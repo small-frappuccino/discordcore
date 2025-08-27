@@ -4,6 +4,8 @@ github.com/alice-bnuy/errutil v0.2.2 h1:+TbaLIbMIrr846vHzKGHEZvBDiJPAji4dJ4iyNeb
 github.com/alice-bnuy/errutil v0.2.2/go.mod h1:XD+buMHSwqxawx1oCMZ1llON4D9MrqU2YlpunR1wFaY=
 github.com/alice-bnuy/errutil v1.0.0 h1:bd8UdkVwFpf848YjyGw2TOmTsReFoez6/wE+AuyEEWc=
 github.com/alice-bnuy/errutil v1.0.0/go.mod h1:XD+buMHSwqxawx1oCMZ1llON4D9MrqU2YlpunR1wFaY=
+github.com/alice-bnuy/errutil v1.1.0 h1:gxk5RWUTsdwVF2BcSE+phToO1AOl8r5mF5Gfe+Hi54A=
+github.com/alice-bnuy/errutil v1.1.0/go.mod h1:MrehILXhebE3xL+uuPYk8uyKbxfkdjvUVhdVqCHrmzU=
 github.com/alice-bnuy/logutil v0.0.0-20250827041203-320697e5f4cf h1:xGpf02uwaTIZ+Vt2LQ8CFevyDW6W+8160is35k92lfA=
 github.com/alice-bnuy/logutil v0.0.0-20250827041203-320697e5f4cf/go.mod h1:ewkAenzoxjsCWu49aRAMsxihSg2GVlvYISU5wUmh73k=
 github.com/alice-bnuy/logutil v1.0.0 h1:o7zdW8ef7ah6K25TBnNNTwsC5Tt12YGj5DPPp/R0j4o=
