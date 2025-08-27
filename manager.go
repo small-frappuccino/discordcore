@@ -1,4 +1,4 @@
-package store
+package discordcore
 
 import (
 	"alicemains/internal/core/errutil"
