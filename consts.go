@@ -1,13 +1,13 @@
 package discordcore
 
 // ## Module Version
-const Version = "1.0.0"
+const Version = "2.0.0"
 
 // ## Path Constants
 // These constants define the file paths used for configuration, cache, and logs.
 const (
-	ConfigFilePath = "configs/config.json"
-	CacheFilePath  = "configs/cache.json"
+	ConfigFileName = "config.json"
+	CacheFileName  = "cache.json"
 )
 
 // ## Error Constants

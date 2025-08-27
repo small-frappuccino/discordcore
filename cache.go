@@ -29,7 +29,7 @@ type AvatarCacheManager struct {
 	lastSave   time.Time
 }
 
-func NewAvatarCacheManager(configPath string) *AvatarCacheManager {
+func newAvatarCacheManager(configPath string) *AvatarCacheManager {
 	path := filepath.Join(configPath, "cache.json")
 	return &AvatarCacheManager{
 		path:       path,

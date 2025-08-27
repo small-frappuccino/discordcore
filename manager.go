@@ -15,20 +15,12 @@ import (
 )
 
 // NewConfigManager creates a new configuration manager with the given config path.
-func NewConfigManager(configPath string) *ConfigManager {
-	return &ConfigManager{
-		configFilePath: ConfigFilePath,
-		cacheFilePath:  CacheFilePath,
-		logsDirPath:    logutil.LogsDirPath,
-		configPath:     configPath,
-	}
-}
-
-// NewConfigManagerWithPath creates a new configuration manager with custom config file path.
-func NewConfigManagerWithPath(configPath, configFilePath string) *ConfigManager {
+func newConfigManager(configPath string) *ConfigManager {
+	configFilePath := filepath.Join(configPath, ConfigFileName)
+	cacheFilePath := filepath.Join(configPath, CacheFileName)
 	return &ConfigManager{
 		configFilePath: configFilePath,
-		cacheFilePath:  CacheFilePath,
+		cacheFilePath:  cacheFilePath,
 		logsDirPath:    logutil.LogsDirPath,
 		configPath:     configPath,
 	}

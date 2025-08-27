@@ -205,7 +205,7 @@ func NewDiscordCore() *DiscordCore {
 	token := getDiscordBotToken(branch)
 	botName := getBotNameFromAPI(token)
 	supportPath := getApplicationSupportPath(branch, botName)
-	configPath := filepath.Join(supportPath, "configs")
+	configPath := filepath.Join(supportPath, "data")
 
 	// Ensure directories exist
 	ensureDirectories([]string{supportPath, configPath})
@@ -226,12 +226,12 @@ func NewDiscordCore() *DiscordCore {
 
 // NewConfigManager creates a new ConfigManager using this DiscordCore's config path.
 func (core *DiscordCore) NewConfigManager() *ConfigManager {
-	return NewConfigManager(core.ConfigPath)
+	return newConfigManager(core.ConfigPath)
 }
 
 // NewAvatarCacheManager creates a new AvatarCacheManager using this DiscordCore's config path.
 func (core *DiscordCore) NewAvatarCacheManager() *AvatarCacheManager {
-	return NewAvatarCacheManager(core.ConfigPath)
+	return newAvatarCacheManager(core.ConfigPath)
 }
 
 // GetToken returns the Discord bot token.
@@ -278,10 +278,7 @@ func getCurrentGitBranch() string {
 
 // getApplicationSupportPath returns the application support path based on branch and bot name.
 func getApplicationSupportPath(branch, botName string) string {
-	if branch == "main" {
-		return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", botName)
-	}
-	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", fmt.Sprintf("%s (Development)", botName))
+	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", botName)
 }
 
 // getDiscordBotToken returns the Discord bot token based on the branch.
