@@ -1,8 +1,6 @@
 package discordcore
 
 import (
-	"alicemains/internal/core/errutil"
-	"alicemains/internal/shared/logger"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/alice-bnuy/errutil"
+	"github.com/alice-bnuy/logutil"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -73,7 +74,7 @@ func NewConfigManager() *ConfigManager {
 	return &ConfigManager{
 		configFilePath: ConfigFilePath,
 		cacheFilePath:  CacheFilePath,
-		logsDirPath:    logger.LogsDirPath,
+		logsDirPath:    logutil.LogsDirPath,
 	}
 }
 
@@ -86,38 +87,38 @@ func NewConfigManagerWithPath(configPath string) *ConfigManager {
 func (mgr *ConfigManager) LoadConfig() error {
 	path, err := safeJoin(ApplicationConfigPath, mgr.configFilePath)
 	if err != nil {
-		logger.Debugf(LogLoadConfigFailedJoinPaths, mgr.configFilePath, err)
+		logutil.Debugf(LogLoadConfigFailedJoinPaths, mgr.configFilePath, err)
 		return fmt.Errorf(ErrFailedResolveConfigPath, err)
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Warnf(LogLoadConfigFileNotFound, path)
+			logutil.Warnf(LogLoadConfigFileNotFound, path)
 			mgr.mu.Lock()
 			mgr.config = &BotConfig{Guilds: []GuildConfig{}}
 			mgr.mu.Unlock()
 			return nil
 		}
-		logger.Errorf(LogLoadConfigFailedReadFile, path, err)
+		logutil.Errorf(LogLoadConfigFailedReadFile, path, err)
 		return errutil.HandleConfigError("read", mgr.configFilePath, func() error { return err })
 	}
 
 	var config BotConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		logger.Errorf(LogLoadConfigFailedUnmarshal, path, err)
+		logutil.Errorf(LogLoadConfigFailedUnmarshal, path, err)
 		return errutil.HandleConfigError("unmarshal", mgr.configFilePath, func() error { return err })
 	}
 
 	// Validando a configuração carregada
 	if len(config.Guilds) == 0 {
-		logger.Warnf(LogLoadConfigNoGuilds, path)
+		logutil.Warnf(LogLoadConfigNoGuilds, path)
 	}
 
 	mgr.mu.Lock()
 	mgr.config = &config
 	mgr.mu.Unlock()
-	logger.Infof(LogLoadConfigSuccess, path)
+	logutil.Infof(LogLoadConfigSuccess, path)
 	return nil
 }
 
@@ -129,32 +130,32 @@ func (mgr *ConfigManager) SaveConfig() error {
 
 	if mgr.config == nil {
 		log.Println("SaveConfig: config is nil")
-		logger.Errorf(LogSaveConfigNilConfig)
+		logutil.Errorf(LogSaveConfigNilConfig)
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
 	path, err := safeJoin(ApplicationConfigPath, mgr.configFilePath)
 	if err != nil {
 		log.Printf("SaveConfig: failed to resolve path: %v", err)
-		logger.Errorf(LogSaveConfigFailedResolvePath, mgr.ConfigPath(), err)
+		logutil.Errorf(LogSaveConfigFailedResolvePath, mgr.ConfigPath(), err)
 		return fmt.Errorf(ErrFailedResolveConfigPath, err)
 	}
 
 	data, err := json.MarshalIndent(mgr.config, "", "  ")
 	if err != nil {
 		log.Printf("SaveConfig: failed to marshal config: %v", err)
-		logger.Errorf(LogSaveConfigFailedMarshal, err)
+		logutil.Errorf(LogSaveConfigFailedMarshal, err)
 		return fmt.Errorf(ErrFailedMarshalConfig, err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		log.Printf("SaveConfig: failed to write file: %v", err)
-		logger.Errorf(LogSaveConfigFailedWriteFile, path, err)
+		logutil.Errorf(LogSaveConfigFailedWriteFile, path, err)
 		return errutil.HandleConfigError("write", mgr.configFilePath, func() error { return err })
 	}
 
 	log.Printf("SaveConfig: successfully saved to %s", path)
-	logger.Infof(LogSaveConfigSuccess, path)
+	logutil.Infof(LogSaveConfigSuccess, path)
 	return nil
 }
 
@@ -241,13 +242,13 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 	for _, g := range session.State.Guilds {
 		fullGuild, err := session.Guild(g.ID)
 		if err != nil {
-			logger.WithField("guildID", g.ID).Warnf(LogCouldNotFetchGuild, err)
+			logutil.WithField("guildID", g.ID).Warnf(LogCouldNotFetchGuild, err)
 			continue
 		}
 
 		channelID := FindSuitableChannel(session, g.ID)
 		if channelID == "" {
-			logger.WithField("guildID", g.ID).Warnf(LogNoSuitableChannel, fullGuild.Name)
+			logutil.WithField("guildID", g.ID).Warnf(LogNoSuitableChannel, fullGuild.Name)
 			continue
 		}
 
@@ -261,7 +262,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
 		mgr.mu.Unlock()
-		logger.WithFields(map[string]interface{}{
+		logutil.WithFields(map[string]interface{}{
 			"guildName": fullGuild.Name,
 			"guildID":   g.ID,
 			"channelID": channelID,
@@ -287,7 +288,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		for _, g := range mgr.config.Guilds {
 			if g.GuildID == guildID {
 				mgr.mu.RUnlock()
-				logger.WithField("guildID", guildID).Info(LogGuildAlreadyConfigured)
+				logutil.WithField("guildID", guildID).Info(LogGuildAlreadyConfigured)
 				return nil
 			}
 		}
@@ -315,7 +316,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	if ch, err := session.Channel(channelID); err == nil {
 		channelName = ch.Name
 	}
-	logger.WithFields(map[string]interface{}{
+	logutil.WithFields(map[string]interface{}{
 		"guildName": guild.Name,
 		"guildID":   guildID,
 		"channel":   channelName,
@@ -333,12 +334,12 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	}
 	for _, guildConfig := range configuration.Guilds {
 		if guild, err := s.Guild(guildConfig.GuildID); err == nil {
-			logger.WithFields(map[string]interface{}{
+			logutil.WithFields(map[string]interface{}{
 				"guildName": guild.Name,
 				"guildID":   guild.ID,
 			}).Info(LogMonitorGuild)
 		} else {
-			logger.WithField("guildID", guildConfig.GuildID).Warn(LogGuildNotAccessible)
+			logutil.WithField("guildID", guildConfig.GuildID).Warn(LogGuildNotAccessible)
 		}
 	}
 }
@@ -429,7 +430,7 @@ func EnsureConfigFiles() error {
 	// Check if config file exists
 	configFilePath := filepath.Join(ApplicationConfigPath, "config.json")
 	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-		logger.Infof("Config file not found, creating default at %s", configFilePath)
+		logutil.Infof("Config file not found, creating default at %s", configFilePath)
 
 		// Create basic empty config
 		defaultConfig := BotConfig{
@@ -447,7 +448,7 @@ func EnsureConfigFiles() error {
 	// Check if cache file exists
 	cacheFilePath := filepath.Join(ApplicationConfigPath, "cache.json")
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
-		logger.Infof("Cache file not found, creating default at %s", cacheFilePath)
+		logutil.Infof("Cache file not found, creating default at %s", cacheFilePath)
 
 		// Create basic empty cache
 		defaultCache := `{"guilds":{},"last_updated":"","version":"1.0"}`
@@ -463,17 +464,17 @@ func EnsureConfigFiles() error {
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		logger.Warn(LogNoConfiguredGuilds)
+		logutil.Warn(LogNoConfiguredGuilds)
 		return nil
 	}
-	logger.Infof(LogFoundConfiguredGuilds, len(cfg.Guilds))
+	logutil.Infof(LogFoundConfiguredGuilds, len(cfg.Guilds))
 	var errCount int
 	for _, g := range cfg.Guilds {
 		guild, err := session.Guild(g.GuildID)
 		if err == nil {
-			logger.WithFields(map[string]interface{}{"guildName": guild.Name, "guildID": guild.ID}).Info("🔎 Will monitor this guild")
+			logutil.WithFields(map[string]interface{}{"guildName": guild.Name, "guildID": guild.ID}).Info("🔎 Will monitor this guild")
 		} else {
-			logger.WithField("guildID", g.GuildID).Warn(LogGuildNotAccessible)
+			logutil.WithField("guildID", g.GuildID).Warn(LogGuildNotAccessible)
 			errCount++
 		}
 	}
@@ -498,11 +499,11 @@ func ensureDirectories(directories []string) error {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				log.Printf("Failed to create directory: %v", err)
-				logger.Errorf("Failed to create directory: %s, error: %v", dir, err)
+				logutil.Errorf("Failed to create directory: %s, error: %v", dir, err)
 				return fmt.Errorf("failed to create directory: %w", err)
 			}
 			log.Printf("Directory created at %s", dir)
-			logger.Infof("Directory created at %s", dir)
+			logutil.Infof("Directory created at %s", dir)
 		}
 	}
 	return nil
