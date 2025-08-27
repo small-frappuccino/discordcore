@@ -200,11 +200,11 @@ type DiscordCore struct {
 
 // NewDiscordCore creates a new DiscordCore instance.
 // It fetches the bot name from the Discord API and initializes paths based on the current git branch.
-func NewDiscordCore() *DiscordCore {
+func NewDiscordCore(botName string) *DiscordCore {
 	branch := getCurrentGitBranch()
-	token := getDiscordBotToken(branch)
-	botName := getBotNameFromAPI(token)
-	supportPath := getApplicationSupportPath(branch, botName)
+	token := getDiscordBotToken(botName, branch)
+	botName = getBotNameFromAPI(token)
+	supportPath := getApplicationSupportPath(botName)
 	configPath := filepath.Join(supportPath, "data")
 
 	// Ensure directories exist
@@ -277,20 +277,20 @@ func getCurrentGitBranch() string {
 }
 
 // getApplicationSupportPath returns the application support path based on branch and bot name.
-func getApplicationSupportPath(branch, botName string) string {
+func getApplicationSupportPath(botName string) string {
 	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", botName)
 }
 
 // getDiscordBotToken returns the Discord bot token based on the branch.
-func getDiscordBotToken(branch string) string {
+func getDiscordBotToken(botName string, branch string) string {
 	var token string
 	switch branch {
 	case "main":
-		token = os.Getenv("DISCORD_BOT_TOKEN_MAIN")
+		token = os.Getenv(fmt.Sprintf("%s_TOKEN_MAIN", botName))
 	case "development":
-		token = os.Getenv("DISCORD_BOT_TOKEN_DEV")
+		token = os.Getenv(fmt.Sprintf("%s_TOKEN_DEV", botName))
 	default:
-		token = os.Getenv("DISCORD_BOT_TOKEN_DEFAULT")
+		log.Fatalf("could not get Discord bot token for branch: %s", branch)
 	}
 
 	if token == "" {
