@@ -21,19 +21,20 @@ type AvatarMultiGuildCache struct {
 }
 
 type AvatarCacheManager struct {
-	path     string
-	guilds   map[string]*AvatarCache
-	mu       sync.RWMutex
-	saveMu   sync.Mutex
-	lastSave time.Time
+	path       string
+	configPath string
+	guilds     map[string]*AvatarCache
+	mu         sync.RWMutex
+	saveMu     sync.Mutex
+	lastSave   time.Time
 }
 
-func NewAvatarCacheManager() *AvatarCacheManager {
-	// Update CacheFilePath to use ApplicationConfigPath
-	path := filepath.Join(ApplicationConfigPath, "cache.json")
+func NewAvatarCacheManager(configPath string) *AvatarCacheManager {
+	path := filepath.Join(configPath, "cache.json")
 	return &AvatarCacheManager{
-		path:   path,
-		guilds: make(map[string]*AvatarCache),
+		path:       path,
+		configPath: configPath,
+		guilds:     make(map[string]*AvatarCache),
 	}
 }
 
@@ -237,7 +238,7 @@ func (m *AvatarCacheManager) SaveForGuild(guildID string) error {
 	}
 	m.mu.Unlock()
 	// Update guild-specific cache file path
-	path, err := safeJoin(ApplicationConfigPath, filepath.Join("cache", guildID+".json"))
+	path, err := safeJoin(m.configPath, filepath.Join("cache", guildID+".json"))
 	if err != nil {
 		return err
 	}
