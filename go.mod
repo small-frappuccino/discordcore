@@ -3,7 +3,7 @@ module github.com/alice-bnuy/discordcore
 go 1.25.0
 
 require (
-	github.com/alice-bnuy/errutil v1.0.0
+	github.com/alice-bnuy/errutil v1.1.0
 	github.com/alice-bnuy/logutil v1.0.0
 	github.com/bwmarrin/discordgo v0.29.0
 )
