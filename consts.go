@@ -1,5 +1,8 @@
 package store
 
+// ## Module Version
+const Version = "1.0.0"
+
 // ## Path Constants
 // These constants define the file paths used for configuration, cache, and logs.
 const (
