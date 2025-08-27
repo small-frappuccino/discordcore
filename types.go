@@ -287,7 +287,7 @@ func getDiscordBotToken(botName string, branch string) string {
 	switch branch {
 	case "main":
 		token = os.Getenv(fmt.Sprintf("%s_TOKEN_MAIN", botName))
-	case "development":
+	case "alice-main":
 		token = os.Getenv(fmt.Sprintf("%s_TOKEN_DEV", botName))
 	default:
 		log.Fatalf("could not get Discord bot token for branch: %s", branch)
