@@ -1,4 +1,4 @@
-package store
+package discordcore
 
 // ## Module Version
 const Version = "1.0.0"
