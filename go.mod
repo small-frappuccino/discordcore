@@ -1,4 +1,4 @@
-module github.com/alice-bnuy/discordcore
+module github.com/alice-bnuy/discordcore/v2
 
 go 1.25.0
 
