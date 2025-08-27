@@ -1,0 +1,22 @@
+# IDE files
+.vscode/
+.github/
+
+# Environment files
+.env
+
+# Binaries folder
+bin/
+
+# Logs folder
+logs/
+
+# Vendor folder
+vendor/
+
+# Hot reload temporary files (Air)
+tmp/
+
+# macOS system files
+.DS_Store
+
