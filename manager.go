@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/alice-bnuy/errutil"
 	"github.com/alice-bnuy/logutil"
@@ -15,77 +14,29 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var (
-	DiscordBotName         string = "Alice Bot"
-	DiscordBotToken        string
-	ApplicationSupportPath string
-	ApplicationConfigPath  string
-	CurrentGitBranch       string
-)
-
-// --- Initialization & Persistence ---
-
-func init() {
-	// Get current git branch
-	branch := getCurrentGitBranch()
-	CurrentGitBranch = branch
-
-	// Set DiscordBotToken and ApplicationSupportPath
-	DiscordBotToken = getDiscordBotToken()
-	ApplicationSupportPath = getApplicationSupportPath(branch)
-	ApplicationConfigPath = filepath.Join(ApplicationSupportPath, "configs")
-
-	// Ensure all application directories exist
-	configDirectories := []string{ApplicationSupportPath, ApplicationConfigPath}
-	if err := ensureDirectories(configDirectories); err != nil {
-		log.Fatalf("Failed to initialize application directory: %v", err)
-	}
-
-	// Ensure config files exist in the new paths
-	if err := EnsureConfigFiles(); err != nil {
-		log.Fatalf("Failed to ensure config files: %v", err)
-	}
-}
-
-func getCurrentGitBranch() string {
-	data, err := os.ReadFile(".git/HEAD")
-	if err != nil {
-		log.Printf("Failed to read git HEAD: %v", err)
-		return "unknown"
-	}
-	line := strings.TrimSpace(string(data))
-	if strings.HasPrefix(line, "ref: ") {
-		parts := strings.Split(line, "/")
-		if len(parts) > 0 {
-			return parts[len(parts)-1]
-		}
-	}
-	return line
-}
-
-func getApplicationSupportPath(branch string) string {
-	if branch == "main" {
-		return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", DiscordBotName)
-	}
-	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", fmt.Sprintf("%s (Development)", DiscordBotName))
-}
-
-func NewConfigManager() *ConfigManager {
+// NewConfigManager creates a new configuration manager with the given config path.
+func NewConfigManager(configPath string) *ConfigManager {
 	return &ConfigManager{
 		configFilePath: ConfigFilePath,
 		cacheFilePath:  CacheFilePath,
 		logsDirPath:    logutil.LogsDirPath,
+		configPath:     configPath,
 	}
 }
 
-// NewManager creates a new configuration manager.
-func NewConfigManagerWithPath(configPath string) *ConfigManager {
-	return &ConfigManager{configFilePath: configPath}
+// NewConfigManagerWithPath creates a new configuration manager with custom config file path.
+func NewConfigManagerWithPath(configPath, configFilePath string) *ConfigManager {
+	return &ConfigManager{
+		configFilePath: configFilePath,
+		cacheFilePath:  CacheFilePath,
+		logsDirPath:    logutil.LogsDirPath,
+		configPath:     configPath,
+	}
 }
 
 // Load loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
-	path, err := safeJoin(ApplicationConfigPath, mgr.configFilePath)
+	path, err := safeJoin(mgr.configPath, mgr.configFilePath)
 	if err != nil {
 		logutil.Debugf(LogLoadConfigFailedJoinPaths, mgr.configFilePath, err)
 		return fmt.Errorf(ErrFailedResolveConfigPath, err)
@@ -110,7 +61,7 @@ func (mgr *ConfigManager) LoadConfig() error {
 		return errutil.HandleConfigError("unmarshal", mgr.configFilePath, func() error { return err })
 	}
 
-	// Validando a configuração carregada
+	// Validating the loaded configuration
 	if len(config.Guilds) == 0 {
 		logutil.Warnf(LogLoadConfigNoGuilds, path)
 	}
@@ -134,7 +85,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
-	path, err := safeJoin(ApplicationConfigPath, mgr.configFilePath)
+	path, err := safeJoin(mgr.configPath, mgr.configFilePath)
 	if err != nil {
 		log.Printf("SaveConfig: failed to resolve path: %v", err)
 		logutil.Errorf(LogSaveConfigFailedResolvePath, mgr.ConfigPath(), err)
@@ -421,14 +372,14 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 	return nil
 }
 
-func EnsureConfigFiles() error {
+func EnsureConfigFiles(configPath string) error {
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(ApplicationConfigPath, 0755); err != nil {
+	if err := os.MkdirAll(configPath, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Check if config file exists
-	configFilePath := filepath.Join(ApplicationConfigPath, "config.json")
+	configFilePath := filepath.Join(configPath, "config.json")
 	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
 		logutil.Infof("Config file not found, creating default at %s", configFilePath)
 
@@ -446,7 +397,7 @@ func EnsureConfigFiles() error {
 	}
 
 	// Check if cache file exists
-	cacheFilePath := filepath.Join(ApplicationConfigPath, "cache.json")
+	cacheFilePath := filepath.Join(configPath, "cache.json")
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
 		logutil.Infof("Cache file not found, creating default at %s", cacheFilePath)
 
@@ -507,24 +458,4 @@ func ensureDirectories(directories []string) error {
 		}
 	}
 	return nil
-}
-
-// SetDiscordBotToken returns the Discord bot token based on the current Git branch.
-func getDiscordBotToken() string {
-	var token string
-	switch CurrentGitBranch {
-	case "main":
-		token = os.Getenv("DISCORD_BOT_TOKEN_MAIN")
-	case "development":
-		token = os.Getenv("DISCORD_BOT_TOKEN_DEV")
-	default:
-		token = os.Getenv("DISCORD_BOT_TOKEN_DEFAULT")
-	}
-
-	if token == "" {
-		log.Fatalf("Discord bot token is not set for branch: %s", CurrentGitBranch)
-	}
-
-	log.Printf("Discord bot token set for branch: %s", CurrentGitBranch)
-	return token
 }
