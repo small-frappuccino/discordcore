@@ -326,15 +326,15 @@ func getDiscordBotToken(botName string, branch string) (string, error) {
 	var token string
 	switch branch {
 	case "main":
-		token = os.Getenv(fmt.Sprintf("%s_TOKEN_MAIN", botName))
+		token = os.Getenv(fmt.Sprintf("%s_PRODUCTION_TOKEN", botName))
 	case "alice-main":
-		token = os.Getenv(fmt.Sprintf("%s_TOKEN_DEV", botName))
+		token = os.Getenv(fmt.Sprintf("%s_DEVELOPMENT_TOKEN", botName))
 	default:
 		return "", fmt.Errorf("could not get Discord bot token for branch: %s", branch)
 	}
 
 	if token == "" {
-		return "", fmt.Errorf("Discord bot token is not set for branch: %s", branch)
+		return "", fmt.Errorf("discord bot token is not set for branch: %s", branch)
 	}
 
 	log.Printf("Discord bot token set for branch: %s", branch)
@@ -359,7 +359,7 @@ func getBotNameFromAPI(token string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Discord API returned status %d when fetching bot info", resp.StatusCode)
+		return "", fmt.Errorf("discord API returned status %d when fetching bot info", resp.StatusCode)
 	}
 
 	var user struct {
