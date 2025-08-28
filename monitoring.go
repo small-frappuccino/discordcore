@@ -476,7 +476,6 @@ type DiscordEventAdapter struct {
 }
 
 // NewDiscordEventAdapter creates a new Discord event adapter.
-// avatarCacheManager is optional - if provided, enables avatar change detection.
 func NewDiscordEventAdapter(session *discordgo.Session, configManager *ConfigManager, monitoringService *MonitoringService, avatarCacheManager *AvatarCacheManager) *DiscordEventAdapter {
 	return &DiscordEventAdapter{
 		monitoringService:  monitoringService,

@@ -15,6 +15,7 @@ import (
 )
 
 // NewConfigManager creates a new configuration manager with the given config path.
+// Deprecated: Use NewConfigManagerWithPaths for more control over config and cache paths.
 func newConfigManager(configPath string) (*ConfigManager, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("config path cannot be empty")
@@ -29,13 +30,37 @@ func newConfigManager(configPath string) (*ConfigManager, error) {
 	}, nil
 }
 
+// NewConfigManagerWithPaths creates a new configuration manager with separate config and cache paths.
+func NewConfigManagerWithPaths(configPath, cachePath string) (*ConfigManager, error) {
+	if configPath == "" {
+		return nil, fmt.Errorf("config path cannot be empty")
+	}
+	if cachePath == "" {
+		return nil, fmt.Errorf("cache path cannot be empty")
+	}
+
+	// Ensure config and cache directories exist
+	if err := os.MkdirAll(configPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := os.MkdirAll(cachePath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	configFilePath := filepath.Join(configPath, ConfigFileName)
+	cacheFilePath := filepath.Join(cachePath, CacheFileName)
+
+	return &ConfigManager{
+		configFilePath: configFilePath,
+		cacheFilePath:  cacheFilePath,
+		logsDirPath:    logutil.LogsDirPath,
+		configPath:     configPath,
+	}, nil
+}
+
 // Load loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
-	path, err := safeJoin(mgr.configPath, mgr.configFilePath)
-	if err != nil {
-		logutil.Debugf(LogLoadConfigFailedJoinPaths, mgr.configFilePath, err)
-		return fmt.Errorf(ErrFailedResolveConfigPath, err)
-	}
+	path := mgr.configFilePath
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -80,12 +105,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
-	path, err := safeJoin(mgr.configPath, mgr.configFilePath)
-	if err != nil {
-		log.Printf("SaveConfig: failed to resolve path: %v", err)
-		logutil.Errorf(LogSaveConfigFailedResolvePath, mgr.ConfigPath(), err)
-		return fmt.Errorf(ErrFailedResolveConfigPath, err)
-	}
+	path := mgr.configFilePath
 
 	data, err := json.MarshalIndent(mgr.config, "", "  ")
 	if err != nil {

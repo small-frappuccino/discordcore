@@ -255,6 +255,52 @@ func NewDiscordCore(token string) (*DiscordCore, error) {
 	}, nil
 }
 
+// NewDiscordCoreWithPaths creates a new DiscordCore instance with custom config and cache paths.
+// This allows full control over where config and cache files are stored.
+//
+// Parameters:
+//   - token: Discord bot token
+//   - configPath: Directory path for configuration files
+//   - cachePath: Directory path for cache files
+//
+// Example usage:
+//
+//	core, err := discordcore.NewDiscordCoreWithPaths("YOUR_BOT_TOKEN", "/path/to/config", "/path/to/cache")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func NewDiscordCoreWithPaths(token, configPath, cachePath string) (*DiscordCore, error) {
+	if token == "" {
+		return nil, fmt.Errorf("discord bot token cannot be empty")
+	}
+	if configPath == "" {
+		return nil, fmt.Errorf("config path cannot be empty")
+	}
+	if cachePath == "" {
+		return nil, fmt.Errorf("cache path cannot be empty")
+	}
+
+	// Get bot name from Discord API using the token
+	botName, err := getBotNameFromAPI(token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bot name from API: %w", err)
+	}
+
+	// Create config manager with separate paths
+	configManager, err := NewConfigManagerWithPaths(configPath, cachePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config manager: %w", err)
+	}
+
+	return &DiscordCore{
+		BotName:       botName,
+		Token:         token,
+		SupportPath:   "", // Not used when custom paths are provided
+		ConfigPath:    configPath,
+		ConfigManager: configManager,
+	}, nil
+}
+
 // NewConfigManager creates a new ConfigManager using this DiscordCore's config path.
 func (core *DiscordCore) NewConfigManager() (*ConfigManager, error) {
 	return newConfigManager(core.ConfigPath)
