@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -329,9 +327,4 @@ func getBotNameFromAPI(token string) (string, error) {
 
 	log.Printf("Fetched bot name from API: %s", user.Username)
 	return user.Username, nil
-}
-
-// getApplicationSupportPath returns the application support path based on bot name.
-func getApplicationSupportPath(botName string) string {
-	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", botName)
 }
