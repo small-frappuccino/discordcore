@@ -34,7 +34,6 @@ type BotConfig struct {
 // Manager handles bot configuration management.
 type ConfigManager struct {
 	configFilePath string
-	cacheFilePath  string
 	logsDirPath    string
 	configPath     string
 	config         *BotConfig
@@ -196,16 +195,23 @@ type DiscordCore struct {
 	Token         string
 	SupportPath   string
 	ConfigPath    string
+	CachePath     string
 	Session       *discordgo.Session
 	ConfigManager *ConfigManager
+	CacheManager  *CacheManager
 }
 
 // NewDiscordCore creates a new DiscordCore instance.
-// It takes a Discord bot token and initializes the core with configuration management.
+// It takes a Discord bot token and custom paths for config and cache files.
+//
+// Parameters:
+//   - token: Discord bot token (required)
+//   - configPath: Directory path for configuration files (required)
+//   - cachePath: Directory path for cache files (required)
 //
 // Example usage:
 //
-//	core, err := discordcore.NewDiscordCore("YOUR_BOT_TOKEN_HERE")
+//	core, err := discordcore.NewDiscordCore("YOUR_BOT_TOKEN", "/path/to/config", "/path/to/cache")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -217,59 +223,7 @@ type DiscordCore struct {
 //
 //	// Bot is now ready to use
 //	defer session.Close()
-func NewDiscordCore(token string) (*DiscordCore, error) {
-	if token == "" {
-		return nil, fmt.Errorf("discord bot token cannot be empty")
-	}
-
-	// Get bot name from Discord API using the token
-	botName, err := getBotNameFromAPI(token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bot name from API: %w", err)
-	}
-
-	supportPath := getApplicationSupportPath(botName)
-	configPath := filepath.Join(supportPath, "data")
-
-	// Ensure directories exist
-	if err := ensureDirectories([]string{supportPath, configPath}); err != nil {
-		return nil, fmt.Errorf("failed to ensure directories: %w", err)
-	}
-
-	// Ensure config files exist
-	if err := EnsureConfigFiles(configPath); err != nil {
-		return nil, fmt.Errorf("failed to ensure config files: %w", err)
-	}
-
-	configManager, err := newConfigManager(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create config manager: %w", err)
-	}
-
-	return &DiscordCore{
-		BotName:       botName,
-		Token:         token,
-		SupportPath:   supportPath,
-		ConfigPath:    configPath,
-		ConfigManager: configManager,
-	}, nil
-}
-
-// NewDiscordCoreWithPaths creates a new DiscordCore instance with custom config and cache paths.
-// This allows full control over where config and cache files are stored.
-//
-// Parameters:
-//   - token: Discord bot token
-//   - configPath: Directory path for configuration files
-//   - cachePath: Directory path for cache files
-//
-// Example usage:
-//
-//	core, err := discordcore.NewDiscordCoreWithPaths("YOUR_BOT_TOKEN", "/path/to/config", "/path/to/cache")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-func NewDiscordCoreWithPaths(token, configPath, cachePath string) (*DiscordCore, error) {
+func NewDiscordCore(token, configPath, cachePath string) (*DiscordCore, error) {
 	if token == "" {
 		return nil, fmt.Errorf("discord bot token cannot be empty")
 	}
@@ -287,9 +241,15 @@ func NewDiscordCoreWithPaths(token, configPath, cachePath string) (*DiscordCore,
 	}
 
 	// Create config manager with separate paths
-	configManager, err := NewConfigManagerWithPaths(configPath, cachePath)
+	configManager, err := newConfigManager(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config manager: %w", err)
+	}
+
+	// Create avatar cache manager
+	cacheManager, err := newCacheManager(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create avatar cache manager: %w", err)
 	}
 
 	return &DiscordCore{
@@ -297,18 +257,10 @@ func NewDiscordCoreWithPaths(token, configPath, cachePath string) (*DiscordCore,
 		Token:         token,
 		SupportPath:   "", // Not used when custom paths are provided
 		ConfigPath:    configPath,
+		CachePath:     cachePath,
 		ConfigManager: configManager,
+		CacheManager:  cacheManager,
 	}, nil
-}
-
-// NewConfigManager creates a new ConfigManager using this DiscordCore's config path.
-func (core *DiscordCore) NewConfigManager() (*ConfigManager, error) {
-	return newConfigManager(core.ConfigPath)
-}
-
-// NewAvatarCacheManager creates a new AvatarCacheManager using this DiscordCore's config path.
-func (core *DiscordCore) NewAvatarCacheManager() (*AvatarCacheManager, error) {
-	return newAvatarCacheManager(core.ConfigPath)
 }
 
 // GetToken returns the Discord bot token.
@@ -326,6 +278,11 @@ func (core *DiscordCore) GetConfigPath() string {
 	return core.ConfigPath
 }
 
+// GetCachePath returns the cache path.
+func (core *DiscordCore) GetCachePath() string {
+	return core.CachePath
+}
+
 // GetSupportPath returns the support path.
 func (core *DiscordCore) GetSupportPath() string {
 	return core.SupportPath
@@ -336,30 +293,9 @@ func (core *DiscordCore) GetSession() *discordgo.Session {
 	return core.Session
 }
 
-// detectGuilds detects guilds where the bot is present and adds them to the config (private function).
-func (core *DiscordCore) detectGuilds() error {
-	return core.ConfigManager.detectGuilds(core.Session)
-}
-
-// DetectGuilds detects guilds where the bot is present and adds them to the config.
-// Deprecated: Use detectGuilds (private) instead. This function is kept for backward compatibility.
-func (core *DiscordCore) DetectGuilds() error {
-	return core.detectGuilds()
-}
-
-// RegisterGuild adds a new guild to the configuration.
-func (core *DiscordCore) RegisterGuild(guildID string) error {
-	return core.ConfigManager.RegisterGuild(core.Session, guildID)
-}
-
-// ShowConfiguredGuilds logs the configured guilds.
-func (core *DiscordCore) ShowConfiguredGuilds() {
-	ShowConfiguredGuilds(core.Session, core.ConfigManager)
-}
-
-// LogConfiguredGuilds logs a summary of configured guilds.
-func (core *DiscordCore) LogConfiguredGuilds() error {
-	return LogConfiguredGuilds(core.ConfigManager, core.Session)
+// GetCacheManager returns the cache manager.
+func (core *DiscordCore) GetCacheManager() *CacheManager {
+	return core.CacheManager
 }
 
 // getBotNameFromAPI fetches the bot's username from the Discord API using the token.

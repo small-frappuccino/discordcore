@@ -469,19 +469,19 @@ func (a *AvatarChangeEvent) GetTimestamp() time.Time {
 
 // DiscordEventAdapter adapts Discord events to the generic Event interface.
 type DiscordEventAdapter struct {
-	monitoringService  *MonitoringService
-	session            *discordgo.Session
-	configManager      *ConfigManager
-	avatarCacheManager *AvatarCacheManager
+	monitoringService *MonitoringService
+	session           *discordgo.Session
+	configManager     *ConfigManager
+	cacheManager      *CacheManager
 }
 
 // NewDiscordEventAdapter creates a new Discord event adapter.
-func NewDiscordEventAdapter(session *discordgo.Session, configManager *ConfigManager, monitoringService *MonitoringService, avatarCacheManager *AvatarCacheManager) *DiscordEventAdapter {
+func NewDiscordEventAdapter(session *discordgo.Session, configManager *ConfigManager, monitoringService *MonitoringService, cacheManager *CacheManager) *DiscordEventAdapter {
 	return &DiscordEventAdapter{
-		monitoringService:  monitoringService,
-		session:            session,
-		configManager:      configManager,
-		avatarCacheManager: avatarCacheManager,
+		monitoringService: monitoringService,
+		session:           session,
+		configManager:     configManager,
+		cacheManager:      cacheManager,
 	}
 }
 
@@ -506,7 +506,7 @@ func (dea *DiscordEventAdapter) Start() {
 	dea.session.AddHandler(dea.handleGuildMemberUpdate)
 
 	// Only add avatar change handler if avatar cache manager is available
-	if dea.avatarCacheManager != nil {
+	if dea.cacheManager != nil {
 		dea.session.AddHandler(dea.handleAvatarChange)
 	}
 }
@@ -642,7 +642,7 @@ func (dea *DiscordEventAdapter) handleGuildMemberUpdate(s *discordgo.Session, m 
 
 // handleAvatarChange processes avatar change events by comparing with cached avatars.
 func (dea *DiscordEventAdapter) handleAvatarChange(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-	if m.User == nil || m.GuildID == "" || dea.avatarCacheManager == nil {
+	if m.User == nil || m.GuildID == "" || dea.cacheManager == nil {
 		return
 	}
 	if dea.configManager.GuildConfig(m.GuildID) == nil {
@@ -651,15 +651,15 @@ func (dea *DiscordEventAdapter) handleAvatarChange(s *discordgo.Session, m *disc
 
 	// Check if avatar actually changed
 	currentAvatar := m.User.Avatar
-	if !dea.avatarCacheManager.AvatarChanged(m.GuildID, m.User.ID, currentAvatar) {
+	if !dea.cacheManager.AvatarChanged(m.GuildID, m.User.ID, currentAvatar) {
 		return // No change detected
 	}
 
 	// Get the old avatar from cache
-	oldAvatar := dea.avatarCacheManager.AvatarHash(m.GuildID, m.User.ID)
+	oldAvatar := dea.cacheManager.AvatarHash(m.GuildID, m.User.ID)
 
 	// Update cache with new avatar
-	dea.avatarCacheManager.UpdateAvatar(m.GuildID, m.User.ID, currentAvatar)
+	dea.cacheManager.UpdateAvatar(m.GuildID, m.User.ID, currentAvatar)
 
 	// Calculate time in guild
 	var timeInGuild time.Duration

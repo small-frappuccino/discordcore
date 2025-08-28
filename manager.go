@@ -14,45 +14,21 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// NewConfigManager creates a new configuration manager with the given config path.
-// Deprecated: Use NewConfigManagerWithPaths for more control over config and cache paths.
+// newConfigManagerWithPaths creates a new configuration manager with separate config and cache paths.
 func newConfigManager(configPath string) (*ConfigManager, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("config path cannot be empty")
 	}
-	configFilePath := filepath.Join(configPath, ConfigFileName)
-	cacheFilePath := filepath.Join(configPath, CacheFileName)
-	return &ConfigManager{
-		configFilePath: configFilePath,
-		cacheFilePath:  cacheFilePath,
-		logsDirPath:    logutil.LogsDirPath,
-		configPath:     configPath,
-	}, nil
-}
 
-// NewConfigManagerWithPaths creates a new configuration manager with separate config and cache paths.
-func NewConfigManagerWithPaths(configPath, cachePath string) (*ConfigManager, error) {
-	if configPath == "" {
-		return nil, fmt.Errorf("config path cannot be empty")
-	}
-	if cachePath == "" {
-		return nil, fmt.Errorf("cache path cannot be empty")
-	}
-
-	// Ensure config and cache directories exist
+	// Ensure config directory exists
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
-	if err := os.MkdirAll(cachePath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create cache directory: %w", err)
-	}
 
 	configFilePath := filepath.Join(configPath, ConfigFileName)
-	cacheFilePath := filepath.Join(cachePath, CacheFileName)
 
 	return &ConfigManager{
 		configFilePath: configFilePath,
-		cacheFilePath:  cacheFilePath,
 		logsDirPath:    logutil.LogsDirPath,
 		configPath:     configPath,
 	}, nil
@@ -161,8 +137,8 @@ func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
 	return nil
 }
 
-// AddGuildConfig adds or replaces a guild configuration.
-func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
+// addGuildConfig adds or replaces a guild configuration (private function).
+func (mgr *ConfigManager) addGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.config == nil {
@@ -176,6 +152,12 @@ func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	}
 	mgr.config.Guilds = append(guilds, guildCfg)
 	return nil
+}
+
+// AddGuildConfig adds or replaces a guild configuration.
+// Deprecated: Use addGuildConfig (private) instead.
+func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
+	return mgr.addGuildConfig(guildCfg)
 }
 
 // RemoveGuildConfig removes a guild configuration.
@@ -291,24 +273,6 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 }
 
 // --- Utility & Logging ---
-
-// ShowConfiguredGuilds logs the configured guilds (no active guild concept).
-func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
-	configuration := configManager.Config()
-	if configuration == nil || len(configuration.Guilds) == 0 {
-		return
-	}
-	for _, guildConfig := range configuration.Guilds {
-		if guild, err := s.Guild(guildConfig.GuildID); err == nil {
-			logutil.WithFields(map[string]interface{}{
-				"guildName": guild.Name,
-				"guildID":   guild.ID,
-			}).Info(LogMonitorGuild)
-		} else {
-			logutil.WithField("guildID", guildConfig.GuildID).Warn(LogGuildNotAccessible)
-		}
-	}
-}
 
 func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 	channels, err := session.GuildChannels(guildID)
@@ -426,30 +390,6 @@ func EnsureConfigFiles(configPath string) error {
 	return nil
 }
 
-// LogConfiguredGuilds logs a summary of configured guilds. Returns error if any guilds are inaccessible.
-func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
-	cfg := configManager.Config()
-	if cfg == nil || len(cfg.Guilds) == 0 {
-		logutil.Warn(LogNoConfiguredGuilds)
-		return nil
-	}
-	logutil.Infof(LogFoundConfiguredGuilds, len(cfg.Guilds))
-	var errCount int
-	for _, g := range cfg.Guilds {
-		guild, err := session.Guild(g.GuildID)
-		if err == nil {
-			logutil.WithFields(map[string]interface{}{"guildName": guild.Name, "guildID": guild.ID}).Info("🔎 Will monitor this guild")
-		} else {
-			logutil.WithField("guildID", g.GuildID).Warn(LogGuildNotAccessible)
-			errCount++
-		}
-	}
-	if errCount > 0 {
-		return fmt.Errorf(ErrGuildsNotAccessible, errCount)
-	}
-	return nil
-}
-
 // FindRulesetByID searches for a ruleset by its ID in the guild configuration.
 func (cfg *GuildConfig) FindRulesetByID(id string) (*Ruleset, int) {
 	for idx, rs := range cfg.Rulesets {
@@ -458,19 +398,4 @@ func (cfg *GuildConfig) FindRulesetByID(id string) (*Ruleset, int) {
 		}
 	}
 	return nil, -1
-}
-
-func ensureDirectories(directories []string) error {
-	for _, dir := range directories {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				log.Printf("Failed to create directory: %v", err)
-				logutil.Errorf("Failed to create directory: %s, error: %v", dir, err)
-				return fmt.Errorf("failed to create directory: %w", err)
-			}
-			log.Printf("Directory created at %s", dir)
-			logutil.Infof("Directory created at %s", dir)
-		}
-	}
-	return nil
 }

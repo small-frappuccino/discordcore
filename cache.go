@@ -2,11 +2,9 @@ package discordcore
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,7 +18,7 @@ type AvatarMultiGuildCache struct {
 	Version     string                  `json:"version"`
 }
 
-type AvatarCacheManager struct {
+type CacheManager struct {
 	path       string
 	configPath string
 	guilds     map[string]*AvatarCache
@@ -29,12 +27,12 @@ type AvatarCacheManager struct {
 	lastSave   time.Time
 }
 
-func newAvatarCacheManager(configPath string) (*AvatarCacheManager, error) {
+func newCacheManager(configPath string) (*CacheManager, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("config path cannot be empty")
 	}
 	path := filepath.Join(configPath, "cache.json")
-	return &AvatarCacheManager{
+	return &CacheManager{
 		path:       path,
 		configPath: configPath,
 		guilds:     make(map[string]*AvatarCache),
@@ -42,7 +40,7 @@ func newAvatarCacheManager(configPath string) (*AvatarCacheManager, error) {
 }
 
 // Load loads the cache from the file.
-func (m *AvatarCacheManager) Load() error {
+func (m *CacheManager) Load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -86,7 +84,7 @@ func (m *AvatarCacheManager) Load() error {
 }
 
 // GuildCache retrieves or initializes the cache for a specific guild.
-func (m *AvatarCacheManager) GuildCache(guildID string) *AvatarCache {
+func (m *CacheManager) GuildCache(guildID string) *AvatarCache {
 	m.mu.RLock()
 	existing, ok := m.guilds[guildID]
 	m.mu.RUnlock()
@@ -111,7 +109,7 @@ func (m *AvatarCacheManager) GuildCache(guildID string) *AvatarCache {
 }
 
 // UpdateAvatar updates the avatar hash for a user in a specific guild.
-func (m *AvatarCacheManager) UpdateAvatar(guildID, userID, avatarHash string) {
+func (m *CacheManager) UpdateAvatar(guildID, userID, avatarHash string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -136,7 +134,7 @@ func (m *AvatarCacheManager) UpdateAvatar(guildID, userID, avatarHash string) {
 }
 
 // AvatarHash retrieves the avatar hash for a user in a specific guild.
-func (m *AvatarCacheManager) AvatarHash(guildID, userID string) string {
+func (m *CacheManager) AvatarHash(guildID, userID string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if cache := m.guilds[guildID]; cache != nil {
@@ -153,24 +151,8 @@ func (m *AvatarCacheManager) AvatarHash(guildID, userID string) string {
 	return ""
 }
 
-// safeJoin ensures that the joined path is within the base directory.
-func safeJoin(baseDir, relPath string) (string, error) {
-	cleanBase := filepath.Clean(baseDir)
-	cleanPath := filepath.Join(cleanBase, relPath)
-	rel, err := filepath.Rel(cleanBase, cleanPath)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-		logutil.WithFields(map[string]interface{}{
-			"baseDir": baseDir,
-			"relPath": relPath,
-			"error":   err,
-		}).Error("Invalid path detected")
-		return "", errors.New(ErrInvalidPath)
-	}
-	return cleanPath, nil
-}
-
 // Save saves the avatar cache to the configured file path.
-func (m *AvatarCacheManager) Save() error {
+func (m *CacheManager) Save() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -206,7 +188,7 @@ func (m *AvatarCacheManager) Save() error {
 }
 
 // SaveThrottled performs coalesced persistence respecting the minimum interval.
-func (m *AvatarCacheManager) SaveThrottled(minInterval time.Duration) error {
+func (m *CacheManager) SaveThrottled(minInterval time.Duration) error {
 	m.saveMu.Lock()
 	defer m.saveMu.Unlock()
 	if time.Since(m.lastSave) < minInterval {
@@ -220,7 +202,7 @@ func (m *AvatarCacheManager) SaveThrottled(minInterval time.Duration) error {
 }
 
 // SaveForGuild saves only a specific guild (keeps compatibility)
-func (m *AvatarCacheManager) SaveForGuild(guildID string) error {
+func (m *CacheManager) SaveForGuild(guildID string) error {
 	m.mu.Lock()
 	if cache := m.guilds[guildID]; cache != nil {
 		cache.LastUpdated = time.Now()
@@ -243,12 +225,12 @@ func (m *AvatarCacheManager) SaveForGuild(guildID string) error {
 	return nil
 }
 
-func (m *AvatarCacheManager) AvatarChanged(guildID, userID, currentAvatarHash string) bool {
+func (m *CacheManager) AvatarChanged(guildID, userID, currentAvatarHash string) bool {
 	return m.AvatarHash(guildID, userID) != currentAvatarHash
 }
 
 // ClearForGuild removes the cache of a specific guild
-func (m *AvatarCacheManager) ClearForGuild(guildID string) error {
+func (m *CacheManager) ClearForGuild(guildID string) error {
 	m.mu.Lock()
 	if _, exists := m.guilds[guildID]; !exists {
 		m.mu.Unlock()
@@ -268,7 +250,7 @@ func (m *AvatarCacheManager) ClearForGuild(guildID string) error {
 }
 
 // GuildIDs returns a list of guilds that have cache
-func (m *AvatarCacheManager) GuildIDs() []string {
+func (m *CacheManager) GuildIDs() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
