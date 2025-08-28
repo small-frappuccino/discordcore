@@ -176,8 +176,8 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 
 // --- Guild Detection & Addition ---
 
-// AutoDetectGuilds automatically detects guilds where the bot is present.
-func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
+// detectGuilds automatically detects guilds where the bot is present (private function).
+func (mgr *ConfigManager) detectGuilds(session *discordgo.Session) error {
 	mgr.mu.Lock()
 	if mgr.config == nil {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}

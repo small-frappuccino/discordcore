@@ -476,16 +476,8 @@ type DiscordEventAdapter struct {
 }
 
 // NewDiscordEventAdapter creates a new Discord event adapter.
-func NewDiscordEventAdapter(session *discordgo.Session, configManager *ConfigManager, monitoringService *MonitoringService) *DiscordEventAdapter {
-	return &DiscordEventAdapter{
-		monitoringService: monitoringService,
-		session:           session,
-		configManager:     configManager,
-	}
-}
-
-// NewDiscordEventAdapterWithAvatarCache creates a new Discord event adapter with avatar change detection.
-func NewDiscordEventAdapterWithAvatarCache(session *discordgo.Session, configManager *ConfigManager, monitoringService *MonitoringService, avatarCacheManager *AvatarCacheManager) *DiscordEventAdapter {
+// avatarCacheManager is optional - if provided, enables avatar change detection.
+func NewDiscordEventAdapter(session *discordgo.Session, configManager *ConfigManager, monitoringService *MonitoringService, avatarCacheManager *AvatarCacheManager) *DiscordEventAdapter {
 	return &DiscordEventAdapter{
 		monitoringService:  monitoringService,
 		session:            session,
@@ -500,8 +492,15 @@ func (dea *DiscordEventAdapter) ProcessEvent(event Event) {
 	// So this method is a no-op for the EventProcessor interface
 }
 
-// Start registers Discord event handlers.
+// Start registers Discord event handlers and automatically detects guilds.
 func (dea *DiscordEventAdapter) Start() {
+	// Automatically detect and configure guilds during initialization
+	if err := dea.configManager.detectGuilds(dea.session); err != nil {
+		logutil.Errorf("Failed to auto-detect guilds during initialization: %v", err)
+	} else {
+		logutil.Info("✅ Guilds auto-detected and configured successfully")
+	}
+
 	dea.session.AddHandler(dea.handlePresenceUpdate)
 	dea.session.AddHandler(dea.handleGuildMemberAdd)
 	dea.session.AddHandler(dea.handleGuildMemberRemove)
@@ -705,7 +704,7 @@ type CoreMonitoringService struct {
 // NewCoreMonitoringService creates a new core monitoring service (deprecated).
 func NewCoreMonitoringService(session *discordgo.Session, configManager *ConfigManager) *CoreMonitoringService {
 	ms := NewMonitoringService()
-	adapter := NewDiscordEventAdapter(session, configManager, ms)
+	adapter := NewDiscordEventAdapter(session, configManager, ms, nil)
 	ms.AddProcessor(adapter)
 	return &CoreMonitoringService{
 		MonitoringService: ms,

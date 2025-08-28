@@ -290,9 +290,15 @@ func (core *DiscordCore) GetSession() *discordgo.Session {
 	return core.Session
 }
 
+// detectGuilds detects guilds where the bot is present and adds them to the config (private function).
+func (core *DiscordCore) detectGuilds() error {
+	return core.ConfigManager.detectGuilds(core.Session)
+}
+
 // DetectGuilds detects guilds where the bot is present and adds them to the config.
+// Deprecated: Use detectGuilds (private) instead. This function is kept for backward compatibility.
 func (core *DiscordCore) DetectGuilds() error {
-	return core.ConfigManager.DetectGuilds(core.Session)
+	return core.detectGuilds()
 }
 
 // RegisterGuild adds a new guild to the configuration.
