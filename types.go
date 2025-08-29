@@ -296,8 +296,8 @@ func (core *DiscordCore) GetCacheManager() *CacheManager {
 	return core.CacheManager
 }
 
-// getBotNameFromAPI fetches the bot's username from the Discord API using the token.
-func getBotNameFromAPI(token string) (string, error) {
+// GetBotNameFromAPI fetches the bot's username from the Discord API using the token.
+func GetBotNameFromAPI(token string) (string, error) {
 	req, err := http.NewRequest("GET", "https://discord.com/api/v10/users/@me", nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request for bot info: %w", err)
