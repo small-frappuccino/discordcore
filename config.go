@@ -26,11 +26,9 @@ func init() {
 
 	// Set ApplicationSupportPath
 	ApplicationSupportPath = getApplicationSupportPath(branch)
-	ApplicationConfigPath = filepath.Join(ApplicationSupportPath, "configs")
 
 	// Ensure all application directories exist
-	configDirectories := []string{ApplicationSupportPath, ApplicationConfigPath}
-	if err := ensureDirectories(configDirectories); err != nil {
+	if err := ensureDirectories([]string{ApplicationSupportPath}); err != nil {
 		log.Fatalf("Failed to initialize application directory: %v", err)
 	}
 
