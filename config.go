@@ -112,11 +112,7 @@ func NewConfigManagerWithPath(configPath string) *ConfigManager {
 
 // Load loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
-	path, err := safeJoin(ApplicationSupportPath, mgr.configFilePath)
-	if err != nil {
-		Debugf(LogLoadConfigFailedJoinPaths, mgr.configFilePath, err)
-		return fmt.Errorf(ErrFailedResolveConfigPath, err)
-	}
+	path := mgr.configFilePath
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -161,13 +157,6 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
-	path, err := safeJoin(ApplicationSupportPath, mgr.configFilePath)
-	if err != nil {
-		log.Printf("SaveConfig: failed to resolve path: %v", err)
-		Errorf(LogSaveConfigFailedResolvePath, mgr.ConfigPath(), err)
-		return fmt.Errorf(ErrFailedResolveConfigPath, err)
-	}
-
 	data, err := json.MarshalIndent(mgr.config, "", "  ")
 	if err != nil {
 		log.Printf("SaveConfig: failed to marshal config: %v", err)
@@ -175,10 +164,12 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return fmt.Errorf(ErrFailedMarshalConfig, err)
 	}
 
+	path := mgr.configFilePath
+
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		log.Printf("SaveConfig: failed to write file: %v", err)
 		Errorf(LogSaveConfigFailedWriteFile, path, err)
-		return HandleConfigError("write", mgr.configFilePath, func() error { return err })
+		return HandleConfigError("write", path, func() error { return err })
 	}
 
 	log.Printf("SaveConfig: successfully saved to %s", path)
