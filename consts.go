@@ -1,4 +1,4 @@
-package store
+package discordcore
 
 // ## Constants
 // This section consolidates all constants into a single declaration for better organization and readability.

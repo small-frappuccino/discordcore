@@ -1,4 +1,4 @@
-package store
+package discordcore
 
 import (
 	"errors"
