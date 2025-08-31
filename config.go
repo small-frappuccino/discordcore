@@ -15,7 +15,6 @@ import (
 var (
 	DiscordBotName         string = "Alice Bot"
 	ApplicationSupportPath string
-	ApplicationConfigPath  string
 	CurrentGitBranch       string
 )
 
@@ -113,7 +112,7 @@ func NewConfigManagerWithPath(configPath string) *ConfigManager {
 
 // Load loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
-	path, err := safeJoin(ApplicationConfigPath, mgr.configFilePath)
+	path, err := safeJoin(ApplicationSupportPath, mgr.configFilePath)
 	if err != nil {
 		Debugf(LogLoadConfigFailedJoinPaths, mgr.configFilePath, err)
 		return fmt.Errorf(ErrFailedResolveConfigPath, err)
@@ -162,7 +161,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
-	path, err := safeJoin(ApplicationConfigPath, mgr.configFilePath)
+	path, err := safeJoin(ApplicationSupportPath, mgr.configFilePath)
 	if err != nil {
 		log.Printf("SaveConfig: failed to resolve path: %v", err)
 		Errorf(LogSaveConfigFailedResolvePath, mgr.ConfigPath(), err)
@@ -474,7 +473,7 @@ func EnsureConfigFiles() error {
 	}
 
 	// Check if cache file exists
-	cacheFilePath := filepath.Join(ApplicationConfigPath, "cache.json")
+	cacheFilePath := filepath.Join(ApplicationSupportPath, "cache.json")
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
 		Infof("Cache file not found, creating default at %s", cacheFilePath)
 
