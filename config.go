@@ -14,7 +14,6 @@ import (
 
 var (
 	DiscordBotName         string = "Alice Bot"
-	DiscordBotToken        string
 	ApplicationSupportPath string
 	ApplicationConfigPath  string
 	CurrentGitBranch       string
@@ -25,8 +24,7 @@ func init() {
 	branch := getCurrentGitBranch()
 	CurrentGitBranch = branch
 
-	// Set DiscordBotToken and ApplicationSupportPath
-	DiscordBotToken = getDiscordBotToken()
+	// Set ApplicationSupportPath
 	ApplicationSupportPath = getApplicationSupportPath(branch)
 	ApplicationConfigPath = filepath.Join(ApplicationSupportPath, "configs")
 
@@ -80,16 +78,16 @@ func getCurrentGitBranch() string {
 	return line
 }
 
-// SetDiscordBotToken returns the Discord bot token based on the current Git branch.
-func getDiscordBotToken() string {
+// GetDiscordBotToken returns the Discord bot token based on the current Git branch.
+func GetDiscordBotToken(tokenName string) string {
 	var token string
 	switch CurrentGitBranch {
 	case "main":
-		token = os.Getenv("DISCORD_BOT_TOKEN_MAIN")
+		token = os.Getenv(fmt.Sprintf("%s_PRODUCTION_TOKEN", tokenName))
 	case "development":
-		token = os.Getenv("DISCORD_BOT_TOKEN_DEV")
+		token = os.Getenv(fmt.Sprintf("%s_DEVELOPMENT_TOKEN", tokenName))
 	default:
-		token = os.Getenv("DISCORD_BOT_TOKEN_DEFAULT")
+		token = os.Getenv(fmt.Sprintf("%s_TOKEN_DEFAULT", tokenName))
 	}
 
 	if token == "" {
