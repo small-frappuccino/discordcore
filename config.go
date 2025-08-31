@@ -451,12 +451,12 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 
 func EnsureConfigFiles() error {
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(ApplicationConfigPath, 0755); err != nil {
+	if err := os.MkdirAll(ApplicationSupportPath, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Check if config file exists
-	configFilePath := filepath.Join(ApplicationConfigPath, "config.json")
+	configFilePath := filepath.Join(ApplicationSupportPath, "configs/config.json")
 	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
 		Infof("Config file not found, creating default at %s", configFilePath)
 
