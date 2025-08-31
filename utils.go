@@ -3,7 +3,6 @@ package discordcore
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -39,7 +38,6 @@ func GetBotNameFromAPI(token string) (string, error) {
 		return "", fmt.Errorf("failed to decode bot info response: %w", err)
 	}
 
-	log.Printf("Fetched bot name from API: %s", user.Username)
 	return user.Username, nil
 }
 

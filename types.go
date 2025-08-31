@@ -218,31 +218,22 @@ type DiscordCore struct {
 //
 //	// Bot is now ready to use
 //	defer session.Close()
-func NewDiscordCore(token, configPath, cachePath string) (*DiscordCore, error) {
+func NewDiscordCore(token, botName, storagePath string) (*DiscordCore, error) {
 	if token == "" {
 		return nil, fmt.Errorf("discord bot token cannot be empty")
 	}
-	if configPath == "" {
-		return nil, fmt.Errorf("config path cannot be empty")
-	}
-	if cachePath == "" {
-		return nil, fmt.Errorf("cache path cannot be empty")
-	}
-
-	// Get bot name from Discord API using the token
-	botName, err := GetBotNameFromAPI(token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bot name from API: %w", err)
+	if storagePath == "" {
+		return nil, fmt.Errorf("storage path cannot be empty")
 	}
 
 	// Create config manager with separate paths
-	configManager, err := newConfigManager(configPath)
+	configManager, err := newConfigManager(storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config manager: %w", err)
 	}
 
 	// Create avatar cache manager
-	cacheManager, err := newCacheManager(configPath)
+	cacheManager, err := newCacheManager(storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create avatar cache manager: %w", err)
 	}
@@ -250,8 +241,8 @@ func NewDiscordCore(token, configPath, cachePath string) (*DiscordCore, error) {
 	return &DiscordCore{
 		BotName:       botName,
 		token:         token,
-		ConfigPath:    configPath,
-		CachePath:     cachePath,
+		ConfigPath:    storagePath,
+		CachePath:     storagePath,
 		ConfigManager: configManager,
 		CacheManager:  cacheManager,
 	}, nil

@@ -715,8 +715,3 @@ func NewCoreMonitoringService(session *discordgo.Session, configManager *ConfigM
 func (cms *CoreMonitoringService) AddMonitor(monitor Monitor) {
 	cms.AddProcessor(monitor)
 }
-
-// setupEventHandlers is deprecated: handled by DiscordEventAdapter.
-func (cms *CoreMonitoringService) setupEventHandlers() {
-	// Handled by DiscordEventAdapter
-}
