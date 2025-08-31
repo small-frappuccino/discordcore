@@ -99,9 +99,9 @@ func GetDiscordBotToken(tokenName string) string {
 
 func NewConfigManager() *ConfigManager {
 	return &ConfigManager{
-		configFilePath: ConfigFilePath,
-		cacheFilePath:  CacheFilePath,
-		logsDirPath:    LogsDirPath,
+		configFilePath: filepath.Join(ApplicationSupportPath, "configs", "config.json"),
+		cacheFilePath:  filepath.Join(ApplicationSupportPath, "cache.json"),
+		logsDirPath:    filepath.Join(ApplicationSupportPath, "logs"),
 	}
 }
 

@@ -27,8 +27,8 @@ type AvatarCacheManager struct {
 }
 
 func NewAvatarCacheManager() *AvatarCacheManager {
-	// Update CacheFilePath to use ApplicationConfigPath
-	path := filepath.Join(ApplicationConfigPath, "cache.json")
+	// Update CacheFilePath to use ApplicationSupportPath
+	path := filepath.Join(ApplicationSupportPath, "configs", "cache.json")
 	return &AvatarCacheManager{
 		path:   path,
 		guilds: make(map[string]*AvatarCache),
@@ -224,32 +224,6 @@ func (m *AvatarCacheManager) SaveThrottled(minInterval time.Duration) error {
 		return err
 	}
 	m.lastSave = time.Now()
-	return nil
-}
-
-// SaveForGuild saves only a specific guild (keeps compatibility)
-func (m *AvatarCacheManager) SaveForGuild(guildID string) error {
-	m.mu.Lock()
-	if cache := m.guilds[guildID]; cache != nil {
-		cache.LastUpdated = time.Now()
-	}
-	m.mu.Unlock()
-	// Update guild-specific cache file path
-	path, err := safeJoin(ApplicationConfigPath, filepath.Join("cache", guildID+".json"))
-	if err != nil {
-		return err
-	}
-	cache := m.GuildCache(guildID)
-	data, err := json.MarshalIndent(cache, "", "  ")
-	if err != nil {
-		return fmt.Errorf(ErrMarshalAvatarCache, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf(ErrCreateCacheDir, err)
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf(ErrWriteAvatarCache, err)
-	}
 	return nil
 }
 

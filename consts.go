@@ -3,10 +3,6 @@ package discordcore
 // ## Constants
 // This section consolidates all constants into a single declaration for better organization and readability.
 const (
-	// ## Path Constants
-	ConfigFilePath = "configs/config.json"
-	CacheFilePath  = "configs/cache.json"
-
 	// ## Error Constants
 	// Avatar cache errors
 	ErrReadCacheFile        = "error reading cache file: %w"
