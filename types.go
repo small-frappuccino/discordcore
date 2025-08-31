@@ -35,6 +35,7 @@ type ConfigManager struct {
 	logsDirPath    string
 	config         *BotConfig
 	mu             sync.RWMutex
+	jsonManager    *JSONManager
 }
 
 // ## Avatar Cache Types

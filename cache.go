@@ -2,11 +2,9 @@ package discordcore
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -19,19 +17,21 @@ type AvatarMultiGuildCache struct {
 }
 
 type AvatarCacheManager struct {
-	path     string
-	guilds   map[string]*AvatarCache
-	mu       sync.RWMutex
-	saveMu   sync.Mutex
-	lastSave time.Time
+	path        string
+	guilds      map[string]*AvatarCache
+	mu          sync.RWMutex
+	saveMu      sync.Mutex
+	lastSave    time.Time
+	jsonManager *JSONManager
 }
 
 func NewAvatarCacheManager() *AvatarCacheManager {
 	// Update CacheFilePath to use ApplicationSupportPath
 	path := filepath.Join(ApplicationSupportPath, "configs", "cache.json")
 	return &AvatarCacheManager{
-		path:   path,
-		guilds: make(map[string]*AvatarCache),
+		path:        path,
+		guilds:      make(map[string]*AvatarCache),
+		jsonManager: NewJSONManager(path),
 	}
 }
 
@@ -147,45 +147,10 @@ func (m *AvatarCacheManager) AvatarHash(guildID, userID string) string {
 	return ""
 }
 
-// safeJoin ensures that the joined path is within the base directory.
-func safeJoin(baseDir, relPath string) (string, error) {
-	cleanBase := filepath.Clean(baseDir)
-	cleanPath := filepath.Join(cleanBase, relPath)
-	rel, err := filepath.Rel(cleanBase, cleanPath)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-		WithFields(map[string]interface{}{
-			"baseDir": baseDir,
-			"relPath": relPath,
-			"error":   err,
-		}).Error("Invalid path detected")
-		return "", errors.New(ErrInvalidPath)
-	}
-	return cleanPath, nil
-}
-
 // Save saves the avatar cache to the configured file path.
 func (m *AvatarCacheManager) Save() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	projectRoot := "/Users/alice/Desktop/go/alice/development/alicemains"
-	dir := filepath.Dir(m.path)
-	safeDir, err := safeJoin(projectRoot, dir)
-	if err != nil {
-		WithFields(map[string]interface{}{
-			"projectRoot": projectRoot,
-			"dir":         dir,
-			"error":       err,
-		}).Error("Failed to resolve safe directory for saving cache")
-		return err
-	}
-	if err := os.MkdirAll(safeDir, 0755); err != nil {
-		WithFields(map[string]interface{}{
-			"safeDir": safeDir,
-			"error":   err,
-		}).Error("Failed to create cache directory")
-		return fmt.Errorf(ErrCreateCacheDir, err)
-	}
 
 	multiCache := AvatarMultiGuildCache{
 		Guilds:      m.guilds,
@@ -193,15 +158,7 @@ func (m *AvatarCacheManager) Save() error {
 		Version:     "2.0",
 	}
 
-	data, err := json.Marshal(multiCache)
-	if err != nil {
-		WithFields(map[string]interface{}{
-			"error": err,
-		}).Error("Failed to marshal cache data")
-		return fmt.Errorf(ErrMarshalCache, err)
-	}
-
-	if err := os.WriteFile(m.path, data, 0644); err != nil {
+	if err := m.jsonManager.Save(multiCache); err != nil {
 		WithFields(map[string]interface{}{
 			"path":  m.path,
 			"error": err,
@@ -241,15 +198,6 @@ func (m *AvatarCacheManager) ClearForGuild(guildID string) error {
 	}
 	delete(m.guilds, guildID)
 	m.mu.Unlock()
-	// Remove the guild's cache file safely
-	projectRoot := "/Users/alice/Desktop/go/alice/development/alicemains"
-	path, err := safeJoin(projectRoot, filepath.Join("cache", guildID+".json"))
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf(ErrRemoveAvatarCache, err)
-	}
 	return m.Save()
 }
 

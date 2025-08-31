@@ -98,82 +98,67 @@ func GetDiscordBotToken(tokenName string) string {
 // --- Initialization & Persistence ---
 
 func NewConfigManager() *ConfigManager {
+	configFilePath := filepath.Join(ApplicationSupportPath, "configs", "config.json")
 	return &ConfigManager{
-		configFilePath: filepath.Join(ApplicationSupportPath, "configs", "config.json"),
+		configFilePath: configFilePath,
 		cacheFilePath:  filepath.Join(ApplicationSupportPath, "cache.json"),
 		logsDirPath:    filepath.Join(ApplicationSupportPath, "logs"),
+		jsonManager:    NewJSONManager(configFilePath),
 	}
 }
 
 // NewManager creates a new configuration manager.
 func NewConfigManagerWithPath(configPath string) *ConfigManager {
-	return &ConfigManager{configFilePath: configPath}
+	return &ConfigManager{
+		configFilePath: configPath,
+		jsonManager:    NewJSONManager(configPath),
+	}
 }
 
 // Load loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
-	path := mgr.configFilePath
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
-	data, err := os.ReadFile(path)
+	if mgr.config == nil {
+		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
+	}
+
+	err := mgr.jsonManager.Load(mgr.config)
 	if err != nil {
 		if os.IsNotExist(err) {
-			Warnf(LogLoadConfigFileNotFound, path)
-			mgr.mu.Lock()
-			mgr.config = &BotConfig{Guilds: []GuildConfig{}}
-			mgr.mu.Unlock()
+			Warnf(LogLoadConfigFileNotFound, mgr.configFilePath)
 			return nil
 		}
-		Errorf(LogLoadConfigFailedReadFile, path, err)
+		Errorf(LogLoadConfigFailedReadFile, mgr.configFilePath, err)
 		return HandleConfigError("read", mgr.configFilePath, func() error { return err })
 	}
 
-	var config BotConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		Errorf(LogLoadConfigFailedUnmarshal, path, err)
-		return HandleConfigError("unmarshal", mgr.configFilePath, func() error { return err })
+	if len(mgr.config.Guilds) == 0 {
+		Warnf(LogLoadConfigNoGuilds, mgr.configFilePath)
 	}
 
-	// Validando a configuração carregada
-	if len(config.Guilds) == 0 {
-		Warnf(LogLoadConfigNoGuilds, path)
-	}
-
-	mgr.mu.Lock()
-	mgr.config = &config
-	mgr.mu.Unlock()
-	Infof(LogLoadConfigSuccess, path)
+	Infof(LogLoadConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
 // Save saves the current configuration to file.
 func (mgr *ConfigManager) SaveConfig() error {
-	log.Println("SaveConfig called")
 	mgr.mu.RLock()
 	defer mgr.mu.RUnlock()
 
 	if mgr.config == nil {
-		log.Println("SaveConfig: config is nil")
 		Errorf(LogSaveConfigNilConfig)
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
-	data, err := json.MarshalIndent(mgr.config, "", "  ")
+	err := mgr.jsonManager.Save(mgr.config)
 	if err != nil {
-		log.Printf("SaveConfig: failed to marshal config: %v", err)
-		Errorf(LogSaveConfigFailedMarshal, err)
-		return fmt.Errorf(ErrFailedMarshalConfig, err)
+		Errorf(LogSaveConfigFailedWriteFile, mgr.configFilePath, err)
+		return HandleConfigError("write", mgr.configFilePath, func() error { return err })
 	}
 
-	path := mgr.configFilePath
-
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		log.Printf("SaveConfig: failed to write file: %v", err)
-		Errorf(LogSaveConfigFailedWriteFile, path, err)
-		return HandleConfigError("write", path, func() error { return err })
-	}
-
-	log.Printf("SaveConfig: successfully saved to %s", path)
-	Infof(LogSaveConfigSuccess, path)
+	Infof(LogSaveConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
