@@ -84,7 +84,7 @@ func GetDiscordBotToken(tokenName string) string {
 	switch CurrentGitBranch {
 	case "main":
 		token = os.Getenv(fmt.Sprintf("%s_PRODUCTION_TOKEN", tokenName))
-	case "development":
+	case "alice-main":
 		token = os.Getenv(fmt.Sprintf("%s_DEVELOPMENT_TOKEN", tokenName))
 	default:
 		token = os.Getenv(fmt.Sprintf("%s_TOKEN_DEFAULT", tokenName))
