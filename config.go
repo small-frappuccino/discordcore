@@ -430,8 +430,14 @@ func EnsureConfigFiles() error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	// Create configs subdirectory if it doesn't exist
+	configsDir := filepath.Join(ApplicationSupportPath, "configs")
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create configs directory: %w", err)
+	}
+
 	// Check if config file exists
-	configFilePath := filepath.Join(ApplicationSupportPath, "configs/config.json")
+	configFilePath := filepath.Join(configsDir, "config.json")
 	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
 		Infof("Config file not found, creating default at %s", configFilePath)
 
