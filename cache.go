@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -26,8 +25,8 @@ type AvatarCacheManager struct {
 }
 
 func NewAvatarCacheManager() *AvatarCacheManager {
-	// Update CacheFilePath to use ApplicationSupportPath
-	path := filepath.Join(ApplicationSupportPath, "configs", "cache.json")
+	// Use unified path function for application cache
+	path := GetApplicationCacheFilePath()
 	return &AvatarCacheManager{
 		path:        path,
 		guilds:      make(map[string]*AvatarCache),

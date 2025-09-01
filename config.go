@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -98,10 +99,10 @@ func GetDiscordBotToken(tokenName string) string {
 // --- Initialization & Persistence ---
 
 func NewConfigManager() *ConfigManager {
-	configFilePath := filepath.Join(ApplicationSupportPath, "configs", "config.json")
+	configFilePath := GetSettingsFilePath()
 	return &ConfigManager{
 		configFilePath: configFilePath,
-		cacheFilePath:  filepath.Join(ApplicationSupportPath, "cache.json"),
+		cacheFilePath:  GetApplicationCacheFilePath(),
 		logsDirPath:    filepath.Join(ApplicationSupportPath, "logs"),
 		jsonManager:    NewJSONManager(configFilePath),
 	}
@@ -425,21 +426,36 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 }
 
 func EnsureConfigFiles() error {
-	// Create config directory if it doesn't exist
+	// Create base directory if it doesn't exist
 	if err := os.MkdirAll(ApplicationSupportPath, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Create configs subdirectory if it doesn't exist
-	configsDir := filepath.Join(ApplicationSupportPath, "configs")
-	if err := os.MkdirAll(configsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create configs directory: %w", err)
+	// Ensure settings file
+	if err := EnsureSettingsFile(); err != nil {
+		return fmt.Errorf("failed to ensure settings file: %w", err)
 	}
 
-	// Check if config file exists
-	configFilePath := filepath.Join(configsDir, "config.json")
-	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-		Infof("Config file not found, creating default at %s", configFilePath)
+	// Ensure application cache file
+	if err := EnsureApplicationCacheFile(); err != nil {
+		return fmt.Errorf("failed to ensure application cache file: %w", err)
+	}
+
+	return nil
+}
+
+// EnsureSettingsFile ensures the settings.json file exists and is properly initialized
+func EnsureSettingsFile() error {
+	// Create preferences subdirectory if it doesn't exist
+	preferencesDir := filepath.Join(ApplicationSupportPath, "preferences")
+	if err := os.MkdirAll(preferencesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create preferences directory: %w", err)
+	}
+
+	// Check if settings file exists
+	settingsFilePath := filepath.Join(preferencesDir, "settings.json")
+	if _, err := os.Stat(settingsFilePath); os.IsNotExist(err) {
+		Infof("Settings file not found, creating default at %s", settingsFilePath)
 
 		// Create basic empty config
 		defaultConfig := BotConfig{
@@ -447,23 +463,148 @@ func EnsureConfigFiles() error {
 		}
 		configData, err := json.MarshalIndent(defaultConfig, "", "  ")
 		if err != nil {
-			return fmt.Errorf("failed to create config file: %w", err)
+			return fmt.Errorf("failed to create settings file: %w", err)
 		}
-		if err := os.WriteFile(configFilePath, configData, 0644); err != nil {
-			return fmt.Errorf("failed to write config file: %w", err)
+		if err := os.WriteFile(settingsFilePath, configData, 0644); err != nil {
+			return fmt.Errorf("failed to write settings file: %w", err)
 		}
 	}
 
+	return nil
+}
+
+// EnsureApplicationCacheFile ensures the application_cache.json file exists and is properly initialized
+func EnsureApplicationCacheFile() error {
+	// Create data subdirectory if it doesn't exist
+	dataDir := filepath.Join(ApplicationSupportPath, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
 	// Check if cache file exists
-	cacheFilePath := filepath.Join(ApplicationSupportPath, "cache.json")
+	cacheFilePath := filepath.Join(dataDir, "application_cache.json")
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
-		Infof("Cache file not found, creating default at %s", cacheFilePath)
+		Infof("Application cache file not found, creating default at %s", cacheFilePath)
 
 		// Create basic empty cache
-		defaultCache := `{"guilds":{},"last_updated":"","version":"1.0"}`
+		defaultCache := `{"guilds":{},"last_updated":"","version":"2.0"}`
 		if err := os.WriteFile(cacheFilePath, []byte(defaultCache), 0644); err != nil {
-			return fmt.Errorf("failed to write cache file: %w", err)
+			return fmt.Errorf("failed to write application cache file: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// GetSettingsFilePath returns the standardized path for settings.json
+func GetSettingsFilePath() string {
+	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
+}
+
+// GetApplicationCacheFilePath returns the standardized path for application_cache.json
+func GetApplicationCacheFilePath() string {
+	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
+}
+
+// --- Unified Settings Operations ---
+//
+// These functions provide a standardized way to work with settings.json
+//
+// Example usage:
+//   config, err := LoadSettingsFile()
+//   if err != nil { /* handle error */ }
+//
+//   // Modify config...
+//
+//   err = SaveSettingsFile(config)
+//   if err != nil { /* handle error */ }
+
+// LoadSettingsFile loads settings from the standardized settings.json file
+func LoadSettingsFile() (*BotConfig, error) {
+	settingsPath := GetSettingsFilePath()
+	jsonManager := NewJSONManager(settingsPath)
+
+	config := &BotConfig{Guilds: []GuildConfig{}}
+	err := jsonManager.Load(config)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return config, nil // Return empty config if file doesn't exist
+		}
+		return nil, fmt.Errorf("failed to load settings from %s: %w", settingsPath, err)
+	}
+
+	return config, nil
+}
+
+// SaveSettingsFile saves settings to the standardized settings.json file
+func SaveSettingsFile(config *BotConfig) error {
+	if config == nil {
+		return fmt.Errorf("cannot save nil config")
+	}
+
+	settingsPath := GetSettingsFilePath()
+	jsonManager := NewJSONManager(settingsPath)
+
+	if err := jsonManager.Save(config); err != nil {
+		return fmt.Errorf("failed to save settings to %s: %w", settingsPath, err)
+	}
+
+	return nil
+}
+
+// --- Unified Application Cache Operations ---
+//
+// These functions provide a standardized way to work with application_cache.json
+// They can be used as an alternative to AvatarCacheManager for simple operations
+//
+// Example usage:
+//   cache, err := LoadApplicationCacheFile()
+//   if err != nil { /* handle error */ }
+//
+//   // Modify cache...
+//
+//   err = SaveApplicationCacheFile(cache)
+//   if err != nil { /* handle error */ }
+//
+// Note: For complex cache operations with threading and throttling,
+// prefer using AvatarCacheManager which provides additional features like:
+// - Thread-safe operations
+// - Throttled saves
+// - Guild-specific operations
+
+// LoadApplicationCacheFile loads cache from the standardized application_cache.json file
+func LoadApplicationCacheFile() (*AvatarMultiGuildCache, error) {
+	cachePath := GetApplicationCacheFilePath()
+	jsonManager := NewJSONManager(cachePath)
+
+	cache := &AvatarMultiGuildCache{
+		Guilds:      make(map[string]*AvatarCache),
+		LastUpdated: time.Now(),
+		Version:     "2.0",
+	}
+
+	err := jsonManager.Load(cache)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cache, nil // Return empty cache if file doesn't exist
+		}
+		return nil, fmt.Errorf("failed to load application cache from %s: %w", cachePath, err)
+	}
+
+	return cache, nil
+}
+
+// SaveApplicationCacheFile saves cache to the standardized application_cache.json file
+func SaveApplicationCacheFile(cache *AvatarMultiGuildCache) error {
+	if cache == nil {
+		return fmt.Errorf("cannot save nil cache")
+	}
+
+	cachePath := GetApplicationCacheFilePath()
+	jsonManager := NewJSONManager(cachePath)
+
+	if err := jsonManager.Save(cache); err != nil {
+		return fmt.Errorf("failed to save application cache to %s: %w", cachePath, err)
 	}
 
 	return nil
