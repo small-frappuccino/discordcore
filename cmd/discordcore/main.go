@@ -59,7 +59,7 @@ func main() {
 	}
 
 	// Fetch token
-	token := files.GetDiscordBotToken("ALICE_BOT")
+	token := util.GetDiscordBotToken("ALICE_BOT")
 
 	// Initialize config manager
 	configManager := files.NewConfigManager()

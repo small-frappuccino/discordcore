@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/alice-bnuy/discordcore/v2/internal/util"
 )
 
@@ -47,7 +46,7 @@ type avatarMultiGuildCache struct {
 // NewAvatarCacheManager creates a new avatar cache manager with the provided path.
 func NewAvatarCacheManager(path string) *AvatarCacheManager {
 	if path == "" {
-		path = files.GetApplicationCacheFilePath()
+		path = util.GetCacheFilePath()
 	}
 	return &AvatarCacheManager{
 		path:        path,
@@ -59,7 +58,7 @@ func NewAvatarCacheManager(path string) *AvatarCacheManager {
 
 // NewDefaultAvatarCacheManager creates a new avatar cache manager using the standard application cache path.
 func NewDefaultAvatarCacheManager() *AvatarCacheManager {
-	return NewAvatarCacheManager(files.GetApplicationCacheFilePath())
+	return NewAvatarCacheManager(util.GetCacheFilePath())
 }
 
 // --------------- CacheManager implementation ---------------
