@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alice-bnuy/discordcore/v2/internal/cache"
@@ -77,6 +78,11 @@ func (mes *MessageEventService) IsRunning() bool {
 	return mes.isRunning
 }
 
+// GetCache expõe o cache TTL usado pelo serviço para integração com agregadores
+func (mes *MessageEventService) GetCache() cache.CacheManager {
+	return mes.cache
+}
+
 // handleMessageCreate armazena mensagens no cache para futuras comparações
 func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m == nil || m.Author == nil || m.Author.Bot || m.Content == "" {
@@ -96,7 +102,8 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	}
 
 	// Armazenar no cache (TTL 24h via default)
-	_ = mes.cache.Set(m.ID, &CachedMessage{
+	key := channel.GuildID + ":" + m.ID
+	_ = mes.cache.Set(key, &CachedMessage{
 		ID:        m.ID,
 		Content:   m.Content,
 		Author:    m.Author,
@@ -120,7 +127,8 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	}
 
 	// Verificar se temos a mensagem original no cache
-	v, exists := mes.cache.Get(m.ID)
+	key := m.GuildID + ":" + m.ID
+	v, exists := mes.cache.Get(key)
 	var cached *CachedMessage
 	if exists {
 		cached, _ = v.(*CachedMessage)
@@ -178,7 +186,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	}
 
 	// Atualizar cache com novo conteúdo
-	_ = mes.cache.Set(m.ID, &CachedMessage{
+	_ = mes.cache.Set(key, &CachedMessage{
 		ID:        cached.ID,
 		Content:   m.Content,
 		Author:    cached.Author,
@@ -194,7 +202,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		return
 	}
 
-	v, exists := mes.cache.Get(m.ID)
+	key := m.GuildID + ":" + m.ID
+	v, exists := mes.cache.Get(key)
 	var cached *CachedMessage
 	if exists {
 		cached, _ = v.(*CachedMessage)
@@ -278,10 +287,9 @@ func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
 	// Contar mensagens por guild (melhor esforço)
 	guildCounts := make(map[string]int)
 	for _, key := range mes.cache.Keys() {
-		if v, ok := mes.cache.Get(key); ok {
-			if msg, ok := v.(*CachedMessage); ok && msg != nil && msg.GuildID != "" {
-				guildCounts[msg.GuildID]++
-			}
+		if idx := strings.IndexByte(key, ':'); idx > 0 {
+			guildID := key[:idx]
+			guildCounts[guildID]++
 		}
 	}
 	result["perGuild"] = guildCounts

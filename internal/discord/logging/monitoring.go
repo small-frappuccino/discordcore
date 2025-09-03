@@ -379,3 +379,23 @@ func (ms *MonitoringService) performPeriodicCheck() {
 		}
 	}
 }
+
+// MemberEvents exposes the member event sub-service.
+func (ms *MonitoringService) MemberEvents() *MemberEventService {
+	return ms.memberEventService
+}
+
+// MessageEvents exposes the message event sub-service.
+func (ms *MonitoringService) MessageEvents() *MessageEventService {
+	return ms.messageEventService
+}
+
+// Notifier exposes the notification sender used by monitoring.
+func (ms *MonitoringService) Notifier() *NotificationSender {
+	return ms.notifier
+}
+
+// CacheManager exposes the avatar cache manager used by monitoring.
+func (ms *MonitoringService) CacheManager() *cache.AvatarCacheManager {
+	return ms.cacheManager
+}

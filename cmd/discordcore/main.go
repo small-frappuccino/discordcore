@@ -148,7 +148,8 @@ func main() {
 	}
 
 	// Register admin commands
-	adminCommands := admin.NewAdminCommands(serviceManager, cache)
+	compositeCache := dcache.NewCompositeCache("bot_cache", cache, monitoringService.MessageEvents().GetCache())
+	adminCommands := admin.NewAdminCommands(serviceManager, compositeCache)
 	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 
 	// Ensure safe shutdown of all services
