@@ -2,9 +2,9 @@ package logging
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -25,11 +25,8 @@ type MessageEventService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
 	notifier      *NotificationSender
-	messageCache  map[string]*CachedMessage // Cache de mensagens para detectar edições
-	cacheMutex    sync.RWMutex              // Mutex para proteger o cache
+	cache         *cache.TTLMap
 	isRunning     bool
-	cleanupTicker *time.Ticker
-	stopCleanup   chan struct{}
 }
 
 // NewMessageEventService cria uma nova instância do serviço de eventos de mensagens
@@ -38,9 +35,8 @@ func NewMessageEventService(session *discordgo.Session, configManager *files.Con
 		session:       session,
 		configManager: configManager,
 		notifier:      notifier,
-		messageCache:  make(map[string]*CachedMessage),
+		cache:         cache.NewTTLMap("message_events", 24*time.Hour, 1*time.Hour, 0),
 		isRunning:     false,
-		stopCleanup:   make(chan struct{}),
 	}
 }
 
@@ -55,9 +51,7 @@ func (mes *MessageEventService) Start() error {
 	mes.session.AddHandler(mes.handleMessageUpdate)
 	mes.session.AddHandler(mes.handleMessageDelete)
 
-	// Iniciar limpeza automática do cache a cada hora
-	mes.cleanupTicker = time.NewTicker(1 * time.Hour)
-	go mes.cleanupRoutine()
+	// TTL cache handles cleanup internally
 
 	logutil.Info("Message event service started")
 	return nil
@@ -70,10 +64,9 @@ func (mes *MessageEventService) Stop() error {
 	}
 	mes.isRunning = false
 
-	if mes.cleanupTicker != nil {
-		mes.cleanupTicker.Stop()
+	if mes.cache != nil {
+		mes.cache.Close()
 	}
-	close(mes.stopCleanup)
 
 	logutil.Info("Message event service stopped")
 	return nil
@@ -102,17 +95,15 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 
-	// Armazenar no cache
-	mes.cacheMutex.Lock()
-	mes.messageCache[m.ID] = &CachedMessage{
+	// Armazenar no cache (TTL 24h via default)
+	_ = mes.cache.Set(m.ID, &CachedMessage{
 		ID:        m.ID,
 		Content:   m.Content,
 		Author:    m.Author,
 		ChannelID: m.ChannelID,
 		GuildID:   channel.GuildID,
 		Timestamp: m.Timestamp,
-	}
-	mes.cacheMutex.Unlock()
+	}, 0)
 
 	logutil.WithFields(map[string]interface{}{
 		"guildID":   channel.GuildID,
@@ -129,11 +120,13 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	}
 
 	// Verificar se temos a mensagem original no cache
-	mes.cacheMutex.RLock()
-	cached, exists := mes.messageCache[m.ID]
-	mes.cacheMutex.RUnlock()
+	v, exists := mes.cache.Get(m.ID)
+	var cached *CachedMessage
+	if exists {
+		cached, _ = v.(*CachedMessage)
+	}
 
-	if !exists {
+	if !exists || cached == nil {
 		logutil.WithFields(map[string]interface{}{
 			"messageID": m.ID,
 			"userID":    m.Author.ID,
@@ -185,11 +178,14 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	}
 
 	// Atualizar cache com novo conteúdo
-	mes.cacheMutex.Lock()
-	if cachedMsg, exists := mes.messageCache[m.ID]; exists {
-		cachedMsg.Content = m.Content
-	}
-	mes.cacheMutex.Unlock()
+	_ = mes.cache.Set(m.ID, &CachedMessage{
+		ID:        cached.ID,
+		Content:   m.Content,
+		Author:    cached.Author,
+		ChannelID: cached.ChannelID,
+		GuildID:   cached.GuildID,
+		Timestamp: cached.Timestamp,
+	}, 0)
 }
 
 // handleMessageDelete processa deleções de mensagens
@@ -198,9 +194,11 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		return
 	}
 
-	mes.cacheMutex.RLock()
-	cached, exists := mes.messageCache[m.ID]
-	mes.cacheMutex.RUnlock()
+	v, exists := mes.cache.Get(m.ID)
+	var cached *CachedMessage
+	if exists {
+		cached, _ = v.(*CachedMessage)
+	}
 
 	if !exists {
 		logutil.WithFields(map[string]interface{}{
@@ -212,17 +210,13 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	// Pular se for bot
 	if cached.Author.Bot {
-		mes.cacheMutex.Lock()
-		delete(mes.messageCache, m.ID)
-		mes.cacheMutex.Unlock()
+		_ = mes.cache.Delete(m.ID)
 		return
 	}
 
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
-		mes.cacheMutex.Lock()
-		delete(mes.messageCache, m.ID)
-		mes.cacheMutex.Unlock()
+		_ = mes.cache.Delete(m.ID)
 		return
 	}
 
@@ -232,9 +226,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 			"guildID":   cached.GuildID,
 			"messageID": m.ID,
 		}).Debug("MessageLogChannelID not configured for guild, message delete notification not sent")
-		mes.cacheMutex.Lock()
-		delete(mes.messageCache, m.ID)
-		mes.cacheMutex.Unlock()
+		_ = mes.cache.Delete(m.ID)
 		return
 	}
 
@@ -267,62 +259,32 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	}
 
 	// Remover do cache
-	mes.cacheMutex.Lock()
-	delete(mes.messageCache, m.ID)
-	mes.cacheMutex.Unlock()
+	_ = mes.cache.Delete(m.ID)
 }
 
-// cleanupRoutine executa limpeza automática do cache
-func (mes *MessageEventService) cleanupRoutine() {
-	for {
-		select {
-		case <-mes.cleanupTicker.C:
-			mes.cleanOldCache()
-		case <-mes.stopCleanup:
-			return
-		}
-	}
-}
-
-// cleanOldCache remove mensagens antigas do cache (> 24 horas)
-func (mes *MessageEventService) cleanOldCache() {
-	cutoff := time.Now().Add(-24 * time.Hour)
-	removedCount := 0
-
-	mes.cacheMutex.Lock()
-	for id, msg := range mes.messageCache {
-		if msg.Timestamp.Before(cutoff) {
-			delete(mes.messageCache, id)
-			removedCount++
-		}
-	}
-	cacheSize := len(mes.messageCache)
-	mes.cacheMutex.Unlock()
-
-	if removedCount > 0 {
-		logutil.WithFields(map[string]interface{}{
-			"removedCount":       removedCount,
-			"remainingCacheSize": cacheSize,
-		}).Info("Message cache cleanup completed")
-	}
-}
+// TTL cache handles expiration; explicit cleanup routine removed
 
 // GetCacheStats retorna estatísticas do cache para debugging
 func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
-	mes.cacheMutex.RLock()
-	defer mes.cacheMutex.RUnlock()
+	stats := mes.cache.Stats()
 
-	stats := map[string]interface{}{
-		"totalCached": len(mes.messageCache),
+	result := map[string]interface{}{
+		"totalCached": stats.TotalEntries,
 		"isRunning":   mes.isRunning,
+		"hitRate":     stats.HitRate,
+		"memoryUsage": stats.MemoryUsage,
 	}
 
-	// Contar mensagens por guild
+	// Contar mensagens por guild (melhor esforço)
 	guildCounts := make(map[string]int)
-	for _, msg := range mes.messageCache {
-		guildCounts[msg.GuildID]++
+	for _, key := range mes.cache.Keys() {
+		if v, ok := mes.cache.Get(key); ok {
+			if msg, ok := v.(*CachedMessage); ok && msg != nil && msg.GuildID != "" {
+				guildCounts[msg.GuildID]++
+			}
+		}
 	}
-	stats["perGuild"] = guildCounts
+	result["perGuild"] = guildCounts
 
-	return stats
+	return result
 }
