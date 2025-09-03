@@ -1,4 +1,4 @@
-package discordcore
+package files
 
 import (
 	"encoding/json"
@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alice-bnuy/discordcore/v2/internal/util"
+	"github.com/alice-bnuy/errutil"
+	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -43,11 +46,10 @@ func ensureDirectories(directories []string) error {
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				log.Printf("Failed to create directory: %v", err)
-				Errorf("Failed to create directory: %s, error: %v", dir, err)
 				return fmt.Errorf("failed to create directory: %w", err)
 			}
 			log.Printf("Directory created at %s", dir)
-			Infof("Directory created at %s", dir)
+			logutil.Infof("Directory created at %s", dir)
 		}
 	}
 	return nil
@@ -104,7 +106,7 @@ func NewConfigManager() *ConfigManager {
 		configFilePath: configFilePath,
 		cacheFilePath:  GetApplicationCacheFilePath(),
 		logsDirPath:    filepath.Join(ApplicationSupportPath, "logs"),
-		jsonManager:    NewJSONManager(configFilePath),
+		jsonManager:    util.NewJSONManager(configFilePath),
 	}
 }
 
@@ -112,7 +114,7 @@ func NewConfigManager() *ConfigManager {
 func NewConfigManagerWithPath(configPath string) *ConfigManager {
 	return &ConfigManager{
 		configFilePath: configPath,
-		jsonManager:    NewJSONManager(configPath),
+		jsonManager:    util.NewJSONManager(configPath),
 	}
 }
 
@@ -128,18 +130,17 @@ func (mgr *ConfigManager) LoadConfig() error {
 	err := mgr.jsonManager.Load(mgr.config)
 	if err != nil {
 		if os.IsNotExist(err) {
-			Warnf(LogLoadConfigFileNotFound, mgr.configFilePath)
+			logutil.Warnf(LogLoadConfigFileNotFound, mgr.configFilePath)
 			return nil
 		}
-		Errorf(LogLoadConfigFailedReadFile, mgr.configFilePath, err)
-		return HandleConfigError("read", mgr.configFilePath, func() error { return err })
+		return errutil.HandleConfigError("read", mgr.configFilePath, func() error { return err })
 	}
 
 	if len(mgr.config.Guilds) == 0 {
-		Warnf(LogLoadConfigNoGuilds, mgr.configFilePath)
+		logutil.Warnf(LogLoadConfigNoGuilds, mgr.configFilePath)
 	}
 
-	Infof(LogLoadConfigSuccess, mgr.configFilePath)
+	logutil.Infof(LogLoadConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
@@ -149,17 +150,15 @@ func (mgr *ConfigManager) SaveConfig() error {
 	defer mgr.mu.RUnlock()
 
 	if mgr.config == nil {
-		Errorf(LogSaveConfigNilConfig)
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 
 	err := mgr.jsonManager.Save(mgr.config)
 	if err != nil {
-		Errorf(LogSaveConfigFailedWriteFile, mgr.configFilePath, err)
-		return HandleConfigError("write", mgr.configFilePath, func() error { return err })
+		return errutil.HandleConfigError("write", mgr.configFilePath, func() error { return err })
 	}
 
-	Infof(LogSaveConfigSuccess, mgr.configFilePath)
+	logutil.Infof(LogSaveConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
@@ -246,13 +245,13 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 	for _, g := range session.State.Guilds {
 		fullGuild, err := session.Guild(g.ID)
 		if err != nil {
-			WithField("guildID", g.ID).Warnf(LogCouldNotFetchGuild, err)
+			logutil.WithField("guildID", g.ID).Warnf(LogCouldNotFetchGuild, err)
 			continue
 		}
 
 		channelID := FindSuitableChannel(session, g.ID)
 		if channelID == "" {
-			WithField("guildID", g.ID).Warnf(LogNoSuitableChannel, fullGuild.Name)
+			logutil.WithField("guildID", g.ID).Warnf(LogNoSuitableChannel, fullGuild.Name)
 			continue
 		}
 
@@ -266,7 +265,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
 		mgr.mu.Unlock()
-		WithFields(map[string]interface{}{
+		logutil.WithFields(map[string]any{
 			"guildName": fullGuild.Name,
 			"guildID":   g.ID,
 			"channelID": channelID,
@@ -292,7 +291,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		for _, g := range mgr.config.Guilds {
 			if g.GuildID == guildID {
 				mgr.mu.RUnlock()
-				WithField("guildID", guildID).Info(LogGuildAlreadyConfigured)
+				logutil.WithField("guildID", guildID).Info(LogGuildAlreadyConfigured)
 				return nil
 			}
 		}
@@ -320,7 +319,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	if ch, err := session.Channel(channelID); err == nil {
 		channelName = ch.Name
 	}
-	WithFields(map[string]interface{}{
+	logutil.WithFields(map[string]any{
 		"guildName": guild.Name,
 		"guildID":   guildID,
 		"channel":   channelName,
@@ -338,12 +337,12 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	}
 	for _, guildConfig := range configuration.Guilds {
 		if guild, err := s.Guild(guildConfig.GuildID); err == nil {
-			WithFields(map[string]interface{}{
+			logutil.WithFields(map[string]any{
 				"guildName": guild.Name,
 				"guildID":   guild.ID,
 			}).Info(LogMonitorGuild)
 		} else {
-			WithField("guildID", guildConfig.GuildID).Warn(LogGuildNotAccessible)
+			logutil.WithField("guildID", guildConfig.GuildID).Warn(LogGuildNotAccessible)
 		}
 	}
 }
@@ -455,7 +454,7 @@ func EnsureSettingsFile() error {
 	// Check if settings file exists
 	settingsFilePath := filepath.Join(preferencesDir, "settings.json")
 	if _, err := os.Stat(settingsFilePath); os.IsNotExist(err) {
-		Infof("Settings file not found, creating default at %s", settingsFilePath)
+		logutil.Infof("Settings file not found, creating default at %s", settingsFilePath)
 
 		// Create basic empty config
 		defaultConfig := BotConfig{
@@ -484,7 +483,7 @@ func EnsureApplicationCacheFile() error {
 	// Check if cache file exists
 	cacheFilePath := filepath.Join(dataDir, "application_cache.json")
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
-		Infof("Application cache file not found, creating default at %s", cacheFilePath)
+		logutil.Infof("Application cache file not found, creating default at %s", cacheFilePath)
 
 		// Create basic empty cache
 		defaultCache := `{"guilds":{},"last_updated":"","version":"2.0"}`
@@ -499,11 +498,6 @@ func EnsureApplicationCacheFile() error {
 // GetSettingsFilePath returns the standardized path for settings.json
 func GetSettingsFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
-}
-
-// GetApplicationCacheFilePath returns the standardized path for application_cache.json
-func GetApplicationCacheFilePath() string {
-	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
 }
 
 // --- Unified Settings Operations ---
@@ -522,7 +516,7 @@ func GetApplicationCacheFilePath() string {
 // LoadSettingsFile loads settings from the standardized settings.json file
 func LoadSettingsFile() (*BotConfig, error) {
 	settingsPath := GetSettingsFilePath()
-	jsonManager := NewJSONManager(settingsPath)
+	jsonManager := util.NewJSONManager(settingsPath)
 
 	config := &BotConfig{Guilds: []GuildConfig{}}
 	err := jsonManager.Load(config)
@@ -543,7 +537,7 @@ func SaveSettingsFile(config *BotConfig) error {
 	}
 
 	settingsPath := GetSettingsFilePath()
-	jsonManager := NewJSONManager(settingsPath)
+	jsonManager := util.NewJSONManager(settingsPath)
 
 	if err := jsonManager.Save(config); err != nil {
 		return fmt.Errorf("failed to save settings to %s: %w", settingsPath, err)
@@ -575,7 +569,7 @@ func SaveSettingsFile(config *BotConfig) error {
 // LoadApplicationCacheFile loads cache from the standardized application_cache.json file
 func LoadApplicationCacheFile() (*AvatarMultiGuildCache, error) {
 	cachePath := GetApplicationCacheFilePath()
-	jsonManager := NewJSONManager(cachePath)
+	jsonManager := util.NewJSONManager(cachePath)
 
 	cache := &AvatarMultiGuildCache{
 		Guilds:      make(map[string]*AvatarCache),
@@ -601,7 +595,7 @@ func SaveApplicationCacheFile(cache *AvatarMultiGuildCache) error {
 	}
 
 	cachePath := GetApplicationCacheFilePath()
-	jsonManager := NewJSONManager(cachePath)
+	jsonManager := util.NewJSONManager(cachePath)
 
 	if err := jsonManager.Save(cache); err != nil {
 		return fmt.Errorf("failed to save application cache to %s: %w", cachePath, err)
@@ -614,17 +608,17 @@ func SaveApplicationCacheFile(cache *AvatarMultiGuildCache) error {
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		Warn(LogNoConfiguredGuilds)
+		logutil.Warn(LogNoConfiguredGuilds)
 		return nil
 	}
-	Infof(LogFoundConfiguredGuilds, len(cfg.Guilds))
+	logutil.Infof(LogFoundConfiguredGuilds, len(cfg.Guilds))
 	var errCount int
 	for _, g := range cfg.Guilds {
 		guild, err := session.Guild(g.GuildID)
 		if err == nil {
-			WithFields(map[string]interface{}{"guildName": guild.Name, "guildID": guild.ID}).Info("🔎 Will monitor this guild")
+			logutil.WithFields(map[string]any{"guildName": guild.Name, "guildID": guild.ID}).Info("🔎 Will monitor this guild")
 		} else {
-			WithField("guildID", g.GuildID).Warn(LogGuildNotAccessible)
+			logutil.WithField("guildID", g.GuildID).Warn(LogGuildNotAccessible)
 			errCount++
 		}
 	}

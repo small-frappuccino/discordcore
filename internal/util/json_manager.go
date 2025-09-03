@@ -1,4 +1,4 @@
-package discordcore
+package util
 
 import (
 	"encoding/json"
@@ -30,7 +30,7 @@ func (m *JSONManager) WithProjectRoot(projectRoot string) *JSONManager {
 }
 
 // Load reads the JSON file and unmarshals it into the provided data structure.
-func (m *JSONManager) Load(data interface{}) error {
+func (m *JSONManager) Load(data any) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

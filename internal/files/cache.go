@@ -1,11 +1,16 @@
-package discordcore
+package files
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/alice-bnuy/discordcore/v2/internal/util"
+
+	"github.com/alice-bnuy/logutil"
 )
 
 // AvatarMultiGuildCache represents the cache file containing all guilds
@@ -21,7 +26,7 @@ type AvatarCacheManager struct {
 	mu          sync.RWMutex
 	saveMu      sync.Mutex
 	lastSave    time.Time
-	jsonManager *JSONManager
+	jsonManager *util.JSONManager
 }
 
 func NewAvatarCacheManager() *AvatarCacheManager {
@@ -30,7 +35,7 @@ func NewAvatarCacheManager() *AvatarCacheManager {
 	return &AvatarCacheManager{
 		path:        path,
 		guilds:      make(map[string]*AvatarCache),
-		jsonManager: NewJSONManager(path),
+		jsonManager: util.NewJSONManager(path),
 	}
 }
 
@@ -43,10 +48,10 @@ func (m *AvatarCacheManager) Load() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			m.guilds = make(map[string]*AvatarCache)
-			WithField("path", m.path).Info("Cache file does not exist, initializing empty cache")
+			logutil.WithField("path", m.path).Info("Cache file does not exist, initializing empty cache")
 			return nil
 		}
-		WithFields(map[string]interface{}{
+		logutil.WithFields(map[string]interface{}{
 			"path":  m.path,
 			"error": err,
 		}).Error("Failed to read cache file")
@@ -56,13 +61,13 @@ func (m *AvatarCacheManager) Load() error {
 	var multiCache AvatarMultiGuildCache
 	if err := json.Unmarshal(data, &multiCache); err == nil && multiCache.Guilds != nil {
 		m.guilds = multiCache.Guilds
-		WithField("path", m.path).Info("Cache loaded successfully")
+		logutil.WithField("path", m.path).Info("Cache loaded successfully")
 		return nil
 	}
 
 	var oldCache AvatarCache
 	if err := json.Unmarshal(data, &oldCache); err != nil {
-		WithFields(map[string]interface{}{
+		logutil.WithFields(map[string]interface{}{
 			"path":  m.path,
 			"error": err,
 		}).Error("Failed to unmarshal cache file")
@@ -72,7 +77,7 @@ func (m *AvatarCacheManager) Load() error {
 	m.guilds = make(map[string]*AvatarCache)
 	if oldCache.GuildID != "" {
 		m.guilds[oldCache.GuildID] = &oldCache
-		WithField("guildID", oldCache.GuildID).Info("Loaded old cache format for guild")
+		logutil.WithField("guildID", oldCache.GuildID).Info("Loaded old cache format for guild")
 	}
 
 	return nil
@@ -84,13 +89,13 @@ func (m *AvatarCacheManager) GuildCache(guildID string) *AvatarCache {
 	existing, ok := m.guilds[guildID]
 	m.mu.RUnlock()
 	if ok {
-		WithField("guildID", guildID).Debug("Cache hit for guild")
+		logutil.WithField("guildID", guildID).Debug("Cache hit for guild")
 		return existing
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if cache, ok := m.guilds[guildID]; ok {
-		WithField("guildID", guildID).Debug("Cache hit for guild after lock")
+		logutil.WithField("guildID", guildID).Debug("Cache hit for guild after lock")
 		return cache
 	}
 	cache := &AvatarCache{
@@ -99,7 +104,7 @@ func (m *AvatarCacheManager) GuildCache(guildID string) *AvatarCache {
 		GuildID:     guildID,
 	}
 	m.guilds[guildID] = cache
-	WithField("guildID", guildID).Info("Initialized new cache for guild")
+	logutil.WithField("guildID", guildID).Info("Initialized new cache for guild")
 	return cache
 }
 
@@ -116,12 +121,12 @@ func (m *AvatarCacheManager) UpdateAvatar(guildID, userID, avatarHash string) {
 			GuildID:     guildID,
 		}
 		m.guilds[guildID] = cache
-		WithField("guildID", guildID).Info("Created new cache for guild during avatar update")
+		logutil.WithField("guildID", guildID).Info("Created new cache for guild during avatar update")
 	}
 
 	cache.Avatars[userID] = avatarHash
 	cache.LastUpdated = time.Now()
-	WithFields(map[string]interface{}{
+	logutil.WithFields(map[string]interface{}{
 		"guildID":    guildID,
 		"userID":     userID,
 		"avatarHash": avatarHash,
@@ -133,13 +138,13 @@ func (m *AvatarCacheManager) AvatarHash(guildID, userID string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if cache := m.guilds[guildID]; cache != nil {
-		WithFields(map[string]interface{}{
+		logutil.WithFields(map[string]interface{}{
 			"guildID": guildID,
 			"userID":  userID,
 		}).Debug("Retrieved avatar hash from cache")
 		return cache.Avatars[userID]
 	}
-	WithFields(map[string]interface{}{
+	logutil.WithFields(map[string]interface{}{
 		"guildID": guildID,
 		"userID":  userID,
 	}).Warn("Avatar hash not found in cache")
@@ -158,14 +163,14 @@ func (m *AvatarCacheManager) Save() error {
 	}
 
 	if err := m.jsonManager.Save(multiCache); err != nil {
-		WithFields(map[string]interface{}{
+		logutil.WithFields(map[string]interface{}{
 			"path":  m.path,
 			"error": err,
 		}).Error("Failed to write cache file")
 		return fmt.Errorf(ErrWriteAvatarCache, err)
 	}
 
-	WithField("path", m.path).Info("Cache saved successfully")
+	logutil.WithField("path", m.path).Info("Cache saved successfully")
 	return nil
 }
 
@@ -192,7 +197,7 @@ func (m *AvatarCacheManager) ClearForGuild(guildID string) error {
 	m.mu.Lock()
 	if _, exists := m.guilds[guildID]; !exists {
 		m.mu.Unlock()
-		WithField("guildID", guildID).Warn(WarnNoGuildCache)
+		logutil.WithField("guildID", guildID).Warn(WarnNoGuildCache)
 		return nil
 	}
 	delete(m.guilds, guildID)
@@ -210,4 +215,9 @@ func (m *AvatarCacheManager) GuildIDs() []string {
 		ids = append(ids, guildID)
 	}
 	return ids
+}
+
+// GetApplicationCacheFilePath returns the standardized path for application_cache.json
+func GetApplicationCacheFilePath() string {
+	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
 }

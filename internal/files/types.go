@@ -1,4 +1,4 @@
-package discordcore
+package files
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/alice-bnuy/discordcore/v2/internal/util"
 )
 
 // ## Config Types
@@ -35,7 +37,7 @@ type ConfigManager struct {
 	logsDirPath    string
 	config         *BotConfig
 	mu             sync.RWMutex
-	jsonManager    *JSONManager
+	jsonManager    *util.JSONManager
 }
 
 // ## Avatar Cache Types
