@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
+	dcache "github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/discord/commands"
+	"github.com/alice-bnuy/discordcore/v2/internal/discord/commands/admin"
 	"github.com/alice-bnuy/discordcore/v2/internal/discord/logging"
 	"github.com/alice-bnuy/discordcore/v2/internal/discord/session"
+	"github.com/alice-bnuy/discordcore/v2/internal/errors"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
+	"github.com/alice-bnuy/discordcore/v2/internal/service"
 	"github.com/alice-bnuy/discordcore/v2/internal/util"
 	"github.com/alice-bnuy/errutil"
 	"github.com/alice-bnuy/logutil"
@@ -40,6 +46,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize unified error handler
+	errorHandler := errors.NewErrorHandler()
+
 	// Log bot startup
 	logutil.Info("🚀 Starting Alice Bot...")
 
@@ -68,7 +77,7 @@ func main() {
 	logutil.Infof("✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
 
 	// Initialize avatar/config cache
-	cache := files.NewAvatarCacheManager()
+	cache := dcache.NewDefaultAvatarCacheManager()
 	if err := cache.Load(); err != nil {
 		logutil.ErrorWithErr("Error loading cache", err)
 	}
@@ -78,34 +87,81 @@ func main() {
 		logutil.ErrorWithErr("Some configured guilds could not be accessed", err)
 	}
 
-	// Initialize and start multi-guild monitoring service
-	monitorService, err := logging.NewMonitoringService(discordSession, configManager, cache)
-	if err != nil {
-		logutil.ErrorWithErr("Failed to initialize monitoring service", err)
-		logutil.Fatal("❌ Failed to initialize monitoring service")
-	}
-	if err := monitorService.Start(); err != nil {
-		logutil.ErrorWithErr("Failed to start monitoring service", err)
-		logutil.Fatal("❌ Failed to start monitoring service")
-	}
-	// Ensure safe shutdown of monitoring service
-	defer func() {
-		if err := monitorService.Stop(); err != nil {
-			logutil.ErrorWithErr("Failed to stop monitoring service", err)
-		}
-	}()
+	// Initialize Service Manager
+	serviceManager := service.NewServiceManager(errorHandler)
 
-	// Initialize and start AutoMod service (keyword-based moderation)
+	// Create service wrappers for existing services
+	logutil.Info("🔧 Creating service wrappers...")
+
+	// Wrap MonitoringService
+	monitoringService, err := logging.NewMonitoringService(discordSession, configManager, cache)
+	if err != nil {
+		logutil.ErrorWithErr("Failed to create monitoring service", err)
+		logutil.Fatal("❌ Failed to create monitoring service")
+	}
+
+	monitoringWrapper := service.NewServiceWrapper(
+		"monitoring",
+		service.TypeMonitoring,
+		service.PriorityHigh,
+		[]string{}, // No dependencies
+		func() error { return monitoringService.Start() },
+		func() error { return monitoringService.Stop() },
+		func() bool { return true }, // Simple health check
+	)
+
+	// Wrap AutomodService
 	automodService := logging.NewAutomodService(discordSession, configManager)
-	automodService.Start()
-	defer automodService.Stop()
+	automodWrapper := service.NewServiceWrapper(
+		"automod",
+		service.TypeAutomod,
+		service.PriorityNormal,
+		[]string{}, // No dependencies
+		func() error { automodService.Start(); return nil },
+		func() error { automodService.Stop(); return nil },
+		func() bool { return true }, // Simple health check
+	)
+
+	// Register services with the manager
+	if err := serviceManager.Register(monitoringWrapper); err != nil {
+		logutil.ErrorWithErr("Failed to register monitoring service", err)
+		logutil.Fatal("❌ Failed to register monitoring service")
+	}
+
+	if err := serviceManager.Register(automodWrapper); err != nil {
+		logutil.ErrorWithErr("Failed to register automod service", err)
+		logutil.Fatal("❌ Failed to register automod service")
+	}
+
+	// Start all services
+	logutil.Info("🚀 Starting all services...")
+	if err := serviceManager.StartAll(); err != nil {
+		logutil.ErrorWithErr("Failed to start services", err)
+		logutil.Fatal("❌ Failed to start services")
+	}
 
 	// Initialize and register bot commands
-	commandHandler := commands.NewCommandHandler(discordSession, configManager, cache, monitorService, automodService)
+	commandHandler := commands.NewCommandHandler(discordSession, configManager)
 	if err := commandHandler.SetupCommands(); err != nil {
 		logutil.ErrorWithErr("Error configuring slash commands", err)
 		logutil.Fatal("❌ Error configuring slash commands")
 	}
+
+	// Register admin commands
+	adminCommands := admin.NewAdminCommands(serviceManager, cache)
+	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
+
+	// Ensure safe shutdown of all services
+	defer func() {
+		logutil.Info("🛑 Shutting down services...")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer shutdownCancel()
+
+		if err := serviceManager.StopAll(); err != nil {
+			logutil.ErrorWithErr("Some services failed to stop cleanly", err)
+		}
+		_ = shutdownCtx // Avoid unused variable warning
+	}()
 
 	// Log successful initialization and wait for shutdown
 	logutil.Info("🔗 Slash commands sync completed")

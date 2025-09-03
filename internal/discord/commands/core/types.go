@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -49,13 +50,13 @@ type Response struct {
 type BaseHandler struct {
 	session            *discordgo.Session
 	configManager      *files.ConfigManager
-	avatarCacheManager *files.AvatarCacheManager
+	avatarCacheManager *cache.AvatarCacheManager
 }
 
 func NewBaseHandler(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *files.AvatarCacheManager,
+	avatarCacheManager *cache.AvatarCacheManager,
 ) *BaseHandler {
 	return &BaseHandler{
 		session:            session,
@@ -75,7 +76,7 @@ func (bh *BaseHandler) GetConfigManager() *files.ConfigManager {
 }
 
 // GetAvatarCacheManager retorna o gerenciador de cache de avatar
-func (bh *BaseHandler) GetAvatarCacheManager() *files.AvatarCacheManager {
+func (bh *BaseHandler) GetAvatarCacheManager() *cache.AvatarCacheManager {
 	return bh.avatarCacheManager
 }
 

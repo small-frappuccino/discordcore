@@ -253,6 +253,19 @@ func (r *Responder) RespondWithEmbed(i *discordgo.InteractionCreate, embed *disc
 	})
 }
 
+// SendEmbed sends an embed response
+func (r *Responder) SendEmbed(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
+	return r.RespondWithEmbed(i, embed, false)
+}
+
+// EditResponse edits the original response
+func (r *Responder) EditResponse(i *discordgo.InteractionCreate, content string) error {
+	_, err := r.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &content,
+	})
+	return err
+}
+
 // Autocomplete envia uma resposta de autocomplete
 func (r *Responder) Autocomplete(i *discordgo.InteractionCreate, choices []*discordgo.ApplicationCommandOptionChoice) error {
 	if len(choices) > 25 {
@@ -357,6 +370,36 @@ func (AutocompleteUtils) CreateChoicesFromStrings(items []string) []*discordgo.A
 		}
 	}
 	return choices
+}
+
+// GetStringOption extracts a string option value from command options
+func GetStringOption(options []*discordgo.ApplicationCommandInteractionDataOption, name string) string {
+	for _, option := range options {
+		if option.Name == name && option.Type == discordgo.ApplicationCommandOptionString {
+			return option.StringValue()
+		}
+	}
+	return ""
+}
+
+// GetIntegerOption extracts an integer option value from command options
+func GetIntegerOption(options []*discordgo.ApplicationCommandInteractionDataOption, name string) int64 {
+	for _, option := range options {
+		if option.Name == name && option.Type == discordgo.ApplicationCommandOptionInteger {
+			return option.IntValue()
+		}
+	}
+	return 0
+}
+
+// GetBooleanOption extracts a boolean option value from command options
+func GetBooleanOption(options []*discordgo.ApplicationCommandInteractionDataOption, name string) bool {
+	for _, option := range options {
+		if option.Name == name && option.Type == discordgo.ApplicationCommandOptionBoolean {
+			return option.BoolValue()
+		}
+	}
+	return false
 }
 
 // EmbedBuilder constrói embeds padronizados

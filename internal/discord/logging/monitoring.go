@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -15,11 +16,11 @@ import (
 type UserWatcher struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
-	cacheManager  *files.AvatarCacheManager
+	cacheManager  *cache.AvatarCacheManager
 	notifier      *NotificationSender
 }
 
-func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, cacheManager *files.AvatarCacheManager, notifier *NotificationSender) *UserWatcher {
+func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, cacheManager *cache.AvatarCacheManager, notifier *NotificationSender) *UserWatcher {
 	return &UserWatcher{
 		session:       session,
 		configManager: configManager,
@@ -32,7 +33,7 @@ func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManag
 type MonitoringService struct {
 	session             *discordgo.Session
 	configManager       *files.ConfigManager
-	cacheManager        *files.AvatarCacheManager
+	cacheManager        *cache.AvatarCacheManager
 	notifier            *NotificationSender
 	userWatcher         *UserWatcher
 	memberEventService  *MemberEventService  // Serviço para eventos de entrada/saída
@@ -45,7 +46,7 @@ type MonitoringService struct {
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
-func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, cacheManager *files.AvatarCacheManager) (*MonitoringService, error) {
+func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, cacheManager *cache.AvatarCacheManager) (*MonitoringService, error) {
 	if session == nil {
 		return nil, fmt.Errorf("discord session is nil")
 	}

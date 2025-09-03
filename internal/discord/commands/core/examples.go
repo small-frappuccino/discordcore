@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/bwmarrin/discordgo"
 )
@@ -442,7 +443,7 @@ func (h *ConfigAutocompleteHandler) getValueChoices(ctx *Context) ([]*discordgo.
 func ExampleCommandSetup(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *files.AvatarCacheManager,
+	avatarCacheManager *cache.AvatarCacheManager,
 ) error {
 	// Criar o gerenciador de comandos
 	manager := NewCommandManager(session, configManager, avatarCacheManager)

@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 
+	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -21,7 +22,7 @@ type CommandRouter struct {
 func NewCommandRouter(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *files.AvatarCacheManager,
+	avatarCacheManager *cache.AvatarCacheManager,
 ) *CommandRouter {
 	registry := NewCommandRegistry()
 	responder := NewResponder(session)
@@ -153,7 +154,7 @@ type CommandManager struct {
 func NewCommandManager(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *files.AvatarCacheManager,
+	avatarCacheManager *cache.AvatarCacheManager,
 ) *CommandManager {
 	return &CommandManager{
 		session: session,
@@ -384,3 +385,28 @@ func (sc *SimpleCommand) Options() []*discordgo.ApplicationCommandOption {
 func (sc *SimpleCommand) Handle(ctx *Context) error { return sc.handler(ctx) }
 func (sc *SimpleCommand) RequiresGuild() bool       { return sc.requiresGuild }
 func (sc *SimpleCommand) RequiresPermissions() bool { return sc.requiresPermissions }
+
+// GetSession returns the Discord session from the context builder
+func (cr *CommandRouter) GetSession() *discordgo.Session {
+	return cr.contextBuilder.session
+}
+
+// GetConfigManager returns the config manager from the context builder
+func (cr *CommandRouter) GetConfigManager() *files.ConfigManager {
+	return cr.contextBuilder.configManager
+}
+
+// GetRegistry returns the command registry
+func (cr *CommandRouter) GetRegistry() *CommandRegistry {
+	return cr.registry
+}
+
+// GetResponder returns the responder
+func (cr *CommandRouter) GetResponder() *Responder {
+	return cr.responder
+}
+
+// GetPermissionChecker returns the permission checker
+func (cr *CommandRouter) GetPermissionChecker() *PermissionChecker {
+	return cr.permChecker
+}

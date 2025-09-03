@@ -92,7 +92,7 @@ func main() {
         log.Fatal(err)
     }
     
-    cache := files.NewAvatarCacheManager()
+    cache := dcache.NewDefaultAvatarCacheManager()
     cache.Load()
     
     // Inicializar serviços de monitoramento

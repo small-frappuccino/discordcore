@@ -50,6 +50,13 @@ type AvatarCache struct {
 	GuildID     string            `json:"guild_id"`
 }
 
+// AvatarMultiGuildCache represents the cache file containing all guilds
+type AvatarMultiGuildCache struct {
+	Guilds      map[string]*AvatarCache `json:"guilds"`
+	LastUpdated time.Time               `json:"last_updated"`
+	Version     string                  `json:"version"`
+}
+
 // AvatarChange holds information about a user's avatar change.
 type AvatarChange struct {
 	UserID    string
