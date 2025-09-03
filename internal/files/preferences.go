@@ -349,7 +349,7 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 
 func EnsureConfigFiles() error {
 	// Create base directory if it doesn't exist
-	if err := os.MkdirAll(ApplicationSupportPath, 0755); err != nil {
+	if err := os.MkdirAll(util.ApplicationSupportPath, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -369,7 +369,7 @@ func EnsureConfigFiles() error {
 // EnsureSettingsFile ensures the settings.json file exists and is properly initialized
 func EnsureSettingsFile() error {
 	// Create preferences subdirectory if it doesn't exist
-	preferencesDir := filepath.Join(ApplicationSupportPath, "preferences")
+	preferencesDir := filepath.Join(util.ApplicationSupportPath, "preferences")
 	if err := os.MkdirAll(preferencesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create preferences directory: %w", err)
 	}
@@ -398,7 +398,7 @@ func EnsureSettingsFile() error {
 // EnsureApplicationCacheFile ensures the application_cache.json file exists and is properly initialized
 func EnsureApplicationCacheFile() error {
 	// Create data subdirectory if it doesn't exist
-	dataDir := filepath.Join(ApplicationSupportPath, "data")
+	dataDir := filepath.Join(util.ApplicationSupportPath, "data")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
