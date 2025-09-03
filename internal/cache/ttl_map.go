@@ -167,7 +167,7 @@ func (m *TTLMap) Stats() CacheStats {
 	var memory int64
 
 	m.mu.RLock()
-	for k, v := range m.data {
+	for _, v := range m.data {
 		if v == nil {
 			continue
 		}
