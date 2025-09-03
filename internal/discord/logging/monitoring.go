@@ -30,16 +30,18 @@ func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManag
 
 // MonitoringService coordena handlers multi-guild e delega tarefas específicas (ex.: usuário).
 type MonitoringService struct {
-	session       *discordgo.Session
-	configManager *files.ConfigManager
-	cacheManager  *files.AvatarCacheManager
-	notifier      *NotificationSender
-	userWatcher   *UserWatcher
-	isRunning     bool
-	stopChan      chan struct{}
-	runMu         sync.Mutex
-	recentChanges map[string]time.Time // Debounce para evitar duplicidade
-	changesMutex  sync.RWMutex
+	session             *discordgo.Session
+	configManager       *files.ConfigManager
+	cacheManager        *files.AvatarCacheManager
+	notifier            *NotificationSender
+	userWatcher         *UserWatcher
+	memberEventService  *MemberEventService  // Serviço para eventos de entrada/saída
+	messageEventService *MessageEventService // Serviço para eventos de mensagens
+	isRunning           bool
+	stopChan            chan struct{}
+	runMu               sync.Mutex
+	recentChanges       map[string]time.Time // Debounce para evitar duplicidade
+	changesMutex        sync.RWMutex
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
@@ -55,13 +57,15 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	}
 	n := NewNotificationSender(session)
 	ms := &MonitoringService{
-		session:       session,
-		configManager: configManager,
-		cacheManager:  cacheManager,
-		notifier:      n,
-		userWatcher:   NewUserWatcher(session, configManager, cacheManager, n),
-		stopChan:      make(chan struct{}),
-		recentChanges: make(map[string]time.Time),
+		session:             session,
+		configManager:       configManager,
+		cacheManager:        cacheManager,
+		notifier:            n,
+		userWatcher:         NewUserWatcher(session, configManager, cacheManager, n),
+		memberEventService:  NewMemberEventService(session, configManager, n),
+		messageEventService: NewMessageEventService(session, configManager, n),
+		stopChan:            make(chan struct{}),
+		recentChanges:       make(map[string]time.Time),
 	}
 	return ms, nil
 }
@@ -79,7 +83,21 @@ func (ms *MonitoringService) Start() error {
 	ms.ensureGuildsListed()
 	ms.initializeCache()
 	ms.setupEventHandlers()
+
+	// Iniciar novos serviços
+	if err := ms.memberEventService.Start(); err != nil {
+		ms.isRunning = false
+		return fmt.Errorf("failed to start member event service: %w", err)
+	}
+	if err := ms.messageEventService.Start(); err != nil {
+		ms.isRunning = false
+		// Parar o serviço de membros se falhou
+		ms.memberEventService.Stop()
+		return fmt.Errorf("failed to start message event service: %w", err)
+	}
+
 	go ms.periodicCheck()
+	logutil.Info("All monitoring services started successfully")
 	return nil
 }
 
@@ -93,6 +111,15 @@ func (ms *MonitoringService) Stop() error {
 	}
 	ms.isRunning = false
 	close(ms.stopChan)
+
+	// Parar novos serviços
+	if err := ms.memberEventService.Stop(); err != nil {
+		logutil.WithField("error", err).Warn("Error stopping member event service")
+	}
+	if err := ms.messageEventService.Stop(); err != nil {
+		logutil.WithField("error", err).Warn("Error stopping message event service")
+	}
+
 	logutil.Info("Monitoring service stopped")
 	return nil
 }

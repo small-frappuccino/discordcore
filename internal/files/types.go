@@ -16,7 +16,8 @@ import (
 type GuildConfig struct {
 	GuildID             string    `json:"guild_id"`
 	CommandChannelID    string    `json:"command_channel_id"`
-	UserLogChannelID    string    `json:"user_log_channel_id"` // Renamed from AvatarLogChannelID
+	UserLogChannelID    string    `json:"user_log_channel_id"`    // Para logs de entrada/saída e avatares
+	MessageLogChannelID string    `json:"message_log_channel_id"` // Para logs de mensagens editadas/deletadas
 	AutomodLogChannelID string    `json:"automod_log_channel_id"`
 	AllowedRoles        []string  `json:"allowed_roles"`
 	Rulesets            []Ruleset `json:"rulesets,omitempty"`

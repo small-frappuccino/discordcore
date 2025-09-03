@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 
@@ -103,6 +104,182 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 	}
 
 	return fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.%s?size=128", userID, avatarHash, format)
+}
+
+// SendMemberJoinNotification envia notificação de entrada de membro
+func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
+	embed := &discordgo.MessageEmbed{
+		Title:       "👋 Membro entrou",
+		Color:       0x00FF00, // Verde
+		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Conta criada há",
+				Value:  formatDuration(accountAge),
+				Inline: true,
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
+// SendMemberLeaveNotification envia notificação de saída de membro
+func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration) error {
+	embed := &discordgo.MessageEmbed{
+		Title:       "👋 Membro saiu",
+		Color:       0xFF0000, // Vermelho
+		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	if serverTime > 0 {
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{
+				Name:   "Tempo no servidor",
+				Value:  formatDuration(serverTime),
+				Inline: true,
+			},
+		}
+	} else {
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{
+				Name:   "Tempo no servidor",
+				Value:  "Tempo desconhecido",
+				Inline: true,
+			},
+		}
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
+// SendMessageEditNotification envia notificação de edição de mensagem
+func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error {
+	embed := &discordgo.MessageEmbed{
+		Title:       "✏️ Mensagem editada",
+		Color:       0xFFA500, // Laranja
+		Description: fmt.Sprintf("**%s** (<@%s>) editou uma mensagem em <#%s>", original.Author.Username, original.Author.ID, original.ChannelID),
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Antes",
+				Value:  truncateString(original.Content, 1000),
+				Inline: false,
+			},
+			{
+				Name:   "Depois",
+				Value:  truncateString(edited.Content, 1000),
+				Inline: false,
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: ns.buildAvatarURL(original.Author.ID, original.Author.Avatar),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
+// SendMessageDeleteNotification envia notificação de deleção de mensagem
+func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error {
+	embed := &discordgo.MessageEmbed{
+		Title:       "🗑️ Mensagem deletada",
+		Color:       0xFF0000, // Vermelho
+		Description: fmt.Sprintf("Mensagem de **%s** (<@%s>) deletada em <#%s>", deleted.Author.Username, deleted.Author.ID, deleted.ChannelID),
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Conteúdo",
+				Value:  truncateString(deleted.Content, 1000),
+				Inline: false,
+			},
+			{
+				Name:   "Deletado por",
+				Value:  deletedBy,
+				Inline: true,
+			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: ns.buildAvatarURL(deleted.Author.ID, deleted.Author.Avatar),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
+// formatDuration formata uma duração de tempo de forma legível
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "Tempo desconhecido"
+	}
+
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 365 {
+		years := days / 365
+		remainingDays := days % 365
+		if years == 1 {
+			return fmt.Sprintf("1 ano, %d dias", remainingDays)
+		}
+		return fmt.Sprintf("%d anos, %d dias", years, remainingDays)
+	}
+
+	if days > 30 {
+		months := days / 30
+		remainingDays := days % 30
+		if months == 1 {
+			return fmt.Sprintf("1 mês, %d dias", remainingDays)
+		}
+		return fmt.Sprintf("%d meses, %d dias", months, remainingDays)
+	}
+
+	if days > 0 {
+		if days == 1 {
+			return fmt.Sprintf("1 dia, %d horas", hours)
+		}
+		return fmt.Sprintf("%d dias, %d horas", days, hours)
+	}
+
+	if hours > 0 {
+		if hours == 1 {
+			return fmt.Sprintf("1 hora, %d minutos", minutes)
+		}
+		return fmt.Sprintf("%d horas, %d minutos", hours, minutes)
+	}
+
+	if minutes > 0 {
+		if minutes == 1 {
+			return "1 minuto"
+		}
+		return fmt.Sprintf("%d minutos", minutes)
+	}
+
+	return "Menos de 1 minuto"
+}
+
+// truncateString trunca uma string para um tamanho máximo
+func truncateString(s string, maxLen int) string {
+	if s == "" {
+		return "*mensagem vazia*"
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
 
 func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
