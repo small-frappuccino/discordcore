@@ -7,6 +7,7 @@ import (
 
 	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
+	"github.com/alice-bnuy/discordcore/v2/internal/task"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -26,6 +27,7 @@ type MessageEventService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
 	notifier      *NotificationSender
+	adapters      *task.NotificationAdapters
 	cache         *cache.TTLMap
 	isRunning     bool
 }
@@ -170,19 +172,52 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	}).Info("Message edit detected")
 
 	// Enviar notificação de edição
-	if err := mes.notifier.SendMessageEditNotification(logChannelID, cached, m); err != nil {
-		logutil.WithFields(map[string]interface{}{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-			"channelID": logChannelID,
-			"error":     err,
-		}).Error("Failed to send message edit notification")
+	if mes.adapters != nil {
+		tCached := &task.CachedMessage{
+			ID:        cached.ID,
+			Content:   cached.Content,
+			Author:    cached.Author,
+			ChannelID: cached.ChannelID,
+			GuildID:   cached.GuildID,
+			Timestamp: cached.Timestamp,
+		}
+		if err := mes.adapters.EnqueueMessageEdit(logChannelID, tCached, m); err != nil {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+				"error":     err,
+			}).Error("Failed to send message edit notification")
+		} else {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+			}).Info("Message edit notification sent successfully")
+		}
 	} else {
-		logutil.WithFields(map[string]interface{}{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-			"channelID": logChannelID,
-		}).Info("Message edit notification sent successfully")
+		tCached := &task.CachedMessage{
+			ID:        cached.ID,
+			Content:   cached.Content,
+			Author:    cached.Author,
+			ChannelID: cached.ChannelID,
+			GuildID:   cached.GuildID,
+			Timestamp: cached.Timestamp,
+		}
+		if err := mes.notifier.SendMessageEditNotification(logChannelID, tCached, m); err != nil {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+				"error":     err,
+			}).Error("Failed to send message edit notification")
+		} else {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+			}).Info("Message edit notification sent successfully")
+		}
 	}
 
 	// Atualizar cache com novo conteúdo
@@ -252,19 +287,52 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	// TODO: Implementar auditlog check para detectar se foi um moderador
 
 	// Enviar notificação de deleção
-	if err := mes.notifier.SendMessageDeleteNotification(logChannelID, cached, deletedBy); err != nil {
-		logutil.WithFields(map[string]interface{}{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-			"channelID": logChannelID,
-			"error":     err,
-		}).Error("Failed to send message delete notification")
+	if mes.adapters != nil {
+		tCached := &task.CachedMessage{
+			ID:        cached.ID,
+			Content:   cached.Content,
+			Author:    cached.Author,
+			ChannelID: cached.ChannelID,
+			GuildID:   cached.GuildID,
+			Timestamp: cached.Timestamp,
+		}
+		if err := mes.adapters.EnqueueMessageDelete(logChannelID, tCached, deletedBy); err != nil {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+				"error":     err,
+			}).Error("Failed to send message delete notification")
+		} else {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+			}).Info("Message delete notification sent successfully")
+		}
 	} else {
-		logutil.WithFields(map[string]interface{}{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-			"channelID": logChannelID,
-		}).Info("Message delete notification sent successfully")
+		tCached := &task.CachedMessage{
+			ID:        cached.ID,
+			Content:   cached.Content,
+			Author:    cached.Author,
+			ChannelID: cached.ChannelID,
+			GuildID:   cached.GuildID,
+			Timestamp: cached.Timestamp,
+		}
+		if err := mes.notifier.SendMessageDeleteNotification(logChannelID, tCached, deletedBy); err != nil {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+				"error":     err,
+			}).Error("Failed to send message delete notification")
+		} else {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   cached.GuildID,
+				"messageID": m.ID,
+				"channelID": logChannelID,
+			}).Info("Message delete notification sent successfully")
+		}
 	}
 
 	// Remover do cache
@@ -295,4 +363,8 @@ func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
 	result["perGuild"] = guildCounts
 
 	return result
+}
+
+func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {
+	mes.adapters = adapters
 }

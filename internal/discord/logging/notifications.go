@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
+	"github.com/alice-bnuy/discordcore/v2/internal/task"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -164,7 +165,7 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 }
 
 // SendMessageEditNotification envia notificação de edição de mensagem
-func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error {
+func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *task.CachedMessage, edited *discordgo.MessageUpdate) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "✏️ Mensagem editada",
 		Color:       0xFFA500, // Laranja
@@ -192,7 +193,7 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 }
 
 // SendMessageDeleteNotification envia notificação de deleção de mensagem
-func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error {
+func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "🗑️ Mensagem deletada",
 		Color:       0xFF0000, // Vermelho

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/alice-bnuy/discordcore/v2/internal/cache"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
+	"github.com/alice-bnuy/discordcore/v2/internal/task"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -35,6 +37,8 @@ type MonitoringService struct {
 	configManager       *files.ConfigManager
 	cacheManager        *cache.AvatarCacheManager
 	notifier            *NotificationSender
+	adapters            *task.NotificationAdapters
+	router              *task.TaskRouter
 	userWatcher         *UserWatcher
 	memberEventService  *MemberEventService  // Serviço para eventos de entrada/saída
 	messageEventService *MessageEventService // Serviço para eventos de mensagens
@@ -43,6 +47,7 @@ type MonitoringService struct {
 	runMu               sync.Mutex
 	recentChanges       map[string]time.Time // Debounce para evitar duplicidade
 	changesMutex        sync.RWMutex
+	cronCancel          func()
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
@@ -57,6 +62,8 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		return nil, fmt.Errorf("cache manager is nil")
 	}
 	n := NewNotificationSender(session)
+	router := task.NewRouter(task.Defaults())
+	adapters := task.NewNotificationAdapters(router, session, configManager, cacheManager, n)
 	ms := &MonitoringService{
 		session:             session,
 		configManager:       configManager,
@@ -65,9 +72,14 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		userWatcher:         NewUserWatcher(session, configManager, cacheManager, n),
 		memberEventService:  NewMemberEventService(session, configManager, n),
 		messageEventService: NewMessageEventService(session, configManager, n),
+		adapters:            adapters,
+		router:              router,
 		stopChan:            make(chan struct{}),
 		recentChanges:       make(map[string]time.Time),
 	}
+	// Wire task adapters into sub-services
+	ms.memberEventService.SetAdapters(adapters)
+	ms.messageEventService.SetAdapters(adapters)
 	return ms, nil
 }
 
@@ -97,7 +109,12 @@ func (ms *MonitoringService) Start() error {
 		return fmt.Errorf("failed to start message event service: %w", err)
 	}
 
-	go ms.periodicCheck()
+	// Schedule periodic avatar scan via router cron instead of local goroutine
+	ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
+		ms.performPeriodicCheck()
+		return nil
+	})
+	ms.cronCancel = ms.router.ScheduleEvery(30*time.Minute, task.Task{Type: "monitor.scan_avatars"})
 	logutil.Info("All monitoring services started successfully")
 	return nil
 }
@@ -121,6 +138,14 @@ func (ms *MonitoringService) Stop() error {
 		logutil.WithField("error", err).Warn("Error stopping message event service")
 	}
 
+	// Cancel cron before closing router
+	if ms.cronCancel != nil {
+		ms.cronCancel()
+	}
+
+	if ms.router != nil {
+		ms.router.Close()
+	}
 	logutil.Info("Monitoring service stopped")
 	return nil
 }
@@ -290,7 +315,11 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 		}
 		ms.changesMutex.Unlock()
 
-		ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+		if ms.adapters != nil {
+			_ = ms.adapters.EnqueueProcessAvatarChange(guildID, userID, username, currentAvatar)
+		} else {
+			ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+		}
 	}
 }
 
@@ -341,20 +370,6 @@ func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string
 		return member.Nick
 	}
 	return userID
-}
-
-// periodicCheck executa checagens periódicas de avatar.
-func (ms *MonitoringService) periodicCheck() {
-	ticker := time.NewTicker(30 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			ms.performPeriodicCheck()
-		case <-ms.stopChan:
-			return
-		}
-	}
 }
 
 func (ms *MonitoringService) performPeriodicCheck() {
