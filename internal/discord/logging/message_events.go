@@ -87,19 +87,58 @@ func (mes *MessageEventService) GetCache() cache.CacheManager {
 
 // handleMessageCreate armazena mensagens no cache para futuras comparações
 func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m == nil || m.Author == nil || m.Author.Bot || m.Content == "" {
+	if m == nil {
+		logutil.Debug("MessageCreate: nil event")
 		return
 	}
+	if m.Author == nil {
+		logutil.WithFields(map[string]interface{}{
+			"channelID": m.ChannelID,
+		}).Debug("MessageCreate: nil author; skipping")
+		return
+	}
+	if m.Author.Bot {
+		logutil.WithFields(map[string]interface{}{
+			"channelID": m.ChannelID,
+			"userID":    m.Author.ID,
+		}).Debug("MessageCreate: ignoring bot message")
+		return
+	}
+	if m.Content == "" {
+		logutil.WithFields(map[string]interface{}{
+			"channelID": m.ChannelID,
+			"userID":    m.Author.ID,
+		}).Debug("MessageCreate: empty content; will not cache")
+		return
+	}
+	logutil.WithFields(map[string]interface{}{
+		"channelID": m.ChannelID,
+		"userID":    m.Author.ID,
+		"messageID": m.ID,
+	}).Debug("MessageCreate received")
 
 	// Verificar se é uma mensagem de guild
 	channel, err := s.Channel(m.ChannelID)
-	if err != nil || channel.GuildID == "" {
-		return // Ignorar DMs
+	if err != nil {
+		logutil.WithFields(map[string]interface{}{
+			"channelID": m.ChannelID,
+			"error":     err,
+		}).Debug("MessageCreate: failed to fetch channel; skipping cache")
+		return
+	}
+	if channel.GuildID == "" {
+		logutil.WithFields(map[string]interface{}{
+			"channelID": m.ChannelID,
+		}).Debug("MessageCreate: DM detected; skipping cache")
+		return
 	}
 
 	// Verificar se o guild está configurado
 	guildConfig := mes.configManager.GuildConfig(channel.GuildID)
 	if guildConfig == nil {
+		logutil.WithFields(map[string]interface{}{
+			"guildID": channel.GuildID,
+		}).Debug("MessageCreate: no guild config; skipping cache")
 		return
 	}
 
@@ -124,9 +163,31 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 
 // handleMessageUpdate processa edições de mensagens
 func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
-	if m == nil || m.Author == nil || m.Author.Bot {
+	if m == nil {
+		logutil.Debug("MessageUpdate: nil event")
 		return
 	}
+	if m.Author == nil {
+		logutil.WithFields(map[string]interface{}{
+			"messageID": m.ID,
+			"channelID": m.ChannelID,
+		}).Debug("MessageUpdate: nil author; skipping")
+		return
+	}
+	if m.Author.Bot {
+		logutil.WithFields(map[string]interface{}{
+			"messageID": m.ID,
+			"userID":    m.Author.ID,
+			"channelID": m.ChannelID,
+		}).Debug("MessageUpdate: ignoring bot edit")
+		return
+	}
+	logutil.WithFields(map[string]interface{}{
+		"messageID": m.ID,
+		"userID":    m.Author.ID,
+		"guildID":   m.GuildID,
+		"channelID": m.ChannelID,
+	}).Debug("MessageUpdate received")
 
 	// Verificar se temos a mensagem original no cache
 	key := m.GuildID + ":" + m.ID
@@ -146,11 +207,21 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 
 	// Verificar se realmente mudou o conteúdo
 	if cached.Content == m.Content {
+		logutil.WithFields(map[string]interface{}{
+			"guildID":   cached.GuildID,
+			"channelID": cached.ChannelID,
+			"messageID": m.ID,
+			"userID":    cached.Author.ID,
+		}).Debug("MessageUpdate: content unchanged; skipping notification")
 		return
 	}
 
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
+		logutil.WithFields(map[string]interface{}{
+			"guildID":   cached.GuildID,
+			"messageID": m.ID,
+		}).Debug("MessageUpdate: no guild config; skipping notification")
 		return
 	}
 
@@ -229,6 +300,11 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		GuildID:   cached.GuildID,
 		Timestamp: cached.Timestamp,
 	}, 0)
+	logutil.WithFields(map[string]interface{}{
+		"guildID":   cached.GuildID,
+		"channelID": cached.ChannelID,
+		"messageID": m.ID,
+	}).Debug("MessageUpdate: cache updated with new content")
 }
 
 // handleMessageDelete processa deleções de mensagens

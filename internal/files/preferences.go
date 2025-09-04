@@ -366,7 +366,8 @@ func EnsureConfigFiles() error {
 	return nil
 }
 
-// EnsureSettingsFile ensures the settings.json file exists and is properly initialized
+// EnsureSettingsFile ensures the settings.json file exists and is properly initialized.
+// If the file already exists and has a valid structure, it will not be modified.
 func EnsureSettingsFile() error {
 	// Create preferences subdirectory if it doesn't exist
 	preferencesDir := filepath.Join(util.ApplicationSupportPath, "preferences")
@@ -374,15 +375,16 @@ func EnsureSettingsFile() error {
 		return fmt.Errorf("failed to create preferences directory: %w", err)
 	}
 
-	// Check if settings file exists
-	settingsFilePath := filepath.Join(preferencesDir, "settings.json")
-	if _, err := os.Stat(settingsFilePath); os.IsNotExist(err) {
-		logutil.Infof("Settings file not found, creating default at %s", settingsFilePath)
+	// Determine settings file status
+	exists, valid, settingsFilePath, err := SettingsFileStatus()
+	if err != nil {
+		return fmt.Errorf("failed to check settings file status: %w", err)
+	}
 
-		// Create basic empty config
-		defaultConfig := BotConfig{
-			Guilds: []GuildConfig{},
-		}
+	// If file does not exist, create default
+	if !exists {
+		logutil.Infof("Settings file not found, creating default at %s", settingsFilePath)
+		defaultConfig := BotConfig{Guilds: []GuildConfig{}}
 		configData, err := json.MarshalIndent(defaultConfig, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to create settings file: %w", err)
@@ -390,9 +392,56 @@ func EnsureSettingsFile() error {
 		if err := os.WriteFile(settingsFilePath, configData, 0644); err != nil {
 			return fmt.Errorf("failed to write settings file: %w", err)
 		}
+		return nil
+	}
+
+	// If it exists and is valid, do not modify it
+	if valid {
+		logutil.Debugf("Settings file exists and is valid at %s; no changes made", settingsFilePath)
+		return nil
+	}
+
+	// If it exists but is invalid, replace with a default structure
+	logutil.Warnf("Settings file at %s exists but is invalid JSON structure; rewriting with default schema", settingsFilePath)
+	defaultConfig := BotConfig{Guilds: []GuildConfig{}}
+	configData, err := json.MarshalIndent(defaultConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to create default settings content: %w", err)
+	}
+	if err := os.WriteFile(settingsFilePath, configData, 0644); err != nil {
+		return fmt.Errorf("failed to write settings file: %w", err)
 	}
 
 	return nil
+}
+
+// SettingsFileStatus reports whether settings.json exists and whether its structure is valid.
+func SettingsFileStatus() (exists bool, valid bool, path string, err error) {
+	path = util.GetSettingsFilePath()
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		if os.IsNotExist(statErr) {
+			return false, false, path, nil
+		}
+		return false, false, path, fmt.Errorf("failed to stat settings file: %w", statErr)
+	}
+	if info.IsDir() {
+		return true, false, path, fmt.Errorf("settings path is a directory")
+	}
+
+	data, readErr := os.ReadFile(path)
+	if readErr != nil {
+		return true, false, path, fmt.Errorf("failed to read settings file: %w", readErr)
+	}
+
+	// Validate minimal structure by attempting to unmarshal into BotConfig
+	var tmp BotConfig
+	if json.Unmarshal(data, &tmp) != nil {
+		return true, false, path, nil
+	}
+
+	// Consider it valid if it unmarshals into BotConfig (even if empty)
+	return true, true, path, nil
 }
 
 // EnsureApplicationCacheFile ensures the application_cache.json file exists and is properly initialized

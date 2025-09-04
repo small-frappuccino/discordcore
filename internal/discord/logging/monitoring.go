@@ -208,6 +208,11 @@ func (ms *MonitoringService) ensureGuildsListed() {
 	if ms.session == nil || ms.session.State == nil {
 		return
 	}
+	// Ensure config is loaded before checking for existing guild entries
+	if err := ms.configManager.LoadConfig(); err != nil {
+		logutil.ErrorWithErr("Failed to load settings before ensuring guild list", err)
+	}
+
 	for _, g := range ms.session.State.Guilds {
 		if g == nil || g.ID == "" {
 			continue
@@ -230,6 +235,9 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	guildID := e.ID
 	if guildID == "" {
 		return
+	}
+	if err := ms.configManager.LoadConfig(); err != nil {
+		logutil.ErrorWithErr("Failed to load settings on guild create", err)
 	}
 	if ms.configManager.GuildConfig(guildID) == nil {
 		// Guild nova: adicionar no config e inicializar cache
