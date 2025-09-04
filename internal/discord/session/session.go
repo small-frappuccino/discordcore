@@ -44,7 +44,8 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 		discordgo.IntentsGuildMembers |
 		discordgo.IntentsGuildPresences |
 		discordgo.IntentAutoModerationConfiguration |
-		discordgo.IntentAutoModerationExecution
+		discordgo.IntentAutoModerationExecution |
+		discordgo.IntentMessageContent
 
 	// Add logging for connection
 	logutil.Info("🔗 Connecting to Discord...")

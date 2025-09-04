@@ -63,6 +63,10 @@ func main() {
 
 	// Initialize config manager
 	configManager := files.NewConfigManager()
+	// Load existing settings from disk before starting services
+	if err := configManager.LoadConfig(); err != nil {
+		logutil.ErrorWithErr("Failed to load settings file", err)
+	}
 
 	// Add detailed logging for Discord authentication
 	logutil.Info("🔑 Attempting to authenticate with Discord API...")
