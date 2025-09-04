@@ -19,6 +19,7 @@ type NotificationSender interface {
 	SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration) error
 	SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error
 	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
+	SendAutomodActionNotification(channelID string, event *discordgo.AutoModerationActionExecution) error
 }
 
 // CachedMessage is a minimal snapshot of a Discord message used for notifications.
@@ -36,6 +37,7 @@ const (
 	TaskTypeSendMemberLeave   = "notifications.member_leave"
 	TaskTypeSendMessageEdit   = "notifications.message_edit"
 	TaskTypeSendMessageDelete = "notifications.message_delete"
+	TaskTypeSendAutomodAction = "notifications.automod_action"
 
 	TaskTypeProcessAvatarChange = "avatar.process_change"
 	TaskTypeFlushAvatarCache    = "avatar.flush_cache"
@@ -67,6 +69,12 @@ type MessageDeletePayload struct {
 	ChannelID string
 	Deleted   *CachedMessage
 	DeletedBy string
+}
+
+// AutomodActionPayload holds information for an automod action notification task.
+type AutomodActionPayload struct {
+	ChannelID string
+	Event     *discordgo.AutoModerationActionExecution
 }
 
 // AvatarChangePayload holds information to process an avatar change.
@@ -113,6 +121,7 @@ func (a *NotificationAdapters) RegisterHandlers() {
 	a.Router.RegisterHandler(TaskTypeSendMemberLeave, a.handleSendMemberLeave)
 	a.Router.RegisterHandler(TaskTypeSendMessageEdit, a.handleSendMessageEdit)
 	a.Router.RegisterHandler(TaskTypeSendMessageDelete, a.handleSendMessageDelete)
+	a.Router.RegisterHandler(TaskTypeSendAutomodAction, a.handleSendAutomodAction)
 
 	a.Router.RegisterHandler(TaskTypeProcessAvatarChange, a.handleProcessAvatarChange)
 	a.Router.RegisterHandler(TaskTypeFlushAvatarCache, a.handleFlushAvatarCache)
@@ -217,6 +226,29 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 	})
 }
 
+// EnqueueAutomodAction enqueues an automod action notification.
+func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *discordgo.AutoModerationActionExecution) error {
+	if event == nil {
+		return nil
+	}
+	group := event.GuildID
+	return a.Router.Dispatch(context.Background(), Task{
+		Type: TaskTypeSendAutomodAction,
+		Payload: AutomodActionPayload{
+			ChannelID: channelID,
+			Event:     event,
+		},
+		Options: TaskOptions{
+			GroupKey:       group,
+			IdempotencyKey: fmt.Sprintf("automod:%s:%s:%s:%s", event.GuildID, event.RuleID, event.UserID, event.MessageID),
+			IdempotencyTTL: 10 * time.Second,
+			MaxAttempts:    3,
+			InitialBackoff: 1 * time.Second,
+			MaxBackoff:     10 * time.Second,
+		},
+	})
+}
+
 // EnqueueProcessAvatarChange enqueues processing of an avatar change.
 func (a *NotificationAdapters) EnqueueProcessAvatarChange(guildID, userID, username, newAvatar string) error {
 	return a.Router.Dispatch(context.Background(), Task{
@@ -312,6 +344,17 @@ func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payl
 		return err
 	}
 	return nil
+}
+
+func (a *NotificationAdapters) handleSendAutomodAction(ctx context.Context, payload any) error {
+	if a.Notifier == nil {
+		return fmt.Errorf("notifier is nil")
+	}
+	p, ok := payload.(AutomodActionPayload)
+	if !ok || p.Event == nil {
+		return fmt.Errorf("invalid payload for %s", TaskTypeSendAutomodAction)
+	}
+	return a.Notifier.SendAutomodActionNotification(p.ChannelID, p.Event)
 }
 
 func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, payload any) error {

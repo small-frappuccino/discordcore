@@ -15,6 +15,7 @@ import (
 	"github.com/alice-bnuy/discordcore/v2/pkg/errors"
 	"github.com/alice-bnuy/discordcore/v2/pkg/files"
 	"github.com/alice-bnuy/discordcore/v2/pkg/service"
+	"github.com/alice-bnuy/discordcore/v2/pkg/task"
 	"github.com/alice-bnuy/discordcore/v2/pkg/util"
 	"github.com/alice-bnuy/errutil"
 	"github.com/alice-bnuy/logutil"
@@ -116,6 +117,10 @@ func main() {
 
 	// Wrap AutomodService
 	automodService := logging.NewAutomodService(discordSession, configManager)
+	// Wire Automod with TaskRouter via NotificationAdapters (uses same notifier/config/cache)
+	automodRouter := task.NewRouter(task.Defaults())
+	automodAdapters := task.NewNotificationAdapters(automodRouter, discordSession, configManager, cache, monitoringService.Notifier())
+	automodService.SetAdapters(automodAdapters)
 	automodWrapper := service.NewServiceWrapper(
 		"automod",
 		service.TypeAutomod,

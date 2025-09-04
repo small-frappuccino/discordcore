@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/v2/pkg/task"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -13,6 +14,7 @@ import (
 type AutomodService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
+	adapters      *task.NotificationAdapters
 	isRunning     bool
 }
 
@@ -21,6 +23,11 @@ func NewAutomodService(session *discordgo.Session, configManager *files.ConfigMa
 		session:       session,
 		configManager: configManager,
 	}
+}
+
+// SetAdapters allows wiring TaskRouter adapters for async notifications.
+func (as *AutomodService) SetAdapters(adapters *task.NotificationAdapters) {
+	as.adapters = adapters
 }
 
 // Start registers handlers.
@@ -61,7 +68,20 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	// Build embed from event data
+	// If adapters are wired, enqueue via TaskRouter for retries/backoff
+	if as.adapters != nil {
+		if err := as.adapters.EnqueueAutomodAction(logChannelID, e); err != nil {
+			logutil.WithFields(map[string]interface{}{
+				"guildID":   e.GuildID,
+				"channelID": logChannelID,
+				"userID":    e.UserID,
+				"error":     err,
+			}).Error("Failed to enqueue automod log task")
+		}
+		return
+	}
+
+	// Build embed from event data (fallback when adapters are not available)
 	title := "AutoMod action executed"
 	desc := "A native AutoMod rule was triggered."
 	embed := &discordgo.MessageEmbed{
