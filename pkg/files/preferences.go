@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/util"
+	"github.com/alice-bnuy/discordcore/v2/pkg/util"
 	"github.com/alice-bnuy/errutil"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"

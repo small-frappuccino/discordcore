@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/util"
+	"github.com/alice-bnuy/discordcore/v2/pkg/util"
 )
 
 // AvatarCacheManager is a persistent, guild-aware cache for user avatar hashes.
