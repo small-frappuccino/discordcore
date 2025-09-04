@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/cache"
-	"github.com/alice-bnuy/discordcore/v2/internal/files"
-	"github.com/alice-bnuy/discordcore/v2/internal/task"
+	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
+	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/v2/pkg/task"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )

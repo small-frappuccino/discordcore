@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/files"
-	"github.com/alice-bnuy/discordcore/v2/internal/task"
+	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/v2/pkg/task"
 
 	"github.com/bwmarrin/discordgo"
 )

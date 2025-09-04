@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/cache"
-	"github.com/alice-bnuy/discordcore/v2/internal/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/v2/internal/service"
+	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
+	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands/core"
+	"github.com/alice-bnuy/discordcore/v2/pkg/service"
 	"github.com/bwmarrin/discordgo"
 )
 

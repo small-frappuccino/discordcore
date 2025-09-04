@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/internal/util"
+	"github.com/alice-bnuy/discordcore/v2/pkg/util"
 )
 
 // ## Config Types
