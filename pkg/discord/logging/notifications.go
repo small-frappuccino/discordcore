@@ -315,3 +315,69 @@ func (ns *NotificationSender) SendSuccessMessage(channelID, message string) erro
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }
+
+func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e *discordgo.AutoModerationActionExecution) error {
+	if e == nil || channelID == "" {
+		return nil
+	}
+
+	title := "AutoMod action executed"
+	desc := "A native AutoMod rule was triggered."
+	embed := &discordgo.MessageEmbed{
+		Title:       title,
+		Description: desc,
+		Color:       0xFF5555,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "User",
+				Value:  "<@" + e.UserID + "> (`" + e.UserID + "`)",
+				Inline: true,
+			},
+			{
+				Name: "Channel",
+				Value: func() string {
+					if e.ChannelID != "" {
+						return "<#" + e.ChannelID + ">"
+					}
+					return "(DM/unknown)"
+				}(),
+				Inline: true,
+			},
+		},
+	}
+
+	if e.RuleID != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Rule ID",
+			Value:  "`" + e.RuleID + "`",
+			Inline: true,
+		})
+	}
+	if e.MatchedKeyword != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Matched",
+			Value:  "`" + e.MatchedKeyword + "`",
+			Inline: true,
+		})
+	}
+
+	content := e.Content
+	if content == "" && e.MatchedContent != "" {
+		content = e.MatchedContent
+	}
+	if content != "" {
+		excerpt := content
+		if len(excerpt) > 200 {
+			excerpt = excerpt[:200] + "…"
+		}
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Excerpt",
+			Value:  "```" + excerpt + "```",
+			Inline: false,
+		})
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
