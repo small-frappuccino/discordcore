@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/alice-bnuy/discordcore/v2/internal/discord/commands/config"
 	"github.com/alice-bnuy/discordcore/v2/internal/discord/commands/core"
 	"github.com/alice-bnuy/discordcore/v2/internal/files"
 	"github.com/alice-bnuy/logutil"
@@ -50,8 +51,10 @@ func (ch *CommandHandler) SetupCommands() error {
 
 // registerConfigCommands registra os comandos de configuração
 func (ch *CommandHandler) registerConfigCommands() error {
-	// Os comandos são registrados automaticamente pelo CommandManager.SetupCommands()
-	// que já inclui o comando de configuração e seus subcomandos
+	router := ch.commandManager.GetRouter()
+
+	// Registrar o grupo /config e comandos simples (ping/echo)
+	config.NewConfigCommands(ch.configManager).RegisterCommands(router)
 
 	logutil.Info("Config commands registered successfully")
 	return nil
