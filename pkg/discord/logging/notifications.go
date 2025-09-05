@@ -244,42 +244,42 @@ func formatDuration(d time.Duration) string {
 		years := days / 365
 		remainingDays := days % 365
 		if years == 1 {
-			return fmt.Sprintf("1 ano, %d dias", remainingDays)
+			return fmt.Sprintf("1 year, %d days", remainingDays)
 		}
-		return fmt.Sprintf("%d anos, %d dias", years, remainingDays)
+		return fmt.Sprintf("%d years, %d days", years, remainingDays)
 	}
 
 	if days > 30 {
 		months := days / 30
 		remainingDays := days % 30
 		if months == 1 {
-			return fmt.Sprintf("1 mês, %d dias", remainingDays)
+			return fmt.Sprintf("1 month, %d days", remainingDays)
 		}
-		return fmt.Sprintf("%d meses, %d dias", months, remainingDays)
+		return fmt.Sprintf("%d months, %d days", months, remainingDays)
 	}
 
 	if days > 0 {
 		if days == 1 {
-			return fmt.Sprintf("1 dia, %d horas", hours)
+			return fmt.Sprintf("1 day, %d hours", hours)
 		}
-		return fmt.Sprintf("%d dias, %d horas", days, hours)
+		return fmt.Sprintf("%d days, %d hours", days, hours)
 	}
 
 	if hours > 0 {
 		if hours == 1 {
-			return fmt.Sprintf("1 hora, %d minutos", minutes)
+			return fmt.Sprintf("1 hour, %d minutes", minutes)
 		}
-		return fmt.Sprintf("%d horas, %d minutos", hours, minutes)
+		return fmt.Sprintf("%d hours, %d minutes", hours, minutes)
 	}
 
 	if minutes > 0 {
 		if minutes == 1 {
-			return "1 minuto"
+			return "1 minutes"
 		}
-		return fmt.Sprintf("%d minutos", minutes)
+		return fmt.Sprintf("%d minutes", minutes)
 	}
 
-	return "Menos de 1 minuto"
+	return "Less than 1 minute"
 }
 
 // truncateString trunca uma string para um tamanho máximo
