@@ -16,7 +16,7 @@ import (
 type NotificationSender interface {
 	SendAvatarChangeNotification(channelID string, change files.AvatarChange) error
 	SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error
-	SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration) error
+	SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error
 	SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error
 	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
 	SendAutomodActionNotification(channelID string, event *discordgo.AutoModerationActionExecution) error
@@ -55,6 +55,7 @@ type MemberLeavePayload struct {
 	ChannelID  string
 	Member     *discordgo.GuildMemberRemove
 	ServerTime time.Duration
+	BotTime    time.Duration
 }
 
 // MessageEditPayload holds information for a message edit notification task.
@@ -153,7 +154,7 @@ func (a *NotificationAdapters) EnqueueMemberJoin(channelID string, member *disco
 }
 
 // EnqueueMemberLeave enqueues a member leave notification.
-func (a *NotificationAdapters) EnqueueMemberLeave(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration) error {
+func (a *NotificationAdapters) EnqueueMemberLeave(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
 	if member == nil || member.User == nil {
 		return nil
 	}
@@ -163,6 +164,7 @@ func (a *NotificationAdapters) EnqueueMemberLeave(channelID string, member *disc
 			ChannelID:  channelID,
 			Member:     member,
 			ServerTime: serverTime,
+			BotTime:    botTime,
 		},
 		Options: TaskOptions{
 			GroupKey:       member.GuildID,
@@ -309,7 +311,7 @@ func (a *NotificationAdapters) handleSendMemberLeave(ctx context.Context, payloa
 	if !ok || p.Member == nil || p.Member.User == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMemberLeave)
 	}
-	err := a.Notifier.SendMemberLeaveNotification(p.ChannelID, p.Member, p.ServerTime)
+	err := a.Notifier.SendMemberLeaveNotification(p.ChannelID, p.Member, p.ServerTime, p.BotTime)
 	if err != nil {
 		return err
 	}

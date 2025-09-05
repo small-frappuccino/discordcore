@@ -120,9 +120,6 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 				Inline: true,
 			},
 		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
-		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
@@ -131,33 +128,46 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 }
 
 // SendMemberLeaveNotification envia notificação de saída de membro
-func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration) error {
+func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Member left",
 		Color:       0xE52A36, // Red (RGB 229,42,54)
 		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
-		},
-		Timestamp: time.Now().Format(time.RFC3339),
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
+	var fields []*discordgo.MessageEmbedField
+
 	if serverTime > 0 {
-		embed.Fields = []*discordgo.MessageEmbedField{
-			{
-				Name:   "Time on server",
-				Value:  formatDuration(serverTime),
-				Inline: true,
-			},
-		}
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Time on server",
+			Value:  formatDuration(serverTime),
+			Inline: true,
+		})
 	} else {
-		embed.Fields = []*discordgo.MessageEmbedField{
-			{
-				Name:   "Time on server",
-				Value:  "Unknown time",
-				Inline: true,
-			},
-		}
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Time on server",
+			Value:  "Unknown time",
+			Inline: true,
+		})
+	}
+
+	// if botTime > 0 {
+	// 	fields = append(fields, &discordgo.MessageEmbedField{
+	// 		Name:   "Bot time on server",
+	// 		Value:  formatDuration(botTime),
+	// 		Inline: true,
+	// 	})
+	// } else {
+	// 	fields = append(fields, &discordgo.MessageEmbedField{
+	// 		Name:   "Bot time on server",
+	// 		Value:  "Unknown time",
+	// 		Inline: true,
+	// 	})
+	// }
+
+	if len(fields) > 0 {
+		embed.Fields = fields
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)

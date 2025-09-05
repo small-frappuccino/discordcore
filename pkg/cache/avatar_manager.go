@@ -32,9 +32,11 @@ type AvatarCacheManager struct {
 
 // Internal persistence structures (compatible with previous format under files.AvatarMultiGuildCache)
 type avatarCache struct {
-	Avatars     map[string]string `json:"avatars"`
-	LastUpdated time.Time         `json:"last_updated"`
-	GuildID     string            `json:"guild_id"`
+	Avatars     map[string]string    `json:"avatars"`
+	LastUpdated time.Time            `json:"last_updated"`
+	GuildID     string               `json:"guild_id"`
+	BotSince    time.Time            `json:"bot_since,omitempty"`
+	MemberJoins map[string]time.Time `json:"member_joins,omitempty"` // userID -> joinedAt
 }
 
 type avatarMultiGuildCache struct {
@@ -437,6 +439,64 @@ func (m *AvatarCacheManager) incrementHit() {
 func (m *AvatarCacheManager) incrementMiss() {
 	// Not locking for performance; eventual consistency is OK for stats
 	m.misses++
+}
+
+// --- BotSince and MemberJoin helpers ---
+
+// GetBotSince returns when the bot first joined/was seen in a guild (from cache).
+func (m *AvatarCacheManager) GetBotSince(guildID string) (time.Time, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if g, ok := m.guilds[guildID]; ok && g != nil && !g.BotSince.IsZero() {
+		return g.BotSince, true
+	}
+	return time.Time{}, false
+}
+
+// SetBotSince sets when the bot first joined/was seen in a guild (idempotent; prefers earlier time).
+func (m *AvatarCacheManager) SetBotSince(guildID string, t time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	g := m.ensureGuildLocked(guildID)
+	if g.BotSince.IsZero() || t.Before(g.BotSince) {
+		g.BotSince = t
+		g.LastUpdated = time.Now()
+		m.lastUpdated = g.LastUpdated
+	}
+}
+
+// RecordMemberJoin records a member's join time for a guild (idempotent; prefers earlier time).
+func (m *AvatarCacheManager) RecordMemberJoin(guildID, userID string, joinedAt time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	g := m.ensureGuildLocked(guildID)
+	if g.MemberJoins == nil {
+		g.MemberJoins = make(map[string]time.Time)
+	}
+	if existing, ok := g.MemberJoins[userID]; !ok || joinedAt.Before(existing) {
+		g.MemberJoins[userID] = joinedAt
+		g.LastUpdated = time.Now()
+		m.lastUpdated = g.LastUpdated
+	}
+}
+
+// GetMemberJoin returns a member's join time for a guild from the cache.
+func (m *AvatarCacheManager) GetMemberJoin(guildID, userID string) (time.Time, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	g, ok := m.guilds[guildID]
+	if !ok || g == nil || g.MemberJoins == nil {
+		return time.Time{}, false
+	}
+	t, ok := g.MemberJoins[userID]
+	if !ok || t.IsZero() {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 func (m *AvatarCacheManager) estimateMemoryLocked() int64 {

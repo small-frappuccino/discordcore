@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
 	"github.com/alice-bnuy/discordcore/v2/pkg/files"
 	"github.com/alice-bnuy/discordcore/v2/pkg/task"
 	"github.com/alice-bnuy/logutil"
@@ -18,6 +19,10 @@ type MemberEventService struct {
 	notifier      *NotificationSender
 	adapters      *task.NotificationAdapters
 	isRunning     bool
+
+	// Cache para tempos de entrada (membro e bot)
+	cacheManager *cache.AvatarCacheManager
+	joinTimes    map[string]time.Time // chave: guildID:userID
 }
 
 // NewMemberEventService cria uma nova instância do serviço de eventos de membros
@@ -33,6 +38,10 @@ func NewMemberEventService(session *discordgo.Session, configManager *files.Conf
 
 func (mes *MemberEventService) SetAdapters(adapters *task.NotificationAdapters) {
 	mes.adapters = adapters
+	// NEW: injetar cache manager a partir dos adapters
+	if adapters != nil {
+		mes.cacheManager = adapters.Cache
+	}
 }
 
 // Start registra os handlers de eventos de membros
@@ -41,6 +50,11 @@ func (mes *MemberEventService) Start() error {
 		return fmt.Errorf("member event service is already running")
 	}
 	mes.isRunning = true
+
+	// NEW: garantir mapa de joins
+	if mes.joinTimes == nil {
+		mes.joinTimes = make(map[string]time.Time)
+	}
 
 	mes.session.AddHandler(mes.handleGuildMemberAdd)
 	mes.session.AddHandler(mes.handleGuildMemberRemove)
@@ -90,6 +104,20 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 
 	// Calcular há quanto tempo a conta existe
 	accountAge := mes.calculateAccountAge(m.User.ID)
+	// Registrar horário preciso de entrada do membro no cache (se possível)
+	if mes.cacheManager != nil {
+		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
+			mes.cacheManager.RecordMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
+		}
+	}
+
+	// NEW: Registrar horário de entrada do membro (preciso) em memória
+	if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
+		if mes.joinTimes == nil {
+			mes.joinTimes = make(map[string]time.Time)
+		}
+		mes.joinTimes[m.GuildID+":"+m.User.ID] = member.JoinedAt
+	}
 
 	logutil.WithFields(map[string]interface{}{
 		"guildID":    m.GuildID,
@@ -153,18 +181,26 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		return
 	}
 
-	// Calcular há quanto tempo estava no servidor (limitado - sem dados históricos)
-	serverTime := mes.calculateServerTime(m.GuildID, m.User.ID)
+	// Calcular há quanto tempo estava no servidor
+	var serverTime time.Duration
+	if t, ok := mes.joinTimes[m.GuildID+":"+m.User.ID]; ok && !t.IsZero() {
+		serverTime = time.Since(t)
+	} else {
+		serverTime = mes.calculateServerTime(m.GuildID, m.User.ID)
+	}
+
+	botTime := mes.getBotTimeOnServer(m.GuildID)
 
 	logutil.WithFields(map[string]interface{}{
 		"guildID":    m.GuildID,
 		"userID":     m.User.ID,
 		"username":   m.User.Username,
 		"serverTime": serverTime.String(),
+		"botTime":    botTime.String(),
 	}).Info("Member left guild")
 
 	if mes.adapters != nil {
-		if err := mes.adapters.EnqueueMemberLeave(logChannelID, m, serverTime); err != nil {
+		if err := mes.adapters.EnqueueMemberLeave(logChannelID, m, serverTime, botTime); err != nil {
 			logutil.WithFields(map[string]interface{}{
 				"guildID":   m.GuildID,
 				"userID":    m.User.ID,
@@ -178,7 +214,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 				"channelID": logChannelID,
 			}).Info("Member leave notification sent successfully")
 		}
-	} else if err := mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTime); err != nil {
+	} else if err := mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTime, botTime); err != nil {
 		logutil.WithFields(map[string]interface{}{
 			"guildID":   m.GuildID,
 			"userID":    m.User.ID,
@@ -224,4 +260,17 @@ func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.
 	// retornamos 0 para indicar que não sabemos
 	// TODO: Implementar persistência de dados de entrada para cálculo preciso
 	return 0
+}
+
+// NEW: calcula há quanto tempo o bot está na guild (consulta Discord em tempo real)
+func (mes *MemberEventService) getBotTimeOnServer(guildID string) time.Duration {
+	if mes.session == nil || mes.session.State == nil || mes.session.State.User == nil {
+		return 0
+	}
+	botID := mes.session.State.User.ID
+	member, err := mes.session.GuildMember(guildID, botID)
+	if err != nil || member == nil || member.JoinedAt.IsZero() {
+		return 0
+	}
+	return time.Since(member.JoinedAt)
 }

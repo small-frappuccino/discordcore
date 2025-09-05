@@ -180,6 +180,16 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		return
 	}
 	log.Printf("Initializing cache for guild: %s (ID: %s)", guild.Name, guild.ID)
+
+	// Set bot join time in cache if missing
+	if _, ok := ms.cacheManager.GetBotSince(guildID); !ok {
+		botID := ms.session.State.User.ID
+		if botMember, err := ms.session.GuildMember(guildID, botID); err == nil && !botMember.JoinedAt.IsZero() {
+			ms.cacheManager.SetBotSince(guildID, botMember.JoinedAt)
+		} else {
+			ms.cacheManager.SetBotSince(guildID, time.Now())
+		}
+	}
 	members, err := ms.session.GuildMembers(guildID, "", 1000)
 	if err != nil {
 		log.Printf("Error getting members for guild %s: %v", guildID, err)

@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// Initialize config manager (uses the right path now)
-	configManager := files.NewConfigManager()
+	configManager = files.NewConfigManager()
 	// Load existing settings from disk before starting services
 	if err := configManager.LoadConfig(); err != nil {
 		logutil.ErrorWithErr("Failed to load settings file", err)
