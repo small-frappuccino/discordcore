@@ -417,25 +417,9 @@ func EnsureSettingsFile() error {
 		return nil
 	}
 
-	// If it exists and is valid, normalize it by backfilling any missing fields
+	// If it exists and is valid, do not modify it
 	if valid {
-		// Load current settings and rewrite to include missing fields (e.g., new JSON keys)
-		data, readErr := os.ReadFile(settingsFilePath)
-		if readErr != nil {
-			return fmt.Errorf("failed to read settings file: %w", readErr)
-		}
-		var cfg BotConfig
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return fmt.Errorf("failed to parse settings file: %w", err)
-		}
-		normalized, err := json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal normalized settings: %w", err)
-		}
-		if err := os.WriteFile(settingsFilePath, normalized, 0644); err != nil {
-			return fmt.Errorf("failed to write normalized settings file: %w", err)
-		}
-		logutil.Debugf("Settings file normalized at %s; missing fields backfilled", settingsFilePath)
+		logutil.Debugf("Settings file exists and is valid at %s; no changes made", settingsFilePath)
 		return nil
 	}
 
