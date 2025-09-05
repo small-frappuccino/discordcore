@@ -14,15 +14,16 @@ import (
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID             string    `json:"guild_id"`
-	CommandChannelID    string    `json:"command_channel_id"`
-	UserLogChannelID    string    `json:"user_log_channel_id"`    // Para logs de entrada/saída e avatares
-	MessageLogChannelID string    `json:"message_log_channel_id"` // Para logs de mensagens editadas/deletadas
-	AutomodLogChannelID string    `json:"automod_log_channel_id"`
-	AllowedRoles        []string  `json:"allowed_roles"`
-	Rulesets            []Ruleset `json:"rulesets,omitempty"`
-	LooseLists          []Rule    `json:"loose_rules,omitempty"` // Regras soltas, não associadas a nenhuma ruleset
-	Blocklist           []string  `json:"blocklist,omitempty"`
+	GuildID                 string    `json:"guild_id"`
+	CommandChannelID        string    `json:"command_channel_id"`
+	UserLogChannelID        string    `json:"user_log_channel_id"`         // Para logs de entrada/saída e avatares
+	UserEntryLeaveChannelID string    `json:"user_entry_leave_channel_id"` // Canal dedicado para entradas/saídas de usuários
+	MessageLogChannelID     string    `json:"message_log_channel_id"`      // Para logs de mensagens editadas/deletadas
+	AutomodLogChannelID     string    `json:"automod_log_channel_id"`
+	AllowedRoles            []string  `json:"allowed_roles"`
+	Rulesets                []Ruleset `json:"rulesets,omitempty"`
+	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Regras soltas, não associadas a nenhuma ruleset
+	Blocklist               []string  `json:"blocklist,omitempty"`
 }
 
 // BotConfig holds the configuration for the bot.

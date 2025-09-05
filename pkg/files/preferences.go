@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/alice-bnuy/discordcore/v2/pkg/util"
@@ -14,13 +14,6 @@ import (
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
-
-func init() {
-	// Ensure config files exist in the new paths
-	if err := EnsureConfigFiles(); err != nil {
-		log.Fatalf("Failed to ensure config files: %v", err)
-	}
-}
 
 // --- Initialization & Persistence ---
 
@@ -180,10 +173,11 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 
 		roles := FindAdminRoles(session, g.ID, fullGuild.OwnerID)
 		guildCfg := GuildConfig{
-			GuildID:          g.ID,
-			CommandChannelID: channelID,
-			UserLogChannelID: channelID,
-			AllowedRoles:     roles,
+			GuildID:                 g.ID,
+			CommandChannelID:        channelID,
+			UserLogChannelID:        channelID,
+			UserEntryLeaveChannelID: FindOrCreateEntryLeaveChannel(session, g.ID),
+			AllowedRoles:            roles,
 		}
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
@@ -230,10 +224,11 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	}
 	roles := FindAdminRoles(session, guildID, guild.OwnerID)
 	guildCfg := GuildConfig{
-		GuildID:          guildID,
-		CommandChannelID: channelID,
-		UserLogChannelID: channelID,
-		AllowedRoles:     roles,
+		GuildID:                 guildID,
+		CommandChannelID:        channelID,
+		UserLogChannelID:        channelID,
+		UserEntryLeaveChannelID: FindOrCreateEntryLeaveChannel(session, guildID),
+		AllowedRoles:            roles,
 	}
 	mgr.mu.Lock()
 	mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
@@ -289,6 +284,33 @@ func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 		}
 	}
 	return ""
+}
+
+func FindOrCreateEntryLeaveChannel(session *discordgo.Session, guildID string) string {
+	channels, err := session.GuildChannels(guildID)
+	if err == nil {
+		for _, channel := range channels {
+			if channel.Type == discordgo.ChannelTypeGuildText {
+				name := strings.ToLower(channel.Name)
+				if name == "user-entry-leave" || name == "entry-leave" || name == "joins-leaves" || name == "join-leave" || name == "member-log" || name == "members-log" || name == "member-logs" || name == "user-logs" || name == "welcome-goodbye" {
+					if perms, err2 := session.UserChannelPermissions(session.State.User.ID, channel.ID); err2 == nil && (perms&discordgo.PermissionSendMessages) != 0 {
+						return channel.ID
+					}
+				}
+			}
+		}
+	}
+
+	newCh, err := session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
+		Name:  "user-entry-leave",
+		Type:  discordgo.ChannelTypeGuildText,
+		Topic: "User entry/leave notifications",
+	})
+	if err == nil && newCh != nil {
+		return newCh.ID
+	}
+
+	return FindSuitableChannel(session, guildID)
 }
 
 func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []string {
@@ -395,9 +417,25 @@ func EnsureSettingsFile() error {
 		return nil
 	}
 
-	// If it exists and is valid, do not modify it
+	// If it exists and is valid, normalize it by backfilling any missing fields
 	if valid {
-		logutil.Debugf("Settings file exists and is valid at %s; no changes made", settingsFilePath)
+		// Load current settings and rewrite to include missing fields (e.g., new JSON keys)
+		data, readErr := os.ReadFile(settingsFilePath)
+		if readErr != nil {
+			return fmt.Errorf("failed to read settings file: %w", readErr)
+		}
+		var cfg BotConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return fmt.Errorf("failed to parse settings file: %w", err)
+		}
+		normalized, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal normalized settings: %w", err)
+		}
+		if err := os.WriteFile(settingsFilePath, normalized, 0644); err != nil {
+			return fmt.Errorf("failed to write normalized settings file: %w", err)
+		}
+		logutil.Debugf("Settings file normalized at %s; missing fields backfilled", settingsFilePath)
 		return nil
 	}
 

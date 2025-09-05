@@ -59,11 +59,17 @@ func GetDiscordBotToken(tokenName string) string {
 	return token
 }
 
-func GetApplicationSupportPath(branch string) string {
-	if branch == "main" {
-		return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", DiscordBotName)
+func SetBotName(name string) {
+	if strings.TrimSpace(name) == "" {
+		return
 	}
-	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", fmt.Sprintf("%s (Development)", DiscordBotName))
+	DiscordBotName = name
+	// Recalcula o caminho base com o nome atualizado e branch atual
+	ApplicationSupportPath = GetApplicationSupportPath(CurrentGitBranch)
+}
+
+func GetApplicationSupportPath(branch string) string {
+	return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", DiscordBotName)
 }
 
 // getApplicationCacheFilePath returns the standardized path for application_cache.json

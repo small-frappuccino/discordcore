@@ -51,23 +51,10 @@ func main() {
 	errorHandler := errors.NewErrorHandler()
 
 	// Log bot startup
-	logutil.Info("🚀 Starting Alice Bot...")
-
-	// Ensure config and cache files exist
-	if err := files.EnsureConfigFiles(); err != nil {
-		logutil.ErrorWithErr("Error checking config files", err)
-		logutil.Fatal("❌ Error checking config files")
-	}
+	logutil.Info("🚀 Starting bot...")
 
 	// Fetch token
 	token := util.GetDiscordBotToken("ALICE_BOT")
-
-	// Initialize config manager
-	configManager := files.NewConfigManager()
-	// Load existing settings from disk before starting services
-	if err := configManager.LoadConfig(); err != nil {
-		logutil.ErrorWithErr("Failed to load settings file", err)
-	}
 
 	// Add detailed logging for Discord authentication
 	logutil.Info("🔑 Attempting to authenticate with Discord API...")
@@ -81,7 +68,23 @@ func main() {
 	}
 	logutil.Infof("✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
 
-	// Initialize avatar/config cache
+	// Set bot name from Discord and recompute app support path
+	util.SetBotName(discordSession.State.User.Username)
+
+	// Ensure config and cache files exist (now using the right bot name path)
+	if err := files.EnsureConfigFiles(); err != nil {
+		logutil.ErrorWithErr("Error checking config files", err)
+		logutil.Fatal("❌ Error checking config files")
+	}
+
+	// Initialize config manager (uses the right path now)
+	configManager := files.NewConfigManager()
+	// Load existing settings from disk before starting services
+	if err := configManager.LoadConfig(); err != nil {
+		logutil.ErrorWithErr("Failed to load settings file", err)
+	}
+
+	// Initialize avatar/config cache (path based on bot name)
 	cache := dcache.NewDefaultAvatarCacheManager()
 	if err := cache.Load(); err != nil {
 		logutil.ErrorWithErr("Error loading cache", err)

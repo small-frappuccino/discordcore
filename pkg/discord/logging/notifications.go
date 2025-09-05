@@ -110,12 +110,12 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 // SendMemberJoinNotification envia notificação de entrada de membro
 func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
 	embed := &discordgo.MessageEmbed{
-		Title:       "👋 Membro entrou",
-		Color:       0x00FF00, // Verde
+		Title:       "Member joined",
+		Color:       0x4DF475, // Green (RGB 77,244,117)
 		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Conta criada há",
+				Name:   "Account created",
 				Value:  formatDuration(accountAge),
 				Inline: true,
 			},
@@ -133,8 +133,8 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 // SendMemberLeaveNotification envia notificação de saída de membro
 func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration) error {
 	embed := &discordgo.MessageEmbed{
-		Title:       "👋 Membro saiu",
-		Color:       0xFF0000, // Vermelho
+		Title:       "Member left",
+		Color:       0xE52A36, // Red (RGB 229,42,54)
 		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
@@ -145,7 +145,7 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 	if serverTime > 0 {
 		embed.Fields = []*discordgo.MessageEmbedField{
 			{
-				Name:   "Tempo no servidor",
+				Name:   "Time on server",
 				Value:  formatDuration(serverTime),
 				Inline: true,
 			},
@@ -153,8 +153,8 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 	} else {
 		embed.Fields = []*discordgo.MessageEmbedField{
 			{
-				Name:   "Tempo no servidor",
-				Value:  "Tempo desconhecido",
+				Name:   "Time on server",
+				Value:  "Unknown time",
 				Inline: true,
 			},
 		}

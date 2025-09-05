@@ -75,13 +75,16 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		return
 	}
 
-	// Canal para logs de usuários (entrada/saída e avatares)
-	logChannelID := guildConfig.UserLogChannelID
+	// Prefer dedicated entry/leave channel; fallback to general user log channel
+	logChannelID := guildConfig.UserEntryLeaveChannelID
+	if logChannelID == "" {
+		logChannelID = guildConfig.UserLogChannelID
+	}
 	if logChannelID == "" {
 		logutil.WithFields(map[string]interface{}{
 			"guildID": m.GuildID,
 			"userID":  m.User.ID,
-		}).Debug("UserLogChannelID not configured for guild, member join notification not sent")
+		}).Debug("User entry/leave channel not configured for guild, member join notification not sent")
 		return
 	}
 
@@ -137,13 +140,16 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		return
 	}
 
-	// Canal para logs de usuários (entrada/saída e avatares)
-	logChannelID := guildConfig.UserLogChannelID
+	// Prefer dedicated entry/leave channel; fallback to general user log channel
+	logChannelID := guildConfig.UserEntryLeaveChannelID
+	if logChannelID == "" {
+		logChannelID = guildConfig.UserLogChannelID
+	}
 	if logChannelID == "" {
 		logutil.WithFields(map[string]interface{}{
 			"guildID": m.GuildID,
 			"userID":  m.User.ID,
-		}).Debug("UserLogChannelID not configured for guild, member leave notification not sent")
+		}).Debug("User entry/leave channel not configured for guild, member leave notification not sent")
 		return
 	}
 
