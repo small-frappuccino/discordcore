@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/alice-bnuy/discordcore/pkg/cache"
 	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -48,20 +47,17 @@ type Response struct {
 
 // BaseHandler fornece funcionalidades comuns para todos os handlers
 type BaseHandler struct {
-	session            *discordgo.Session
-	configManager      *files.ConfigManager
-	avatarCacheManager *cache.AvatarCacheManager
+	session       *discordgo.Session
+	configManager *files.ConfigManager
 }
 
 func NewBaseHandler(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *cache.AvatarCacheManager,
 ) *BaseHandler {
 	return &BaseHandler{
-		session:            session,
-		configManager:      configManager,
-		avatarCacheManager: avatarCacheManager,
+		session:       session,
+		configManager: configManager,
 	}
 }
 
@@ -76,9 +72,6 @@ func (bh *BaseHandler) GetConfigManager() *files.ConfigManager {
 }
 
 // GetAvatarCacheManager retorna o gerenciador de cache de avatar
-func (bh *BaseHandler) GetAvatarCacheManager() *cache.AvatarCacheManager {
-	return bh.avatarCacheManager
-}
 
 // CommandRegistry gerencia registro e execução de comandos
 type CommandRegistry struct {

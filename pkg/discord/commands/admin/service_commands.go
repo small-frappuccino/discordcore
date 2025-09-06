@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/cache"
 	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
 	"github.com/alice-bnuy/discordcore/pkg/service"
 	"github.com/bwmarrin/discordgo"
@@ -15,14 +14,12 @@ import (
 // AdminCommands provides administrative commands for service management
 type AdminCommands struct {
 	serviceManager *service.ServiceManager
-	cacheManager   cache.CacheManager
 }
 
 // NewAdminCommands creates a new admin commands handler
-func NewAdminCommands(serviceManager *service.ServiceManager, cacheManager cache.CacheManager) *AdminCommands {
+func NewAdminCommands(serviceManager *service.ServiceManager) *AdminCommands {
 	return &AdminCommands{
 		serviceManager: serviceManager,
-		cacheManager:   cacheManager,
 	}
 }
 
@@ -41,8 +38,6 @@ func (ac *AdminCommands) RegisterCommands(router *core.CommandRouter) {
 	adminCmd.AddSubCommand(ac.createServiceListCommand())
 	adminCmd.AddSubCommand(ac.createServiceRestartCommand())
 	adminCmd.AddSubCommand(ac.createHealthCheckCommand())
-	adminCmd.AddSubCommand(ac.createCacheStatsCommand())
-	adminCmd.AddSubCommand(ac.createSystemInfoCommand())
 
 	router.RegisterCommand(adminCmd)
 }
@@ -71,13 +66,6 @@ func (ac *AdminCommands) createServiceRestartCommand() core.SubCommand {
 // createHealthCheckCommand creates the health check subcommand
 func (ac *AdminCommands) createHealthCheckCommand() core.SubCommand {
 	return &HealthCheckCommand{
-		adminCommands: ac,
-	}
-}
-
-// createCacheStatsCommand creates the cache stats subcommand
-func (ac *AdminCommands) createCacheStatsCommand() core.SubCommand {
-	return &CacheStatsCommand{
 		adminCommands: ac,
 	}
 }
@@ -408,84 +396,6 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "❌ Unhealthy Services",
 			Value:  strings.Join(unhealthyServices, "\n"),
-			Inline: false,
-		})
-	}
-
-	return core.NewResponder(ctx.Session).SendEmbed(ctx.Interaction, embed)
-}
-
-// CacheStatsCommand shows cache statistics
-type CacheStatsCommand struct {
-	adminCommands *AdminCommands
-}
-
-func (cmd *CacheStatsCommand) Name() string {
-	return "cache"
-}
-
-func (cmd *CacheStatsCommand) Description() string {
-	return "Show message cache statistics"
-}
-
-func (cmd *CacheStatsCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{}
-}
-
-func (cmd *CacheStatsCommand) RequiresGuild() bool {
-	return true
-}
-
-func (cmd *CacheStatsCommand) RequiresPermissions() bool {
-	return true
-}
-
-func (cmd *CacheStatsCommand) Handle(ctx *core.Context) error {
-	if cmd.adminCommands.cacheManager == nil {
-		return core.NewCommandError("Cache manager not available", true)
-	}
-
-	stats := cmd.adminCommands.cacheManager.Stats()
-
-	embed := &discordgo.MessageEmbed{
-		Title: "📊 Message Cache Statistics",
-		Color: 0x5865F2,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "Total Entries",
-				Value:  fmt.Sprintf("%d", stats.TotalEntries),
-				Inline: true,
-			},
-			{
-				Name:   "Memory Usage",
-				Value:  cmd.adminCommands.formatBytes(stats.MemoryUsage),
-				Inline: true,
-			},
-			{
-				Name:   "Hit Rate",
-				Value:  fmt.Sprintf("%.2f%%", stats.HitRate*100),
-				Inline: true,
-			},
-		},
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
-
-	if stats.LastCleanup.Unix() > 0 {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Last Cleanup",
-			Value:  stats.LastCleanup.Format(time.RFC3339),
-			Inline: true,
-		})
-	}
-
-	if len(stats.PerGuildStats) > 0 {
-		var guildStats []string
-		for guildID, count := range stats.PerGuildStats {
-			guildStats = append(guildStats, fmt.Sprintf("%s: %d", guildID, count))
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Per-Guild Stats",
-			Value:  strings.Join(guildStats, "\n"),
 			Inline: false,
 		})
 	}

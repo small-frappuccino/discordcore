@@ -79,6 +79,7 @@ import (
     "github.com/alice-bnuy/discordcore/v2/internal/discord/session"
     "github.com/alice-bnuy/discordcore/v2/internal/files"
     "github.com/alice-bnuy/discordcore/v2/internal/util"
+    "github.com/alice-bnuy/discordcore/v2/internal/storage"
 )
 
 func main() {
@@ -92,11 +93,14 @@ func main() {
         log.Fatal(err)
     }
     
-    cache := dcache.NewDefaultAvatarCacheManager()
-    cache.Load()
+    // Initialize SQLite store for persistence
+    store := storage.NewStore(util.GetMessageDBPath())
+    if err := store.Init(); err != nil {
+        log.Fatal(err)
+    }
     
     // Inicializar serviços de monitoramento
-    monitorService, err := logging.NewMonitoringService(discordSession, configManager, cache)
+    monitorService, err := logging.NewMonitoringService(discordSession, configManager, store)
     if err != nil {
         log.Fatal(err)
     }
@@ -105,7 +109,7 @@ func main() {
     automodService := logging.NewAutomodService(discordSession, configManager)
     
     // Inicializar comandos
-    commandHandler := commands.NewCommandHandler(discordSession, configManager, cache, monitorService, automodService)
+    commandHandler := commands.NewCommandHandler(discordSession, configManager)
     
     // Iniciar tudo
     monitorService.Start()
@@ -183,9 +187,7 @@ memberService.Start()
 messageService := logging.NewMessageEventService(session, configManager, notifier)
 messageService.Start()
 
-// Ver estatísticas do cache
-stats := messageService.GetCacheStats()
-fmt.Printf("Mensagens em cache: %d\n", stats["totalCached"])
+// Armazenamento de mensagens agora é persistido via SQLite; métricas de cache em memória foram descontinuadas.
 ```
 
 ## 🛠️ Personalização
@@ -225,9 +227,6 @@ func (ch *CommandHandler) registerCustomCommands() error {
 
 ### Estatísticas
 ```go
-// Cache de mensagens
-stats := messageService.GetCacheStats()
-
 // Configurações por servidor
 config := configManager.GuildConfig("guild_id")
 ```

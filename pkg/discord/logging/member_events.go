@@ -269,7 +269,7 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 }
 
 // calculateServerTime tenta calcular há quanto tempo o usuário estava no servidor
-// Agora usa múltiplas fontes em ordem: memória -> cache persistente JSON -> SQLite
+// Agora usa múltiplas fontes em ordem: memória -> SQLite
 func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.Duration {
 	// 1) memória (mais preciso no runtime)
 	if t, ok := mes.joinTimes[guildID+":"+userID]; ok && !t.IsZero() {

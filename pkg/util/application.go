@@ -1,12 +1,16 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/alice-bnuy/discordcore/pkg/storage"
 )
 
 var (
@@ -78,8 +82,6 @@ func SetBotName(name string) {
 	ApplicationSupportPath = GetApplicationSupportPath(CurrentGitBranch)
 	ApplicationCachesPath = GetApplicationCachesPath()
 
-	// One-time migration of legacy caches (best-effort).
-	_ = MigrateLegacyAvatarCache()
 }
 
 // EffectiveBotName returns the current bot name or a safe fallback if unset.
@@ -103,15 +105,15 @@ func GetApplicationCachesPath() string {
 	return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
 }
 
-// GetCacheFilePath returns the path to the avatar cache JSON under the new caches root.
-// New location: ~/Library/Cache/[BotName]/avatar/avatar_cache.json
-func GetCacheFilePath() string {
+// Deprecated: MigrationCacheFilePath returns the path to the avatar cache JSON used only for migration.
+// Location (new): ~/Library/Cache/[BotName]/avatar/avatar_cache.json
+func MigrationCacheFilePath() string {
 	return filepath.Join(ApplicationCachesPath, "avatar", "avatar_cache.json")
 }
 
-// LegacyCacheFilePath returns the previous location used for avatar cache JSON.
-// Old location: ~/Library/Application Support/[BotName]/data/application_cache.json
-func LegacyCacheFilePath() string {
+// Deprecated: LegacyMigrationCacheFilePath returns the previous JSON cache path, used only for migration.
+// Location (legacy): ~/Library/Application Support/[BotName]/data/application_cache.json
+func LegacyMigrationCacheFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
 }
 
@@ -131,7 +133,6 @@ func GetSettingsFilePath() string {
 // Safe to call multiple times.
 func EnsureCacheDirs() error {
 	dirs := []string{
-		filepath.Dir(GetCacheFilePath()),
 		filepath.Dir(GetMessageDBPath()),
 	}
 	for _, d := range dirs {
@@ -145,31 +146,89 @@ func EnsureCacheDirs() error {
 // MigrateLegacyAvatarCache migrates the old avatar cache file to the new caches location
 // on the first run of the new system. It copies and then removes the legacy file (best-effort).
 func MigrateLegacyAvatarCache() error {
-	oldPath := LegacyCacheFilePath()
-	newPath := GetCacheFilePath()
+	// Deprecated: JSON copying removed. Migration is handled by MigrateAvatarJSONToSQLite.
+	return nil
+}
 
-	// If old doesn't exist or new already exists, nothing to do.
-	if !fileExists(oldPath) || fileExists(newPath) {
-		return nil
+// MigrateAvatarJSONToSQLite migrates avatar cache JSON (legacy or new) into SQLite and removes JSON files.
+// Safe to call after SQLite directories are ready.
+func MigrateAvatarJSONToSQLite() error {
+	// Determine source (prefer legacy, then new)
+	oldPath := LegacyMigrationCacheFilePath()
+	newPath := MigrationCacheFilePath()
+	var src string
+	if fileExists(oldPath) {
+		src = oldPath
+	} else if fileExists(newPath) {
+		src = newPath
+	} else {
+		return nil // nothing to migrate
 	}
 
-	// Ensure destination directory exists.
-	if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
-		return fmt.Errorf("failed to create destination cache directory: %w", err)
-	}
-
-	// Copy content from old to new.
-	data, err := os.ReadFile(oldPath)
+	data, err := os.ReadFile(src)
 	if err != nil {
-		return fmt.Errorf("failed to read legacy cache file: %w", err)
-	}
-	if err := os.WriteFile(newPath, data, 0o644); err != nil {
-		return fmt.Errorf("failed to write new cache file: %w", err)
+		return fmt.Errorf("failed to read cache file: %w", err)
 	}
 
-	// Best-effort cleanup: remove old file and its parent "data" directory if empty.
+	type guildCache struct {
+		Avatars     map[string]string    `json:"avatars"`
+		BotSince    time.Time            `json:"bot_since,omitempty"`
+		MemberJoins map[string]time.Time `json:"member_joins,omitempty"`
+		GuildID     string               `json:"guild_id,omitempty"`
+	}
+	type cachePayload struct {
+		Guilds map[string]*guildCache `json:"guilds"`
+	}
+
+	var payload cachePayload
+	if err := json.Unmarshal(data, &payload); err != nil || len(payload.Guilds) == 0 {
+		// try legacy single guild
+		var single guildCache
+		if err2 := json.Unmarshal(data, &single); err2 != nil || single.GuildID == "" {
+			return nil // unknown format; skip
+		}
+		payload.Guilds = map[string]*guildCache{single.GuildID: &single}
+	}
+
+	// Open store
+	if err := os.MkdirAll(filepath.Dir(GetMessageDBPath()), 0o755); err != nil {
+		return fmt.Errorf("failed to create db directory: %w", err)
+	}
+	store := storage.NewStore(GetMessageDBPath())
+	if err := store.Init(); err != nil {
+		return fmt.Errorf("failed to init sqlite store: %w", err)
+	}
+	defer store.Close()
+
+	// Migrate
+	for gid, g := range payload.Guilds {
+		if g == nil {
+			continue
+		}
+		// BotSince
+		if !g.BotSince.IsZero() {
+			_ = store.SetBotSince(gid, g.BotSince)
+		}
+		// Members
+		for uid, t := range g.MemberJoins {
+			if !t.IsZero() {
+				_ = store.UpsertMemberJoin(gid, uid, t)
+			}
+		}
+		// Avatars
+		for uid, h := range g.Avatars {
+			if h == "" {
+				h = "default"
+			}
+			_, _, _ = store.UpsertAvatar(gid, uid, h, time.Now())
+		}
+	}
+
+	// Cleanup JSON files (best-effort)
 	_ = os.Remove(oldPath)
+	_ = os.Remove(newPath)
 	_ = removeDirIfEmpty(filepath.Dir(oldPath))
+	_ = removeDirIfEmpty(filepath.Dir(newPath))
 
 	return nil
 }

@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 
-	"github.com/alice-bnuy/discordcore/pkg/cache"
 	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -22,7 +21,6 @@ type CommandRouter struct {
 func NewCommandRouter(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *cache.AvatarCacheManager,
 ) *CommandRouter {
 	registry := NewCommandRegistry()
 	responder := NewResponder(session)
@@ -154,11 +152,10 @@ type CommandManager struct {
 func NewCommandManager(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	avatarCacheManager *cache.AvatarCacheManager,
 ) *CommandManager {
 	return &CommandManager{
 		session: session,
-		router:  NewCommandRouter(session, configManager, avatarCacheManager),
+		router:  NewCommandRouter(session, configManager),
 		logger:  logutil.WithField("component", "command_manager"),
 	}
 }

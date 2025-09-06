@@ -2,10 +2,8 @@ package logging
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/cache"
 	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
@@ -30,7 +28,6 @@ type MessageEventService struct {
 	configManager *files.ConfigManager
 	notifier      *NotificationSender
 	adapters      *task.NotificationAdapters
-	cache         *cache.TTLMap
 	store         *storage.Store
 	isRunning     bool
 }
@@ -41,7 +38,6 @@ func NewMessageEventService(session *discordgo.Session, configManager *files.Con
 		session:       session,
 		configManager: configManager,
 		notifier:      notifier,
-		cache:         cache.NewTTLMap("message_events", 24*time.Hour, 1*time.Hour, 0),
 		store:         storage.NewStore(util.GetMessageDBPath()),
 		isRunning:     false,
 	}
@@ -80,10 +76,6 @@ func (mes *MessageEventService) Stop() error {
 	}
 	mes.isRunning = false
 
-	if mes.cache != nil {
-		mes.cache.Close()
-	}
-
 	logutil.Info("Message event service stopped")
 	return nil
 }
@@ -91,11 +83,6 @@ func (mes *MessageEventService) Stop() error {
 // IsRunning retorna se o serviço está rodando
 func (mes *MessageEventService) IsRunning() bool {
 	return mes.isRunning
-}
-
-// GetCache expõe o cache TTL usado pelo serviço para integração com agregadores
-func (mes *MessageEventService) GetCache() cache.CacheManager {
-	return mes.cache
 }
 
 // handleMessageCreate armazena mensagens no cache para futuras comparações
@@ -155,18 +142,6 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 
-	// Armazenar no cache (TTL 24h via default)
-	key := channel.GuildID + ":" + m.ID
-	cached := &CachedMessage{
-		ID:        m.ID,
-		Content:   m.Content,
-		Author:    m.Author,
-		ChannelID: m.ChannelID,
-		GuildID:   channel.GuildID,
-		Timestamp: m.Timestamp,
-	}
-	_ = mes.cache.Set(key, cached, 0)
-
 	// Persistir em SQLite (write-through; melhor esforço)
 	if mes.store != nil && m.Author != nil {
 		_ = mes.store.UpsertMessage(storage.MessageRecord{
@@ -219,15 +194,9 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		"channelID": m.ChannelID,
 	}).Debug("MessageUpdate received")
 
-	// Verificar se temos a mensagem original no cache
-	key := m.GuildID + ":" + m.ID
-	v, exists := mes.cache.Get(key)
+	// Consultar persistência (SQLite) para obter a mensagem original
 	var cached *CachedMessage
-	if exists {
-		cached, _ = v.(*CachedMessage)
-	}
-	// Fallback para persistência se não estiver em memória
-	if (cached == nil || !exists) && mes.store != nil && m.GuildID != "" {
+	if mes.store != nil && m.GuildID != "" {
 		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
 			cached = &CachedMessage{
 				ID:        rec.MessageID,
@@ -334,7 +303,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		}
 	}
 
-	// Atualizar cache e persistência com novo conteúdo
+	// Atualizar persistência com novo conteúdo
 	updated := &CachedMessage{
 		ID:        cached.ID,
 		Content:   m.Content,
@@ -343,7 +312,6 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		GuildID:   cached.GuildID,
 		Timestamp: cached.Timestamp,
 	}
-	_ = mes.cache.Set(key, updated, 0)
 	if mes.store != nil && updated.Author != nil {
 		_ = mes.store.UpsertMessage(storage.MessageRecord{
 			GuildID:        updated.GuildID,
@@ -362,7 +330,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		"guildID":   cached.GuildID,
 		"channelID": cached.ChannelID,
 		"messageID": m.ID,
-	}).Debug("MessageUpdate: cache updated with new content")
+	}).Debug("MessageUpdate: store updated with new content")
 }
 
 // handleMessageDelete processa deleções de mensagens
@@ -371,14 +339,9 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		return
 	}
 
-	key := m.GuildID + ":" + m.ID
-	v, exists := mes.cache.Get(key)
 	var cached *CachedMessage
-	if exists {
-		cached, _ = v.(*CachedMessage)
-	}
 
-	if (!exists || cached == nil) && mes.store != nil && m.GuildID != "" {
+	if mes.store != nil && m.GuildID != "" {
 		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
 			cached = &CachedMessage{
 				ID:        rec.MessageID,
@@ -401,7 +364,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	// Pular se for bot
 	if cached.Author.Bot {
-		_ = mes.cache.Delete(key)
+		// no-op: cache removed; using SQLite only
 		if mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
@@ -410,7 +373,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
-		_ = mes.cache.Delete(key)
+		// no-op: cache removed; using SQLite only
 		if mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
@@ -423,7 +386,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 			"guildID":   cached.GuildID,
 			"messageID": m.ID,
 		}).Debug("MessageLogChannelID not configured for guild, message delete notification not sent")
-		_ = mes.cache.Delete(key)
+		// no-op: cache removed; using SQLite only
 		if mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
@@ -492,36 +455,20 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	}
 
 	// Remover do cache e persistência
-	_ = mes.cache.Delete(key)
+	// no-op: cache removed; using SQLite only
 	if mes.store != nil {
 		_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 	}
 }
 
-// TTL cache handles expiration; explicit cleanup routine removed
+// Persistent storage (SQLite) handles expiration and cleanup
 
 // GetCacheStats retorna estatísticas do cache para debugging
 func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
-	stats := mes.cache.Stats()
-
-	result := map[string]interface{}{
-		"totalCached": stats.TotalEntries,
-		"isRunning":   mes.isRunning,
-		"hitRate":     stats.HitRate,
-		"memoryUsage": stats.MemoryUsage,
+	return map[string]interface{}{
+		"isRunning": mes.isRunning,
+		"backend":   "sqlite",
 	}
-
-	// Contar mensagens por guild (melhor esforço)
-	guildCounts := make(map[string]int)
-	for _, key := range mes.cache.Keys() {
-		if idx := strings.IndexByte(key, ':'); idx > 0 {
-			guildID := key[:idx]
-			guildCounts[guildID]++
-		}
-	}
-	result["perGuild"] = guildCounts
-
-	return result
 }
 
 func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {

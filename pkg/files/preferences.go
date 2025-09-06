@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/util"
 	"github.com/alice-bnuy/errutil"
@@ -21,8 +20,8 @@ func NewConfigManager() *ConfigManager {
 	configFilePath := util.GetSettingsFilePath()
 	return &ConfigManager{
 		configFilePath: configFilePath,
-		cacheFilePath:  util.GetCacheFilePath(),
-		jsonManager:    util.NewJSONManager(configFilePath),
+
+		jsonManager: util.NewJSONManager(configFilePath),
 	}
 }
 
@@ -380,11 +379,6 @@ func EnsureConfigFiles() error {
 		return fmt.Errorf("failed to ensure settings file: %w", err)
 	}
 
-	// Ensure application cache file
-	if err := EnsureApplicationCacheFile(); err != nil {
-		return fmt.Errorf("failed to ensure application cache file: %w", err)
-	}
-
 	return nil
 }
 
@@ -466,29 +460,6 @@ func SettingsFileStatus() (exists bool, valid bool, path string, err error) {
 	return true, true, path, nil
 }
 
-// EnsureApplicationCacheFile ensures the application_cache.json file exists and is properly initialized
-func EnsureApplicationCacheFile() error {
-	// Use new caches root under ~/Library/Cache/[BotName]/avatar
-	cacheFilePath := util.GetCacheFilePath()
-	cacheDir := filepath.Dir(cacheFilePath)
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	// Check if cache file exists
-	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
-		logutil.Infof("Application cache file not found, creating default at %s", cacheFilePath)
-
-		// Create basic empty cache
-		defaultCache := `{"guilds":{},"last_updated":"","version":"2.0"}`
-		if err := os.WriteFile(cacheFilePath, []byte(defaultCache), 0644); err != nil {
-			return fmt.Errorf("failed to write application cache file: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // --- Unified Settings Operations ---
 //
 // These functions provide a standardized way to work with settings.json
@@ -554,44 +525,6 @@ func SaveSettingsFile(config *BotConfig) error {
 // - Thread-safe operations
 // - Throttled saves
 // - Guild-specific operations
-
-// LoadApplicationCacheFile loads cache from the standardized application_cache.json file
-func LoadApplicationCacheFile() (*AvatarMultiGuildCache, error) {
-	cachePath := util.GetCacheFilePath()
-	jsonManager := util.NewJSONManager(cachePath)
-
-	cache := &AvatarMultiGuildCache{
-		Guilds:      make(map[string]*AvatarCache),
-		LastUpdated: time.Now(),
-		Version:     "2.0",
-	}
-
-	err := jsonManager.Load(cache)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cache, nil // Return empty cache if file doesn't exist
-		}
-		return nil, fmt.Errorf("failed to load application cache from %s: %w", cachePath, err)
-	}
-
-	return cache, nil
-}
-
-// SaveApplicationCacheFile saves cache to the standardized application_cache.json file
-func SaveApplicationCacheFile(cache *AvatarMultiGuildCache) error {
-	if cache == nil {
-		return fmt.Errorf("cannot save nil cache")
-	}
-
-	cachePath := util.GetCacheFilePath()
-	jsonManager := util.NewJSONManager(cachePath)
-
-	if err := jsonManager.Save(cache); err != nil {
-		return fmt.Errorf("failed to save application cache to %s: %w", cachePath, err)
-	}
-
-	return nil
-}
 
 // LogConfiguredGuilds logs a summary of configured guilds. Returns error if any guilds are inaccessible.
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {

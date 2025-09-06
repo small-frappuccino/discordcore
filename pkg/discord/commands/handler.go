@@ -33,7 +33,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	logutil.Info("Setting up bot commands...")
 
 	// Criar o gerenciador de comandos
-	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager, nil)
+	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
 
 	// Registrar comandos de configuração
 	if err := ch.registerConfigCommands(); err != nil {

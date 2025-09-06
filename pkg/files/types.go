@@ -35,27 +35,10 @@ type BotConfig struct {
 // ConfigManager handles bot configuration management.
 type ConfigManager struct {
 	configFilePath string
-	cacheFilePath  string
 	logsDirPath    string
 	config         *BotConfig
 	mu             sync.RWMutex
 	jsonManager    *util.JSONManager
-}
-
-// ## Avatar Cache Types
-
-// AvatarCache holds the cached avatars for a guild.
-type AvatarCache struct {
-	Avatars     map[string]string `json:"avatars"`
-	LastUpdated time.Time         `json:"last_updated"`
-	GuildID     string            `json:"guild_id"`
-}
-
-// AvatarMultiGuildCache represents the cache file containing all guilds
-type AvatarMultiGuildCache struct {
-	Guilds      map[string]*AvatarCache `json:"guilds"`
-	LastUpdated time.Time               `json:"last_updated"`
-	Version     string                  `json:"version"`
 }
 
 // AvatarChange holds information about a user's avatar change.

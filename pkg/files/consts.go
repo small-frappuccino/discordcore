@@ -34,9 +34,6 @@ const (
 	ErrChannelWrongGuild    = "channel does not belong to this guild"
 	ErrChannelWrongType     = "channel must be a text channel"
 	ErrChannelNoPermissions = "bot lacks permissions to send messages in channel"
-	ErrWriteAvatarCache     = "error writing avatar cache file: %w"
-	ErrMarshalAvatarCache   = "error marshalling avatar cache: %w"
-	ErrRemoveAvatarCache    = "error removing avatar cache file: %w"
 
 	// General errors
 	ErrValidationFailed           = "validation failed"
@@ -63,10 +60,10 @@ const (
 	LogGuildAlreadyConfigured = "Guild already configured, skipping"
 	LogMonitorGuild           = "Will monitor this guild"
 	LogConfigFileNotFound     = "Config file not found, creating: %s"
-	LogCacheFileNotFound      = "Cache file not found, creating: %s"
-	LogNoConfiguredGuilds     = "No configured guilds. Use /setup to configure."
-	LogGuildNotAccessible     = "Guild not accessible; skipping"
-	LogFoundConfiguredGuilds  = "%d configured guild(s) found"
+
+	LogNoConfiguredGuilds    = "No configured guilds. Use /setup to configure."
+	LogGuildNotAccessible    = "Guild not accessible; skipping"
+	LogFoundConfiguredGuilds = "%d configured guild(s) found"
 
 	// Specific loading and saving logs
 	LogLoadConfigFailedJoinPaths   = "Failed to join paths: %s, error: %v"

@@ -92,6 +92,11 @@ func main() {
 		logutil.ErrorWithErr("Failed to load settings file", err)
 	}
 
+	// One-time migration: move JSON avatar cache into SQLite and remove JSON files
+	if err := util.MigrateAvatarJSONToSQLite(); err != nil {
+		logutil.WithField("error", err).Warn("Failed to migrate avatar JSON cache to SQLite (continuing)")
+	}
+
 	// Initialize SQLite store (messages, avatars, joins)
 	store := storage.NewStore(util.GetMessageDBPath())
 	if err := store.Init(); err != nil {
@@ -169,7 +174,7 @@ func main() {
 	}
 
 	// Register admin commands
-	adminCommands := admin.NewAdminCommands(serviceManager, monitoringService.MessageEvents().GetCache())
+	adminCommands := admin.NewAdminCommands(serviceManager)
 	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 
 	// Ensure safe shutdown of all services
