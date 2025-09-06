@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
-	"github.com/alice-bnuy/discordcore/v2/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/storage"
+	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,15 +18,15 @@ import (
 type UserWatcher struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
-	cacheManager  *cache.AvatarCacheManager
+	store         *storage.Store
 	notifier      *NotificationSender
 }
 
-func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, cacheManager *cache.AvatarCacheManager, notifier *NotificationSender) *UserWatcher {
+func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *NotificationSender) *UserWatcher {
 	return &UserWatcher{
 		session:       session,
 		configManager: configManager,
-		cacheManager:  cacheManager,
+		store:         store,
 		notifier:      notifier,
 	}
 }
@@ -35,7 +35,7 @@ func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManag
 type MonitoringService struct {
 	session             *discordgo.Session
 	configManager       *files.ConfigManager
-	cacheManager        *cache.AvatarCacheManager
+	store               *storage.Store
 	notifier            *NotificationSender
 	adapters            *task.NotificationAdapters
 	router              *task.TaskRouter
@@ -51,25 +51,25 @@ type MonitoringService struct {
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
-func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, cacheManager *cache.AvatarCacheManager) (*MonitoringService, error) {
+func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) (*MonitoringService, error) {
 	if session == nil {
 		return nil, fmt.Errorf("discord session is nil")
 	}
 	if configManager == nil {
 		return nil, fmt.Errorf("config manager is nil")
 	}
-	if cacheManager == nil {
-		return nil, fmt.Errorf("cache manager is nil")
+	if store == nil {
+		return nil, fmt.Errorf("store is nil")
 	}
 	n := NewNotificationSender(session)
 	router := task.NewRouter(task.Defaults())
-	adapters := task.NewNotificationAdapters(router, session, configManager, cacheManager, n)
+	adapters := task.NewNotificationAdapters(router, session, configManager, nil, n)
 	ms := &MonitoringService{
 		session:             session,
 		configManager:       configManager,
-		cacheManager:        cacheManager,
+		store:               store,
 		notifier:            n,
-		userWatcher:         NewUserWatcher(session, configManager, cacheManager, n),
+		userWatcher:         NewUserWatcher(session, configManager, store, n),
 		memberEventService:  NewMemberEventService(session, configManager, n),
 		messageEventService: NewMessageEventService(session, configManager, n),
 		adapters:            adapters,
@@ -167,9 +167,7 @@ func (ms *MonitoringService) initializeCache() {
 		}(gid)
 	}
 	wg.Wait()
-	if err := ms.cacheManager.SaveThrottled(3 * time.Second); err != nil {
-		log.Printf("Error saving cache after initialization: %v", err)
-	}
+	// No-op: avatars are persisted per change in the SQLite store
 }
 
 // initializeGuildCache inicializa os avatares atuais dos membros em um guild específico.
@@ -181,13 +179,13 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	}
 	log.Printf("Initializing cache for guild: %s (ID: %s)", guild.Name, guild.ID)
 
-	// Set bot join time in cache if missing
-	if _, ok := ms.cacheManager.GetBotSince(guildID); !ok {
+	// Set bot join time if missing
+	if _, ok, _ := ms.store.GetBotSince(guildID); !ok {
 		botID := ms.session.State.User.ID
 		if botMember, err := ms.session.GuildMember(guildID, botID); err == nil && !botMember.JoinedAt.IsZero() {
-			ms.cacheManager.SetBotSince(guildID, botMember.JoinedAt)
+			_ = ms.store.SetBotSince(guildID, botMember.JoinedAt)
 		} else {
-			ms.cacheManager.SetBotSince(guildID, time.Now())
+			_ = ms.store.SetBotSince(guildID, time.Now())
 		}
 	}
 	members, err := ms.session.GuildMembers(guildID, "", 1000)
@@ -200,7 +198,7 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		if avatarHash == "" {
 			avatarHash = "default"
 		}
-		ms.cacheManager.UpdateAvatar(guildID, member.User.ID, avatarHash)
+		_, _, _ = ms.store.UpsertAvatar(guildID, member.User.ID, avatarHash, time.Now())
 	}
 }
 
@@ -217,10 +215,6 @@ func (ms *MonitoringService) setupEventHandlers() {
 func (ms *MonitoringService) ensureGuildsListed() {
 	if ms.session == nil || ms.session.State == nil {
 		return
-	}
-	// Ensure config is loaded before checking for existing guild entries
-	if err := ms.configManager.LoadConfig(); err != nil {
-		logutil.ErrorWithErr("Failed to load settings before ensuring guild list", err)
 	}
 
 	for _, g := range ms.session.State.Guilds {
@@ -246,9 +240,7 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	if guildID == "" {
 		return
 	}
-	if err := ms.configManager.LoadConfig(); err != nil {
-		logutil.ErrorWithErr("Failed to load settings on guild create", err)
-	}
+
 	if ms.configManager.GuildConfig(guildID) == nil {
 		// Guild nova: adicionar no config e inicializar cache
 		if err := ms.configManager.RegisterGuild(s, guildID); err != nil {
@@ -263,9 +255,7 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 		}
 		logutil.WithField("guildID", guildID).Info("🆕 New guild listed in config")
 		ms.initializeGuildCache(guildID)
-		if err := ms.cacheManager.Save(); err != nil {
-			logutil.WithField("guildID", guildID).ErrorWithErr("Error saving cache for new guild", err)
-		}
+		// No-op: avatars persisted per change in SQLite store
 	}
 }
 
@@ -323,7 +313,14 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	}
 	ms.changesMutex.RUnlock()
 
-	if ms.cacheManager.AvatarChanged(guildID, userID, currentAvatar) {
+	oldHash, _, ok, _ := ms.store.GetAvatar(guildID, userID)
+	changed := true
+	if ok {
+		changed = oldHash != currentAvatar
+	} else {
+		changed = currentAvatar != ""
+	}
+	if changed {
 		ms.changesMutex.Lock()
 		ms.recentChanges[changeKey] = time.Now()
 		for key, timestamp := range ms.recentChanges {
@@ -333,11 +330,7 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 		}
 		ms.changesMutex.Unlock()
 
-		if ms.adapters != nil {
-			_ = ms.adapters.EnqueueProcessAvatarChange(guildID, userID, username, currentAvatar)
-		} else {
-			ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
-		}
+		ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
 	}
 }
 
@@ -347,7 +340,10 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 	if finalUsername == "" {
 		finalUsername = aw.getUsernameForNotification(guildID, userID)
 	}
-	oldAvatar := aw.cacheManager.AvatarHash(guildID, userID)
+	var oldAvatar string
+	if h, _, ok, _ := aw.store.GetAvatar(guildID, userID); ok {
+		oldAvatar = h
+	}
 	change := files.AvatarChange{
 		UserID:    userID,
 		Username:  finalUsername,
@@ -369,9 +365,8 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 			}
 		}
 	}
-	aw.cacheManager.UpdateAvatar(guildID, userID, currentAvatar)
-	if err := aw.cacheManager.Save(); err != nil {
-		logutil.WithField("guildID", guildID).ErrorWithErr("Error saving cache", err)
+	if _, _, err := aw.store.UpsertAvatar(guildID, userID, currentAvatar, time.Now()); err != nil {
+		logutil.WithField("guildID", guildID).ErrorWithErr("Error saving avatar in store", err)
 	}
 }
 
@@ -429,6 +424,6 @@ func (ms *MonitoringService) Notifier() *NotificationSender {
 }
 
 // CacheManager exposes the avatar cache manager used by monitoring.
-func (ms *MonitoringService) CacheManager() *cache.AvatarCacheManager {
-	return ms.cacheManager
+func (ms *MonitoringService) Store() *storage.Store {
+	return ms.store
 }

@@ -7,16 +7,16 @@ import (
 	"os"
 	"time"
 
-	dcache "github.com/alice-bnuy/discordcore/v2/pkg/cache"
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands"
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands/admin"
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/logging"
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/session"
-	"github.com/alice-bnuy/discordcore/v2/pkg/errors"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
-	"github.com/alice-bnuy/discordcore/v2/pkg/service"
-	"github.com/alice-bnuy/discordcore/v2/pkg/task"
-	"github.com/alice-bnuy/discordcore/v2/pkg/util"
+	"github.com/alice-bnuy/discordcore/pkg/discord/commands"
+	"github.com/alice-bnuy/discordcore/pkg/discord/commands/admin"
+	"github.com/alice-bnuy/discordcore/pkg/discord/logging"
+	"github.com/alice-bnuy/discordcore/pkg/discord/session"
+	"github.com/alice-bnuy/discordcore/pkg/errors"
+	"github.com/alice-bnuy/discordcore/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/service"
+	"github.com/alice-bnuy/discordcore/pkg/storage"
+	"github.com/alice-bnuy/discordcore/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/util"
 	"github.com/alice-bnuy/errutil"
 	"github.com/alice-bnuy/logutil"
 	"github.com/joho/godotenv"
@@ -56,12 +56,7 @@ func main() {
 	// Fetch token
 	token := util.GetDiscordBotToken("ALICE_BOT")
 
-	// Initialize config manager
-	configManager := files.NewConfigManager()
-	// Load existing settings from disk before starting services
-	if err := configManager.LoadConfig(); err != nil {
-		logutil.ErrorWithErr("Failed to load settings file", err)
-	}
+	// Config manager will be initialized after bot name is set (paths correct)
 
 	// Add detailed logging for Discord authentication
 	logutil.Info("🔑 Attempting to authenticate with Discord API...")
@@ -78,6 +73,12 @@ func main() {
 	// Set bot name from Discord and recompute app support path
 	util.SetBotName(discordSession.State.User.Username)
 
+	// Ensure cache directories exist for new caches root
+	if err := util.EnsureCacheDirs(); err != nil {
+		logutil.ErrorWithErr("Failed to create cache directories", err)
+		logutil.Fatal("❌ Failed to create cache directories")
+	}
+
 	// Ensure config and cache files exist (now using the right bot name path)
 	if err := files.EnsureConfigFiles(); err != nil {
 		logutil.ErrorWithErr("Error checking config files", err)
@@ -85,16 +86,17 @@ func main() {
 	}
 
 	// Initialize config manager (uses the right path now)
-	configManager = files.NewConfigManager()
+	configManager := files.NewConfigManager()
 	// Load existing settings from disk before starting services
 	if err := configManager.LoadConfig(); err != nil {
 		logutil.ErrorWithErr("Failed to load settings file", err)
 	}
 
-	// Initialize avatar/config cache (path based on bot name)
-	cache := dcache.NewDefaultAvatarCacheManager()
-	if err := cache.Load(); err != nil {
-		logutil.ErrorWithErr("Error loading cache", err)
+	// Initialize SQLite store (messages, avatars, joins)
+	store := storage.NewStore(util.GetMessageDBPath())
+	if err := store.Init(); err != nil {
+		logutil.ErrorWithErr("Failed to initialize SQLite store", err)
+		logutil.Fatal("❌ Failed to initialize SQLite store")
 	}
 
 	// Log summary of configured guilds
@@ -109,7 +111,7 @@ func main() {
 	logutil.Info("🔧 Creating service wrappers...")
 
 	// Wrap MonitoringService
-	monitoringService, err := logging.NewMonitoringService(discordSession, configManager, cache)
+	monitoringService, err := logging.NewMonitoringService(discordSession, configManager, store)
 	if err != nil {
 		logutil.ErrorWithErr("Failed to create monitoring service", err)
 		logutil.Fatal("❌ Failed to create monitoring service")
@@ -129,7 +131,7 @@ func main() {
 	automodService := logging.NewAutomodService(discordSession, configManager)
 	// Wire Automod with TaskRouter via NotificationAdapters (uses same notifier/config/cache)
 	automodRouter := task.NewRouter(task.Defaults())
-	automodAdapters := task.NewNotificationAdapters(automodRouter, discordSession, configManager, cache, monitoringService.Notifier())
+	automodAdapters := task.NewNotificationAdapters(automodRouter, discordSession, configManager, store, monitoringService.Notifier())
 	automodService.SetAdapters(automodAdapters)
 	automodWrapper := service.NewServiceWrapper(
 		"automod",
@@ -167,8 +169,7 @@ func main() {
 	}
 
 	// Register admin commands
-	compositeCache := dcache.NewCompositeCache("bot_cache", cache, monitoringService.MessageEvents().GetCache())
-	adminCommands := admin.NewAdminCommands(serviceManager, compositeCache)
+	adminCommands := admin.NewAdminCommands(serviceManager, monitoringService.MessageEvents().GetCache())
 	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 
 	// Ensure safe shutdown of all services
@@ -179,6 +180,9 @@ func main() {
 
 		if err := serviceManager.StopAll(); err != nil {
 			logutil.ErrorWithErr("Some services failed to stop cleanly", err)
+		}
+		if store != nil {
+			_ = store.Close()
 		}
 		_ = shutdownCtx // Avoid unused variable warning
 	}()

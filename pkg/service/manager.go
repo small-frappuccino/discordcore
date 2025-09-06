@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/errors"
+	"github.com/alice-bnuy/discordcore/pkg/errors"
 	"github.com/alice-bnuy/logutil"
 )
 

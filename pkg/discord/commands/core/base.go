@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )

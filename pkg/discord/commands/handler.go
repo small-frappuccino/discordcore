@@ -3,9 +3,9 @@ package commands
 import (
 	"fmt"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands/config"
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/discord/commands/config"
+	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
+	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )

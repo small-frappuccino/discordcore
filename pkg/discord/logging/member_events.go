@@ -5,9 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
-	"github.com/alice-bnuy/discordcore/v2/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/storage"
+	"github.com/alice-bnuy/discordcore/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/util"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -21,8 +22,11 @@ type MemberEventService struct {
 	isRunning     bool
 
 	// Cache para tempos de entrada (membro e bot)
-	cacheManager *cache.AvatarCacheManager
-	joinTimes    map[string]time.Time // chave: guildID:userID
+
+	joinTimes map[string]time.Time // chave: guildID:userID
+
+	// Persistência complementar (SQLite)
+	store *storage.Store
 }
 
 // NewMemberEventService cria uma nova instância do serviço de eventos de membros
@@ -38,10 +42,6 @@ func NewMemberEventService(session *discordgo.Session, configManager *files.Conf
 
 func (mes *MemberEventService) SetAdapters(adapters *task.NotificationAdapters) {
 	mes.adapters = adapters
-	// NEW: injetar cache manager a partir dos adapters
-	if adapters != nil {
-		mes.cacheManager = adapters.Cache
-	}
 }
 
 // Start registra os handlers de eventos de membros
@@ -54,6 +54,16 @@ func (mes *MemberEventService) Start() error {
 	// NEW: garantir mapa de joins
 	if mes.joinTimes == nil {
 		mes.joinTimes = make(map[string]time.Time)
+	}
+
+	// Inicializar store SQLite (melhor esforço)
+	if mes.store == nil {
+		mes.store = storage.NewStore(util.GetMessageDBPath())
+	}
+	if mes.store != nil {
+		if err := mes.store.Init(); err != nil {
+			logutil.WithField("error", err).Warn("Member event service: failed to initialize SQLite store (continuing)")
+		}
 	}
 
 	mes.session.AddHandler(mes.handleGuildMemberAdd)
@@ -104,10 +114,16 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 
 	// Calcular há quanto tempo a conta existe
 	accountAge := mes.calculateAccountAge(m.User.ID)
-	// Registrar horário preciso de entrada do membro no cache (se possível)
-	if mes.cacheManager != nil {
+
+	// Persistir também em SQLite (melhor esforço)
+	if mes.store != nil {
 		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
-			mes.cacheManager.RecordMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
+			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
+		}
+	}
+	if mes.store != nil {
+		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
+			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
 		}
 	}
 
@@ -253,12 +269,19 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 }
 
 // calculateServerTime tenta calcular há quanto tempo o usuário estava no servidor
-// Nota: isso é limitado pois não temos histórico persistente, então retorna 0 (tempo desconhecido)
-// Em uma implementação mais avançada, você poderia salvar dados de join em um banco de dados
+// Agora usa múltiplas fontes em ordem: memória -> cache persistente JSON -> SQLite
 func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.Duration {
-	// Como não temos dados históricos persistentes do tempo de entrada no servidor,
-	// retornamos 0 para indicar que não sabemos
-	// TODO: Implementar persistência de dados de entrada para cálculo preciso
+	// 1) memória (mais preciso no runtime)
+	if t, ok := mes.joinTimes[guildID+":"+userID]; ok && !t.IsZero() {
+		return time.Since(t)
+	}
+
+	// 3) SQLite (novo repositório)
+	if mes.store != nil {
+		if t, ok, err := mes.store.GetMemberJoin(guildID, userID); err == nil && ok && !t.IsZero() {
+			return time.Since(t)
+		}
+	}
 	return 0
 }
 

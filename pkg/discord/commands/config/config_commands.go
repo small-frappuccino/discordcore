@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
+	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/bwmarrin/discordgo"
 )
 

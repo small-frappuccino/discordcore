@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -88,12 +88,11 @@ type AvatarChangePayload struct {
 
 // NotificationAdapters wires NotificationSender and AvatarCache to the TaskRouter.
 type NotificationAdapters struct {
-	Router       *TaskRouter
-	Notifier     NotificationSender
-	Cache        *cache.AvatarCacheManager
-	Config       *files.ConfigManager
-	Session      *discordgo.Session
-	SaveThrottle time.Duration
+	Router   *TaskRouter
+	Notifier NotificationSender
+	Store    *storage.Store
+	Config   *files.ConfigManager
+	Session  *discordgo.Session
 }
 
 // NewNotificationAdapters creates adapters and registers task handlers.
@@ -101,16 +100,15 @@ func NewNotificationAdapters(
 	router *TaskRouter,
 	session *discordgo.Session,
 	cfg *files.ConfigManager,
-	cacheMgr *cache.AvatarCacheManager,
+	store *storage.Store,
 	notifier NotificationSender,
 ) *NotificationAdapters {
 	ad := &NotificationAdapters{
-		Router:       router,
-		Notifier:     notifier,
-		Cache:        cacheMgr,
-		Config:       cfg,
-		Session:      session,
-		SaveThrottle: 3 * time.Second,
+		Router:   router,
+		Notifier: notifier,
+		Store:    store,
+		Config:   cfg,
+		Session:  session,
 	}
 	ad.RegisterHandlers()
 	return ad
@@ -360,7 +358,7 @@ func (a *NotificationAdapters) handleSendAutomodAction(ctx context.Context, payl
 }
 
 func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, payload any) error {
-	if a.Notifier == nil || a.Cache == nil || a.Config == nil {
+	if a.Notifier == nil || a.Store == nil || a.Config == nil {
 		return fmt.Errorf("dependencies not initialized")
 	}
 	p, ok := payload.(AvatarChangePayload)
@@ -383,7 +381,10 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 		username = p.UserID // fallback
 	}
 
-	oldHash := a.Cache.AvatarHash(p.GuildID, p.UserID)
+	var oldHash string
+	if h, _, ok, _ := a.Store.GetAvatar(p.GuildID, p.UserID); ok {
+		oldHash = h
+	}
 
 	change := files.AvatarChange{
 		UserID:    p.UserID,
@@ -396,14 +397,12 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	// Find destination channel
 	gcfg := a.Config.GuildConfig(p.GuildID)
 	if gcfg == nil {
-		// No configuration; nothing to do (avoid retries)
+		// No configuration; update avatar and exit (avoid retries)
+		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
 		logutil.WithFields(map[string]any{
 			"guildID": p.GuildID,
 			"userID":  p.UserID,
 		}).Debug("No guild config found; skipping avatar notification")
-		// Still update cache silently
-		a.Cache.UpdateAvatar(p.GuildID, p.UserID, p.NewAvatar)
-		_ = a.Cache.SaveThrottled(a.SaveThrottle)
 		return nil
 	}
 
@@ -411,14 +410,13 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	if channelID == "" {
 		channelID = gcfg.CommandChannelID
 	}
-	// If there's still no channel, skip notification but update cache
+	// If there's still no channel, skip notification but update avatar in store
 	if channelID == "" {
 		logutil.WithFields(map[string]any{
 			"guildID": p.GuildID,
 			"userID":  p.UserID,
 		}).Warn("No log channel configured; skipping avatar notification")
-		a.Cache.UpdateAvatar(p.GuildID, p.UserID, p.NewAvatar)
-		_ = a.Cache.SaveThrottled(a.SaveThrottle)
+		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
 		return nil
 	}
 
@@ -427,9 +425,8 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 		return err
 	}
 
-	// Update cache and coalesce saves
-	a.Cache.UpdateAvatar(p.GuildID, p.UserID, p.NewAvatar)
-	if err := a.Cache.SaveThrottled(a.SaveThrottle); err != nil {
+	// Update current avatar in store
+	if _, _, err := a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now()); err != nil {
 		return err
 	}
 
@@ -437,8 +434,6 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 }
 
 func (a *NotificationAdapters) handleFlushAvatarCache(ctx context.Context, payload any) error {
-	if a.Cache == nil {
-		return fmt.Errorf("cache manager is nil")
-	}
-	return a.Cache.Save()
+	// No-op when using SQLite store
+	return nil
 }

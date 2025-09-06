@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
-	"github.com/alice-bnuy/discordcore/v2/pkg/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/v2/pkg/service"
+	"github.com/alice-bnuy/discordcore/pkg/cache"
+	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
+	"github.com/alice-bnuy/discordcore/pkg/service"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -425,7 +425,7 @@ func (cmd *CacheStatsCommand) Name() string {
 }
 
 func (cmd *CacheStatsCommand) Description() string {
-	return "Show cache statistics"
+	return "Show message cache statistics"
 }
 
 func (cmd *CacheStatsCommand) Options() []*discordgo.ApplicationCommandOption {
@@ -448,7 +448,7 @@ func (cmd *CacheStatsCommand) Handle(ctx *core.Context) error {
 	stats := cmd.adminCommands.cacheManager.Stats()
 
 	embed := &discordgo.MessageEmbed{
-		Title: "📊 Cache Statistics",
+		Title: "📊 Message Cache Statistics",
 		Color: 0x5865F2,
 		Fields: []*discordgo.MessageEmbedField{
 			{

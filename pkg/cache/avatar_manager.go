@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/util"
+	"github.com/alice-bnuy/discordcore/pkg/util"
 )
 
 // AvatarCacheManager is a persistent, guild-aware cache for user avatar hashes.
@@ -424,6 +424,9 @@ func (m *AvatarCacheManager) ensureGuildLocked(guildID string) *avatarCache {
 }
 
 func (m *AvatarCacheManager) ensureParentDir() error {
+	// Ensure base caches directories exist (new caches root)
+	_ = util.EnsureCacheDirs()
+
 	dir := filepath.Dir(m.path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)

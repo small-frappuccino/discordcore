@@ -5,9 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/cache"
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
-	"github.com/alice-bnuy/discordcore/v2/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/cache"
+	"github.com/alice-bnuy/discordcore/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/storage"
+	"github.com/alice-bnuy/discordcore/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/util"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
@@ -29,6 +31,7 @@ type MessageEventService struct {
 	notifier      *NotificationSender
 	adapters      *task.NotificationAdapters
 	cache         *cache.TTLMap
+	store         *storage.Store
 	isRunning     bool
 }
 
@@ -39,6 +42,7 @@ func NewMessageEventService(session *discordgo.Session, configManager *files.Con
 		configManager: configManager,
 		notifier:      notifier,
 		cache:         cache.NewTTLMap("message_events", 24*time.Hour, 1*time.Hour, 0),
+		store:         storage.NewStore(util.GetMessageDBPath()),
 		isRunning:     false,
 	}
 }
@@ -49,6 +53,15 @@ func (mes *MessageEventService) Start() error {
 		return fmt.Errorf("message event service is already running")
 	}
 	mes.isRunning = true
+
+	// Inicializa a persistência (SQLite) e limpa expirados (melhor esforço)
+	if mes.store != nil {
+		if err := mes.store.Init(); err != nil {
+			logutil.WithField("error", err).Warn("Message event service: failed to initialize SQLite store (continuing without persistence)")
+		} else {
+			_ = mes.store.CleanupExpiredMessages()
+		}
+	}
 
 	mes.session.AddHandler(mes.handleMessageCreate)
 	mes.session.AddHandler(mes.handleMessageUpdate)
@@ -144,14 +157,31 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 
 	// Armazenar no cache (TTL 24h via default)
 	key := channel.GuildID + ":" + m.ID
-	_ = mes.cache.Set(key, &CachedMessage{
+	cached := &CachedMessage{
 		ID:        m.ID,
 		Content:   m.Content,
 		Author:    m.Author,
 		ChannelID: m.ChannelID,
 		GuildID:   channel.GuildID,
 		Timestamp: m.Timestamp,
-	}, 0)
+	}
+	_ = mes.cache.Set(key, cached, 0)
+
+	// Persistir em SQLite (write-through; melhor esforço)
+	if mes.store != nil && m.Author != nil {
+		_ = mes.store.UpsertMessage(storage.MessageRecord{
+			GuildID:        channel.GuildID,
+			MessageID:      m.ID,
+			ChannelID:      m.ChannelID,
+			AuthorID:       m.Author.ID,
+			AuthorUsername: m.Author.Username,
+			AuthorAvatar:   m.Author.Avatar,
+			Content:        m.Content,
+			CachedAt:       time.Now(),
+			ExpiresAt:      time.Now().Add(24 * time.Hour),
+			HasExpiry:      true,
+		})
+	}
 
 	logutil.WithFields(map[string]interface{}{
 		"guildID":   channel.GuildID,
@@ -196,12 +226,25 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	if exists {
 		cached, _ = v.(*CachedMessage)
 	}
+	// Fallback para persistência se não estiver em memória
+	if (cached == nil || !exists) && mes.store != nil && m.GuildID != "" {
+		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
+			cached = &CachedMessage{
+				ID:        rec.MessageID,
+				Content:   rec.Content,
+				Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
+				ChannelID: rec.ChannelID,
+				GuildID:   rec.GuildID,
+				Timestamp: rec.CachedAt,
+			}
+		}
+	}
 
-	if !exists || cached == nil {
+	if cached == nil {
 		logutil.WithFields(map[string]interface{}{
 			"messageID": m.ID,
 			"userID":    m.Author.ID,
-		}).Debug("Message edit detected but original not in cache")
+		}).Debug("Message edit detected but original not in cache/persistence")
 		return
 	}
 
@@ -291,15 +334,30 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		}
 	}
 
-	// Atualizar cache com novo conteúdo
-	_ = mes.cache.Set(key, &CachedMessage{
+	// Atualizar cache e persistência com novo conteúdo
+	updated := &CachedMessage{
 		ID:        cached.ID,
 		Content:   m.Content,
 		Author:    cached.Author,
 		ChannelID: cached.ChannelID,
 		GuildID:   cached.GuildID,
 		Timestamp: cached.Timestamp,
-	}, 0)
+	}
+	_ = mes.cache.Set(key, updated, 0)
+	if mes.store != nil && updated.Author != nil {
+		_ = mes.store.UpsertMessage(storage.MessageRecord{
+			GuildID:        updated.GuildID,
+			MessageID:      updated.ID,
+			ChannelID:      updated.ChannelID,
+			AuthorID:       updated.Author.ID,
+			AuthorUsername: updated.Author.Username,
+			AuthorAvatar:   updated.Author.Avatar,
+			Content:        updated.Content,
+			CachedAt:       time.Now(),
+			ExpiresAt:      time.Now().Add(24 * time.Hour),
+			HasExpiry:      true,
+		})
+	}
 	logutil.WithFields(map[string]interface{}{
 		"guildID":   cached.GuildID,
 		"channelID": cached.ChannelID,
@@ -320,23 +378,42 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		cached, _ = v.(*CachedMessage)
 	}
 
-	if !exists {
+	if (!exists || cached == nil) && mes.store != nil && m.GuildID != "" {
+		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
+			cached = &CachedMessage{
+				ID:        rec.MessageID,
+				Content:   rec.Content,
+				Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
+				ChannelID: rec.ChannelID,
+				GuildID:   rec.GuildID,
+				Timestamp: rec.CachedAt,
+			}
+		}
+	}
+
+	if cached == nil {
 		logutil.WithFields(map[string]interface{}{
 			"messageID": m.ID,
 			"channelID": m.ChannelID,
-		}).Debug("Message delete detected but original not in cache")
+		}).Debug("Message delete detected but original not in cache/persistence")
 		return
 	}
 
 	// Pular se for bot
 	if cached.Author.Bot {
-		_ = mes.cache.Delete(m.ID)
+		_ = mes.cache.Delete(key)
+		if mes.store != nil {
+			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+		}
 		return
 	}
 
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
-		_ = mes.cache.Delete(m.ID)
+		_ = mes.cache.Delete(key)
+		if mes.store != nil {
+			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+		}
 		return
 	}
 
@@ -346,7 +423,10 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 			"guildID":   cached.GuildID,
 			"messageID": m.ID,
 		}).Debug("MessageLogChannelID not configured for guild, message delete notification not sent")
-		_ = mes.cache.Delete(m.ID)
+		_ = mes.cache.Delete(key)
+		if mes.store != nil {
+			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+		}
 		return
 	}
 
@@ -411,8 +491,11 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		}
 	}
 
-	// Remover do cache
-	_ = mes.cache.Delete(m.ID)
+	// Remover do cache e persistência
+	_ = mes.cache.Delete(key)
+	if mes.store != nil {
+		_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+	}
 }
 
 // TTL cache handles expiration; explicit cleanup routine removed

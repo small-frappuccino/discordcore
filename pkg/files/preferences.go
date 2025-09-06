@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/util"
+	"github.com/alice-bnuy/discordcore/pkg/util"
 	"github.com/alice-bnuy/errutil"
 	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
@@ -56,7 +56,7 @@ func (mgr *ConfigManager) LoadConfig() error {
 		logutil.Warnf(LogLoadConfigNoGuilds, mgr.configFilePath)
 	}
 
-	logutil.Infof(LogLoadConfigSuccess, mgr.configFilePath)
+	// logutil.Infof(LogLoadConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
@@ -468,14 +468,14 @@ func SettingsFileStatus() (exists bool, valid bool, path string, err error) {
 
 // EnsureApplicationCacheFile ensures the application_cache.json file exists and is properly initialized
 func EnsureApplicationCacheFile() error {
-	// Create data subdirectory if it doesn't exist
-	dataDir := filepath.Join(util.ApplicationSupportPath, "data")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
+	// Use new caches root under ~/Library/Cache/[BotName]/avatar
+	cacheFilePath := util.GetCacheFilePath()
+	cacheDir := filepath.Dir(cacheFilePath)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
 	// Check if cache file exists
-	cacheFilePath := filepath.Join(dataDir, "application_cache.json")
 	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
 		logutil.Infof("Application cache file not found, creating default at %s", cacheFilePath)
 

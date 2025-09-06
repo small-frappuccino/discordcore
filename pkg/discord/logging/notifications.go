@@ -2,10 +2,11 @@ package logging
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/v2/pkg/files"
-	"github.com/alice-bnuy/discordcore/v2/pkg/task"
+	"github.com/alice-bnuy/discordcore/pkg/files"
+	"github.com/alice-bnuy/discordcore/pkg/task"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -109,6 +110,12 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 
 // SendMemberJoinNotification envia notificação de entrada de membro
 func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
+	joinAgeText := formatDurationSmart(accountAge)
+	if joinAgeText == "" {
+		joinAgeText = "— ago"
+	} else {
+		joinAgeText = joinAgeText + " ago"
+	}
 	embed := &discordgo.MessageEmbed{
 		Title:       "Member joined",
 		Color:       0x4DF475, // Green (RGB 77,244,117)
@@ -116,7 +123,7 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Account created",
-				Value:  formatDuration(accountAge),
+				Value:  joinAgeText,
 				Inline: true,
 			},
 		},
@@ -139,15 +146,22 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 	var fields []*discordgo.MessageEmbedField
 
 	if serverTime > 0 {
+		// Build human-readable server time with fallback when formatting yields empty (e.g., <1s)
+		serverTimeText := formatDurationSmart(serverTime)
+		if serverTimeText == "" {
+			serverTimeText = "— ago"
+		} else {
+			serverTimeText = serverTimeText + " ago"
+		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Time on server",
-			Value:  formatDuration(serverTime),
+			Value:  serverTimeText,
 			Inline: true,
 		})
 	} else {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Time on server",
-			Value:  "Unknown time",
+			Value:  "— ago",
 			Inline: true,
 		})
 	}
@@ -177,17 +191,17 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 // SendMessageEditNotification envia notificação de edição de mensagem
 func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *task.CachedMessage, edited *discordgo.MessageUpdate) error {
 	embed := &discordgo.MessageEmbed{
-		Title:       "✏️ Mensagem editada",
-		Color:       0xFFA500, // Laranja
-		Description: fmt.Sprintf("**%s** (<@%s>) editou uma mensagem em <#%s>", original.Author.Username, original.Author.ID, original.ChannelID),
+		Title:       "✏️ Message Edited",
+		Color:       0xFFA500, // Orange
+		Description: fmt.Sprintf("**%s** (<@%s>) edited a message in <#%s>", original.Author.Username, original.Author.ID, original.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Antes",
+				Name:   "Before",
 				Value:  truncateString(original.Content, 1000),
 				Inline: false,
 			},
 			{
-				Name:   "Depois",
+				Name:   "After",
 				Value:  truncateString(edited.Content, 1000),
 				Inline: false,
 			},
@@ -205,17 +219,17 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 // SendMessageDeleteNotification envia notificação de deleção de mensagem
 func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
 	embed := &discordgo.MessageEmbed{
-		Title:       "🗑️ Mensagem deletada",
-		Color:       0xFF0000, // Vermelho
-		Description: fmt.Sprintf("Mensagem de **%s** (<@%s>) deletada em <#%s>", deleted.Author.Username, deleted.Author.ID, deleted.ChannelID),
+		Title:       "🗑️ Message Deleted",
+		Color:       0xFF0000, // Red
+		Description: fmt.Sprintf("Message from **%s** (<@%s>) was deleted in <#%s>", deleted.Author.Username, deleted.Author.ID, deleted.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Conteúdo",
+				Name:   "Content",
 				Value:  truncateString(deleted.Content, 1000),
 				Inline: false,
 			},
 			{
-				Name:   "Deletado por",
+				Name:   "Deleted by",
 				Value:  deletedBy,
 				Inline: true,
 			},
@@ -230,10 +244,96 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 	return err
 }
 
+// formatDurationFull mostra a duração no formato completo, omitindo unidades iniciais iguais a zero.
+// Ex.: "0 days 2 minutes 5 seconds" -> "2 minutes 5 seconds"
+//
+//	"0 days 3 hours 0 minutes"   -> "3 hours 0 minutes"
+func formatDurationFull(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d.Seconds())
+	days := totalSeconds / 86400
+	hours := (totalSeconds % 86400) / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	type comp struct {
+		label string
+		value int64
+	}
+	parts := []comp{
+		{"days", days},
+		{"hours", hours},
+		{"minutes", minutes},
+		{"seconds", seconds},
+	}
+
+	// Trim leading zero-valued units, but keep remaining units as-is
+	for len(parts) > 1 && parts[0].value == 0 {
+		parts = parts[1:]
+	}
+
+	out := ""
+	for i, p := range parts {
+		if i > 0 {
+			out += " "
+		}
+		out += fmt.Sprintf("%d %s", p.value, p.label)
+	}
+	return out
+}
+
+// formatDurationSmart formata listando todas as unidades com valor diferente de zero (sem abreviações).
+func formatDurationSmart(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d.Seconds())
+	days := totalSeconds / 86400
+	hours := (totalSeconds % 86400) / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	parts := []string{}
+
+	if days > 0 {
+		if days == 1 {
+			parts = append(parts, "1 day")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d days", days))
+		}
+	}
+	if hours > 0 {
+		if hours == 1 {
+			parts = append(parts, "1 hour")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d hours", hours))
+		}
+	}
+	if minutes > 0 {
+		if minutes == 1 {
+			parts = append(parts, "1 minute")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d minutes", minutes))
+		}
+	}
+	// Inclui seconds se > 0 ou se nenhuma outra unidade foi incluída (ex.: tudo zero)
+	if seconds > 0 {
+		if seconds == 1 {
+			parts = append(parts, "1 second")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d seconds", seconds))
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
 // formatDuration formata uma duração de tempo de forma legível
 func formatDuration(d time.Duration) string {
 	if d == 0 {
-		return "Tempo desconhecido"
+		return "`            `"
 	}
 
 	days := int(d.Hours()) / 24
