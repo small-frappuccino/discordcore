@@ -1,7 +1,7 @@
-github.com/alice-bnuy/errutil v1.70.0 h1:9iRUjLDMxNIdw+UsTqpzvopX5kFbHVq0YvmkFVN7Flg=
-github.com/alice-bnuy/errutil v1.70.0/go.mod h1:MrehILXhebE3xL+uuPYk8uyKbxfkdjvUVhdVqCHrmzU=
-github.com/alice-bnuy/logutil v1.70.0 h1:CvemlbKfMC0JaI2r2z5R4vJIPMZXJ2alwTHb8KKrrtI=
-github.com/alice-bnuy/logutil v1.70.0/go.mod h1:ewkAenzoxjsCWu49aRAMsxihSg2GVlvYISU5wUmh73k=
+github.com/alice-bnuy/errutil v0.9.0 h1:CQ9QOFNO+xH3I6ErNv3aox277R2fzv5N1QOX6uUqzBI=
+github.com/alice-bnuy/errutil v0.9.0/go.mod h1:MrehILXhebE3xL+uuPYk8uyKbxfkdjvUVhdVqCHrmzU=
+github.com/alice-bnuy/logutil v1.0.0 h1:o7zdW8ef7ah6K25TBnNNTwsC5Tt12YGj5DPPp/R0j4o=
+github.com/alice-bnuy/logutil v1.0.0/go.mod h1:ewkAenzoxjsCWu49aRAMsxihSg2GVlvYISU5wUmh73k=
 github.com/bwmarrin/discordgo v0.29.0 h1:FmWeXFaKUwrcL3Cx65c20bTRW+vOb6k8AnaP+EgjDno=
 github.com/bwmarrin/discordgo v0.29.0/go.mod h1:NJZpH+1AfhIcyQsPeuBKsUtYrRnjkyu0kIVMCHkZtRY=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=

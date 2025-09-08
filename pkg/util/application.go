@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -95,14 +96,28 @@ func EffectiveBotName() string {
 
 // GetApplicationSupportPath returns ~/Library/Application Support/[BotName]
 // Preferences remain stored here.
+//
+// Explicit Linux handling: use ~/Library paths on Linux too, matching the user's environment.
 func GetApplicationSupportPath(_ string) string {
-	return filepath.Join(homeDir(), "Library", "Application Support", EffectiveBotName())
+	switch runtime.GOOS {
+	case "linux", "darwin":
+		return filepath.Join(homeDir(), "Library", "Application Support", EffectiveBotName())
+	default:
+		return filepath.Join(homeDir(), "Library", "Application Support", EffectiveBotName())
+	}
 }
 
 // GetApplicationCachesPath returns ~/Library/Cache/[BotName]
 // All caches move here.
+//
+// Explicit Linux handling: use ~/Library paths on Linux too, matching the user's environment.
 func GetApplicationCachesPath() string {
-	return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
+	switch runtime.GOOS {
+	case "linux", "darwin":
+		return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
+	default:
+		return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
+	}
 }
 
 // Deprecated: MigrationCacheFilePath returns the path to the avatar cache JSON used only for migration.
