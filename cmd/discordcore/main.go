@@ -109,6 +109,40 @@ func main() {
 		logutil.ErrorWithErr("Some configured guilds could not be accessed", err)
 	}
 
+	// Downtime-aware silent avatar refresh before starting services/notifications
+	if store != nil {
+		if lastHB, ok, err := store.GetHeartbeat(); err == nil {
+			if !ok || time.Since(lastHB) > 30*time.Minute {
+				logutil.Info("⏱️ Detected downtime > 30m; performing silent avatar refresh before enabling notifications")
+				if cfg := configManager.Config(); cfg != nil {
+					for _, gcfg := range cfg.Guilds {
+						members, err := discordSession.GuildMembers(gcfg.GuildID, "", 1000)
+						if err != nil {
+							logutil.WithFields(map[string]any{"guildID": gcfg.GuildID, "error": err}).Warn("Failed to list members for silent refresh")
+							continue
+						}
+						for _, member := range members {
+							if member == nil || member.User == nil {
+								continue
+							}
+							avatarHash := member.User.Avatar
+							if avatarHash == "" {
+								avatarHash = "default"
+							}
+							_, _, _ = store.UpsertAvatar(gcfg.GuildID, member.User.ID, avatarHash, time.Now())
+						}
+					}
+				}
+				logutil.Info("✅ Silent avatar refresh completed")
+			} else {
+				logutil.Debug("No significant downtime detected; skipping silent avatar refresh")
+			}
+		} else {
+			logutil.WithField("error", err).Warn("Failed to read last heartbeat; skipping downtime check")
+		}
+		_ = store.SetHeartbeat(time.Now())
+	}
+
 	// Initialize Service Manager
 	serviceManager := service.NewServiceManager(errorHandler)
 

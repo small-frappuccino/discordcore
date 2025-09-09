@@ -340,6 +340,70 @@ func (s *Store) GetBotSince(guildID string) (time.Time, bool, error) {
 	return t.Time, true, nil
 }
 
+// SetHeartbeat records the last-known "bot is running" timestamp.
+func (s *Store) SetHeartbeat(t time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if t.IsZero() {
+		t = time.Now().UTC()
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
+		"heartbeat", t.UTC(),
+	)
+	return err
+}
+
+// GetHeartbeat returns the last recorded heartbeat timestamp, if any.
+func (s *Store) GetHeartbeat() (time.Time, bool, error) {
+	if s.db == nil {
+		return time.Time{}, false, fmt.Errorf("store not initialized")
+	}
+	row := s.db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "heartbeat")
+	var ts time.Time
+	if err := row.Scan(&ts); err != nil {
+		if err == sql.ErrNoRows {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	return ts, true, nil
+}
+
+// SetLastEvent records the last time a relevant Discord event was processed.
+func (s *Store) SetLastEvent(t time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if t.IsZero() {
+		t = time.Now().UTC()
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
+		"last_event", t.UTC(),
+	)
+	return err
+}
+
+// GetLastEvent returns the last recorded event timestamp, if any.
+func (s *Store) GetLastEvent() (time.Time, bool, error) {
+	if s.db == nil {
+		return time.Time{}, false, fmt.Errorf("store not initialized")
+	}
+	row := s.db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "last_event")
+	var ts time.Time
+	if err := row.Scan(&ts); err != nil {
+		if err == sql.ErrNoRows {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	return ts, true, nil
+}
+
 // ensureSchema creates required tables and indexes if they don't exist.
 func ensureSchema(db *sql.DB) error {
 	const createMessages = `
@@ -392,12 +456,19 @@ CREATE TABLE IF NOT EXISTS guild_meta (
   bot_since TIMESTAMP
 );`
 
+	const createRuntimeMeta = `
+CREATE TABLE IF NOT EXISTS runtime_meta (
+  key TEXT PRIMARY KEY,
+  ts  TIMESTAMP NOT NULL
+);`
+
 	stmts := []string{
 		createMessages,
 		createMemberJoins,
 		createAvatarsCurrent,
 		createAvatarsHistory,
 		createGuildMeta,
+		createRuntimeMeta,
 	}
 	for _, sqlText := range stmts {
 		if _, err := db.Exec(sqlText); err != nil {

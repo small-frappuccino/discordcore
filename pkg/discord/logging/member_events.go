@@ -94,6 +94,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		return
 	}
 
+	mes.markEvent()
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil {
 		return
@@ -179,6 +180,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		return
 	}
 
+	mes.markEvent()
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil {
 		return
@@ -283,6 +285,12 @@ func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.
 		}
 	}
 	return 0
+}
+
+func (mes *MemberEventService) markEvent() {
+	if mes.store != nil {
+		_ = mes.store.SetLastEvent(time.Now())
+	}
 }
 
 // NEW: calcula há quanto tempo o bot está na guild (consulta Discord em tempo real)

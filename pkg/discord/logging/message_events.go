@@ -142,6 +142,8 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 
+	mes.markEvent()
+
 	// Persistir em SQLite (write-through; melhor esforço)
 	if mes.store != nil && m.Author != nil {
 		_ = mes.store.UpsertMessage(storage.MessageRecord{
@@ -193,6 +195,8 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		"guildID":   m.GuildID,
 		"channelID": m.ChannelID,
 	}).Debug("MessageUpdate received")
+
+	mes.markEvent()
 
 	// Consultar persistência (SQLite) para obter a mensagem original
 	var cached *CachedMessage
@@ -341,6 +345,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	var cached *CachedMessage
 
+	mes.markEvent()
+
 	if mes.store != nil && m.GuildID != "" {
 		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
 			cached = &CachedMessage{
@@ -464,6 +470,12 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 // Persistent storage (SQLite) handles expiration and cleanup
 
 // GetCacheStats retorna estatísticas do cache para debugging
+func (mes *MessageEventService) markEvent() {
+	if mes.store != nil {
+		_ = mes.store.SetLastEvent(time.Now())
+	}
+}
+
 func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
 	return map[string]interface{}{
 		"isRunning": mes.isRunning,

@@ -14,6 +14,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const (
+	heartbeatInterval = time.Minute
+	downtimeThreshold = 30 * time.Minute
+)
+
 // UserWatcher contém a lógica específica de processamento de mudanças de usuário.
 type UserWatcher struct {
 	session       *discordgo.Session
@@ -48,6 +53,10 @@ type MonitoringService struct {
 	recentChanges       map[string]time.Time // Debounce para evitar duplicidade
 	changesMutex        sync.RWMutex
 	cronCancel          func()
+
+	// Heartbeat runtime tracking
+	heartbeatTicker *time.Ticker
+	heartbeatStop   chan struct{}
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
@@ -94,8 +103,11 @@ func (ms *MonitoringService) Start() error {
 	ms.isRunning = true
 	ms.stopChan = make(chan struct{})
 	ms.ensureGuildsListed()
-	ms.initializeCache()
+	// Detect downtime and refresh avatars silently before wiring handlers (no notifications)
+	ms.handleStartupDowntimeAndMaybeRefresh()
 	ms.setupEventHandlers()
+	// Start periodic heartbeat tracker (persisted)
+	ms.startHeartbeat()
 
 	// Iniciar novos serviços
 	if err := ms.memberEventService.Start(); err != nil {
@@ -129,6 +141,7 @@ func (ms *MonitoringService) Stop() error {
 	}
 	ms.isRunning = false
 	close(ms.stopChan)
+	ms.stopHeartbeat()
 
 	// Parar novos serviços
 	if err := ms.memberEventService.Stop(); err != nil {
@@ -158,6 +171,7 @@ func (ms *MonitoringService) initializeCache() {
 		return
 	}
 	var wg sync.WaitGroup
+	ms.markEvent()
 	for _, gcfg := range cfg.Guilds {
 		gid := gcfg.GuildID
 		wg.Add(1)
@@ -271,6 +285,8 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 		logutil.WithFields(map[string]interface{}{"userID": m.User.ID, "guildID": m.GuildID}).Debug("PresenceUpdate ignored (empty username)")
 		return
 	}
+	ms.markEvent()
+	ms.markEvent()
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 }
 
@@ -383,6 +399,77 @@ func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string
 		return member.Nick
 	}
 	return userID
+}
+
+func (ms *MonitoringService) markEvent() {
+	if ms.store != nil {
+		_ = ms.store.SetLastEvent(time.Now())
+	}
+}
+
+func (ms *MonitoringService) startHeartbeat() {
+	if ms.store == nil || ms.heartbeatTicker != nil {
+		return
+	}
+	ms.heartbeatTicker = time.NewTicker(heartbeatInterval)
+	ms.heartbeatStop = make(chan struct{})
+	// Set immediately on startup
+	_ = ms.store.SetHeartbeat(time.Now())
+	go func() {
+		for {
+			select {
+			case <-ms.heartbeatTicker.C:
+				_ = ms.store.SetHeartbeat(time.Now())
+			case <-ms.heartbeatStop:
+				return
+			case <-ms.stopChan:
+				return
+			}
+		}
+	}()
+}
+
+func (ms *MonitoringService) stopHeartbeat() {
+	if ms.heartbeatTicker != nil {
+		ms.heartbeatTicker.Stop()
+		ms.heartbeatTicker = nil
+	}
+	if ms.heartbeatStop != nil {
+		close(ms.heartbeatStop)
+		ms.heartbeatStop = nil
+	}
+}
+
+func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
+	if ms.store == nil {
+		return
+	}
+	lastHB, okHB, err := ms.store.GetHeartbeat()
+	if err != nil {
+		logutil.WithField("error", err).Warn("Failed to read last heartbeat; skipping downtime check")
+	} else {
+		if !okHB || time.Since(lastHB) > downtimeThreshold {
+			logutil.Info("⏱️ Detected downtime > threshold; performing silent avatar refresh before enabling notifications")
+			cfg := ms.configManager.Config()
+			if cfg == nil || len(cfg.Guilds) == 0 {
+				log.Println("No configured guilds for startup silent refresh")
+				return
+			}
+			var wg sync.WaitGroup
+			for _, gcfg := range cfg.Guilds {
+				gid := gcfg.GuildID
+				wg.Add(1)
+				go func(guildID string) {
+					defer wg.Done()
+					ms.initializeGuildCache(guildID) // Upserts avatars without sending notifications
+				}(gid)
+			}
+			wg.Wait()
+			logutil.Info("✅ Silent avatar refresh completed")
+			return
+		}
+	}
+	logutil.Debug("No significant downtime detected; skipping heavy avatar refresh")
 }
 
 func (ms *MonitoringService) performPeriodicCheck() {
