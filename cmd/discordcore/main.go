@@ -12,13 +12,13 @@ import (
 	"github.com/alice-bnuy/discordcore/pkg/discord/logging"
 	"github.com/alice-bnuy/discordcore/pkg/discord/session"
 	"github.com/alice-bnuy/discordcore/pkg/errors"
+	"github.com/alice-bnuy/discordcore/pkg/errutil"
 	"github.com/alice-bnuy/discordcore/pkg/files"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/alice-bnuy/discordcore/pkg/service"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/alice-bnuy/discordcore/pkg/util"
-	"github.com/alice-bnuy/errutil"
-	"github.com/alice-bnuy/logutil"
 	"github.com/joho/godotenv"
 )
 
@@ -94,7 +94,7 @@ func main() {
 
 	// One-time migration: move JSON avatar cache into SQLite and remove JSON files
 	if err := util.MigrateAvatarJSONToSQLite(); err != nil {
-		logutil.WithField("error", err).Warn("Failed to migrate avatar JSON cache to SQLite (continuing)")
+		logutil.GlobalLogger.WithError(err).Warn("Failed to migrate avatar JSON cache to SQLite (continuing)")
 	}
 
 	// Initialize SQLite store (messages, avatars, joins)
@@ -118,7 +118,7 @@ func main() {
 					for _, gcfg := range cfg.Guilds {
 						members, err := discordSession.GuildMembers(gcfg.GuildID, "", 1000)
 						if err != nil {
-							logutil.WithFields(map[string]any{"guildID": gcfg.GuildID, "error": err}).Warn("Failed to list members for silent refresh")
+							logutil.GlobalLogger.WithFields(map[string]any{"guildID": gcfg.GuildID, "error": err.Error()}).Warn("Failed to list members for silent refresh")
 							continue
 						}
 						for _, member := range members {
@@ -138,7 +138,7 @@ func main() {
 				logutil.Debug("No significant downtime detected; skipping silent avatar refresh")
 			}
 		} else {
-			logutil.WithField("error", err).Warn("Failed to read last heartbeat; skipping downtime check")
+			logutil.GlobalLogger.WithError(err).Warn("Failed to read last heartbeat; skipping downtime check")
 		}
 		_ = store.SetHeartbeat(time.Now())
 	}

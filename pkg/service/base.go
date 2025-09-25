@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/errors"
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 )
 
 // BaseService provides common functionality for all services
@@ -108,7 +108,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
-			bs.logger.WithField("error", err).Error("Service start failed")
+			bs.logger.WithError(err).Error("Service start failed")
 			return serviceErr
 		}
 	}
@@ -149,7 +149,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
-			bs.logger.WithField("error", err).Warn("Service stop failed")
+			bs.logger.WithError(err).Warn("Service stop failed")
 			// Continue with shutdown even if hook fails
 		}
 	}
@@ -427,11 +427,11 @@ func (ms *ManagedService) HandleError(err error) {
 	ms.RecordError(serviceErr)
 
 	if ms.autoRestart && ms.restartCount < ms.maxRestarts {
-		ms.logger.WithField("error", err).Info("Service error detected, attempting restart")
+		ms.logger.WithError(err).Info("Service error detected, attempting restart")
 		go func() {
 			time.Sleep(ms.restartDelay)
 			if restartErr := ms.manager.RestartService(ms.name); restartErr != nil {
-				ms.logger.WithField("restart_error", restartErr).Error("Failed to restart service after error")
+				ms.logger.WithField("restart_error", restartErr.Error()).Error("Failed to restart service after error")
 			}
 		}()
 	}

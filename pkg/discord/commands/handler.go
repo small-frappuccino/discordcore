@@ -6,7 +6,7 @@ import (
 	"github.com/alice-bnuy/discordcore/pkg/discord/commands/config"
 	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/bwmarrin/discordgo"
 )
 

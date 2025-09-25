@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 )
 
 // TaskHandler is a function that processes a task payload.

@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/alice-bnuy/logutil"
+	"github.com/alice-bnuy/discordcore/pkg/logging"
 )
 
 // WaitForInterrupt waits for an interrupt signal (SIGINT, SIGTERM)
@@ -16,7 +16,7 @@ func WaitForInterrupt() {
 
 	// Block until a signal is received
 	sig := <-c
-	logutil.WithField("signal", sig.String()).Info("Received interrupt signal")
+	logging.WithField("signal", sig.String()).Info("Received interrupt signal")
 }
 
 // WaitForInterruptWithCallback waits for an interrupt signal and executes
@@ -27,7 +27,7 @@ func WaitForInterruptWithCallback(callback func()) {
 
 	// Block until a signal is received
 	sig := <-c
-	logutil.WithField("signal", sig.String()).Info("Received interrupt signal")
+	logging.WithField("signal", sig.String()).Info("Received interrupt signal")
 
 	if callback != nil {
 		callback()

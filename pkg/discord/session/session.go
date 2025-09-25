@@ -3,8 +3,8 @@ package session
 import (
 	"fmt"
 
-	"github.com/alice-bnuy/errutil"
-	"github.com/alice-bnuy/logutil"
+	"github.com/alice-bnuy/discordcore/pkg/errutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/bwmarrin/discordgo"
 )
 

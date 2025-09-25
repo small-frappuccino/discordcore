@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/errors"
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 )
 
 // ServiceState represents the current state of a service

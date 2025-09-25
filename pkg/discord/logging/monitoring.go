@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
-	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -145,10 +145,10 @@ func (ms *MonitoringService) Stop() error {
 
 	// Parar novos serviços
 	if err := ms.memberEventService.Stop(); err != nil {
-		logutil.WithField("error", err).Warn("Error stopping member event service")
+		logutil.WithError(err).Warn("Error stopping member event service")
 	}
 	if err := ms.messageEventService.Stop(); err != nil {
-		logutil.WithField("error", err).Warn("Error stopping message event service")
+		logutil.WithError(err).Warn("Error stopping message event service")
 	}
 
 	// Cancel cron before closing router
@@ -389,7 +389,7 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string {
 	member, err := aw.session.GuildMember(guildID, userID)
 	if err != nil {
-		logutil.WithFields(map[string]interface{}{"userID": userID, "guildID": guildID, "error": err}).Debug("Error getting member for username - using ID")
+		logutil.WithFields(map[string]interface{}{"userID": userID, "guildID": guildID, "error": err.Error()}).Debug("Error getting member for username - using ID")
 		return userID
 	}
 	if member.User != nil && member.User.Username != "" {
@@ -446,7 +446,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 	}
 	lastHB, okHB, err := ms.store.GetHeartbeat()
 	if err != nil {
-		logutil.WithField("error", err).Warn("Failed to read last heartbeat; skipping downtime check")
+		logutil.WithError(err).Warn("Failed to read last heartbeat; skipping downtime check")
 	} else {
 		if !okHB || time.Since(lastHB) > downtimeThreshold {
 			logutil.Info("⏱️ Detected downtime > threshold; performing silent avatar refresh before enabling notifications")

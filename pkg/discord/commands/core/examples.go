@@ -277,7 +277,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 	// Persistir configuração
 	persister := NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
-		ctx.Logger.WithField("error", err).Error("Failed to save config")
+		ctx.Logger.WithError(err).Error("Failed to save config")
 		return NewCommandError("Failed to save configuration", true)
 	}
 
@@ -520,7 +520,7 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 		// Log do erro
 		ctx.Logger.WithFields(CreateLogFields(ctx, map[string]any{
 			"input": input,
-			"error": err,
+			"error": err.Error(),
 		})).Error("Failed to process input")
 
 		// Retornar erro amigável para o usuário

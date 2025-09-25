@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/alice-bnuy/discordcore/pkg/util"
-	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -53,7 +53,7 @@ func (mes *MessageEventService) Start() error {
 	// Inicializa a persistência (SQLite) e limpa expirados (melhor esforço)
 	if mes.store != nil {
 		if err := mes.store.Init(); err != nil {
-			logutil.WithField("error", err).Warn("Message event service: failed to initialize SQLite store (continuing without persistence)")
+			logutil.WithError(err).Warn("Message event service: failed to initialize SQLite store (continuing without persistence)")
 		} else {
 			_ = mes.store.CleanupExpiredMessages()
 		}
@@ -122,7 +122,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	if err != nil {
 		logutil.WithFields(map[string]interface{}{
 			"channelID": m.ChannelID,
-			"error":     err,
+			"error":     err.Error(),
 		}).Debug("MessageCreate: failed to fetch channel; skipping cache")
 		return
 	}
@@ -273,7 +273,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 				"guildID":   cached.GuildID,
 				"messageID": m.ID,
 				"channelID": logChannelID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to send message edit notification")
 		} else {
 			logutil.WithFields(map[string]interface{}{
@@ -296,7 +296,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 				"guildID":   cached.GuildID,
 				"messageID": m.ID,
 				"channelID": logChannelID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to send message edit notification")
 		} else {
 			logutil.WithFields(map[string]interface{}{
@@ -426,7 +426,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 				"guildID":   cached.GuildID,
 				"messageID": m.ID,
 				"channelID": logChannelID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to send message delete notification")
 		} else {
 			logutil.WithFields(map[string]interface{}{
@@ -449,7 +449,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 				"guildID":   cached.GuildID,
 				"messageID": m.ID,
 				"channelID": logChannelID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to send message delete notification")
 		} else {
 			logutil.WithFields(map[string]interface{}{

@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/alice-bnuy/discordcore/pkg/util"
-	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -62,7 +62,7 @@ func (mes *MemberEventService) Start() error {
 	}
 	if mes.store != nil {
 		if err := mes.store.Init(); err != nil {
-			logutil.WithField("error", err).Warn("Member event service: failed to initialize SQLite store (continuing)")
+			logutil.WithError(err).Warn("Member event service: failed to initialize SQLite store (continuing)")
 		}
 	}
 
@@ -149,7 +149,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 				"guildID":   m.GuildID,
 				"userID":    m.User.ID,
 				"channelID": logChannelID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to send member join notification")
 		} else {
 			logutil.WithFields(map[string]interface{}{
@@ -163,7 +163,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 			"guildID":   m.GuildID,
 			"userID":    m.User.ID,
 			"channelID": logChannelID,
-			"error":     err,
+			"error":     err.Error(),
 		}).Error("Failed to send member join notification")
 	} else {
 		logutil.WithFields(map[string]interface{}{
@@ -223,7 +223,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 				"guildID":   m.GuildID,
 				"userID":    m.User.ID,
 				"channelID": logChannelID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to send member leave notification")
 		} else {
 			logutil.WithFields(map[string]interface{}{
@@ -237,7 +237,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 			"guildID":   m.GuildID,
 			"userID":    m.User.ID,
 			"channelID": logChannelID,
-			"error":     err,
+			"error":     err.Error(),
 		}).Error("Failed to send member leave notification")
 	} else {
 		logutil.WithFields(map[string]interface{}{
@@ -258,7 +258,7 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 	if err != nil {
 		logutil.WithFields(map[string]interface{}{
 			"userID": userID,
-			"error":  err,
+			"error":  err.Error(),
 		}).Warn("Failed to parse user ID for account age calculation")
 		return 0
 	}

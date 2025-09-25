@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -97,7 +97,7 @@ func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 	// Executar comando
 	ctx.Logger.Info("Executing command")
 	if err := cmd.Handle(ctx); err != nil {
-		ctx.Logger.WithField("error", err).Error("Command execution failed")
+		ctx.Logger.WithError(err).Error("Command execution failed")
 
 		// Verificar se é um erro específico de comando
 		if cmdErr, ok := err.(*CommandError); ok {
@@ -134,7 +134,7 @@ func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
 	// Executar autocomplete
 	choices, err := handler.HandleAutocomplete(ctx, focusedOpt.Name)
 	if err != nil {
-		ctx.Logger.WithField("error", err).Error("Autocomplete handler failed")
+		ctx.Logger.WithError(err).Error("Autocomplete handler failed")
 		choices = []*discordgo.ApplicationCommandOptionChoice{}
 	}
 

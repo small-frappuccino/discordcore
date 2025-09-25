@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -204,7 +204,7 @@ func (eh *ErrorHandler) HandleWithRetry(ctx context.Context, operation string, c
 			"delay":     delay,
 			"component": component,
 			"operation": operation,
-			"error":     err,
+			"error":     err.Error(),
 		}).Warn("Operation failed, retrying")
 
 		select {
@@ -338,7 +338,7 @@ func (eh *ErrorHandler) logError(err *ServiceError) {
 func (eh *ErrorHandler) notifyError(ctx context.Context, err *ServiceError) {
 	for _, notifier := range eh.notifiers {
 		if notifyErr := notifier.NotifyError(ctx, err); notifyErr != nil {
-			eh.logger.WithField("notifier_error", notifyErr).Error("Failed to notify error")
+			eh.logger.WithField("notifier_error", notifyErr.Error()).Error("Failed to notify error")
 		}
 	}
 }

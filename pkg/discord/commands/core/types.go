@@ -2,7 +2,7 @@ package core
 
 import (
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/logutil"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/bwmarrin/discordgo"
 )
 

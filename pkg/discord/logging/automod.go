@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
+	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
 	"github.com/alice-bnuy/discordcore/pkg/task"
-	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -75,7 +75,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 				"guildID":   e.GuildID,
 				"channelID": logChannelID,
 				"userID":    e.UserID,
-				"error":     err,
+				"error":     err.Error(),
 			}).Error("Failed to enqueue automod log task")
 		}
 		return
@@ -129,7 +129,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 			"guildID":   e.GuildID,
 			"channelID": logChannelID,
 			"userID":    e.UserID,
-			"error":     err,
+			"error":     err.Error(),
 		}).Error("Failed to send native automod log message")
 	}
 }
