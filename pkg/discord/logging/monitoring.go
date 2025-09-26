@@ -3,12 +3,11 @@ package logging
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/bwmarrin/discordgo"
@@ -97,7 +96,7 @@ func (ms *MonitoringService) Start() error {
 	ms.runMu.Lock()
 	defer ms.runMu.Unlock()
 	if ms.isRunning {
-		logutil.Warn("Monitoring service is already running")
+		log.Error("Monitoring service is already running")
 		return fmt.Errorf("monitoring service is already running")
 	}
 	ms.isRunning = true
@@ -127,7 +126,7 @@ func (ms *MonitoringService) Start() error {
 		return nil
 	})
 	ms.cronCancel = ms.router.ScheduleEvery(30*time.Minute, task.Task{Type: "monitor.scan_avatars"})
-	logutil.Info("All monitoring services started successfully")
+	log.Info(log.DiscordEvents, "All monitoring services started successfully")
 	return nil
 }
 
@@ -136,7 +135,7 @@ func (ms *MonitoringService) Stop() error {
 	ms.runMu.Lock()
 	defer ms.runMu.Unlock()
 	if !ms.isRunning {
-		logutil.Warn("Monitoring service is not running")
+		log.Error("Monitoring service is not running")
 		return fmt.Errorf("monitoring service is not running")
 	}
 	ms.isRunning = false
@@ -145,10 +144,10 @@ func (ms *MonitoringService) Stop() error {
 
 	// Parar novos serviços
 	if err := ms.memberEventService.Stop(); err != nil {
-		logutil.WithError(err).Warn("Error stopping member event service")
+		log.Errorf("Error stopping member event service: %v", err)
 	}
 	if err := ms.messageEventService.Stop(); err != nil {
-		logutil.WithError(err).Warn("Error stopping message event service")
+		log.Errorf("Error stopping message event service: %v", err)
 	}
 
 	// Cancel cron before closing router
@@ -159,7 +158,7 @@ func (ms *MonitoringService) Stop() error {
 	if ms.router != nil {
 		ms.router.Close()
 	}
-	logutil.Info("Monitoring service stopped")
+	log.Info(log.DiscordEvents, "Monitoring service stopped")
 	return nil
 }
 
@@ -167,7 +166,7 @@ func (ms *MonitoringService) Stop() error {
 func (ms *MonitoringService) initializeCache() {
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		log.Println("No guild configured for monitoring")
+		log.Info(log.DiscordEvents, "No guild configured for monitoring")
 		return
 	}
 	var wg sync.WaitGroup
@@ -188,10 +187,10 @@ func (ms *MonitoringService) initializeCache() {
 func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	guild, err := ms.session.Guild(guildID)
 	if err != nil {
-		log.Printf("Error getting guild %s: %v", guildID, err)
+		log.Errorf("Error getting guild %s: %v", guildID, err)
 		return
 	}
-	log.Printf("Initializing cache for guild: %s (ID: %s)", guild.Name, guild.ID)
+	log.Infof(log.DiscordEvents, "Initializing cache for guild: %s (ID: %s)", guild.Name, guild.ID)
 
 	// Set bot join time if missing
 	if _, ok, _ := ms.store.GetBotSince(guildID); !ok {
@@ -204,7 +203,7 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	}
 	members, err := ms.session.GuildMembers(guildID, "", 1000)
 	if err != nil {
-		log.Printf("Error getting members for guild %s: %v", guildID, err)
+		log.Errorf("Error getting members for guild %s: %v", guildID, err)
 		return
 	}
 	for _, member := range members {
@@ -237,13 +236,13 @@ func (ms *MonitoringService) ensureGuildsListed() {
 		}
 		if ms.configManager.GuildConfig(g.ID) == nil {
 			if err := ms.configManager.AddGuildConfig(files.GuildConfig{GuildID: g.ID}); err != nil {
-				logutil.WithField("guildID", g.ID).ErrorWithErr("Error adding minimal guild entry", err)
+				log.Errorf("Error adding minimal guild entry for guild %s: %v", g.ID, err)
 				continue
 			}
 			if err := ms.configManager.SaveConfig(); err != nil {
-				logutil.WithField("guildID", g.ID).ErrorWithErr("Error saving config after minimal guild add", err)
+				log.Errorf("Error saving config after minimal guild add for guild %s: %v", g.ID, err)
 			} else {
-				logutil.WithField("guildID", g.ID).Info("📘 Guild listed in config (minimal entry)")
+				log.Infof(log.DiscordEvents, "📘 Guild listed in config (minimal entry) for guild %s", g.ID)
 			}
 		}
 	}
@@ -258,16 +257,16 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	if ms.configManager.GuildConfig(guildID) == nil {
 		// Guild nova: adicionar no config e inicializar cache
 		if err := ms.configManager.RegisterGuild(s, guildID); err != nil {
-			logutil.WithField("guildID", guildID).Warnf("Falling back to minimal guild entry: %v", err)
+			log.Errorf("Falling back to minimal guild entry for guild %s: %v", guildID, err)
 			if err2 := ms.configManager.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err2 != nil {
-				logutil.WithField("guildID", guildID).ErrorWithErr("Error adding minimal guild entry", err2)
+				log.Errorf("Error adding minimal guild entry for guild %s: %v", guildID, err2)
 				return
 			}
 		}
 		if err := ms.configManager.SaveConfig(); err != nil {
-			logutil.WithField("guildID", guildID).ErrorWithErr("Error saving config after guild add", err)
+			log.Errorf("Error saving config after guild add for guild %s: %v", guildID, err)
 		}
-		logutil.WithField("guildID", guildID).Info("🆕 New guild listed in config")
+		log.Infof(log.DiscordEvents, "🆕 New guild listed in config for guild %s", guildID)
 		ms.initializeGuildCache(guildID)
 		// No-op: avatars persisted per change in SQLite store
 	}
@@ -282,7 +281,7 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 		return
 	}
 	if m.User.Username == "" {
-		logutil.WithFields(map[string]interface{}{"userID": m.User.ID, "guildID": m.GuildID}).Debug("PresenceUpdate ignored (empty username)")
+		log.Infof(log.DiscordEvents, "PresenceUpdate ignored (empty username) for user %s in guild %s", m.User.ID, m.GuildID)
 		return
 	}
 	ms.markEvent()
@@ -323,7 +322,7 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	if lastChange, exists := ms.recentChanges[changeKey]; exists {
 		if time.Since(lastChange) < 5*time.Second {
 			ms.changesMutex.RUnlock()
-			logutil.WithFields(map[string]interface{}{"userID": userID, "guildID": guildID, "username": username, "avatar": currentAvatar}).Debug("Avatar change ignored (debounce)")
+			log.Infof(log.DiscordEvents, "Avatar change ignored (debounce) for user %s in guild %s", userID, guildID)
 			return
 		}
 	}
@@ -367,29 +366,29 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 		NewAvatar: currentAvatar,
 		Timestamp: time.Now(),
 	}
-	logutil.WithFields(map[string]interface{}{"userID": userID, "guildID": guildID, "username": finalUsername, "oldAvatar": oldAvatar, "newAvatar": currentAvatar}).Info("Avatar change detected")
+	log.Infof(log.DiscordEvents, "Avatar change detected for user %s in guild %s. Old avatar: %s, new avatar: %s", userID, guildID, oldAvatar, currentAvatar)
 	guildConfig := aw.configManager.GuildConfig(guildID)
 	if guildConfig != nil {
 		channelID := guildConfig.UserLogChannelID // Renamed from AvatarLogChannelID
 		if channelID == "" {
-			logutil.WithFields(map[string]interface{}{"guildID": guildID}).Warn("UserLogChannelID not configured for guild. Notification not sent.")
+			log.Errorf("UserLogChannelID not configured for guild %s. Notification not sent.", guildID)
 		} else {
 			if err := aw.notifier.SendAvatarChangeNotification(channelID, change); err != nil {
-				logutil.WithFields(map[string]interface{}{"channelID": channelID, "userID": userID, "guildID": guildID}).ErrorWithErr("Error sending notification", err)
+				log.Errorf("Error sending notification to channel %s for user %s in guild %s: %v", channelID, userID, guildID, err)
 			} else {
-				logutil.WithFields(map[string]interface{}{"channelID": channelID, "userID": userID, "guildID": guildID}).Info("Avatar notification sent successfully")
+				log.Infof(log.DiscordEvents, "Avatar notification sent successfully to channel %s for user %s in guild %s", channelID, userID, guildID)
 			}
 		}
 	}
 	if _, _, err := aw.store.UpsertAvatar(guildID, userID, currentAvatar, time.Now()); err != nil {
-		logutil.WithField("guildID", guildID).ErrorWithErr("Error saving avatar in store", err)
+		log.Errorf("Error saving avatar in store for guild %s: %v", guildID, err)
 	}
 }
 
 func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string {
 	member, err := aw.session.GuildMember(guildID, userID)
 	if err != nil {
-		logutil.WithFields(map[string]interface{}{"userID": userID, "guildID": guildID, "error": err.Error()}).Debug("Error getting member for username - using ID")
+		log.Infof(log.DiscordEvents, "Error getting member for username for user %s in guild %s: %v - using ID", userID, guildID, err)
 		return userID
 	}
 	if member.User != nil && member.User.Username != "" {
@@ -446,13 +445,13 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 	}
 	lastHB, okHB, err := ms.store.GetHeartbeat()
 	if err != nil {
-		logutil.WithError(err).Warn("Failed to read last heartbeat; skipping downtime check")
+		log.Errorf("Failed to read last heartbeat; skipping downtime check: %v", err)
 	} else {
 		if !okHB || time.Since(lastHB) > downtimeThreshold {
-			logutil.Info("⏱️ Detected downtime > threshold; performing silent avatar refresh before enabling notifications")
+			log.Info(log.DiscordEvents, "⏱️ Detected downtime > threshold; performing silent avatar refresh before enabling notifications")
 			cfg := ms.configManager.Config()
 			if cfg == nil || len(cfg.Guilds) == 0 {
-				log.Println("No configured guilds for startup silent refresh")
+				log.Info(log.DiscordEvents, "No configured guilds for startup silent refresh")
 				return
 			}
 			var wg sync.WaitGroup
@@ -465,24 +464,24 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 				}(gid)
 			}
 			wg.Wait()
-			logutil.Info("✅ Silent avatar refresh completed")
+			log.Info(log.DiscordEvents, "✅ Silent avatar refresh completed")
 			return
 		}
 	}
-	logutil.Debug("No significant downtime detected; skipping heavy avatar refresh")
+	log.Info(log.DiscordEvents, "No significant downtime detected; skipping heavy avatar refresh")
 }
 
 func (ms *MonitoringService) performPeriodicCheck() {
-	log.Println("Running periodic avatar check...")
+	log.Info(log.DiscordEvents, "Running periodic avatar check...")
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		log.Println("No configured guilds for periodic check")
+		log.Info(log.DiscordEvents, "No configured guilds for periodic check")
 		return
 	}
 	for _, gcfg := range cfg.Guilds {
 		members, err := ms.session.GuildMembers(gcfg.GuildID, "", 1000)
 		if err != nil {
-			log.Printf("Error getting members for guild %s: %v", gcfg.GuildID, err)
+			log.Errorf("Error getting members for guild %s: %v", gcfg.GuildID, err)
 			continue
 		}
 		for _, member := range members {

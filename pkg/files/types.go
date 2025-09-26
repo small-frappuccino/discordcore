@@ -1,14 +1,6 @@
 package files
 
-import (
-	"errors"
-	"fmt"
-	"log"
-	"sync"
-	"time"
-
-	"github.com/alice-bnuy/discordcore/pkg/util"
-)
+import "github.com/alice-bnuy/discordcore/pkg/log"
 
 // ## Config Types
 
@@ -96,24 +88,17 @@ func (r Ruleset) StatusString() string {
 
 // AddList adds a list to the LooseLists of a guild.
 func (mgr *ConfigManager) AddList(guildID string, list List) error {
-	log.Printf("AddList called with guildID: %s, listID: %s", guildID, list.ID)
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig := mgr.GuildConfig(guildID)
-	if guildConfig == nil {
-		log.Printf("GuildConfig not found for guildID: %s", guildID)
-		return fmt.Errorf("guild not found")
+	log.Errorf("GuildConfig not found for guildID: %s", guildID)		return fmt.Errorf("guild not found")
 	}
 
-	log.Printf("Appending list to LooseLists for guildID: %s", guildID)
+	log.Infof(log.Database, "Appending list to LooseLists for guildID: %s", guildID)
 	guildConfig.LooseLists = append(guildConfig.LooseLists, Rule{
 		ID:      list.ID,
 		Name:    list.Name,
 		Lists:   []List{list},
 		Enabled: true,
 	})
-	log.Printf("List appended successfully for guildID: %s", guildID)
+	log.Infof(log.Database, "List appended successfully for guildID: %s", guildID)
 	return mgr.SaveConfig()
 }
 
@@ -147,26 +132,26 @@ func (mgr *ConfigManager) AddRuleset(guildID string, ruleset Ruleset) error {
 
 // AddListToRule adds a list to a specific rule in a guild.
 func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List) error {
-	log.Printf("AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID)
+	log.Infof(log.Database, "AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID)
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
 	guildConfig := mgr.GuildConfig(guildID)
 	if guildConfig == nil {
-		log.Printf("GuildConfig not found for guildID: %s", guildID)
+log.Errorf("GuildConfig not found for guildID: %s", guildID)
 		return fmt.Errorf("guild not found")
 	}
 
 	for i, rule := range guildConfig.LooseLists {
 		if rule.ID == ruleID {
-			log.Printf("Rule found for ruleID: %s, appending list", ruleID)
+			log.Infof(log.Database, "Rule found for ruleID: %s, appending list", ruleID)
 			guildConfig.LooseLists[i].Lists = append(guildConfig.LooseLists[i].Lists, list)
-			log.Printf("List appended successfully to ruleID: %s", ruleID)
+			log.Infof(log.Database, "List appended successfully to ruleID: %s", ruleID)
 			return mgr.SaveConfig()
 		}
 	}
 
-	log.Printf("Rule not found for ruleID: %s", ruleID)
+	log.Errorf("Rule not found for ruleID: %s", ruleID)
 	return fmt.Errorf("rule not found")
 }
 

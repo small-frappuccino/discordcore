@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 	"github.com/alice-bnuy/discordcore/pkg/errors"
 	"github.com/alice-bnuy/discordcore/pkg/errutil"
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/alice-bnuy/discordcore/pkg/service"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
@@ -30,20 +29,11 @@ func main() {
 	token, loadErr = util.LoadEnvWithLocalBinFallback("ALICE_BOT_DEVELOPMENT_TOKEN")
 	if loadErr != nil {
 		// Keep the original single-line Portuguese message for parity with previous behavior.
-		log.Println("Arquivo .env não encontrado ou erro ao carregar")
-	}
-
 	// Initialize global logger
-	if err := logutil.SetupLogger(); err != nil {
+	if err := log.SetupLogger(); err != nil {
 		fmt.Printf("failed to configure logger: %v\n", err)
 		os.Exit(1)
 	}
-	// Ensure logger is closed on exit
-	defer func() {
-		if err := logutil.CloseGlobalLogger(); err != nil {
-			fmt.Fprintf(os.Stderr, "error closing logger: %v\n", err)
-		}
-	}()
 
 	// Initialize global error handler
 	if err := errutil.InitializeGlobalErrorHandler(logutil.GlobalLogger); err != nil {
@@ -55,7 +45,7 @@ func main() {
 	errorHandler := errors.NewErrorHandler()
 
 	// Log bot startup
-	logutil.Info("🚀 Starting bot...")
+	log.Info(log.Application, "🚀 Starting bot...")
 
 	// Ensure token present (already loaded by util.LoadEnvWithLocalBinFallback)
 	if token == "" {
@@ -65,66 +55,70 @@ func main() {
 	// Config manager will be initialized after bot name is set (paths correct)
 
 	// Add detailed logging for Discord authentication
-	logutil.Info("🔑 Attempting to authenticate with Discord API...")
-	logutil.Debug("Using bot token from ALICE_BOT_DEVELOPMENT_TOKEN environment variable (token redacted)")
+	log.Info(log.DiscordEvents, "🔑 Attempting to authenticate with Discord API...")
+	log.Info(log.DiscordEvents, "Using bot token from ALICE_BOT_DEVELOPMENT_TOKEN environment variable (token redacted)")
 
 	// Create Discord session and ensure safe shutdown
 	discordSession, err := session.NewDiscordSession(token)
 	if err != nil {
-		logutil.ErrorWithErr("❌ Authentication failed with Discord API", err)
-		logutil.Fatalf("❌ Error creating Discord session: %v", err)
+		log.Errorf("❌ Authentication failed with Discord API: %v", err)
+		log.Errorf("❌ Error creating Discord session: %v", err)
+		os.Exit(1)
 	}
-	logutil.Infof("✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
+	log.Infof(log.DiscordEvents, "✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
 
 	// Set bot name from Discord and recompute app support path
 	util.SetBotName(discordSession.State.User.Username)
 
 	// Ensure cache directories exist for new caches root
 	if err := util.EnsureCacheDirs(); err != nil {
-		logutil.ErrorWithErr("Failed to create cache directories", err)
-		logutil.Fatal("❌ Failed to create cache directories")
+		log.Errorf("Failed to create cache directories: %v", err)
+		log.Error("❌ Failed to create cache directories")
+		os.Exit(1)
 	}
 
 	// Ensure config and cache files exist (now using the right bot name path)
 	if err := files.EnsureConfigFiles(); err != nil {
-		logutil.ErrorWithErr("Error checking config files", err)
-		logutil.Fatal("❌ Error checking config files")
+		log.Errorf("Error checking config files: %v", err)
+		log.Error("❌ Error checking config files")
+		os.Exit(1)
 	}
 
 	// Initialize config manager (uses the right path now)
 	configManager := files.NewConfigManager()
 	// Load existing settings from disk before starting services
 	if err := configManager.LoadConfig(); err != nil {
-		logutil.ErrorWithErr("Failed to load settings file", err)
+		log.Errorf("Failed to load settings file: %v", err)
 	}
 
 	// One-time migration: move JSON avatar cache into SQLite and remove JSON files
 	if err := util.MigrateAvatarJSONToSQLite(); err != nil {
-		logutil.GlobalLogger.WithError(err).Warn("Failed to migrate avatar JSON cache to SQLite (continuing)")
+		log.Errorf("Failed to migrate avatar JSON cache to SQLite (continuing): %v", err)
 	}
 
 	// Initialize SQLite store (messages, avatars, joins)
 	store := storage.NewStore(util.GetMessageDBPath())
 	if err := store.Init(); err != nil {
-		logutil.ErrorWithErr("Failed to initialize SQLite store", err)
-		logutil.Fatal("❌ Failed to initialize SQLite store")
+		log.Errorf("Failed to initialize SQLite store: %v", err)
+		log.Error("❌ Failed to initialize SQLite store")
+		os.Exit(1)
 	}
 
 	// Log summary of configured guilds
 	if err := files.LogConfiguredGuilds(configManager, discordSession); err != nil {
-		logutil.ErrorWithErr("Some configured guilds could not be accessed", err)
+		log.Errorf("Some configured guilds could not be accessed: %v", err)
 	}
 
 	// Downtime-aware silent avatar refresh before starting services/notifications
 	if store != nil {
 		if lastHB, ok, err := store.GetHeartbeat(); err == nil {
 			if !ok || time.Since(lastHB) > 30*time.Minute {
-				logutil.Info("⏱️ Detected downtime > 30m; performing silent avatar refresh before enabling notifications")
+				log.Info(log.Application, "⏱️ Detected downtime > 30m; performing silent avatar refresh before enabling notifications")
 				if cfg := configManager.Config(); cfg != nil {
 					for _, gcfg := range cfg.Guilds {
 						members, err := discordSession.GuildMembers(gcfg.GuildID, "", 1000)
 						if err != nil {
-							logutil.GlobalLogger.WithFields(map[string]any{"guildID": gcfg.GuildID, "error": err.Error()}).Warn("Failed to list members for silent refresh")
+							log.Errorf("Failed to list members for silent refresh for guild %s: %v", gcfg.GuildID, err)
 							continue
 						}
 						for _, member := range members {
@@ -139,12 +133,12 @@ func main() {
 						}
 					}
 				}
-				logutil.Info("✅ Silent avatar refresh completed")
+				log.Info(log.Application, "✅ Silent avatar refresh completed")
 			} else {
-				logutil.Debug("No significant downtime detected; skipping silent avatar refresh")
+				log.Info(log.Application, "No significant downtime detected; skipping silent avatar refresh")
 			}
 		} else {
-			logutil.GlobalLogger.WithError(err).Warn("Failed to read last heartbeat; skipping downtime check")
+			log.Errorf("Failed to read last heartbeat; skipping downtime check: %v", err)
 		}
 		_ = store.SetHeartbeat(time.Now())
 	}
@@ -153,13 +147,14 @@ func main() {
 	serviceManager := service.NewServiceManager(errorHandler)
 
 	// Create service wrappers for existing services
-	logutil.Info("🔧 Creating service wrappers...")
+	log.Info(log.Application, "🔧 Creating service wrappers...")
 
 	// Wrap MonitoringService
 	monitoringService, err := logging.NewMonitoringService(discordSession, configManager, store)
 	if err != nil {
-		logutil.ErrorWithErr("Failed to create monitoring service", err)
-		logutil.Fatal("❌ Failed to create monitoring service")
+		log.Errorf("Failed to create monitoring service: %v", err)
+		log.Error("❌ Failed to create monitoring service")
+		os.Exit(1)
 	}
 
 	monitoringWrapper := service.NewServiceWrapper(
@@ -190,27 +185,31 @@ func main() {
 
 	// Register services with the manager
 	if err := serviceManager.Register(monitoringWrapper); err != nil {
-		logutil.ErrorWithErr("Failed to register monitoring service", err)
-		logutil.Fatal("❌ Failed to register monitoring service")
+		log.Errorf("Failed to register monitoring service: %v", err)
+		log.Error("❌ Failed to register monitoring service")
+		os.Exit(1)
 	}
 
 	if err := serviceManager.Register(automodWrapper); err != nil {
-		logutil.ErrorWithErr("Failed to register automod service", err)
-		logutil.Fatal("❌ Failed to register automod service")
+		log.Errorf("Failed to register automod service: %v", err)
+		log.Error("❌ Failed to register automod service")
+		os.Exit(1)
 	}
 
 	// Start all services
-	logutil.Info("🚀 Starting all services...")
+	log.Info(log.Application, "🚀 Starting all services...")
 	if err := serviceManager.StartAll(); err != nil {
-		logutil.ErrorWithErr("Failed to start services", err)
-		logutil.Fatal("❌ Failed to start services")
+		log.Errorf("Failed to start services: %v", err)
+		log.Error("❌ Failed to start services")
+		os.Exit(1)
 	}
 
 	// Initialize and register bot commands
 	commandHandler := commands.NewCommandHandler(discordSession, configManager)
 	if err := commandHandler.SetupCommands(); err != nil {
-		logutil.ErrorWithErr("Error configuring slash commands", err)
-		logutil.Fatal("❌ Error configuring slash commands")
+		log.Errorf("Error configuring slash commands: %v", err)
+		log.Error("❌ Error configuring slash commands")
+		os.Exit(1)
 	}
 
 	// Register admin commands
@@ -219,12 +218,12 @@ func main() {
 
 	// Ensure safe shutdown of all services
 	defer func() {
-		logutil.Info("🛑 Shutting down services...")
+		log.Info(log.Application, "🛑 Shutting down services...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer shutdownCancel()
 
 		if err := serviceManager.StopAll(); err != nil {
-			logutil.ErrorWithErr("Some services failed to stop cleanly", err)
+			log.Errorf("Some services failed to stop cleanly: %v", err)
 		}
 		if store != nil {
 			_ = store.Close()
@@ -233,10 +232,10 @@ func main() {
 	}()
 
 	// Log successful initialization and wait for shutdown
-	logutil.Info("🔗 Slash commands sync completed")
-	logutil.Info("🎯 Bot initialized successfully!")
-	logutil.Info("🤖 Bot running. Monitoring all configured guilds. Press Ctrl+C to stop...")
+	log.Info(log.Application, "🔗 Slash commands sync completed")
+	log.Info(log.Application, "🎯 Bot initialized successfully!")
+	log.Info(log.Application, "🤖 Bot running. Monitoring all configured guilds. Press Ctrl+C to stop...")
 
 	util.WaitForInterrupt()
-	logutil.Info("🛑 Stopping bot...")
+	log.Info(log.Application, "🛑 Stopping bot...")
 }

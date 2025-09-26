@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 )
 
@@ -38,7 +38,7 @@ func init() {
 func getCurrentGitBranch() string {
 	data, err := os.ReadFile(".git/HEAD")
 	if err != nil {
-		log.Printf("Failed to read git HEAD: %v", err)
+		log.Errorf("Failed to read git HEAD: %v", err)
 		return "unknown"
 	}
 	line := strings.TrimSpace(string(data))
@@ -81,29 +81,35 @@ func EffectiveBotName() string {
 	return n
 }
 
-// GetApplicationSupportPath returns ~/Library/Application Support/[BotName]
-// Preferences remain stored here.
-//
-// Explicit Linux handling: use ~/Library paths on Linux too, matching the user's environment.
+// GetApplicationSupportPath returns the OS-specific path for application support files.
+// - macOS: ~/Library/Application Support/[BotName]
+// - Linux: ~/.local/lib/[BotName]
+// Preferences are stored here.
 func GetApplicationSupportPath(_ string) string {
 	switch runtime.GOOS {
-	case "linux", "darwin":
+	case "darwin":
 		return filepath.Join(homeDir(), "Library", "Application Support", EffectiveBotName())
+	case "linux":
+		return filepath.Join(homeDir(), ".local", "lib", EffectiveBotName())
 	default:
-		return filepath.Join(homeDir(), "Library", "Application Support", EffectiveBotName())
+		// Fallback for other platforms (e.g., Windows), using a common convention.
+		return filepath.Join(homeDir(), "AppData", "Roaming", EffectiveBotName())
 	}
 }
 
-// GetApplicationCachesPath returns ~/Library/Cache/[BotName]
-// All caches move here.
-//
-// Explicit Linux handling: use ~/Library paths on Linux too, matching the user's environment.
+// GetApplicationCachesPath returns the OS-specific path for cache files.
+// - macOS: ~/Library/Cache/[BotName]
+// - Linux: ~/.local/lib/[BotName]
+// All caches are stored here.
 func GetApplicationCachesPath() string {
 	switch runtime.GOOS {
-	case "linux", "darwin":
+	case "darwin":
 		return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
+	case "linux":
+		return filepath.Join(homeDir(), ".local", "lib", EffectiveBotName())
 	default:
-		return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
+		// Fallback for other platforms, using a common convention.
+		return filepath.Join(homeDir(), "AppData", "Local", EffectiveBotName())
 	}
 }
 
@@ -120,15 +126,24 @@ func LegacyMigrationCacheFilePath() string {
 }
 
 // GetMessageDBPath returns the SQLite DB path for message persistence.
-// Location: ~/Library/Cache/[BotName]/messages/messages.db
+// - macOS: ~/Library/Cache/[BotName]/messages/messages.db
+// - Linux: ~/.local/lib/[BotName]/messages/messages.db
 func GetMessageDBPath() string {
 	return filepath.Join(ApplicationCachesPath, "messages", "messages.db")
 }
 
-// GetSettingsFilePath returns the standardized path for settings.json
-// Remains under Application Support.
+// GetSettingsFilePath returns the standardized path for settings.json.
+// - macOS: ~/Library/Application Support/[BotName]/preferences/settings.json
+// - Linux: ~/.local/lib/[BotName]/preferences/settings.json
 func GetSettingsFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
+}
+
+// GetLogFilePath returns the path to the log file.
+// - macOS: ~/Library/Application Support/[BotName]/logs/discordcore.log
+// - Linux: ~/.local/lib/[BotName]/logs/discordcore.log
+func GetLogFilePath() string {
+	return filepath.Join(ApplicationSupportPath, "logs", "discordcore.log")
 }
 
 // EnsureCacheDirs creates base cache directories as needed.
