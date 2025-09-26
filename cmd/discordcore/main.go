@@ -19,13 +19,17 @@ import (
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/alice-bnuy/discordcore/pkg/util"
-	"github.com/joho/godotenv"
 )
 
 // main is the entry point of the Discord bot.
 func main() {
-	err := godotenv.Load()
-	if err != nil {
+	// Load environment with fallback search under $HOME/.local/bin.
+	// Use the shared util function so other repositories can reuse the same logic.
+	var loadErr error
+	var token string
+	token, loadErr = util.LoadEnvWithLocalBinFallback("ALICE_BOT_DEVELOPMENT_TOKEN")
+	if loadErr != nil {
+		// Keep the original single-line Portuguese message for parity with previous behavior.
 		log.Println("Arquivo .env não encontrado ou erro ao carregar")
 	}
 
@@ -53,14 +57,16 @@ func main() {
 	// Log bot startup
 	logutil.Info("🚀 Starting bot...")
 
-	// Fetch token
-	token := util.GetDiscordBotToken("ALICE_BOT")
+	// Ensure token present (already loaded by util.LoadEnvWithLocalBinFallback)
+	if token == "" {
+		logutil.Fatal("Discord bot token (ALICE_BOT_DEVELOPMENT_TOKEN) is not set in environment")
+	}
 
 	// Config manager will be initialized after bot name is set (paths correct)
 
 	// Add detailed logging for Discord authentication
 	logutil.Info("🔑 Attempting to authenticate with Discord API...")
-	logutil.Debugf("Using bot token: %s", token)
+	logutil.Debug("Using bot token from ALICE_BOT_DEVELOPMENT_TOKEN environment variable (token redacted)")
 
 	// Create Discord session and ensure safe shutdown
 	discordSession, err := session.NewDiscordSession(token)

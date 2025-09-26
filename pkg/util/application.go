@@ -51,25 +51,12 @@ func getCurrentGitBranch() string {
 	return line
 }
 
-// GetDiscordBotToken returns the Discord bot token based on the current Git branch.
-func GetDiscordBotToken(tokenName string) string {
-	var token string
-	switch CurrentGitBranch {
-	case "main":
-		token = os.Getenv(fmt.Sprintf("%s_PRODUCTION_TOKEN", tokenName))
-	case "alice-main":
-		token = os.Getenv(fmt.Sprintf("%s_DEVELOPMENT_TOKEN", tokenName))
-	default:
-		token = os.Getenv(fmt.Sprintf("%s_TOKEN_DEFAULT", tokenName))
-	}
-
-	if token == "" {
-		log.Fatalf("Discord bot token is not set for branch: %s", CurrentGitBranch)
-	}
-
-	log.Printf("Discord bot token set for branch: %s", CurrentGitBranch)
-	return token
-}
+// GetDiscordBotToken removed.
+//
+// Token selection by branch and automatic environment lookups were intentionally removed
+// from this package to avoid implicit behavior shared across projects. Use
+// `LoadEnvWithLocalBinFallback(tokenEnvName)` from this package to load a token from
+// environment with the fallback to `$HOME/.local/bin/.env` when needed.
 
 // SetBotName sets the bot name (from Discord API) and recomputes base paths.
 // It also attempts a one-time migration of legacy cache files to the new caches location.
