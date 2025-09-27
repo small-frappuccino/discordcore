@@ -48,18 +48,18 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 		discordgo.IntentMessageContent
 
 	// Add logging for connection
-	log.Info(log.DiscordEvents, "🔗 Connecting to Discord...")
+	log.Info().Discordf("🔗 Connecting to Discord...")
 	if err := errutil.HandleDiscordError("connect", func() error {
 		connectErr := s.Open()
 		if connectErr != nil {
-			log.Errorf("❌ Failed to connect to Discord: %v", connectErr)
+			log.Error().Errorf("❌ Failed to connect to Discord: %v", connectErr)
 		}
 		return connectErr
 	}); err != nil {
-		log.Errorf("❌ Error during connection: %v", err)
+		log.Error().Errorf("❌ Error during connection: %v", err)
 		return nil, fmt.Errorf(ErrSessionConnectionFailed, err)
 	}
 
-	log.Info(log.DiscordEvents, "✅ Connected to Discord successfully")
+	log.Info().Discordf("✅ Connected to Discord successfully")
 	return s, nil
 }

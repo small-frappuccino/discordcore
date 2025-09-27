@@ -53,7 +53,7 @@ func (mes *MessageEventService) Start() error {
 	// Inicializa a persistência (SQLite) e limpa expirados (melhor esforço)
 	if mes.store != nil {
 		if err := mes.store.Init(); err != nil {
-			log.WithError(err).Warn("Message event service: failed to initialize SQLite store (continuing without persistence)")
+			log.Warn().Applicationf("Message event service: failed to initialize SQLite store (continuing without persistence): %v", err)
 		} else {
 			_ = mes.store.CleanupExpiredMessages()
 		}
@@ -65,7 +65,7 @@ func (mes *MessageEventService) Start() error {
 
 	// TTL cache handles cleanup internally
 
-	log.Info(log.Application, "Message event service started")
+	log.Info().Applicationf("Message event service started")
 	return nil
 }
 
@@ -76,7 +76,7 @@ func (mes *MessageEventService) Stop() error {
 	}
 	mes.isRunning = false
 
-	log.Info(log.Application, "Message event service stopped")
+	log.Info().Applicationf("Message event service stopped")
 	return nil
 }
 
@@ -88,57 +88,38 @@ func (mes *MessageEventService) IsRunning() bool {
 // handleMessageCreate armazena mensagens no cache para futuras comparações
 func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m == nil {
-		log.Info(log.Application, "DEBUG: MessageCreate: nil event")
+		log.Info().Applicationf("DEBUG: MessageCreate: nil event")
 		return
 	}
 	if m.Author == nil {
-		log.WithFields(map[string]any{
-			"channelID": m.ChannelID,
-		}).Debug("MessageCreate: nil author; skipping")
+		log.Info().Applicationf("MessageCreate: nil author; skipping: channelID=%s", m.ChannelID)
 		return
 	}
 	if m.Author.Bot {
-		log.WithFields(map[string]any{
-			"channelID": m.ChannelID,
-			"userID":    m.Author.ID,
-		}).Debug("MessageCreate: ignoring bot message")
+		log.Info().Applicationf("MessageCreate: ignoring bot message: channelID=%s, userID=%s", m.ChannelID, m.Author.ID)
 		return
 	}
 	if m.Content == "" {
-		log.WithFields(map[string]any{
-			"channelID": m.ChannelID,
-			"userID":    m.Author.ID,
-		}).Debug("MessageCreate: empty content; will not cache")
+		log.Info().Applicationf("MessageCreate: empty content; will not cache: channelID=%s, userID=%s", m.ChannelID, m.Author.ID)
 		return
 	}
-	log.WithFields(map[string]any{
-		"channelID": m.ChannelID,
-		"userID":    m.Author.ID,
-		"messageID": m.ID,
-	}).Debug("MessageCreate received")
+	log.Info().Applicationf("MessageCreate received: channelID=%s, userID=%s, messageID=%s", m.ChannelID, m.Author.ID, m.ID)
 
 	// Verificar se é uma mensagem de guild
 	channel, err := s.Channel(m.ChannelID)
 	if err != nil {
-		log.WithFields(map[string]any{
-			"channelID": m.ChannelID,
-			"error":     err.Error(),
-		}).Debug("MessageCreate: failed to fetch channel; skipping cache")
+		log.Info().Applicationf("MessageCreate: failed to fetch channel; skipping cache: channelID=%s, error=%v", m.ChannelID, err)
 		return
 	}
 	if channel.GuildID == "" {
-		log.WithFields(map[string]any{
-			"channelID": m.ChannelID,
-		}).Debug("MessageCreate: DM detected; skipping cache")
+		log.Info().Applicationf("MessageCreate: DM detected; skipping cache: channelID=%s", m.ChannelID)
 		return
 	}
 
 	// Verificar se o guild está configurado
 	guildConfig := mes.configManager.GuildConfig(channel.GuildID)
 	if guildConfig == nil {
-		log.WithFields(map[string]any{
-			"guildID": channel.GuildID,
-		}).Debug("MessageCreate: no guild config; skipping cache")
+		log.Info().Applicationf("MessageCreate: no guild config; skipping cache: guildID=%s", channel.GuildID)
 		return
 	}
 
@@ -160,41 +141,24 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		})
 	}
 
-	log.WithFields(map[string]any{
-		"guildID":   channel.GuildID,
-		"channelID": m.ChannelID,
-		"messageID": m.ID,
-		"userID":    m.Author.ID,
-	}).Debug("Message cached for monitoring")
+	log.Info().Applicationf("Message cached for monitoring: guildID=%s, channelID=%s, messageID=%s, userID=%s", channel.GuildID, m.ChannelID, m.ID, m.Author.ID)
 }
 
 // handleMessageUpdate processa edições de mensagens
 func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	if m == nil {
-		log.Info(log.Application, "DEBUG: MessageUpdate: nil event")
+		log.Info().Applicationf("DEBUG: MessageUpdate: nil event")
 		return
 	}
 	if m.Author == nil {
-		log.WithFields(map[string]any{
-			"messageID": m.ID,
-			"channelID": m.ChannelID,
-		}).Debug("MessageUpdate: nil author; skipping")
+		log.Info().Applicationf("MessageUpdate: nil author; skipping: messageID=%s, channelID=%s", m.ID, m.ChannelID)
 		return
 	}
 	if m.Author.Bot {
-		log.WithFields(map[string]any{
-			"messageID": m.ID,
-			"userID":    m.Author.ID,
-			"channelID": m.ChannelID,
-		}).Debug("MessageUpdate: ignoring bot edit")
+		log.Info().Applicationf("MessageUpdate: ignoring bot edit: messageID=%s, userID=%s, channelID=%s", m.ID, m.Author.ID, m.ChannelID)
 		return
 	}
-	log.WithFields(map[string]any{
-		"messageID": m.ID,
-		"userID":    m.Author.ID,
-		"guildID":   m.GuildID,
-		"channelID": m.ChannelID,
-	}).Debug("MessageUpdate received")
+	log.Info().Applicationf("MessageUpdate received: messageID=%s, userID=%s, guildID=%s, channelID=%s", m.ID, m.Author.ID, m.GuildID, m.ChannelID)
 
 	mes.markEvent()
 
@@ -214,49 +178,29 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 	}
 
 	if cached == nil {
-		log.WithFields(map[string]any{
-			"messageID": m.ID,
-			"userID":    m.Author.ID,
-		}).Debug("Message edit detected but original not in cache/persistence")
+		log.Info().Applicationf("Message edit detected but original not in cache/persistence: messageID=%s, userID=%s", m.ID, m.Author.ID)
 		return
 	}
 
 	// Verificar se realmente mudou o conteúdo
 	if cached.Content == m.Content {
-		log.WithFields(map[string]any{
-			"guildID":   cached.GuildID,
-			"channelID": cached.ChannelID,
-			"messageID": m.ID,
-			"userID":    cached.Author.ID,
-		}).Debug("MessageUpdate: content unchanged; skipping notification")
+		log.Info().Applicationf("MessageUpdate: content unchanged; skipping notification: guildID=%s, channelID=%s, messageID=%s, userID=%s", cached.GuildID, cached.ChannelID, m.ID, cached.Author.ID)
 		return
 	}
 
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
-		log.WithFields(map[string]any{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-		}).Debug("MessageUpdate: no guild config; skipping notification")
+		log.Info().Applicationf("MessageUpdate: no guild config; skipping notification: guildID=%s, messageID=%s", cached.GuildID, m.ID)
 		return
 	}
 
 	logChannelID := guildConfig.MessageLogChannelID
 	if logChannelID == "" {
-		log.WithFields(map[string]any{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-		}).Debug("MessageLogChannelID not configured for guild, message edit notification not sent")
+		log.Info().Applicationf("MessageLogChannelID not configured for guild, message edit notification not sent: guildID=%s, messageID=%s", cached.GuildID, m.ID)
 		return
 	}
 
-	log.WithFields(map[string]any{
-		"guildID":   cached.GuildID,
-		"channelID": cached.ChannelID,
-		"messageID": m.ID,
-		"userID":    cached.Author.ID,
-		"username":  cached.Author.Username,
-	}).Info("Message edit detected")
+	log.Info().Applicationf("Message edit detected: guildID=%s, channelID=%s, messageID=%s, userID=%s, username=%s", cached.GuildID, cached.ChannelID, m.ID, cached.Author.ID, cached.Author.Username)
 
 	// Enviar notificação de edição
 	if mes.adapters != nil {
@@ -269,18 +213,9 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.adapters.EnqueueMessageEdit(logChannelID, tCached, m); err != nil {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-				"error":     err.Error(),
-			}).Error("Failed to send message edit notification")
+			log.Error().Errorf("Failed to send message edit notification: guildID=%s, messageID=%s, channelID=%s, error=%v", cached.GuildID, m.ID, logChannelID, err)
 		} else {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-			}).Info("Message edit notification sent successfully")
+			log.Info().Applicationf("Message edit notification sent successfully: guildID=%s, messageID=%s, channelID=%s", cached.GuildID, m.ID, logChannelID)
 		}
 	} else {
 		tCached := &task.CachedMessage{
@@ -292,18 +227,9 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.notifier.SendMessageEditNotification(logChannelID, tCached, m); err != nil {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-				"error":     err.Error(),
-			}).Error("Failed to send message edit notification")
+			log.Error().Errorf("Failed to send message edit notification: guildID=%s, messageID=%s, channelID=%s, error=%v", cached.GuildID, m.ID, logChannelID, err)
 		} else {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-			}).Info("Message edit notification sent successfully")
+			log.Info().Applicationf("Message edit notification sent successfully: guildID=%s, messageID=%s, channelID=%s", cached.GuildID, m.ID, logChannelID)
 		}
 	}
 
@@ -330,11 +256,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 			HasExpiry:      true,
 		})
 	}
-	log.WithFields(map[string]any{
-		"guildID":   cached.GuildID,
-		"channelID": cached.ChannelID,
-		"messageID": m.ID,
-	}).Debug("MessageUpdate: store updated with new content")
+	log.Info().Applicationf("MessageUpdate: store updated with new content: guildID=%s, channelID=%s, messageID=%s", cached.GuildID, cached.ChannelID, m.ID)
 }
 
 // handleMessageDelete processa deleções de mensagens
@@ -361,10 +283,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	}
 
 	if cached == nil {
-		log.WithFields(map[string]any{
-			"messageID": m.ID,
-			"channelID": m.ChannelID,
-		}).Debug("Message delete detected but original not in cache/persistence")
+		log.Info().Applicationf("Message delete detected but original not in cache/persistence: messageID=%s, channelID=%s", m.ID, m.ChannelID)
 		return
 	}
 
@@ -388,10 +307,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	logChannelID := guildConfig.MessageLogChannelID
 	if logChannelID == "" {
-		log.WithFields(map[string]any{
-			"guildID":   cached.GuildID,
-			"messageID": m.ID,
-		}).Debug("MessageLogChannelID not configured for guild, message edit notification not sent")
+		log.Info().Applicationf("MessageLogChannelID not configured for guild, message edit notification not sent: guildID=%s, messageID=%s", cached.GuildID, m.ID)
 		// no-op: cache removed; using SQLite only
 		if mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
@@ -399,13 +315,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		return
 	}
 
-	log.WithFields(map[string]any{
-		"guildID":   cached.GuildID,
-		"channelID": cached.ChannelID,
-		"messageID": m.ID,
-		"userID":    cached.Author.ID,
-		"username":  cached.Author.Username,
-	}).Info("Message delete detected")
+	log.Info().Applicationf("Message delete detected: guildID=%s, channelID=%s, messageID=%s, userID=%s, username=%s", cached.GuildID, cached.ChannelID, m.ID, cached.Author.ID, cached.Author.Username)
 
 	// Tentar determinar quem deletou (limitado pela API do Discord)
 	deletedBy := "Usuário" // Padrão - assumimos que foi o próprio usuário
@@ -422,18 +332,9 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.adapters.EnqueueMessageDelete(logChannelID, tCached, deletedBy); err != nil {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-				"error":     err.Error(),
-			}).Error("Failed to send message delete notification")
+			log.Error().Errorf("Failed to send message delete notification: guildID=%s, messageID=%s, channelID=%s, error=%v", cached.GuildID, m.ID, logChannelID, err)
 		} else {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-			}).Info("Message delete notification sent successfully")
+			log.Info().Applicationf("Message delete notification sent successfully: guildID=%s, messageID=%s, channelID=%s", cached.GuildID, m.ID, logChannelID)
 		}
 	} else {
 		tCached := &task.CachedMessage{
@@ -445,18 +346,9 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.notifier.SendMessageDeleteNotification(logChannelID, tCached, deletedBy); err != nil {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-				"error":     err.Error(),
-			}).Error("Failed to send message delete notification")
+			log.Error().Errorf("Failed to send message delete notification: guildID=%s, messageID=%s, channelID=%s, error=%v", cached.GuildID, m.ID, logChannelID, err)
 		} else {
-			log.WithFields(map[string]any{
-				"guildID":   cached.GuildID,
-				"messageID": m.ID,
-				"channelID": logChannelID,
-			}).Info("Message delete notification sent successfully")
+			log.Info().Applicationf("Message delete notification sent successfully: guildID=%s, messageID=%s, channelID=%s", cached.GuildID, m.ID, logChannelID)
 		}
 	}
 

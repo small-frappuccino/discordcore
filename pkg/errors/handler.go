@@ -311,13 +311,13 @@ func (eh *ErrorHandler) logError(err *ServiceError) {
 
 	switch err.Severity {
 	case SeverityLow:
-		eh.logger.Info().Applicationf(fullMessage)
+		eh.logger.Info().Applicationf("%s", fullMessage)
 	case SeverityMedium:
-		eh.logger.Info().Applicationf(fullMessage)
+		eh.logger.Info().Applicationf("%s", fullMessage)
 	case SeverityHigh:
-		eh.logger.Warn().Applicationf(fullMessage)
+		eh.logger.Warn().Applicationf("%s", fullMessage)
 	case SeverityCritical:
-		eh.logger.Error().Errorf(fullMessage)
+		eh.logger.Error().Errorf("%s", fullMessage)
 	}
 }
 

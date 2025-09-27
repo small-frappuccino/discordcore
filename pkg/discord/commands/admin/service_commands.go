@@ -308,7 +308,7 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	// Restart service in background
 	go func() {
 		if err := cmd.adminCommands.serviceManager.RestartService(serviceName); err != nil {
-			ctx.Logger.WithError(err).Error("Failed to restart service")
+			ctx.Logger.Error().Errorf("Failed to restart service: %v", err)
 			// Try to follow up with error message
 			responder.EditResponse(ctx.Interaction, fmt.Sprintf("❌ Failed to restart service '%s': %v", serviceName, err))
 		} else {

@@ -37,11 +37,7 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 		isOwner = cb.isGuildOwner(guildID, userID)
 	}
 
-	logger := log.WithFields(map[string]any{
-		"command": i.ApplicationCommandData().Name,
-		"userID":  userID,
-		"guildID": guildID,
-	})
+	logger := log.GlobalLogger
 
 	return &Context{
 		Session:     cb.session,
@@ -94,11 +90,7 @@ func GetSubCommandOptions(i *discordgo.InteractionCreate) []*discordgo.Applicati
 
 // CommandLogEntry cria uma entrada de log padronizada para comandos
 func CommandLogEntry(i *discordgo.InteractionCreate, command string, userID string) *log.Logger {
-	return log.WithFields(map[string]any{
-		"command": command,
-		"guildID": i.GuildID,
-		"userID":  userID,
-	})
+	return log.GlobalLogger
 }
 
 // ValidateGuildContext valida se o contexto tem as informações necessárias do servidor

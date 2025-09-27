@@ -169,7 +169,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	// Persist changes
 	persister := core.NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
-		ctx.Logger.WithError(err).Error("Failed to save config")
+		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
 		return core.NewCommandError("Failed to save configuration", true)
 	}
 

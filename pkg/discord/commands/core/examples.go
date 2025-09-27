@@ -277,7 +277,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 	// Persistir configuração
 	persister := NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
-		ctx.Logger.WithError(err).Error("Failed to save config")
+		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
 		return NewCommandError("Failed to save configuration", true)
 	}
 
@@ -518,10 +518,7 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 	result, err := c.processInput(input)
 	if err != nil {
 		// Log do erro
-		ctx.Logger.WithFields(CreateLogFields(ctx, map[string]any{
-			"input": input,
-			"error": err.Error(),
-		})).Error("Failed to process input")
+		ctx.Logger.Error().Errorf("Failed to process input: %v", err)
 
 		// Retornar erro amigável para o usuário
 		return NewCommandError("Failed to process your input. Please try again.", true)

@@ -70,34 +70,34 @@ func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 	ctx := cr.contextBuilder.BuildContext(i)
 	commandName := i.ApplicationCommandData().Name
 
-	ctx.Logger.Debug("Processing slash command")
+	ctx.Logger.Info().Applicationf("Processing slash command")
 
 	// Verificar se o comando existe
 	cmd, exists := cr.registry.GetCommand(commandName)
 	if !exists {
-		ctx.Logger.Error("Command not found")
+		ctx.Logger.Error().Errorf("Command not found")
 		cr.responder.Error(i, "Command not found")
 		return
 	}
 
 	// Verificar se requer servidor
 	if cmd.RequiresGuild() && ctx.GuildID == "" {
-		ctx.Logger.Warn("Command used outside of guild")
+		ctx.Logger.Warn().Applicationf("Command used outside of guild")
 		cr.responder.Error(i, "This command can only be used in a server")
 		return
 	}
 
 	// Verificar permissões
 	if cmd.RequiresPermissions() && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
-		ctx.Logger.Warn("User without permission tried to use command")
+		ctx.Logger.Warn().Applicationf("User without permission tried to use command")
 		cr.responder.Error(i, "You do not have permission to use this command")
 		return
 	}
 
 	// Executar comando
-	ctx.Logger.Info("Executing command")
+	ctx.Logger.Info().Applicationf("Executing command")
 	if err := cmd.Handle(ctx); err != nil {
-		ctx.Logger.WithError(err).Error("Command execution failed")
+		ctx.Logger.Error().Errorf("Command execution failed: %v", err)
 
 		// Verificar se é um erro específico de comando
 		if cmdErr, ok := err.(*CommandError); ok {
@@ -134,7 +134,7 @@ func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
 	// Executar autocomplete
 	choices, err := handler.HandleAutocomplete(ctx, focusedOpt.Name)
 	if err != nil {
-		ctx.Logger.WithError(err).Error("Autocomplete handler failed")
+		ctx.Logger.Error().Errorf("Autocomplete handler failed: %v", err)
 		choices = []*discordgo.ApplicationCommandOptionChoice{}
 	}
 
@@ -156,7 +156,7 @@ func NewCommandManager(
 	return &CommandManager{
 		session: session,
 		router:  NewCommandRouter(session, configManager),
-		logger:  log.WithField("component", "command_manager"),
+		logger:  log.GlobalLogger,
 	}
 }
 
@@ -201,7 +201,7 @@ func (cm *CommandManager) SetupCommands() error {
 		if existing, ok := regByName[name]; ok {
 			// Comando já existe, verificar se precisa atualizar
 			if CompareCommands(existing, desired) {
-				cm.logger.WithField("command", name).Debug("Command unchanged, skipping")
+				cm.logger.Info().Applicationf("Command unchanged, skipping: %s", name)
 				unchanged++
 				continue
 			}
@@ -210,14 +210,14 @@ func (cm *CommandManager) SetupCommands() error {
 			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired); err != nil {
 				return fmt.Errorf("error updating command '%s': %w", name, err)
 			}
-			cm.logger.WithField("command", name).Info("Command updated")
+			cm.logger.Info().Applicationf("Command updated: %s", name)
 			updated++
 		} else {
 			// Criar novo comando
 			if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired); err != nil {
 				return fmt.Errorf("error creating command '%s': %w", name, err)
 			}
-			cm.logger.WithField("command", name).Info("Command created")
+			cm.logger.Info().Applicationf("Command created: %s", name)
 			created++
 		}
 	}
@@ -227,26 +227,15 @@ func (cm *CommandManager) SetupCommands() error {
 	for _, rc := range registered {
 		if _, exists := codeByName[rc.Name]; !exists {
 			if err := cm.session.ApplicationCommandDelete(cm.session.State.User.ID, "", rc.ID); err != nil {
-				cm.logger.WithFields(map[string]any{
-					"command": rc.Name,
-					"error":   err,
-				}).Warn("Error removing orphan command")
-				continue
-			}
-			cm.logger.WithField("command", rc.Name).Info("Orphan command removed")
-			deleted++
-		}
-	}
-
+				                cm.logger.Warn().Applicationf("Error removing orphan command: %s, error: %v", rc.Name, err)
+				                continue
+				            }
+				            cm.logger.Info().Applicationf("Orphan command removed: %s", rc.Name)
+				            deleted++
+				        }
+				    }
 	// Log do resumo
-	cm.logger.WithFields(map[string]any{
-		"created":   created,
-		"updated":   updated,
-		"deleted":   deleted,
-		"unchanged": unchanged,
-		"total":     len(codeCommands),
-		"mode":      "incremental",
-	}).Info("Command synchronization completed")
+	cm.logger.Info().Applicationf("Command synchronization completed: created=%d, updated=%d, deleted=%d, unchanged=%d, total=%d, mode=incremental", created, updated, deleted, unchanged, len(codeCommands))
 
 	return nil
 }

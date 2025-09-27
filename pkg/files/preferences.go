@@ -162,13 +162,13 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		fullGuild, err := session.Guild(g.ID)
 		if err != nil {
 			// preserve the guildID field and format the message as a warning
-			log.WithField("guildID", g.ID).Warn().Applicationf(LogCouldNotFetchGuild, err)
+			log.Warn().Applicationf("Could not fetch guild details for guild %s: %v", g.ID, err)
 			continue
 		}
 
 		channelID := FindSuitableChannel(session, g.ID)
 		if channelID == "" {
-			log.WithField("guildID", g.ID).Warn().Applicationf(LogNoSuitableChannel, fullGuild.Name)
+			log.Warn().Applicationf("No suitable channel found in guild %s (%s)", fullGuild.Name, g.ID)
 			continue
 		}
 
@@ -183,11 +183,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
 		mgr.mu.Unlock()
-		log.WithFields(map[string]any{
-			"guildName": fullGuild.Name,
-			"guildID":   g.ID,
-			"channelID": channelID,
-		}).Info().Applicationf(LogGuildAdded)
+		log.Info().Applicationf("Guild added: %s (%s) with channel %s", fullGuild.Name, g.ID, channelID)
 	}
 	return mgr.SaveConfig()
 }
@@ -207,14 +203,13 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	} else {
 		mgr.mu.RLock()
 		for _, g := range mgr.config.Guilds {
-			if g.GuildID == guildID {
-				mgr.mu.RUnlock()
-				log.WithField("guildID", guildID).Info().Applicationf(LogGuildAlreadyConfigured)
-				return nil
-			}
-		}
-		mgr.mu.RUnlock()
-	}
+							if g.GuildID == guildID {
+								mgr.mu.RUnlock()
+								log.Info().Applicationf("Guild %s already configured, skipping", guildID)
+								return nil
+							}
+						}
+						mgr.mu.RUnlock()	}
 	guild, err := session.Guild(guildID)
 	if err != nil {
 		return fmt.Errorf(ErrGuildInfoFetchMsg, guildID, err)

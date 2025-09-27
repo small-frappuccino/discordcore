@@ -101,18 +101,16 @@ func (mgr *ConfigManager) AddList(guildID string, list List) error {
 
 	guildConfig := mgr.GuildConfig(guildID)
 	if guildConfig == nil {
-		log.Errorf("GuildConfig not found for guildID: %s", guildID)
+		log.Error().Errorf("GuildConfig not found for guildID: %s", guildID)
 		return fmt.Errorf("guild not found")
 	}
-
-	log.Infof(log.Database, "Appending list to LooseLists for guildID: %s", guildID)
 	guildConfig.LooseLists = append(guildConfig.LooseLists, Rule{
 		ID:      list.ID,
 		Name:    list.Name,
 		Lists:   []List{list},
 		Enabled: true,
 	})
-	log.Infof(log.Database, "List appended successfully for guildID: %s", guildID)
+	log.Info().Databasef("List appended successfully for guildID: %s", guildID)
 	return mgr.SaveConfig()
 }
 
@@ -146,26 +144,26 @@ func (mgr *ConfigManager) AddRuleset(guildID string, ruleset Ruleset) error {
 
 // AddListToRule adds a list to a specific rule in a guild.
 func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List) error {
-	log.Infof(log.Database, "AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID)
+	log.Info().Databasef("AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID)
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
 	guildConfig := mgr.GuildConfig(guildID)
 	if guildConfig == nil {
-		log.Errorf("GuildConfig not found for guildID: %s", guildID)
+		log.Error().Errorf("GuildConfig not found for guildID: %s", guildID)
 		return fmt.Errorf("guild not found")
 	}
 
 	for i, rule := range guildConfig.LooseLists {
 		if rule.ID == ruleID {
-			log.Infof(log.Database, "Rule found for ruleID: %s, appending list", ruleID)
+			log.Info().Databasef("Rule found for ruleID: %s, appending list", ruleID)
 			guildConfig.LooseLists[i].Lists = append(guildConfig.LooseLists[i].Lists, list)
-			log.Infof(log.Database, "List appended successfully to ruleID: %s", ruleID)
+			log.Info().Databasef("List appended successfully to ruleID: %s", ruleID)
 			return mgr.SaveConfig()
 		}
 	}
 
-	log.Errorf("Rule not found for ruleID: %s", ruleID)
+	log.Error().Errorf("Rule not found for ruleID: %s", ruleID)
 	return fmt.Errorf("rule not found")
 }
 
