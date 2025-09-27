@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -145,7 +145,7 @@ func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
 type CommandManager struct {
 	session *discordgo.Session
 	router  *CommandRouter
-	logger  *logutil.Logger
+	logger  *log.Logger
 }
 
 // NewCommandManager cria um novo gerenciador de comandos
@@ -156,7 +156,7 @@ func NewCommandManager(
 	return &CommandManager{
 		session: session,
 		router:  NewCommandRouter(session, configManager),
-		logger:  logutil.WithField("component", "command_manager"),
+		logger:  log.WithField("component", "command_manager"),
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/errors"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 )
 
 // BaseService provides common functionality for all services
@@ -40,8 +40,6 @@ type BaseService struct {
 	startHook  func(ctx context.Context) error
 	stopHook   func(ctx context.Context) error
 	healthHook func(ctx context.Context) HealthStatus
-
-	logger *logutil.Logger
 }
 
 // NewBaseService creates a new base service
@@ -58,7 +56,6 @@ func NewBaseService(name string, serviceType ServiceType, priority ServicePriori
 			Message:   "Service initialized",
 			LastCheck: time.Now(),
 		},
-		logger: logutil.WithField("service", name),
 	}
 }
 
@@ -91,7 +88,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 		return nil // Already running
 	}
 
-	bs.logger.Info("Starting service...")
+	log.Infof(log.Application, "service %s: Starting service...", bs.name)
 	bs.state = StateInitializing
 
 	// Call the start hook if provided
@@ -108,7 +105,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
-			bs.logger.WithError(err).Error("Service start failed")
+			log.Errorf("service %s: Service start failed: %v", bs.name, err)
 			return serviceErr
 		}
 	}
@@ -120,7 +117,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 	bs.startTime = &now
 	bs.stopTime = nil
 
-	bs.logger.Info("Service started successfully")
+	log.Infof(log.Application, "service %s: Service started successfully", bs.name)
 	return nil
 }
 
@@ -133,7 +130,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 		return nil // Already stopped
 	}
 
-	bs.logger.Info("Stopping service...")
+	log.Infof(log.Application, "service %s: Stopping service...", bs.name)
 	bs.state = StateStopping
 
 	// Call the stop hook if provided
@@ -149,7 +146,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
-			bs.logger.WithError(err).Warn("Service stop failed")
+			log.Errorf("service %s: Service stop failed: %v", bs.name, err)
 			// Continue with shutdown even if hook fails
 		}
 	}
@@ -160,7 +157,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 	now := time.Now()
 	bs.stopTime = &now
 
-	bs.logger.Info("Service stopped")
+	log.Infof(log.Application, "service %s: Service stopped", bs.name)
 	return nil
 }
 
@@ -427,11 +424,12 @@ func (ms *ManagedService) HandleError(err error) {
 	ms.RecordError(serviceErr)
 
 	if ms.autoRestart && ms.restartCount < ms.maxRestarts {
-		ms.logger.WithError(err).Info("Service error detected, attempting restart")
+		// Use the package logger (simple categories are available)
+		log.Infof(log.Application, "service %s: Service error detected, attempting restart: %v", ms.name, err)
 		go func() {
 			time.Sleep(ms.restartDelay)
 			if restartErr := ms.manager.RestartService(ms.name); restartErr != nil {
-				ms.logger.WithField("restart_error", restartErr.Error()).Error("Failed to restart service after error")
+				log.Errorf("service %s: Failed to restart service after error: %v", ms.name, restartErr)
 			}
 		}()
 	}

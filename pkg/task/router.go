@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 )
 
 // TaskHandler is a function that processes a task payload.
@@ -374,11 +374,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 
 		// Safety: ensure handler still registered
 		if handler == nil {
-			logutil.WithFields(map[string]any{
-				"type":    enq.task.Type,
-				"group":   gw.key,
-				"message": "handler no longer registered, dropping task",
-			}).Warn("Task dropped")
+			log.Warn().Applicationf("Task dropped (handler not registered). Type: %s, Group: %s", enq.task.Type, gw.key)
 			tr.maybeReleaseIdempotency(enq.task, eff)
 			continue
 		}
@@ -397,14 +393,14 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 				delay := tr.computeBackoff(eff.InitialBackoff, eff.MaxBackoff, enq.attempt)
 				attempt := enq.attempt + 1
 
-				logutil.WithFields(map[string]any{
-					"type":      enq.task.Type,
-					"group":     gw.key,
-					"attempt":   attempt,
-					"max":       eff.MaxAttempts,
-					"backoff":   delay.String(),
-					"lastError": err,
-				}).Warn("Task failed, scheduling retry")
+				log.Warn().Applicationf("Task failed, scheduling retry. Type: %s, Group: %s, Attempt: %d/%d, Backoff: %s, Error: %v",
+					enq.task.Type,
+					gw.key,
+					attempt,
+					eff.MaxAttempts,
+					delay.String(),
+					err,
+				)
 
 				// Re-enqueue after backoff (same group)
 				tr.wg.Add(1)
@@ -439,13 +435,12 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 				continue
 			}
 
-			logutil.WithFields(map[string]any{
-				"type":      enq.task.Type,
-				"group":     gw.key,
-				"attempts":  enq.attempt,
-				"max":       eff.MaxAttempts,
-				"lastError": err,
-			}).Error("Task failed; max attempts reached, dropping")
+			log.Error().Errorf("Task failed; max attempts reached. Type: %s, Group: %s, Attempts: %d, Error: %v",
+				enq.task.Type,
+				gw.key,
+				enq.attempt,
+				err,
+			)
 		}
 
 		// Success or final failure: allow idempotency key to naturally expire.

@@ -2,7 +2,7 @@ package core
 
 import (
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -31,7 +31,7 @@ type Context struct {
 	Session     *discordgo.Session
 	Interaction *discordgo.InteractionCreate
 	Config      *files.ConfigManager
-	Logger      *logutil.Logger
+	Logger      *log.Logger
 	GuildID     string
 	UserID      string
 	IsOwner     bool

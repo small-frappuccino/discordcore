@@ -2,7 +2,7 @@ package core
 
 import (
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -37,7 +37,7 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 		isOwner = cb.isGuildOwner(guildID, userID)
 	}
 
-	logger := logutil.WithFields(map[string]any{
+	logger := log.WithFields(map[string]any{
 		"command": i.ApplicationCommandData().Name,
 		"userID":  userID,
 		"guildID": guildID,
@@ -93,8 +93,8 @@ func GetSubCommandOptions(i *discordgo.InteractionCreate) []*discordgo.Applicati
 }
 
 // CommandLogEntry cria uma entrada de log padronizada para comandos
-func CommandLogEntry(i *discordgo.InteractionCreate, command string, userID string) *logutil.Logger {
-	return logutil.WithFields(map[string]any{
+func CommandLogEntry(i *discordgo.InteractionCreate, command string, userID string) *log.Logger {
+	return log.WithFields(map[string]any{
 		"command": command,
 		"guildID": i.GuildID,
 		"userID":  userID,

@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// Initialize global error handler
-	if err := errutil.InitializeGlobalErrorHandler(logutil.GlobalLogger); err != nil {
+	if err := errutil.InitializeGlobalErrorHandler(log.GlobalLogger); err != nil {
 		fmt.Fprintln(os.Stderr, "failed to initialize error handler:", err)
 		os.Exit(1)
 	}
@@ -49,7 +49,8 @@ func main() {
 
 	// Ensure token present (already loaded by util.LoadEnvWithLocalBinFallback)
 	if token == "" {
-		logutil.Fatal("Discord bot token (ALICE_BOT_DEVELOPMENT_TOKEN) is not set in environment")
+		log.Errorf("Discord bot token (ALICE_BOT_DEVELOPMENT_TOKEN) is not set in environment")
+		os.Exit(1)
 	}
 
 	// Config manager will be initialized after bot name is set (paths correct)

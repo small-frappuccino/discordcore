@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -72,7 +72,7 @@ func (e ServiceError) Unwrap() error {
 
 // ErrorHandler provides centralized error handling for the entire system
 type ErrorHandler struct {
-	logger          *logutil.Logger
+	logger          *log.Logger
 	notifiers       []ErrorNotifier
 	retryStrategies map[ErrorCategory]RetryStrategy
 	circuits        map[string]*CircuitBreaker
@@ -112,7 +112,7 @@ const (
 // NewErrorHandler creates a new unified error handler
 func NewErrorHandler() *ErrorHandler {
 	return &ErrorHandler{
-		logger:    logutil.WithField("component", "error_handler"),
+		logger:    log.GlobalLogger, // Field-based loggers are deprecated
 		notifiers: make([]ErrorNotifier, 0),
 		retryStrategies: map[ErrorCategory]RetryStrategy{
 			CategoryDiscord: {
@@ -160,15 +160,9 @@ func (eh *ErrorHandler) Handle(ctx context.Context, err error) error {
 		case ActionRetry:
 			// Retry logic is handled by HandleWithRetry
 		case ActionRestart:
-			eh.logger.WithFields(map[string]interface{}{
-				"component": serviceErr.Component,
-				"operation": serviceErr.Operation,
-			}).Warn("Service restart required")
+			eh.logger.Warn().Applicationf("Service restart required. Component: %s, Operation: %s", serviceErr.Component, serviceErr.Operation)
 		case ActionTerminate:
-			eh.logger.WithFields(map[string]interface{}{
-				"component": serviceErr.Component,
-				"operation": serviceErr.Operation,
-			}).Fatal("Critical error - terminating")
+			eh.logger.Error().Fatalf("Critical error - terminating. Component: %s, Operation: %s", serviceErr.Component, serviceErr.Operation)
 		}
 	}
 
@@ -199,13 +193,8 @@ func (eh *ErrorHandler) HandleWithRetry(ctx context.Context, operation string, c
 		}
 
 		delay := eh.calculateDelay(strategy, attempt)
-		eh.logger.WithFields(map[string]interface{}{
-			"attempt":   attempt,
-			"delay":     delay,
-			"component": component,
-			"operation": operation,
-			"error":     err.Error(),
-		}).Warn("Operation failed, retrying")
+		eh.logger.Warn().Applicationf("Operation failed, retrying. Attempt: %d, Delay: %v, Component: %s, Operation: %s, Error: %v",
+			attempt, delay, component, operation, err)
 
 		select {
 		case <-ctx.Done():
@@ -306,31 +295,29 @@ func (eh *ErrorHandler) categorizeError(err error) ErrorCategory {
 
 // logError logs the error using the appropriate severity level
 func (eh *ErrorHandler) logError(err *ServiceError) {
-	fields := map[string]interface{}{
-		"category":    err.Category,
-		"severity":    err.Severity,
-		"component":   err.Component,
-		"operation":   err.Operation,
-		"recoverable": err.Recoverable,
-		"actions":     err.Actions,
-	}
-
-	// Add context fields
+	// Flatten context into the message string
+	var contextBuilder strings.Builder
+	first := true
 	for k, v := range err.Context {
-		fields[k] = v
+		if !first {
+			contextBuilder.WriteString(", ")
+		}
+		contextBuilder.WriteString(fmt.Sprintf("%s: %v", k, v))
+		first = false
 	}
 
-	logger := eh.logger.WithFields(fields)
+	fullMessage := fmt.Sprintf("%s. Category: %s, Severity: %s, Component: %s, Operation: %s, Recoverable: %v, Actions: %v, Context: {%s}",
+		err.Message, err.Category, err.Severity, err.Component, err.Operation, err.Recoverable, err.Actions, contextBuilder.String())
 
 	switch err.Severity {
 	case SeverityLow:
-		logger.Debug(err.Message)
+		eh.logger.Info().Applicationf(fullMessage)
 	case SeverityMedium:
-		logger.Info(err.Message)
+		eh.logger.Info().Applicationf(fullMessage)
 	case SeverityHigh:
-		logger.Warn(err.Message)
+		eh.logger.Warn().Applicationf(fullMessage)
 	case SeverityCritical:
-		logger.Error(err.Message)
+		eh.logger.Error().Errorf(fullMessage)
 	}
 }
 
@@ -338,7 +325,7 @@ func (eh *ErrorHandler) logError(err *ServiceError) {
 func (eh *ErrorHandler) notifyError(ctx context.Context, err *ServiceError) {
 	for _, notifier := range eh.notifiers {
 		if notifyErr := notifier.NotifyError(ctx, err); notifyErr != nil {
-			eh.logger.WithField("notifier_error", notifyErr.Error()).Error("Failed to notify error")
+			eh.logger.Error().Errorf("Failed to notify error. Notifier Error: %v", notifyErr)
 		}
 	}
 }

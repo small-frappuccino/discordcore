@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	logging "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 )
 
 // Minimal replacement for the previously external errutil package.
@@ -19,13 +19,13 @@ import (
 
 var (
 	mu     sync.RWMutex
-	logger *logging.Logger
+	logger *log.Logger
 )
 
 // InitializeGlobalErrorHandler sets the package-level logger used by the error helpers.
 // It is safe to call multiple times; the last non-nil logger wins.
 // Returns an error if the supplied logger is nil.
-func InitializeGlobalErrorHandler(l *logging.Logger) error {
+func InitializeGlobalErrorHandler(l *log.Logger) error {
 	if l == nil {
 		return fmt.Errorf("nil logger provided")
 	}
@@ -52,11 +52,11 @@ func HandleDiscordError(operation string, fn func() error) error {
 	mu.RUnlock()
 
 	if l != nil {
-		l.WithField("operation", operation).ErrorWithErr("Discord operation failed", err)
+		l.Error().Errorf("Discord operation failed. Operation: %s, Error: %v", operation, err)
 	} else {
 		// Best-effort fallback to package-level helper in logging (if available).
 		// This ensures some logging even if InitializeGlobalErrorHandler wasn't called.
-		logging.ErrorWithErr(fmt.Sprintf("Discord operation failed: %s", operation), err)
+		log.Error().Errorf("Discord operation failed: %s, Error: %v", operation, err)
 	}
 
 	return err
@@ -79,12 +79,9 @@ func HandleConfigError(operation, path string, fn func() error) error {
 	mu.RUnlock()
 
 	if l != nil {
-		l.WithFields(map[string]any{
-			"operation": operation,
-			"path":      path,
-		}).ErrorWithErr("Config operation failed", err)
+		l.Error().Errorf("Config operation failed. Operation: %s, Path: %s, Error: %v", operation, path, err)
 	} else {
-		logging.ErrorWithErr(fmt.Sprintf("Config operation failed: %s %s", operation, path), err)
+		log.Error().Errorf("Config operation failed: %s %s, Error: %v", operation, path, err)
 	}
 
 	return fmt.Errorf("config %s %s: %w", operation, path, err)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alice-bnuy/discordcore/pkg/errutil"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -20,26 +20,26 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 
 	// Validate token before creating session
 	if token == "" {
-		logutil.Fatal("❌ Discord bot token is empty. Please set the token before starting the bot.")
+		log.Error().Errorf("❌ Discord bot token is empty. Please set the token before starting the bot.")
 		return nil, fmt.Errorf("discord bot token is empty")
 	}
 
 	// Add detailed logging for session creation
-	logutil.Infof("🔑 Creating Discord session with token: %s", token)
+	log.Info().Discordf("🔑 Creating Discord session with token: %s", token)
 
 	if err := errutil.HandleDiscordError("create_session", func() error {
 		var sessionErr error
 		s, sessionErr = discordgo.New("Bot " + token)
 		if sessionErr != nil {
-			logutil.Errorf("❌ Failed to create Discord session: %v", sessionErr)
+			log.Error().Errorf("❌ Failed to create Discord session: %v", sessionErr)
 		}
 		return sessionErr
 	}); err != nil {
-		logutil.Fatalf("❌ Error during session creation: %v", err)
+		log.Error().Errorf("❌ Error during session creation: %v", err)
 		return nil, fmt.Errorf(ErrSessionCreationFailed, err)
 	}
 
-	logutil.Info("✅ Discord session created successfully")
+	log.Info().Discordf("✅ Discord session created successfully")
 	s.Identify.Intents = discordgo.IntentsGuilds |
 		discordgo.IntentsGuildMembers |
 		discordgo.IntentsGuildPresences |
@@ -48,18 +48,18 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 		discordgo.IntentMessageContent
 
 	// Add logging for connection
-	logutil.Info("🔗 Connecting to Discord...")
+	log.Info(log.DiscordEvents, "🔗 Connecting to Discord...")
 	if err := errutil.HandleDiscordError("connect", func() error {
 		connectErr := s.Open()
 		if connectErr != nil {
-			logutil.Errorf("❌ Failed to connect to Discord: %v", connectErr)
+			log.Errorf("❌ Failed to connect to Discord: %v", connectErr)
 		}
 		return connectErr
 	}); err != nil {
-		logutil.Fatalf("❌ Error during connection: %v", err)
+		log.Errorf("❌ Error during connection: %v", err)
 		return nil, fmt.Errorf(ErrSessionConnectionFailed, err)
 	}
 
-	logutil.Info("✅ Connected to Discord successfully")
+	log.Info(log.DiscordEvents, "✅ Connected to Discord successfully")
 	return s, nil
 }

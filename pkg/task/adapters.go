@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/bwmarrin/discordgo"
 )
@@ -399,10 +399,7 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	if gcfg == nil {
 		// No configuration; update avatar and exit (avoid retries)
 		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
-		logutil.WithFields(map[string]any{
-			"guildID": p.GuildID,
-			"userID":  p.UserID,
-		}).Debug("No guild config found; skipping avatar notification")
+		log.Info().Applicationf("No guild config found; skipping avatar notification; guildID=%s userID=%s", p.GuildID, p.UserID)
 		return nil
 	}
 
@@ -412,10 +409,7 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	}
 	// If there's still no channel, skip notification but update avatar in store
 	if channelID == "" {
-		logutil.WithFields(map[string]any{
-			"guildID": p.GuildID,
-			"userID":  p.UserID,
-		}).Warn("No log channel configured; skipping avatar notification")
+		log.Info().Applicationf("No log channel configured; skipping avatar notification; guildID=%s userID=%s", p.GuildID, p.UserID)
 		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
 		return nil
 	}

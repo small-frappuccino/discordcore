@@ -1,6 +1,14 @@
 package files
 
-import "github.com/alice-bnuy/discordcore/pkg/log"
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/alice-bnuy/discordcore/pkg/log"
+	"github.com/alice-bnuy/discordcore/pkg/util"
+)
 
 // ## Config Types
 
@@ -88,7 +96,13 @@ func (r Ruleset) StatusString() string {
 
 // AddList adds a list to the LooseLists of a guild.
 func (mgr *ConfigManager) AddList(guildID string, list List) error {
-	log.Errorf("GuildConfig not found for guildID: %s", guildID)		return fmt.Errorf("guild not found")
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	guildConfig := mgr.GuildConfig(guildID)
+	if guildConfig == nil {
+		log.Errorf("GuildConfig not found for guildID: %s", guildID)
+		return fmt.Errorf("guild not found")
 	}
 
 	log.Infof(log.Database, "Appending list to LooseLists for guildID: %s", guildID)
@@ -138,7 +152,7 @@ func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List
 
 	guildConfig := mgr.GuildConfig(guildID)
 	if guildConfig == nil {
-log.Errorf("GuildConfig not found for guildID: %s", guildID)
+		log.Errorf("GuildConfig not found for guildID: %s", guildID)
 		return fmt.Errorf("guild not found")
 	}
 

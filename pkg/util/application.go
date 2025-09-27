@@ -38,7 +38,7 @@ func init() {
 func getCurrentGitBranch() string {
 	data, err := os.ReadFile(".git/HEAD")
 	if err != nil {
-		log.Errorf("Failed to read git HEAD: %v", err)
+		log.Error().Errorf("Failed to read git HEAD: %v", err)
 		return "unknown"
 	}
 	line := strings.TrimSpace(string(data))

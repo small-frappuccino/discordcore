@@ -6,7 +6,7 @@ import (
 	"github.com/alice-bnuy/discordcore/pkg/discord/commands/config"
 	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -30,7 +30,7 @@ func NewCommandHandler(
 
 // SetupCommands inicializa e registra todos os comandos do bot
 func (ch *CommandHandler) SetupCommands() error {
-	logutil.Info("Setting up bot commands...")
+	log.Info(log.Application, "Setting up bot commands...")
 
 	// Criar o gerenciador de comandos
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
@@ -45,7 +45,7 @@ func (ch *CommandHandler) SetupCommands() error {
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	logutil.Info("Bot commands setup completed successfully")
+	log.Info(log.Application, "Bot commands setup completed successfully")
 	return nil
 }
 
@@ -56,13 +56,13 @@ func (ch *CommandHandler) registerConfigCommands() error {
 	// Registrar o grupo /config e comandos simples (ping/echo)
 	config.NewConfigCommands(ch.configManager).RegisterCommands(router)
 
-	logutil.Info("Config commands registered successfully")
+	log.Info(log.Application, "Config commands registered successfully")
 	return nil
 }
 
 // Shutdown realiza limpeza dos recursos do command handler
 func (ch *CommandHandler) Shutdown() error {
-	logutil.Info("Shutting down command handler...")
+	log.Info(log.Application, "Shutting down command handler...")
 
 	// Aqui você pode adicionar lógica de limpeza se necessário
 	// Por exemplo, salvar configurações, limpar caches, etc.

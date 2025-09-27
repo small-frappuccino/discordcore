@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/alice-bnuy/discordcore/pkg/files"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/alice-bnuy/discordcore/pkg/task"
 	"github.com/bwmarrin/discordgo"
 )
@@ -71,7 +71,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	// If adapters are wired, enqueue via TaskRouter for retries/backoff
 	if as.adapters != nil {
 		if err := as.adapters.EnqueueAutomodAction(logChannelID, e); err != nil {
-			logutil.WithFields(map[string]interface{}{
+			log.WithFields(map[string]interface{}{
 				"guildID":   e.GuildID,
 				"channelID": logChannelID,
 				"userID":    e.UserID,
@@ -125,7 +125,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	}
 
 	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-		logutil.WithFields(map[string]interface{}{
+		log.WithFields(map[string]interface{}{
 			"guildID":   e.GuildID,
 			"channelID": logChannelID,
 			"userID":    e.UserID,

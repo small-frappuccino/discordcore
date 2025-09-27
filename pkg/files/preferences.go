@@ -9,8 +9,9 @@ import (
 	"strings"
 
 	"github.com/alice-bnuy/discordcore/pkg/errutil"
-	logutil "github.com/alice-bnuy/discordcore/pkg/logging"
+	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/alice-bnuy/discordcore/pkg/util"
+	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -45,14 +46,14 @@ func (mgr *ConfigManager) LoadConfig() error {
 	err := mgr.jsonManager.Load(mgr.config)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logutil.Warnf(LogLoadConfigFileNotFound, mgr.configFilePath)
+			log.Info().Applicationf(LogLoadConfigFileNotFound, mgr.configFilePath)
 			return nil
 		}
 		return errutil.HandleConfigError("read", mgr.configFilePath, func() error { return err })
 	}
 
 	if len(mgr.config.Guilds) == 0 {
-		logutil.Warnf(LogLoadConfigNoGuilds, mgr.configFilePath)
+		log.Info().Applicationf(LogLoadConfigNoGuilds, mgr.configFilePath)
 	}
 
 	// logutil.Infof(LogLoadConfigSuccess, mgr.configFilePath)
@@ -73,7 +74,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return errutil.HandleConfigError("write", mgr.configFilePath, func() error { return err })
 	}
 
-	logutil.Infof(LogSaveConfigSuccess, mgr.configFilePath)
+	log.Info().Applicationf(LogSaveConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
@@ -160,13 +161,14 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 	for _, g := range session.State.Guilds {
 		fullGuild, err := session.Guild(g.ID)
 		if err != nil {
-			logutil.WithField("guildID", g.ID).Warnf(LogCouldNotFetchGuild, err)
+			// preserve the guildID field and format the message as a warning
+			log.WithField("guildID", g.ID).Warn().Applicationf(LogCouldNotFetchGuild, err)
 			continue
 		}
 
 		channelID := FindSuitableChannel(session, g.ID)
 		if channelID == "" {
-			logutil.WithField("guildID", g.ID).Warnf(LogNoSuitableChannel, fullGuild.Name)
+			log.WithField("guildID", g.ID).Warn().Applicationf(LogNoSuitableChannel, fullGuild.Name)
 			continue
 		}
 
@@ -181,11 +183,11 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
 		mgr.mu.Unlock()
-		logutil.WithFields(map[string]any{
+		log.WithFields(map[string]any{
 			"guildName": fullGuild.Name,
 			"guildID":   g.ID,
 			"channelID": channelID,
-		}).Info(LogGuildAdded)
+		}).Info().Applicationf(LogGuildAdded)
 	}
 	return mgr.SaveConfig()
 }
@@ -207,7 +209,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		for _, g := range mgr.config.Guilds {
 			if g.GuildID == guildID {
 				mgr.mu.RUnlock()
-				logutil.WithField("guildID", guildID).Info(LogGuildAlreadyConfigured)
+				log.WithField("guildID", guildID).Info().Applicationf(LogGuildAlreadyConfigured)
 				return nil
 			}
 		}
