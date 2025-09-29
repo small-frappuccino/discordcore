@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/errors"
-	"github.com/alice-bnuy/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/errors"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // BaseService provides common functionality for all services

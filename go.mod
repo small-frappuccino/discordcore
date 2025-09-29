@@ -1,4 +1,4 @@
-module github.com/alice-bnuy/discordcore
+module github.com/small-frappuccino/discordcore
 
 go 1.25.0
 
@@ -9,7 +9,7 @@ require (
 )
 
 require (
-	github.com/alice-bnuy/logutil v1.0.0 // indirect
+	github.com/small-frappuccino/logutil v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect

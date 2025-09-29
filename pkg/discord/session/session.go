@@ -3,9 +3,9 @@ package session
 import (
 	"fmt"
 
-	"github.com/alice-bnuy/discordcore/pkg/errutil"
-	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // Error messages

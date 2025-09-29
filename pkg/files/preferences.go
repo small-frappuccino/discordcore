@@ -8,11 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/alice-bnuy/discordcore/pkg/errutil"
-	"github.com/alice-bnuy/discordcore/pkg/log"
-	"github.com/alice-bnuy/discordcore/pkg/util"
-	"github.com/alice-bnuy/logutil"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // --- Initialization & Persistence ---
@@ -56,7 +55,6 @@ func (mgr *ConfigManager) LoadConfig() error {
 		log.Info().Applicationf(LogLoadConfigNoGuilds, mgr.configFilePath)
 	}
 
-	// logutil.Infof(LogLoadConfigSuccess, mgr.configFilePath)
 	return nil
 }
 
@@ -203,13 +201,14 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	} else {
 		mgr.mu.RLock()
 		for _, g := range mgr.config.Guilds {
-							if g.GuildID == guildID {
-								mgr.mu.RUnlock()
-								log.Info().Applicationf("Guild %s already configured, skipping", guildID)
-								return nil
-							}
-						}
-						mgr.mu.RUnlock()	}
+			if g.GuildID == guildID {
+				mgr.mu.RUnlock()
+				log.Info().Applicationf("Guild %s already configured, skipping", guildID)
+				return nil
+			}
+		}
+		mgr.mu.RUnlock()
+	}
 	guild, err := session.Guild(guildID)
 	if err != nil {
 		return fmt.Errorf(ErrGuildInfoFetchMsg, guildID, err)
@@ -233,11 +232,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	if ch, err := session.Channel(channelID); err == nil {
 		channelName = ch.Name
 	}
-	logutil.WithFields(map[string]any{
-		"guildName": guild.Name,
-		"guildID":   guildID,
-		"channel":   channelName,
-	}).Info(LogGuildAdded)
+	log.Info().Applicationf("%s: %s (%s) channel: %s", LogGuildAdded, guild.Name, guildID, channelName)
 	return mgr.SaveConfig()
 }
 
@@ -251,12 +246,9 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	}
 	for _, guildConfig := range configuration.Guilds {
 		if guild, err := s.Guild(guildConfig.GuildID); err == nil {
-			logutil.WithFields(map[string]any{
-				"guildName": guild.Name,
-				"guildID":   guild.ID,
-			}).Info(LogMonitorGuild)
+			log.Info().Applicationf("%s: %s (%s)", LogMonitorGuild, guild.Name, guild.ID)
 		} else {
-			logutil.WithField("guildID", guildConfig.GuildID).Warn(LogGuildNotAccessible)
+			log.Warn().Applicationf("%s: %s", LogGuildNotAccessible, guildConfig.GuildID)
 		}
 	}
 }
@@ -396,7 +388,7 @@ func EnsureSettingsFile() error {
 
 	// If file does not exist, create default
 	if !exists {
-		logutil.Infof("Settings file not found, creating default at %s", settingsFilePath)
+		log.Info().Applicationf("Settings file not found, creating default at %s", settingsFilePath)
 		defaultConfig := BotConfig{Guilds: []GuildConfig{}}
 		configData, err := json.MarshalIndent(defaultConfig, "", "  ")
 		if err != nil {
@@ -410,12 +402,12 @@ func EnsureSettingsFile() error {
 
 	// If it exists and is valid, do not modify it
 	if valid {
-		logutil.Debugf("Settings file exists and is valid at %s; no changes made", settingsFilePath)
+		log.Info().Applicationf("Settings file exists and is valid at %s; no changes made", settingsFilePath)
 		return nil
 	}
 
 	// If it exists but is invalid, replace with a default structure
-	logutil.Warnf("Settings file at %s exists but is invalid JSON structure; rewriting with default schema", settingsFilePath)
+	log.Warn().Applicationf("Settings file at %s exists but is invalid JSON structure; rewriting with default schema", settingsFilePath)
 	defaultConfig := BotConfig{Guilds: []GuildConfig{}}
 	configData, err := json.MarshalIndent(defaultConfig, "", "  ")
 	if err != nil {
@@ -527,17 +519,17 @@ func SaveSettingsFile(config *BotConfig) error {
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		logutil.Warn(LogNoConfiguredGuilds)
+		log.Warn().Applicationf(LogNoConfiguredGuilds)
 		return nil
 	}
-	logutil.Infof(LogFoundConfiguredGuilds, len(cfg.Guilds))
+	log.Info().Applicationf(LogFoundConfiguredGuilds, len(cfg.Guilds))
 	var errCount int
 	for _, g := range cfg.Guilds {
 		guild, err := session.Guild(g.GuildID)
 		if err == nil {
-			logutil.WithFields(map[string]any{"guildName": guild.Name, "guildID": guild.ID}).Info("🔎 Will monitor this guild")
+			log.Info().Applicationf("🔎 Will monitor this guild: %s (%s)", guild.Name, guild.ID)
 		} else {
-			logutil.WithField("guildID", g.GuildID).Warn(LogGuildNotAccessible)
+			log.Warn().Applicationf("%s: %s", LogGuildNotAccessible, g.GuildID)
 			errCount++
 		}
 	}

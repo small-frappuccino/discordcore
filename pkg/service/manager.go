@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/errors"
-	"github.com/alice-bnuy/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/errors"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // ServiceState represents the current state of a service
@@ -514,7 +514,7 @@ func (sm *ServiceManager) checkServiceHealth(info *ServiceInfo) {
 			go func() {
 				log.Info().Applicationf("service %s: Attempting to restart unhealthy service", info.Service.Name())
 				if err := sm.RestartService(info.Service.Name()); err != nil {
-				log.Error().Errorf("Failed to restart unhealthy service: service=%s error=%v", info.Service.Name(), err)
+					log.Error().Errorf("Failed to restart unhealthy service: service=%s error=%v", info.Service.Name(), err)
 				}
 			}()
 		} else {

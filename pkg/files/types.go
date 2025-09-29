@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/log"
-	"github.com/alice-bnuy/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // ## Config Types

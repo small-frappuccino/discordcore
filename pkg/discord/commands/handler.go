@@ -3,11 +3,11 @@ package commands
 import (
 	"fmt"
 
-	"github.com/alice-bnuy/discordcore/pkg/discord/commands/config"
-	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // CommandHandler é o handler principal que coordena todos os comandos do bot

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/alice-bnuy/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // Minimal replacement for the previously external errutil package.

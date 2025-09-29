@@ -3,9 +3,9 @@ package core
 import (
 	"fmt"
 
-	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // CommandRouter gerencia o roteamento e execução de comandos
@@ -227,13 +227,13 @@ func (cm *CommandManager) SetupCommands() error {
 	for _, rc := range registered {
 		if _, exists := codeByName[rc.Name]; !exists {
 			if err := cm.session.ApplicationCommandDelete(cm.session.State.User.ID, "", rc.ID); err != nil {
-				                cm.logger.Warn().Applicationf("Error removing orphan command: %s, error: %v", rc.Name, err)
-				                continue
-				            }
-				            cm.logger.Info().Applicationf("Orphan command removed: %s", rc.Name)
-				            deleted++
-				        }
-				    }
+				cm.logger.Warn().Applicationf("Error removing orphan command: %s, error: %v", rc.Name, err)
+				continue
+			}
+			cm.logger.Info().Applicationf("Orphan command removed: %s", rc.Name)
+			deleted++
+		}
+	}
 	// Log do resumo
 	cm.logger.Info().Applicationf("Command synchronization completed: created=%d, updated=%d, deleted=%d, unchanged=%d, total=%d, mode=incremental", created, updated, deleted, unchanged, len(codeCommands))
 

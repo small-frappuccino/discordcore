@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // OptionExtractor simplifica extração de opções de comandos Discord

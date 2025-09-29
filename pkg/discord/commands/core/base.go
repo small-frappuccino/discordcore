@@ -1,9 +1,9 @@
 package core
 
 import (
-	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // ContextBuilder cria contextos para execução de comandos

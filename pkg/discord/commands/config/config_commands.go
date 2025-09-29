@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // ConfigCommands wires the real config slash command group into the CommandRouter.

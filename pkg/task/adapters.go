@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/files"
-	"github.com/alice-bnuy/discordcore/pkg/log"
-	"github.com/alice-bnuy/discordcore/pkg/storage"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // Task type identifiers for notifications and avatar pipeline

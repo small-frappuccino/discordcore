@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alice-bnuy/discordcore/pkg/files"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // Este arquivo contém exemplos de como usar a infraestrutura core

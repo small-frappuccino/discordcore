@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/discord/commands/core"
-	"github.com/alice-bnuy/discordcore/pkg/service"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
 // AdminCommands provides administrative commands for service management

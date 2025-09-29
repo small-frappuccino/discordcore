@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alice-bnuy/discordcore/pkg/log"
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // ErrorCategory represents different types of errors in the system
