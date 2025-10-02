@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // --- Fluent Interface ---
@@ -120,8 +122,8 @@ func (el *ErrorLogger) Fatalf(format string, v ...interface{}) {
 // --- Initialization & Helpers ---
 
 func getDefaultLogDir() string {
-	if dir, err := os.UserConfigDir(); err == nil && dir != "" {
-		return filepath.Join(dir, "discordcore", "logs")
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".log", util.EffectiveBotName())
 	}
 	return filepath.Join(".", "logs")
 }

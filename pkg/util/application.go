@@ -6,11 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
+
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -38,7 +37,6 @@ func init() {
 func getCurrentGitBranch() string {
 	data, err := os.ReadFile(".git/HEAD")
 	if err != nil {
-		log.Error().Errorf("Failed to read git HEAD: %v", err)
 		return "unknown"
 	}
 	line := strings.TrimSpace(string(data))
@@ -81,36 +79,16 @@ func EffectiveBotName() string {
 	return n
 }
 
-// GetApplicationSupportPath returns the OS-specific path for application support files.
-// - macOS: ~/Library/Application Support/[BotName]
-// - Linux: ~/.local/lib/[BotName]
-// Preferences are stored here.
+// GetApplicationSupportPath (Linux-only) returns the base path for configuration files.
+// New layout: ~/.config/[BotName]
 func GetApplicationSupportPath(_ string) string {
-	switch runtime.GOOS {
-	case "darwin":
-		return filepath.Join(homeDir(), "Library", "Application Support", EffectiveBotName())
-	case "linux":
-		return filepath.Join(homeDir(), ".local", "lib", EffectiveBotName())
-	default:
-		// Fallback for other platforms (e.g., Windows), using a common convention.
-		return filepath.Join(homeDir(), "AppData", "Roaming", EffectiveBotName())
-	}
+	return filepath.Join(homeDir(), ".config", EffectiveBotName())
 }
 
-// GetApplicationCachesPath returns the OS-specific path for cache files.
-// - macOS: ~/Library/Cache/[BotName]
-// - Linux: ~/.local/lib/[BotName]
-// All caches are stored here.
+// GetApplicationCachesPath (Linux-only) returns the base path for cache data.
+// New layout: ~/.cache/[BotName]
 func GetApplicationCachesPath() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return filepath.Join(homeDir(), "Library", "Cache", EffectiveBotName())
-	case "linux":
-		return filepath.Join(homeDir(), ".local", "lib", EffectiveBotName())
-	default:
-		// Fallback for other platforms, using a common convention.
-		return filepath.Join(homeDir(), "AppData", "Local", EffectiveBotName())
-	}
+	return filepath.Join(homeDir(), ".cache", EffectiveBotName())
 }
 
 // Deprecated: MigrationCacheFilePath returns the path to the avatar cache JSON used only for migration.
@@ -126,24 +104,21 @@ func LegacyMigrationCacheFilePath() string {
 }
 
 // GetMessageDBPath returns the SQLite DB path for message persistence.
-// - macOS: ~/Library/Cache/[BotName]/messages/messages.db
-// - Linux: ~/.local/lib/[BotName]/messages/messages.db
+// New Linux layout: ~/.cache/[BotName]/messages/messages.db
 func GetMessageDBPath() string {
 	return filepath.Join(ApplicationCachesPath, "messages", "messages.db")
 }
 
-// GetSettingsFilePath returns the standardized path for settings.json.
-// - macOS: ~/Library/Application Support/[BotName]/preferences/settings.json
-// - Linux: ~/.local/lib/[BotName]/preferences/settings.json
+// GetSettingsFilePath returns the path for the primary settings JSON.
+// Layout (explicit): ~/.config/[BotName]/preferences/settings.json
 func GetSettingsFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
 }
 
-// GetLogFilePath returns the path to the log file.
-// - macOS: ~/Library/Application Support/[BotName]/logs/discordcore.log
-// - Linux: ~/.local/lib/[BotName]/logs/discordcore.log
+// GetLogFilePath returns the path to the main log file.
+// New Linux layout: ~/.log/[BotName]/discordcore.log
 func GetLogFilePath() string {
-	return filepath.Join(ApplicationSupportPath, "logs", "discordcore.log")
+	return filepath.Join(homeDir(), ".log", EffectiveBotName(), "discordcore.log")
 }
 
 // EnsureCacheDirs creates base cache directories as needed.
@@ -292,4 +267,24 @@ func sanitizeName(s string) string {
 		return "DiscordBot"
 	}
 	return out
+}
+
+// EnsureCacheInitialized creates the minimal cache structure if it is not present.
+// It is safe to call multiple times.
+func EnsureCacheInitialized() error {
+	dirs := []string{
+		filepath.Dir(GetMessageDBPath()),               // messages db directory
+		filepath.Join(ApplicationCachesPath, "avatar"), // avatar cache (even if now migrated to sqlite; kept for future artifacts)
+	}
+
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return fmt.Errorf("failed to create cache directory %s: %w", d, err)
+		}
+	}
+
+	// Best-effort marker file so we can detect initialization later (ignore errors).
+	_ = os.WriteFile(filepath.Join(ApplicationCachesPath, "avatar", ".keep"), []byte{}, 0o644)
+
+	return nil
 }
