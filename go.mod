@@ -1,6 +1,6 @@
 module github.com/small-frappuccino/discordcore
 
-go 1.25.0
+go 1.24.7
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
