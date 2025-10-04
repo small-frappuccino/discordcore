@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -373,9 +374,14 @@ func EnsureConfigFiles() error {
 // EnsureSettingsFile ensures the settings.json file exists and is properly initialized.
 // If the file already exists and has a valid structure, it will not be modified.
 func EnsureSettingsFile() error {
-	// Ensure base config directory exists (new layout: settings.json directly under ApplicationSupportPath)
+	// Ensure base config directory exists
 	if err := os.MkdirAll(util.ApplicationSupportPath, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	// Ensure preferences subdirectory (explicit layout: ~/.config/<BotName>/preferences/settings.json)
+	preferencesDir := filepath.Join(util.ApplicationSupportPath, "preferences")
+	if err := os.MkdirAll(preferencesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create preferences directory: %w", err)
 	}
 
 	// Determine settings file status

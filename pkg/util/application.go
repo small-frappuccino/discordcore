@@ -14,11 +14,14 @@ import (
 )
 
 var (
+	// ConfiguredAppName can be set by host before Discord auth; when non-empty, EffectiveBotName() uses it.
+	ConfiguredAppName string
+
 	// DiscordBotName is set at runtime via SetBotName using the Discord API username.
 	// It has no hardcoded default to avoid stale paths; when empty, EffectiveBotName() provides a fallback.
 	DiscordBotName string
 
-	// Paths are recalculated when SetBotName is called.
+	// Paths are recalculated when SetBotName or SetAppName is called.
 	ApplicationSupportPath string
 	ApplicationCachesPath  string
 
@@ -70,13 +73,32 @@ func SetBotName(name string) {
 
 }
 
-// EffectiveBotName returns the current bot name or a safe fallback if unset.
-func EffectiveBotName() string {
-	n := strings.TrimSpace(DiscordBotName)
-	if n == "" {
-		return "DiscordBot"
+// SetAppName sets a configured application name and recomputes base paths.
+// This allows host applications to control folder names before Discord auth.
+func SetAppName(name string) {
+	if strings.TrimSpace(name) == "" {
+		return
 	}
-	return n
+	ConfiguredAppName = sanitizeName(name)
+
+	// Recompute base paths to use configured name.
+	ApplicationSupportPath = GetApplicationSupportPath(CurrentGitBranch)
+	ApplicationCachesPath = GetApplicationCachesPath()
+}
+
+// EffectiveBotName returns the current application/bot name, preferring a configured
+// name when available, otherwise falling back to the Discord username, then a default.
+func EffectiveBotName() string {
+	// Prefer explicitly configured app name.
+	if n := strings.TrimSpace(ConfiguredAppName); n != "" {
+		return n
+	}
+	// Fallback to Discord-provided bot username.
+	if n := strings.TrimSpace(DiscordBotName); n != "" {
+		return n
+	}
+	// Final fallback.
+	return "alicebot"
 }
 
 // GetApplicationSupportPath (Linux-only) returns the base path for configuration files.

@@ -68,7 +68,7 @@ func main() {
 		}
 		log.Info().Discordf("✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
 
-		// Set bot name from Discord and recompute app support path
+		// Set Discord username as fallback bot name; effective name may be preconfigured (recompute app paths)
 		util.SetBotName(discordSession.State.User.Username)
 
 		// Ensure cache directories exist for new caches root
