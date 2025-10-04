@@ -9,6 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 // AdminCommands provides administrative commands for service management
@@ -230,7 +231,7 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "🔧 Registered Services",
-		Color:       0x5865F2,
+		Color:       theme.ServiceList(),
 		Description: fmt.Sprintf("Total services: %d", len(services)),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
@@ -434,7 +435,7 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 
 	embed := &discordgo.MessageEmbed{
 		Title: "ℹ️ System Information",
-		Color: 0x5865F2,
+		Color: theme.SystemInfo(),
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Bot Name",
@@ -462,13 +463,13 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 
 func (ac *AdminCommands) getStatusColor(state service.ServiceState, healthy bool) int {
 	if state == service.StateRunning && healthy {
-		return 0x00FF00 // Green
+		return theme.StatusOK()
 	} else if state == service.StateError {
-		return 0xFF0000 // Red
+		return theme.StatusError()
 	} else if state == service.StateRunning && !healthy {
-		return 0xFFA500 // Orange
+		return theme.StatusDegraded()
 	}
-	return 0x808080 // Gray
+	return theme.StatusDefault()
 }
 
 func (ac *AdminCommands) getHealthString(healthy bool) string {

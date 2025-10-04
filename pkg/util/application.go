@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 var (
@@ -84,6 +85,22 @@ func SetAppName(name string) {
 	// Recompute base paths to use configured name.
 	ApplicationSupportPath = GetApplicationSupportPath(CurrentGitBranch)
 	ApplicationCachesPath = GetApplicationCachesPath()
+}
+
+// SetTheme sets the active theme by name. Empty name resets to default.
+func SetTheme(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return theme.SetCurrent("")
+	}
+	return theme.SetCurrent(name)
+}
+
+// ConfigureThemeFromEnv loads theme from ALICE_BOT_THEME, if set.
+func ConfigureThemeFromEnv() error {
+	if v := os.Getenv("ALICE_BOT_THEME"); strings.TrimSpace(v) != "" {
+		return theme.SetCurrent(v)
+	}
+	return nil
 }
 
 // EffectiveBotName returns the current application/bot name, preferring a configured

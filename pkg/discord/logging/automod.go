@@ -8,6 +8,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 // AutomodService listens to messages and enforces a simple keyword-based moderation.
@@ -82,7 +83,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: desc,
-		Color:       0xFF5555,
+		Color:       theme.AutomodAction(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: "User", Value: "<@" + e.UserID + "> (``" + e.UserID + "``)", Inline: true},

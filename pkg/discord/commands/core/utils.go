@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 // OptionExtractor simplifica extração de opções de comandos Discord
@@ -410,7 +411,7 @@ func (EmbedBuilder) Success(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
-		Color:       0x00FF00, // Verde
+		Color:       theme.Success(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -420,7 +421,7 @@ func (EmbedBuilder) Error(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
-		Color:       0xFF0000, // Vermelho
+		Color:       theme.Error(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -430,7 +431,7 @@ func (EmbedBuilder) Info(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
-		Color:       0x0099FF, // Azul
+		Color:       theme.Info(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -440,7 +441,7 @@ func (EmbedBuilder) Warning(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
-		Color:       0xFFAA00, // Laranja
+		Color:       theme.Warning(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }

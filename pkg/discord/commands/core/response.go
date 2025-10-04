@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 // ResponseType define tipos de resposta padronizados
@@ -202,17 +203,17 @@ func (rm *ResponseManager) getColorForType(responseType ResponseType) int {
 
 	switch responseType {
 	case ResponseSuccess:
-		return 0x00FF00 // Verde
+		return theme.Success()
 	case ResponseError:
-		return 0xFF0000 // Vermelho
+		return theme.Error()
 	case ResponseWarning:
-		return 0xFFAA00 // Laranja
+		return theme.Warning()
 	case ResponseInfo:
-		return 0x0099FF // Azul
+		return theme.Info()
 	case ResponseLoading:
-		return 0xFFFF00 // Amarelo
+		return theme.Loading()
 	default:
-		return 0x808080 // Cinza
+		return theme.Muted()
 	}
 }
 

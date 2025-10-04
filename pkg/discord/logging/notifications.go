@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 const (
@@ -57,7 +58,7 @@ func (ns *NotificationSender) createAvatarChangeEmbeds(change files.AvatarChange
 	// First embed - Always keep the title "Avatar changed"
 	firstEmbed := &discordgo.MessageEmbed{
 		Title:       "Avatar changed",
-		Color:       0x5865F2, // Discord blue color
+		Color:       theme.AvatarChange(),
 		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", change.Username, change.UserID, change.UserID),
 	}
 
@@ -69,7 +70,7 @@ func (ns *NotificationSender) createAvatarChangeEmbeds(change files.AvatarChange
 	// Second embed - New avatar (always sent)
 	secondEmbed := &discordgo.MessageEmbed{
 		Title:     "...To",
-		Color:     0x5865F2, // Discord blue color
+		Color:     theme.AvatarChange(),
 		Timestamp: change.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
@@ -118,7 +119,7 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 	}
 	embed := &discordgo.MessageEmbed{
 		Title:       "Member joined",
-		Color:       0x4DF475, // Green (RGB 77,244,117)
+		Color:       theme.MemberJoin(),
 		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -138,7 +139,7 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Member left",
-		Color:       0xE52A36, // Red (RGB 229,42,54)
+		Color:       theme.MemberLeave(),
 		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
@@ -192,7 +193,7 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *task.CachedMessage, edited *discordgo.MessageUpdate) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "✏️ Message Edited",
-		Color:       0xFFA500, // Orange
+		Color:       theme.MessageEdit(),
 		Description: fmt.Sprintf("**%s** (<@%s>) edited a message in <#%s>", original.Author.Username, original.Author.ID, original.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -220,7 +221,7 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "🗑️ Message Deleted",
-		Color:       0xFF0000, // Red
+		Color:       theme.MessageDelete(),
 		Description: fmt.Sprintf("Message from **%s** (<@%s>) was deleted in <#%s>", deleted.Author.Username, deleted.Author.ID, deleted.ChannelID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -397,7 +398,7 @@ func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "ℹ️ Info",
 		Description: message,
-		Color:       0x0099ff, // Blue
+		Color:       theme.Info(),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -408,7 +409,7 @@ func (ns *NotificationSender) SendErrorMessage(channelID, message string) error 
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrErrorTitle,
 		Description: message,
-		Color:       0xff0000, // Red
+		Color:       theme.Error(),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -419,7 +420,7 @@ func (ns *NotificationSender) SendSuccessMessage(channelID, message string) erro
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrSuccessTitle,
 		Description: message,
-		Color:       0x00ff00, // Green
+		Color:       theme.Success(),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -436,7 +437,7 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: desc,
-		Color:       0xFF5555,
+		Color:       theme.AutomodAction(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields: []*discordgo.MessageEmbedField{
 			{
