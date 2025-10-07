@@ -29,6 +29,8 @@ func main() {
 	token, loadErr = util.LoadEnvWithLocalBinFallback("ALICE_BOT_DEVELOPMENT_TOKEN")
 	if loadErr != nil {
 		// Keep the original single-line Portuguese message for parity with previous behavior.
+		// Hard-set application name so all XDG directories resolve to ~/.config/alicebot and ~/.cache/alicebot
+		util.SetAppName("discordcore")
 		// Initialize global logger
 		if err := log.SetupLogger(); err != nil {
 			fmt.Printf("failed to configure logger: %v\n", err)
@@ -68,8 +70,7 @@ func main() {
 		}
 		log.Info().Discordf("✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
 
-		// Set Discord username as fallback bot name; effective name may be preconfigured (recompute app paths)
-		util.SetBotName(discordSession.State.User.Username)
+		// Directories are fixed to 'alicebot' via util.SetAppName at startup; do not override with Discord username
 
 		// Ensure cache directories exist for new caches root
 		if err := util.EnsureCacheDirs(); err != nil {
