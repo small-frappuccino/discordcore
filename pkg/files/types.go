@@ -24,6 +24,7 @@ type GuildConfig struct {
 	Rulesets                []Ruleset `json:"rulesets,omitempty"`
 	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Regras soltas, não associadas a nenhuma ruleset
 	Blocklist               []string  `json:"blocklist,omitempty"`
+	RolesCacheTTL           string    `json:"roles_cache_ttl,omitempty"` // Ex.: "5m", "1h" (padrão: "5m")
 }
 
 // BotConfig holds the configuration for the bot.
@@ -168,6 +169,50 @@ func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List
 }
 
 // ## GuildConfig Methods
+
+// RolesCacheTTLDuration retorna o TTL configurado para o cache de roles ou um padrão de 5m.
+func (gc *GuildConfig) RolesCacheTTLDuration() time.Duration {
+	const def = 5 * time.Minute
+	if gc == nil || gc.RolesCacheTTL == "" {
+		return def
+	}
+	d, err := time.ParseDuration(gc.RolesCacheTTL)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
+}
+
+// SetRolesCacheTTL define o TTL do cache de roles por guild (ex.: "5m", "1h") e persiste a configuração.
+func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
+	if guildID == "" {
+		return fmt.Errorf("guild not found")
+	}
+	// Validar formato (permite vazio para resetar ao padrão)
+	if ttl != "" {
+		if _, err := time.ParseDuration(ttl); err != nil {
+			return fmt.Errorf("invalid ttl: %w", err)
+		}
+	}
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	gcfg := mgr.GuildConfig(guildID)
+	if gcfg == nil {
+		return fmt.Errorf("guild not found")
+	}
+	gcfg.RolesCacheTTL = ttl
+	return mgr.SaveConfig()
+}
+
+// GetRolesCacheTTL obtém o TTL do cache de roles configurado (string original, ex.: "5m").
+func (mgr *ConfigManager) GetRolesCacheTTL(guildID string) string {
+	gcfg := mgr.GuildConfig(guildID)
+	if gcfg == nil {
+		return ""
+	}
+	return gcfg.RolesCacheTTL
+}
 
 // FindListByName searches for a list by its name in LooseLists.
 func (gc *GuildConfig) FindListByName(name string) *List {

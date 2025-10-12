@@ -118,20 +118,34 @@ func main() {
 					log.Info().Applicationf("⏱️ Detected downtime > 30m; performing silent avatar refresh before enabling notifications")
 					if cfg := configManager.Config(); cfg != nil {
 						for _, gcfg := range cfg.Guilds {
-							members, err := discordSession.GuildMembers(gcfg.GuildID, "", 1000)
-							if err != nil {
-								log.Error().Errorf("Failed to list members for silent refresh for guild %s: %v", gcfg.GuildID, err)
-								continue
-							}
-							for _, member := range members {
-								if member == nil || member.User == nil {
-									continue
+							after := ""
+							for {
+								members, err := discordSession.GuildMembers(gcfg.GuildID, after, 1000)
+								if err != nil {
+									log.Error().Errorf("Failed to list members for silent refresh for guild %s: %v", gcfg.GuildID, err)
+									break
 								}
-								avatarHash := member.User.Avatar
-								if avatarHash == "" {
-									avatarHash = "default"
+								if len(members) == 0 {
+									break
 								}
-								_, _, _ = store.UpsertAvatar(gcfg.GuildID, member.User.ID, avatarHash, time.Now())
+								for _, member := range members {
+									if member == nil || member.User == nil {
+										continue
+									}
+									avatarHash := member.User.Avatar
+									if avatarHash == "" {
+										avatarHash = "default"
+									}
+									_, _, _ = store.UpsertAvatar(gcfg.GuildID, member.User.ID, avatarHash, time.Now())
+								}
+								last := members[len(members)-1]
+								if last == nil || last.User == nil {
+									break
+								}
+								after = last.User.ID
+								if len(members) < 1000 {
+									break
+								}
 							}
 						}
 					}
@@ -212,6 +226,12 @@ func main() {
 			log.Error().Errorf("Error configuring slash commands: %v", err)
 			log.Error().Errorf("❌ Error configuring slash commands")
 			os.Exit(1)
+		}
+		// Reuse main store instance for PermissionChecker to avoid opening another connection
+		if cm := commandHandler.GetCommandManager(); cm != nil {
+			if router := cm.GetRouter(); router != nil {
+				router.SetStore(store)
+			}
 		}
 
 		// Register admin commands

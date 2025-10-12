@@ -53,8 +53,15 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 
 // isGuildOwner verifica se o usuário é o dono do servidor
 func (cb *ContextBuilder) isGuildOwner(guildID, userID string) bool {
+	// Preferir cache do state para evitar chamada REST quando possível
+	if cb.session != nil && cb.session.State != nil {
+		if g, _ := cb.session.State.Guild(guildID); g != nil {
+			return g.OwnerID == userID
+		}
+	}
+	// Fallback para REST apenas se necessário
 	guild, err := cb.session.Guild(guildID)
-	if err != nil {
+	if err != nil || guild == nil {
 		return false
 	}
 	return guild.OwnerID == userID

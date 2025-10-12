@@ -105,21 +105,26 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	}
 	log.Info().Applicationf("MessageCreate received: channelID=%s, userID=%s, messageID=%s", m.ChannelID, m.Author.ID, m.ID)
 
-	// Verificar se é uma mensagem de guild
-	channel, err := s.Channel(m.ChannelID)
-	if err != nil {
-		log.Info().Applicationf("MessageCreate: failed to fetch channel; skipping cache: channelID=%s, error=%v", m.ChannelID, err)
-		return
+	// Verificar se é uma mensagem de guild sem buscar o canal quando possível
+	guildID := m.GuildID
+	if guildID == "" {
+		// Fallback: obter via canal apenas se necessário (provável DM)
+		channel, err := s.Channel(m.ChannelID)
+		if err != nil {
+			log.Info().Applicationf("MessageCreate: failed to fetch channel; skipping cache: channelID=%s, error=%v", m.ChannelID, err)
+			return
+		}
+		guildID = channel.GuildID
 	}
-	if channel.GuildID == "" {
+	if guildID == "" {
 		log.Info().Applicationf("MessageCreate: DM detected; skipping cache: channelID=%s", m.ChannelID)
 		return
 	}
 
 	// Verificar se o guild está configurado
-	guildConfig := mes.configManager.GuildConfig(channel.GuildID)
+	guildConfig := mes.configManager.GuildConfig(guildID)
 	if guildConfig == nil {
-		log.Info().Applicationf("MessageCreate: no guild config; skipping cache: guildID=%s", channel.GuildID)
+		log.Info().Applicationf("MessageCreate: no guild config; skipping cache: guildID=%s", guildID)
 		return
 	}
 
@@ -128,7 +133,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	// Persistir em SQLite (write-through; melhor esforço)
 	if mes.store != nil && m.Author != nil {
 		_ = mes.store.UpsertMessage(storage.MessageRecord{
-			GuildID:        channel.GuildID,
+			GuildID:        guildID,
 			MessageID:      m.ID,
 			ChannelID:      m.ChannelID,
 			AuthorID:       m.Author.ID,
@@ -141,7 +146,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		})
 	}
 
-	log.Info().Applicationf("Message cached for monitoring: guildID=%s, channelID=%s, messageID=%s, userID=%s", channel.GuildID, m.ChannelID, m.ID, m.Author.ID)
+	log.Info().Applicationf("Message cached for monitoring: guildID=%s, channelID=%s, messageID=%s, userID=%s", guildID, m.ChannelID, m.ID, m.Author.ID)
 }
 
 // handleMessageUpdate processa edições de mensagens

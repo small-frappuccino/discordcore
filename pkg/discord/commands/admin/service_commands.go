@@ -35,6 +35,8 @@ func (ac *AdminCommands) RegisterCommands(router *core.CommandRouter) {
 	)
 
 	// Service management subcommands
+	adminCmd.AddSubCommand(ac.createMetricsCommand())
+	adminCmd.AddSubCommand(ac.createMetricsWatchCommand())
 	adminCmd.AddSubCommand(ac.createServiceStatusCommand())
 	adminCmd.AddSubCommand(ac.createServiceListCommand())
 	adminCmd.AddSubCommand(ac.createServiceRestartCommand())
@@ -76,6 +78,196 @@ func (ac *AdminCommands) createSystemInfoCommand() core.SubCommand {
 	return &SystemInfoCommand{
 		adminCommands: ac,
 	}
+}
+
+// createMetricsCommand creates the metrics subcommand
+func (ac *AdminCommands) createMetricsCommand() core.SubCommand {
+	return &MetricsCommand{
+		adminCommands: ac,
+	}
+}
+
+// createMetricsWatchCommand creates the metrics watch subcommand
+func (ac *AdminCommands) createMetricsWatchCommand() core.SubCommand {
+	return &MetricsWatchCommand{
+		adminCommands: ac,
+	}
+}
+
+// MetricsCommand shows aggregate API/cache metrics for core services
+type MetricsCommand struct {
+	adminCommands *AdminCommands
+}
+
+func (cmd *MetricsCommand) Name() string {
+	return "metrics"
+}
+
+func (cmd *MetricsCommand) Description() string {
+	return "Show API/cache metrics for core services"
+}
+
+func (cmd *MetricsCommand) Options() []*discordgo.ApplicationCommandOption {
+	return nil
+}
+
+func (cmd *MetricsCommand) RequiresGuild() bool {
+	return true
+}
+
+func (cmd *MetricsCommand) RequiresPermissions() bool {
+	return true
+}
+
+func (cmd *MetricsCommand) Handle(ctx *core.Context) error {
+	summary := cmd.formatMetrics(ctx)
+	if strings.TrimSpace(summary) == "" {
+		summary = "No metrics available"
+	}
+
+	builder := core.NewResponseBuilder(ctx.Session).
+		WithEmbed().
+		WithTitle("📊 Metrics").
+		WithColor(theme.Info()).
+		WithTimestamp()
+
+	return builder.Info(ctx.Interaction, summary)
+}
+
+func (cmd *MetricsCommand) formatMetrics(ctx *core.Context) string {
+	var lines []string
+
+	services := []string{"monitoring", "automod"}
+	for _, name := range services {
+		info, err := cmd.adminCommands.serviceManager.GetServiceInfo(name)
+		if err != nil || info == nil || info.Service == nil {
+			continue
+		}
+		stats := info.Service.Stats()
+		var ms []string
+		if len(stats.CustomMetrics) > 0 {
+			for k, v := range stats.CustomMetrics {
+				ms = append(ms, fmt.Sprintf("• %s: %v", k, v))
+			}
+		} else {
+			ms = append(ms, "• No custom metrics available")
+		}
+
+		// Extra: exibir TTL do cache de roles configurado para o guild no bloco do monitoring
+		if name == "monitoring" && ctx != nil && ctx.GuildConfig != nil {
+			ttl := strings.TrimSpace(ctx.GuildConfig.RolesCacheTTL)
+			if ttl == "" {
+				ttl = "default (5m)"
+			}
+			ms = append(ms, fmt.Sprintf("• roles_cache_ttl: %s", ttl))
+		}
+
+		lines = append(lines,
+			fmt.Sprintf("**Service:** %s", name),
+			strings.Join(ms, "\n"),
+			"",
+		)
+	}
+
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// MetricsWatchCommand streams metrics updates to the current channel for a period
+type MetricsWatchCommand struct {
+	adminCommands *AdminCommands
+}
+
+func (cmd *MetricsWatchCommand) Name() string {
+	return "metrics_watch"
+}
+
+func (cmd *MetricsWatchCommand) Description() string {
+	return "Continuously update API/cache metrics in this channel for a period"
+}
+
+func (cmd *MetricsWatchCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        "interval_seconds",
+			Description: "Refresh interval in seconds (default: 30)",
+			Required:    false,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        "duration_seconds",
+			Description: "Total duration to update in seconds (default: 300)",
+			Required:    false,
+		},
+	}
+}
+
+func (cmd *MetricsWatchCommand) RequiresGuild() bool {
+	return true
+}
+
+func (cmd *MetricsWatchCommand) RequiresPermissions() bool {
+	return true
+}
+
+func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	intervalSec := extractor.Int("interval_seconds")
+	if intervalSec <= 0 {
+		intervalSec = 30
+	}
+	durationSec := extractor.Int("duration_seconds")
+	if durationSec <= 0 {
+		durationSec = 300
+	}
+
+	// Acknowledge start
+	if err := core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Starting metrics watch: interval=%ds, duration=%ds", intervalSec, durationSec)); err != nil {
+		return err
+	}
+
+	// Prepare first payload
+	channelID := ctx.Interaction.ChannelID
+	mc := &MetricsCommand{adminCommands: cmd.adminCommands}
+	format := func() string { return mc.formatMetrics(ctx) }
+	send := func() (*discordgo.Message, error) {
+		embed := &discordgo.MessageEmbed{
+			Title:       "📊 Metrics (live)",
+			Description: format(),
+			Color:       theme.Info(),
+			Timestamp:   time.Now().Format(time.RFC3339),
+		}
+		return ctx.Session.ChannelMessageSendEmbed(channelID, embed)
+	}
+
+	// Send initial message
+	msg, err := send()
+	if err != nil || msg == nil {
+		return nil
+	}
+
+	// Periodically update
+	go func(chID, msgID string, interval, total time.Duration) {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		timeout := time.After(total)
+		for {
+			select {
+			case <-ticker.C:
+				embed := &discordgo.MessageEmbed{
+					Title:       "📊 Metrics (live)",
+					Description: format(),
+					Color:       theme.Info(),
+					Timestamp:   time.Now().Format(time.RFC3339),
+				}
+				_, _ = ctx.Session.ChannelMessageEditEmbed(chID, msgID, embed)
+			case <-timeout:
+				return
+			}
+		}
+	}(channelID, msg.ID, time.Duration(intervalSec)*time.Second, time.Duration(durationSec)*time.Second)
+
+	return nil
 }
 
 // ServiceStatusCommand shows detailed status of a specific service

@@ -3,7 +3,9 @@ package logging
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -56,6 +58,24 @@ type MonitoringService struct {
 	// Heartbeat runtime tracking
 	heartbeatTicker *time.Ticker
 	heartbeatStop   chan struct{}
+
+	// In-memory roles cache with TTL to reduce REST/DB lookups
+	rolesCache   map[string]cachedRoles
+	rolesCacheMu sync.RWMutex
+	rolesTTL     time.Duration
+
+	// Metrics counters
+	apiAuditLogCalls     uint64
+	apiGuildMemberCalls  uint64
+	apiMessagesSent      uint64
+	cacheStateMemberHits uint64
+	cacheRolesMemoryHits uint64
+	cacheRolesStoreHits  uint64
+}
+
+type cachedRoles struct {
+	roles     []string
+	expiresAt time.Time
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
@@ -84,6 +104,8 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		router:              router,
 		stopChan:            make(chan struct{}),
 		recentChanges:       make(map[string]time.Time),
+		rolesCache:          make(map[string]cachedRoles),
+		rolesTTL:            5 * time.Minute,
 	}
 	// Wire task adapters into sub-services
 	ms.memberEventService.SetAdapters(adapters)
@@ -185,23 +207,41 @@ func (ms *MonitoringService) initializeCache() {
 
 // initializeGuildCache inicializa os avatares atuais dos membros em um guild específico.
 func (ms *MonitoringService) initializeGuildCache(guildID string) {
+	if ms.store == nil {
+		log.Warn().Applicationf("Store is nil; skipping cache initialization for guild: %s", guildID)
+		return
+	}
 	guild, err := ms.session.Guild(guildID)
 	if err != nil {
 		log.Error().Errorf("Error getting guild %s: %v", guildID, err)
 		return
 	}
 	log.Info().Applicationf("Initializing cache for guild: %s (ID: %s)", guild.Name, guild.ID)
+	_ = ms.store.SetGuildOwnerID(guildID, guild.OwnerID)
 
 	// Set bot join time if missing
 	if _, ok, _ := ms.store.GetBotSince(guildID); !ok {
 		botID := ms.session.State.User.ID
-		if botMember, err := ms.session.GuildMember(guildID, botID); err == nil && !botMember.JoinedAt.IsZero() {
+		var botMember *discordgo.Member
+		// Preferir cache do state para evitar chamada REST
+		if ms.session != nil && ms.session.State != nil {
+			if m, _ := ms.session.State.Member(guildID, botID); m != nil {
+				botMember = m
+			}
+		}
+		// Fallback para REST somente se necessário
+		if botMember == nil {
+			if m, err := ms.session.GuildMember(guildID, botID); err == nil {
+				botMember = m
+			}
+		}
+		if botMember != nil && !botMember.JoinedAt.IsZero() {
 			_ = ms.store.SetBotSince(guildID, botMember.JoinedAt)
 		} else {
 			_ = ms.store.SetBotSince(guildID, time.Now())
 		}
 	}
-	members, err := ms.session.GuildMembers(guildID, "", 1000)
+	members, err := ms.fetchAllGuildMembers(guildID)
 	if err != nil {
 		log.Error().Errorf("Error getting members for guild %s: %v", guildID, err)
 		return
@@ -212,6 +252,18 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 			avatarHash = "default"
 		}
 		_, _, _ = ms.store.UpsertAvatar(guildID, member.User.ID, avatarHash, time.Now())
+		// Persist roles snapshot for the member to enable efficient role diffing later
+		if ms.store != nil && len(member.Roles) > 0 {
+			_ = ms.store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now())
+			ms.cacheRolesSet(guildID, member.User.ID, member.Roles)
+		}
+
+		// Backfill missing member join date using Discord data
+		if ms.store != nil && !member.JoinedAt.IsZero() {
+			if _, ok, _ := ms.store.GetMemberJoin(guildID, member.User.ID); !ok {
+				_ = ms.store.UpsertMemberJoin(guildID, member.User.ID, member.JoinedAt)
+			}
+		}
 	}
 }
 
@@ -221,6 +273,7 @@ func (ms *MonitoringService) setupEventHandlers() {
 	ms.session.AddHandler(ms.handleMemberUpdate)
 	ms.session.AddHandler(ms.handleUserUpdate)
 	ms.session.AddHandler(ms.handleGuildCreate)
+	ms.session.AddHandler(ms.handleGuildUpdate)
 }
 
 // ensureGuildsListed adiciona entradas mínimas de guild no discordcore.json
@@ -272,6 +325,19 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	}
 }
 
+// handleGuildUpdate atualiza o cache do OwnerID quando houver mudança de propriedade do servidor.
+func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordgo.GuildUpdate) {
+	if e == nil || e.Guild == nil || e.Guild.ID == "" {
+		return
+	}
+	if ms.store != nil {
+		if prev, ok, _ := ms.store.GetGuildOwnerID(e.Guild.ID); ok && prev != e.Guild.OwnerID {
+			log.Info().Applicationf("Guild owner changed: guildID=%s, from=%s, to=%s", e.Guild.ID, prev, e.Guild.OwnerID)
+		}
+		_ = ms.store.SetGuildOwnerID(e.Guild.ID, e.Guild.OwnerID)
+	}
+}
+
 // handlePresenceUpdate processa updates de presença (inclui avatar).
 func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *discordgo.PresenceUpdate) {
 	if m.User == nil {
@@ -294,10 +360,271 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	if m.User == nil {
 		return
 	}
-	if ms.configManager.GuildConfig(m.GuildID) == nil {
+	gcfg := ms.configManager.GuildConfig(m.GuildID)
+	if gcfg == nil {
 		return
 	}
+
+	// Avatar change logging (já existente)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
+
+	// Role update logging (via Audit Log)
+	channelID := gcfg.UserLogChannelID
+	if channelID == "" {
+		channelID = gcfg.CommandChannelID
+	}
+	if channelID == "" {
+		return
+	}
+
+	// Buscar audit log de atualização de cargos usando constante e com retentativa curta
+	actionType := int(discordgo.AuditLogActionMemberRoleUpdate)
+
+	tryFetchAndNotify := func() (sent bool) {
+		audit, err := ms.session.GuildAuditLog(m.GuildID, "", "", actionType, 10)
+		atomic.AddUint64(&ms.apiAuditLogCalls, 1)
+		if err != nil || audit == nil {
+			log.Warn().Applicationf("Failed to fetch audit logs for role update: guildID=%s, userID=%s, error=%v", m.GuildID, m.User.ID, err)
+			return false
+		}
+
+		for _, entry := range audit.AuditLogEntries {
+			if entry == nil || entry.ActionType == nil || *entry.ActionType != discordgo.AuditLogActionMemberRoleUpdate || entry.TargetID != m.User.ID {
+				continue
+			}
+			actorID := entry.UserID
+
+			// Verificação de recência da entry (via snowflake ID -> timestamp)
+			recentThreshold := 2 * time.Minute
+			if entry.ID != "" {
+				if sid, err := strconv.ParseUint(entry.ID, 10, 64); err == nil {
+					const discordEpoch = int64(1420070400000) // 2015-01-01 UTC em ms
+					tsMillis := int64(sid>>22) + discordEpoch
+					entryTime := time.Unix(0, tsMillis*int64(time.Millisecond))
+					if time.Since(entryTime) > recentThreshold {
+						continue
+					}
+				}
+			}
+
+			type rolePartial struct {
+				ID   string
+				Name string
+			}
+			extractRoles := func(v interface{}) []rolePartial {
+				arr, ok := v.([]interface{})
+				if !ok {
+					return nil
+				}
+				out := make([]rolePartial, 0, len(arr))
+				for _, it := range arr {
+					if obj, ok := it.(map[string]interface{}); ok {
+						r := rolePartial{}
+						if vv, ok := obj["id"].(string); ok {
+							r.ID = vv
+						}
+						if vv, ok := obj["name"].(string); ok {
+							r.Name = vv
+						}
+						if r.ID != "" || r.Name != "" {
+							out = append(out, r)
+						}
+					}
+				}
+				return out
+			}
+
+			added := []rolePartial{}
+			removed := []rolePartial{}
+
+			for _, ch := range entry.Changes {
+				if ch == nil || ch.Key == nil {
+					continue
+				}
+				switch *ch.Key {
+				case discordgo.AuditLogChangeKeyRoleAdd:
+					// considerar NewValue e OldValue por robustez
+					added = append(added, extractRoles(ch.NewValue)...)
+					added = append(added, extractRoles(ch.OldValue)...)
+				case discordgo.AuditLogChangeKeyRoleRemove:
+					removed = append(removed, extractRoles(ch.NewValue)...)
+					removed = append(removed, extractRoles(ch.OldValue)...)
+				}
+			}
+
+			if len(added) == 0 && len(removed) == 0 {
+				// Sem mudanças relevantes detectadas nessa entrada; continuar varrendo
+				continue
+			}
+
+			buildList := func(list []rolePartial) string {
+				if len(list) == 0 {
+					return "None"
+				}
+				out := ""
+				for i, r := range list {
+					display := ""
+					if r.ID != "" {
+						display = "<@&" + r.ID + ">"
+					}
+					if display == "" && r.Name != "" {
+						display = "`" + r.Name + "`"
+					}
+					if display == "" && r.ID != "" {
+						display = "`" + r.ID + "`"
+					}
+					if i > 0 {
+						out += ", "
+					}
+					out += display
+				}
+				return out
+			}
+
+			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>)", actorID, m.User.Username, m.User.ID)
+			embed := &discordgo.MessageEmbed{
+				Title:       "Roles updated",
+				Color:       0x3498db,
+				Description: desc,
+				Fields: []*discordgo.MessageEmbedField{
+					{
+						Name:   "Added",
+						Value:  buildList(added),
+						Inline: true,
+					},
+					{
+						Name:   "Removed",
+						Value:  buildList(removed),
+						Inline: true,
+					},
+				},
+				Timestamp: time.Now().Format(time.RFC3339),
+			}
+
+			atomic.AddUint64(&ms.apiMessagesSent, 1)
+			atomic.AddUint64(&ms.apiMessagesSent, 1)
+			if _, sendErr := ms.session.ChannelMessageSendEmbed(channelID, embed); sendErr != nil {
+				log.Error().Errorf("Failed to send role update notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, channelID, sendErr)
+			} else {
+				log.Info().Applicationf("Role update notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, channelID)
+				// Update cached roles snapshot for this member after processing update
+				if ms.store != nil {
+					atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
+					if member, err := ms.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil && len(member.Roles) > 0 {
+						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, member.Roles, time.Now())
+						ms.cacheRolesSet(m.GuildID, m.User.ID, member.Roles)
+					}
+				}
+			}
+
+			// Consider only the latest relevant entry
+			return true
+		}
+		return false
+	}
+
+	// Primeira tentativa
+	if tryFetchAndNotify() {
+		return
+	}
+	// Retentativa curta
+	time.Sleep(300 * time.Millisecond)
+	if tryFetchAndNotify() {
+		return
+	}
+	// Fallback por diff de roles quando audit log não produziu resultado
+	if ms.store != nil {
+		curRoles := m.Roles
+		if len(curRoles) == 0 {
+			if member, err := ms.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
+				curRoles = member.Roles
+			}
+		}
+		if len(curRoles) > 0 {
+			var addedIDs, removedIDs []string
+			var diffErr error
+			if prev, ok := ms.cacheRolesGet(m.GuildID, m.User.ID); ok {
+				atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
+				curSet := make(map[string]struct{}, len(curRoles))
+				for _, r := range curRoles {
+					if r != "" {
+						curSet[r] = struct{}{}
+					}
+				}
+				prevSet := make(map[string]struct{}, len(prev))
+				for _, r := range prev {
+					if r != "" {
+						prevSet[r] = struct{}{}
+					}
+				}
+				for r := range curSet {
+					if _, ok := prevSet[r]; !ok {
+						addedIDs = append(addedIDs, r)
+					}
+				}
+				for r := range prevSet {
+					if _, ok := curSet[r]; !ok {
+						removedIDs = append(removedIDs, r)
+					}
+				}
+			} else if ms.store != nil {
+				addedIDs, removedIDs, diffErr = ms.store.DiffMemberRoles(m.GuildID, m.User.ID, curRoles)
+				atomic.AddUint64(&ms.cacheRolesStoreHits, 1)
+			}
+			if len(addedIDs) > 0 || len(removedIDs) > 0 {
+				buildListIDs := func(list []string) string {
+					if len(list) == 0 {
+						return "None"
+					}
+					out := ""
+					for i, id := range list {
+						display := ""
+						if id != "" {
+							display = "<@&" + id + ">"
+						}
+						if i > 0 {
+							out += ", "
+						}
+						out += display
+					}
+					return out
+				}
+				desc := fmt.Sprintf("Role changes detected for **%s** (<@%s>)", m.User.Username, m.User.ID)
+				embed := &discordgo.MessageEmbed{
+					Title:       "Roles updated (fallback)",
+					Color:       0x3498db,
+					Description: desc,
+					Fields: []*discordgo.MessageEmbedField{
+						{
+							Name:   "Added",
+							Value:  buildListIDs(addedIDs),
+							Inline: true,
+						},
+						{
+							Name:   "Removed",
+							Value:  buildListIDs(removedIDs),
+							Inline: true,
+						},
+					},
+					Timestamp: time.Now().Format(time.RFC3339),
+				}
+				if _, sendErr := ms.session.ChannelMessageSendEmbed(channelID, embed); sendErr != nil {
+					log.Error().Errorf("Failed to send fallback role update notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, channelID, sendErr)
+				} else {
+					log.Info().Applicationf("Fallback role update notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, channelID)
+					// Atualiza snapshot de roles após o envio
+					if ms.store != nil {
+						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
+					}
+					// update in-memory cache
+
+					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+				}
+			} else if diffErr != nil {
+				log.Warn().Applicationf("Role diff fallback failed: guildID=%s, userID=%s, error=%v", m.GuildID, m.User.ID, diffErr)
+			}
+		}
+	}
 }
 
 // handleUserUpdate processa updates de usuário em todos os guilds configurados.
@@ -307,8 +634,22 @@ func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo
 		return
 	}
 	for _, gcfg := range cfg.Guilds {
-		member, err := s.GuildMember(gcfg.GuildID, m.User.ID)
-		if err != nil || member == nil || member.User == nil {
+		var member *discordgo.Member
+		// Tente obter do state cache primeiro
+		if s != nil && s.State != nil {
+			if m2, _ := s.State.Member(gcfg.GuildID, m.User.ID); m2 != nil {
+				member = m2
+				atomic.AddUint64(&ms.cacheStateMemberHits, 1)
+			}
+		}
+		// Fallback para REST apenas se necessário
+		if member == nil {
+			atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
+			if m2, err := s.GuildMember(gcfg.GuildID, m.User.ID); err == nil {
+				member = m2
+			}
+		}
+		if member == nil || member.User == nil {
 			continue
 		}
 		ms.checkAvatarChange(gcfg.GuildID, member.User.ID, member.User.Avatar, member.User.Username)
@@ -386,16 +727,29 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 }
 
 func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string {
+	// Prefer session state cache to avoid REST calls
+	if aw.session != nil && aw.session.State != nil {
+		if m, _ := aw.session.State.Member(guildID, userID); m != nil {
+			if m.Nick != "" {
+				return m.Nick
+			}
+			if m.User != nil && m.User.Username != "" {
+				return m.User.Username
+			}
+		}
+	}
+
+	// Fallback: REST fetch
 	member, err := aw.session.GuildMember(guildID, userID)
-	if err != nil {
+	if err != nil || member == nil {
 		log.Info().Applicationf("Error getting member for username for user %s in guild %s: %v - using ID", userID, guildID, err)
 		return userID
 	}
-	if member.User != nil && member.User.Username != "" {
-		return member.User.Username
-	}
 	if member.Nick != "" {
 		return member.Nick
+	}
+	if member.User != nil && member.User.Username != "" {
+		return member.User.Username
 	}
 	return userID
 }
@@ -439,6 +793,65 @@ func (ms *MonitoringService) stopHeartbeat() {
 	}
 }
 
+func (ms *MonitoringService) cacheRolesSet(guildID, userID string, roles []string) {
+	if len(roles) == 0 {
+		return
+	}
+	// TTL: prefer guild-configured value, fallback to service default (5m)
+	ttl := ms.rolesTTL
+	if ms.configManager != nil {
+		if gcfg := ms.configManager.GuildConfig(guildID); gcfg != nil {
+			if d := gcfg.RolesCacheTTLDuration(); d > 0 {
+				ttl = d
+			}
+		}
+	}
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	key := guildID + ":" + userID
+	ms.rolesCacheMu.Lock()
+	ms.rolesCache[key] = cachedRoles{
+		roles:     append([]string(nil), roles...),
+		expiresAt: time.Now().Add(ttl),
+	}
+	ms.rolesCacheMu.Unlock()
+}
+
+func (ms *MonitoringService) cacheRolesGet(guildID, userID string) ([]string, bool) {
+	key := guildID + ":" + userID
+	ms.rolesCacheMu.RLock()
+	entry, ok := ms.rolesCache[key]
+	ms.rolesCacheMu.RUnlock()
+	if !ok || time.Now().After(entry.expiresAt) {
+		if ok {
+			ms.rolesCacheMu.Lock()
+			delete(ms.rolesCache, key)
+			ms.rolesCacheMu.Unlock()
+		}
+		return nil, false
+	}
+	out := append([]string(nil), entry.roles...)
+	return out, true
+}
+
+func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
+	ms.rolesCacheMu.RLock()
+	size := len(ms.rolesCache)
+	ms.rolesCacheMu.RUnlock()
+	ttl := ms.rolesTTL
+	return map[string]interface{}{
+		"isRunning":            ms.isRunning,
+		"rolesCacheSize":       size,
+		"rolesCacheTTLSeconds": int(ttl.Seconds()),
+		"apiAuditLogCalls":     atomic.LoadUint64(&ms.apiAuditLogCalls),
+		"apiGuildMemberCalls":  atomic.LoadUint64(&ms.apiGuildMemberCalls),
+		"apiMessagesSent":      atomic.LoadUint64(&ms.apiMessagesSent),
+		"cacheStateMemberHits": atomic.LoadUint64(&ms.cacheStateMemberHits),
+		"cacheRolesMemoryHits": atomic.LoadUint64(&ms.cacheRolesMemoryHits),
+		"cacheRolesStoreHits":  atomic.LoadUint64(&ms.cacheRolesStoreHits),
+	}
+}
 func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 	if ms.store == nil {
 		return
@@ -471,6 +884,29 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 	log.Info().Applicationf("No significant downtime detected; skipping heavy avatar refresh")
 }
 
+// fetchAllGuildMembers paginates through all guild members in batches up to 1000 until exhaustion.
+func (ms *MonitoringService) fetchAllGuildMembers(guildID string) ([]*discordgo.Member, error) {
+	var all []*discordgo.Member
+	after := ""
+	for {
+		members, err := ms.session.GuildMembers(guildID, after, 1000)
+		if err != nil {
+			log.Error().Errorf("Failed to paginate guild members: guildID=%s, after=%s, fetched_so_far=%d, error=%v", guildID, after, len(all), err)
+			return all, err
+		}
+		if len(members) == 0 {
+			break
+		}
+		all = append(all, members...)
+		if len(members) < 1000 {
+			break
+		}
+		after = members[len(members)-1].User.ID
+	}
+	log.Info().Applicationf("Pagination completed successfully: guildID=%s, total_members_fetched=%d", guildID, len(all))
+	return all, nil
+}
+
 func (ms *MonitoringService) performPeriodicCheck() {
 	log.Info().Applicationf("Running periodic avatar check...")
 	cfg := ms.configManager.Config()
@@ -479,12 +915,19 @@ func (ms *MonitoringService) performPeriodicCheck() {
 		return
 	}
 	for _, gcfg := range cfg.Guilds {
-		members, err := ms.session.GuildMembers(gcfg.GuildID, "", 1000)
+		members, err := ms.fetchAllGuildMembers(gcfg.GuildID)
 		if err != nil {
 			log.Error().Errorf("Error getting members for guild %s: %v", gcfg.GuildID, err)
 			continue
 		}
 		for _, member := range members {
+			// Backfill missing member join date using Discord data
+			if ms.store != nil && !member.JoinedAt.IsZero() {
+				if _, ok, _ := ms.store.GetMemberJoin(gcfg.GuildID, member.User.ID); !ok {
+					_ = ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt)
+				}
+			}
+
 			avatarHash := member.User.Avatar
 			if avatarHash == "" {
 				continue

@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // CommandRouter gerencia o roteamento e execução de comandos
@@ -395,4 +396,11 @@ func (cr *CommandRouter) GetResponder() *Responder {
 // GetPermissionChecker returns the permission checker
 func (cr *CommandRouter) GetPermissionChecker() *PermissionChecker {
 	return cr.permChecker
+}
+
+// SetStore sets the shared store for the permission checker to enable local OwnerID cache usage.
+func (cr *CommandRouter) SetStore(store *storage.Store) {
+	if cr.permChecker != nil {
+		cr.permChecker.SetStore(store)
+	}
 }

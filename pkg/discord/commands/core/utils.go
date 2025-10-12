@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -130,6 +131,7 @@ func (cp *ConfigPersister) SaveWithBackup(config *files.GuildConfig) error {
 type PermissionChecker struct {
 	session *discordgo.Session
 	config  *files.ConfigManager
+	store   *storage.Store
 }
 
 // NewPermissionChecker cria um novo verificador de permissões
@@ -137,15 +139,42 @@ func NewPermissionChecker(session *discordgo.Session, config *files.ConfigManage
 	return &PermissionChecker{session: session, config: config}
 }
 
+func (pc *PermissionChecker) SetStore(store *storage.Store) {
+	pc.store = store
+}
+
 // HasPermission verifica se o usuário tem permissão para usar comandos
 func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
-	guildConfig := pc.config.GuildConfig(guildID)
-
-	guild, err := pc.session.Guild(guildID)
-	if err != nil {
+	if guildID == "" {
 		return false
 	}
-	isOwner := guild.OwnerID == userID
+	guildConfig := pc.config.GuildConfig(guildID)
+
+	// Prefer state cache over REST for owner lookup
+	var ownerID string
+	if pc.session != nil && pc.session.State != nil {
+		if g, _ := pc.session.State.Guild(guildID); g != nil {
+			ownerID = g.OwnerID
+		}
+	}
+	// Fallback: store cache
+	if ownerID == "" && pc.store != nil {
+		if oid, ok, _ := pc.store.GetGuildOwnerID(guildID); ok {
+			ownerID = oid
+		}
+	}
+	// Fallback: REST and then persist in store
+	if ownerID == "" {
+		guild, err := pc.session.Guild(guildID)
+		if err != nil {
+			return false
+		}
+		ownerID = guild.OwnerID
+		if pc.store != nil && ownerID != "" {
+			_ = pc.store.SetGuildOwnerID(guildID, ownerID)
+		}
+	}
+	isOwner := ownerID == userID
 
 	if guildConfig == nil || len(guildConfig.AllowedRoles) == 0 {
 		return isOwner
@@ -155,9 +184,18 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 		return true
 	}
 
-	member, err := pc.session.GuildMember(guildID, userID)
-	if err != nil {
-		return false
+	var member *discordgo.Member
+	var err error
+	if pc.session != nil && pc.session.State != nil {
+		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+			member = m
+		}
+	}
+	if member == nil {
+		member, err = pc.session.GuildMember(guildID, userID)
+		if err != nil {
+			return false
+		}
 	}
 
 	for _, userRole := range member.Roles {
@@ -170,9 +208,18 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 
 // HasRole verifica se o usuário tem uma role específica
 func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
-	member, err := pc.session.GuildMember(guildID, userID)
-	if err != nil {
-		return false
+	var member *discordgo.Member
+	var err error
+	if pc.session != nil && pc.session.State != nil {
+		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+			member = m
+		}
+	}
+	if member == nil {
+		member, err = pc.session.GuildMember(guildID, userID)
+		if err != nil {
+			return false
+		}
 	}
 
 	return slices.Contains(member.Roles, roleID)
@@ -180,11 +227,34 @@ func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
 
 // IsOwner verifica se o usuário é dono do servidor
 func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
-	guild, err := pc.session.Guild(guildID)
-	if err != nil {
+	if guildID == "" {
 		return false
 	}
-	return guild.OwnerID == userID
+	// Prefer state cache over REST for owner lookup
+	var ownerID string
+	if pc.session != nil && pc.session.State != nil {
+		if g, _ := pc.session.State.Guild(guildID); g != nil {
+			ownerID = g.OwnerID
+		}
+	}
+	// Fallback: store cache
+	if ownerID == "" && pc.store != nil {
+		if oid, ok, _ := pc.store.GetGuildOwnerID(guildID); ok {
+			ownerID = oid
+		}
+	}
+	// Fallback: REST and then persist in store
+	if ownerID == "" {
+		guild, err := pc.session.Guild(guildID)
+		if err != nil {
+			return false
+		}
+		ownerID = guild.OwnerID
+		if pc.store != nil && ownerID != "" {
+			_ = pc.store.SetGuildOwnerID(guildID, ownerID)
+		}
+	}
+	return ownerID == userID
 }
 
 // Responder gerencia respostas padronizadas

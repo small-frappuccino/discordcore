@@ -405,6 +405,68 @@ func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	return err
 }
 
+// SendMemberRoleUpdateNotification envia notificação de atualização de cargo (add/remove)
+func (ns *NotificationSender) SendMemberRoleUpdateNotification(
+	channelID string,
+	actorID string, // quem realizou a ação (moderador/admin)
+	targetID string, // usuário alvo
+	targetUsername string, // nome do usuário alvo (opcional, pode vir vazio)
+	roleID string, // ID do cargo afetado
+	roleName string, // nome do cargo (fallback caso mention não seja desejada)
+	action string, // "add" | "remove" | "added" | "removed"
+) error {
+	if channelID == "" || targetID == "" || (roleID == "" && roleName == "") {
+		return nil
+	}
+
+	displayName := targetUsername
+	if displayName == "" {
+		displayName = targetID
+	}
+
+	act := "Updated"
+	switch {
+	case strings.EqualFold(action, "add") || strings.EqualFold(action, "added"):
+		act = "Added"
+	case strings.EqualFold(action, "remove") || strings.EqualFold(action, "removed"):
+		act = "Removed"
+	}
+
+	roleDisplay := ""
+	if roleID != "" {
+		roleDisplay = "<@&" + roleID + ">"
+	}
+	if roleDisplay == "" && roleName != "" {
+		roleDisplay = "`" + roleName + "`"
+	}
+	if roleDisplay == "" && roleID != "" {
+		roleDisplay = "`" + roleID + "`"
+	}
+
+	desc := fmt.Sprintf("<@%s> %s role for **%s** (<@%s>)", actorID, strings.ToLower(act), displayName, targetID)
+	embed := &discordgo.MessageEmbed{
+		Title:       "Role updated",
+		Color:       theme.Info(),
+		Description: desc,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Role",
+				Value:  roleDisplay,
+				Inline: true,
+			},
+			{
+				Name:   "Action",
+				Value:  act,
+				Inline: true,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
 func (ns *NotificationSender) SendErrorMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrErrorTitle,

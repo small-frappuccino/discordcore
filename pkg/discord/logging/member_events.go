@@ -118,11 +118,6 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
 		}
 	}
-	if mes.store != nil {
-		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
-			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
-		}
-	}
 
 	// NEW: Registrar horário de entrada do membro (preciso) em memória
 	if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {

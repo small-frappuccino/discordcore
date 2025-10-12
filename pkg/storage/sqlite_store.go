@@ -404,6 +404,135 @@ func (s *Store) GetLastEvent() (time.Time, bool, error) {
 	return ts, true, nil
 }
 
+// SetGuildOwnerID sets or updates the cached owner ID for a guild.
+func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || ownerID == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO guild_meta (guild_id, owner_id)
+         VALUES (?, ?)
+         ON CONFLICT(guild_id) DO UPDATE SET
+           owner_id=excluded.owner_id`,
+		guildID, ownerID,
+	)
+	return err
+}
+
+// GetGuildOwnerID retrieves the cached owner ID for a guild, if any.
+func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
+	if s.db == nil {
+		return "", false, fmt.Errorf("store not initialized")
+	}
+	row := s.db.QueryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=?`, guildID)
+	var owner sql.NullString
+	if err := row.Scan(&owner); err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	if !owner.Valid || owner.String == "" {
+		return "", false, nil
+	}
+	return owner.String, true, nil
+}
+
+// UpsertMemberRoles replaces the current set of roles for a member in a guild atomically.
+func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, updatedAt time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Clear existing roles for member
+	if _, err := tx.Exec(`DELETE FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID); err != nil {
+		return err
+	}
+	// Insert new set
+	for _, rid := range roles {
+		if rid == "" {
+			continue
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at) VALUES (?, ?, ?, ?)`,
+			guildID, userID, rid, updatedAt,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// GetMemberRoles returns the current cached roles for a member in a guild.
+func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	rows, err := s.db.Query(`SELECT role_id FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var roles []string
+	for rows.Next() {
+		var rid string
+		if err := rows.Scan(&rid); err != nil {
+			return nil, err
+		}
+		if rid != "" {
+			roles = append(roles, rid)
+		}
+	}
+	return roles, rows.Err()
+}
+
+// DiffMemberRoles compares the cached set of roles with the provided current set and returns deltas.
+func (s *Store) DiffMemberRoles(guildID, userID string, current []string) (added []string, removed []string, err error) {
+	cached, err := s.GetMemberRoles(guildID, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	curSet := make(map[string]struct{}, len(current))
+	for _, r := range current {
+		if r != "" {
+			curSet[r] = struct{}{}
+		}
+	}
+	cacheSet := make(map[string]struct{}, len(cached))
+	for _, r := range cached {
+		if r != "" {
+			cacheSet[r] = struct{}{}
+		}
+	}
+	for r := range curSet {
+		if _, ok := cacheSet[r]; !ok {
+			added = append(added, r)
+		}
+	}
+	for r := range cacheSet {
+		if _, ok := curSet[r]; !ok {
+			removed = append(removed, r)
+		}
+	}
+	return added, removed, nil
+}
+
 // ensureSchema creates required tables and indexes if they don't exist.
 func ensureSchema(db *sql.DB) error {
 	const createMessages = `
@@ -453,7 +582,8 @@ CREATE INDEX IF NOT EXISTS idx_avatars_hist_changed ON avatars_history(changed_a
 	const createGuildMeta = `
 CREATE TABLE IF NOT EXISTS guild_meta (
   guild_id  TEXT PRIMARY KEY,
-  bot_since TIMESTAMP
+  bot_since TIMESTAMP,
+  owner_id  TEXT
 );`
 
 	const createRuntimeMeta = `
@@ -462,6 +592,16 @@ CREATE TABLE IF NOT EXISTS runtime_meta (
   ts  TIMESTAMP NOT NULL
 );`
 
+	const createRolesCurrent = `
+CREATE TABLE IF NOT EXISTS roles_current (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  role_id    TEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (guild_id, user_id, role_id)
+);
+CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, user_id);`
+
 	stmts := []string{
 		createMessages,
 		createMemberJoins,
@@ -469,6 +609,7 @@ CREATE TABLE IF NOT EXISTS runtime_meta (
 		createAvatarsHistory,
 		createGuildMeta,
 		createRuntimeMeta,
+		createRolesCurrent,
 	}
 	for _, sqlText := range stmts {
 		if _, err := db.Exec(sqlText); err != nil {
