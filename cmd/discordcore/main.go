@@ -227,10 +227,14 @@ func main() {
 			log.Error().Errorf("❌ Error configuring slash commands")
 			os.Exit(1)
 		}
-		// Reuse main store instance for PermissionChecker to avoid opening another connection
+		// Reuse main store instance and unified cache for PermissionChecker to avoid opening another connection
 		if cm := commandHandler.GetCommandManager(); cm != nil {
 			if router := cm.GetRouter(); router != nil {
 				router.SetStore(store)
+				// Inject unified cache into permission checker
+				if monitoringService != nil {
+					router.SetCache(monitoringService.GetUnifiedCache())
+				}
 			}
 		}
 

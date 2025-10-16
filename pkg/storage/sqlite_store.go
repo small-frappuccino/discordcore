@@ -602,6 +602,17 @@ CREATE TABLE IF NOT EXISTS roles_current (
 );
 CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, user_id);`
 
+	const createPersistentCache = `
+CREATE TABLE IF NOT EXISTS persistent_cache (
+  cache_key  TEXT PRIMARY KEY,
+  cache_type TEXT NOT NULL,
+  data       TEXT NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  cached_at  TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_persistent_cache_type ON persistent_cache(cache_type);
+CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expires_at);`
+
 	stmts := []string{
 		createMessages,
 		createMemberJoins,
@@ -610,6 +621,7 @@ CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, u
 		createGuildMeta,
 		createRuntimeMeta,
 		createRolesCurrent,
+		createPersistentCache,
 	}
 	for _, sqlText := range stmts {
 		if _, err := db.Exec(sqlText); err != nil {
@@ -617,4 +629,132 @@ CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, u
 		}
 	}
 	return nil
+}
+
+// Persistent Cache Methods
+
+// UpsertCacheEntry saves a cache entry to persistent storage
+func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if key == "" || cacheType == "" || data == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(cache_key) DO UPDATE SET
+           data=excluded.data,
+           expires_at=excluded.expires_at,
+           cached_at=excluded.cached_at`,
+		key, cacheType, data, expiresAt, time.Now().UTC(),
+	)
+	return err
+}
+
+// GetCacheEntry retrieves a cache entry from persistent storage
+func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt time.Time, ok bool, err error) {
+	if s.db == nil {
+		return "", "", time.Time{}, false, fmt.Errorf("store not initialized")
+	}
+	row := s.db.QueryRow(
+		`SELECT cache_type, data, expires_at FROM persistent_cache WHERE cache_key=?`,
+		key,
+	)
+	err = row.Scan(&cacheType, &data, &expiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", "", time.Time{}, false, nil
+		}
+		return "", "", time.Time{}, false, err
+	}
+	// Check if expired
+	if time.Now().After(expiresAt) {
+		return "", "", time.Time{}, false, nil
+	}
+	return cacheType, data, expiresAt, true, nil
+}
+
+// GetCacheEntriesByType retrieves all cache entries of a specific type
+func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
+	Key       string
+	Data      string
+	ExpiresAt time.Time
+}, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	rows, err := s.db.Query(
+		`SELECT cache_key, data, expires_at FROM persistent_cache
+         WHERE cache_type=? AND expires_at > ?`,
+		cacheType, time.Now().UTC(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []struct {
+		Key       string
+		Data      string
+		ExpiresAt time.Time
+	}
+	for rows.Next() {
+		var entry struct {
+			Key       string
+			Data      string
+			ExpiresAt time.Time
+		}
+		if err := rows.Scan(&entry.Key, &entry.Data, &entry.ExpiresAt); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+// DeleteCacheEntry removes a cache entry from persistent storage
+func (s *Store) DeleteCacheEntry(key string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE cache_key=?`, key)
+	return err
+}
+
+// CleanupExpiredCacheEntries removes all expired cache entries
+func (s *Store) CleanupExpiredCacheEntries() error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE expires_at <= ?`, time.Now().UTC())
+	return err
+}
+
+// GetCacheStats returns statistics about the persistent cache
+func (s *Store) GetCacheStats() (map[string]int, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	rows, err := s.db.Query(
+		`SELECT cache_type, COUNT(*) as count FROM persistent_cache
+         WHERE expires_at > ? GROUP BY cache_type`,
+		time.Now().UTC(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := make(map[string]int)
+	for rows.Next() {
+		var cacheType string
+		var count int
+		if err := rows.Scan(&cacheType, &count); err != nil {
+			return nil, err
+		}
+		stats[cacheType] = count
+	}
+	return stats, rows.Err()
 }

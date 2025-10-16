@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -26,14 +27,16 @@ type UserWatcher struct {
 	configManager *files.ConfigManager
 	store         *storage.Store
 	notifier      *NotificationSender
+	cache         *cache.UnifiedCache
 }
 
-func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *NotificationSender) *UserWatcher {
+func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *NotificationSender, unifiedCache *cache.UnifiedCache) *UserWatcher {
 	return &UserWatcher{
 		session:       session,
 		configManager: configManager,
 		store:         store,
 		notifier:      notifier,
+		cache:         unifiedCache,
 	}
 }
 
@@ -58,6 +61,9 @@ type MonitoringService struct {
 	// Heartbeat runtime tracking
 	heartbeatTicker *time.Ticker
 	heartbeatStop   chan struct{}
+
+	// Unified cache for Discord API data (members, guilds, roles, channels)
+	unifiedCache *cache.UnifiedCache
 
 	// In-memory roles cache with TTL to reduce REST/DB lookups
 	rolesCache   map[string]cachedRoles
@@ -92,14 +98,22 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	n := NewNotificationSender(session)
 	router := task.NewRouter(task.Defaults())
 	adapters := task.NewNotificationAdapters(router, session, configManager, nil, n)
+
+	// Create unified cache with persistence enabled
+	cacheConfig := cache.DefaultCacheConfig()
+	cacheConfig.Store = store
+	cacheConfig.PersistEnabled = true
+	unifiedCache := cache.NewUnifiedCache(cacheConfig)
+
 	ms := &MonitoringService{
 		session:             session,
 		configManager:       configManager,
 		store:               store,
 		notifier:            n,
-		userWatcher:         NewUserWatcher(session, configManager, store, n),
-		memberEventService:  NewMemberEventService(session, configManager, n),
-		messageEventService: NewMessageEventService(session, configManager, n),
+		unifiedCache:        unifiedCache,
+		userWatcher:         NewUserWatcher(session, configManager, store, n, unifiedCache),
+		memberEventService:  NewMemberEventService(session, configManager, n, store),
+		messageEventService: NewMessageEventService(session, configManager, n, store),
 		adapters:            adapters,
 		router:              router,
 		stopChan:            make(chan struct{}),
@@ -123,6 +137,19 @@ func (ms *MonitoringService) Start() error {
 	}
 	ms.isRunning = true
 	ms.stopChan = make(chan struct{})
+
+	// Warmup cache from persistent storage if enabled
+	if ms.unifiedCache != nil {
+		log.Info().Applicationf("🔄 Warming up cache from persistent storage...")
+		if err := ms.unifiedCache.Warmup(); err != nil {
+			log.Warn().Applicationf("Cache warmup failed (continuing): %v", err)
+		} else {
+			stats := ms.unifiedCache.GetStats()
+			total := stats.MemberEntries + stats.GuildEntries + stats.RolesEntries + stats.ChannelEntries
+			log.Info().Applicationf("✅ Cache warmup complete: %d entries loaded", total)
+		}
+	}
+
 	ms.ensureGuildsListed()
 	// Detect downtime and refresh avatars silently before wiring handlers (no notifications)
 	ms.handleStartupDowntimeAndMaybeRefresh()
@@ -163,6 +190,18 @@ func (ms *MonitoringService) Stop() error {
 	ms.isRunning = false
 	close(ms.stopChan)
 	ms.stopHeartbeat()
+
+	// Persist cache before shutdown
+	if ms.unifiedCache != nil {
+		log.Info().Applicationf("💾 Persisting cache to storage...")
+		if err := ms.unifiedCache.Persist(); err != nil {
+			log.Error().Errorf("Failed to persist cache (continuing): %v", err)
+		} else {
+			stats := ms.unifiedCache.GetStats()
+			total := stats.MemberEntries + stats.GuildEntries + stats.RolesEntries + stats.ChannelEntries
+			log.Info().Applicationf("✅ Cache persisted: %d entries saved", total)
+		}
+	}
 
 	// Parar novos serviços
 	if err := ms.memberEventService.Stop(); err != nil {
@@ -211,7 +250,9 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		log.Warn().Applicationf("Store is nil; skipping cache initialization for guild: %s", guildID)
 		return
 	}
-	guild, err := ms.session.Guild(guildID)
+
+	// Use unified cache for guild fetch
+	guild, err := ms.getGuild(guildID)
 	if err != nil {
 		log.Error().Errorf("Error getting guild %s: %v", guildID, err)
 		return
@@ -231,7 +272,7 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		}
 		// Fallback para REST somente se necessário
 		if botMember == nil {
-			if m, err := ms.session.GuildMember(guildID, botID); err == nil {
+			if m, err := ms.getGuildMember(guildID, botID); err == nil {
 				botMember = m
 			}
 		}
@@ -502,15 +543,13 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			}
 
 			atomic.AddUint64(&ms.apiMessagesSent, 1)
-			atomic.AddUint64(&ms.apiMessagesSent, 1)
 			if _, sendErr := ms.session.ChannelMessageSendEmbed(channelID, embed); sendErr != nil {
 				log.Error().Errorf("Failed to send role update notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, channelID, sendErr)
 			} else {
 				log.Info().Applicationf("Role update notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, channelID)
 				// Update cached roles snapshot for this member after processing update
 				if ms.store != nil {
-					atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
-					if member, err := ms.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil && len(member.Roles) > 0 {
+					if member, err := ms.getGuildMember(m.GuildID, m.User.ID); err == nil && member != nil && len(member.Roles) > 0 {
 						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, member.Roles, time.Now())
 						ms.cacheRolesSet(m.GuildID, m.User.ID, member.Roles)
 					}
@@ -536,7 +575,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	if ms.store != nil {
 		curRoles := m.Roles
 		if len(curRoles) == 0 {
-			if member, err := ms.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
+			if member, err := ms.getGuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
 				curRoles = member.Roles
 			}
 		}
@@ -635,19 +674,9 @@ func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo
 	}
 	for _, gcfg := range cfg.Guilds {
 		var member *discordgo.Member
-		// Tente obter do state cache primeiro
-		if s != nil && s.State != nil {
-			if m2, _ := s.State.Member(gcfg.GuildID, m.User.ID); m2 != nil {
-				member = m2
-				atomic.AddUint64(&ms.cacheStateMemberHits, 1)
-			}
-		}
-		// Fallback para REST apenas se necessário
-		if member == nil {
-			atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
-			if m2, err := s.GuildMember(gcfg.GuildID, m.User.ID); err == nil {
-				member = m2
-			}
+		// Use unified cache
+		if m2, err := ms.getGuildMember(gcfg.GuildID, m.User.ID); err == nil {
+			member = m2
 		}
 		if member == nil || member.User == nil {
 			continue
@@ -727,9 +756,24 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 }
 
 func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string {
+	// Try unified cache first
+	if aw.cache != nil {
+		if member, ok := aw.cache.GetMember(guildID, userID); ok {
+			if member.Nick != "" {
+				return member.Nick
+			}
+			if member.User != nil && member.User.Username != "" {
+				return member.User.Username
+			}
+		}
+	}
+
 	// Prefer session state cache to avoid REST calls
 	if aw.session != nil && aw.session.State != nil {
 		if m, _ := aw.session.State.Member(guildID, userID); m != nil {
+			if aw.cache != nil {
+				aw.cache.SetMember(guildID, userID, m)
+			}
 			if m.Nick != "" {
 				return m.Nick
 			}
@@ -745,6 +789,11 @@ func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string
 		log.Info().Applicationf("Error getting member for username for user %s in guild %s: %v - using ID", userID, guildID, err)
 		return userID
 	}
+
+	if aw.cache != nil {
+		aw.cache.SetMember(guildID, userID, member)
+	}
+
 	if member.Nick != "" {
 		return member.Nick
 	}
@@ -840,7 +889,8 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 	size := len(ms.rolesCache)
 	ms.rolesCacheMu.RUnlock()
 	ttl := ms.rolesTTL
-	return map[string]interface{}{
+
+	stats := map[string]interface{}{
 		"isRunning":            ms.isRunning,
 		"rolesCacheSize":       size,
 		"rolesCacheTTLSeconds": int(ttl.Seconds()),
@@ -851,6 +901,27 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 		"cacheRolesMemoryHits": atomic.LoadUint64(&ms.cacheRolesMemoryHits),
 		"cacheRolesStoreHits":  atomic.LoadUint64(&ms.cacheRolesStoreHits),
 	}
+
+	// Add unified cache stats
+	if ms.unifiedCache != nil {
+		ucStats := ms.unifiedCache.GetStats()
+		stats["unifiedCache"] = map[string]interface{}{
+			"memberEntries":  ucStats.MemberEntries,
+			"guildEntries":   ucStats.GuildEntries,
+			"rolesEntries":   ucStats.RolesEntries,
+			"channelEntries": ucStats.ChannelEntries,
+			"memberHits":     ucStats.MemberHits,
+			"memberMisses":   ucStats.MemberMisses,
+			"guildHits":      ucStats.GuildHits,
+			"guildMisses":    ucStats.GuildMisses,
+			"rolesHits":      ucStats.RolesHits,
+			"rolesMisses":    ucStats.RolesMisses,
+			"channelHits":    ucStats.ChannelHits,
+			"channelMisses":  ucStats.ChannelMisses,
+		}
+	}
+
+	return stats
 }
 func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 	if ms.store == nil {
@@ -955,4 +1026,75 @@ func (ms *MonitoringService) Notifier() *NotificationSender {
 // CacheManager exposes the avatar cache manager used by monitoring.
 func (ms *MonitoringService) Store() *storage.Store {
 	return ms.store
+}
+
+// GetUnifiedCache exposes the unified cache for use by other components
+func (ms *MonitoringService) GetUnifiedCache() *cache.UnifiedCache {
+	return ms.unifiedCache
+}
+
+// Helper methods for cached API calls
+
+// getGuildMember retrieves a member using unified cache -> state -> API fallback
+func (ms *MonitoringService) getGuildMember(guildID, userID string) (*discordgo.Member, error) {
+	// Try unified cache first
+	if ms.unifiedCache != nil {
+		if member, ok := ms.unifiedCache.GetMember(guildID, userID); ok {
+			return member, nil
+		}
+	}
+
+	// Try state cache
+	if ms.session != nil && ms.session.State != nil {
+		if member, err := ms.session.State.Member(guildID, userID); err == nil && member != nil {
+			atomic.AddUint64(&ms.cacheStateMemberHits, 1)
+			if ms.unifiedCache != nil {
+				ms.unifiedCache.SetMember(guildID, userID, member)
+			}
+			return member, nil
+		}
+	}
+
+	// Fallback to API
+	atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
+	member, err := ms.session.GuildMember(guildID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if ms.unifiedCache != nil {
+		ms.unifiedCache.SetMember(guildID, userID, member)
+	}
+	return member, nil
+}
+
+// getGuild retrieves a guild using unified cache -> state -> API fallback
+func (ms *MonitoringService) getGuild(guildID string) (*discordgo.Guild, error) {
+	// Try unified cache first
+	if ms.unifiedCache != nil {
+		if guild, ok := ms.unifiedCache.GetGuild(guildID); ok {
+			return guild, nil
+		}
+	}
+
+	// Try state cache
+	if ms.session != nil && ms.session.State != nil {
+		if guild, err := ms.session.State.Guild(guildID); err == nil && guild != nil {
+			if ms.unifiedCache != nil {
+				ms.unifiedCache.SetGuild(guildID, guild)
+			}
+			return guild, nil
+		}
+	}
+
+	// Fallback to API
+	guild, err := ms.session.Guild(guildID)
+	if err != nil {
+		return nil, err
+	}
+
+	if ms.unifiedCache != nil {
+		ms.unifiedCache.SetGuild(guildID, guild)
+	}
+	return guild, nil
 }

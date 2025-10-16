@@ -83,7 +83,8 @@ func (ns *NotificationSender) createAvatarChangeEmbeds(change files.AvatarChange
 }
 
 func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
-	if avatarHash == "" {
+	// Handle both empty string and "default" sentinel for default avatars
+	if avatarHash == "" || avatarHash == "default" {
 		// Generate Discord default avatar based on user ID
 		// Discord uses: (user_id >> 22) % 6 for new users
 		// For compatibility, we'll use a simplified version

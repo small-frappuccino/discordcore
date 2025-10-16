@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -128,19 +129,24 @@ func (cp *ConfigPersister) SaveWithBackup(config *files.GuildConfig) error {
 }
 
 // PermissionChecker gerencia verificação de permissões
+// PermissionChecker verifica permissões do usuário
 type PermissionChecker struct {
 	session *discordgo.Session
 	config  *files.ConfigManager
 	store   *storage.Store
+	cache   *cache.UnifiedCache
 }
 
-// NewPermissionChecker cria um novo verificador de permissões
 func NewPermissionChecker(session *discordgo.Session, config *files.ConfigManager) *PermissionChecker {
 	return &PermissionChecker{session: session, config: config}
 }
 
 func (pc *PermissionChecker) SetStore(store *storage.Store) {
 	pc.store = store
+}
+
+func (pc *PermissionChecker) SetCache(unifiedCache *cache.UnifiedCache) {
+	pc.cache = unifiedCache
 }
 
 // HasPermission verifica se o usuário tem permissão para usar comandos
@@ -150,11 +156,20 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	}
 	guildConfig := pc.config.GuildConfig(guildID)
 
-	// Prefer state cache over REST for owner lookup
+	// Try unified cache first
 	var ownerID string
-	if pc.session != nil && pc.session.State != nil {
+	if pc.cache != nil {
+		if guild, ok := pc.cache.GetGuild(guildID); ok {
+			ownerID = guild.OwnerID
+		}
+	}
+	// Fallback: state cache
+	if ownerID == "" && pc.session != nil && pc.session.State != nil {
 		if g, _ := pc.session.State.Guild(guildID); g != nil {
 			ownerID = g.OwnerID
+			if pc.cache != nil {
+				pc.cache.SetGuild(guildID, g)
+			}
 		}
 	}
 	// Fallback: store cache
@@ -163,13 +178,16 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 			ownerID = oid
 		}
 	}
-	// Fallback: REST and then persist in store
+	// Fallback: REST and then persist in caches
 	if ownerID == "" {
 		guild, err := pc.session.Guild(guildID)
 		if err != nil {
 			return false
 		}
 		ownerID = guild.OwnerID
+		if pc.cache != nil {
+			pc.cache.SetGuild(guildID, guild)
+		}
 		if pc.store != nil && ownerID != "" {
 			_ = pc.store.SetGuildOwnerID(guildID, ownerID)
 		}
@@ -186,15 +204,29 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 
 	var member *discordgo.Member
 	var err error
-	if pc.session != nil && pc.session.State != nil {
-		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+	// Try unified cache first
+	if pc.cache != nil {
+		if m, ok := pc.cache.GetMember(guildID, userID); ok {
 			member = m
 		}
 	}
+	// Fallback: state cache
+	if member == nil && pc.session != nil && pc.session.State != nil {
+		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+			member = m
+			if pc.cache != nil {
+				pc.cache.SetMember(guildID, userID, m)
+			}
+		}
+	}
+	// Fallback: REST
 	if member == nil {
 		member, err = pc.session.GuildMember(guildID, userID)
 		if err != nil {
 			return false
+		}
+		if pc.cache != nil {
+			pc.cache.SetMember(guildID, userID, member)
 		}
 	}
 
@@ -210,15 +242,29 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
 	var member *discordgo.Member
 	var err error
-	if pc.session != nil && pc.session.State != nil {
-		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+	// Try unified cache first
+	if pc.cache != nil {
+		if m, ok := pc.cache.GetMember(guildID, userID); ok {
 			member = m
 		}
 	}
+	// Fallback: state cache
+	if member == nil && pc.session != nil && pc.session.State != nil {
+		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+			member = m
+			if pc.cache != nil {
+				pc.cache.SetMember(guildID, userID, m)
+			}
+		}
+	}
+	// Fallback: REST
 	if member == nil {
 		member, err = pc.session.GuildMember(guildID, userID)
 		if err != nil {
 			return false
+		}
+		if pc.cache != nil {
+			pc.cache.SetMember(guildID, userID, member)
 		}
 	}
 
@@ -230,11 +276,20 @@ func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
 	if guildID == "" {
 		return false
 	}
-	// Prefer state cache over REST for owner lookup
+	// Try unified cache first
 	var ownerID string
-	if pc.session != nil && pc.session.State != nil {
+	if pc.cache != nil {
+		if guild, ok := pc.cache.GetGuild(guildID); ok {
+			ownerID = guild.OwnerID
+		}
+	}
+	// Fallback: state cache
+	if ownerID == "" && pc.session != nil && pc.session.State != nil {
 		if g, _ := pc.session.State.Guild(guildID); g != nil {
 			ownerID = g.OwnerID
+			if pc.cache != nil {
+				pc.cache.SetGuild(guildID, g)
+			}
 		}
 	}
 	// Fallback: store cache
@@ -243,13 +298,16 @@ func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
 			ownerID = oid
 		}
 	}
-	// Fallback: REST and then persist in store
+	// Fallback: REST and then persist in caches
 	if ownerID == "" {
 		guild, err := pc.session.Guild(guildID)
 		if err != nil {
 			return false
 		}
 		ownerID = guild.OwnerID
+		if pc.cache != nil {
+			pc.cache.SetGuild(guildID, guild)
+		}
 		if pc.store != nil && ownerID != "" {
 			_ = pc.store.SetGuildOwnerID(guildID, ownerID)
 		}

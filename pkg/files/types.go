@@ -24,7 +24,12 @@ type GuildConfig struct {
 	Rulesets                []Ruleset `json:"rulesets,omitempty"`
 	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Regras soltas, não associadas a nenhuma ruleset
 	Blocklist               []string  `json:"blocklist,omitempty"`
-	RolesCacheTTL           string    `json:"roles_cache_ttl,omitempty"` // Ex.: "5m", "1h" (padrão: "5m")
+
+	// Cache TTL configuration (per-guild tuning)
+	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // Ex.: "5m", "1h" (padrão: "5m")
+	MemberCacheTTL  string `json:"member_cache_ttl,omitempty"`  // Ex.: "5m", "10m" (padrão: "5m")
+	GuildCacheTTL   string `json:"guild_cache_ttl,omitempty"`   // Ex.: "15m", "30m" (padrão: "15m")
+	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // Ex.: "15m", "30m" (padrão: "15m")
 }
 
 // BotConfig holds the configuration for the bot.
@@ -177,6 +182,45 @@ func (gc *GuildConfig) RolesCacheTTLDuration() time.Duration {
 		return def
 	}
 	d, err := time.ParseDuration(gc.RolesCacheTTL)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
+}
+
+// MemberCacheTTLDuration retorna o TTL configurado para o cache de membros ou um padrão de 5m.
+func (gc *GuildConfig) MemberCacheTTLDuration() time.Duration {
+	const def = 5 * time.Minute
+	if gc == nil || gc.MemberCacheTTL == "" {
+		return def
+	}
+	d, err := time.ParseDuration(gc.MemberCacheTTL)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
+}
+
+// GuildCacheTTLDuration retorna o TTL configurado para o cache de guilds ou um padrão de 15m.
+func (gc *GuildConfig) GuildCacheTTLDuration() time.Duration {
+	const def = 15 * time.Minute
+	if gc == nil || gc.GuildCacheTTL == "" {
+		return def
+	}
+	d, err := time.ParseDuration(gc.GuildCacheTTL)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
+}
+
+// ChannelCacheTTLDuration retorna o TTL configurado para o cache de channels ou um padrão de 15m.
+func (gc *GuildConfig) ChannelCacheTTLDuration() time.Duration {
+	const def = 15 * time.Minute
+	if gc == nil || gc.ChannelCacheTTL == "" {
+		return def
+	}
+	d, err := time.ParseDuration(gc.ChannelCacheTTL)
 	if err != nil || d <= 0 {
 		return def
 	}

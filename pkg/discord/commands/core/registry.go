@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -402,5 +403,12 @@ func (cr *CommandRouter) GetPermissionChecker() *PermissionChecker {
 func (cr *CommandRouter) SetStore(store *storage.Store) {
 	if cr.permChecker != nil {
 		cr.permChecker.SetStore(store)
+	}
+}
+
+// SetCache sets the unified cache for the permission checker to reduce API calls.
+func (cr *CommandRouter) SetCache(unifiedCache *cache.UnifiedCache) {
+	if cr.permChecker != nil {
+		cr.permChecker.SetCache(unifiedCache)
 	}
 }

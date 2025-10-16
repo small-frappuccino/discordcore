@@ -9,7 +9,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // CachedMessage armazena dados de mensagens para comparação
@@ -33,12 +32,12 @@ type MessageEventService struct {
 }
 
 // NewMessageEventService cria uma nova instância do serviço de eventos de mensagens
-func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender) *MessageEventService {
+func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MessageEventService {
 	return &MessageEventService{
 		session:       session,
 		configManager: configManager,
 		notifier:      notifier,
-		store:         storage.NewStore(util.GetMessageDBPath()),
+		store:         store,
 		isRunning:     false,
 	}
 }
@@ -50,13 +49,10 @@ func (mes *MessageEventService) Start() error {
 	}
 	mes.isRunning = true
 
-	// Inicializa a persistência (SQLite) e limpa expirados (melhor esforço)
+	// Store should be injected and already initialized
+	// Clean up expired messages (best effort)
 	if mes.store != nil {
-		if err := mes.store.Init(); err != nil {
-			log.Warn().Applicationf("Message event service: failed to initialize SQLite store (continuing without persistence): %v", err)
-		} else {
-			_ = mes.store.CleanupExpiredMessages()
-		}
+		_ = mes.store.CleanupExpiredMessages()
 	}
 
 	mes.session.AddHandler(mes.handleMessageCreate)

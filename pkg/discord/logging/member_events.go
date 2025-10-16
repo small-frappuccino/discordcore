@@ -10,7 +10,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // MemberEventService gerencia eventos de entrada e saída de usuários
@@ -30,11 +29,12 @@ type MemberEventService struct {
 }
 
 // NewMemberEventService cria uma nova instância do serviço de eventos de membros
-func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender) *MemberEventService {
+func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MemberEventService {
 	return &MemberEventService{
 		session:       session,
 		configManager: configManager,
 		notifier:      notifier,
+		store:         store,
 		isRunning:     false,
 	}
 }
@@ -55,10 +55,7 @@ func (mes *MemberEventService) Start() error {
 		mes.joinTimes = make(map[string]time.Time)
 	}
 
-	// Inicializar store SQLite (melhor esforço)
-	if mes.store == nil {
-		mes.store = storage.NewStore(util.GetMessageDBPath())
-	}
+	// Store should be injected and already initialized
 	if mes.store != nil {
 		if err := mes.store.Init(); err != nil {
 			log.Warn().Applicationf("Member event service: failed to initialize SQLite store (continuing): %v", err)
