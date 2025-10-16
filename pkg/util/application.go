@@ -1,16 +1,13 @@
 package util
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"strings"
-	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -171,96 +168,6 @@ func EnsureCacheDirs() error {
 			return fmt.Errorf("failed to create cache directory %s: %w", d, err)
 		}
 	}
-	return nil
-}
-
-// MigrateLegacyAvatarCache migrates the old avatar cache file to the new caches location
-// on the first run of the new system. It copies and then removes the legacy file (best-effort).
-func MigrateLegacyAvatarCache() error {
-	// Deprecated: JSON copying removed. Migration is handled by MigrateAvatarJSONToSQLite.
-	return nil
-}
-
-// MigrateAvatarJSONToSQLite migrates avatar cache JSON (legacy or new) into SQLite and removes JSON files.
-// Safe to call after SQLite directories are ready.
-func MigrateAvatarJSONToSQLite() error {
-	// Determine source (prefer legacy, then new)
-	oldPath := LegacyMigrationCacheFilePath()
-	newPath := MigrationCacheFilePath()
-	var src string
-	if fileExists(oldPath) {
-		src = oldPath
-	} else if fileExists(newPath) {
-		src = newPath
-	} else {
-		return nil // nothing to migrate
-	}
-
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("failed to read cache file: %w", err)
-	}
-
-	type guildCache struct {
-		Avatars     map[string]string    `json:"avatars"`
-		BotSince    time.Time            `json:"bot_since,omitempty"`
-		MemberJoins map[string]time.Time `json:"member_joins,omitempty"`
-		GuildID     string               `json:"guild_id,omitempty"`
-	}
-	type cachePayload struct {
-		Guilds map[string]*guildCache `json:"guilds"`
-	}
-
-	var payload cachePayload
-	if err := json.Unmarshal(data, &payload); err != nil || len(payload.Guilds) == 0 {
-		// try legacy single guild
-		var single guildCache
-		if err2 := json.Unmarshal(data, &single); err2 != nil || single.GuildID == "" {
-			return nil // unknown format; skip
-		}
-		payload.Guilds = map[string]*guildCache{single.GuildID: &single}
-	}
-
-	// Open store
-	if err := os.MkdirAll(filepath.Dir(GetMessageDBPath()), 0o755); err != nil {
-		return fmt.Errorf("failed to create db directory: %w", err)
-	}
-	store := storage.NewStore(GetMessageDBPath())
-	if err := store.Init(); err != nil {
-		return fmt.Errorf("failed to init sqlite store: %w", err)
-	}
-	defer store.Close()
-
-	// Migrate
-	for gid, g := range payload.Guilds {
-		if g == nil {
-			continue
-		}
-		// BotSince
-		if !g.BotSince.IsZero() {
-			_ = store.SetBotSince(gid, g.BotSince)
-		}
-		// Members
-		for uid, t := range g.MemberJoins {
-			if !t.IsZero() {
-				_ = store.UpsertMemberJoin(gid, uid, t)
-			}
-		}
-		// Avatars
-		for uid, h := range g.Avatars {
-			if h == "" {
-				h = "default"
-			}
-			_, _, _ = store.UpsertAvatar(gid, uid, h, time.Now())
-		}
-	}
-
-	// Cleanup JSON files (best-effort)
-	_ = os.Remove(oldPath)
-	_ = os.Remove(newPath)
-	_ = removeDirIfEmpty(filepath.Dir(oldPath))
-	_ = removeDirIfEmpty(filepath.Dir(newPath))
-
 	return nil
 }
 
