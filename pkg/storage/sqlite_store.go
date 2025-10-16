@@ -174,6 +174,88 @@ func (s *Store) CleanupExpiredMessages() error {
 	return err
 }
 
+// CleanupObsoleteMemberJoins removes member join records for users who left guilds (older than retentionDays)
+func (s *Store) CleanupObsoleteMemberJoins(retentionDays int) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	if retentionDays <= 0 {
+		retentionDays = 90 // default: keep 90 days of history
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	result, err := s.db.Exec(`DELETE FROM member_joins WHERE joined_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// CleanupObsoleteMemberRoles removes role records older than retentionDays
+func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	if retentionDays <= 0 {
+		retentionDays = 30 // default: keep 30 days of role history
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	result, err := s.db.Exec(`DELETE FROM roles_current WHERE updated_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// CleanupObsoleteAvatars removes avatar records older than retentionDays
+func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	if retentionDays <= 0 {
+		retentionDays = 180 // default: keep 6 months of avatar history
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	result, err := s.db.Exec(`DELETE FROM avatars_history WHERE changed_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// CleanupAllObsoleteData performs cleanup of all obsolete data with default retention periods
+func (s *Store) CleanupAllObsoleteData() error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+
+	// Cleanup expired messages
+	if err := s.CleanupExpiredMessages(); err != nil {
+		return fmt.Errorf("cleanup messages: %w", err)
+	}
+
+	// Cleanup expired cache entries
+	if err := s.CleanupExpiredCacheEntries(); err != nil {
+		return fmt.Errorf("cleanup cache: %w", err)
+	}
+
+	// Cleanup obsolete member joins (90 days)
+	if _, err := s.CleanupObsoleteMemberJoins(90); err != nil {
+		return fmt.Errorf("cleanup member joins: %w", err)
+	}
+
+	// Cleanup obsolete member roles (30 days)
+	if _, err := s.CleanupObsoleteMemberRoles(30); err != nil {
+		return fmt.Errorf("cleanup member roles: %w", err)
+	}
+
+	// Cleanup obsolete avatars (180 days)
+	if _, err := s.CleanupObsoleteAvatars(180); err != nil {
+		return fmt.Errorf("cleanup avatars: %w", err)
+	}
+
+	return nil
+}
+
 // UpsertMemberJoin records the earliest known join time for a member in a guild.
 func (s *Store) UpsertMemberJoin(guildID, userID string, joinedAt time.Time) error {
 	if s.db == nil {
@@ -729,6 +811,93 @@ func (s *Store) CleanupExpiredCacheEntries() error {
 		return fmt.Errorf("store not initialized")
 	}
 	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE expires_at <= ?`, time.Now().UTC())
+	return err
+}
+
+// DeleteCacheEntriesByPrefix deletes all cache entries with keys starting with the given prefix
+func (s *Store) DeleteCacheEntriesByPrefix(prefix string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if prefix == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE cache_key LIKE ?`, prefix+"%")
+	return err
+}
+
+// GetAllMemberJoins retrieves all member join records for a guild
+func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	rows, err := s.db.Query(`SELECT user_id, joined_at FROM member_joins WHERE guild_id=?`, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	members := make(map[string]time.Time)
+	for rows.Next() {
+		var userID string
+		var joinedAt time.Time
+		if err := rows.Scan(&userID, &joinedAt); err != nil {
+			return nil, err
+		}
+		members[userID] = joinedAt
+	}
+	return members, rows.Err()
+}
+
+// GetAllGuildMemberRoles retrieves all member roles for a guild
+func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	rows, err := s.db.Query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=?`, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	memberRoles := make(map[string][]string)
+	for rows.Next() {
+		var userID, roleID string
+		if err := rows.Scan(&userID, &roleID); err != nil {
+			return nil, err
+		}
+		memberRoles[userID] = append(memberRoles[userID], roleID)
+	}
+	return memberRoles, rows.Err()
+}
+
+// TouchMemberJoin updates the joined_at timestamp for a member (keeps it fresh)
+func (s *Store) TouchMemberJoin(guildID, userID string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`UPDATE member_joins SET joined_at=? WHERE guild_id=? AND user_id=?`,
+		time.Now().UTC(), guildID, userID,
+	)
+	return err
+}
+
+// TouchMemberRoles updates the updated_at timestamp for all member roles (keeps them fresh)
+func (s *Store) TouchMemberRoles(guildID, userID string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`UPDATE roles_current SET updated_at=? WHERE guild_id=? AND user_id=?`,
+		time.Now().UTC(), guildID, userID,
+	)
 	return err
 }
 

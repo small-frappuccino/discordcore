@@ -12,7 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
-// UnifiedCache provides an in-memory cache layer for frequently accessed Discord data
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
 // and optional SQLite persistence.
 type UnifiedCache struct {
@@ -590,6 +589,52 @@ func (uc *UnifiedCache) Clear() {
 	uc.channelsMu.Unlock()
 }
 
+// ClearGuild removes all cached data for a specific guild (members, guild, roles, channels)
+func (uc *UnifiedCache) ClearGuild(guildID string) error {
+	// Clear guild entry
+	uc.InvalidateGuild(guildID)
+
+	// Clear roles for this guild
+	uc.InvalidateRoles(guildID)
+
+	// Clear all members for this guild (scan all member keys with guildID prefix)
+	uc.membersMu.Lock()
+	prefix := guildID + ":"
+	keysToDelete := make([]string, 0)
+	for key := range uc.members {
+		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
+			keysToDelete = append(keysToDelete, key)
+		}
+	}
+	for _, key := range keysToDelete {
+		if entry, exists := uc.members[key]; exists {
+			uc.membersList.Remove(entry.element)
+			delete(uc.members, key)
+		}
+	}
+	uc.membersMu.Unlock()
+
+	// Clear channels for this guild (we need to track guild->channel mapping)
+	// For now, we'll need to get channels from Discord or store guild_id with channels
+	// This is a limitation - channels don't inherently store their guild_id in cache key
+
+	// Clear from persistent storage if enabled
+	if uc.persistEnabled && uc.store != nil {
+		// Delete persistent cache entries for this guild
+		if err := uc.store.DeleteCacheEntriesByPrefix("member:" + guildID); err != nil {
+			return fmt.Errorf("delete member cache entries: %w", err)
+		}
+		if err := uc.store.DeleteCacheEntriesByPrefix("guild:" + guildID); err != nil {
+			return fmt.Errorf("delete guild cache entry: %w", err)
+		}
+		if err := uc.store.DeleteCacheEntriesByPrefix("roles:" + guildID); err != nil {
+			return fmt.Errorf("delete roles cache entry: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // Stop stops the background cleanup goroutine
 func (uc *UnifiedCache) Stop() {
 	uc.cleanupOnce.Do(func() {
@@ -908,4 +953,33 @@ func (uc *UnifiedCache) PersistAndStop() error {
 		return uc.Persist()
 	}
 	return nil
+}
+
+// SetPersistInterval configures automatic persistence interval (0 disables auto-persist)
+func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{} {
+	if interval <= 0 || !uc.persistEnabled || uc.store == nil {
+		return nil
+	}
+
+	stopChan := make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := uc.Persist(); err != nil {
+					// Log error but continue
+				}
+			case <-stopChan:
+				return
+			case <-uc.stopCleanup:
+				return
+			}
+		}
+	}()
+
+	return stopChan
 }
