@@ -57,6 +57,10 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 		return connectErr
 	}); err != nil {
 		log.Error().Errorf("❌ Error during connection: %v", err)
+		// Clean up session if connection failed
+		if s != nil {
+			_ = s.Close()
+		}
 		return nil, fmt.Errorf(ErrSessionConnectionFailed, err)
 	}
 

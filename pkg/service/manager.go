@@ -113,6 +113,10 @@ type ServiceManager struct {
 	cancel       context.CancelFunc
 	errorHandler *errors.ErrorHandler
 
+	// Stop channel for health monitor
+	healthStop     chan struct{}
+	healthStopOnce sync.Once
+
 	// Configuration
 	shutdownTimeout time.Duration
 	healthInterval  time.Duration
@@ -130,6 +134,7 @@ func NewServiceManager(errorHandler *errors.ErrorHandler) *ServiceManager {
 		dependents:      make(map[string][]string),
 		ctx:             ctx,
 		cancel:          cancel,
+		healthStop:      make(chan struct{}),
 		errorHandler:    errorHandler,
 		shutdownTimeout: 30 * time.Second,
 		healthInterval:  1 * time.Minute,
@@ -191,6 +196,8 @@ func (sm *ServiceManager) StartAll() error {
 	}
 
 	// Start health monitoring
+	sm.healthStopOnce = sync.Once{}
+	sm.healthStop = make(chan struct{})
 	go sm.healthMonitor()
 
 	log.Info().Applicationf("All services started successfully; services_count=%d", len(sm.services))
@@ -203,6 +210,8 @@ func (sm *ServiceManager) StopAll() error {
 
 	// Cancel context to signal shutdown
 	sm.cancel()
+	// Signal health monitor to stop immediately
+	sm.healthStopOnce.Do(func() { close(sm.healthStop) })
 
 	startOrder, err := sm.calculateStartOrder()
 	if err != nil {
@@ -473,6 +482,8 @@ func (sm *ServiceManager) healthMonitor() {
 	for {
 		select {
 		case <-sm.ctx.Done():
+			return
+		case <-sm.healthStop:
 			return
 		case <-ticker.C:
 			sm.performHealthChecks()

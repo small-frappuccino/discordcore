@@ -172,6 +172,11 @@ func (cm *CommandManager) SetupCommands() error {
 	// Registrar handler de interações
 	cm.session.AddHandler(cm.router.HandleInteraction)
 
+	// Verify session state is properly initialized
+	if cm.session == nil || cm.session.State == nil || cm.session.State.User == nil {
+		return fmt.Errorf("session not properly initialized")
+	}
+
 	// Obter comandos já registrados no Discord
 	registered, err := cm.session.ApplicationCommands(cm.session.State.User.ID, "")
 	if err != nil {

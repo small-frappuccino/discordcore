@@ -254,8 +254,12 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 }
 
 func FindSuitableChannel(session *discordgo.Session, guildID string) string {
+	// Verify session state is properly initialized
+	if session == nil || session.State == nil || session.State.User == nil {
+		return ""
+	}
 	channels, err := session.GuildChannels(guildID)
-	if err != nil {
+	if err != nil || channels == nil {
 		return ""
 	}
 	for _, channel := range channels {
@@ -275,6 +279,10 @@ func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 }
 
 func FindOrCreateEntryLeaveChannel(session *discordgo.Session, guildID string) string {
+	// Verify session state is properly initialized
+	if session == nil || session.State == nil || session.State.User == nil {
+		return ""
+	}
 	channels, err := session.GuildChannels(guildID)
 	if err == nil {
 		for _, channel := range channels {
@@ -320,6 +328,10 @@ func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []strin
 }
 
 func GetTextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
+	// Verify session state is properly initialized
+	if session == nil || session.State == nil || session.State.User == nil {
+		return nil, fmt.Errorf("session not properly initialized")
+	}
 	channels, err := session.GuildChannels(guildID)
 	if err != nil {
 		return nil, err
@@ -337,6 +349,10 @@ func GetTextChannels(session *discordgo.Session, guildID string) ([]*discordgo.C
 }
 
 func ValidateChannel(session *discordgo.Session, guildID, channelID string) error {
+	// Verify session state is properly initialized
+	if session == nil || session.State == nil || session.State.User == nil {
+		return errors.New("session not properly initialized")
+	}
 	channel, err := session.Channel(channelID)
 	if err != nil {
 		return fmt.Errorf("%s: %w", ErrChannelNotFound, err)

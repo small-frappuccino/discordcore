@@ -3,6 +3,7 @@ package logging
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -23,9 +24,13 @@ type MemberEventService struct {
 	// Cache para tempos de entrada (membro e bot)
 
 	joinTimes map[string]time.Time // chave: guildID:userID
+	joinMu    sync.RWMutex
 
 	// Persistência complementar (SQLite)
 	store *storage.Store
+
+	// Cleanup control
+	cleanupStop chan struct{}
 }
 
 // NewMemberEventService cria uma nova instância do serviço de eventos de membros
@@ -36,6 +41,7 @@ func NewMemberEventService(session *discordgo.Session, configManager *files.Conf
 		notifier:      notifier,
 		store:         store,
 		isRunning:     false,
+		cleanupStop:   make(chan struct{}),
 	}
 }
 
@@ -65,6 +71,10 @@ func (mes *MemberEventService) Start() error {
 	mes.session.AddHandler(mes.handleGuildMemberAdd)
 	mes.session.AddHandler(mes.handleGuildMemberRemove)
 
+	// Start periodic cleanup of old joinTimes entries
+	mes.cleanupStop = make(chan struct{})
+	go mes.cleanupLoop()
+
 	log.Info().Applicationf("Member event service started")
 	return nil
 }
@@ -75,6 +85,13 @@ func (mes *MemberEventService) Stop() error {
 		return fmt.Errorf("member event service is not running")
 	}
 	mes.isRunning = false
+
+	// Stop cleanup goroutine
+	if mes.cleanupStop != nil {
+		close(mes.cleanupStop)
+		mes.cleanupStop = nil
+	}
+
 	log.Info().Applicationf("Member event service stopped")
 	return nil
 }
@@ -118,10 +135,12 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 
 	// NEW: Registrar horário de entrada do membro (preciso) em memória
 	if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
+		mes.joinMu.Lock()
 		if mes.joinTimes == nil {
 			mes.joinTimes = make(map[string]time.Time)
 		}
 		mes.joinTimes[m.GuildID+":"+m.User.ID] = member.JoinedAt
+		mes.joinMu.Unlock()
 	}
 
 	log.Info().Applicationf("Member joined guild: guildID=%s, userID=%s, username=%s, accountAge=%s", m.GuildID, m.User.ID, m.User.Username, accountAge.String())
@@ -163,7 +182,12 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 
 	// Calcular há quanto tempo estava no servidor
 	var serverTime time.Duration
-	if t, ok := mes.joinTimes[m.GuildID+":"+m.User.ID]; ok && !t.IsZero() {
+	var t time.Time
+	var ok bool
+	mes.joinMu.RLock()
+	t, ok = mes.joinTimes[m.GuildID+":"+m.User.ID]
+	mes.joinMu.RUnlock()
+	if ok && !t.IsZero() {
 		serverTime = time.Since(t)
 	} else {
 		serverTime = mes.calculateServerTime(m.GuildID, m.User.ID)
@@ -209,7 +233,10 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 // Agora usa múltiplas fontes em ordem: memória -> SQLite
 func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.Duration {
 	// 1) memória (mais preciso no runtime)
-	if t, ok := mes.joinTimes[guildID+":"+userID]; ok && !t.IsZero() {
+	mes.joinMu.RLock()
+	t, ok := mes.joinTimes[guildID+":"+userID]
+	mes.joinMu.RUnlock()
+	if ok && !t.IsZero() {
 		return time.Since(t)
 	}
 
@@ -220,6 +247,54 @@ func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.
 		}
 	}
 	return 0
+}
+
+// cleanupLoop periodically removes old entries from joinTimes map
+func (mes *MemberEventService) cleanupLoop() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			mes.cleanupJoinTimes()
+		case <-mes.cleanupStop:
+			return
+		}
+	}
+}
+
+// cleanupJoinTimes removes entries older than 7 days from joinTimes map
+func (mes *MemberEventService) cleanupJoinTimes() {
+	if mes.joinTimes == nil {
+		return
+	}
+
+	now := time.Now()
+	threshold := 7 * 24 * time.Hour
+	var toDelete []string
+
+	// Collect keys to delete (can't delete while iterating)
+	mes.joinMu.RLock()
+	for key, joinTime := range mes.joinTimes {
+		if now.Sub(joinTime) > threshold {
+			toDelete = append(toDelete, key)
+		}
+	}
+	mes.joinMu.RUnlock()
+
+	// Delete old entries
+	if len(toDelete) > 0 {
+		mes.joinMu.Lock()
+		for _, key := range toDelete {
+			delete(mes.joinTimes, key)
+		}
+		mes.joinMu.Unlock()
+	}
+
+	if len(toDelete) > 0 {
+		log.Info().Applicationf("Cleaned up %d old join time entries from memory", len(toDelete))
+	}
 }
 
 func (mes *MemberEventService) markEvent() {

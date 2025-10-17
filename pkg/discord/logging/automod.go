@@ -17,6 +17,9 @@ type AutomodService struct {
 	configManager *files.ConfigManager
 	adapters      *task.NotificationAdapters
 	isRunning     bool
+
+	// unsubscribe function for the registered handler
+	handlerCancel func()
 }
 
 func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager) *AutomodService {
@@ -39,13 +42,17 @@ func (as *AutomodService) Start() {
 	as.isRunning = true
 
 	// Use Discord native AutoMod: listen for action execution events
-	as.session.AddHandler(as.handleAutoModerationAction)
+	as.handlerCancel = as.session.AddHandler(as.handleAutoModerationAction)
 }
 
 // Stop stops the service (no-op for now).
 func (as *AutomodService) Stop() {
 	if !as.isRunning {
 		return
+	}
+	if as.handlerCancel != nil {
+		as.handlerCancel()
+		as.handlerCancel = nil
 	}
 	as.isRunning = false
 }

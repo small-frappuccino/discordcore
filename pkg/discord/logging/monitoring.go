@@ -49,10 +49,11 @@ type MonitoringService struct {
 	adapters            *task.NotificationAdapters
 	router              *task.TaskRouter
 	userWatcher         *UserWatcher
-	memberEventService  *MemberEventService  // Serviço para eventos de entrada/saída
+	memberEventService  *MemberEventService  // Serviço para eventos de membros
 	messageEventService *MessageEventService // Serviço para eventos de mensagens
 	isRunning           bool
 	stopChan            chan struct{}
+	stopOnce            sync.Once
 	runMu               sync.Mutex
 	recentChanges       map[string]time.Time // Debounce para evitar duplicidade
 	changesMutex        sync.RWMutex
@@ -66,9 +67,13 @@ type MonitoringService struct {
 	unifiedCache *cache.UnifiedCache
 
 	// In-memory roles cache with TTL to reduce REST/DB lookups
-	rolesCache   map[string]cachedRoles
-	rolesCacheMu sync.RWMutex
-	rolesTTL     time.Duration
+	rolesCache        map[string]cachedRoles
+	rolesCacheMu      sync.RWMutex
+	rolesTTL          time.Duration
+	rolesCacheCleanup chan struct{}
+
+	// Event handler references for cleanup
+	eventHandlers []interface{}
 
 	// Metrics counters
 	apiAuditLogCalls     uint64
@@ -120,6 +125,8 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		recentChanges:       make(map[string]time.Time),
 		rolesCache:          make(map[string]cachedRoles),
 		rolesTTL:            5 * time.Minute,
+		rolesCacheCleanup:   make(chan struct{}),
+		eventHandlers:       make([]interface{}, 0),
 	}
 	// Wire task adapters into sub-services
 	ms.memberEventService.SetAdapters(adapters)
@@ -136,7 +143,9 @@ func (ms *MonitoringService) Start() error {
 		return fmt.Errorf("monitoring service is already running")
 	}
 	ms.isRunning = true
+	// Recreate stopChan and reset stopOnce for restart
 	ms.stopChan = make(chan struct{})
+	ms.stopOnce = sync.Once{}
 
 	// Warmup cache from persistent storage if enabled
 	if ms.unifiedCache != nil {
@@ -156,6 +165,9 @@ func (ms *MonitoringService) Start() error {
 	ms.setupEventHandlers()
 	// Start periodic heartbeat tracker (persisted)
 	ms.startHeartbeat()
+	// Start periodic roles cache cleanup
+	ms.rolesCacheCleanup = make(chan struct{})
+	go ms.rolesCacheCleanupLoop()
 
 	// Iniciar novos serviços
 	if err := ms.memberEventService.Start(); err != nil {
@@ -188,7 +200,10 @@ func (ms *MonitoringService) Stop() error {
 		return fmt.Errorf("monitoring service is not running")
 	}
 	ms.isRunning = false
-	close(ms.stopChan)
+	// Use sync.Once to prevent double-closing stopChan
+	ms.stopOnce.Do(func() {
+		close(ms.stopChan)
+	})
 	ms.stopHeartbeat()
 
 	// Persist cache before shutdown
@@ -201,7 +216,18 @@ func (ms *MonitoringService) Stop() error {
 			total := stats.MemberEntries + stats.GuildEntries + stats.RolesEntries + stats.ChannelEntries
 			log.Info().Applicationf("✅ Cache persisted: %d entries saved", total)
 		}
+		// Stop cache cleanup goroutine
+		ms.unifiedCache.Stop()
 	}
+
+	// Stop roles cache cleanup
+	if ms.rolesCacheCleanup != nil {
+		close(ms.rolesCacheCleanup)
+		ms.rolesCacheCleanup = nil
+	}
+
+	// Remove event handlers
+	ms.removeEventHandlers()
 
 	// Parar novos serviços
 	if err := ms.memberEventService.Stop(); err != nil {
@@ -310,11 +336,30 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 
 // setupEventHandlers registra handlers do Discord.
 func (ms *MonitoringService) setupEventHandlers() {
-	ms.session.AddHandler(ms.handlePresenceUpdate)
-	ms.session.AddHandler(ms.handleMemberUpdate)
-	ms.session.AddHandler(ms.handleUserUpdate)
-	ms.session.AddHandler(ms.handleGuildCreate)
-	ms.session.AddHandler(ms.handleGuildUpdate)
+	// Store handler references for later removal
+	ms.eventHandlers = append(ms.eventHandlers,
+		ms.session.AddHandler(ms.handlePresenceUpdate),
+		ms.session.AddHandler(ms.handleMemberUpdate),
+		ms.session.AddHandler(ms.handleUserUpdate),
+		ms.session.AddHandler(ms.handleGuildCreate),
+		ms.session.AddHandler(ms.handleGuildUpdate),
+	)
+}
+
+// removeEventHandlers removes all registered event handlers
+// Note: discordgo doesn't support RemoveHandler, so handlers persist for session lifetime
+// This is acceptable since the session is closed on shutdown
+func (ms *MonitoringService) removeEventHandlers() {
+	// Call unsubscriber functions returned by AddHandler to deregister callbacks
+	for _, h := range ms.eventHandlers {
+		if h == nil {
+			continue
+		}
+		if fn, ok := h.(func()); ok {
+			fn()
+		}
+	}
+	ms.eventHandlers = nil
 }
 
 // ensureGuildsListed adiciona entradas mínimas de guild no discordcore.json
@@ -839,6 +884,44 @@ func (ms *MonitoringService) stopHeartbeat() {
 	if ms.heartbeatStop != nil {
 		close(ms.heartbeatStop)
 		ms.heartbeatStop = nil
+	}
+}
+
+// rolesCacheCleanupLoop periodically removes expired entries from rolesCache
+func (ms *MonitoringService) rolesCacheCleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			ms.cleanupRolesCache()
+		case <-ms.rolesCacheCleanup:
+			return
+		}
+	}
+}
+
+// cleanupRolesCache removes expired entries from rolesCache map
+func (ms *MonitoringService) cleanupRolesCache() {
+	now := time.Now()
+	var toDelete []string
+
+	ms.rolesCacheMu.RLock()
+	for key, entry := range ms.rolesCache {
+		if now.After(entry.expiresAt) {
+			toDelete = append(toDelete, key)
+		}
+	}
+	ms.rolesCacheMu.RUnlock()
+
+	if len(toDelete) > 0 {
+		ms.rolesCacheMu.Lock()
+		for _, key := range toDelete {
+			delete(ms.rolesCache, key)
+		}
+		ms.rolesCacheMu.Unlock()
+		log.Info().Applicationf("Cleaned up %d expired roles cache entries", len(toDelete))
 	}
 }
 

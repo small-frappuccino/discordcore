@@ -263,6 +263,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 				_, _ = ctx.Session.ChannelMessageEditEmbed(chID, msgID, embed)
 			case <-timeout:
 				return
+
 			}
 		}
 	}(channelID, msg.ID, time.Duration(intervalSec)*time.Second, time.Duration(durationSec)*time.Second)

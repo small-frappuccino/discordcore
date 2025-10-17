@@ -638,7 +638,10 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 // Stop stops the background cleanup goroutine
 func (uc *UnifiedCache) Stop() {
 	uc.cleanupOnce.Do(func() {
-		close(uc.stopCleanup)
+		if uc.stopCleanup != nil {
+			close(uc.stopCleanup)
+			uc.stopCleanup = nil
+		}
 	})
 }
 

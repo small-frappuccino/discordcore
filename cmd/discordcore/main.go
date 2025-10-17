@@ -78,6 +78,10 @@ func main() {
 		log.Error().Errorf("❌ Authentication failed with Discord API: %v", err)
 		log.Error().Fatalf("❌ Error creating Discord session: %v", err)
 	}
+	// Verify session state is properly initialized
+	if discordSession.State == nil || discordSession.State.User == nil {
+		log.Error().Fatalf("❌ Discord session state not properly initialized")
+	}
 	log.Info().Discordf("✅ Successfully authenticated with Discord API as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
 
 	// Initialize minimal cache structure (idempotent)
@@ -278,9 +282,24 @@ func main() {
 		if err := serviceManager.StopAll(); err != nil {
 			log.Error().Errorf("Some services failed to stop cleanly: %v", err)
 		}
+
+		// Close task routers to stop background goroutines
+		if automodRouter != nil {
+			automodRouter.Close()
+		}
+
+		// Allow services to finish final writes before closing store
+		time.Sleep(100 * time.Millisecond)
+
 		if store != nil {
 			_ = store.Close()
 		}
+
+		// Close Discord session
+		if discordSession != nil {
+			_ = discordSession.Close()
+		}
+
 		_ = shutdownCtx
 	}()
 
