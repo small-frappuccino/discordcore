@@ -11,6 +11,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	genericcache "github.com/small-frappuccino/discordcore/pkg/cache"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
@@ -82,6 +83,26 @@ type lruEntry struct {
 	value     interface{}
 	expiresAt time.Time
 	element   *list.Element
+}
+
+// Small helpers to build keys/prefixes and centralize comparisons
+func (uc *UnifiedCache) memberKey(guildID, userID string) string {
+	if guildID == "" || userID == "" {
+		return ""
+	}
+	return guildID + ":" + userID
+}
+
+func (uc *UnifiedCache) memberPrefix(guildID string) string {
+	if guildID == "" {
+		return ""
+	}
+	return guildID + ":"
+}
+
+// hasPrefix reports whether key starts with prefix (no allocations)
+func hasPrefix(key, prefix string) bool {
+	return util.HasPrefix(key, prefix)
 }
 
 // Cached value types
@@ -192,7 +213,7 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 
 // GetMember retrieves a cached member or returns nil if not found/expired
 func (uc *UnifiedCache) GetMember(guildID, userID string) (*discordgo.Member, bool) {
-	key := guildID + ":" + userID
+	key := uc.memberKey(guildID, userID)
 	uc.membersMu.Lock()
 	defer uc.membersMu.Unlock()
 
@@ -220,7 +241,7 @@ func (uc *UnifiedCache) SetMember(guildID, userID string, member *discordgo.Memb
 	if member == nil {
 		return
 	}
-	key := guildID + ":" + userID
+	key := uc.memberKey(guildID, userID)
 	cached := &cachedMember{
 		member:    member,
 		expiresAt: time.Now().Add(uc.memberTTL),
@@ -265,7 +286,7 @@ func (uc *UnifiedCache) evictMemberLRU() {
 
 // InvalidateMember removes a member from the cache
 func (uc *UnifiedCache) InvalidateMember(guildID, userID string) {
-	key := guildID + ":" + userID
+	key := uc.memberKey(guildID, userID)
 	uc.membersMu.Lock()
 	if entry, ok := uc.members[key]; ok {
 		uc.membersList.Remove(entry.element)
@@ -614,6 +635,11 @@ func (uc *UnifiedCache) StatsGeneric() genericcache.CacheStats {
 }
 
 // WasWarmedUpRecently returns whether Warmup was executed within the given duration
+// WasWarmedUpRecently reports whether a warmup has occurred within the given duration.
+// Semantics:
+// - d <= 0 returns false (treats as disabled check).
+// - If no warmup has ever occurred (zero timestamp), returns false.
+// - Otherwise returns time.Since(lastWarmup) <= d.
 func (uc *UnifiedCache) WasWarmedUpRecently(d time.Duration) bool {
 	if d <= 0 {
 		return false
@@ -645,6 +671,12 @@ type CacheStats struct {
 }
 
 // Clear removes all entries from the cache
+// Clear removes all in-memory cache entries across all cache types.
+//
+// Semantics:
+// - Only in-memory maps are reset (members, guilds, roles, channels).
+// - No persistent storage rows are touched. Use PersistAndStop or ClearGuild for durable cleanup.
+// - This is safe to call at any time; ongoing readers may miss entries immediately after.
 func (uc *UnifiedCache) Clear() {
 	uc.membersMu.Lock()
 	uc.members = make(map[string]*lruEntry)
@@ -667,7 +699,17 @@ func (uc *UnifiedCache) Clear() {
 	uc.channelsMu.Unlock()
 }
 
-// ClearGuild removes all cached data for a specific guild (members, guild, roles, channels)
+// ClearGuild removes all cached data for a specific guild.
+//
+// Semantics:
+//   - In-memory: invalidates guild, roles, and all member entries whose key has prefix "<guildID>:".
+//   - Persistent: if persistence is enabled and a store is configured, it deletes durable rows by
+//     cache_type and key prefix for:
+//   - members:   type "member", keys "<guildID>:<userID>"
+//   - guild:     type "guild",  key  "<guildID>"
+//   - roles:     type "roles",  key  "<guildID>"
+//   - Channels: in-memory channel cache does not have a guild-prefix key; separate handling would be needed.
+//   - Idempotent: safe to call multiple times.
 func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	// Clear guild entry
 	uc.InvalidateGuild(guildID)
@@ -677,10 +719,10 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 
 	// Clear all members for this guild (scan all member keys with guildID prefix)
 	uc.membersMu.Lock()
-	prefix := guildID + ":"
+	prefix := uc.memberPrefix(guildID)
 	keysToDelete := make([]string, 0)
 	for key := range uc.members {
-		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
+		if util.HasPrefix(key, prefix) {
 			keysToDelete = append(keysToDelete, key)
 		}
 	}
@@ -698,14 +740,14 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 
 	// Clear from persistent storage if enabled
 	if uc.persistEnabled && uc.store != nil {
-		// Delete persistent cache entries for this guild
-		if err := uc.store.DeleteCacheEntriesByPrefix("member:" + guildID); err != nil {
+		// Delete persistent cache entries for this guild using precise type+prefix filtering
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("member", guildID+":"); err != nil {
 			return fmt.Errorf("delete member cache entries: %w", err)
 		}
-		if err := uc.store.DeleteCacheEntriesByPrefix("guild:" + guildID); err != nil {
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("guild", guildID); err != nil {
 			return fmt.Errorf("delete guild cache entry: %w", err)
 		}
-		if err := uc.store.DeleteCacheEntriesByPrefix("roles:" + guildID); err != nil {
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("roles", guildID); err != nil {
 			return fmt.Errorf("delete roles cache entry: %w", err)
 		}
 	}
@@ -791,6 +833,12 @@ func (uc *UnifiedCache) cleanupExpired() {
 }
 
 // Persist saves current cache state to SQLite (if enabled)
+// Persist writes all non-expired in-memory entries to the persistent store.
+//
+// Notes:
+// - Each cache type is encoded to JSON and upserted with its TTL-derived expiry.
+// - Errors are aggregated; the method returns a single error summarizing count, if any.
+// - No entries are removed in-memory by this call.
 func (uc *UnifiedCache) Persist() error {
 	if !uc.persistEnabled || uc.store == nil {
 		return nil
@@ -869,6 +917,14 @@ func (uc *UnifiedCache) Persist() error {
 }
 
 // Warmup pre-populates the cache from SQLite (if enabled)
+//
+// Behavior and guarantees:
+// - No-op if persistence is disabled or the store is nil.
+// - Loads only non-expired entries for each cache type ("member", "guild", "roles", "channel").
+// - Uses internal setters that bypass LRU side effects during initial load.
+// - Does not evict existing in-memory entries; entries are upserted by key.
+// - Corrupt rows are skipped (best-effort); errors per section return with context.
+// - Updates the last warmup timestamp for WasWarmedUpRecently checks.
 func (uc *UnifiedCache) Warmup() error {
 	if !uc.persistEnabled || uc.store == nil {
 		return nil
@@ -1041,6 +1097,12 @@ func (uc *UnifiedCache) PersistAndStop() error {
 }
 
 // SetPersistInterval configures automatic persistence interval (0 disables auto-persist)
+// SetPersistInterval starts a background ticker to periodically call Persist.
+//
+// Semantics:
+// - interval <= 0 or missing store/persistence disables scheduling and returns nil.
+// - Returns a channel; closing the returned channel stops the ticker goroutine.
+// - The ticker is independent of cleanupLoop; both may run concurrently.
 func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{} {
 	if interval <= 0 || !uc.persistEnabled || uc.store == nil {
 		return nil

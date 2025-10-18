@@ -170,12 +170,15 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 			continue
 		}
 
+		// Determine allowed roles
 		roles := FindAdminRoles(session, g.ID, fullGuild.OwnerID)
+
+		entryLeaveID := FindEntryLeaveChannel(session, g.ID)
 		guildCfg := GuildConfig{
 			GuildID:                 g.ID,
 			CommandChannelID:        channelID,
 			UserLogChannelID:        channelID,
-			UserEntryLeaveChannelID: FindOrCreateEntryLeaveChannel(session, g.ID),
+			UserEntryLeaveChannelID: entryLeaveID,
 			AllowedRoles:            roles,
 		}
 		mgr.mu.Lock()
@@ -218,11 +221,16 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		return fmt.Errorf(ErrNoSuitableChannelMsg, guild.Name)
 	}
 	roles := FindAdminRoles(session, guildID, guild.OwnerID)
+	entryLeaveID := FindEntryLeaveChannel(session, guildID)
+	if entryLeaveID == "" {
+		entryLeaveID = channelID
+	}
+
 	guildCfg := GuildConfig{
 		GuildID:                 guildID,
 		CommandChannelID:        channelID,
 		UserLogChannelID:        channelID,
-		UserEntryLeaveChannelID: FindOrCreateEntryLeaveChannel(session, guildID),
+		UserEntryLeaveChannelID: entryLeaveID,
 		AllowedRoles:            roles,
 	}
 	mgr.mu.Lock()
@@ -276,6 +284,50 @@ func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 		}
 	}
 	return ""
+}
+
+func FindEntryLeaveChannel(session *discordgo.Session, guildID string) string {
+	// Verify session state is properly initialized
+	if session == nil || session.State == nil || session.State.User == nil {
+		return ""
+	}
+	channels, err := session.GuildChannels(guildID)
+	if err != nil {
+		return ""
+	}
+	for _, channel := range channels {
+		if channel.Type == discordgo.ChannelTypeGuildText {
+			name := strings.ToLower(channel.Name)
+			if name == "user-entry-leave" {
+				if HasSendPermission(session, channel.ID) {
+					return channel.ID
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// Deprecated: prefer FindEntryLeaveChannel. This function may create a new channel;
+// avoid using it during detection/registration flows.
+func IsCanonicalEntryLeaveName(name string) bool {
+	name = strings.ToLower(name)
+	switch name {
+	case "user-entry-leave", "entry-leave", "joins-leaves", "join-leave", "member-log", "members-log", "member-logs", "user-logs", "welcome-goodbye":
+		return true
+	default:
+		return false
+	}
+}
+
+func HasSendPermission(session *discordgo.Session, channelID string) bool {
+	if session == nil || session.State == nil || session.State.User == nil || channelID == "" {
+		return false
+	}
+	if perms, err := session.UserChannelPermissions(session.State.User.ID, channelID); err == nil {
+		return (perms & discordgo.PermissionSendMessages) != 0
+	}
+	return false
 }
 
 func FindOrCreateEntryLeaveChannel(session *discordgo.Session, guildID string) string {

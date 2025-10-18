@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
 	"sync"
 )
 
@@ -84,7 +84,7 @@ func safeJoin(baseDir, relPath string) (string, error) {
 	cleanBase := filepath.Clean(baseDir)
 	cleanPath := filepath.Join(cleanBase, relPath)
 	rel, err := filepath.Rel(cleanBase, cleanPath)
-	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+	if err != nil || HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		return "", fmt.Errorf("invalid path: %s", relPath)
 	}
 	return cleanPath, nil

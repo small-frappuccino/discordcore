@@ -24,6 +24,11 @@ import (
 // Callers should pass the exact environment variable name they expect (for example
 // "ALICE_BOT_DEVELOPMENT_TOKEN" or a repo-specific token name).
 func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
+	// First, honor already-set environment variable
+	if v := os.Getenv(tokenEnvName); v != "" {
+		return v, nil
+	}
+
 	// Determine fallback path: $HOME/.local/bin/.env
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -44,6 +49,6 @@ func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
 		return "", fmt.Errorf("environment variable %q not set after loading fallback file %s", tokenEnvName, envPath)
 	}
 
-	// Fallback file does not exist
-	return "", fmt.Errorf("fallback env file not found: %s", envPath)
+	// Fallback file does not exist and env var not set
+	return "", fmt.Errorf("environment variable %q not set and fallback env file not found: %s", tokenEnvName, envPath)
 }

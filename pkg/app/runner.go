@@ -23,6 +23,11 @@ import (
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
 // appName affects config/cache/log paths; tokenEnv is the environment variable containing the bot token.
+// Run bootstraps the bot with a unified flow and blocks until shutdown.
+// Environment: the tokenEnv is read from the current process environment first; if empty,
+// a fallback $HOME/.local/bin/.env file will be loaded and the variable re-checked.
+// Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
+// remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
 func Run(appName, tokenEnv string) error {
 	started := time.Now()
 

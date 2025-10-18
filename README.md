@@ -2,6 +2,13 @@
 
 Uma biblioteca modular em Go para bots do Discord que oferece monitoramento abrangente de eventos e gerenciamento de configurações.
 
+## Variáveis de Ambiente (Tokens)
+
+- ALICE_BOT_PRODUCTION_TOKEN: token de produção do bot Alice (usado pelo app alicebot)
+- ALICE_BOT_DEVELOPMENT_TOKEN: token de desenvolvimento para testes (usado pelo exemplo discordcore)
+
+O core primeiro verifica se a variável já está definida no ambiente. Se não estiver, tenta carregar $HOME/.local/bin/.env e, após carregar, verifica novamente as variáveis de ambiente.
+
 ## 🚀 Funcionalidades
 
 ### ✅ Implementadas

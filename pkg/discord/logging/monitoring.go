@@ -176,7 +176,48 @@ func (ms *MonitoringService) Start() error {
 		ms.performPeriodicCheck()
 		return nil
 	})
+
+	// Register a daily roles DB refresh task and run once at startup
+	ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
+		cfg := ms.configManager.Config()
+		if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
+			return nil
+		}
+		start := time.Now()
+		totalUpdates := 0
+		for _, gcfg := range cfg.Guilds {
+			members, err := ms.fetchAllGuildMembers(gcfg.GuildID)
+			if err != nil {
+				log.Error().Errorf("Error refreshing roles for guild %s: %v", gcfg.GuildID, err)
+				continue
+			}
+			for _, member := range members {
+				if len(member.Roles) == 0 {
+					continue
+				}
+				if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
+					log.Warn().Applicationf("Failed to upsert roles for user %s in guild %s: %v", member.User.ID, gcfg.GuildID, err)
+					continue
+				}
+				ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
+				totalUpdates++
+			}
+		}
+		log.Info().Applicationf("✅ Roles DB refresh completed: %d members updated in %s", totalUpdates, time.Since(start).Round(time.Second))
+		return nil
+	})
+
+	// Using TaskRouter scheduler helpers for daily scheduling
+	// Schedule periodic jobs
 	ms.cronCancel = ms.router.ScheduleEvery(30*time.Minute, task.Task{Type: "monitor.scan_avatars"})
+	// Schedule daily roles refresh at 03:00 UTC
+	ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
+
+	// Trigger one-time roles refresh on startup (non-blocking)
+	go func() {
+		_ = ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.refresh_roles"})
+	}()
+
 	log.Info().Applicationf("All monitoring services started successfully")
 	return nil
 }
@@ -337,8 +378,8 @@ func (ms *MonitoringService) setupEventHandlers() {
 }
 
 // removeEventHandlers removes all registered event handlers
-// Note: discordgo doesn't support RemoveHandler, so handlers persist for session lifetime
-// This is acceptable since the session is closed on shutdown
+// Note: discordgo returns an unsubscribe function from AddHandler; we capture those when registering and call them here
+// Handlers are explicitly removed; any remaining handlers will be dropped when the session is closed on shutdown
 func (ms *MonitoringService) removeEventHandlers() {
 	// Call unsubscriber functions returned by AddHandler to deregister callbacks
 	for _, h := range ms.eventHandlers {
@@ -427,7 +468,6 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 		return
 	}
 	ms.markEvent()
-	ms.markEvent()
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 }
 
@@ -455,6 +495,58 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 
 	// Buscar audit log de atualização de cargos usando constante e com retentativa curta
 	actionType := int(discordgo.AuditLogActionMemberRoleUpdate)
+
+	// Helper para obter diff verificado entre o snapshot local (memória/SQLite) e o estado atual no Discord.
+	// Retorna também os roles atuais considerados para atualização de snapshot.
+	computeVerifiedDiff := func(guildID, userID string, proposed []string) (cur []string, added []string, removed []string) {
+		// 1) determinar estado atual a partir do proposto (event) ou do Discord
+		cur = proposed
+		if len(cur) == 0 {
+			if member, err := ms.getGuildMember(guildID, userID); err == nil && member != nil {
+				cur = member.Roles
+			}
+		}
+		if len(cur) == 0 {
+			return cur, nil, nil
+		}
+
+		// 2) obter estado anterior (preferir cache em memória com TTL; fallback SQLite)
+		var prev []string
+		if p, ok := ms.cacheRolesGet(guildID, userID); ok {
+			atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
+			prev = p
+		} else if ms.store != nil {
+			if r, err := ms.store.GetMemberRoles(guildID, userID); err == nil {
+				atomic.AddUint64(&ms.cacheRolesStoreHits, 1)
+				prev = r
+			}
+		}
+
+		// 3) calcular diffs
+		curSet := make(map[string]struct{}, len(cur))
+		for _, r := range cur {
+			if r != "" {
+				curSet[r] = struct{}{}
+			}
+		}
+		prevSet := make(map[string]struct{}, len(prev))
+		for _, r := range prev {
+			if r != "" {
+				prevSet[r] = struct{}{}
+			}
+		}
+		for r := range curSet {
+			if _, ok := prevSet[r]; !ok {
+				added = append(added, r)
+			}
+		}
+		for r := range prevSet {
+			if _, ok := curSet[r]; !ok {
+				removed = append(removed, r)
+			}
+		}
+		return cur, added, removed
+	}
 
 	tryFetchAndNotify := func() (sent bool) {
 		audit, err := ms.session.GuildAuditLog(m.GuildID, "", "", actionType, 10)
@@ -557,6 +649,50 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				return out
 			}
 
+			// Verificar com o Discord + DB quais mudanças realmente foram aplicadas
+			curRoles, verifiedAdded, verifiedRemoved := computeVerifiedDiff(m.GuildID, m.User.ID, m.Roles)
+
+			toSet := func(ids []string) map[string]struct{} {
+				s := make(map[string]struct{}, len(ids))
+				for _, id := range ids {
+					if id != "" {
+						s[id] = struct{}{}
+					}
+				}
+				return s
+			}
+			verifiedAddedSet := toSet(verifiedAdded)
+			verifiedRemovedSet := toSet(verifiedRemoved)
+
+			// Filtrar apenas os cargos que realmente foram adicionados/removidos segundo o estado atual
+			filteredAdded := make([]rolePartial, 0, len(added))
+			for _, r := range added {
+				if r.ID != "" {
+					if _, ok := verifiedAddedSet[r.ID]; ok {
+						filteredAdded = append(filteredAdded, r)
+					}
+				}
+			}
+			filteredRemoved := make([]rolePartial, 0, len(removed))
+			for _, r := range removed {
+				if r.ID != "" {
+					if _, ok := verifiedRemovedSet[r.ID]; ok {
+						filteredRemoved = append(filteredRemoved, r)
+					}
+				}
+			}
+
+			// Se nada restou após verificação, não enviar embed
+			if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
+				// Atualizar snapshot mesmo assim para manter o DB consistente
+				if ms.store != nil && len(curRoles) > 0 {
+					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
+					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+				}
+				// Continuar varrendo outras entries possíveis
+				continue
+			}
+
 			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>)", actorID, m.User.Username, m.User.ID)
 			embed := &discordgo.MessageEmbed{
 				Title:       "Roles updated",
@@ -565,12 +701,12 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				Fields: []*discordgo.MessageEmbedField{
 					{
 						Name:   "Added",
-						Value:  buildList(added),
+						Value:  buildList(filteredAdded),
 						Inline: true,
 					},
 					{
 						Name:   "Removed",
-						Value:  buildList(removed),
+						Value:  buildList(filteredRemoved),
 						Inline: true,
 					},
 				},
@@ -582,12 +718,10 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				log.Error().Errorf("Failed to send role update notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, channelID, sendErr)
 			} else {
 				log.Info().Applicationf("Role update notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, channelID)
-				// Update cached roles snapshot for this member after processing update
-				if ms.store != nil {
-					if member, err := ms.getGuildMember(m.GuildID, m.User.ID); err == nil && member != nil && len(member.Roles) > 0 {
-						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, member.Roles, time.Now())
-						ms.cacheRolesSet(m.GuildID, m.User.ID, member.Roles)
-					}
+				// Atualizar snapshot para refletir o estado após a mudança
+				if ms.store != nil && len(curRoles) > 0 {
+					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
+					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
 				}
 			}
 
@@ -616,35 +750,8 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		}
 		if len(curRoles) > 0 {
 			var addedIDs, removedIDs []string
-			var diffErr error
-			if prev, ok := ms.cacheRolesGet(m.GuildID, m.User.ID); ok {
-				atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
-				curSet := make(map[string]struct{}, len(curRoles))
-				for _, r := range curRoles {
-					if r != "" {
-						curSet[r] = struct{}{}
-					}
-				}
-				prevSet := make(map[string]struct{}, len(prev))
-				for _, r := range prev {
-					if r != "" {
-						prevSet[r] = struct{}{}
-					}
-				}
-				for r := range curSet {
-					if _, ok := prevSet[r]; !ok {
-						addedIDs = append(addedIDs, r)
-					}
-				}
-				for r := range prevSet {
-					if _, ok := curSet[r]; !ok {
-						removedIDs = append(removedIDs, r)
-					}
-				}
-			} else if ms.store != nil {
-				addedIDs, removedIDs, diffErr = ms.store.DiffMemberRoles(m.GuildID, m.User.ID, curRoles)
-				atomic.AddUint64(&ms.cacheRolesStoreHits, 1)
-			}
+			_, addedIDs, removedIDs = computeVerifiedDiff(m.GuildID, m.User.ID, curRoles)
+
 			if len(addedIDs) > 0 || len(removedIDs) > 0 {
 				buildListIDs := func(list []string) string {
 					if len(list) == 0 {
@@ -694,11 +801,11 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 
 					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
 				}
-			} else if diffErr != nil {
-				log.Warn().Applicationf("Role diff fallback failed: guildID=%s, userID=%s, error=%v", m.GuildID, m.User.ID, diffErr)
+
 			}
 		}
 	}
+
 }
 
 // handleUserUpdate processa updates de usuário em todos os guilds configurados.

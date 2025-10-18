@@ -826,6 +826,18 @@ func (s *Store) DeleteCacheEntriesByPrefix(prefix string) error {
 	return err
 }
 
+// DeleteCacheEntriesByTypeAndPrefix deletes cache entries filtered by cache_type and key prefix
+func (s *Store) DeleteCacheEntriesByTypeAndPrefix(cacheType, keyPrefix string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if cacheType == "" || keyPrefix == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE cache_type=? AND cache_key LIKE ?`, cacheType, keyPrefix+"%")
+	return err
+}
+
 // GetAllMemberJoins retrieves all member join records for a guild
 func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) {
 	if s.db == nil {
