@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -96,8 +97,24 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 	if m.Content == "" {
-		log.Info().Applicationf("MessageCreate: empty content; will not cache: channelID=%s, userID=%s", m.ChannelID, m.Author.ID)
-		return
+		// Build a concise summary for non-text messages so we can still cache deletes/edits
+		extra := ""
+		if len(m.Attachments) > 0 {
+			extra += fmt.Sprintf("[attachments: %d] ", len(m.Attachments))
+		}
+		if len(m.Embeds) > 0 {
+			extra += fmt.Sprintf("[embeds: %d] ", len(m.Embeds))
+		}
+		if len(m.StickerItems) > 0 {
+			extra += fmt.Sprintf("[stickers: %d] ", len(m.StickerItems))
+		}
+		if extra == "" {
+			log.Info().Applicationf("MessageCreate: empty content; will not cache: channelID=%s, userID=%s", m.ChannelID, m.Author.ID)
+			return
+		}
+		// Use the summary as content for persistence
+		m.Content = extra
+		log.Info().Applicationf("MessageCreate: content empty; using summary for cache: channelID=%s, userID=%s", m.ChannelID, m.Author.ID)
 	}
 	log.Info().Applicationf("MessageCreate received: channelID=%s, userID=%s, messageID=%s", m.ChannelID, m.Author.ID, m.ID)
 
@@ -183,7 +200,15 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		return
 	}
 
-	// Verificar se realmente mudou o conteúdo
+	// Ensure latest content; MessageUpdate may omit content. Also enrich empty content with context.
+	if m.Content == "" {
+		if msg, err := s.ChannelMessage(m.ChannelID, m.ID); err == nil && msg != nil {
+			m.Content = msg.Content
+			// Enrich only when original content is empty (e.g., attachments-only messages)
+			m.Content = mes.summarizeMessageContent(msg, m.Content)
+		}
+	}
+	// Verificar se realmente mudou o conteúdo (compare effective strings)
 	if cached.Content == m.Content {
 		log.Info().Applicationf("MessageUpdate: content unchanged; skipping notification: guildID=%s, channelID=%s, messageID=%s, userID=%s", cached.GuildID, cached.ChannelID, m.ID, cached.Author.ID)
 		return
@@ -195,9 +220,9 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		return
 	}
 
-	logChannelID := guildConfig.MessageLogChannelID
+	logChannelID := mes.fallbackMessageLogChannel(guildConfig)
 	if logChannelID == "" {
-		log.Info().Applicationf("MessageLogChannelID not configured for guild, message edit notification not sent: guildID=%s, messageID=%s", cached.GuildID, m.ID)
+		log.Info().Applicationf("Message log channel not configured for guild; edit notification not sent: guildID=%s, messageID=%s", cached.GuildID, m.ID)
 		return
 	}
 
@@ -306,9 +331,9 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		return
 	}
 
-	logChannelID := guildConfig.MessageLogChannelID
+	logChannelID := mes.fallbackMessageLogChannel(guildConfig)
 	if logChannelID == "" {
-		log.Info().Applicationf("MessageLogChannelID not configured for guild, message edit notification not sent: guildID=%s, messageID=%s", cached.GuildID, m.ID)
+		log.Info().Applicationf("Message log channel not configured for guild; delete notification not sent: guildID=%s, messageID=%s", cached.GuildID, m.ID)
 		// no-op: cache removed; using SQLite only
 		if mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
@@ -318,9 +343,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	log.Info().Applicationf("Message delete detected: guildID=%s, channelID=%s, messageID=%s, userID=%s, username=%s", cached.GuildID, cached.ChannelID, m.ID, cached.Author.ID, cached.Author.Username)
 
-	// Tentar determinar quem deletou (limitado pela API do Discord)
-	deletedBy := "Usuário" // Padrão - assumimos que foi o próprio usuário
-	// TODO: Implementar auditlog check para detectar se foi um moderador
+	// Tentar determinar quem deletou (melhor esforço via audit log)
+	deletedBy := mes.determineDeletedBy(s, cached.GuildID, cached.ChannelID, cached.Author.ID)
 
 	// Enviar notificação de deleção
 	if mes.adapters != nil {
@@ -378,4 +402,71 @@ func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
 
 func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {
 	mes.adapters = adapters
+}
+
+// fallbackMessageLogChannel chooses the best available channel for message logs.
+func (mes *MessageEventService) fallbackMessageLogChannel(g *files.GuildConfig) string {
+	if g == nil {
+		return ""
+	}
+	if g.MessageLogChannelID != "" {
+		return g.MessageLogChannelID
+	}
+	if g.UserLogChannelID != "" {
+		return g.UserLogChannelID
+	}
+	if g.CommandChannelID != "" {
+		return g.CommandChannelID
+	}
+	return ""
+}
+
+// summarizeMessageContent enriches content with a concise summary when the message has
+// non-textual elements and content is otherwise empty.
+func (mes *MessageEventService) summarizeMessageContent(msg *discordgo.Message, base string) string {
+	if msg == nil {
+		return base
+	}
+	extra := ""
+	if len(msg.Attachments) > 0 {
+		extra += fmt.Sprintf("[attachments: %d] ", len(msg.Attachments))
+	}
+	if len(msg.Embeds) > 0 {
+		extra += fmt.Sprintf("[embeds: %d] ", len(msg.Embeds))
+	}
+	if len(msg.StickerItems) > 0 {
+		extra += fmt.Sprintf("[stickers: %d] ", len(msg.StickerItems))
+	}
+	if extra == "" {
+		return base
+	}
+	if base == "" {
+		return strings.TrimSpace(extra)
+	}
+	return base + "\n" + strings.TrimSpace(extra)
+}
+
+// determineDeletedBy tries to resolve the actor for a deletion via audit log (best-effort).
+func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID, channelID, authorID string) string {
+	if s == nil || guildID == "" {
+		return "Usuário"
+	}
+	al, err := s.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMessageDelete), 50)
+	if err != nil || al == nil {
+		return "Usuário"
+	}
+	for _, entry := range al.AuditLogEntries {
+		if entry == nil || entry.ActionType == nil || *entry.ActionType != discordgo.AuditLogActionMessageDelete {
+			continue
+		}
+		targetOK := entry.TargetID == authorID
+		channelOK := true
+		if entry.Options != nil && entry.Options.ChannelID != "" {
+			channelOK = entry.Options.ChannelID == channelID
+		}
+		if targetOK && channelOK && entry.UserID != "" {
+			return "<@" + entry.UserID + ">"
+		}
+	}
+	return "Usuário"
 }

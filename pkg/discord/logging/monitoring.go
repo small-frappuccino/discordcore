@@ -147,17 +147,7 @@ func (ms *MonitoringService) Start() error {
 	ms.stopChan = make(chan struct{})
 	ms.stopOnce = sync.Once{}
 
-	// Warmup cache from persistent storage if enabled
-	if ms.unifiedCache != nil {
-		log.Info().Applicationf("🔄 Warming up cache from persistent storage...")
-		if err := ms.unifiedCache.Warmup(); err != nil {
-			log.Warn().Applicationf("Cache warmup failed (continuing): %v", err)
-		} else {
-			stats := ms.unifiedCache.GetStats()
-			total := stats.MemberEntries + stats.GuildEntries + stats.RolesEntries + stats.ChannelEntries
-			log.Info().Applicationf("✅ Cache warmup complete: %d entries loaded", total)
-		}
-	}
+	// Unified cache warmup is performed in app runner; skipping here to prevent duplicate work
 
 	ms.ensureGuildsListed()
 	// Detect downtime and refresh avatars silently before wiring handlers (no notifications)
@@ -988,7 +978,10 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 	// Add unified cache stats
 	if ms.unifiedCache != nil {
 		ucStats := ms.unifiedCache.GetStats()
-		stats["unifiedCache"] = map[string]interface{}{
+		// Prefer generic unified cache stats (primary)
+		stats["unifiedCache"] = ms.unifiedCache.StatsGeneric()
+		// Keep specific stats for backward compatibility
+		stats["unifiedCacheSpecific"] = map[string]interface{}{
 			"memberEntries":  ucStats.MemberEntries,
 			"guildEntries":   ucStats.GuildEntries,
 			"rolesEntries":   ucStats.RolesEntries,

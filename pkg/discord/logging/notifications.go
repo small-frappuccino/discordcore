@@ -88,15 +88,15 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 		// Generate Discord default avatar based on user ID
 		// Discord uses: (user_id >> 22) % 6 for new users
 		// For compatibility, we'll use a simplified version
-		var userIDNum int64
+		var userIDNum uint64
 		for _, char := range userID {
 			if char >= '0' && char <= '9' {
-				userIDNum = userIDNum*10 + int64(char-'0')
+				userIDNum = userIDNum*10 + uint64(char-'0')
 			}
 		}
 
 		// Use a formula that gives the correct result for this user
-		avatarIndex := (userIDNum >> 22) % 6
+		avatarIndex := int((userIDNum >> 22) % 6)
 
 		return fmt.Sprintf("https://cdn.discordapp.com/embed/avatars/%d.png", avatarIndex)
 	}
@@ -192,11 +192,49 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 
 // SendMessageEditNotification envia notificação de edição de mensagem
 func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *task.CachedMessage, edited *discordgo.MessageUpdate) error {
+	// Build jump link (best effort)
+	var jumpURL string
+	if original.GuildID != "" && original.ChannelID != "" && edited.ID != "" {
+		jumpURL = fmt.Sprintf("https://discord.com/channels/%s/%s/%s", original.GuildID, original.ChannelID, edited.ID)
+	}
+
+	// Resolve channel name (best effort; avoid API call by using session state)
+	channelName := ""
+	if ns.session != nil && ns.session.State != nil {
+		if ch, _ := ns.session.State.Channel(original.ChannelID); ch != nil {
+			channelName = ch.Name
+		}
+	}
+
+	userField := fmt.Sprintf("Name: %s\nMention: <@%s>\nID: `%s`", original.Author.Username, original.Author.ID, original.Author.ID)
+	channelField := fmt.Sprintf("Name: #%s\nMention: <#%s>\nID: `%s`", channelName, original.ChannelID, original.ChannelID)
+	messageTime := original.Timestamp.Format("January 2, 2006 at 3:04 PM")
+
+	desc := ""
+	if jumpURL != "" {
+		desc = "[Jump to message](" + jumpURL + ")"
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       "✏️ Message Edited",
 		Color:       theme.MessageEdit(),
-		Description: fmt.Sprintf("**%s** (<@%s>) edited a message in <#%s>", original.Author.Username, original.Author.ID, original.ChannelID),
+		Description: desc,
 		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "User",
+				Value:  userField,
+				Inline: true,
+			},
+			{
+				Name:   "Channel",
+				Value:  channelField,
+				Inline: true,
+			},
+			{
+				Name:   "Message Timestamp",
+				Value:  messageTime,
+				Inline: true,
+			},
 			{
 				Name:   "Before",
 				Value:  truncateString(original.Content, 1000),
@@ -212,6 +250,9 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 			URL: ns.buildAvatarURL(original.Author.ID, original.Author.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Message ID: " + edited.ID,
+		},
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -220,13 +261,39 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 
 // SendMessageDeleteNotification envia notificação de deleção de mensagem
 func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
+	// Resolve channel name (best effort; avoid API call by using session state)
+	channelName := ""
+	if ns.session != nil && ns.session.State != nil {
+		if ch, _ := ns.session.State.Channel(deleted.ChannelID); ch != nil {
+			channelName = ch.Name
+		}
+	}
+
+	userField := fmt.Sprintf("Name: %s\nMention: <@%s>\nID: `%s`", deleted.Author.Username, deleted.Author.ID, deleted.Author.ID)
+	channelField := fmt.Sprintf("Name: #%s\nMention: <#%s>\nID: `%s`", channelName, deleted.ChannelID, deleted.ChannelID)
+	messageTime := deleted.Timestamp.Format("January 2, 2006 at 3:04 PM")
+
 	embed := &discordgo.MessageEmbed{
-		Title:       "🗑️ Message Deleted",
-		Color:       theme.MessageDelete(),
-		Description: fmt.Sprintf("Message from **%s** (<@%s>) was deleted in <#%s>", deleted.Author.Username, deleted.Author.ID, deleted.ChannelID),
+		Title: "🗑️ Message Deleted",
+		Color: theme.MessageDelete(),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Content",
+				Name:   "User",
+				Value:  userField,
+				Inline: true,
+			},
+			{
+				Name:   "Channel",
+				Value:  channelField,
+				Inline: true,
+			},
+			{
+				Name:   "Message Timestamp",
+				Value:  messageTime,
+				Inline: true,
+			},
+			{
+				Name:   "Message",
 				Value:  truncateString(deleted.Content, 1000),
 				Inline: false,
 			},
@@ -240,6 +307,9 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 			URL: ns.buildAvatarURL(deleted.Author.ID, deleted.Author.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Message ID: " + deleted.ID,
+		},
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)

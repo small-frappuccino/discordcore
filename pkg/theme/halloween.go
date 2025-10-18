@@ -22,8 +22,8 @@ func init() {
 		// Notification-focused overrides
 		// Purple & Pumpkin palette for a seasonal look
 		AvatarChange:  0xEB6123, // Pumpkin
-		MemberJoin:    0xEB6123, // Pumpkin (amber)
-		MemberLeave:   0xB91C1C, // Deep blood red
+		MemberJoin:    0xEB6123, // Pumpkin
+		MemberLeave:   0xEB6123, // Pumpkin
 		MessageEdit:   0xFB923C, // Softer orange
 		MessageDelete: 0xDC2626, // Strong red
 		AutomodAction: 0xEB6123, // Pumpkin

@@ -25,7 +25,7 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 	}
 
 	// Add detailed logging for session creation
-	log.Info().Discordf("🔑 Creating Discord session with token: %s", token)
+	log.Info().Discordf("🔑 Creating Discord session (token redacted)")
 
 	if err := errutil.HandleDiscordError("create_session", func() error {
 		var sessionErr error
@@ -43,6 +43,7 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 	s.Identify.Intents = discordgo.IntentsGuilds |
 		discordgo.IntentsGuildMembers |
 		discordgo.IntentsGuildPresences |
+		discordgo.IntentsGuildMessages |
 		discordgo.IntentAutoModerationConfiguration |
 		discordgo.IntentAutoModerationExecution |
 		discordgo.IntentMessageContent

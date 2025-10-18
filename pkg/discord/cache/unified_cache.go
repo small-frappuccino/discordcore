@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	genericcache "github.com/small-frappuccino/discordcore/pkg/cache"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -68,6 +69,11 @@ type UnifiedCache struct {
 	// Cleanup
 	stopCleanup chan struct{}
 	cleanupOnce sync.Once
+
+	// Last cleanup timestamp for stats reporting
+	lastCleanup time.Time
+	// Last warmup timestamp for recency checks
+	lastWarmup time.Time
 }
 
 // lruEntry wraps a cache entry with LRU list element
@@ -546,6 +552,78 @@ func (uc *UnifiedCache) GetStats() CacheStats {
 	}
 }
 
+// StatsGeneric returns generic cache statistics for external consumers
+func (uc *UnifiedCache) StatsGeneric() genericcache.CacheStats {
+	uc.membersMu.RLock()
+	memberCount := len(uc.members)
+	uc.membersMu.RUnlock()
+
+	uc.guildsMu.RLock()
+	guildCount := len(uc.guilds)
+	uc.guildsMu.RUnlock()
+
+	uc.rolesMu.RLock()
+	rolesCount := len(uc.roles)
+	uc.rolesMu.RUnlock()
+
+	uc.channelsMu.RLock()
+	channelCount := len(uc.channels)
+	uc.channelsMu.RUnlock()
+
+	totalEntries := memberCount + guildCount + rolesCount + channelCount
+	memberHits := atomic.LoadUint64(&uc.memberHits)
+	memberMisses := atomic.LoadUint64(&uc.memberMisses)
+	guildHits := atomic.LoadUint64(&uc.guildHits)
+	guildMisses := atomic.LoadUint64(&uc.guildMisses)
+	rolesHits := atomic.LoadUint64(&uc.rolesHits)
+	rolesMisses := atomic.LoadUint64(&uc.rolesMisses)
+	channelHits := atomic.LoadUint64(&uc.channelHits)
+	channelMisses := atomic.LoadUint64(&uc.channelMisses)
+
+	totalHits := float64(memberHits + guildHits + rolesHits + channelHits)
+	totalMisses := float64(memberMisses + guildMisses + rolesMisses + channelMisses)
+	var hitRate, missRate float64
+	if (totalHits + totalMisses) > 0 {
+		hitRate = totalHits / (totalHits + totalMisses)
+		missRate = totalMisses / (totalHits + totalMisses)
+	}
+
+	return genericcache.CacheStats{
+		TotalEntries:  totalEntries,
+		MemoryUsage:   0,
+		HitRate:       hitRate,
+		MissRate:      missRate,
+		LastCleanup:   uc.lastCleanup,
+		TTLEnabled:    true,
+		PerGuildStats: nil,
+		CustomMetrics: map[string]any{
+			"memberEntries":  memberCount,
+			"guildEntries":   guildCount,
+			"rolesEntries":   rolesCount,
+			"channelEntries": channelCount,
+			"memberHits":     memberHits,
+			"memberMisses":   memberMisses,
+			"guildHits":      guildHits,
+			"guildMisses":    guildMisses,
+			"rolesHits":      rolesHits,
+			"rolesMisses":    rolesMisses,
+			"channelHits":    channelHits,
+			"channelMisses":  channelMisses,
+		},
+	}
+}
+
+// WasWarmedUpRecently returns whether Warmup was executed within the given duration
+func (uc *UnifiedCache) WasWarmedUpRecently(d time.Duration) bool {
+	if d <= 0 {
+		return false
+	}
+	if uc.lastWarmup.IsZero() {
+		return false
+	}
+	return time.Since(uc.lastWarmup) <= d
+}
+
 // CacheStats holds cache statistics
 type CacheStats struct {
 	MemberEntries    int    `json:"member_entries"`
@@ -707,6 +785,9 @@ func (uc *UnifiedCache) cleanupExpired() {
 		}
 	}
 	uc.channelsMu.Unlock()
+
+	// Track last cleanup time for stats
+	uc.lastCleanup = now
 }
 
 // Persist saves current cache state to SQLite (if enabled)
@@ -852,6 +933,7 @@ func (uc *UnifiedCache) Warmup() error {
 		totalLoaded++
 	}
 
+	uc.lastWarmup = time.Now()
 	return nil
 }
 

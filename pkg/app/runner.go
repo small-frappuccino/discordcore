@@ -125,11 +125,17 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Cache warmup (persisted + fetch missing)
+	// NOTE: Warmup responsibility is consolidated in the app runner.
+	// MonitoringService does not perform its own warmup to avoid duplicate work during startup.
 	unifiedCache := monitoringService.GetUnifiedCache()
-	warmupConfig := cache.DefaultWarmupConfig()
-	warmupConfig.MaxMembersPerGuild = 500 // mitigate initial load
-	if err := cache.IntelligentWarmup(discordSession, unifiedCache, store, warmupConfig); err != nil {
-		log.Warn().Applicationf("Intelligent warmup failed (continuing): %v", err)
+	if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
+		log.Info().Applicationf("Skipping cache warmup (recently warmed up)")
+	} else {
+		warmupConfig := cache.DefaultWarmupConfig()
+		warmupConfig.MaxMembersPerGuild = 500 // mitigate initial load
+		if err := cache.IntelligentWarmup(discordSession, unifiedCache, store, warmupConfig); err != nil {
+			log.Warn().Applicationf("Intelligent warmup failed (continuing): %v", err)
+		}
 	}
 
 	// Periodic cache persistence
