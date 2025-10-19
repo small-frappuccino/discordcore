@@ -37,6 +37,12 @@ type UnifiedCache struct {
 	channelsList *list.List
 	channelsMu   sync.RWMutex
 
+	// Indices to relate channels and guilds for efficient guild-scoped operations
+	guildToChannels   map[string]map[string]struct{}
+	guildToChannelsMu sync.RWMutex
+	channelToGuild    map[string]string
+	channelToGuildMu  sync.RWMutex
+
 	// TTL configurations (configurable per type)
 	memberTTL  time.Duration
 	guildTTL   time.Duration
@@ -175,14 +181,16 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 	}
 
 	uc := &UnifiedCache{
-		members:      make(map[string]*lruEntry),
-		membersList:  list.New(),
-		guilds:       make(map[string]*lruEntry),
-		guildsList:   list.New(),
-		roles:        make(map[string]*lruEntry),
-		rolesList:    list.New(),
-		channels:     make(map[string]*lruEntry),
-		channelsList: list.New(),
+		members:         make(map[string]*lruEntry),
+		membersList:     list.New(),
+		guilds:          make(map[string]*lruEntry),
+		guildsList:      list.New(),
+		roles:           make(map[string]*lruEntry),
+		rolesList:       list.New(),
+		channels:        make(map[string]*lruEntry),
+		channelsList:    list.New(),
+		guildToChannels: make(map[string]map[string]struct{}),
+		channelToGuild:  make(map[string]string),
 
 		memberTTL:  cfg.MemberTTL,
 		guildTTL:   cfg.GuildTTL,
@@ -483,6 +491,46 @@ func (uc *UnifiedCache) SetChannel(channelID string, channel *discordgo.Channel)
 		expiresAt: time.Now().Add(uc.channelTTL),
 	}
 
+	// Update indices before inserting into main map
+	if channel.GuildID != "" {
+		// channelID -> guildID
+		uc.channelToGuildMu.Lock()
+		if uc.channelToGuild == nil {
+			uc.channelToGuild = make(map[string]string)
+		}
+		oldGuildID := uc.channelToGuild[channelID]
+		uc.channelToGuild[channelID] = channel.GuildID
+		uc.channelToGuildMu.Unlock()
+
+		// guildID -> set(channelID)
+		uc.guildToChannelsMu.Lock()
+		if uc.guildToChannels == nil {
+			uc.guildToChannels = make(map[string]map[string]struct{})
+		}
+		if oldGuildID != "" && oldGuildID != channel.GuildID {
+			if set, ok := uc.guildToChannels[oldGuildID]; ok {
+				delete(set, channelID)
+				if len(set) == 0 {
+					delete(uc.guildToChannels, oldGuildID)
+				}
+			}
+		}
+		set := uc.guildToChannels[channel.GuildID]
+		if set == nil {
+			set = make(map[string]struct{})
+			uc.guildToChannels[channel.GuildID] = set
+		}
+		set[channelID] = struct{}{}
+		uc.guildToChannelsMu.Unlock()
+	} else {
+		// No guild association
+		uc.channelToGuildMu.Lock()
+		if uc.channelToGuild != nil {
+			delete(uc.channelToGuild, channelID)
+		}
+		uc.channelToGuildMu.Unlock()
+	}
+
 	uc.channelsMu.Lock()
 	defer uc.channelsMu.Unlock()
 
@@ -522,6 +570,31 @@ func (uc *UnifiedCache) evictChannelLRU() {
 
 // InvalidateChannel removes a channel from the cache
 func (uc *UnifiedCache) InvalidateChannel(channelID string) {
+	// Update indices
+	var guildID string
+	uc.channelToGuildMu.RLock()
+	if uc.channelToGuild != nil {
+		guildID = uc.channelToGuild[channelID]
+	}
+	uc.channelToGuildMu.RUnlock()
+
+	if guildID != "" {
+		uc.guildToChannelsMu.Lock()
+		if set, ok := uc.guildToChannels[guildID]; ok {
+			delete(set, channelID)
+			if len(set) == 0 {
+				delete(uc.guildToChannels, guildID)
+			}
+		}
+		uc.guildToChannelsMu.Unlock()
+	}
+
+	uc.channelToGuildMu.Lock()
+	if uc.channelToGuild != nil {
+		delete(uc.channelToGuild, channelID)
+	}
+	uc.channelToGuildMu.Unlock()
+
 	uc.channelsMu.Lock()
 	if entry, ok := uc.channels[channelID]; ok {
 		uc.channelsList.Remove(entry.element)
@@ -692,6 +765,15 @@ func (uc *UnifiedCache) Clear() {
 	uc.channels = make(map[string]*lruEntry)
 	uc.channelsList = list.New()
 	uc.channelsMu.Unlock()
+
+	// Reset indices
+	uc.guildToChannelsMu.Lock()
+	uc.guildToChannels = make(map[string]map[string]struct{})
+	uc.guildToChannelsMu.Unlock()
+
+	uc.channelToGuildMu.Lock()
+	uc.channelToGuild = make(map[string]string)
+	uc.channelToGuildMu.Unlock()
 }
 
 // ClearGuild removes all cached data for a specific guild.
@@ -703,7 +785,7 @@ func (uc *UnifiedCache) Clear() {
 //   - members:   type "member", keys "<guildID>:<userID>"
 //   - guild:     type "guild",  key  "<guildID>"
 //   - roles:     type "roles",  key  "<guildID>"
-//   - Channels: in-memory channel cache does not have a guild-prefix key; separate handling would be needed.
+//   - channels:  type "channel", keys "<guildID>:<channelID>"
 //   - Idempotent: safe to call multiple times.
 func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	// Clear guild entry
@@ -729,9 +811,19 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	}
 	uc.membersMu.Unlock()
 
-	// Clear channels for this guild (we need to track guild->channel mapping)
-	// For now, we'll need to get channels from Discord or store guild_id with channels
-	// This is a limitation - channels don't inherently store their guild_id in cache key
+	// Clear channels for this guild using the guild->channels index
+	uc.guildToChannelsMu.RLock()
+	var chIDs []string
+	if set, ok := uc.guildToChannels[guildID]; ok {
+		chIDs = make([]string, 0, len(set))
+		for cid := range set {
+			chIDs = append(chIDs, cid)
+		}
+	}
+	uc.guildToChannelsMu.RUnlock()
+	for _, cid := range chIDs {
+		uc.InvalidateChannel(cid)
+	}
 
 	// Clear from persistent storage if enabled
 	if uc.persistEnabled && uc.store != nil {
@@ -744,6 +836,9 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 		}
 		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("roles", guildID); err != nil {
 			return fmt.Errorf("delete roles cache entry: %w", err)
+		}
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("channel", guildID+":"); err != nil {
+			return fmt.Errorf("delete channel cache entries: %w", err)
 		}
 	}
 
@@ -817,6 +912,24 @@ func (uc *UnifiedCache) cleanupExpired() {
 	uc.channelsMu.Lock()
 	for key, entry := range uc.channels {
 		if now.After(entry.expiresAt) {
+			// Cleanup indices for channels
+			uc.channelToGuildMu.RLock()
+			guildID := uc.channelToGuild[key]
+			uc.channelToGuildMu.RUnlock()
+			if guildID != "" {
+				uc.guildToChannelsMu.Lock()
+				if set, ok := uc.guildToChannels[guildID]; ok {
+					delete(set, key)
+					if len(set) == 0 {
+						delete(uc.guildToChannels, guildID)
+					}
+				}
+				uc.guildToChannelsMu.Unlock()
+			}
+			uc.channelToGuildMu.Lock()
+			delete(uc.channelToGuild, key)
+			uc.channelToGuildMu.Unlock()
+
 			uc.channelsList.Remove(entry.element)
 			delete(uc.channels, key)
 		}
@@ -898,7 +1011,11 @@ func (uc *UnifiedCache) Persist() error {
 				errs = append(errs, fmt.Errorf("encode channel %s: %w", key, err))
 				continue
 			}
-			if err := uc.store.UpsertCacheEntry(key, "channel", data, entry.expiresAt); err != nil {
+			persistKey := key
+			if ch := cached.channel; ch != nil && ch.GuildID != "" {
+				persistKey = ch.GuildID + ":" + ch.ID
+			}
+			if err := uc.store.UpsertCacheEntry(persistKey, "channel", data, entry.expiresAt); err != nil {
 				errs = append(errs, fmt.Errorf("persist channel %s: %w", key, err))
 			}
 		}
@@ -980,7 +1097,8 @@ func (uc *UnifiedCache) Warmup() error {
 		if err := decodeEntity(entry.Data, &channel); err != nil {
 			continue
 		}
-		uc.setChannelInternal(entry.Key, &channel, entry.ExpiresAt)
+		// Store in-memory by channel.ID and populate indices via internal setter
+		uc.setChannelInternal(channel.ID, &channel, entry.ExpiresAt)
 		totalLoaded++
 	}
 
@@ -1051,6 +1169,37 @@ func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channe
 		channel:   channel,
 		expiresAt: expiresAt,
 	}
+
+	// Maintain indices
+	if channel != nil {
+		if channel.GuildID != "" {
+			uc.channelToGuildMu.Lock()
+			if uc.channelToGuild == nil {
+				uc.channelToGuild = make(map[string]string)
+			}
+			uc.channelToGuild[key] = channel.GuildID
+			uc.channelToGuildMu.Unlock()
+
+			uc.guildToChannelsMu.Lock()
+			if uc.guildToChannels == nil {
+				uc.guildToChannels = make(map[string]map[string]struct{})
+			}
+			set := uc.guildToChannels[channel.GuildID]
+			if set == nil {
+				set = make(map[string]struct{})
+				uc.guildToChannels[channel.GuildID] = set
+			}
+			set[key] = struct{}{}
+			uc.guildToChannelsMu.Unlock()
+		} else {
+			uc.channelToGuildMu.Lock()
+			if uc.channelToGuild != nil {
+				delete(uc.channelToGuild, key)
+			}
+			uc.channelToGuildMu.Unlock()
+		}
+	}
+
 	uc.channelsMu.Lock()
 	defer uc.channelsMu.Unlock()
 

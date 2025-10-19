@@ -37,12 +37,13 @@ type Theme struct {
 	StatusDefault  Color
 
 	// Notifications/logging
-	AvatarChange  Color
-	MemberJoin    Color
-	MemberLeave   Color
-	MessageEdit   Color
-	MessageDelete Color
-	AutomodAction Color
+	AvatarChange     Color
+	MemberJoin       Color
+	MemberLeave      Color
+	MessageEdit      Color
+	MessageDelete    Color
+	AutomodAction    Color
+	MemberRoleUpdate Color
 }
 
 // Clone returns a copy of the Theme.
@@ -119,6 +120,9 @@ func (t *Theme) ensureDefaults() {
 	if t.AutomodAction == 0 {
 		t.AutomodAction = 0xFF5555 // legacy automod color
 	}
+	if t.MemberRoleUpdate == 0 {
+		t.MemberRoleUpdate = t.Info
+	}
 }
 
 // defaultTheme returns the current built-in theme (mirrors existing hardcoded colors).
@@ -144,12 +148,13 @@ func defaultTheme() *Theme {
 		StatusError:    0xED4245,
 		StatusDefault:  0x99AAB5,
 
-		AvatarChange:  0x5865F2,
-		MemberJoin:    0x57F287,
-		MemberLeave:   0xED4245,
-		MessageEdit:   0xF59E0B,
-		MessageDelete: 0xED4245,
-		AutomodAction: 0xED4245,
+		AvatarChange:     0x5865F2,
+		MemberJoin:       0x57F287,
+		MemberLeave:      0xED4245,
+		MessageEdit:      0xF59E0B,
+		MessageDelete:    0xED4245,
+		AutomodAction:    0xED4245,
+		MemberRoleUpdate: 0x3B82F6,
 	}
 	th.ensureDefaults()
 	return th
@@ -221,24 +226,25 @@ func Default() *Theme {
 // Helper getters to use directly in code (avoid exposing globals).
 // These read from the current theme and simplify adoption throughout the codebase.
 
-func Primary() Color        { return Current().Primary }
-func Accent() Color         { return Current().Accent }
-func Info() Color           { return Current().Info }
-func Success() Color        { return Current().Success }
-func Warning() Color        { return Current().Warning }
-func Error() Color          { return Current().Error }
-func Danger() Color         { return Current().Danger }
-func Muted() Color          { return Current().Muted }
-func ServiceList() Color    { return Current().ServiceList }
-func SystemInfo() Color     { return Current().SystemInfo }
-func StatusOK() Color       { return Current().StatusOK }
-func StatusDegraded() Color { return Current().StatusDegraded }
-func StatusError() Color    { return Current().StatusError }
-func StatusDefault() Color  { return Current().StatusDefault }
-func AvatarChange() Color   { return Current().AvatarChange }
-func MemberJoin() Color     { return Current().MemberJoin }
-func MemberLeave() Color    { return Current().MemberLeave }
-func MessageEdit() Color    { return Current().MessageEdit }
-func MessageDelete() Color  { return Current().MessageDelete }
-func AutomodAction() Color  { return Current().AutomodAction }
-func Loading() Color        { return Current().Loading }
+func Primary() Color          { return Current().Primary }
+func Accent() Color           { return Current().Accent }
+func Info() Color             { return Current().Info }
+func Success() Color          { return Current().Success }
+func Warning() Color          { return Current().Warning }
+func Error() Color            { return Current().Error }
+func Danger() Color           { return Current().Danger }
+func Muted() Color            { return Current().Muted }
+func ServiceList() Color      { return Current().ServiceList }
+func SystemInfo() Color       { return Current().SystemInfo }
+func StatusOK() Color         { return Current().StatusOK }
+func StatusDegraded() Color   { return Current().StatusDegraded }
+func StatusError() Color      { return Current().StatusError }
+func StatusDefault() Color    { return Current().StatusDefault }
+func AvatarChange() Color     { return Current().AvatarChange }
+func MemberJoin() Color       { return Current().MemberJoin }
+func MemberLeave() Color      { return Current().MemberLeave }
+func MessageEdit() Color      { return Current().MessageEdit }
+func MessageDelete() Color    { return Current().MessageDelete }
+func AutomodAction() Color    { return Current().AutomodAction }
+func MemberRoleUpdate() Color { return Current().MemberRoleUpdate }
+func Loading() Color          { return Current().Loading }

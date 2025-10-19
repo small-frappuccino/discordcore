@@ -21,11 +21,12 @@ func init() {
 
 		// Notification-focused overrides
 		// Purple & Pumpkin palette for a seasonal look
-		AvatarChange:  0xEB6123, // Pumpkin
-		MemberJoin:    0xEB6123, // Pumpkin
-		MemberLeave:   0xEB6123, // Pumpkin
-		MessageEdit:   0xEB6123, // Pumpkin
-		MessageDelete: 0xF28B82, // Pastel red
-		AutomodAction: 0xF28B82, // Pastel red
+		AvatarChange:     0xEB6123, // Pumpkin
+		MemberJoin:       0xEB6123, // Pumpkin
+		MemberLeave:      0xEB6123, // Pumpkin
+		MessageEdit:      0xEB6123, // Pumpkin
+		MessageDelete:    0xF28B82, // Pastel red
+		AutomodAction:    0xF28B82, // Pastel red
+		MemberRoleUpdate: 0xEB6123, // Pumpkin
 	})
 }

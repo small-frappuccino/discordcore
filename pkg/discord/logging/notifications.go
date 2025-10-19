@@ -517,7 +517,7 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(
 	desc := fmt.Sprintf("<@%s> %s role for **%s** (<@%s>)", actorID, strings.ToLower(act), displayName, targetID)
 	embed := &discordgo.MessageEmbed{
 		Title:       "Role updated",
-		Color:       theme.Info(),
+		Color:       theme.MemberRoleUpdate(),
 		Description: desc,
 		Fields: []*discordgo.MessageEmbedField{
 			{
