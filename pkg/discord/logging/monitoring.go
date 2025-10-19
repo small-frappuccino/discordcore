@@ -3,7 +3,9 @@ package logging
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -164,11 +166,23 @@ func (ms *MonitoringService) Start() error {
 		ms.isRunning = false
 		return fmt.Errorf("failed to start member event service: %w", err)
 	}
-	if err := ms.messageEventService.Start(); err != nil {
-		ms.isRunning = false
-		// Parar o serviço de membros se falhou
-		ms.memberEventService.Stop()
-		return fmt.Errorf("failed to start message event service: %w", err)
+	// Gate message logging behind env flag
+	disableMsg := false
+	if v := os.Getenv("ALICE_DISABLE_MESSAGE_LOGS"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			disableMsg = true
+		}
+	}
+	if disableMsg {
+		log.ApplicationLogger().Info("🛑 Message logging disabled by ALICE_DISABLE_MESSAGE_LOGS; MessageEventService will not start")
+	} else {
+		if err := ms.messageEventService.Start(); err != nil {
+			ms.isRunning = false
+			// Parar o serviço de membros se falhou
+			ms.memberEventService.Stop()
+			return fmt.Errorf("failed to start message event service: %w", err)
+		}
 	}
 
 	// Schedule periodic avatar scan via router cron instead of local goroutine
@@ -264,8 +278,10 @@ func (ms *MonitoringService) Stop() error {
 	if err := ms.memberEventService.Stop(); err != nil {
 		log.ErrorLoggerRaw().Error("Error stopping member event service", "err", err)
 	}
-	if err := ms.messageEventService.Stop(); err != nil {
-		log.ErrorLoggerRaw().Error("Error stopping message event service", "err", err)
+	if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
+		if err := ms.messageEventService.Stop(); err != nil {
+			log.ErrorLoggerRaw().Error("Error stopping message event service", "err", err)
+		}
 	}
 
 	// Cancel cron before closing router
