@@ -3,6 +3,7 @@ package errors
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -160,9 +161,10 @@ func (eh *ErrorHandler) Handle(ctx context.Context, err error) error {
 		case ActionRetry:
 			// Retry logic is handled by HandleWithRetry
 		case ActionRestart:
-			eh.logger.Warn().Applicationf("Service restart required. Component: %s, Operation: %s", serviceErr.Component, serviceErr.Operation)
+			log.ApplicationLogger().Warn("Service restart required", "component", serviceErr.Component, "operation", serviceErr.Operation)
 		case ActionTerminate:
-			eh.logger.Error().Fatalf("Critical error - terminating. Component: %s, Operation: %s", serviceErr.Component, serviceErr.Operation)
+			log.ErrorLoggerRaw().Error("Critical error - terminating", "component", serviceErr.Component, "operation", serviceErr.Operation)
+			os.Exit(1)
 		}
 	}
 
@@ -193,8 +195,7 @@ func (eh *ErrorHandler) HandleWithRetry(ctx context.Context, operation string, c
 		}
 
 		delay := eh.calculateDelay(strategy, attempt)
-		eh.logger.Warn().Applicationf("Operation failed, retrying. Attempt: %d, Delay: %v, Component: %s, Operation: %s, Error: %v",
-			attempt, delay, component, operation, err)
+		log.ApplicationLogger().Warn("Operation failed, retrying", "attempt", attempt, "delay", delay, "component", component, "operation", operation, "err", err)
 
 		select {
 		case <-ctx.Done():
@@ -311,13 +312,13 @@ func (eh *ErrorHandler) logError(err *ServiceError) {
 
 	switch err.Severity {
 	case SeverityLow:
-		eh.logger.Info().Applicationf("%s", fullMessage)
+		log.ApplicationLogger().Info(fullMessage)
 	case SeverityMedium:
-		eh.logger.Info().Applicationf("%s", fullMessage)
+		log.ApplicationLogger().Info(fullMessage)
 	case SeverityHigh:
-		eh.logger.Warn().Applicationf("%s", fullMessage)
+		log.ApplicationLogger().Warn(fullMessage)
 	case SeverityCritical:
-		eh.logger.Error().Errorf("%s", fullMessage)
+		log.ErrorLoggerRaw().Error(fullMessage)
 	}
 }
 
@@ -325,7 +326,7 @@ func (eh *ErrorHandler) logError(err *ServiceError) {
 func (eh *ErrorHandler) notifyError(ctx context.Context, err *ServiceError) {
 	for _, notifier := range eh.notifiers {
 		if notifyErr := notifier.NotifyError(ctx, err); notifyErr != nil {
-			eh.logger.Error().Errorf("Failed to notify error. Notifier Error: %v", notifyErr)
+			log.ErrorLoggerRaw().Error("Failed to notify error", "err", notifyErr)
 		}
 	}
 }

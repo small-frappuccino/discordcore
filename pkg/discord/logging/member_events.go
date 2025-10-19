@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"log/slog"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -64,7 +66,7 @@ func (mes *MemberEventService) Start() error {
 	// Store should be injected and already initialized
 	if mes.store != nil {
 		if err := mes.store.Init(); err != nil {
-			log.Warn().Applicationf("Member event service: failed to initialize SQLite store (continuing): %v", err)
+			slog.Warn(fmt.Sprintf("Member event service: failed to initialize SQLite store (continuing): %v", err))
 		}
 	}
 
@@ -75,7 +77,7 @@ func (mes *MemberEventService) Start() error {
 	mes.cleanupStop = make(chan struct{})
 	go mes.cleanupLoop()
 
-	log.Info().Applicationf("Member event service started")
+	slog.Info("Member event service started")
 	return nil
 }
 
@@ -92,7 +94,7 @@ func (mes *MemberEventService) Stop() error {
 		mes.cleanupStop = nil
 	}
 
-	log.Info().Applicationf("Member event service stopped")
+	slog.Info("Member event service stopped")
 	return nil
 }
 
@@ -119,7 +121,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		logChannelID = guildConfig.UserLogChannelID
 	}
 	if logChannelID == "" {
-		log.Info().Applicationf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID)
+		slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
 		return
 	}
 
@@ -143,18 +145,18 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		mes.joinMu.Unlock()
 	}
 
-	log.Info().Applicationf("Member joined guild: guildID=%s, userID=%s, username=%s, accountAge=%s", m.GuildID, m.User.ID, m.User.Username, accountAge.String())
+	slog.Info(fmt.Sprintf("Member joined guild: guildID=%s, userID=%s, username=%s, accountAge=%s", m.GuildID, m.User.ID, m.User.Username, accountAge.String()))
 
 	if mes.adapters != nil {
 		if err := mes.adapters.EnqueueMemberJoin(logChannelID, m, accountAge); err != nil {
-			log.Error().Errorf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err)
+			slog.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
-			log.Info().Applicationf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID)
+			slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
 	} else if err := mes.notifier.SendMemberJoinNotification(logChannelID, m, accountAge); err != nil {
-		log.Error().Errorf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err)
+		slog.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 	} else {
-		log.Info().Applicationf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID)
+		slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
 }
 
@@ -176,7 +178,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		logChannelID = guildConfig.UserLogChannelID
 	}
 	if logChannelID == "" {
-		log.Info().Applicationf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID)
+		slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
 		return
 	}
 
@@ -195,18 +197,18 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 
 	botTime := mes.getBotTimeOnServer(m.GuildID)
 
-	log.Info().Applicationf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTime.String(), botTime.String())
+	slog.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTime.String(), botTime.String()))
 
 	if mes.adapters != nil {
 		if err := mes.adapters.EnqueueMemberLeave(logChannelID, m, serverTime, botTime); err != nil {
-			log.Error().Errorf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err)
+			slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
-			log.Info().Applicationf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID)
+			slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
 	} else if err := mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTime, botTime); err != nil {
-		log.Error().Errorf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err)
+		slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 	} else {
-		log.Info().Applicationf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID)
+		slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
 }
 
@@ -218,7 +220,7 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 	// Converter string ID para uint64
 	snowflake, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		log.Warn().Applicationf("Failed to parse user ID for account age calculation: userID=%s, error=%v", userID, err)
+		slog.Warn(fmt.Sprintf("Failed to parse user ID for account age calculation: userID=%s, error=%v", userID, err))
 		return 0
 	}
 
@@ -293,7 +295,7 @@ func (mes *MemberEventService) cleanupJoinTimes() {
 	}
 
 	if len(toDelete) > 0 {
-		log.Info().Applicationf("Cleaned up %d old join time entries from memory", len(toDelete))
+		log.ApplicationLogger().Info("Cleaned up old join time entries from memory", "count", len(toDelete))
 	}
 }
 

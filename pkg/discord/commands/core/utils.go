@@ -315,102 +315,10 @@ func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
 	return ownerID == userID
 }
 
-// Responder gerencia respostas padronizadas
-type Responder struct {
-	session *discordgo.Session
-}
-
-// NewResponder cria um novo respondedor
-func NewResponder(session *discordgo.Session) *Responder {
-	return &Responder{session: session}
-}
-
-// Success envia uma resposta de sucesso
-func (r *Responder) Success(i *discordgo.InteractionCreate, message string) error {
-	return r.respond(i, message, false)
-}
-
-// Error envia uma resposta de erro
-func (r *Responder) Error(i *discordgo.InteractionCreate, message string) error {
-	return r.respond(i, "❌ "+message, true)
-}
-
-// Ephemeral envia uma resposta ephemeral
-func (r *Responder) Ephemeral(i *discordgo.InteractionCreate, message string) error {
-	return r.respond(i, message, true)
-}
-
-// Info envia uma resposta informativa
-func (r *Responder) Info(i *discordgo.InteractionCreate, message string) error {
-	return r.respond(i, "ℹ️ "+message, false)
-}
-
-// Warning envia uma resposta de aviso
-func (r *Responder) Warning(i *discordgo.InteractionCreate, message string) error {
-	return r.respond(i, "⚠️ "+message, false)
-}
-
-// respond envia uma resposta básica
-func (r *Responder) respond(i *discordgo.InteractionCreate, content string, ephemeral bool) error {
-	var flags discordgo.MessageFlags
-	if ephemeral {
-		flags = discordgo.MessageFlagsEphemeral
-	}
-
-	return r.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: content,
-			Flags:   flags,
-		},
-	})
-}
-
-// RespondWithEmbed envia uma resposta com embed
-func (r *Responder) RespondWithEmbed(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, ephemeral bool) error {
-	var flags discordgo.MessageFlags
-	if ephemeral {
-		flags = discordgo.MessageFlagsEphemeral
-	}
-
-	return r.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-			Flags:  flags,
-		},
-	})
-}
-
-// SendEmbed sends an embed response
-func (r *Responder) SendEmbed(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
-	return r.RespondWithEmbed(i, embed, false)
-}
-
-// EditResponse edits the original response
-func (r *Responder) EditResponse(i *discordgo.InteractionCreate, content string) error {
-	_, err := r.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: &content,
-	})
-	return err
-}
-
-// Autocomplete envia uma resposta de autocomplete
-func (r *Responder) Autocomplete(i *discordgo.InteractionCreate, choices []*discordgo.ApplicationCommandOptionChoice) error {
-	if len(choices) > 25 {
-		choices = choices[:25]
-	}
-
-	return r.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
-		Data: &discordgo.InteractionResponseData{Choices: choices},
-	})
-}
-
-// StringUtils fornece utilitários para manipulação de strings
+// StringUtils provides utilities for string manipulation
 type StringUtils struct{}
 
-// ProcessCommaSeparatedList processa uma string separada por vírgulas
+// ProcessCommaSeparatedList parses a comma-separated string
 func (StringUtils) ProcessCommaSeparatedList(input string) []string {
 	if input == "" {
 		return []string{}
@@ -429,7 +337,7 @@ func (StringUtils) ProcessCommaSeparatedList(input string) []string {
 	return result
 }
 
-// SanitizeInput sanitiza entrada do usuário
+// SanitizeInput sanitizes user input
 func (StringUtils) SanitizeInput(input string) string {
 	// Remove caracteres de controle e espaços extras
 	input = strings.TrimSpace(input)
@@ -438,7 +346,7 @@ func (StringUtils) SanitizeInput(input string) string {
 	return input
 }
 
-// TruncateString trunca uma string se ela for muito longa
+// TruncateString truncates a string if it is too long
 func (StringUtils) TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -449,7 +357,7 @@ func (StringUtils) TruncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// ValidateStringLength valida o comprimento de uma string
+// ValidateStringLength validates a string length
 func (StringUtils) ValidateStringLength(s string, minLen, maxLen int, fieldName string) error {
 	if len(s) < minLen {
 		return NewValidationError(fieldName, fmt.Sprintf("%s must be at least %d characters", fieldName, minLen))
@@ -460,10 +368,10 @@ func (StringUtils) ValidateStringLength(s string, minLen, maxLen int, fieldName 
 	return nil
 }
 
-// AutocompleteUtils fornece utilitários para autocomplete
+// AutocompleteUtils provides utilities for autocomplete
 type AutocompleteUtils struct{}
 
-// FilterChoices filtra choices baseado no input do usuário
+// FilterChoices filters choices based on user input
 func (AutocompleteUtils) FilterChoices(choices []*discordgo.ApplicationCommandOptionChoice, input string) []*discordgo.ApplicationCommandOptionChoice {
 	if input == "" {
 		return choices
@@ -481,7 +389,7 @@ func (AutocompleteUtils) FilterChoices(choices []*discordgo.ApplicationCommandOp
 	return filtered
 }
 
-// CreateChoice cria uma choice para autocomplete
+// CreateChoice creates a choice for autocomplete
 func (AutocompleteUtils) CreateChoice(name, value string) *discordgo.ApplicationCommandOptionChoice {
 	return &discordgo.ApplicationCommandOptionChoice{
 		Name:  name,
@@ -489,7 +397,7 @@ func (AutocompleteUtils) CreateChoice(name, value string) *discordgo.Application
 	}
 }
 
-// CreateChoicesFromStrings cria choices a partir de uma slice de strings
+// CreateChoicesFromStrings creates choices from a slice of strings
 func (AutocompleteUtils) CreateChoicesFromStrings(items []string) []*discordgo.ApplicationCommandOptionChoice {
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, len(items))
 	for i, item := range items {

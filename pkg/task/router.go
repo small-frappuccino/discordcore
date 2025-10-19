@@ -86,7 +86,7 @@ func Defaults() RouterConfig {
 		IdempotencyTTL:     60 * time.Second,
 		GroupBuffer:        128,
 		GroupIdleTTL:       2 * time.Minute,
-		CleanupInterval:    30 * time.Second,
+		CleanupInterval:    2 * time.Minute,
 		GlobalMaxWorkers:   0, // unlimited by default
 		GroupMaxParallel:   1, // serialized per group by default
 	}
@@ -374,7 +374,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 
 		// Safety: ensure handler still registered
 		if handler == nil {
-			log.Warn().Applicationf("Task dropped (handler not registered). Type: %s, Group: %s", enq.task.Type, gw.key)
+			log.ApplicationLogger().Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
 			tr.maybeReleaseIdempotency(enq.task, eff)
 			continue
 		}
@@ -393,13 +393,13 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 				delay := tr.computeBackoff(eff.InitialBackoff, eff.MaxBackoff, enq.attempt)
 				attempt := enq.attempt + 1
 
-				log.Warn().Applicationf("Task failed, scheduling retry. Type: %s, Group: %s, Attempt: %d/%d, Backoff: %s, Error: %v",
-					enq.task.Type,
-					gw.key,
-					attempt,
-					eff.MaxAttempts,
-					delay.String(),
-					err,
+				log.ApplicationLogger().Warn("Task failed, scheduling retry",
+					"type", enq.task.Type,
+					"group", gw.key,
+					"attempt", attempt,
+					"max_attempts", eff.MaxAttempts,
+					"backoff", delay.String(),
+					"err", err,
 				)
 
 				// Re-enqueue after backoff (same group)
@@ -435,11 +435,11 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 				continue
 			}
 
-			log.Error().Errorf("Task failed; max attempts reached. Type: %s, Group: %s, Attempts: %d, Error: %v",
-				enq.task.Type,
-				gw.key,
-				enq.attempt,
-				err,
+			log.ErrorLoggerRaw().Error("Task failed; max attempts reached",
+				"type", enq.task.Type,
+				"group", gw.key,
+				"attempts", enq.attempt,
+				"err", err,
 			)
 		}
 

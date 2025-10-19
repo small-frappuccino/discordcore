@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/errors"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // BaseService provides common functionality for all services
@@ -88,7 +89,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 		return nil // Already running
 	}
 
-	log.Info().Applicationf("service %s: Starting service...", bs.name)
+	slog.Info("Starting service...", "service", bs.name)
 	bs.state = StateInitializing
 
 	// Call the start hook if provided
@@ -105,7 +106,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
-			log.Error().Errorf("service %s: Service start failed: %v", bs.name, err)
+			slog.Error("Service start failed", "service", bs.name, "err", err)
 			return serviceErr
 		}
 	}
@@ -117,7 +118,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 	bs.startTime = &now
 	bs.stopTime = nil
 
-	log.Info().Applicationf("service %s: Service started successfully", bs.name)
+	slog.Info("Service started successfully", "service", bs.name)
 	return nil
 }
 
@@ -130,7 +131,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 		return nil // Already stopped
 	}
 
-	log.Info().Applicationf("service %s: Stopping service...", bs.name)
+	slog.Info("Stopping service...", "service", bs.name)
 	bs.state = StateStopping
 
 	// Call the stop hook if provided
@@ -146,7 +147,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
-			log.Error().Errorf("service %s: Service stop failed: %v", bs.name, err)
+			slog.Error("Service stop failed", "service", bs.name, "err", err)
 			// Continue with shutdown even if hook fails
 		}
 	}
@@ -157,7 +158,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 	now := time.Now()
 	bs.stopTime = &now
 
-	log.Info().Applicationf("service %s: Service stopped", bs.name)
+	slog.Info("Service stopped", "service", bs.name)
 	return nil
 }
 
@@ -425,11 +426,11 @@ func (ms *ManagedService) HandleError(err error) {
 
 	if ms.autoRestart && ms.restartCount < ms.maxRestarts {
 		// Use the package logger (simple categories are available)
-		log.Info().Applicationf("service %s: Service error detected, attempting restart: %v", ms.name, err)
+		slog.Warn("Service error detected, attempting restart", "service", ms.name, "err", err)
 		go func() {
 			time.Sleep(ms.restartDelay)
 			if restartErr := ms.manager.RestartService(ms.name); restartErr != nil {
-				log.Error().Errorf("service %s: Failed to restart service after error: %v", ms.name, restartErr)
+				slog.Error("Failed to restart service after error", "service", ms.name, "err", restartErr)
 			}
 		}()
 	}

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -137,7 +139,7 @@ func NewServiceManager(errorHandler *errors.ErrorHandler) *ServiceManager {
 		healthStop:      make(chan struct{}),
 		errorHandler:    errorHandler,
 		shutdownTimeout: 30 * time.Second,
-		healthInterval:  1 * time.Minute,
+		healthInterval:  5 * time.Minute,
 		maxRestarts:     3,
 		restartDelay:    5 * time.Second,
 	}
@@ -167,15 +169,14 @@ func (sm *ServiceManager) Register(service Service) error {
 		sm.dependents[dep] = append(sm.dependents[dep], name)
 	}
 
-	log.Info().Applicationf("Service registered: service=%s type=%s priority=%d dependencies=%v",
-		name, service.Type(), service.Priority(), service.Dependencies())
+	log.ApplicationLogger().Info("Service registered", "service", name, "type", service.Type(), "priority", service.Priority(), "dependencies", service.Dependencies())
 
 	return nil
 }
 
 // StartAll starts all services in dependency order
 func (sm *ServiceManager) StartAll() error {
-	log.Info().Applicationf("Starting all services...")
+	log.ApplicationLogger().Info("Starting all services...")
 
 	startOrder, err := sm.calculateStartOrder()
 	if err != nil {
@@ -200,13 +201,13 @@ func (sm *ServiceManager) StartAll() error {
 	sm.healthStop = make(chan struct{})
 	go sm.healthMonitor()
 
-	log.Info().Applicationf("All services started successfully; services_count=%d", len(sm.services))
+	log.ApplicationLogger().Info("All services started successfully", "services_count", len(sm.services))
 	return nil
 }
 
 // StopAll stops all services in reverse dependency order
 func (sm *ServiceManager) StopAll() error {
-	log.Info().Applicationf("Stopping all services...")
+	log.ApplicationLogger().Info("Stopping all services...")
 
 	// Cancel context to signal shutdown
 	sm.cancel()
@@ -232,11 +233,11 @@ func (sm *ServiceManager) StopAll() error {
 	}
 
 	if len(stopErrors) > 0 {
-		log.Error().Errorf("Some services failed to stop cleanly: %v", stopErrors)
+		log.ErrorLoggerRaw().Error("Some services failed to stop cleanly", "errors", stopErrors)
 		return fmt.Errorf("failed to stop some services: %v", stopErrors)
 	}
 
-	log.Info().Applicationf("All services stopped successfully")
+	log.ApplicationLogger().Info("All services stopped successfully")
 	return nil
 }
 
@@ -276,7 +277,7 @@ func (sm *ServiceManager) StartService(name string) error {
 	ctx, cancel := context.WithTimeout(sm.ctx, 30*time.Second)
 	defer cancel()
 
-	log.Info().Applicationf("service %s: Starting service...", name)
+	log.ApplicationLogger().Info("Starting service...", "service", name)
 
 	err := sm.errorHandler.HandleWithRetry(ctx, "start_service", name, func() error {
 		return info.Service.Start(ctx)
@@ -304,7 +305,7 @@ func (sm *ServiceManager) StartService(name string) error {
 	sm.updateServiceState(info, StateRunning)
 	sm.mu.Unlock()
 
-	log.Info().Applicationf("service %s: Service started successfully", name)
+	log.ApplicationLogger().Info("Service started successfully", "service", name)
 	return nil
 }
 
@@ -328,7 +329,7 @@ func (sm *ServiceManager) StopService(name string) error {
 	// Stop dependents first
 	for _, dependent := range sm.dependents[name] {
 		if err := sm.StopService(dependent); err != nil {
-			log.Error().Errorf("Failed to stop dependent service: service=%s dependent=%s error=%v", name, dependent, err)
+			log.ErrorLoggerRaw().Error("Failed to stop dependent service", "service", name, "dependent", dependent, "err", err)
 		}
 	}
 
@@ -336,7 +337,7 @@ func (sm *ServiceManager) StopService(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), sm.shutdownTimeout)
 	defer cancel()
 
-	log.Info().Applicationf("service %s: Stopping service...", name)
+	log.ApplicationLogger().Info("Stopping service...", "service", name)
 
 	err := info.Service.Stop(ctx)
 
@@ -360,20 +361,20 @@ func (sm *ServiceManager) StopService(name string) error {
 	sm.mu.Unlock()
 
 	if err != nil {
-		log.Error().Errorf("Service %s stopped with errors: %v", name, err)
+		log.ErrorLoggerRaw().Error("Service stopped with errors", "service", name, "err", err)
 		return err
 	}
 
-	log.Info().Applicationf("service %s: Service stopped successfully", name)
+	slog.Info("Service stopped successfully", "service", name)
 	return nil
 }
 
 // RestartService restarts a specific service
 func (sm *ServiceManager) RestartService(name string) error {
-	log.Info().Applicationf("service %s: Restarting service...", name)
+	slog.Info("Restarting service...", "service", name)
 
 	if err := sm.StopService(name); err != nil {
-		log.Error().Errorf("Failed to stop service for restart: service=%s error=%v", name, err)
+		slog.Error("Failed to stop service for restart", "service", name, "err", err)
 	}
 
 	// Wait a bit before restarting
@@ -515,7 +516,7 @@ func (sm *ServiceManager) checkServiceHealth(info *ServiceInfo) {
 	health := info.Service.HealthCheck(ctx)
 
 	if !health.Healthy {
-		log.Error().Errorf("Service health check failed: service=%s message=%s details=%v", info.Service.Name(), health.Message, health.Details)
+		slog.Error("Service health check failed", "service", info.Service.Name(), "message", health.Message, "details", health.Details)
 
 		// Consider restarting the service if it's been unhealthy
 		sm.mu.Lock()
@@ -523,14 +524,14 @@ func (sm *ServiceManager) checkServiceHealth(info *ServiceInfo) {
 		if info.RestartCount < sm.maxRestarts {
 			sm.mu.Unlock()
 			go func() {
-				log.Info().Applicationf("service %s: Attempting to restart unhealthy service", info.Service.Name())
+				slog.Warn("Attempting to restart unhealthy service", "service", info.Service.Name())
 				if err := sm.RestartService(info.Service.Name()); err != nil {
-					log.Error().Errorf("Failed to restart unhealthy service: service=%s error=%v", info.Service.Name(), err)
+					slog.Error("Failed to restart unhealthy service", "service", info.Service.Name(), "err", err)
 				}
 			}()
 		} else {
 			sm.mu.Unlock()
-			log.Error().Errorf("Service %s exceeded maximum restart attempts", info.Service.Name())
+			slog.Error("Service exceeded maximum restart attempts", "service", info.Service.Name())
 		}
 	}
 }

@@ -2,6 +2,7 @@ package errutil
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -9,7 +10,7 @@ import (
 
 // Minimal replacement for the previously external errutil package.
 // Provides:
-// - InitializeGlobalErrorHandler(logger *logging.Logger) error
+// - InitializeGlobalErrorHandler(logger *log.Logger) error
 // - HandleDiscordError(operation string, fn func() error) error
 // - HandleConfigError(operation, path string, fn func() error) error
 //
@@ -52,11 +53,11 @@ func HandleDiscordError(operation string, fn func() error) error {
 	mu.RUnlock()
 
 	if l != nil {
-		l.Error().Errorf("Discord operation failed. Operation: %s, Error: %v", operation, err)
+		slog.Error("Discord operation failed", "operation", operation, "error", err)
 	} else {
 		// Best-effort fallback to package-level helper in logging (if available).
 		// This ensures some logging even if InitializeGlobalErrorHandler wasn't called.
-		log.Error().Errorf("Discord operation failed: %s, Error: %v", operation, err)
+		slog.Error("Discord operation failed", "operation", operation, "error", err)
 	}
 
 	return err
@@ -79,9 +80,9 @@ func HandleConfigError(operation, path string, fn func() error) error {
 	mu.RUnlock()
 
 	if l != nil {
-		l.Error().Errorf("Config operation failed. Operation: %s, Path: %s, Error: %v", operation, path, err)
+		slog.Error("Config operation failed", "operation", operation, "path", path, "error", err)
 	} else {
-		log.Error().Errorf("Config operation failed: %s %s, Error: %v", operation, path, err)
+		slog.Error("Config operation failed", "operation", operation, "path", path, "error", err)
 	}
 
 	return fmt.Errorf("config %s %s: %w", operation, path, err)

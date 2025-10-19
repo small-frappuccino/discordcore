@@ -25,7 +25,7 @@ func NewConfigManager() *ConfigManager {
 	}
 }
 
-// NewManager creates a new configuration manager.
+// NewConfigManagerWithPath creates a new configuration manager.
 func NewConfigManagerWithPath(configPath string) *ConfigManager {
 	return &ConfigManager{
 		configFilePath: configPath,
@@ -45,14 +45,14 @@ func (mgr *ConfigManager) LoadConfig() error {
 	err := mgr.jsonManager.Load(mgr.config)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Info().Applicationf(LogLoadConfigFileNotFound, mgr.configFilePath)
+			log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigFileNotFound, mgr.configFilePath))
 			return nil
 		}
 		return errutil.HandleConfigError("read", mgr.configFilePath, func() error { return err })
 	}
 
 	if len(mgr.config.Guilds) == 0 {
-		log.Info().Applicationf(LogLoadConfigNoGuilds, mgr.configFilePath)
+		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigNoGuilds, mgr.configFilePath))
 	}
 
 	return nil
@@ -72,7 +72,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 		return errutil.HandleConfigError("write", mgr.configFilePath, func() error { return err })
 	}
 
-	log.Info().Applicationf(LogSaveConfigSuccess, mgr.configFilePath)
+	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.configFilePath))
 	return nil
 }
 
@@ -160,13 +160,13 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		fullGuild, err := session.Guild(g.ID)
 		if err != nil {
 			// preserve the guildID field and format the message as a warning
-			log.Warn().Applicationf("Could not fetch guild details for guild %s: %v", g.ID, err)
+			log.ApplicationLogger().Warn("Could not fetch guild details for guild", "guildID", g.ID, "err", err)
 			continue
 		}
 
 		channelID := FindSuitableChannel(session, g.ID)
 		if channelID == "" {
-			log.Warn().Applicationf("No suitable channel found in guild %s (%s)", fullGuild.Name, g.ID)
+			log.ApplicationLogger().Warn("No suitable channel found in guild", "guildName", fullGuild.Name, "guildID", g.ID)
 			continue
 		}
 
@@ -184,7 +184,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
 		mgr.mu.Unlock()
-		log.Info().Applicationf("Guild added: %s (%s) with channel %s", fullGuild.Name, g.ID, channelID)
+		log.ApplicationLogger().Info("Guild added", "guildName", fullGuild.Name, "guildID", g.ID, "channelID", channelID)
 	}
 	return mgr.SaveConfig()
 }
@@ -206,7 +206,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		for _, g := range mgr.config.Guilds {
 			if g.GuildID == guildID {
 				mgr.mu.RUnlock()
-				log.Info().Applicationf("Guild %s already configured, skipping", guildID)
+				log.ApplicationLogger().Info("Guild already configured, skipping", "guildID", guildID)
 				return nil
 			}
 		}
@@ -240,7 +240,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	if ch, err := session.Channel(channelID); err == nil {
 		channelName = ch.Name
 	}
-	log.Info().Applicationf("%s: %s (%s) channel: %s", LogGuildAdded, guild.Name, guildID, channelName)
+	log.ApplicationLogger().Info(LogGuildAdded, "guildName", guild.Name, "guildID", guildID, "channel", channelName)
 	return mgr.SaveConfig()
 }
 
@@ -254,9 +254,9 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	}
 	for _, guildConfig := range configuration.Guilds {
 		if guild, err := s.Guild(guildConfig.GuildID); err == nil {
-			log.Info().Applicationf("%s: %s (%s)", LogMonitorGuild, guild.Name, guild.ID)
+			log.ApplicationLogger().Info(LogMonitorGuild, "guildName", guild.Name, "guildID", guild.ID)
 		} else {
-			log.Warn().Applicationf("%s: %s", LogGuildNotAccessible, guildConfig.GuildID)
+			log.ApplicationLogger().Warn(LogGuildNotAccessible, "guildID", guildConfig.GuildID)
 		}
 	}
 }
@@ -460,7 +460,7 @@ func EnsureSettingsFile() error {
 
 	// If file does not exist, create default
 	if !exists {
-		log.Info().Applicationf("Settings file not found, creating default at %s", settingsFilePath)
+		log.ApplicationLogger().Info(fmt.Sprintf("Settings file not found, creating default at %s", settingsFilePath))
 		defaultConfig := BotConfig{Guilds: []GuildConfig{}}
 		configData, err := json.MarshalIndent(defaultConfig, "", "  ")
 		if err != nil {
@@ -474,12 +474,12 @@ func EnsureSettingsFile() error {
 
 	// If it exists and is valid, do not modify it
 	if valid {
-		log.Info().Applicationf("Settings file exists and is valid at %s; no changes made", settingsFilePath)
+		log.ApplicationLogger().Info(fmt.Sprintf("Settings file exists and is valid at %s; no changes made", settingsFilePath))
 		return nil
 	}
 
 	// If it exists but is invalid, replace with a default structure
-	log.Warn().Applicationf("Settings file at %s exists but is invalid JSON structure; rewriting with default schema", settingsFilePath)
+	log.ApplicationLogger().Warn(fmt.Sprintf("Settings file at %s exists but is invalid JSON structure; rewriting with default schema", settingsFilePath))
 	defaultConfig := BotConfig{Guilds: []GuildConfig{}}
 	configData, err := json.MarshalIndent(defaultConfig, "", "  ")
 	if err != nil {
@@ -591,17 +591,17 @@ func SaveSettingsFile(config *BotConfig) error {
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		log.Warn().Applicationf(LogNoConfiguredGuilds)
+		log.ApplicationLogger().Warn(LogNoConfiguredGuilds)
 		return nil
 	}
-	log.Info().Applicationf(LogFoundConfiguredGuilds, len(cfg.Guilds))
+	log.ApplicationLogger().Info(fmt.Sprintf(LogFoundConfiguredGuilds, len(cfg.Guilds)))
 	var errCount int
 	for _, g := range cfg.Guilds {
 		guild, err := session.Guild(g.GuildID)
 		if err == nil {
-			log.Info().Applicationf("🔎 Will monitor this guild: %s (%s)", guild.Name, guild.ID)
+			log.ApplicationLogger().Info(fmt.Sprintf("🔎 Will monitor this guild: %s (%s)", guild.Name, guild.ID))
 		} else {
-			log.Warn().Applicationf("%s: %s", LogGuildNotAccessible, g.GuildID)
+			log.ApplicationLogger().Warn(fmt.Sprintf("%s: %s", LogGuildNotAccessible, g.GuildID))
 			errCount++
 		}
 	}

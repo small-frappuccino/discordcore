@@ -7,7 +7,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-// ResponseType define tipos de resposta padronizados
+// ResponseType defines standard response types
 type ResponseType int
 
 const (
@@ -18,7 +18,7 @@ const (
 	ResponseLoading
 )
 
-// ResponseConfig configura opções de resposta
+// ResponseConfig sets options for responses
 type ResponseConfig struct {
 	Ephemeral   bool
 	Title       string
@@ -30,13 +30,13 @@ type ResponseConfig struct {
 	Attachments []*discordgo.File
 }
 
-// ResponseManager gerencia todas as respostas de interação
+// ResponseManager manages all interaction responses
 type ResponseManager struct {
 	session *discordgo.Session
 	config  ResponseConfig
 }
 
-// NewResponseManager cria um novo gerenciador de respostas
+// NewResponseManager creates a new response manager
 func NewResponseManager(session *discordgo.Session) *ResponseManager {
 	return &ResponseManager{
 		session: session,
@@ -44,7 +44,7 @@ func NewResponseManager(session *discordgo.Session) *ResponseManager {
 	}
 }
 
-// WithConfig define configurações para a próxima resposta
+// WithConfig sets configuration for the next response
 func (rm *ResponseManager) WithConfig(config ResponseConfig) *ResponseManager {
 	return &ResponseManager{
 		session: rm.session,
@@ -52,39 +52,39 @@ func (rm *ResponseManager) WithConfig(config ResponseConfig) *ResponseManager {
 	}
 }
 
-// Success envia uma resposta de sucesso
+// Success sends a success response
 func (rm *ResponseManager) Success(i *discordgo.InteractionCreate, message string) error {
 	return rm.sendResponse(i, message, ResponseSuccess)
 }
 
-// Error envia uma resposta de erro
+// Error sends an error response
 func (rm *ResponseManager) Error(i *discordgo.InteractionCreate, message string) error {
 	return rm.sendResponse(i, message, ResponseError)
 }
 
-// Warning envia uma resposta de aviso
+// Warning sends a warning response
 func (rm *ResponseManager) Warning(i *discordgo.InteractionCreate, message string) error {
 	return rm.sendResponse(i, message, ResponseWarning)
 }
 
-// Info envia uma resposta informativa
+// Info sends an informational response
 func (rm *ResponseManager) Info(i *discordgo.InteractionCreate, message string) error {
 	return rm.sendResponse(i, message, ResponseInfo)
 }
 
-// Loading envia uma resposta de carregamento
+// Loading sends a loading response
 func (rm *ResponseManager) Loading(i *discordgo.InteractionCreate, message string) error {
 	return rm.sendResponse(i, message, ResponseLoading)
 }
 
-// Ephemeral envia uma resposta ephemeral simples
+// Ephemeral sends a simple ephemeral response
 func (rm *ResponseManager) Ephemeral(i *discordgo.InteractionCreate, message string) error {
 	config := rm.config
 	config.Ephemeral = true
 	return rm.WithConfig(config).Info(i, message)
 }
 
-// Custom envia uma resposta personalizada
+// Custom sends a custom response
 func (rm *ResponseManager) Custom(i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed) error {
 	var flags discordgo.MessageFlags
 	if rm.config.Ephemeral {
@@ -103,7 +103,7 @@ func (rm *ResponseManager) Custom(i *discordgo.InteractionCreate, content string
 	})
 }
 
-// sendResponse envia uma resposta baseada no tipo
+// sendResponse sends a response based on the type
 func (rm *ResponseManager) sendResponse(i *discordgo.InteractionCreate, message string, responseType ResponseType) error {
 	if rm.config.WithEmbed {
 		return rm.sendEmbedResponse(i, message, responseType)
@@ -111,7 +111,7 @@ func (rm *ResponseManager) sendResponse(i *discordgo.InteractionCreate, message 
 	return rm.sendTextResponse(i, message, responseType)
 }
 
-// sendTextResponse envia uma resposta de texto simples
+// sendTextResponse sends a simple text response
 func (rm *ResponseManager) sendTextResponse(i *discordgo.InteractionCreate, message string, responseType ResponseType) error {
 	content := rm.formatTextMessage(message, responseType)
 
@@ -131,7 +131,7 @@ func (rm *ResponseManager) sendTextResponse(i *discordgo.InteractionCreate, mess
 	})
 }
 
-// sendEmbedResponse envia uma resposta com embed
+// sendEmbedResponse sends a response with an embed
 func (rm *ResponseManager) sendEmbedResponse(i *discordgo.InteractionCreate, message string, responseType ResponseType) error {
 	embed := rm.createEmbed(message, responseType)
 
@@ -151,7 +151,7 @@ func (rm *ResponseManager) sendEmbedResponse(i *discordgo.InteractionCreate, mes
 	})
 }
 
-// formatTextMessage formata mensagem de texto baseada no tipo
+// formatTextMessage formats a text message based on the type
 func (rm *ResponseManager) formatTextMessage(message string, responseType ResponseType) string {
 	switch responseType {
 	case ResponseSuccess:
@@ -169,7 +169,7 @@ func (rm *ResponseManager) formatTextMessage(message string, responseType Respon
 	}
 }
 
-// createEmbed cria um embed baseado no tipo de resposta
+// createEmbed creates an embed based on the response type
 func (rm *ResponseManager) createEmbed(message string, responseType ResponseType) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
 		Description: message,
@@ -195,7 +195,7 @@ func (rm *ResponseManager) createEmbed(message string, responseType ResponseType
 	return embed
 }
 
-// getColorForType retorna a cor apropriada para cada tipo de resposta
+// getColorForType returns the appropriate color for each response type
 func (rm *ResponseManager) getColorForType(responseType ResponseType) int {
 	if rm.config.Color != 0 {
 		return rm.config.Color
@@ -217,7 +217,7 @@ func (rm *ResponseManager) getColorForType(responseType ResponseType) int {
 	}
 }
 
-// getTitleForType retorna o título padrão para cada tipo de resposta
+// getTitleForType returns the default title for each response type
 func (rm *ResponseManager) getTitleForType(responseType ResponseType) string {
 	switch responseType {
 	case ResponseSuccess:
@@ -235,7 +235,7 @@ func (rm *ResponseManager) getTitleForType(responseType ResponseType) string {
 	}
 }
 
-// Autocomplete envia uma resposta de autocomplete
+// Autocomplete sends an autocomplete response
 func (rm *ResponseManager) Autocomplete(i *discordgo.InteractionCreate, choices []*discordgo.ApplicationCommandOptionChoice) error {
 	if len(choices) > 25 {
 		choices = choices[:25]
@@ -247,7 +247,7 @@ func (rm *ResponseManager) Autocomplete(i *discordgo.InteractionCreate, choices 
 	})
 }
 
-// DeferResponse adia a resposta (para processamento longo)
+// DeferResponse defers the response (for long processing)
 func (rm *ResponseManager) DeferResponse(i *discordgo.InteractionCreate, ephemeral bool) error {
 	var flags discordgo.MessageFlags
 	if ephemeral {
@@ -262,7 +262,7 @@ func (rm *ResponseManager) DeferResponse(i *discordgo.InteractionCreate, ephemer
 	})
 }
 
-// EditResponse edita uma resposta já enviada
+// EditResponse edits an already sent response
 func (rm *ResponseManager) EditResponse(i *discordgo.InteractionCreate, content string) error {
 	_, err := rm.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &content,
@@ -270,7 +270,7 @@ func (rm *ResponseManager) EditResponse(i *discordgo.InteractionCreate, content 
 	return err
 }
 
-// EditResponseWithEmbed edita uma resposta com embed
+// EditResponseWithEmbed edits a response with an embed
 func (rm *ResponseManager) EditResponseWithEmbed(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
 	_, err := rm.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &[]*discordgo.MessageEmbed{embed},
@@ -278,7 +278,7 @@ func (rm *ResponseManager) EditResponseWithEmbed(i *discordgo.InteractionCreate,
 	return err
 }
 
-// FollowUp envia uma mensagem de follow-up
+// FollowUp sends a follow-up message
 func (rm *ResponseManager) FollowUp(i *discordgo.InteractionCreate, content string, ephemeral bool) error {
 	var flags discordgo.MessageFlags
 	if ephemeral {
@@ -292,7 +292,7 @@ func (rm *ResponseManager) FollowUp(i *discordgo.InteractionCreate, content stri
 	return err
 }
 
-// FollowUpWithEmbed envia uma mensagem de follow-up com embed
+// FollowUpWithEmbed sends a follow-up message with an embed
 func (rm *ResponseManager) FollowUpWithEmbed(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, ephemeral bool) error {
 	var flags discordgo.MessageFlags
 	if ephemeral {
@@ -306,20 +306,20 @@ func (rm *ResponseManager) FollowUpWithEmbed(i *discordgo.InteractionCreate, emb
 	return err
 }
 
-// DeleteResponse deleta a resposta original
+// DeleteResponse deletes the original response
 func (rm *ResponseManager) DeleteResponse(i *discordgo.InteractionCreate) error {
 	return rm.session.InteractionResponseDelete(i.Interaction)
 }
 
-// Builder pattern para construção fluente de respostas
+// Builder pattern for fluent response construction
 
-// ResponseBuilder constrói respostas de forma fluente
+// ResponseBuilder builds responses fluently
 type ResponseBuilder struct {
 	manager *ResponseManager
 	config  ResponseConfig
 }
 
-// NewResponseBuilder cria um novo construtor de respostas
+// NewResponseBuilder creates a new response builder
 func NewResponseBuilder(session *discordgo.Session) *ResponseBuilder {
 	return &ResponseBuilder{
 		manager: NewResponseManager(session),
@@ -327,75 +327,75 @@ func NewResponseBuilder(session *discordgo.Session) *ResponseBuilder {
 	}
 }
 
-// Ephemeral torna a resposta ephemeral
+// Ephemeral makes the response ephemeral
 func (rb *ResponseBuilder) Ephemeral() *ResponseBuilder {
 	rb.config.Ephemeral = true
 	return rb
 }
 
-// WithEmbed habilita respostas com embed
+// WithEmbed enables embed responses
 func (rb *ResponseBuilder) WithEmbed() *ResponseBuilder {
 	rb.config.WithEmbed = true
 	return rb
 }
 
-// WithTitle define um título personalizado
+// WithTitle sets a custom title
 func (rb *ResponseBuilder) WithTitle(title string) *ResponseBuilder {
 	rb.config.Title = title
 	return rb
 }
 
-// WithColor define uma cor personalizada
+// WithColor sets a custom color
 func (rb *ResponseBuilder) WithColor(color int) *ResponseBuilder {
 	rb.config.Color = color
 	return rb
 }
 
-// WithFooter adiciona um footer
+// WithFooter adds a footer
 func (rb *ResponseBuilder) WithFooter(footer string) *ResponseBuilder {
 	rb.config.Footer = footer
 	return rb
 }
 
-// WithTimestamp adiciona timestamp
+// WithTimestamp adds a timestamp
 func (rb *ResponseBuilder) WithTimestamp() *ResponseBuilder {
 	rb.config.Timestamp = true
 	return rb
 }
 
-// WithComponents adiciona componentes (botões, etc.)
+// WithComponents adds components (buttons, etc.)
 func (rb *ResponseBuilder) WithComponents(components ...discordgo.MessageComponent) *ResponseBuilder {
 	rb.config.Components = components
 	return rb
 }
 
-// WithAttachments adiciona anexos
+// WithAttachments adds attachments
 func (rb *ResponseBuilder) WithAttachments(files ...*discordgo.File) *ResponseBuilder {
 	rb.config.Attachments = files
 	return rb
 }
 
-// Build constrói o ResponseManager com as configurações
+// Build constructs the ResponseManager with the configuration
 func (rb *ResponseBuilder) Build() *ResponseManager {
 	return rb.manager.WithConfig(rb.config)
 }
 
-// Success envia uma resposta de sucesso (método de conveniência)
+// Success sends a success response (convenience method)
 func (rb *ResponseBuilder) Success(i *discordgo.InteractionCreate, message string) error {
 	return rb.Build().Success(i, message)
 }
 
-// Error envia uma resposta de erro (método de conveniência)
+// Error sends an error response (convenience method)
 func (rb *ResponseBuilder) Error(i *discordgo.InteractionCreate, message string) error {
 	return rb.Build().Error(i, message)
 }
 
-// Info envia uma resposta informativa (método de conveniência)
+// Info sends an informational response (convenience method)
 func (rb *ResponseBuilder) Info(i *discordgo.InteractionCreate, message string) error {
 	return rb.Build().Info(i, message)
 }
 
-// Warning envia uma resposta de aviso (método de conveniência)
+// Warning sends a warning response (convenience method)
 func (rb *ResponseBuilder) Warning(i *discordgo.InteractionCreate, message string) error {
 	return rb.Build().Warning(i, message)
 }

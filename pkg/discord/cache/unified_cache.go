@@ -80,7 +80,7 @@ type UnifiedCache struct {
 // lruEntry wraps a cache entry with LRU list element
 type lruEntry struct {
 	key       string
-	value     interface{}
+	value     any
 	expiresAt time.Time
 	element   *list.Element
 }
@@ -98,11 +98,6 @@ func (uc *UnifiedCache) memberPrefix(guildID string) string {
 		return ""
 	}
 	return guildID + ":"
-}
-
-// hasPrefix reports whether key starts with prefix (no allocations)
-func hasPrefix(key, prefix string) bool {
-	return util.HasPrefix(key, prefix)
 }
 
 // Cached value types
@@ -160,7 +155,7 @@ func DefaultCacheConfig() CacheConfig {
 		GuildTTL:        15 * time.Minute,
 		RolesTTL:        10 * time.Minute,
 		ChannelTTL:      15 * time.Minute,
-		CleanupInterval: 2 * time.Minute,
+		CleanupInterval: 5 * time.Minute,
 
 		// LRU limits (0 = unlimited)
 		MaxMemberSize:  10000, // ~10k members per bot instance
@@ -768,7 +763,7 @@ func (uc *UnifiedCache) Stop() {
 // cleanupLoop periodically removes expired entries
 func (uc *UnifiedCache) cleanupLoop(interval time.Duration) {
 	if interval <= 0 {
-		interval = 2 * time.Minute
+		return
 	}
 
 	ticker := time.NewTicker(interval)

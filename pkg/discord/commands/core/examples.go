@@ -6,16 +6,17 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-// Este arquivo contém exemplos de como usar a infraestrutura core
-// para criar comandos Discord de forma modular e reutilizável.
+// This file contains examples of how to use the core infrastructure
+// to create Discord commands in a modular and reusable way.
 
 // ======================
-// Exemplo 1: Comando Simples
+// Example 1: Simple Command
 // ======================
 
-// PingCommand é um exemplo de comando simples
+// PingCommand is a simple command example
 type PingCommand struct{}
 
 func NewPingCommand() *PingCommand {
@@ -31,27 +32,26 @@ func (c *PingCommand) Description() string {
 }
 
 func (c *PingCommand) Options() []*discordgo.ApplicationCommandOption {
-	return nil // Comando simples sem opções
+	return nil // Simple command without options
 }
 
 func (c *PingCommand) RequiresGuild() bool {
-	return false // Pode ser usado em DM
+	return false // Can be used in DM
 }
 
 func (c *PingCommand) RequiresPermissions() bool {
-	return false // Todos podem usar
+	return false // Everyone can use
 }
 
 func (c *PingCommand) Handle(ctx *Context) error {
-	responder := NewResponder(ctx.Session)
-	return responder.Success(ctx.Interaction, "🏓 Pong!")
+	return NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "🏓 Pong!")
 }
 
 // ======================
-// Exemplo 2: Comando com Opções
+// Example 2: Command with Options
 // ======================
 
-// EchoCommand demonstra como usar opções e extração de dados
+// EchoCommand demonstrates how to use options and data extraction
 type EchoCommand struct{}
 
 func NewEchoCommand() *EchoCommand {
@@ -92,7 +92,7 @@ func (c *EchoCommand) RequiresPermissions() bool {
 }
 
 func (c *EchoCommand) Handle(ctx *Context) error {
-	// Extrair opções do comando
+	// Extract command options
 	extractor := NewOptionExtractor(ctx.Interaction.ApplicationCommandData().Options)
 
 	message, err := extractor.StringRequired("message")
@@ -102,7 +102,7 @@ func (c *EchoCommand) Handle(ctx *Context) error {
 
 	ephemeral := extractor.Bool("ephemeral")
 
-	// Usar ResponseBuilder para resposta mais flexível
+	// Use ResponseBuilder for a more flexible response
 	builder := NewResponseBuilder(ctx.Session)
 	if ephemeral {
 		builder = builder.Ephemeral()
@@ -112,10 +112,10 @@ func (c *EchoCommand) Handle(ctx *Context) error {
 }
 
 // ======================
-// Exemplo 3: SubComando
+// Example 3: Subcommand
 // ======================
 
-// UserInfoSubCommand demonstra implementação de subcomando
+// UserInfoSubCommand demonstrates a subcommand implementation
 type UserInfoSubCommand struct{}
 
 func NewUserInfoSubCommand() *UserInfoSubCommand {
@@ -142,7 +142,7 @@ func (c *UserInfoSubCommand) Options() []*discordgo.ApplicationCommandOption {
 }
 
 func (c *UserInfoSubCommand) RequiresGuild() bool {
-	return true // Requer servidor para acessar informações do membro
+	return true // Requires a server to access member information
 }
 
 func (c *UserInfoSubCommand) RequiresPermissions() bool {
@@ -152,16 +152,16 @@ func (c *UserInfoSubCommand) RequiresPermissions() bool {
 func (c *UserInfoSubCommand) Handle(ctx *Context) error {
 	extractor := NewOptionExtractor(GetSubCommandOptions(ctx.Interaction))
 
-	// Se não especificar usuário, usar o autor do comando
+	// If no user is specified, use the command author
 	var targetUser *discordgo.User
 	if extractor.HasOption("user") {
-		// Lógica para extrair usuário da opção
+		// Logic to extract the user from the option
 		targetUser = ctx.Interaction.Member.User
 	} else {
 		targetUser = ctx.Interaction.Member.User
 	}
 
-	// Criar embed com informações do usuário
+	// Create an embed with user information
 	builder := NewResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("User Information").
@@ -173,21 +173,20 @@ func (c *UserInfoSubCommand) Handle(ctx *Context) error {
 }
 
 // ======================
-// Exemplo 4: Comando de Grupo com Múltiplos SubComandos
+// Example 4: Group Command with Multiple Subcommands
 // ======================
 
-// ConfigGroupCommand demonstra como criar um comando com múltiplos subcomandos
+// ConfigGroupCommand demonstrates how to create a command with multiple subcommands
 type ConfigGroupCommand struct {
 	*GroupCommand
 }
 
 func NewConfigGroupCommand(session *discordgo.Session, configManager *files.ConfigManager) *ConfigGroupCommand {
-	responder := NewResponder(session)
 	checker := NewPermissionChecker(session, configManager)
 
-	group := NewGroupCommand("config", "Manage server configuration", responder, checker)
+	group := NewGroupCommand("config", "Manage server configuration", checker)
 
-	// Adicionar subcomandos
+	// Add subcommands
 	group.AddSubCommand(NewConfigSetSubCommand(configManager))
 	group.AddSubCommand(NewConfigGetSubCommand(configManager))
 	group.AddSubCommand(NewConfigListSubCommand(configManager))
@@ -195,7 +194,7 @@ func NewConfigGroupCommand(session *discordgo.Session, configManager *files.Conf
 	return &ConfigGroupCommand{GroupCommand: group}
 }
 
-// ConfigSetSubCommand - subcomando para definir configurações
+// ConfigSetSubCommand - subcommand to set configuration values
 type ConfigSetSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -239,7 +238,7 @@ func (c *ConfigSetSubCommand) RequiresGuild() bool {
 }
 
 func (c *ConfigSetSubCommand) RequiresPermissions() bool {
-	return true // Apenas usuários com permissão podem alterar config
+	return true // Only users with permission can change configuration
 }
 
 func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
@@ -255,7 +254,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 		return err
 	}
 
-	// Usar SafeGuildAccess para manipulação segura da config
+	// Use SafeGuildAccess for safe configuration manipulation
 	err = SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		switch key {
 		case "command_channel":
@@ -274,18 +273,17 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 		return err
 	}
 
-	// Persistir configuração
+	// Persist configuration
 	persister := NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
 		return NewCommandError("Failed to save configuration", true)
 	}
 
-	responder := NewResponder(ctx.Session)
-	return responder.Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
+	return NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
 }
 
-// ConfigGetSubCommand - subcomando para obter configurações
+// ConfigGetSubCommand - subcommand to get configurations
 type ConfigGetSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -329,12 +327,12 @@ func (c *ConfigGetSubCommand) Handle(ctx *Context) error {
 	builder := NewResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("Server Configuration").
-		WithColor(0x0099FF)
+		WithColor(theme.Info())
 
 	return builder.Info(ctx.Interaction, config.String())
 }
 
-// ConfigListSubCommand - subcomando para listar todas as configurações
+// ConfigListSubCommand - subcommand to list all configurations
 type ConfigListSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -382,10 +380,10 @@ func (c *ConfigListSubCommand) Handle(ctx *Context) error {
 }
 
 // ======================
-// Exemplo 5: Autocomplete Handler
+// Example 5: Autocomplete Handler
 // ======================
 
-// ConfigAutocompleteHandler demonstra implementação de autocomplete
+// ConfigAutocompleteHandler demonstrates an autocomplete implementation
 type ConfigAutocompleteHandler struct {
 	configManager *files.ConfigManager
 }
@@ -404,8 +402,8 @@ func (h *ConfigAutocompleteHandler) HandleAutocomplete(ctx *Context, focusedOpti
 		}, nil
 
 	case "value":
-		// Autocomplete baseado no key selecionado
-		// Isso requereria lógica adicional para detectar o valor do key
+		// Autocomplete based on the selected key
+		// This would require additional logic to detect the key's value
 		return h.getValueChoices(ctx)
 
 	default:
@@ -414,7 +412,7 @@ func (h *ConfigAutocompleteHandler) HandleAutocomplete(ctx *Context, focusedOpti
 }
 
 func (h *ConfigAutocompleteHandler) getValueChoices(ctx *Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
-	// Exemplo: sugerir canais do servidor
+	// Example: suggest server channels
 	channels, err := ctx.Session.GuildChannels(ctx.GuildID)
 	if err != nil {
 		return []*discordgo.ApplicationCommandOptionChoice{}, nil
@@ -435,38 +433,38 @@ func (h *ConfigAutocompleteHandler) getValueChoices(ctx *Context) ([]*discordgo.
 }
 
 // ======================
-// Exemplo 6: Como Registrar Tudo
+// Example 6: How to Register Everything
 // ======================
 
-// ExampleCommandSetup demonstra como configurar todos os comandos
+// ExampleCommandSetup demonstrates how to set up all commands
 func ExampleCommandSetup(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 ) error {
-	// Criar o gerenciador de comandos
+	// Create the command manager
 	manager := NewCommandManager(session, configManager)
 	router := manager.GetRouter()
 
-	// Registrar comandos simples
+	// Register simple commands
 	router.RegisterCommand(NewPingCommand())
 	router.RegisterCommand(NewEchoCommand())
 
-	// Registrar comando de grupo
+	// Register group command
 	configCmd := NewConfigGroupCommand(session, configManager)
 	router.RegisterCommand(configCmd)
 
-	// Registrar autocomplete
+	// Register autocomplete
 	router.RegisterAutocomplete("config", NewConfigAutocompleteHandler(configManager))
 
-	// Sincronizar comandos com Discord
+	// Sync commands with Discord
 	return manager.SetupCommands()
 }
 
 // ======================
-// Exemplo 7: Tratamento de Erros Avançado
+// Example 7: Advanced Error Handling
 // ======================
 
-// AdvancedCommand demonstra tratamento de erros robusto
+// AdvancedCommand demonstrates robust error handling
 type AdvancedCommand struct{}
 
 func NewAdvancedCommand() *AdvancedCommand {
@@ -505,26 +503,26 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 
 	input, err := extractor.StringRequired("input")
 	if err != nil {
-		return err // Erro de validação será tratado automaticamente
+		return err // Validation error will be handled automatically
 	}
 
-	// Validações customizadas
+	// Custom validations
 	stringUtils := StringUtils{}
 	if err := stringUtils.ValidateStringLength(input, 1, 100, "input"); err != nil {
 		return err
 	}
 
-	// Operação que pode falhar
+	// Operation that may fail
 	result, err := c.processInput(input)
 	if err != nil {
-		// Log do erro
+		// Log the error
 		ctx.Logger.Error().Errorf("Failed to process input: %v", err)
 
-		// Retornar erro amigável para o usuário
+		// Return a user-friendly error
 		return NewCommandError("Failed to process your input. Please try again.", true)
 	}
 
-	// Resposta de sucesso
+	// Success response
 	builder := NewResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("Processing Complete").
@@ -534,7 +532,7 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 }
 
 func (c *AdvancedCommand) processInput(input string) (string, error) {
-	// Simular processamento que pode falhar
+	// Simulate processing that may fail
 	if strings.Contains(input, "error") {
 		return "", fmt.Errorf("input contains forbidden word")
 	}

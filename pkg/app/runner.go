@@ -37,23 +37,25 @@ func Run(appName, tokenEnv string) error {
 	// Load env (with $HOME/.local/bin fallback)
 	token, loadErr := util.LoadEnvWithLocalBinFallback(tokenEnv)
 	if loadErr != nil {
-		fmt.Printf("Warning: %v\n", loadErr)
+		log.ApplicationLogger().Warn(fmt.Sprintf("Warning: %v", loadErr))
 	}
 
 	// Logger first so subsequent steps can log meaningfully
 	if err := log.SetupLogger(); err != nil {
 		return fmt.Errorf("configure logger: %w", err)
 	}
+	// Ensure logs are flushed on exit
+	defer log.GlobalLogger.Sync()
 
 	// Theme configuration
 	if err := util.ConfigureThemeFromEnv(); err != nil {
-		log.Warn().Applicationf("Failed to set theme from %s: %v", "ALICE_BOT_THEME", err)
+		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from %s: %v", "ALICE_BOT_THEME", err))
 	}
 	if os.Getenv("ALICE_BOT_THEME") == "" {
 		if err := util.SetTheme(""); err != nil {
-			log.Warn().Applicationf("Failed to apply default theme: %v", err)
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
 		} else {
-			log.Info().Applicationf("🌈 Default theme applied")
+			log.ApplicationLogger().Info("🌈 Default theme applied")
 		}
 	}
 
@@ -65,7 +67,7 @@ func Run(appName, tokenEnv string) error {
 	// Error handler for service manager
 	errorHandler := errors.NewErrorHandler()
 
-	log.Info().Applicationf("🚀 Starting %s...", appName)
+	log.ApplicationLogger().Info(fmt.Sprintf("🚀 Starting %s...", appName))
 
 	// Token must be present
 	if token == "" {
@@ -73,8 +75,8 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Discord session
-	log.Info().Discordf("🔑 Attempting to authenticate with Discord API...")
-	log.Info().Discordf("Using bot token (value redacted)")
+	log.DiscordLogger().Info("🔑 Attempting to authenticate with Discord API...")
+	log.DiscordLogger().Info("Using bot token (value redacted)")
 	discordSession, err := session.NewDiscordSession(token)
 	if err != nil {
 		return fmt.Errorf("create discord session: %w", err)
@@ -82,11 +84,11 @@ func Run(appName, tokenEnv string) error {
 	if discordSession.State == nil || discordSession.State.User == nil {
 		return fmt.Errorf("discord session state not properly initialized")
 	}
-	log.Info().Discordf("✅ Authenticated as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)
+	log.DiscordLogger().Info(fmt.Sprintf("✅ Authenticated as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator))
 
 	// Minimal on-disk structure
 	if err := util.EnsureCacheInitialized(); err != nil {
-		log.Warn().Applicationf("Failed to initialize cache structure: %v", err)
+		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to initialize cache structure: %v", err))
 	}
 	if err := util.EnsureCacheDirs(); err != nil {
 		return fmt.Errorf("create cache directories: %w", err)
@@ -98,7 +100,7 @@ func Run(appName, tokenEnv string) error {
 	// Config manager
 	configManager := files.NewConfigManager()
 	if err := configManager.LoadConfig(); err != nil {
-		log.Error().Errorf("Failed to load settings file: %v", err)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to load settings file: %v", err))
 	}
 
 	// SQLite store
@@ -109,7 +111,7 @@ func Run(appName, tokenEnv string) error {
 
 	// Log configured guilds
 	if err := files.LogConfiguredGuilds(configManager, discordSession); err != nil {
-		log.Error().Errorf("Some configured guilds could not be accessed: %v", err)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some configured guilds could not be accessed: %v", err))
 	}
 
 	// Periodic cleanup (every 6 hours)
@@ -134,17 +136,25 @@ func Run(appName, tokenEnv string) error {
 	// MonitoringService does not perform its own warmup to avoid duplicate work during startup.
 	unifiedCache := monitoringService.GetUnifiedCache()
 	if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
-		log.Info().Applicationf("Skipping cache warmup (recently warmed up)")
+		log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)")
 	} else {
 		warmupConfig := cache.DefaultWarmupConfig()
 		warmupConfig.MaxMembersPerGuild = 500 // mitigate initial load
 		if err := cache.IntelligentWarmup(discordSession, unifiedCache, store, warmupConfig); err != nil {
-			log.Warn().Applicationf("Intelligent warmup failed (continuing): %v", err)
+			log.ApplicationLogger().Warn(fmt.Sprintf("Intelligent warmup failed (continuing): %v", err))
 		}
 	}
 
-	// Periodic cache persistence
-	persistStop := unifiedCache.SetPersistInterval(30 * time.Minute)
+	// Periodic cache persistence (configurable via ALICE_UNIFIED_CACHE_PERSIST_INTERVAL; default 1h)
+	persistInterval := time.Hour
+	if v := os.Getenv("ALICE_UNIFIED_CACHE_PERSIST_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			persistInterval = d
+		} else {
+			log.ApplicationLogger().Warn(fmt.Sprintf("Invalid ALICE_UNIFIED_CACHE_PERSIST_INTERVAL=%q: %v; using default %v", v, err, persistInterval))
+		}
+	}
+	persistStop := unifiedCache.SetPersistInterval(persistInterval)
 	defer func() {
 		if persistStop != nil {
 			close(persistStop)
@@ -188,7 +198,7 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Start services
-	log.Info().Applicationf("🚀 Starting all services...")
+	log.ApplicationLogger().Info("🚀 Starting all services...")
 	if err := serviceManager.StartAll(); err != nil {
 		return fmt.Errorf("start services: %w", err)
 	}
@@ -213,20 +223,21 @@ func Run(appName, tokenEnv string) error {
 	adminCommands := admin.NewAdminCommands(serviceManager)
 	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 
-	log.Info().Applicationf("🔗 Slash commands sync completed")
-	log.Info().Applicationf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond))
-	log.Info().Applicationf("🤖 %s running. Press Ctrl+C to stop...", appName)
+	log.ApplicationLogger().Info("🔗 Slash commands sync completed")
+	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
+	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
 
 	// Wait for shutdown signal
 	util.WaitForInterrupt()
-	log.Info().Applicationf("🛑 Stopping %s...", appName)
+	log.ApplicationLogger().Info(fmt.Sprintf("🛑 Stopping %s...", appName))
+	log.GlobalLogger.Sync()
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if err := serviceManager.StopAll(); err != nil {
-		log.Error().Errorf("Some services failed to stop cleanly: %v", err)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some services failed to stop cleanly: %v", err))
 	}
 
 	// Allow services to finish final writes before closing store

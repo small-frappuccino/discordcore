@@ -399,7 +399,7 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	if gcfg == nil {
 		// No configuration; update avatar and exit (avoid retries)
 		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
-		log.Info().Applicationf("No guild config found; skipping avatar notification; guildID=%s userID=%s", p.GuildID, p.UserID)
+		log.ApplicationLogger().Info("No guild config found; skipping avatar notification", "guildID", p.GuildID, "userID", p.UserID)
 		return nil
 	}
 
@@ -409,7 +409,7 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	}
 	// If there's still no channel, skip notification but update avatar in store
 	if channelID == "" {
-		log.Info().Applicationf("No log channel configured; skipping avatar notification; guildID=%s userID=%s", p.GuildID, p.UserID)
+		log.ApplicationLogger().Info("No log channel configured; skipping avatar notification", "guildID", p.GuildID, "userID", p.UserID)
 		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
 		return nil
 	}

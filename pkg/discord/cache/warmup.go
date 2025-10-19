@@ -40,15 +40,15 @@ func DefaultWarmupConfig() WarmupConfig {
 // IntelligentWarmup performs cache warmup by loading persisted cache and fetching missing data
 func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *storage.Store, config WarmupConfig) error {
 	startTime := time.Now()
-	log.Info().Applicationf("🔥 Starting intelligent cache warmup...")
+	log.ApplicationLogger().Info("🔥 Starting intelligent cache warmup...")
 
 	// Step 1: Load persisted cache entries from SQLite
 	if err := cache.Warmup(); err != nil {
-		log.Warn().Applicationf("Failed to warmup from persistent cache: %v", err)
+		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup from persistent cache: %v", err))
 	} else {
 		stats := cache.GetStats()
-		log.Info().Applicationf("✅ Loaded from persistent cache: %d members, %d guilds, %d roles, %d channels",
-			stats.MemberEntries, stats.GuildEntries, stats.RolesEntries, stats.ChannelEntries)
+		log.ApplicationLogger().Info(fmt.Sprintf("✅ Loaded from persistent cache: %d members, %d guilds, %d roles, %d channels",
+			stats.MemberEntries, stats.GuildEntries, stats.RolesEntries, stats.ChannelEntries))
 	}
 
 	// Step 2: Determine which guilds to warmup
@@ -61,11 +61,11 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 	}
 
 	if len(guildIDs) == 0 {
-		log.Warn().Applicationf("No guilds found for warmup")
+		log.ApplicationLogger().Warn("No guilds found for warmup")
 		return nil
 	}
 
-	log.Info().Applicationf("🏰 Warming up %d guilds...", len(guildIDs))
+	log.ApplicationLogger().Info(fmt.Sprintf("🏰 Warming up %d guilds...", len(guildIDs)))
 
 	// Step 3: Warmup each guild
 	var totalMembers, totalRoles, totalChannels, totalGuilds int
@@ -73,7 +73,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		// Fetch missing guild data
 		if config.FetchMissingGuilds {
 			if err := warmupGuild(session, cache, guildID); err != nil {
-				log.Warn().Applicationf("Failed to warmup guild %s: %v", guildID, err)
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup guild %s: %v", guildID, err))
 			} else {
 				totalGuilds++
 			}
@@ -83,7 +83,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		if config.FetchMissingRoles {
 			rolesCount, err := warmupGuildRoles(session, cache, store, guildID)
 			if err != nil {
-				log.Warn().Applicationf("Failed to warmup roles for guild %s: %v", guildID, err)
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup roles for guild %s: %v", guildID, err))
 			} else {
 				totalRoles += rolesCount
 			}
@@ -93,7 +93,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		if config.FetchMissingChannels {
 			channelsCount, err := warmupGuildChannels(session, cache, guildID)
 			if err != nil {
-				log.Warn().Applicationf("Failed to warmup channels for guild %s: %v", guildID, err)
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup channels for guild %s: %v", guildID, err))
 			} else {
 				totalChannels += channelsCount
 			}
@@ -103,7 +103,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		if config.FetchMissingMembers {
 			membersCount, err := warmupGuildMembers(session, cache, store, guildID, config.MaxMembersPerGuild)
 			if err != nil {
-				log.Warn().Applicationf("Failed to warmup members for guild %s: %v", guildID, err)
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup members for guild %s: %v", guildID, err))
 			} else {
 				totalMembers += membersCount
 			}
@@ -111,8 +111,8 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 	}
 
 	elapsed := time.Since(startTime)
-	log.Info().Applicationf("✅ Warmup completed in %v: %d guilds, %d members, %d roles, %d channels",
-		elapsed, totalGuilds, totalMembers, totalRoles, totalChannels)
+	log.ApplicationLogger().Info(fmt.Sprintf("✅ Warmup completed in %v: %d guilds, %d members, %d roles, %d channels",
+		elapsed, totalGuilds, totalMembers, totalRoles, totalChannels))
 
 	return nil
 }
@@ -188,7 +188,7 @@ func warmupGuildMembers(session *discordgo.Session, cache *UnifiedCache, store *
 		var err error
 		storedMembers, err = store.GetAllMemberJoins(guildID)
 		if err != nil {
-			log.Warn().Applicationf("Failed to get stored members for guild %s: %v", guildID, err)
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to get stored members for guild %s: %v", guildID, err))
 		}
 	}
 
@@ -239,25 +239,25 @@ func warmupGuildMembers(session *discordgo.Session, cache *UnifiedCache, store *
 					joinedAt = member.JoinedAt
 				}
 				if err := store.UpsertMemberJoin(guildID, member.User.ID, joinedAt); err != nil {
-					log.Warn().Applicationf("Failed to store member join: %v", err)
+					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member join: %v", err))
 				}
 			}
 
 			// Store member roles if not exists
 			if store != nil && len(member.Roles) > 0 {
 				if err := store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now().UTC()); err != nil {
-					log.Warn().Applicationf("Failed to store member roles: %v", err)
+					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member roles: %v", err))
 				}
 			}
 
 			// Touch existing members to keep them fresh
 			if store != nil && existsInStorage {
 				if err := store.TouchMemberJoin(guildID, member.User.ID); err != nil {
-					log.Warn().Applicationf("Failed to touch member join: %v", err)
+					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member join: %v", err))
 				}
 				if len(member.Roles) > 0 {
 					if err := store.TouchMemberRoles(guildID, member.User.ID); err != nil {
-						log.Warn().Applicationf("Failed to touch member roles: %v", err)
+						log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member roles: %v", err))
 					}
 				}
 			}
@@ -281,12 +281,12 @@ func RefreshMemberData(session *discordgo.Session, cache *UnifiedCache, store *s
 		return nil
 	}
 
-	log.Info().Applicationf("🔄 Refreshing %d members in guild %s", len(userIDs), guildID)
+	log.ApplicationLogger().Info(fmt.Sprintf("🔄 Refreshing %d members in guild %s", len(userIDs), guildID))
 
 	for _, userID := range userIDs {
 		member, err := session.GuildMember(guildID, userID)
 		if err != nil {
-			log.Warn().Applicationf("Failed to refresh member %s: %v", userID, err)
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to refresh member %s: %v", userID, err))
 			continue
 		}
 
@@ -300,12 +300,12 @@ func RefreshMemberData(session *discordgo.Session, cache *UnifiedCache, store *s
 				joinedAt = member.JoinedAt
 			}
 			if err := store.UpsertMemberJoin(guildID, userID, joinedAt); err != nil {
-				log.Warn().Applicationf("Failed to update member join: %v", err)
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to update member join: %v", err))
 			}
 
 			if len(member.Roles) > 0 {
 				if err := store.UpsertMemberRoles(guildID, userID, member.Roles, time.Now().UTC()); err != nil {
-					log.Warn().Applicationf("Failed to update member roles: %v", err)
+					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to update member roles: %v", err))
 				}
 			}
 		}
@@ -314,10 +314,11 @@ func RefreshMemberData(session *discordgo.Session, cache *UnifiedCache, store *s
 	return nil
 }
 
-// SchedulePeriodicCleanup starts a background goroutine that periodically cleans up obsolete data
+// SchedulePeriodicCleanup starts a background goroutine that periodically cleans up obsolete data.
+// Pass interval <= 0 to disable cleanup (returns nil).
 func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan struct{} {
 	if interval <= 0 {
-		interval = 6 * time.Hour // Default: cleanup every 6 hours
+		return nil
 	}
 
 	stopChan := make(chan struct{})
@@ -326,19 +327,14 @@ func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		log.Info().Applicationf("🧹 Scheduled periodic cleanup every %v", interval)
-
 		for {
 			select {
 			case <-ticker.C:
-				log.Info().Applicationf("🧹 Running periodic cleanup...")
 				if err := store.CleanupAllObsoleteData(); err != nil {
-					log.Error().Errorf("Periodic cleanup failed: %v", err)
-				} else {
-					log.Info().Applicationf("✅ Periodic cleanup completed")
+					log.ErrorLoggerRaw().Error(fmt.Sprintf("Periodic cleanup failed: %v", err))
 				}
 			case <-stopChan:
-				log.Info().Applicationf("🛑 Stopping periodic cleanup")
+
 				return
 			}
 		}
@@ -356,12 +352,12 @@ func KeepMemberDataFresh(store *storage.Store, guildID string, userIDs []string)
 	for _, userID := range userIDs {
 		// Touch member join to keep it fresh
 		if err := store.TouchMemberJoin(guildID, userID); err != nil {
-			log.Warn().Applicationf("Failed to touch member join for %s: %v", userID, err)
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member join for %s: %v", userID, err))
 		}
 
 		// Touch member roles to keep them fresh
 		if err := store.TouchMemberRoles(guildID, userID); err != nil {
-			log.Warn().Applicationf("Failed to touch member roles for %s: %v", userID, err)
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member roles for %s: %v", userID, err))
 		}
 	}
 

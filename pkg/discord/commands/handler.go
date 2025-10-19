@@ -30,7 +30,7 @@ func NewCommandHandler(
 
 // SetupCommands inicializa e registra todos os comandos do bot
 func (ch *CommandHandler) SetupCommands() error {
-	log.Info().Applicationf("Setting up bot commands...")
+	log.ApplicationLogger().Info("Setting up bot commands...")
 
 	// Criar o gerenciador de comandos
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
@@ -45,7 +45,7 @@ func (ch *CommandHandler) SetupCommands() error {
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	log.Info().Applicationf("Bot commands setup completed successfully")
+	log.ApplicationLogger().Info("Bot commands setup completed successfully")
 	return nil
 }
 
@@ -56,13 +56,13 @@ func (ch *CommandHandler) registerConfigCommands() error {
 	// Registrar o grupo /config e comandos simples (ping/echo)
 	config.NewConfigCommands(ch.configManager).RegisterCommands(router)
 
-	log.Info().Applicationf("Config commands registered successfully")
+	log.ApplicationLogger().Info("Config commands registered successfully")
 	return nil
 }
 
 // Shutdown realiza limpeza dos recursos do command handler
 func (ch *CommandHandler) Shutdown() error {
-	log.Info().Applicationf("Shutting down command handler...")
+	log.ApplicationLogger().Info("Shutting down command handler...")
 
 	// Aqui você pode adicionar lógica de limpeza se necessário
 	// Por exemplo, salvar configurações, limpar caches, etc.

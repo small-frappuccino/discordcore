@@ -1,17 +1,20 @@
 package log
 
 import (
+	"context"
 	"fmt"
-	"io"
 	stdlog "log"
 	"os"
 	"path/filepath"
 	"time"
 
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/util"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// --- Fluent Interface ---
+// --- Fluent Interface (kept for compatibility) ---
 
 type Level int
 
@@ -34,12 +37,16 @@ type ErrorLogger struct {
 
 // --- Logger Struct & Setup ---
 
-// Logger is a simple structured logger wrapper around several stdlib loggers.
+// Logger wraps slog loggers for different categories to preserve the existing API
+// while enabling direct slog usage for new code.
 type Logger struct {
-	application *stdlog.Logger
-	discord     *stdlog.Logger
-	database    *stdlog.Logger
-	error       *stdlog.Logger
+	application *slog.Logger
+	discord     *slog.Logger
+	database    *slog.Logger
+	error       *slog.Logger
+
+	// A shared runtime-adjustable log level for all handlers
+	levelVar slog.LevelVar
 }
 
 var globalLogger *Logger
@@ -47,7 +54,7 @@ var globalLogger *Logger
 // GlobalLogger is a convenience alias used by some initialization helpers in the project.
 var GlobalLogger *Logger
 
-// --- Public Fluent API ---
+// --- Public Fluent API (kept for compatibility) ---
 
 // -- Instance Methods --
 
@@ -77,45 +84,118 @@ func Error() *ErrorLogger {
 	return &ErrorLogger{logger: globalLogger}
 }
 
-// --- Fluent API Finalizers ---
+// --- Expose raw slog loggers for direct usage in new code ---
+
+// ApplicationLogger returns the category-scoped slog.Logger for application logs.
+func ApplicationLogger() *slog.Logger {
+	if globalLogger == nil || globalLogger.application == nil {
+		return slog.Default()
+	}
+	return globalLogger.application
+}
+
+// DiscordLogger returns the category-scoped slog.Logger for Discord-related logs.
+func DiscordLogger() *slog.Logger {
+	if globalLogger == nil || globalLogger.discord == nil {
+		return slog.Default()
+	}
+	return globalLogger.discord
+}
+
+// DatabaseLogger returns the category-scoped slog.Logger for database logs.
+func DatabaseLogger() *slog.Logger {
+	if globalLogger == nil || globalLogger.database == nil {
+		return slog.Default()
+	}
+	return globalLogger.database
+}
+
+// ErrorLoggerRaw returns the category-scoped slog.Logger for error logs.
+func ErrorLoggerRaw() *slog.Logger { // name avoids collision with Error() fluent builder
+	if globalLogger == nil || globalLogger.error == nil {
+		return slog.Default()
+	}
+	return globalLogger.error
+}
+
+// GlobalLevelVar exposes the shared level variable so callers can adjust level at runtime.
+func GlobalLevelVar() *slog.LevelVar {
+	if globalLogger == nil {
+		// Default to Info if not initialized yet
+		var lv slog.LevelVar
+		lv.Set(slog.LevelInfo)
+		return &lv
+	}
+	return &globalLogger.levelVar
+}
+
+// --- Fluent API Finalizers (kept for compatibility) ---
 
 func (cl *CategorizedLogger) Applicationf(format string, v ...interface{}) {
-	cl.log(cl.logger.application, format, v...)
-}
-
-func (cl *CategorizedLogger) Discordf(format string, v ...interface{}) {
-	cl.log(cl.logger.discord, format, v...)
-}
-
-func (cl *CategorizedLogger) Databasef(format string, v ...interface{}) {
-	cl.log(cl.logger.database, format, v...)
-}
-
-func (cl *CategorizedLogger) log(target *stdlog.Logger, format string, v ...interface{}) {
-	if cl.logger == nil {
+	if cl == nil || cl.logger == nil || cl.logger.application == nil {
 		stdlog.Printf(format, v...)
 		return
 	}
-	msg := format
-	if cl.level == WarnLevel {
-		msg = "WARN: " + msg
+	msg := fmt.Sprintf(format, v...)
+	switch cl.level {
+	case InfoLevel:
+		cl.logger.application.Info(msg)
+	case WarnLevel:
+		cl.logger.application.Warn(msg)
+	default:
+		cl.logger.application.Info(msg)
 	}
-	cl.logger.writeTo(target, msg, v...)
+}
+
+func (cl *CategorizedLogger) Discordf(format string, v ...interface{}) {
+	if cl == nil || cl.logger == nil || cl.logger.discord == nil {
+		stdlog.Printf(format, v...)
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	switch cl.level {
+	case InfoLevel:
+		cl.logger.discord.Info(msg)
+	case WarnLevel:
+		cl.logger.discord.Warn(msg)
+	default:
+		cl.logger.discord.Info(msg)
+	}
+}
+
+func (cl *CategorizedLogger) Databasef(format string, v ...interface{}) {
+	if cl == nil || cl.logger == nil || cl.logger.database == nil {
+		stdlog.Printf(format, v...)
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	switch cl.level {
+	case InfoLevel:
+		cl.logger.database.Info(msg)
+	case WarnLevel:
+		cl.logger.database.Warn(msg)
+	default:
+		cl.logger.database.Info(msg)
+	}
 }
 
 func (el *ErrorLogger) Errorf(format string, v ...interface{}) {
-	if el.logger == nil {
+	if el == nil || el.logger == nil || el.logger.error == nil {
 		stdlog.Printf("ERROR: "+format, v...)
 		return
 	}
-	el.logger.writeTo(el.logger.error, "ERROR: "+format, v...)
+	msg := fmt.Sprintf(format, v...)
+	el.logger.error.Error(msg)
 }
 
 func (el *ErrorLogger) Fatalf(format string, v ...interface{}) {
-	if el.logger == nil {
-		stdlog.Fatalf("FATAL: "+format, v...)
+	msg := fmt.Sprintf(format, v...)
+	if el == nil || el.logger == nil || el.logger.error == nil {
+		stdlog.Fatalf("FATAL: %s", msg)
+		return
 	}
-	el.logger.writeTo(el.logger.error, "FATAL: "+format, v...)
+	// slog has no Fatal level; log as Error and exit.
+	el.logger.error.Error(msg, slog.String("fatal", "true"))
 	os.Exit(1)
 }
 
@@ -128,46 +208,118 @@ func getDefaultLogDir() string {
 	return filepath.Join(".", "logs")
 }
 
+// rollingWriter creates a lumberjack-backed writer with sane defaults.
+func rollingWriter(path string) *lumberjack.Logger {
+	return &lumberjack.Logger{
+		Filename:   path,
+		MaxSize:    50,   // megabytes per file
+		MaxBackups: 3,    // number of old files to keep
+		MaxAge:     30,   // days
+		Compress:   true, // gzip old logs
+	}
+}
+
+// multiHandler fans out records to multiple handlers (e.g., JSON file + console).
+type multiHandler struct {
+	handlers []slog.Handler
+}
+
+func (m *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, h := range m.handlers {
+		if h.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *multiHandler) Handle(ctx context.Context, r slog.Record) error {
+	var firstErr error
+	for _, h := range m.handlers {
+		if err := h.Handle(ctx, r); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (m *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	out := make([]slog.Handler, 0, len(m.handlers))
+	for _, h := range m.handlers {
+		out = append(out, h.WithAttrs(attrs))
+	}
+	return &multiHandler{handlers: out}
+}
+
+func (m *multiHandler) WithGroup(name string) slog.Handler {
+	out := make([]slog.Handler, 0, len(m.handlers))
+	for _, h := range m.handlers {
+		out = append(out, h.WithGroup(name))
+	}
+	return &multiHandler{handlers: out}
+}
+
+// buildCategoryLogger creates a slog.Logger that tees to file (JSON) and console (text)
+// and annotates every record with service and category attributes.
+func buildCategoryLogger(category string, fileWriter *lumberjack.Logger, consoleWriter *os.File, levelVar *slog.LevelVar) *slog.Logger {
+	jsonHandler := slog.NewJSONHandler(fileWriter, &slog.HandlerOptions{
+		Level:     levelVar,
+		AddSource: true,
+	})
+	textHandler := slog.NewTextHandler(consoleWriter, &slog.HandlerOptions{
+		Level:     levelVar,
+		AddSource: true,
+	})
+
+	handler := &multiHandler{handlers: []slog.Handler{jsonHandler, textHandler}}
+	base := slog.New(handler).With(
+		slog.String("service", util.EffectiveBotName()),
+		slog.String("category", category),
+	)
+	return base
+}
+
+// SetupLogger configures category-separated slog loggers (application, discord, database, error)
+// writing to rotating files (via lumberjack) and to human-friendly console output.
+// It preserves the existing global variables and fluent API and also exposes raw slog loggers.
 func SetupLogger() error {
 	logDir := getDefaultLogDir()
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return err
 	}
 
-	appLog, err := os.OpenFile(filepath.Join(logDir, "application.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
-	if err != nil {
-		return err
-	}
-	discordLog, err := os.OpenFile(filepath.Join(logDir, "discord_events.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
-	if err != nil {
-		return err
-	}
-	dbLog, err := os.OpenFile(filepath.Join(logDir, "database.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
-	if err != nil {
-		return err
-	}
-	errorLog, err := os.OpenFile(filepath.Join(logDir, "error.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
-	if err != nil {
-		return err
-	}
+	// Initialize global logger and default level
+	l := &Logger{}
+	l.levelVar.Set(slog.LevelInfo)
 
-	flags := stdlog.LstdFlags | stdlog.Lmicroseconds
-	globalLogger = &Logger{
-		application: stdlog.New(io.MultiWriter(os.Stdout, appLog), "APP ", flags),
-		discord:     stdlog.New(io.MultiWriter(os.Stdout, discordLog), "DISCORD ", flags),
-		database:    stdlog.New(io.MultiWriter(os.Stdout, dbLog), "DB ", flags),
-		error:       stdlog.New(io.MultiWriter(os.Stderr, errorLog), "ERROR ", flags),
-	}
-	GlobalLogger = globalLogger
-	globalLogger.Info().Applicationf("logger initialized at %s", time.Now().Format(time.RFC3339Nano))
+	// Per-category rolling files
+	appFile := rollingWriter(filepath.Join(logDir, "application.log"))
+	discordFile := rollingWriter(filepath.Join(logDir, "discord_events.log"))
+	dbFile := rollingWriter(filepath.Join(logDir, "database.log"))
+	errFile := rollingWriter(filepath.Join(logDir, "error.log"))
+
+	// Console routing: stdout for most, stderr for errors
+	l.application = buildCategoryLogger("application", appFile, os.Stdout, &l.levelVar)
+	l.discord = buildCategoryLogger("discord", discordFile, os.Stdout, &l.levelVar)
+	l.database = buildCategoryLogger("database", dbFile, os.Stdout, &l.levelVar)
+	l.error = buildCategoryLogger("error", errFile, os.Stderr, &l.levelVar)
+
+	globalLogger = l
+	GlobalLogger = l
+
+	// Initial line confirming initialization (kept behavior)
+	l.application.Info("logger initialized", slog.String("time", time.Now().Format(time.RFC3339Nano)))
+
+	// Also set the process default logger so third-party packages using slog.Default() get our handler.
+	// Default will use the application category (most general).
+	slog.SetDefault(l.application)
+
 	return nil
 }
 
-func (l *Logger) writeTo(target *stdlog.Logger, format string, v ...interface{}) {
-	message := fmt.Sprintf(format, v...)
-	if target == nil {
-		stdlog.Printf("%s\n", message)
-		return
-	}
-	target.Printf("%s", message)
+// Sync is a best-effort flush for outputs.
+// slog itself does not buffer; lumberjack writes synchronously.
+// We keep this method so callers can defer GlobalLogger.Sync() safely.
+func (l *Logger) Sync() {
+	// No-op for slog + lumberjack; present for API symmetry and future extensibility.
 }

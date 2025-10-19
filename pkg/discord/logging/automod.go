@@ -79,7 +79,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	// If adapters are wired, enqueue via TaskRouter for retries/backoff
 	if as.adapters != nil {
 		if err := as.adapters.EnqueueAutomodAction(logChannelID, e); err != nil {
-			log.Error().Errorf("Failed to enqueue automod log task: guildID=%s, channelID=%s, userID=%s, error=%v", e.GuildID, logChannelID, e.UserID, err)
+			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
 		}
 		return
 	}
@@ -128,7 +128,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	}
 
 	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-		log.Error().Errorf("Failed to send native automod log message: guildID=%s, channelID=%s, userID=%s, error=%v", e.GuildID, logChannelID, e.UserID, err)
+		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
 	}
 }
 

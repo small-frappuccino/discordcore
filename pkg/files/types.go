@@ -107,7 +107,7 @@ func (mgr *ConfigManager) AddList(guildID string, list List) error {
 
 	guildConfig := mgr.GuildConfig(guildID)
 	if guildConfig == nil {
-		log.Error().Errorf("GuildConfig not found for guildID: %s", guildID)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
 		return fmt.Errorf("guild not found")
 	}
 	guildConfig.LooseLists = append(guildConfig.LooseLists, Rule{
@@ -116,7 +116,7 @@ func (mgr *ConfigManager) AddList(guildID string, list List) error {
 		Lists:   []List{list},
 		Enabled: true,
 	})
-	log.Info().Databasef("List appended successfully for guildID: %s", guildID)
+	log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully for guildID: %s", guildID))
 	return mgr.SaveConfig()
 }
 
@@ -150,26 +150,26 @@ func (mgr *ConfigManager) AddRuleset(guildID string, ruleset Ruleset) error {
 
 // AddListToRule adds a list to a specific rule in a guild.
 func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List) error {
-	log.Info().Databasef("AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID)
+	log.DatabaseLogger().Info(fmt.Sprintf("AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID))
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
 	guildConfig := mgr.GuildConfig(guildID)
 	if guildConfig == nil {
-		log.Error().Errorf("GuildConfig not found for guildID: %s", guildID)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
 		return fmt.Errorf("guild not found")
 	}
 
 	for i, rule := range guildConfig.LooseLists {
 		if rule.ID == ruleID {
-			log.Info().Databasef("Rule found for ruleID: %s, appending list", ruleID)
+			log.DatabaseLogger().Info(fmt.Sprintf("Rule found for ruleID: %s, appending list", ruleID))
 			guildConfig.LooseLists[i].Lists = append(guildConfig.LooseLists[i].Lists, list)
-			log.Info().Databasef("List appended successfully to ruleID: %s", ruleID)
+			log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully to ruleID: %s", ruleID))
 			return mgr.SaveConfig()
 		}
 	}
 
-	log.Error().Errorf("Rule not found for ruleID: %s", ruleID)
+	log.ErrorLoggerRaw().Error(fmt.Sprintf("Rule not found for ruleID: %s", ruleID))
 	return fmt.Errorf("rule not found")
 }
 

@@ -30,7 +30,7 @@ func (ac *AdminCommands) RegisterCommands(router *core.CommandRouter) {
 	adminCmd := core.NewGroupCommand(
 		"admin",
 		"Administrative commands for bot management",
-		core.NewResponder(router.GetSession()),
+
 		core.NewPermissionChecker(router.GetSession(), router.GetConfigManager()),
 	)
 
@@ -248,6 +248,9 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 
 	// Periodically update
 	go func(chID, msgID string, interval, total time.Duration) {
+		if interval < 10*time.Second {
+			interval = 10 * time.Second
+		}
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		timeout := time.After(total)
@@ -391,7 +394,7 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 		})
 	}
 
-	return core.NewResponder(ctx.Session).SendEmbed(ctx.Interaction, embed)
+	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // ServiceListCommand lists all registered services
@@ -446,7 +449,7 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 		})
 	}
 
-	return core.NewResponder(ctx.Session).SendEmbed(ctx.Interaction, embed)
+	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // ServiceRestartCommand restarts a specific service
@@ -494,8 +497,8 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	}
 
 	// Send initial response
-	responder := core.NewResponder(ctx.Session)
-	if err := responder.Info(ctx.Interaction, fmt.Sprintf("🔄 Restarting service: %s", serviceName)); err != nil {
+	rm := core.NewResponseManager(ctx.Session)
+	if err := rm.Info(ctx.Interaction, fmt.Sprintf("🔄 Restarting service: %s", serviceName)); err != nil {
 		return err
 	}
 
@@ -504,10 +507,10 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 		if err := cmd.adminCommands.serviceManager.RestartService(serviceName); err != nil {
 			ctx.Logger.Error().Errorf("Failed to restart service: %v", err)
 			// Try to follow up with error message
-			responder.EditResponse(ctx.Interaction, fmt.Sprintf("❌ Failed to restart service '%s': %v", serviceName, err))
+			rm.EditResponse(ctx.Interaction, fmt.Sprintf("❌ Failed to restart service '%s': %v", serviceName, err))
 		} else {
 			// Follow up with success message
-			responder.EditResponse(ctx.Interaction, fmt.Sprintf("✅ Service '%s' restarted successfully", serviceName))
+			rm.EditResponse(ctx.Interaction, fmt.Sprintf("✅ Service '%s' restarted successfully", serviceName))
 		}
 	}()
 
@@ -594,7 +597,7 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 		})
 	}
 
-	return core.NewResponder(ctx.Session).SendEmbed(ctx.Interaction, embed)
+	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // SystemInfoCommand shows general system information
@@ -649,7 +652,7 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	return core.NewResponder(ctx.Session).SendEmbed(ctx.Interaction, embed)
+	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // Helper methods

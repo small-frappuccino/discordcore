@@ -6,14 +6,14 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
-// ContextBuilder cria contextos para execução de comandos
+// ContextBuilder creates contexts for command execution
 type ContextBuilder struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
 	checker       *PermissionChecker
 }
 
-// NewContextBuilder cria um novo construtor de contexto
+// NewContextBuilder creates a new context builder
 func NewContextBuilder(session *discordgo.Session, configManager *files.ConfigManager, checker *PermissionChecker) *ContextBuilder {
 	return &ContextBuilder{
 		session:       session,
@@ -22,7 +22,7 @@ func NewContextBuilder(session *discordgo.Session, configManager *files.ConfigMa
 	}
 }
 
-// BuildContext cria um contexto completo para execução de comando
+// BuildContext creates a complete context for command execution
 func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context {
 	userID := extractUserID(i)
 	guildID := i.GuildID
@@ -51,15 +51,15 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 	}
 }
 
-// isGuildOwner verifica se o usuário é o dono do servidor
+// isGuildOwner checks if the user is the server owner
 func (cb *ContextBuilder) isGuildOwner(guildID, userID string) bool {
-	// Preferir cache do state para evitar chamada REST quando possível
+	// Prefer state cache to avoid REST calls when possible
 	if cb.session != nil && cb.session.State != nil {
 		if g, _ := cb.session.State.Guild(guildID); g != nil {
 			return g.OwnerID == userID
 		}
 	}
-	// Fallback para REST apenas se necessário
+	// Fallback to REST only if necessary
 	guild, err := cb.session.Guild(guildID)
 	if err != nil || guild == nil {
 		return false
@@ -67,7 +67,7 @@ func (cb *ContextBuilder) isGuildOwner(guildID, userID string) bool {
 	return guild.OwnerID == userID
 }
 
-// extractUserID extrai o ID do usuário da interação
+// extractUserID extracts the user ID from the interaction
 func extractUserID(i *discordgo.InteractionCreate) string {
 	if i.Member != nil && i.Member.User != nil {
 		return i.Member.User.ID
@@ -77,7 +77,7 @@ func extractUserID(i *discordgo.InteractionCreate) string {
 	return ""
 }
 
-// GetSubCommandName extrai o nome do subcomando da interação
+// GetSubCommandName extracts the subcommand name from the interaction
 func GetSubCommandName(i *discordgo.InteractionCreate) string {
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 && options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
@@ -86,21 +86,21 @@ func GetSubCommandName(i *discordgo.InteractionCreate) string {
 	return ""
 }
 
-// GetSubCommandOptions extrai as opções do subcomando da interação
+// GetSubCommandOptions extracts the subcommand options from the interaction
 func GetSubCommandOptions(i *discordgo.InteractionCreate) []*discordgo.ApplicationCommandInteractionDataOption {
 	options := i.ApplicationCommandData().Options
 	if len(options) > 0 && options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
 		return options[0].Options
 	}
-	return options // Retorna as opções diretas se não for subcomando
+	return options // Returns direct options if not a subcommand
 }
 
-// CommandLogEntry cria uma entrada de log padronizada para comandos
+// CommandLogEntry creates a standardized log entry for commands
 func CommandLogEntry(i *discordgo.InteractionCreate, command string, userID string) *log.Logger {
 	return log.GlobalLogger
 }
 
-// ValidateGuildContext valida se o contexto tem as informações necessárias do servidor
+// ValidateGuildContext validates if the context has the required server information
 func ValidateGuildContext(ctx *Context) error {
 	if ctx.GuildID == "" {
 		return NewCommandError("This command can only be used in a server", true)
@@ -113,7 +113,7 @@ func ValidateGuildContext(ctx *Context) error {
 	return nil
 }
 
-// ValidateUserContext valida se o contexto tem as informações necessárias do usuário
+// ValidateUserContext validates if the context has the required user information
 func ValidateUserContext(ctx *Context) error {
 	if ctx.UserID == "" {
 		return NewCommandError("Unable to identify user", true)
@@ -122,13 +122,13 @@ func ValidateUserContext(ctx *Context) error {
 	return nil
 }
 
-// HasFocusedOption verifica se há uma opção com foco (para autocomplete)
+// HasFocusedOption checks if there is a focused option (for autocomplete)
 func HasFocusedOption(options []*discordgo.ApplicationCommandInteractionDataOption) (*discordgo.ApplicationCommandInteractionDataOption, bool) {
 	for _, opt := range options {
 		if opt.Focused {
 			return opt, true
 		}
-		// Verifica recursivamente em subcomandos
+		// Checks recursively in subcommands
 		if opt.Type == discordgo.ApplicationCommandOptionSubCommand && len(opt.Options) > 0 {
 			if focused, found := HasFocusedOption(opt.Options); found {
 				return focused, true
@@ -138,7 +138,7 @@ func HasFocusedOption(options []*discordgo.ApplicationCommandInteractionDataOpti
 	return nil, false
 }
 
-// GetCommandPath retorna o caminho completo do comando (comando + subcomando se houver)
+// GetCommandPath returns the full command path (command + subcommand if present)
 func GetCommandPath(i *discordgo.InteractionCreate) string {
 	path := i.ApplicationCommandData().Name
 
@@ -150,17 +150,17 @@ func GetCommandPath(i *discordgo.InteractionCreate) string {
 	return path
 }
 
-// IsAutocompleteInteraction verifica se a interação é de autocomplete
+// IsAutocompleteInteraction checks if the interaction is for autocomplete
 func IsAutocompleteInteraction(i *discordgo.InteractionCreate) bool {
 	return i.Type == discordgo.InteractionApplicationCommandAutocomplete
 }
 
-// IsSlashCommandInteraction verifica se a interação é de comando slash
+// IsSlashCommandInteraction checks if the interaction is a slash command
 func IsSlashCommandInteraction(i *discordgo.InteractionCreate) bool {
 	return i.Type == discordgo.InteractionApplicationCommand
 }
 
-// CreateLogFields cria campos de log padronizados
+// CreateLogFields creates standardized log fields
 func CreateLogFields(ctx *Context, additionalFields map[string]any) map[string]any {
 	fields := map[string]any{
 		"command": GetCommandPath(ctx.Interaction),
@@ -168,7 +168,7 @@ func CreateLogFields(ctx *Context, additionalFields map[string]any) map[string]a
 		"userID":  ctx.UserID,
 	}
 
-	// Adiciona campos adicionais
+	// Adds additional fields
 	for k, v := range additionalFields {
 		fields[k] = v
 	}
@@ -176,7 +176,7 @@ func CreateLogFields(ctx *Context, additionalFields map[string]any) map[string]a
 	return fields
 }
 
-// RequiresGuildConfig verifica se o comando requer configuração de servidor
+// RequiresGuildConfig checks if the command requires server configuration
 func RequiresGuildConfig(ctx *Context) error {
 	if err := ValidateGuildContext(ctx); err != nil {
 		return err
@@ -189,7 +189,7 @@ func RequiresGuildConfig(ctx *Context) error {
 	return nil
 }
 
-// SafeGuildAccess fornece acesso seguro às informações do servidor
+// SafeGuildAccess provides safe access to server information
 func SafeGuildAccess(ctx *Context, fn func(*files.GuildConfig) error) error {
 	if err := RequiresGuildConfig(ctx); err != nil {
 		return err

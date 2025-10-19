@@ -20,26 +20,26 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 
 	// Validate token before creating session
 	if token == "" {
-		log.Error().Errorf("❌ Discord bot token is empty. Please set the token before starting the bot.")
+		log.ErrorLoggerRaw().Error("❌ Discord bot token is empty. Please set the token before starting the bot.")
 		return nil, fmt.Errorf("discord bot token is empty")
 	}
 
 	// Add detailed logging for session creation
-	log.Info().Discordf("🔑 Creating Discord session (token redacted)")
+	log.DiscordLogger().Info("🔑 Creating Discord session (token redacted)")
 
 	if err := errutil.HandleDiscordError("create_session", func() error {
 		var sessionErr error
 		s, sessionErr = discordgo.New("Bot " + token)
 		if sessionErr != nil {
-			log.Error().Errorf("❌ Failed to create Discord session: %v", sessionErr)
+			log.ErrorLoggerRaw().Error(fmt.Sprintf("❌ Failed to create Discord session: %v", sessionErr))
 		}
 		return sessionErr
 	}); err != nil {
-		log.Error().Errorf("❌ Error during session creation: %v", err)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("❌ Error during session creation: %v", err))
 		return nil, fmt.Errorf(ErrSessionCreationFailed, err)
 	}
 
-	log.Info().Discordf("✅ Discord session created successfully")
+	log.DiscordLogger().Info("✅ Discord session created successfully")
 	s.Identify.Intents = discordgo.IntentsGuilds |
 		discordgo.IntentsGuildMembers |
 		discordgo.IntentsGuildPresences |
@@ -49,15 +49,15 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 		discordgo.IntentMessageContent
 
 	// Add logging for connection
-	log.Info().Discordf("🔗 Connecting to Discord...")
+	log.DiscordLogger().Info("🔗 Connecting to Discord...")
 	if err := errutil.HandleDiscordError("connect", func() error {
 		connectErr := s.Open()
 		if connectErr != nil {
-			log.Error().Errorf("❌ Failed to connect to Discord: %v", connectErr)
+			log.ErrorLoggerRaw().Error(fmt.Sprintf("❌ Failed to connect to Discord: %v", connectErr))
 		}
 		return connectErr
 	}); err != nil {
-		log.Error().Errorf("❌ Error during connection: %v", err)
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("❌ Error during connection: %v", err))
 		// Clean up session if connection failed
 		if s != nil {
 			_ = s.Close()
@@ -65,6 +65,6 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 		return nil, fmt.Errorf(ErrSessionConnectionFailed, err)
 	}
 
-	log.Info().Discordf("✅ Connected to Discord successfully")
+	log.DiscordLogger().Info("✅ Connected to Discord successfully")
 	return s, nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 // ConfigCommands wires the real config slash command group into the CommandRouter.
@@ -23,9 +24,9 @@ func NewConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
 // RegisterCommands registers the /config command group and optional simple commands in the provided router.
 func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	// Build /config group with permission checks
-	responder := core.NewResponder(router.GetSession())
+
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-	group := core.NewGroupCommand("config", "Manage server configuration", responder, checker)
+	group := core.NewGroupCommand("config", "Manage server configuration", checker)
 
 	// Attach subcommands
 	group.AddSubCommand(NewConfigSetSubCommand(cc.configManager))
@@ -56,7 +57,7 @@ func (c *pingCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *pingCommand) RequiresGuild() bool       { return false }
 func (c *pingCommand) RequiresPermissions() bool { return false }
 func (c *pingCommand) Handle(ctx *core.Context) error {
-	return core.NewResponder(ctx.Session).Success(ctx.Interaction, "🏓 Pong!")
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "🏓 Pong!")
 }
 
 type echoCommand struct{}
@@ -173,7 +174,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError("Failed to save configuration", true)
 	}
 
-	return core.NewResponder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
 }
 
 // ConfigGetSubCommand - subcommand to get configuration values
@@ -207,7 +208,7 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("Server Configuration").
-		WithColor(0x0099FF)
+		WithColor(theme.Info())
 
 	return builder.Info(ctx.Interaction, b.String())
 }
