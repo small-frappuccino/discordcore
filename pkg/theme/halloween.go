@@ -24,8 +24,8 @@ func init() {
 		AvatarChange:  0xEB6123, // Pumpkin
 		MemberJoin:    0xEB6123, // Pumpkin
 		MemberLeave:   0xEB6123, // Pumpkin
-		MessageEdit:   0xFB923C, // Softer orange
-		MessageDelete: 0xDC2626, // Strong red
-		AutomodAction: 0xEB6123, // Pumpkin
+		MessageEdit:   0xEB6123, // Pumpkin
+		MessageDelete: 0xF28B82, // Pastel red
+		AutomodAction: 0xF28B82, // Pastel red
 	})
 }
