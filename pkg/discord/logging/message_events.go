@@ -3,6 +3,8 @@ package logging
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +32,12 @@ type MessageEventService struct {
 	adapters      *task.NotificationAdapters
 	store         *storage.Store
 	isRunning     bool
+
+	// Message cache configuration (env-controlled)
+	cacheEnabled   bool
+	cacheTTL       time.Duration
+	deleteOnLog    bool
+	cleanupEnabled bool
 }
 
 // NewMessageEventService creates a new instance of the message events service
@@ -50,9 +58,33 @@ func (mes *MessageEventService) Start() error {
 	}
 	mes.isRunning = true
 
+	// Load message cache configuration from environment
+	// ALICE_MESSAGE_CACHE_ENABLED: "1/true/on/yes" enables write-through caching (default: disabled)
+	// ALICE_MESSAGE_CACHE_TTL_HOURS: TTL for cached messages (default: 72 when enabled)
+	// ALICE_MESSAGE_DELETE_ON_LOG: delete message rows after logging deletions (default: disabled)
+	// ALICE_MESSAGE_CACHE_CLEANUP: run periodic cleanup of expired messages on start (default: disabled)
+	{
+		v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_ENABLED")))
+		mes.cacheEnabled = v == "1" || v == "true" || v == "on" || v == "yes"
+
+		ttlHours := 72
+		if vv := strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_TTL_HOURS")); vv != "" {
+			if n, err := strconv.Atoi(vv); err == nil && n > 0 {
+				ttlHours = n
+			}
+		}
+		mes.cacheTTL = time.Duration(ttlHours) * time.Hour
+
+		v = strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_DELETE_ON_LOG")))
+		mes.deleteOnLog = v == "1" || v == "true" || v == "on" || v == "yes"
+
+		v = strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_CLEANUP")))
+		mes.cleanupEnabled = v == "1" || v == "true" || v == "on" || v == "yes"
+	}
+
 	// Store should be injected and already initialized
-	// Clean up expired messages (best effort)
-	if mes.store != nil {
+	// Cleanup is gated by env and disabled by default (do not delete by default)
+	if mes.store != nil && mes.cleanupEnabled {
 		_ = mes.store.CleanupExpiredMessages()
 	}
 
@@ -144,7 +176,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	mes.markEvent()
 
 	// Persist to SQLite (write-through; best effort)
-	if mes.store != nil && m.Author != nil {
+	if mes.cacheEnabled && mes.store != nil && m.Author != nil {
 		_ = mes.store.UpsertMessage(storage.MessageRecord{
 			GuildID:        guildID,
 			MessageID:      m.ID,
@@ -154,7 +186,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 			AuthorAvatar:   m.Author.Avatar,
 			Content:        m.Content,
 			CachedAt:       time.Now().UTC(),
-			ExpiresAt:      time.Now().UTC().Add(24 * time.Hour),
+			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
 			HasExpiry:      true,
 		})
 	}
@@ -268,7 +300,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		GuildID:   cached.GuildID,
 		Timestamp: cached.Timestamp,
 	}
-	if mes.store != nil && updated.Author != nil {
+	if mes.cacheEnabled && mes.store != nil && updated.Author != nil {
 		_ = mes.store.UpsertMessage(storage.MessageRecord{
 			GuildID:        updated.GuildID,
 			MessageID:      updated.ID,
@@ -278,7 +310,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 			AuthorAvatar:   updated.Author.Avatar,
 			Content:        updated.Content,
 			CachedAt:       time.Now().UTC(),
-			ExpiresAt:      time.Now().UTC().Add(24 * time.Hour),
+			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
 			HasExpiry:      true,
 		})
 	}
@@ -315,8 +347,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	// Skip if bot
 	if cached.Author.Bot {
-		// no-op: cache removed; using SQLite only
-		if mes.store != nil {
+		// Deletion from store is disabled by default
+		if mes.deleteOnLog && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
 		return
@@ -324,8 +356,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
-		// no-op: cache removed; using SQLite only
-		if mes.store != nil {
+		// Deletion from store is disabled by default
+		if mes.deleteOnLog && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
 		return
@@ -334,8 +366,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	logChannelID := mes.fallbackMessageLogChannel(guildConfig)
 	if logChannelID == "" {
 		slog.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
-		// no-op: cache removed; using SQLite only
-		if mes.store != nil {
+		// Deletion from store is disabled by default
+		if mes.deleteOnLog && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
 		return
@@ -377,9 +409,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		}
 	}
 
-	// Remove from cache and persistence
-	// no-op: cache removed; using SQLite only
-	if mes.store != nil {
+	// Remove from cache and persistence (disabled by default)
+	if mes.deleteOnLog && mes.store != nil {
 		_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 	}
 }

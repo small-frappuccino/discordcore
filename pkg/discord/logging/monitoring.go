@@ -709,7 +709,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				continue
 			}
 
-			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>)", actorID, m.User.Username, m.User.ID)
+			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>, `%s`)", actorID, m.User.Username, m.User.ID, m.User.ID)
 			embed := &discordgo.MessageEmbed{
 				Title:       "Roles updated",
 				Color:       0x3498db,
@@ -786,7 +786,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 					}
 					return out
 				}
-				desc := fmt.Sprintf("Role changes detected for **%s** (<@%s>)", m.User.Username, m.User.ID)
+				desc := fmt.Sprintf("Role changes detected for **%s** (<@%s>, `%s`)", m.User.Username, m.User.ID, m.User.ID)
 				embed := &discordgo.MessageEmbed{
 					Title:       "Roles updated (fallback)",
 					Color:       0x3498db,

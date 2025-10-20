@@ -200,14 +200,15 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 
 	// Resolve channel name (best effort; avoid API call by using session state)
 	channelName := ""
+	_ = channelName
 	if ns.session != nil && ns.session.State != nil {
 		if ch, _ := ns.session.State.Channel(original.ChannelID); ch != nil {
 			channelName = ch.Name
 		}
 	}
 
-	userField := fmt.Sprintf("Name: %s\nMention: <@%s>\nID: `%s`", original.Author.Username, original.Author.ID, original.Author.ID)
-	channelField := fmt.Sprintf("Name: #%s\nMention: <#%s>\nID: `%s`", channelName, original.ChannelID, original.ChannelID)
+	userField := fmt.Sprintf("**%s** (<@%s>, `%s`)", original.Author.Username, original.Author.ID, original.Author.ID)
+	channelField := fmt.Sprintf("<#%s>, `%s`", original.ChannelID, original.ChannelID)
 	messageTime := original.Timestamp.Format("January 2, 2006 at 3:04 PM")
 
 	desc := ""
@@ -263,14 +264,15 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
 	// Resolve channel name (best effort; avoid API call by using session state)
 	channelName := ""
+	_ = channelName
 	if ns.session != nil && ns.session.State != nil {
 		if ch, _ := ns.session.State.Channel(deleted.ChannelID); ch != nil {
 			channelName = ch.Name
 		}
 	}
 
-	userField := fmt.Sprintf("Name: %s\nMention: <@%s>\nID: `%s`", deleted.Author.Username, deleted.Author.ID, deleted.Author.ID)
-	channelField := fmt.Sprintf("Name: #%s\nMention: <#%s>\nID: `%s`", channelName, deleted.ChannelID, deleted.ChannelID)
+	userField := fmt.Sprintf("**%s** (<@%s>, `%s`)", deleted.Author.Username, deleted.Author.ID, deleted.Author.ID)
+	channelField := fmt.Sprintf("<#%s>, `%s`", deleted.ChannelID, deleted.ChannelID)
 	messageTime := deleted.Timestamp.Format("January 2, 2006 at 3:04 PM")
 
 	embed := &discordgo.MessageEmbed{
@@ -514,7 +516,7 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(
 		roleDisplay = "`" + roleID + "`"
 	}
 
-	desc := fmt.Sprintf("<@%s> %s role for **%s** (<@%s>)", actorID, strings.ToLower(act), displayName, targetID)
+	desc := fmt.Sprintf("<@%s> %s role for **%s** (<@%s>, `%s`)", actorID, strings.ToLower(act), displayName, targetID, targetID)
 	embed := &discordgo.MessageEmbed{
 		Title:       "Role updated",
 		Color:       theme.MemberRoleUpdate(),
@@ -582,7 +584,7 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 				Name: "Channel",
 				Value: func() string {
 					if e.ChannelID != "" {
-						return "<#" + e.ChannelID + ">"
+						return "<#" + e.ChannelID + ">, `" + e.ChannelID + "`"
 					}
 					return "(DM/unknown)"
 				}(),
