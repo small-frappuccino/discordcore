@@ -15,6 +15,14 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
+// IDs específicos para atribuição automática de cargo
+const (
+	targetGuildID = "1375650791251120179" // Guild alvo
+	prereqRoleA   = "1375851519819124907" // Cargo pré-requisito A
+	prereqRoleB   = "1382471052394762280" // Cargo pré-requisito B
+	targetRoleID  = "1401062388135886929" // Cargo a ser atribuído automaticamente
+)
+
 // MemberEventService gerencia eventos de entrada e saída de usuários
 type MemberEventService struct {
 	session       *discordgo.Session
@@ -71,6 +79,7 @@ func (mes *MemberEventService) Start() error {
 	}
 
 	mes.session.AddHandler(mes.handleGuildMemberAdd)
+	mes.session.AddHandler(mes.handleGuildMemberUpdate)
 	mes.session.AddHandler(mes.handleGuildMemberRemove)
 
 	// Start periodic cleanup of old joinTimes entries
@@ -158,6 +167,20 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	} else {
 		slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
+
+	// Atribuição automática de cargo composta para a guild especificada
+	if m.GuildID == targetGuildID {
+		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
+			roles := member.Roles
+			if hasRoleID(roles, prereqRoleA) && hasRoleID(roles, prereqRoleB) && !hasRoleID(roles, targetRoleID) {
+				if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
+					slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+				} else {
+					slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+				}
+			}
+		}
+	}
 }
 
 // handleGuildMemberRemove processa quando um usuário sai do servidor
@@ -209,6 +232,51 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 	} else {
 		slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
+	}
+}
+
+// Função utilitária para verificar se o usuário possui um cargo específico
+func hasRoleID(roles []string, roleID string) bool {
+	for _, r := range roles {
+		if r == roleID {
+			return true
+		}
+	}
+	return false
+}
+
+// handleGuildMemberUpdate mantém a relação entre cargos:
+// - Se o usuário perder o cargo A, remove o cargo alvo.
+// - Se o usuário possuir A e B, concede o cargo alvo (se ainda não tiver).
+func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
+	if m == nil || m.User == nil || m.User.Bot {
+		return
+	}
+	if m.GuildID != targetGuildID {
+		return
+	}
+
+	hasTarget := hasRoleID(m.Roles, targetRoleID)
+	hasA := hasRoleID(m.Roles, prereqRoleA)
+	hasB := hasRoleID(m.Roles, prereqRoleB)
+
+	// Se perdeu o cargo A e ainda tem o cargo alvo, remover o cargo alvo
+	if hasTarget && !hasA {
+		if err := mes.session.GuildMemberRoleRemove(m.GuildID, m.User.ID, targetRoleID); err != nil {
+			slog.Error(fmt.Sprintf("Failed to remove target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+		} else {
+			slog.Info(fmt.Sprintf("Removed target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+		}
+		return
+	}
+
+	// Se possui ambos os cargos pré-requisito e ainda não tem o cargo alvo, concede o cargo alvo
+	if !hasTarget && hasA && hasB {
+		if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
+			slog.Error(fmt.Sprintf("Failed to grant target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+		} else {
+			slog.Info(fmt.Sprintf("Granted target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+		}
 	}
 }
 

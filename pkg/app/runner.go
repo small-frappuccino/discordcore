@@ -103,8 +103,12 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to load settings file: %v", err))
 	}
 
-	// SQLite store
-	store := storage.NewStore(util.GetMessageDBPath())
+	// SQLite store (support ALICE_MESSAGE_DB_PATH override)
+	dbPath := util.GetMessageDBPath()
+	if v := os.Getenv("ALICE_MESSAGE_DB_PATH"); v != "" {
+		dbPath = v
+	}
+	store := storage.NewStore(dbPath)
 	if err := store.Init(); err != nil {
 		return fmt.Errorf("initialize SQLite store: %w", err)
 	}
@@ -172,29 +176,40 @@ func Run(appName, tokenEnv string) error {
 		func() bool { return true },
 	)
 
-	// Automod service with TaskRouter adapters
-	automodService := logging.NewAutomodService(discordSession, configManager)
-	automodRouter := task.NewRouter(task.Defaults())
-	defer automodRouter.Close()
-	automodAdapters := task.NewNotificationAdapters(automodRouter, discordSession, configManager, store, monitoringService.Notifier())
-	automodService.SetAdapters(automodAdapters)
+	// Automod service with TaskRouter adapters (gated by ALICE_DISABLE_AUTOMOD_LOGS)
+	disableAutomod := false
+	if v := os.Getenv("ALICE_DISABLE_AUTOMOD_LOGS"); v == "1" || v == "true" || v == "yes" || v == "y" || v == "on" {
+		disableAutomod = true
+	}
+	var automodWrapper *service.ServiceWrapper
+	if disableAutomod {
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS; AutomodService will not start")
+	} else {
+		automodService := logging.NewAutomodService(discordSession, configManager)
+		automodRouter := task.NewRouter(task.Defaults())
+		defer automodRouter.Close()
+		automodAdapters := task.NewNotificationAdapters(automodRouter, discordSession, configManager, store, monitoringService.Notifier())
+		automodService.SetAdapters(automodAdapters)
 
-	automodWrapper := service.NewServiceWrapper(
-		"automod",
-		service.TypeAutomod,
-		service.PriorityNormal,
-		[]string{},
-		func() error { automodService.Start(); return nil },
-		func() error { automodService.Stop(); return nil },
-		func() bool { return true },
-	)
+		automodWrapper = service.NewServiceWrapper(
+			"automod",
+			service.TypeAutomod,
+			service.PriorityNormal,
+			[]string{},
+			func() error { automodService.Start(); return nil },
+			func() error { automodService.Stop(); return nil },
+			func() bool { return true },
+		)
+	}
 
 	// Register services
 	if err := serviceManager.Register(monitoringWrapper); err != nil {
 		return fmt.Errorf("register monitoring service: %w", err)
 	}
-	if err := serviceManager.Register(automodWrapper); err != nil {
-		return fmt.Errorf("register automod service: %w", err)
+	if automodWrapper != nil {
+		if err := serviceManager.Register(automodWrapper); err != nil {
+			return fmt.Errorf("register automod service: %w", err)
+		}
 	}
 
 	// Start services

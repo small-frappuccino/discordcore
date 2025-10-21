@@ -161,10 +161,28 @@ func (ms *MonitoringService) Start() error {
 	ms.rolesCacheCleanup = make(chan struct{})
 	go ms.rolesCacheCleanupLoop()
 
-	// Iniciar novos serviços
-	if err := ms.memberEventService.Start(); err != nil {
-		ms.isRunning = false
-		return fmt.Errorf("failed to start member event service: %w", err)
+	// Iniciar novos serviços (gate entry/exit logs via env)
+	disableEntryExit := false
+	if v := os.Getenv("ALICE_DISABLE_ENTRY_EXIT_LOGS"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			disableEntryExit = true
+		}
+	}
+	if disableEntryExit {
+		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by ALICE_DISABLE_ENTRY_EXIT_LOGS; MemberEventService will not start")
+	} else {
+		if err := ms.memberEventService.Start(); err != nil {
+			ms.isRunning = false
+			return fmt.Errorf("failed to start member event service: %w", err)
+		}
+	}
+	// Optionally honor ALICE_DISABLE_AUTOMOD_LOGS here (Automod service is started elsewhere)
+	if v := os.Getenv("ALICE_DISABLE_AUTOMOD_LOGS"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS")
+		}
 	}
 	// Gate message logging behind env flag
 	disableMsg := false
@@ -384,13 +402,30 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 // setupEventHandlers registra handlers do Discord.
 func (ms *MonitoringService) setupEventHandlers() {
 	// Store handler references for later removal
-	ms.eventHandlers = append(ms.eventHandlers,
-		ms.session.AddHandler(ms.handlePresenceUpdate),
-		ms.session.AddHandler(ms.handleMemberUpdate),
-		ms.session.AddHandler(ms.handleUserUpdate),
-		ms.session.AddHandler(ms.handleGuildCreate),
-		ms.session.AddHandler(ms.handleGuildUpdate),
-	)
+	// Gate user logs (avatars and roles) via env
+	disableUser := false
+	if v := os.Getenv("ALICE_DISABLE_USER_LOGS"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			disableUser = true
+		}
+	}
+	if disableUser {
+		// Register only non-user handlers
+		ms.eventHandlers = append(ms.eventHandlers,
+			ms.session.AddHandler(ms.handleGuildCreate),
+			ms.session.AddHandler(ms.handleGuildUpdate),
+		)
+		log.ApplicationLogger().Info("🛑 User logs disabled by ALICE_DISABLE_USER_LOGS; avatar/role handlers not registered")
+	} else {
+		ms.eventHandlers = append(ms.eventHandlers,
+			ms.session.AddHandler(ms.handlePresenceUpdate),
+			ms.session.AddHandler(ms.handleMemberUpdate),
+			ms.session.AddHandler(ms.handleUserUpdate),
+			ms.session.AddHandler(ms.handleGuildCreate),
+			ms.session.AddHandler(ms.handleGuildUpdate),
+		)
+	}
 }
 
 // removeEventHandlers removes all registered event handlers

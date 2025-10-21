@@ -661,6 +661,24 @@ CREATE TABLE IF NOT EXISTS avatars_history (
 CREATE INDEX IF NOT EXISTS idx_avatars_hist_gid_uid ON avatars_history(guild_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_avatars_hist_changed ON avatars_history(changed_at);`
 
+	const createMessagesHistory = `
+CREATE TABLE IF NOT EXISTS messages_history (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id      TEXT NOT NULL,
+  message_id    TEXT NOT NULL,
+  channel_id    TEXT NOT NULL,
+  author_id     TEXT NOT NULL,
+  version       INTEGER NOT NULL,
+  event_type    TEXT NOT NULL,               -- 'create' | 'edit' | 'delete'
+  content       TEXT,
+  attachments   INTEGER DEFAULT 0,
+  embeds_count  INTEGER DEFAULT 0,
+  stickers      INTEGER DEFAULT 0,
+  created_at    TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_msg_hist_gid_mid ON messages_history(guild_id, message_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_hist_gid_mid_ver ON messages_history(guild_id, message_id, version);`
+
 	const createGuildMeta = `
 CREATE TABLE IF NOT EXISTS guild_meta (
   guild_id  TEXT PRIMARY KEY,
@@ -697,6 +715,7 @@ CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expi
 
 	stmts := []string{
 		createMessages,
+		createMessagesHistory,
 		createMemberJoins,
 		createAvatarsCurrent,
 		createAvatarsHistory,
@@ -711,6 +730,67 @@ CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expi
 		}
 	}
 	return nil
+}
+
+// Message Versioning (history)
+
+type MessageVersion struct {
+	GuildID     string
+	MessageID   string
+	ChannelID   string
+	AuthorID    string
+	Version     int
+	EventType   string // "create" | "edit" | "delete"
+	Content     string
+	Attachments int
+	Embeds      int
+	Stickers    int
+	CreatedAt   time.Time
+}
+
+// InsertMessageVersion inserts a new version row for a message.
+// If Version <= 0, it will compute next version as (MAX(version)+1) within (guild_id, message_id).
+func (s *Store) InsertMessageVersion(v MessageVersion) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	// basic validation
+	if v.GuildID == "" || v.MessageID == "" || v.ChannelID == "" || v.AuthorID == "" || v.EventType == "" {
+		return nil
+	}
+	if v.CreatedAt.IsZero() {
+		v.CreatedAt = time.Now().UTC()
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Compute next version if not provided
+	if v.Version <= 0 {
+		var cur sql.NullInt64
+		if err := tx.QueryRow(
+			`SELECT COALESCE(MAX(version),0) FROM messages_history WHERE guild_id=? AND message_id=?`,
+			v.GuildID, v.MessageID,
+		).Scan(&cur); err != nil {
+			return err
+		}
+		v.Version = int(cur.Int64) + 1
+	}
+
+	// Insert history row
+	if _, err := tx.Exec(
+		`INSERT INTO messages_history
+         (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		v.GuildID, v.MessageID, v.ChannelID, v.AuthorID, v.Version, v.EventType, v.Content, v.Attachments, v.Embeds, v.Stickers, v.CreatedAt,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // Persistent Cache Methods

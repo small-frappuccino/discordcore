@@ -189,6 +189,26 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
 			HasExpiry:      true,
 		})
+
+		// Versioned history (v1) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
+		if func() bool {
+			v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_VERSIONING_ENABLED")))
+			return v == "1" || v == "true" || v == "on" || v == "yes"
+		}() {
+			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
+				GuildID:     guildID,
+				MessageID:   m.ID,
+				ChannelID:   m.ChannelID,
+				AuthorID:    m.Author.ID,
+				Version:     1,
+				EventType:   "create",
+				Content:     m.Content,
+				Attachments: len(m.Attachments),
+				Embeds:      len(m.Embeds),
+				Stickers:    len(m.StickerItems),
+				CreatedAt:   time.Now().UTC(),
+			})
+		}
 	}
 
 	slog.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
@@ -200,11 +220,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		slog.Debug("MessageUpdate: nil event")
 		return
 	}
-	if m.Author == nil {
-		slog.Debug("MessageUpdate: nil author; skipping", "messageID", m.ID, "channelID", m.ChannelID)
-		return
-	}
-	if m.Author.Bot {
+	if m.Author != nil && m.Author.Bot {
 		slog.Debug("MessageUpdate: ignoring bot edit", "messageID", m.ID, "userID", m.Author.ID, "channelID", m.ChannelID)
 		return
 	}
@@ -212,18 +228,41 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 
 	mes.markEvent()
 
-	// Consult persistence (SQLite) to get the original message
+	// Consult persistence (SQLite) to get the original message (with guild/channel fallback + short retry)
 	var cached *CachedMessage
-	if mes.store != nil && m.GuildID != "" {
-		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
-			cached = &CachedMessage{
-				ID:        rec.MessageID,
-				Content:   rec.Content,
-				Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
-				ChannelID: rec.ChannelID,
-				GuildID:   rec.GuildID,
-				Timestamp: rec.CachedAt,
+	guildID := m.GuildID
+	if guildID == "" && s != nil && s.State != nil {
+		if ch, _ := s.State.Channel(m.ChannelID); ch != nil {
+			guildID = ch.GuildID
+		}
+	}
+	if guildID == "" && s != nil {
+		if ch, _ := s.Channel(m.ChannelID); ch != nil {
+			guildID = ch.GuildID
+		}
+	}
+	if mes.store != nil && guildID != "" {
+		tryFetch := func() *CachedMessage {
+			if rec, err := mes.store.GetMessage(guildID, m.ID); err == nil && rec != nil {
+				return &CachedMessage{
+					ID:        rec.MessageID,
+					Content:   rec.Content,
+					Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
+					ChannelID: rec.ChannelID,
+					GuildID:   rec.GuildID,
+					Timestamp: rec.CachedAt,
+				}
 			}
+			return nil
+		}
+		cached = tryFetch()
+		if cached == nil {
+			time.Sleep(200 * time.Millisecond)
+			cached = tryFetch()
+		}
+		if cached == nil {
+			time.Sleep(400 * time.Millisecond)
+			cached = tryFetch()
 		}
 	}
 
@@ -313,6 +352,22 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
 			HasExpiry:      true,
 		})
+
+		// Versioned history (edit) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
+		if func() bool {
+			v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_VERSIONING_ENABLED")))
+			return v == "1" || v == "true" || v == "on" || v == "yes"
+		}() {
+			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
+				GuildID:   updated.GuildID,
+				MessageID: updated.ID,
+				ChannelID: updated.ChannelID,
+				AuthorID:  updated.Author.ID,
+				EventType: "edit",
+				Content:   m.Content,
+				CreatedAt: time.Now().UTC(),
+			})
+		}
 	}
 	slog.Info("MessageUpdate: store updated with new content", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID)
 }
@@ -327,15 +382,40 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	mes.markEvent()
 
-	if mes.store != nil && m.GuildID != "" {
-		if rec, err := mes.store.GetMessage(m.GuildID, m.ID); err == nil && rec != nil {
-			cached = &CachedMessage{
-				ID:        rec.MessageID,
-				Content:   rec.Content,
-				Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
-				ChannelID: rec.ChannelID,
-				GuildID:   rec.GuildID,
-				Timestamp: rec.CachedAt,
+	if mes.store != nil {
+		guildID := m.GuildID
+		if guildID == "" && s != nil && s.State != nil {
+			if ch, _ := s.State.Channel(m.ChannelID); ch != nil {
+				guildID = ch.GuildID
+			}
+		}
+		if guildID == "" && s != nil {
+			if ch, _ := s.Channel(m.ChannelID); ch != nil {
+				guildID = ch.GuildID
+			}
+		}
+		if guildID != "" {
+			tryFetch := func() *CachedMessage {
+				if rec, err := mes.store.GetMessage(guildID, m.ID); err == nil && rec != nil {
+					return &CachedMessage{
+						ID:        rec.MessageID,
+						Content:   rec.Content,
+						Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
+						ChannelID: rec.ChannelID,
+						GuildID:   rec.GuildID,
+						Timestamp: rec.CachedAt,
+					}
+				}
+				return nil
+			}
+			cached = tryFetch()
+			if cached == nil {
+				time.Sleep(200 * time.Millisecond)
+				cached = tryFetch()
+			}
+			if cached == nil {
+				time.Sleep(400 * time.Millisecond)
+				cached = tryFetch()
 			}
 		}
 	}
@@ -410,6 +490,21 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	}
 
 	// Remove from cache and persistence (disabled by default)
+	// Versioned history (delete) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
+	if func() bool {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_VERSIONING_ENABLED")))
+		return v == "1" || v == "true" || v == "on" || v == "yes"
+	}() && mes.store != nil && cached.Author != nil {
+		_ = mes.store.InsertMessageVersion(storage.MessageVersion{
+			GuildID:   cached.GuildID,
+			MessageID: cached.ID,
+			ChannelID: cached.ChannelID,
+			AuthorID:  cached.Author.ID,
+			EventType: "delete",
+			Content:   cached.Content,
+			CreatedAt: time.Now().UTC(),
+		})
+	}
 	if mes.deleteOnLog && mes.store != nil {
 		_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 	}
@@ -424,8 +519,8 @@ func (mes *MessageEventService) markEvent() {
 	}
 }
 
-func (mes *MessageEventService) GetCacheStats() map[string]interface{} {
-	return map[string]interface{}{
+func (mes *MessageEventService) GetCacheStats() map[string]any {
+	return map[string]any{
 		"isRunning": mes.isRunning,
 		"backend":   "sqlite",
 	}

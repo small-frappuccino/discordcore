@@ -8,14 +8,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// LoadEnvWithLocalBinFallback attempts to ensure the specified environment variable is present
-// by loading a single fallback file located at $HOME/.local/bin/.env.
+// LoadEnvWithLocalBinFallback ensures the specified environment variable is present.
+// It always attempts to load a single fallback file located at $HOME/.local/bin/.env
+// to populate any variables that are currently missing from the environment (without
+// overwriting already-set variables). Then it reads and returns the requested variable.
 //
 // Behavior:
-//   - It does NOT load .env from the current working directory.
-//   - It attempts to load the single file "$HOME/.local/bin/.env" (if it exists).
-//   - After loading that file (if present), it checks whether the environment variable
-//     named by tokenEnvName is set and returns its value.
+//   - Does NOT load .env from the current working directory.
+//   - Always tries to load "$HOME/.local/bin/.env" if it exists, using non-overwriting semantics.
+//   - After attempting the fallback load, returns the value of tokenEnvName if present.
 //
 // Returns the value of the environment variable when found, or a non-nil error if the
 // variable remains unset after the fallback attempt. Errors are descriptive to help callers
@@ -24,31 +25,26 @@ import (
 // Callers should pass the exact environment variable name they expect (for example
 // "ALICE_BOT_DEVELOPMENT_TOKEN" or a repo-specific token name).
 func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
-	// First, honor already-set environment variable
+	// Always attempt to load the fallback file to populate any missing vars (non-overwriting).
+	// Determine fallback path: $HOME/.local/bin/.env
+	home, homeErr := os.UserHomeDir()
+	var envPath string
+	if homeErr == nil && home != "" {
+		envPath = filepath.Join(home, ".local", "bin", ".env")
+		if info, statErr := os.Stat(envPath); statErr == nil && !info.IsDir() {
+			// godotenv.Load will NOT override variables that are already set.
+			_ = godotenv.Load(envPath)
+		}
+	}
+
+	// After attempting fallback load, return the requested variable if present.
 	if v := os.Getenv(tokenEnvName); v != "" {
 		return v, nil
 	}
 
-	// Determine fallback path: $HOME/.local/bin/.env
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return "", fmt.Errorf("cannot determine home directory: %v", err)
+	// Build a descriptive error message.
+	if envPath == "" {
+		return "", fmt.Errorf("environment variable %q not set and home directory unresolved", tokenEnvName)
 	}
-	envPath := filepath.Join(home, ".local", "bin", ".env")
-
-	// If the fallback file exists, try loading it.
-	if info, statErr := os.Stat(envPath); statErr == nil && !info.IsDir() {
-		if loadErr := godotenv.Load(envPath); loadErr != nil {
-			return "", fmt.Errorf("failed to load fallback env file %s: %v", envPath, loadErr)
-		}
-		// Check variable after loading fallback
-		if v := os.Getenv(tokenEnvName); v != "" {
-			return v, nil
-		}
-		// Loaded fallback but variable still missing
-		return "", fmt.Errorf("environment variable %q not set after loading fallback file %s", tokenEnvName, envPath)
-	}
-
-	// Fallback file does not exist and env var not set
-	return "", fmt.Errorf("environment variable %q not set and fallback env file not found: %s", tokenEnvName, envPath)
+	return "", fmt.Errorf("environment variable %q not set; attempted to load fallback file %s", tokenEnvName, envPath)
 }
