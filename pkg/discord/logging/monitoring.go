@@ -235,7 +235,51 @@ func (ms *MonitoringService) Start() error {
 				totalUpdates++
 			}
 		}
-		log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second))
+		// Reconciliar o cargo alvo com base nos dados da DB local após o refresh
+		reconciledAdds := 0
+		reconciledRemoves := 0
+		if ms.store != nil && ms.session != nil {
+			for _, gcfg := range cfg.Guilds {
+				// Aplicar reconciliação apenas na guild alvo
+				if gcfg.GuildID != targetGuildID {
+					continue
+				}
+				memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
+				if err != nil {
+					log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
+					continue
+				}
+				for userID, roles := range memberRoles {
+					hasA, hasB, hasTarget := false, false, false
+					for _, r := range roles {
+						if r == prereqRoleA {
+							hasA = true
+						} else if r == prereqRoleB {
+							hasB = true
+						} else if r == targetRoleID {
+							hasTarget = true
+						}
+					}
+					// Se possui ambos os pré-requisitos e não tem o cargo alvo, conceder
+					if hasA && hasB && !hasTarget {
+						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+						} else {
+							reconciledAdds++
+						}
+					}
+					// Se perdeu o cargo A e ainda tem o cargo alvo, remover
+					if hasTarget && !hasA {
+						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+						} else {
+							reconciledRemoves++
+						}
+					}
+				}
+			}
+		}
+		log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
 		return nil
 	})
 
