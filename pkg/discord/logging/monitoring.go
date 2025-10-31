@@ -3,9 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const (
@@ -42,7 +41,7 @@ func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManag
 	}
 }
 
-// MonitoringService coordena handlers multi-guild e delega tarefas específicas (ex.: usuário).
+// MonitoringService coordinates multi-guild handlers and delegates specific tasks (e.g., user).
 type MonitoringService struct {
 	session             *discordgo.Session
 	configManager       *files.ConfigManager
@@ -51,13 +50,13 @@ type MonitoringService struct {
 	adapters            *task.NotificationAdapters
 	router              *task.TaskRouter
 	userWatcher         *UserWatcher
-	memberEventService  *MemberEventService  // Serviço para eventos de membros
-	messageEventService *MessageEventService // Serviço para eventos de mensagens
+	memberEventService  *MemberEventService  // Service for member events
+	messageEventService *MessageEventService // Service for message events
 	isRunning           bool
 	stopChan            chan struct{}
 	stopOnce            sync.Once
 	runMu               sync.Mutex
-	recentChanges       map[string]time.Time // Debounce para evitar duplicidade
+	recentChanges       map[string]time.Time // Debounce to avoid duplicates
 	changesMutex        sync.RWMutex
 	cronCancel          func()
 
@@ -161,14 +160,8 @@ func (ms *MonitoringService) Start() error {
 	ms.rolesCacheCleanup = make(chan struct{})
 	go ms.rolesCacheCleanupLoop()
 
-	// Iniciar novos serviços (gate entry/exit logs via env)
-	disableEntryExit := false
-	if v := os.Getenv("ALICE_DISABLE_ENTRY_EXIT_LOGS"); v != "" {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "1", "true", "yes", "y", "on":
-			disableEntryExit = true
-		}
-	}
+	// Start member/message services (gate entry/exit logs via env)
+	disableEntryExit := util.EnvBool("ALICE_DISABLE_ENTRY_EXIT_LOGS")
 	if disableEntryExit {
 		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by ALICE_DISABLE_ENTRY_EXIT_LOGS; MemberEventService will not start")
 	} else {
@@ -178,26 +171,17 @@ func (ms *MonitoringService) Start() error {
 		}
 	}
 	// Optionally honor ALICE_DISABLE_AUTOMOD_LOGS here (Automod service is started elsewhere)
-	if v := os.Getenv("ALICE_DISABLE_AUTOMOD_LOGS"); v != "" {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "1", "true", "yes", "y", "on":
-			log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS")
-		}
+	if util.EnvBool("ALICE_DISABLE_AUTOMOD_LOGS") {
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS")
 	}
 	// Gate message logging behind env flag
-	disableMsg := false
-	if v := os.Getenv("ALICE_DISABLE_MESSAGE_LOGS"); v != "" {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "1", "true", "yes", "y", "on":
-			disableMsg = true
-		}
-	}
+	disableMsg := util.EnvBool("ALICE_DISABLE_MESSAGE_LOGS")
 	if disableMsg {
 		log.ApplicationLogger().Info("🛑 Message logging disabled by ALICE_DISABLE_MESSAGE_LOGS; MessageEventService will not start")
 	} else {
 		if err := ms.messageEventService.Start(); err != nil {
 			ms.isRunning = false
-			// Parar o serviço de membros se falhou
+			// Stop the member event service if start failed
 			ms.memberEventService.Stop()
 			return fmt.Errorf("failed to start message event service: %w", err)
 		}
@@ -235,13 +219,13 @@ func (ms *MonitoringService) Start() error {
 				totalUpdates++
 			}
 		}
-		// Reconciliar o cargo alvo com base nos dados da DB local após o refresh
+		// Reconcile target role based on local DB data after the refresh
 		reconciledAdds := 0
 		reconciledRemoves := 0
 		if ms.store != nil && ms.session != nil {
 			for _, gcfg := range cfg.Guilds {
-				// Aplicar reconciliação apenas na guild alvo
-				if gcfg.GuildID != targetGuildID {
+				// Skip guilds without auto-role assignment enabled or missing config
+				if !gcfg.AutoRoleAssignmentEnabled || gcfg.AutoRoleTargetRoleID == "" || gcfg.AutoRolePrereqRoleA == "" || gcfg.AutoRolePrereqRoleB == "" {
 					continue
 				}
 				memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
@@ -252,26 +236,26 @@ func (ms *MonitoringService) Start() error {
 				for userID, roles := range memberRoles {
 					hasA, hasB, hasTarget := false, false, false
 					for _, r := range roles {
-						if r == prereqRoleA {
+						if r == gcfg.AutoRolePrereqRoleA {
 							hasA = true
-						} else if r == prereqRoleB {
+						} else if r == gcfg.AutoRolePrereqRoleB {
 							hasB = true
-						} else if r == targetRoleID {
+						} else if r == gcfg.AutoRoleTargetRoleID {
 							hasTarget = true
 						}
 					}
-					// Se possui ambos os pré-requisitos e não tem o cargo alvo, conceder
+					// Grant target role if both prerequisites are present and target is missing
 					if hasA && hasB && !hasTarget {
-						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, gcfg.AutoRoleTargetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.AutoRoleTargetRoleID, "err", err)
 						} else {
 							reconciledAdds++
 						}
 					}
-					// Se perdeu o cargo A e ainda tem o cargo alvo, remover
+					// Remove target role if prerequisite A is missing
 					if hasTarget && !hasA {
-						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, gcfg.AutoRoleTargetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.AutoRoleTargetRoleID, "err", err)
 						} else {
 							reconciledRemoves++
 						}
@@ -319,8 +303,11 @@ func (ms *MonitoringService) Stop() error {
 		if err := ms.unifiedCache.Persist(); err != nil {
 			log.ErrorLoggerRaw().Error("Failed to persist cache (continuing)", "err", err)
 		} else {
-			stats := ms.unifiedCache.GetStats()
-			total := stats.MemberEntries + stats.GuildEntries + stats.RolesEntries + stats.ChannelEntries
+			members, _, _, _ := ms.unifiedCache.MemberMetrics()
+			guilds, _, _, _ := ms.unifiedCache.GuildMetrics()
+			roles, _, _, _ := ms.unifiedCache.RolesMetrics()
+			channels, _, _, _ := ms.unifiedCache.ChannelMetrics()
+			total := members + guilds + roles + channels
 			log.ApplicationLogger().Info("✅ Cache persisted", "entries_saved", total)
 		}
 		// Stop cache cleanup goroutine
@@ -336,7 +323,7 @@ func (ms *MonitoringService) Stop() error {
 	// Remove event handlers
 	ms.removeEventHandlers()
 
-	// Parar novos serviços
+	// Stop services
 	if err := ms.memberEventService.Stop(); err != nil {
 		log.ErrorLoggerRaw().Error("Error stopping member event service", "err", err)
 	}
@@ -399,13 +386,13 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	if _, ok, _ := ms.store.GetBotSince(guildID); !ok {
 		botID := ms.session.State.User.ID
 		var botMember *discordgo.Member
-		// Preferir cache do state para evitar chamada REST
+		// Prefer state cache to avoid a REST call
 		if ms.session != nil && ms.session.State != nil {
 			if m, _ := ms.session.State.Member(guildID, botID); m != nil {
 				botMember = m
 			}
 		}
-		// Fallback para REST somente se necessário
+		// Fallback to REST only if necessary
 		if botMember == nil {
 			if m, err := ms.getGuildMember(guildID, botID); err == nil {
 				botMember = m
@@ -447,13 +434,7 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 func (ms *MonitoringService) setupEventHandlers() {
 	// Store handler references for later removal
 	// Gate user logs (avatars and roles) via env
-	disableUser := false
-	if v := os.Getenv("ALICE_DISABLE_USER_LOGS"); v != "" {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "1", "true", "yes", "y", "on":
-			disableUser = true
-		}
-	}
+	disableUser := util.EnvBool("ALICE_DISABLE_USER_LOGS")
 	if disableUser {
 		// Register only non-user handlers
 		ms.eventHandlers = append(ms.eventHandlers,
@@ -537,7 +518,7 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	}
 }
 
-// handleGuildUpdate atualiza o cache do OwnerID quando houver mudança de propriedade do servidor.
+// handleGuildUpdate updates the OwnerID cache when the server ownership changes.
 func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordgo.GuildUpdate) {
 	if e == nil || e.Guild == nil || e.Guild.ID == "" {
 		return
@@ -576,7 +557,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		return
 	}
 
-	// Avatar change logging (já existente)
+	// Avatar change logging (already in place)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 
 	// Role update logging (via Audit Log)
@@ -588,13 +569,13 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		return
 	}
 
-	// Buscar audit log de atualização de cargos usando constante e com retentativa curta
+	// Fetch role update audit log using constant with a short retry
 	actionType := int(discordgo.AuditLogActionMemberRoleUpdate)
 
-	// Helper para obter diff verificado entre o snapshot local (memória/SQLite) e o estado atual no Discord.
-	// Retorna também os roles atuais considerados para atualização de snapshot.
+	// Helper to compute a verified diff between the local snapshot (memory/SQLite) and the current Discord state.
+	// Also returns the current roles considered for snapshot update.
 	computeVerifiedDiff := func(guildID, userID string, proposed []string) (cur []string, added []string, removed []string) {
-		// 1) determinar estado atual a partir do proposto (event) ou do Discord
+		// 1) determine current state from the proposed (event) or from Discord
 		cur = proposed
 		if len(cur) == 0 {
 			if member, err := ms.getGuildMember(guildID, userID); err == nil && member != nil {
@@ -605,7 +586,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			return cur, nil, nil
 		}
 
-		// 2) obter estado anterior (preferir cache em memória com TTL; fallback SQLite)
+		// 2) get previous state (prefer in-memory TTL cache; fallback SQLite)
 		var prev []string
 		if p, ok := ms.cacheRolesGet(guildID, userID); ok {
 			atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
@@ -716,7 +697,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			}
 
 			if len(added) == 0 && len(removed) == 0 {
-				// Sem mudanças relevantes detectadas nessa entrada; continuar varrendo
+				// No relevant changes detected in this entry; continue scanning
 				continue
 			}
 
@@ -779,7 +760,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 
 			// Se nada restou após verificação, não enviar embed
 			if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
-				// Atualizar snapshot mesmo assim para manter o DB consistente
+				// Update the snapshot anyway to keep the DB consistent
 				if ms.store != nil && len(curRoles) > 0 {
 					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
 					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
@@ -813,7 +794,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				log.ErrorLoggerRaw().Error("Failed to send role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", sendErr)
 			} else {
 				log.ApplicationLogger().Info("Role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
-				// Atualizar snapshot para refletir o estado após a mudança
+				// Update the snapshot to reflect the state after the change
 				if ms.store != nil && len(curRoles) > 0 {
 					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
 					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
@@ -888,7 +869,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 					log.ErrorLoggerRaw().Error("Failed to send fallback role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", sendErr)
 				} else {
 					log.ApplicationLogger().Info("Fallback role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
-					// Atualiza snapshot de roles após o envio
+					// Update roles snapshot after sending
 					if ms.store != nil {
 						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
 					}
@@ -1181,21 +1162,213 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 	if ms.unifiedCache != nil {
 		ucStats := ms.unifiedCache.GetStats()
 		// Prefer generic unified cache stats (primary)
-		stats["unifiedCache"] = ms.unifiedCache.StatsGeneric()
-		// Keep specific stats for backward compatibility
+		stats["unifiedCache"] = ucStats
+
+		// Keep specific stats for backward compatibility using CustomMetrics
+		var memberEntries, guildEntries, rolesEntries, channelEntries int
+		var memberHits, memberMisses, guildHits, guildMisses, rolesHits, rolesMisses, channelHits, channelMisses uint64
+
+		if ucStats.CustomMetrics != nil {
+			if v, ok := ucStats.CustomMetrics["memberEntries"]; ok {
+				switch t := v.(type) {
+				case int:
+					memberEntries = t
+				case int64:
+					memberEntries = int(t)
+				case float64:
+					memberEntries = int(t)
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["guildEntries"]; ok {
+				switch t := v.(type) {
+				case int:
+					guildEntries = t
+				case int64:
+					guildEntries = int(t)
+				case float64:
+					guildEntries = int(t)
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["rolesEntries"]; ok {
+				switch t := v.(type) {
+				case int:
+					rolesEntries = t
+				case int64:
+					rolesEntries = int(t)
+				case float64:
+					rolesEntries = int(t)
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["channelEntries"]; ok {
+				switch t := v.(type) {
+				case int:
+					channelEntries = t
+				case int64:
+					channelEntries = int(t)
+				case float64:
+					channelEntries = int(t)
+				}
+			}
+
+			if v, ok := ucStats.CustomMetrics["memberHits"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					memberHits = t
+				case int:
+					if t >= 0 {
+						memberHits = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						memberHits = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						memberHits = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["memberMisses"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					memberMisses = t
+				case int:
+					if t >= 0 {
+						memberMisses = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						memberMisses = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						memberMisses = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["guildHits"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					guildHits = t
+				case int:
+					if t >= 0 {
+						guildHits = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						guildHits = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						guildHits = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["guildMisses"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					guildMisses = t
+				case int:
+					if t >= 0 {
+						guildMisses = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						guildMisses = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						guildMisses = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["rolesHits"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					rolesHits = t
+				case int:
+					if t >= 0 {
+						rolesHits = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						rolesHits = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						rolesHits = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["rolesMisses"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					rolesMisses = t
+				case int:
+					if t >= 0 {
+						rolesMisses = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						rolesMisses = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						rolesMisses = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["channelHits"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					channelHits = t
+				case int:
+					if t >= 0 {
+						channelHits = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						channelHits = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						channelHits = uint64(t)
+					}
+				}
+			}
+			if v, ok := ucStats.CustomMetrics["channelMisses"]; ok {
+				switch t := v.(type) {
+				case uint64:
+					channelMisses = t
+				case int:
+					if t >= 0 {
+						channelMisses = uint64(t)
+					}
+				case int64:
+					if t >= 0 {
+						channelMisses = uint64(t)
+					}
+				case float64:
+					if t >= 0 {
+						channelMisses = uint64(t)
+					}
+				}
+			}
+		}
+
 		stats["unifiedCacheSpecific"] = map[string]interface{}{
-			"memberEntries":  ucStats.MemberEntries,
-			"guildEntries":   ucStats.GuildEntries,
-			"rolesEntries":   ucStats.RolesEntries,
-			"channelEntries": ucStats.ChannelEntries,
-			"memberHits":     ucStats.MemberHits,
-			"memberMisses":   ucStats.MemberMisses,
-			"guildHits":      ucStats.GuildHits,
-			"guildMisses":    ucStats.GuildMisses,
-			"rolesHits":      ucStats.RolesHits,
-			"rolesMisses":    ucStats.RolesMisses,
-			"channelHits":    ucStats.ChannelHits,
-			"channelMisses":  ucStats.ChannelMisses,
+			"memberEntries":  memberEntries,
+			"guildEntries":   guildEntries,
+			"rolesEntries":   rolesEntries,
+			"channelEntries": channelEntries,
+			"memberHits":     memberHits,
+			"memberMisses":   memberMisses,
+			"guildHits":      guildHits,
+			"guildMisses":    guildMisses,
+			"rolesHits":      rolesHits,
+			"rolesMisses":    rolesMisses,
+			"channelHits":    channelHits,
+			"channelMisses":  channelMisses,
 		}
 	}
 

@@ -75,7 +75,7 @@ func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 
 	slog.Info("Processing slash command")
 
-	// Verificar se o comando existe
+	// Check if the command exists
 	cmd, exists := cr.registry.GetCommand(commandName)
 	if !exists {
 		slog.Error("Command not found")
@@ -83,26 +83,26 @@ func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 		return
 	}
 
-	// Verificar se requer servidor
+	// Check if the command requires a guild
 	if cmd.RequiresGuild() && ctx.GuildID == "" {
 		slog.Warn("Command used outside of guild")
 		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "This command can only be used in a server")
 		return
 	}
 
-	// Verificar permissões
+	// Check permissions
 	if cmd.RequiresPermissions() && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
 		slog.Warn("User without permission tried to use command")
 		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "You do not have permission to use this command")
 		return
 	}
 
-	// Executar comando
+	// Execute command
 	slog.Info("Executing command")
 	if err := cmd.Handle(ctx); err != nil {
 		slog.Error("Command execution failed", "err", err)
 
-		// Verificar se é um erro específico de comando
+		// Check if it's a command-specific error
 		if cmdErr, ok := err.(*CommandError); ok {
 			if cmdErr.Ephemeral {
 				NewResponseBuilder(ctx.Session).Ephemeral().Error(i, cmdErr.Message)
@@ -120,14 +120,14 @@ func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
 	ctx := cr.contextBuilder.BuildContext(i)
 	commandName := i.ApplicationCommandData().Name
 
-	// Buscar handler de autocomplete
+	// Find autocomplete handler
 	handler, exists := cr.autocompleteMap[commandName]
 	if !exists {
 		NewResponseBuilder(ctx.Session).Build().Autocomplete(i, []*discordgo.ApplicationCommandOptionChoice{})
 		return
 	}
 
-	// Encontrar a opção com foco
+	// Find the focused option
 	focusedOpt, hasFocus := HasFocusedOption(i.ApplicationCommandData().Options)
 	if !hasFocus {
 		NewResponseBuilder(ctx.Session).Build().Autocomplete(i, []*discordgo.ApplicationCommandOptionChoice{})
@@ -170,7 +170,7 @@ func (cm *CommandManager) GetRouter() *CommandRouter {
 
 // SetupCommands configures and synchronizes commands with Discord
 func (cm *CommandManager) SetupCommands() error {
-	// Registrar handler de interações
+	// Register interaction handler
 	cm.session.AddHandler(cm.router.HandleInteraction)
 
 	// Verify session state is properly initialized
@@ -178,26 +178,26 @@ func (cm *CommandManager) SetupCommands() error {
 		return fmt.Errorf("session not properly initialized")
 	}
 
-	// Obter comandos já registrados no Discord
+	// Fetch commands already registered on Discord
 	registered, err := cm.session.ApplicationCommands(cm.session.State.User.ID, "")
 	if err != nil {
 		return fmt.Errorf("failed to fetch registered commands: %w", err)
 	}
 
-	// Criar mapa de comandos registrados
+	// Build map of registered commands
 	regByName := make(map[string]*discordgo.ApplicationCommand, len(registered))
 	for _, rc := range registered {
 		regByName[rc.Name] = rc
 	}
 
-	// Criar mapa de comandos do código
+	// Build map of code-defined commands
 	codeCommands := cm.router.registry.GetAllCommands()
 	codeByName := make(map[string]Command, len(codeCommands))
 	for name, cmd := range codeCommands {
 		codeByName[name] = cmd
 	}
 
-	// Criar/Atualizar comandos conforme necessário
+	// Create/Update commands as needed
 	created, updated, unchanged := 0, 0, 0
 	for name, cmd := range codeCommands {
 		desired := &discordgo.ApplicationCommand{
@@ -207,21 +207,21 @@ func (cm *CommandManager) SetupCommands() error {
 		}
 
 		if existing, ok := regByName[name]; ok {
-			// Comando já existe, verificar se precisa atualizar
+			// Command already exists, check if it needs updating
 			if CompareCommands(existing, desired) {
 				slog.Info(fmt.Sprintf("Command unchanged, skipping: %s", name))
 				unchanged++
 				continue
 			}
 
-			// Atualizar comando
+			// Update command
 			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired); err != nil {
 				return fmt.Errorf("error updating command '%s': %w", name, err)
 			}
 			slog.Info(fmt.Sprintf("Command updated: %s", name))
 			updated++
 		} else {
-			// Criar novo comando
+			// Create new command
 			if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired); err != nil {
 				return fmt.Errorf("error creating command '%s': %w", name, err)
 			}
@@ -230,7 +230,7 @@ func (cm *CommandManager) SetupCommands() error {
 		}
 	}
 
-	// Remover comandos órfãos (existem no Discord mas não no código)
+	// Remove orphaned commands (present on Discord but not in code)
 	deleted := 0
 	for _, rc := range registered {
 		if _, exists := codeByName[rc.Name]; !exists {
@@ -318,11 +318,11 @@ func (gc *GroupCommand) RequiresPermissions() bool {
 	return false
 }
 
-// Handle roteia para o subcomando apropriado
+// Handle routes to the appropriate subcommand
 func (gc *GroupCommand) Handle(ctx *Context) error {
 	subCommandName := GetSubCommandName(ctx.Interaction)
 	if subCommandName == "" {
-		return NewCommandError("No subcommand specified", true)
+		return NewCommandError("Subcommand is required", true)
 	}
 
 	subcmd, exists := gc.subcommands[subCommandName]
@@ -330,7 +330,7 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 		return NewCommandError("Unknown subcommand", true)
 	}
 
-	// Verificar permissões específicas do subcomando
+	// Check subcommand-specific permissions
 	if subcmd.RequiresGuild() && ctx.GuildID == "" {
 		return NewCommandError("This subcommand can only be used in a server", true)
 	}

@@ -16,26 +16,31 @@ import (
 type GuildConfig struct {
 	GuildID                 string    `json:"guild_id"`
 	CommandChannelID        string    `json:"command_channel_id"`
-	UserLogChannelID        string    `json:"user_log_channel_id"`         // Para logs de entrada/saída e avatares
-	UserEntryLeaveChannelID string    `json:"user_entry_leave_channel_id"` // Canal dedicado para entradas/saídas de usuários
-	MessageLogChannelID     string    `json:"message_log_channel_id"`      // Para logs de mensagens editadas/deletadas
+	UserLogChannelID        string    `json:"user_log_channel_id"`         // For entry/exit logs and avatars
+	UserEntryLeaveChannelID string    `json:"user_entry_leave_channel_id"` // Dedicated channel for user entry/leave
+	MessageLogChannelID     string    `json:"message_log_channel_id"`      // For edited/deleted message logs
 	AutomodLogChannelID     string    `json:"automod_log_channel_id"`
 	AllowedRoles            []string  `json:"allowed_roles"`
 	Rulesets                []Ruleset `json:"rulesets,omitempty"`
-	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Regras soltas, não associadas a nenhuma ruleset
+	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
 	Blocklist               []string  `json:"blocklist,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
-	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // Ex.: "5m", "1h" (padrão: "5m")
-	MemberCacheTTL  string `json:"member_cache_ttl,omitempty"`  // Ex.: "5m", "10m" (padrão: "5m")
-	GuildCacheTTL   string `json:"guild_cache_ttl,omitempty"`   // Ex.: "15m", "30m" (padrão: "15m")
-	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // Ex.: "15m", "30m" (padrão: "15m")
+	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")
+	MemberCacheTTL  string `json:"member_cache_ttl,omitempty"`  // e.g.: "5m", "10m" (default: "5m")
+	GuildCacheTTL   string `json:"guild_cache_ttl,omitempty"`   // e.g.: "15m", "30m" (default: "15m")
+	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // e.g.: "15m", "30m" (default: "15m")
+
+	// Auto role assignment configuration (per-guild)
+	AutoRoleAssignmentEnabled bool   `json:"auto_role_assignment_enabled,omitempty"`
+	AutoRoleTargetRoleID      string `json:"auto_role_target_role_id,omitempty"`
+	AutoRolePrereqRoleA       string `json:"auto_role_prereq_role_a,omitempty"`
+	AutoRolePrereqRoleB       string `json:"auto_role_prereq_role_b,omitempty"`
 }
 
 // BotConfig holds the configuration for the bot.
 type BotConfig struct {
-	Guilds      []GuildConfig `json:"guilds"`
-	ActiveGuild string        `json:"active_guild,omitempty"`
+	Guilds []GuildConfig `json:"guilds"`
 }
 
 // ConfigManager handles bot configuration management.
@@ -175,7 +180,7 @@ func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List
 
 // ## GuildConfig Methods
 
-// RolesCacheTTLDuration retorna o TTL configurado para o cache de roles ou um padrão de 5m.
+// RolesCacheTTLDuration returns the configured TTL for the roles cache or a default of 5m.
 func (gc *GuildConfig) RolesCacheTTLDuration() time.Duration {
 	const def = 5 * time.Minute
 	if gc == nil || gc.RolesCacheTTL == "" {
@@ -188,7 +193,7 @@ func (gc *GuildConfig) RolesCacheTTLDuration() time.Duration {
 	return d
 }
 
-// MemberCacheTTLDuration retorna o TTL configurado para o cache de membros ou um padrão de 5m.
+// MemberCacheTTLDuration returns the configured TTL for the members cache or a default of 5m.
 func (gc *GuildConfig) MemberCacheTTLDuration() time.Duration {
 	const def = 5 * time.Minute
 	if gc == nil || gc.MemberCacheTTL == "" {
@@ -201,7 +206,7 @@ func (gc *GuildConfig) MemberCacheTTLDuration() time.Duration {
 	return d
 }
 
-// GuildCacheTTLDuration retorna o TTL configurado para o cache de guilds ou um padrão de 15m.
+// GuildCacheTTLDuration returns the configured TTL for the guilds cache or a default of 15m.
 func (gc *GuildConfig) GuildCacheTTLDuration() time.Duration {
 	const def = 15 * time.Minute
 	if gc == nil || gc.GuildCacheTTL == "" {
@@ -214,7 +219,7 @@ func (gc *GuildConfig) GuildCacheTTLDuration() time.Duration {
 	return d
 }
 
-// ChannelCacheTTLDuration retorna o TTL configurado para o cache de channels ou um padrão de 15m.
+// ChannelCacheTTLDuration returns the configured TTL for the channels cache or a default of 15m.
 func (gc *GuildConfig) ChannelCacheTTLDuration() time.Duration {
 	const def = 15 * time.Minute
 	if gc == nil || gc.ChannelCacheTTL == "" {
@@ -227,12 +232,12 @@ func (gc *GuildConfig) ChannelCacheTTLDuration() time.Duration {
 	return d
 }
 
-// SetRolesCacheTTL define o TTL do cache de roles por guild (ex.: "5m", "1h") e persiste a configuração.
+// SetRolesCacheTTL sets the roles cache TTL per guild (e.g., "5m", "1h") and persists the setting.
 func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 	if guildID == "" {
 		return fmt.Errorf("guild not found")
 	}
-	// Validar formato (permite vazio para resetar ao padrão)
+	// Validate format (allow empty to reset to default)
 	if ttl != "" {
 		if _, err := time.ParseDuration(ttl); err != nil {
 			return fmt.Errorf("invalid ttl: %w", err)

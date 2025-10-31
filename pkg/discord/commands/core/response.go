@@ -84,23 +84,36 @@ func (rm *ResponseManager) Ephemeral(i *discordgo.InteractionCreate, message str
 	return rm.WithConfig(config).Info(i, message)
 }
 
-// Custom sends a custom response
+// Custom sends a custom response using a centralized builder
 func (rm *ResponseManager) Custom(i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed) error {
+	data := rm.buildResponseData(content, embeds)
+	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: data,
+	})
+}
+
+// buildResponseData builds InteractionResponseData honoring ResponseConfig
+func (rm *ResponseManager) buildResponseData(content string, embeds []*discordgo.MessageEmbed) *discordgo.InteractionResponseData {
 	var flags discordgo.MessageFlags
 	if rm.config.Ephemeral {
 		flags = discordgo.MessageFlagsEphemeral
 	}
+	return &discordgo.InteractionResponseData{
+		Content:    content,
+		Embeds:     embeds,
+		Flags:      flags,
+		Components: rm.config.Components,
+		Files:      rm.config.Attachments,
+	}
+}
 
-	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content:    content,
-			Embeds:     embeds,
-			Flags:      flags,
-			Components: rm.config.Components,
-			Files:      rm.config.Attachments,
-		},
-	})
+// buildFlags returns ephemeral flag when requested
+func (rm *ResponseManager) buildFlags(ephemeral bool) discordgo.MessageFlags {
+	if ephemeral {
+		return discordgo.MessageFlagsEphemeral
+	}
+	return 0
 }
 
 // sendResponse sends a response based on the type
@@ -114,41 +127,13 @@ func (rm *ResponseManager) sendResponse(i *discordgo.InteractionCreate, message 
 // sendTextResponse sends a simple text response
 func (rm *ResponseManager) sendTextResponse(i *discordgo.InteractionCreate, message string, responseType ResponseType) error {
 	content := rm.formatTextMessage(message, responseType)
-
-	var flags discordgo.MessageFlags
-	if rm.config.Ephemeral {
-		flags = discordgo.MessageFlagsEphemeral
-	}
-
-	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content:    content,
-			Flags:      flags,
-			Components: rm.config.Components,
-			Files:      rm.config.Attachments,
-		},
-	})
+	return rm.Custom(i, content, nil)
 }
 
 // sendEmbedResponse sends a response with an embed
 func (rm *ResponseManager) sendEmbedResponse(i *discordgo.InteractionCreate, message string, responseType ResponseType) error {
 	embed := rm.createEmbed(message, responseType)
-
-	var flags discordgo.MessageFlags
-	if rm.config.Ephemeral {
-		flags = discordgo.MessageFlagsEphemeral
-	}
-
-	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Flags:      flags,
-			Components: rm.config.Components,
-			Files:      rm.config.Attachments,
-		},
-	})
+	return rm.Custom(i, "", []*discordgo.MessageEmbed{embed})
 }
 
 // formatTextMessage formats a text message based on the type
@@ -249,15 +234,10 @@ func (rm *ResponseManager) Autocomplete(i *discordgo.InteractionCreate, choices 
 
 // DeferResponse defers the response (for long processing)
 func (rm *ResponseManager) DeferResponse(i *discordgo.InteractionCreate, ephemeral bool) error {
-	var flags discordgo.MessageFlags
-	if ephemeral {
-		flags = discordgo.MessageFlagsEphemeral
-	}
-
 	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: flags,
+			Flags: rm.buildFlags(ephemeral),
 		},
 	})
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // CachedMessage stores message data for comparison
@@ -64,8 +65,7 @@ func (mes *MessageEventService) Start() error {
 	// ALICE_MESSAGE_DELETE_ON_LOG: delete message rows after logging deletions (default: disabled)
 	// ALICE_MESSAGE_CACHE_CLEANUP: run periodic cleanup of expired messages on start (default: disabled)
 	{
-		v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_ENABLED")))
-		mes.cacheEnabled = v == "1" || v == "true" || v == "on" || v == "yes"
+		mes.cacheEnabled = util.EnvBool("ALICE_MESSAGE_CACHE_ENABLED")
 
 		ttlHours := 72
 		if vv := strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_TTL_HOURS")); vv != "" {
@@ -75,11 +75,9 @@ func (mes *MessageEventService) Start() error {
 		}
 		mes.cacheTTL = time.Duration(ttlHours) * time.Hour
 
-		v = strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_DELETE_ON_LOG")))
-		mes.deleteOnLog = v == "1" || v == "true" || v == "on" || v == "yes"
+		mes.deleteOnLog = util.EnvBool("ALICE_MESSAGE_DELETE_ON_LOG")
 
-		v = strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_CLEANUP")))
-		mes.cleanupEnabled = v == "1" || v == "true" || v == "on" || v == "yes"
+		mes.cleanupEnabled = util.EnvBool("ALICE_MESSAGE_CACHE_CLEANUP")
 	}
 
 	// Store should be injected and already initialized
@@ -191,10 +189,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		})
 
 		// Versioned history (v1) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
-		if func() bool {
-			v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_VERSIONING_ENABLED")))
-			return v == "1" || v == "true" || v == "on" || v == "yes"
-		}() {
+		if util.EnvBool("ALICE_MESSAGE_VERSIONING_ENABLED") {
 			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
 				GuildID:     guildID,
 				MessageID:   m.ID,
@@ -354,10 +349,7 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		})
 
 		// Versioned history (edit) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
-		if func() bool {
-			v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_VERSIONING_ENABLED")))
-			return v == "1" || v == "true" || v == "on" || v == "yes"
-		}() {
+		if util.EnvBool("ALICE_MESSAGE_VERSIONING_ENABLED") {
 			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
 				GuildID:   updated.GuildID,
 				MessageID: updated.ID,
@@ -491,10 +483,7 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	// Remove from cache and persistence (disabled by default)
 	// Versioned history (delete) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
-	if func() bool {
-		v := strings.ToLower(strings.TrimSpace(os.Getenv("ALICE_MESSAGE_VERSIONING_ENABLED")))
-		return v == "1" || v == "true" || v == "on" || v == "yes"
-	}() && mes.store != nil && cached.Author != nil {
+	if util.EnvBool("ALICE_MESSAGE_VERSIONING_ENABLED") && mes.store != nil && cached.Author != nil {
 		_ = mes.store.InsertMessageVersion(storage.MessageVersion{
 			GuildID:   cached.GuildID,
 			MessageID: cached.ID,

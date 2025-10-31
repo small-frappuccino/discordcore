@@ -6,7 +6,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
-// Command representa um comando Discord
+// Command represents a Discord command
 type Command interface {
 	Name() string
 	Description() string
@@ -16,7 +16,7 @@ type Command interface {
 	RequiresPermissions() bool
 }
 
-// SubCommand representa um subcomando dentro de um comando maior
+// SubCommand represents a subcommand within a larger command
 type SubCommand interface {
 	Name() string
 	Description() string
@@ -26,7 +26,7 @@ type SubCommand interface {
 	RequiresPermissions() bool
 }
 
-// Context fornece contexto unificado para execução de comandos
+// Context provides a unified context for command execution
 type Context struct {
 	Session     *discordgo.Session
 	Interaction *discordgo.InteractionCreate
@@ -38,14 +38,14 @@ type Context struct {
 	GuildConfig *files.GuildConfig
 }
 
-// Response padroniza respostas de comandos
+// Response standardizes command responses
 type Response struct {
 	Content   string
 	Ephemeral bool
 	Success   bool
 }
 
-// BaseHandler fornece funcionalidades comuns para todos os handlers
+// BaseHandler provides common functionality for all handlers
 type BaseHandler struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
@@ -61,19 +61,19 @@ func NewBaseHandler(
 	}
 }
 
-// GetSession retorna a sessão do Discord
+// GetSession returns the Discord session
 func (bh *BaseHandler) GetSession() *discordgo.Session {
 	return bh.session
 }
 
-// GetConfigManager retorna o gerenciador de configuração
+// GetConfigManager returns the configuration manager
 func (bh *BaseHandler) GetConfigManager() *files.ConfigManager {
 	return bh.configManager
 }
 
 // GetAvatarCacheManager retorna o gerenciador de cache de avatar
 
-// CommandRegistry gerencia registro e execução de comandos
+// CommandRegistry manages command registration and execution
 type CommandRegistry struct {
 	commands    map[string]Command
 	subcommands map[string]map[string]SubCommand // [commandName][subcommandName]
@@ -86,12 +86,12 @@ func NewCommandRegistry() *CommandRegistry {
 	}
 }
 
-// Register registra um comando no registry
+// Register registers a command in the registry
 func (r *CommandRegistry) Register(cmd Command) {
 	r.commands[cmd.Name()] = cmd
 }
 
-// RegisterSubCommand registra um subcomando no registry
+// RegisterSubCommand registers a subcommand in the registry
 func (r *CommandRegistry) RegisterSubCommand(parentName string, subcmd SubCommand) {
 	if r.subcommands[parentName] == nil {
 		r.subcommands[parentName] = make(map[string]SubCommand)
@@ -99,13 +99,13 @@ func (r *CommandRegistry) RegisterSubCommand(parentName string, subcmd SubComman
 	r.subcommands[parentName][subcmd.Name()] = subcmd
 }
 
-// GetCommand retorna um comando pelo nome
+// GetCommand returns a command by name
 func (r *CommandRegistry) GetCommand(name string) (Command, bool) {
 	cmd, exists := r.commands[name]
 	return cmd, exists
 }
 
-// GetSubCommand retorna um subcomando pelo nome do comando pai e nome do subcomando
+// GetSubCommand returns a subcommand by its parent command and subcommand name
 func (r *CommandRegistry) GetSubCommand(parentName, subName string) (SubCommand, bool) {
 	if subs, exists := r.subcommands[parentName]; exists {
 		if sub, exists := subs[subName]; exists {
@@ -115,12 +115,12 @@ func (r *CommandRegistry) GetSubCommand(parentName, subName string) (SubCommand,
 	return nil, false
 }
 
-// GetAllCommands retorna todos os comandos registrados
+// GetAllCommands returns all registered commands
 func (r *CommandRegistry) GetAllCommands() map[string]Command {
 	return r.commands
 }
 
-// GetAllSubCommands retorna todos os subcomandos de um comando
+// GetAllSubCommands returns all subcommands for a given command
 func (r *CommandRegistry) GetAllSubCommands(parentName string) map[string]SubCommand {
 	if subs, exists := r.subcommands[parentName]; exists {
 		return subs
@@ -128,26 +128,26 @@ func (r *CommandRegistry) GetAllSubCommands(parentName string) map[string]SubCom
 	return make(map[string]SubCommand)
 }
 
-// CommandMeta define metadados para construção de comandos
+// CommandMeta defines metadata for building commands
 type CommandMeta struct {
 	Name        string
 	Description string
 	Options     []*discordgo.ApplicationCommandOption
 }
 
-// SubCommandMeta define metadados para construção de subcomandos
+// SubCommandMeta defines metadata for building subcommands
 type SubCommandMeta struct {
 	Name        string
 	Description string
 	Options     []*discordgo.ApplicationCommandOption
 }
 
-// AutocompleteHandler define um handler para autocomplete
+// AutocompleteHandler defines a handler for autocomplete
 type AutocompleteHandler interface {
 	HandleAutocomplete(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error)
 }
 
-// PermissionLevel define níveis de permissão para comandos
+// PermissionLevel defines permission levels for commands
 type PermissionLevel int
 
 const (
@@ -158,7 +158,7 @@ const (
 	PermissionOwner
 )
 
-// CommandError representa erros específicos de comandos
+// CommandError represents command-specific errors
 type CommandError struct {
 	Message   string
 	Ephemeral bool
@@ -169,7 +169,7 @@ func (e *CommandError) Error() string {
 	return e.Message
 }
 
-// NewCommandError cria um novo erro de comando
+// NewCommandError creates a new command error
 func NewCommandError(message string, ephemeral bool) *CommandError {
 	return &CommandError{
 		Message:   message,
@@ -177,7 +177,7 @@ func NewCommandError(message string, ephemeral bool) *CommandError {
 	}
 }
 
-// ValidationError representa erros de validação
+// ValidationError represents validation errors
 type ValidationError struct {
 	Field   string
 	Message string
@@ -187,7 +187,7 @@ func (e *ValidationError) Error() string {
 	return e.Message
 }
 
-// NewValidationError cria um novo erro de validação
+// NewValidationError creates a new validation error
 func NewValidationError(field, message string) *ValidationError {
 	return &ValidationError{
 		Field:   field,

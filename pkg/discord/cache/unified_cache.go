@@ -1,11 +1,9 @@
 package cache
 
 import (
-	"container/list"
 	"encoding/json"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -17,25 +15,17 @@ import (
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
 // and optional SQLite persistence.
 type UnifiedCache struct {
-	// Member cache: guildID:userID -> cachedMember
-	members     map[string]*lruEntry
-	membersList *list.List
-	membersMu   sync.RWMutex
+	// Member cache segment: guildID:userID -> *discordgo.Member
+	members *segment[*discordgo.Member]
 
-	// Guild cache: guildID -> cachedGuild
-	guilds     map[string]*lruEntry
-	guildsList *list.List
-	guildsMu   sync.RWMutex
+	// Guild cache segment: guildID -> *discordgo.Guild
+	guilds *segment[*discordgo.Guild]
 
-	// Roles cache: guildID -> cachedRoles
-	roles     map[string]*lruEntry
-	rolesList *list.List
-	rolesMu   sync.RWMutex
+	// Roles cache segment: guildID -> []*discordgo.Role
+	roles *segment[[]*discordgo.Role]
 
-	// Channel cache: channelID -> cachedChannel
-	channels     map[string]*lruEntry
-	channelsList *list.List
-	channelsMu   sync.RWMutex
+	// Channel cache segment: channelID -> *discordgo.Channel
+	channels *segment[*discordgo.Channel]
 
 	// Indices to relate channels and guilds for efficient guild-scoped operations
 	guildToChannels   map[string]map[string]struct{}
@@ -55,19 +45,7 @@ type UnifiedCache struct {
 	maxRolesSize   int
 	maxChannelSize int
 
-	// Metrics
-	memberHits       uint64
-	memberMisses     uint64
-	memberEvictions  uint64
-	guildHits        uint64
-	guildMisses      uint64
-	guildEvictions   uint64
-	rolesHits        uint64
-	rolesMisses      uint64
-	rolesEvictions   uint64
-	channelHits      uint64
-	channelMisses    uint64
-	channelEvictions uint64
+	// Metrics are tracked per-segment
 
 	// SQLite persistence (optional)
 	store          *storage.Store
@@ -81,14 +59,6 @@ type UnifiedCache struct {
 	lastCleanup time.Time
 	// Last warmup timestamp for recency checks
 	lastWarmup time.Time
-}
-
-// lruEntry wraps a cache entry with LRU list element
-type lruEntry struct {
-	key       string
-	value     any
-	expiresAt time.Time
-	element   *list.Element
 }
 
 // Small helpers to build keys/prefixes and centralize comparisons
@@ -107,25 +77,6 @@ func (uc *UnifiedCache) memberPrefix(guildID string) string {
 }
 
 // Cached value types
-type cachedMember struct {
-	member    *discordgo.Member
-	expiresAt time.Time
-}
-
-type cachedGuild struct {
-	guild     *discordgo.Guild
-	expiresAt time.Time
-}
-
-type cachedRoles struct {
-	roles     []*discordgo.Role
-	expiresAt time.Time
-}
-
-type cachedChannel struct {
-	channel   *discordgo.Channel
-	expiresAt time.Time
-}
 
 // Persistent cache entry for SQLite
 type persistentCacheEntry struct {
@@ -181,14 +132,10 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 	}
 
 	uc := &UnifiedCache{
-		members:         make(map[string]*lruEntry),
-		membersList:     list.New(),
-		guilds:          make(map[string]*lruEntry),
-		guildsList:      list.New(),
-		roles:           make(map[string]*lruEntry),
-		rolesList:       list.New(),
-		channels:        make(map[string]*lruEntry),
-		channelsList:    list.New(),
+		members:         newSegment[*discordgo.Member](cfg.MemberTTL, cfg.MaxMemberSize),
+		guilds:          newSegment[*discordgo.Guild](cfg.GuildTTL, cfg.MaxGuildSize),
+		roles:           newSegment[[]*discordgo.Role](cfg.RolesTTL, cfg.MaxRolesSize),
+		channels:        newSegment[*discordgo.Channel](cfg.ChannelTTL, cfg.MaxChannelSize),
 		guildToChannels: make(map[string]map[string]struct{}),
 		channelToGuild:  make(map[string]string),
 
@@ -217,281 +164,105 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 // GetMember retrieves a cached member or returns nil if not found/expired
 func (uc *UnifiedCache) GetMember(guildID, userID string) (*discordgo.Member, bool) {
 	key := uc.memberKey(guildID, userID)
-	uc.membersMu.Lock()
-	defer uc.membersMu.Unlock()
-
-	entry, ok := uc.members[key]
-	if !ok || time.Now().After(entry.expiresAt) {
-		if ok {
-			// Expired, remove it
-			uc.membersList.Remove(entry.element)
-			delete(uc.members, key)
-		}
-		atomic.AddUint64(&uc.memberMisses, 1)
+	if key == "" || uc.members == nil {
 		return nil, false
 	}
-
-	// Move to front (LRU)
-	uc.membersList.MoveToFront(entry.element)
-
-	atomic.AddUint64(&uc.memberHits, 1)
-	cached := entry.value.(*cachedMember)
-	return cached.member, true
+	return uc.members.Get(key)
 }
 
 // SetMember stores a member in the cache with TTL and LRU eviction
 func (uc *UnifiedCache) SetMember(guildID, userID string, member *discordgo.Member) {
-	if member == nil {
+	if member == nil || uc.members == nil {
 		return
 	}
 	key := uc.memberKey(guildID, userID)
-	cached := &cachedMember{
-		member:    member,
-		expiresAt: time.Now().Add(uc.memberTTL),
-	}
-
-	uc.membersMu.Lock()
-	defer uc.membersMu.Unlock()
-
-	// Update existing entry
-	if entry, ok := uc.members[key]; ok {
-		entry.value = cached
-		entry.expiresAt = cached.expiresAt
-		uc.membersList.MoveToFront(entry.element)
+	if key == "" {
 		return
 	}
-
-	// Check size limit and evict LRU if needed
-	if uc.maxMemberSize > 0 && len(uc.members) >= uc.maxMemberSize {
-		uc.evictMemberLRU()
-	}
-
-	// Add new entry
-	element := uc.membersList.PushFront(key)
-	uc.members[key] = &lruEntry{
-		key:       key,
-		value:     cached,
-		expiresAt: cached.expiresAt,
-		element:   element,
-	}
+	uc.members.Set(key, member)
 }
 
 // evictMemberLRU removes the least recently used member (must hold lock)
-func (uc *UnifiedCache) evictMemberLRU() {
-	element := uc.membersList.Back()
-	if element != nil {
-		key := element.Value.(string)
-		uc.membersList.Remove(element)
-		delete(uc.members, key)
-		atomic.AddUint64(&uc.memberEvictions, 1)
-	}
-}
+func (uc *UnifiedCache) evictMemberLRU() {}
 
 // InvalidateMember removes a member from the cache
 func (uc *UnifiedCache) InvalidateMember(guildID, userID string) {
 	key := uc.memberKey(guildID, userID)
-	uc.membersMu.Lock()
-	if entry, ok := uc.members[key]; ok {
-		uc.membersList.Remove(entry.element)
-		delete(uc.members, key)
+	if key == "" || uc.members == nil {
+		return
 	}
-	uc.membersMu.Unlock()
+	uc.members.Invalidate(key)
 }
 
 // GetGuild retrieves a cached guild or returns nil if not found/expired
 func (uc *UnifiedCache) GetGuild(guildID string) (*discordgo.Guild, bool) {
-	uc.guildsMu.Lock()
-	defer uc.guildsMu.Unlock()
-
-	entry, ok := uc.guilds[guildID]
-	if !ok || time.Now().After(entry.expiresAt) {
-		if ok {
-			uc.guildsList.Remove(entry.element)
-			delete(uc.guilds, guildID)
-		}
-		atomic.AddUint64(&uc.guildMisses, 1)
+	if guildID == "" || uc.guilds == nil {
 		return nil, false
 	}
-
-	// Move to front (LRU)
-	uc.guildsList.MoveToFront(entry.element)
-
-	atomic.AddUint64(&uc.guildHits, 1)
-	cached := entry.value.(*cachedGuild)
-	return cached.guild, true
+	return uc.guilds.Get(guildID)
 }
 
 // SetGuild stores a guild in the cache with TTL and LRU eviction
 func (uc *UnifiedCache) SetGuild(guildID string, guild *discordgo.Guild) {
-	if guild == nil {
+	if guild == nil || uc.guilds == nil || guildID == "" {
 		return
 	}
-	cached := &cachedGuild{
-		guild:     guild,
-		expiresAt: time.Now().Add(uc.guildTTL),
-	}
-
-	uc.guildsMu.Lock()
-	defer uc.guildsMu.Unlock()
-
-	// Update existing entry
-	if entry, ok := uc.guilds[guildID]; ok {
-		entry.value = cached
-		entry.expiresAt = cached.expiresAt
-		uc.guildsList.MoveToFront(entry.element)
-		return
-	}
-
-	// Check size limit and evict LRU if needed
-	if uc.maxGuildSize > 0 && len(uc.guilds) >= uc.maxGuildSize {
-		uc.evictGuildLRU()
-	}
-
-	// Add new entry
-	element := uc.guildsList.PushFront(guildID)
-	uc.guilds[guildID] = &lruEntry{
-		key:       guildID,
-		value:     cached,
-		expiresAt: cached.expiresAt,
-		element:   element,
-	}
+	uc.guilds.Set(guildID, guild)
 }
 
 // evictGuildLRU removes the least recently used guild (must hold lock)
-func (uc *UnifiedCache) evictGuildLRU() {
-	element := uc.guildsList.Back()
-	if element != nil {
-		key := element.Value.(string)
-		uc.guildsList.Remove(element)
-		delete(uc.guilds, key)
-		atomic.AddUint64(&uc.guildEvictions, 1)
-	}
-}
+func (uc *UnifiedCache) evictGuildLRU() {}
 
 // InvalidateGuild removes a guild from the cache
 func (uc *UnifiedCache) InvalidateGuild(guildID string) {
-	uc.guildsMu.Lock()
-	if entry, ok := uc.guilds[guildID]; ok {
-		uc.guildsList.Remove(entry.element)
-		delete(uc.guilds, guildID)
+	if guildID == "" || uc.guilds == nil {
+		return
 	}
-	uc.guildsMu.Unlock()
+	uc.guilds.Invalidate(guildID)
 }
 
 // GetRoles retrieves cached roles for a guild or returns nil if not found/expired
 func (uc *UnifiedCache) GetRoles(guildID string) ([]*discordgo.Role, bool) {
-	uc.rolesMu.Lock()
-	defer uc.rolesMu.Unlock()
-
-	entry, ok := uc.roles[guildID]
-	if !ok || time.Now().After(entry.expiresAt) {
-		if ok {
-			uc.rolesList.Remove(entry.element)
-			delete(uc.roles, guildID)
-		}
-		atomic.AddUint64(&uc.rolesMisses, 1)
+	if guildID == "" || uc.roles == nil {
 		return nil, false
 	}
-
-	// Move to front (LRU)
-	uc.rolesList.MoveToFront(entry.element)
-
-	atomic.AddUint64(&uc.rolesHits, 1)
-	cached := entry.value.(*cachedRoles)
-	return cached.roles, true
+	return uc.roles.Get(guildID)
 }
 
 // SetRoles stores guild roles in the cache with TTL and LRU eviction
 func (uc *UnifiedCache) SetRoles(guildID string, roles []*discordgo.Role) {
-	if roles == nil {
+	if roles == nil || uc.roles == nil || guildID == "" {
 		return
 	}
-	cached := &cachedRoles{
-		roles:     roles,
-		expiresAt: time.Now().Add(uc.rolesTTL),
-	}
-
-	uc.rolesMu.Lock()
-	defer uc.rolesMu.Unlock()
-
-	// Update existing entry
-	if entry, ok := uc.roles[guildID]; ok {
-		entry.value = cached
-		entry.expiresAt = cached.expiresAt
-		uc.rolesList.MoveToFront(entry.element)
-		return
-	}
-
-	// Check size limit and evict LRU if needed
-	if uc.maxRolesSize > 0 && len(uc.roles) >= uc.maxRolesSize {
-		uc.evictRolesLRU()
-	}
-
-	// Add new entry
-	element := uc.rolesList.PushFront(guildID)
-	uc.roles[guildID] = &lruEntry{
-		key:       guildID,
-		value:     cached,
-		expiresAt: cached.expiresAt,
-		element:   element,
-	}
+	uc.roles.Set(guildID, roles)
 }
 
 // evictRolesLRU removes the least recently used roles (must hold lock)
-func (uc *UnifiedCache) evictRolesLRU() {
-	element := uc.rolesList.Back()
-	if element != nil {
-		key := element.Value.(string)
-		uc.rolesList.Remove(element)
-		delete(uc.roles, key)
-		atomic.AddUint64(&uc.rolesEvictions, 1)
-	}
-}
+func (uc *UnifiedCache) evictRolesLRU() {}
 
 // InvalidateRoles removes guild roles from the cache
 func (uc *UnifiedCache) InvalidateRoles(guildID string) {
-	uc.rolesMu.Lock()
-	if entry, ok := uc.roles[guildID]; ok {
-		uc.rolesList.Remove(entry.element)
-		delete(uc.roles, guildID)
+	if guildID == "" || uc.roles == nil {
+		return
 	}
-	uc.rolesMu.Unlock()
+	uc.roles.Invalidate(guildID)
 }
 
 // GetChannel retrieves a cached channel or returns nil if not found/expired
 func (uc *UnifiedCache) GetChannel(channelID string) (*discordgo.Channel, bool) {
-	uc.channelsMu.Lock()
-	defer uc.channelsMu.Unlock()
-
-	entry, ok := uc.channels[channelID]
-	if !ok || time.Now().After(entry.expiresAt) {
-		if ok {
-			uc.channelsList.Remove(entry.element)
-			delete(uc.channels, channelID)
-		}
-		atomic.AddUint64(&uc.channelMisses, 1)
+	if channelID == "" || uc.channels == nil {
 		return nil, false
 	}
-
-	// Move to front (LRU)
-	uc.channelsList.MoveToFront(entry.element)
-
-	atomic.AddUint64(&uc.channelHits, 1)
-	cached := entry.value.(*cachedChannel)
-	return cached.channel, true
+	return uc.channels.Get(channelID)
 }
 
 // SetChannel stores a channel in the cache with TTL and LRU eviction
 func (uc *UnifiedCache) SetChannel(channelID string, channel *discordgo.Channel) {
-	if channel == nil {
+	if channel == nil || uc.channels == nil || channelID == "" {
 		return
 	}
-	cached := &cachedChannel{
-		channel:   channel,
-		expiresAt: time.Now().Add(uc.channelTTL),
-	}
 
-	// Update indices before inserting into main map
+	// Update indices before inserting
 	if channel.GuildID != "" {
 		// channelID -> guildID
 		uc.channelToGuildMu.Lock()
@@ -531,45 +302,17 @@ func (uc *UnifiedCache) SetChannel(channelID string, channel *discordgo.Channel)
 		uc.channelToGuildMu.Unlock()
 	}
 
-	uc.channelsMu.Lock()
-	defer uc.channelsMu.Unlock()
-
-	// Update existing entry
-	if entry, ok := uc.channels[channelID]; ok {
-		entry.value = cached
-		entry.expiresAt = cached.expiresAt
-		uc.channelsList.MoveToFront(entry.element)
-		return
-	}
-
-	// Check size limit and evict LRU if needed
-	if uc.maxChannelSize > 0 && len(uc.channels) >= uc.maxChannelSize {
-		uc.evictChannelLRU()
-	}
-
-	// Add new entry
-	element := uc.channelsList.PushFront(channelID)
-	uc.channels[channelID] = &lruEntry{
-		key:       channelID,
-		value:     cached,
-		expiresAt: cached.expiresAt,
-		element:   element,
-	}
+	uc.channels.Set(channelID, channel)
 }
 
 // evictChannelLRU removes the least recently used channel (must hold lock)
-func (uc *UnifiedCache) evictChannelLRU() {
-	element := uc.channelsList.Back()
-	if element != nil {
-		key := element.Value.(string)
-		uc.channelsList.Remove(element)
-		delete(uc.channels, key)
-		atomic.AddUint64(&uc.channelEvictions, 1)
-	}
-}
+func (uc *UnifiedCache) evictChannelLRU() {}
 
 // InvalidateChannel removes a channel from the cache
 func (uc *UnifiedCache) InvalidateChannel(channelID string) {
+	if channelID == "" || uc.channels == nil {
+		return
+	}
 	// Update indices
 	var guildID string
 	uc.channelToGuildMu.RLock()
@@ -595,80 +338,40 @@ func (uc *UnifiedCache) InvalidateChannel(channelID string) {
 	}
 	uc.channelToGuildMu.Unlock()
 
-	uc.channelsMu.Lock()
-	if entry, ok := uc.channels[channelID]; ok {
-		uc.channelsList.Remove(entry.element)
-		delete(uc.channels, channelID)
-	}
-	uc.channelsMu.Unlock()
+	uc.channels.Invalidate(channelID)
 }
 
 // GetStats returns cache statistics
-func (uc *UnifiedCache) GetStats() CacheStats {
-	uc.membersMu.RLock()
-	memberCount := len(uc.members)
-	uc.membersMu.RUnlock()
+func (uc *UnifiedCache) GetStats() genericcache.CacheStats {
+	memberCount, guildCount, rolesCount, channelCount := 0, 0, 0, 0
+	var memberHits, memberMisses, guildHits, guildMisses, rolesHits, rolesMisses, channelHits, channelMisses uint64
 
-	uc.guildsMu.RLock()
-	guildCount := len(uc.guilds)
-	uc.guildsMu.RUnlock()
-
-	uc.rolesMu.RLock()
-	rolesCount := len(uc.roles)
-	uc.rolesMu.RUnlock()
-
-	uc.channelsMu.RLock()
-	channelCount := len(uc.channels)
-	uc.channelsMu.RUnlock()
-
-	return CacheStats{
-		MemberEntries:    memberCount,
-		GuildEntries:     guildCount,
-		RolesEntries:     rolesCount,
-		ChannelEntries:   channelCount,
-		MemberHits:       atomic.LoadUint64(&uc.memberHits),
-		MemberMisses:     atomic.LoadUint64(&uc.memberMisses),
-		MemberEvictions:  atomic.LoadUint64(&uc.memberEvictions),
-		GuildHits:        atomic.LoadUint64(&uc.guildHits),
-		GuildMisses:      atomic.LoadUint64(&uc.guildMisses),
-		GuildEvictions:   atomic.LoadUint64(&uc.guildEvictions),
-		RolesHits:        atomic.LoadUint64(&uc.rolesHits),
-		RolesMisses:      atomic.LoadUint64(&uc.rolesMisses),
-		RolesEvictions:   atomic.LoadUint64(&uc.rolesEvictions),
-		ChannelHits:      atomic.LoadUint64(&uc.channelHits),
-		ChannelMisses:    atomic.LoadUint64(&uc.channelMisses),
-		ChannelEvictions: atomic.LoadUint64(&uc.channelEvictions),
+	if uc.members != nil {
+		memberCount = uc.members.Len()
+		ms := uc.members.Stats()
+		memberHits = ms.Hits
+		memberMisses = ms.Misses
 	}
-}
-
-// StatsGeneric returns generic cache statistics for external consumers
-func (uc *UnifiedCache) StatsGeneric() genericcache.CacheStats {
-	uc.membersMu.RLock()
-	memberCount := len(uc.members)
-	uc.membersMu.RUnlock()
-
-	uc.guildsMu.RLock()
-	guildCount := len(uc.guilds)
-	uc.guildsMu.RUnlock()
-
-	uc.rolesMu.RLock()
-	rolesCount := len(uc.roles)
-	uc.rolesMu.RUnlock()
-
-	uc.channelsMu.RLock()
-	channelCount := len(uc.channels)
-	uc.channelsMu.RUnlock()
+	if uc.guilds != nil {
+		guildCount = uc.guilds.Len()
+		gs := uc.guilds.Stats()
+		guildHits = gs.Hits
+		guildMisses = gs.Misses
+	}
+	if uc.roles != nil {
+		rolesCount = uc.roles.Len()
+		rs := uc.roles.Stats()
+		rolesHits = rs.Hits
+		rolesMisses = rs.Misses
+	}
+	if uc.channels != nil {
+		channelCount = uc.channels.Len()
+		cs := uc.channels.Stats()
+		channelHits = cs.Hits
+		channelMisses = cs.Misses
+	}
 
 	totalEntries := memberCount + guildCount + rolesCount + channelCount
-	memberHits := atomic.LoadUint64(&uc.memberHits)
-	memberMisses := atomic.LoadUint64(&uc.memberMisses)
-	guildHits := atomic.LoadUint64(&uc.guildHits)
-	guildMisses := atomic.LoadUint64(&uc.guildMisses)
-	rolesHits := atomic.LoadUint64(&uc.rolesHits)
-	rolesMisses := atomic.LoadUint64(&uc.rolesMisses)
-	channelHits := atomic.LoadUint64(&uc.channelHits)
-	channelMisses := atomic.LoadUint64(&uc.channelMisses)
-
 	totalHits := float64(memberHits + guildHits + rolesHits + channelHits)
 	totalMisses := float64(memberMisses + guildMisses + rolesMisses + channelMisses)
 	var hitRate, missRate float64
@@ -702,6 +405,47 @@ func (uc *UnifiedCache) StatsGeneric() genericcache.CacheStats {
 	}
 }
 
+// StatsGeneric returns generic cache statistics for external consumers
+func (uc *UnifiedCache) StatsGeneric() genericcache.CacheStats {
+	return uc.GetStats()
+}
+
+// MemberMetrics returns typed metrics for the member segment.
+func (uc *UnifiedCache) MemberMetrics() (entries int, hits, misses, evictions uint64) {
+	if uc.members == nil {
+		return 0, 0, 0, 0
+	}
+	s := uc.members.Stats()
+	return s.Size, s.Hits, s.Misses, s.Evictions
+}
+
+// GuildMetrics returns typed metrics for the guild segment.
+func (uc *UnifiedCache) GuildMetrics() (entries int, hits, misses, evictions uint64) {
+	if uc.guilds == nil {
+		return 0, 0, 0, 0
+	}
+	s := uc.guilds.Stats()
+	return s.Size, s.Hits, s.Misses, s.Evictions
+}
+
+// RolesMetrics returns typed metrics for the roles segment.
+func (uc *UnifiedCache) RolesMetrics() (entries int, hits, misses, evictions uint64) {
+	if uc.roles == nil {
+		return 0, 0, 0, 0
+	}
+	s := uc.roles.Stats()
+	return s.Size, s.Hits, s.Misses, s.Evictions
+}
+
+// ChannelMetrics returns typed metrics for the channel segment.
+func (uc *UnifiedCache) ChannelMetrics() (entries int, hits, misses, evictions uint64) {
+	if uc.channels == nil {
+		return 0, 0, 0, 0
+	}
+	s := uc.channels.Stats()
+	return s.Size, s.Hits, s.Misses, s.Evictions
+}
+
 // WasWarmedUpRecently returns whether Warmup was executed within the given duration
 // WasWarmedUpRecently reports whether a warmup has occurred within the given duration.
 // Semantics:
@@ -718,26 +462,6 @@ func (uc *UnifiedCache) WasWarmedUpRecently(d time.Duration) bool {
 	return time.Since(uc.lastWarmup) <= d
 }
 
-// CacheStats holds cache statistics
-type CacheStats struct {
-	MemberEntries    int    `json:"member_entries"`
-	GuildEntries     int    `json:"guild_entries"`
-	RolesEntries     int    `json:"roles_entries"`
-	ChannelEntries   int    `json:"channel_entries"`
-	MemberHits       uint64 `json:"member_hits"`
-	MemberMisses     uint64 `json:"member_misses"`
-	MemberEvictions  uint64 `json:"member_evictions"`
-	GuildHits        uint64 `json:"guild_hits"`
-	GuildMisses      uint64 `json:"guild_misses"`
-	GuildEvictions   uint64 `json:"guild_evictions"`
-	RolesHits        uint64 `json:"roles_hits"`
-	RolesMisses      uint64 `json:"roles_misses"`
-	RolesEvictions   uint64 `json:"roles_evictions"`
-	ChannelHits      uint64 `json:"channel_hits"`
-	ChannelMisses    uint64 `json:"channel_misses"`
-	ChannelEvictions uint64 `json:"channel_evictions"`
-}
-
 // Clear removes all entries from the cache
 // Clear removes all in-memory cache entries across all cache types.
 //
@@ -746,25 +470,18 @@ type CacheStats struct {
 // - No persistent storage rows are touched. Use PersistAndStop or ClearGuild for durable cleanup.
 // - This is safe to call at any time; ongoing readers may miss entries immediately after.
 func (uc *UnifiedCache) Clear() {
-	uc.membersMu.Lock()
-	uc.members = make(map[string]*lruEntry)
-	uc.membersList = list.New()
-	uc.membersMu.Unlock()
-
-	uc.guildsMu.Lock()
-	uc.guilds = make(map[string]*lruEntry)
-	uc.guildsList = list.New()
-	uc.guildsMu.Unlock()
-
-	uc.rolesMu.Lock()
-	uc.roles = make(map[string]*lruEntry)
-	uc.rolesList = list.New()
-	uc.rolesMu.Unlock()
-
-	uc.channelsMu.Lock()
-	uc.channels = make(map[string]*lruEntry)
-	uc.channelsList = list.New()
-	uc.channelsMu.Unlock()
+	if uc.members != nil {
+		uc.members.Clear()
+	}
+	if uc.guilds != nil {
+		uc.guilds.Clear()
+	}
+	if uc.roles != nil {
+		uc.roles.Clear()
+	}
+	if uc.channels != nil {
+		uc.channels.Clear()
+	}
 
 	// Reset indices
 	uc.guildToChannelsMu.Lock()
@@ -795,21 +512,14 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	uc.InvalidateRoles(guildID)
 
 	// Clear all members for this guild (scan all member keys with guildID prefix)
-	uc.membersMu.Lock()
-	prefix := uc.memberPrefix(guildID)
-	keysToDelete := make([]string, 0)
-	for key := range uc.members {
-		if util.HasPrefix(key, prefix) {
-			keysToDelete = append(keysToDelete, key)
+	if uc.members != nil {
+		prefix := uc.memberPrefix(guildID)
+		for _, key := range uc.members.Keys() {
+			if util.HasPrefix(key, prefix) {
+				uc.members.Invalidate(key)
+			}
 		}
 	}
-	for _, key := range keysToDelete {
-		if entry, exists := uc.members[key]; exists {
-			uc.membersList.Remove(entry.element)
-			delete(uc.members, key)
-		}
-	}
-	uc.membersMu.Unlock()
 
 	// Clear channels for this guild using the guild->channels index
 	uc.guildToChannelsMu.RLock()
@@ -878,40 +588,18 @@ func (uc *UnifiedCache) cleanupLoop(interval time.Duration) {
 func (uc *UnifiedCache) cleanupExpired() {
 	now := time.Now()
 
-	// Cleanup members
-	uc.membersMu.Lock()
-	for key, entry := range uc.members {
-		if now.After(entry.expiresAt) {
-			uc.membersList.Remove(entry.element)
-			delete(uc.members, key)
-		}
+	// Cleanup segments
+	if uc.members != nil {
+		uc.members.CleanupExpired(now)
 	}
-	uc.membersMu.Unlock()
-
-	// Cleanup guilds
-	uc.guildsMu.Lock()
-	for key, entry := range uc.guilds {
-		if now.After(entry.expiresAt) {
-			uc.guildsList.Remove(entry.element)
-			delete(uc.guilds, key)
-		}
+	if uc.guilds != nil {
+		uc.guilds.CleanupExpired(now)
 	}
-	uc.guildsMu.Unlock()
-
-	// Cleanup roles
-	uc.rolesMu.Lock()
-	for key, entry := range uc.roles {
-		if now.After(entry.expiresAt) {
-			uc.rolesList.Remove(entry.element)
-			delete(uc.roles, key)
-		}
+	if uc.roles != nil {
+		uc.roles.CleanupExpired(now)
 	}
-	uc.rolesMu.Unlock()
-
-	// Cleanup channels
-	uc.channelsMu.Lock()
-	for key, entry := range uc.channels {
-		if now.After(entry.expiresAt) {
+	if uc.channels != nil {
+		uc.channels.CleanupExpiredWithCallback(now, func(key string, _ *discordgo.Channel) {
 			// Cleanup indices for channels
 			uc.channelToGuildMu.RLock()
 			guildID := uc.channelToGuild[key]
@@ -929,12 +617,8 @@ func (uc *UnifiedCache) cleanupExpired() {
 			uc.channelToGuildMu.Lock()
 			delete(uc.channelToGuild, key)
 			uc.channelToGuildMu.Unlock()
-
-			uc.channelsList.Remove(entry.element)
-			delete(uc.channels, key)
-		}
+		})
 	}
-	uc.channelsMu.Unlock()
 
 	// Track last cleanup time for stats
 	uc.lastCleanup = now
@@ -955,72 +639,84 @@ func (uc *UnifiedCache) Persist() error {
 	var errs []error
 
 	// Persist members
-	uc.membersMu.RLock()
-	for key, entry := range uc.members {
-		if cached, ok := entry.value.(*cachedMember); ok {
-			data, err := encodeEntity(cached.member)
+	if uc.members != nil {
+		for _, key := range uc.members.Keys() {
+			member, ok := uc.members.Get(key)
+			if !ok || member == nil {
+				continue
+			}
+			data, err := encodeEntity(member)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("encode member %s: %w", key, err))
 				continue
 			}
-			if err := uc.store.UpsertCacheEntry(key, "member", data, entry.expiresAt); err != nil {
+			exp, _ := uc.members.GetExpiration(key)
+			if err := uc.store.UpsertCacheEntry(key, "member", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist member %s: %w", key, err))
 			}
 		}
 	}
-	uc.membersMu.RUnlock()
 
 	// Persist guilds
-	uc.guildsMu.RLock()
-	for key, entry := range uc.guilds {
-		if cached, ok := entry.value.(*cachedGuild); ok {
-			data, err := encodeEntity(cached.guild)
+	if uc.guilds != nil {
+		for _, key := range uc.guilds.Keys() {
+			guild, ok := uc.guilds.Get(key)
+			if !ok || guild == nil {
+				continue
+			}
+			data, err := encodeEntity(guild)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("encode guild %s: %w", key, err))
 				continue
 			}
-			if err := uc.store.UpsertCacheEntry(key, "guild", data, entry.expiresAt); err != nil {
+			exp, _ := uc.guilds.GetExpiration(key)
+			if err := uc.store.UpsertCacheEntry(key, "guild", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist guild %s: %w", key, err))
 			}
 		}
 	}
-	uc.guildsMu.RUnlock()
 
 	// Persist roles
-	uc.rolesMu.RLock()
-	for key, entry := range uc.roles {
-		if cached, ok := entry.value.(*cachedRoles); ok {
-			data, err := encodeEntity(cached.roles)
+	if uc.roles != nil {
+		for _, key := range uc.roles.Keys() {
+			roles, ok := uc.roles.Get(key)
+			if !ok || roles == nil {
+				continue
+			}
+			data, err := encodeEntity(roles)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("encode roles %s: %w", key, err))
 				continue
 			}
-			if err := uc.store.UpsertCacheEntry(key, "roles", data, entry.expiresAt); err != nil {
+			exp, _ := uc.roles.GetExpiration(key)
+			if err := uc.store.UpsertCacheEntry(key, "roles", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist roles %s: %w", key, err))
 			}
 		}
 	}
-	uc.rolesMu.RUnlock()
 
 	// Persist channels
-	uc.channelsMu.RLock()
-	for key, entry := range uc.channels {
-		if cached, ok := entry.value.(*cachedChannel); ok {
-			data, err := encodeEntity(cached.channel)
+	if uc.channels != nil {
+		for _, key := range uc.channels.Keys() {
+			ch, ok := uc.channels.Get(key)
+			if !ok || ch == nil {
+				continue
+			}
+			data, err := encodeEntity(ch)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("encode channel %s: %w", key, err))
 				continue
 			}
 			persistKey := key
-			if ch := cached.channel; ch != nil && ch.GuildID != "" {
+			if ch.GuildID != "" {
 				persistKey = ch.GuildID + ":" + ch.ID
 			}
-			if err := uc.store.UpsertCacheEntry(persistKey, "channel", data, entry.expiresAt); err != nil {
+			exp, _ := uc.channels.GetExpiration(key)
+			if err := uc.store.UpsertCacheEntry(persistKey, "channel", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist channel %s: %w", key, err))
 			}
 		}
 	}
-	uc.channelsMu.RUnlock()
 
 	if len(errs) > 0 {
 		return fmt.Errorf("persist cache: %d errors occurred", len(errs))
@@ -1108,110 +804,60 @@ func (uc *UnifiedCache) Warmup() error {
 
 // Internal setters for warmup (bypass LRU eviction during initial load)
 func (uc *UnifiedCache) setMemberInternal(key string, member *discordgo.Member, expiresAt time.Time) {
-	cached := &cachedMember{
-		member:    member,
-		expiresAt: expiresAt,
+	if key == "" || member == nil || uc.members == nil {
+		return
 	}
-	uc.membersMu.Lock()
-	defer uc.membersMu.Unlock()
-
-	if _, ok := uc.members[key]; !ok {
-		element := uc.membersList.PushFront(key)
-		uc.members[key] = &lruEntry{
-			key:       key,
-			value:     cached,
-			expiresAt: expiresAt,
-			element:   element,
-		}
-	}
+	uc.members.SetWithExpiration(key, member, expiresAt)
 }
 
 func (uc *UnifiedCache) setGuildInternal(key string, guild *discordgo.Guild, expiresAt time.Time) {
-	cached := &cachedGuild{
-		guild:     guild,
-		expiresAt: expiresAt,
+	if key == "" || guild == nil || uc.guilds == nil {
+		return
 	}
-	uc.guildsMu.Lock()
-	defer uc.guildsMu.Unlock()
-
-	if _, ok := uc.guilds[key]; !ok {
-		element := uc.guildsList.PushFront(key)
-		uc.guilds[key] = &lruEntry{
-			key:       key,
-			value:     cached,
-			expiresAt: expiresAt,
-			element:   element,
-		}
-	}
+	uc.guilds.SetWithExpiration(key, guild, expiresAt)
 }
 
 func (uc *UnifiedCache) setRolesInternal(key string, roles []*discordgo.Role, expiresAt time.Time) {
-	cached := &cachedRoles{
-		roles:     roles,
-		expiresAt: expiresAt,
+	if key == "" || roles == nil || uc.roles == nil {
+		return
 	}
-	uc.rolesMu.Lock()
-	defer uc.rolesMu.Unlock()
-
-	if _, ok := uc.roles[key]; !ok {
-		element := uc.rolesList.PushFront(key)
-		uc.roles[key] = &lruEntry{
-			key:       key,
-			value:     cached,
-			expiresAt: expiresAt,
-			element:   element,
-		}
-	}
+	uc.roles.SetWithExpiration(key, roles, expiresAt)
 }
 
 func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channel, expiresAt time.Time) {
-	cached := &cachedChannel{
-		channel:   channel,
-		expiresAt: expiresAt,
+	if key == "" || channel == nil || uc.channels == nil {
+		return
 	}
 
 	// Maintain indices
-	if channel != nil {
-		if channel.GuildID != "" {
-			uc.channelToGuildMu.Lock()
-			if uc.channelToGuild == nil {
-				uc.channelToGuild = make(map[string]string)
-			}
-			uc.channelToGuild[key] = channel.GuildID
-			uc.channelToGuildMu.Unlock()
-
-			uc.guildToChannelsMu.Lock()
-			if uc.guildToChannels == nil {
-				uc.guildToChannels = make(map[string]map[string]struct{})
-			}
-			set := uc.guildToChannels[channel.GuildID]
-			if set == nil {
-				set = make(map[string]struct{})
-				uc.guildToChannels[channel.GuildID] = set
-			}
-			set[key] = struct{}{}
-			uc.guildToChannelsMu.Unlock()
-		} else {
-			uc.channelToGuildMu.Lock()
-			if uc.channelToGuild != nil {
-				delete(uc.channelToGuild, key)
-			}
-			uc.channelToGuildMu.Unlock()
+	if channel.GuildID != "" {
+		uc.channelToGuildMu.Lock()
+		if uc.channelToGuild == nil {
+			uc.channelToGuild = make(map[string]string)
 		}
+		uc.channelToGuild[key] = channel.GuildID
+		uc.channelToGuildMu.Unlock()
+
+		uc.guildToChannelsMu.Lock()
+		if uc.guildToChannels == nil {
+			uc.guildToChannels = make(map[string]map[string]struct{})
+		}
+		set := uc.guildToChannels[channel.GuildID]
+		if set == nil {
+			set = make(map[string]struct{})
+			uc.guildToChannels[channel.GuildID] = set
+		}
+		set[key] = struct{}{}
+		uc.guildToChannelsMu.Unlock()
+	} else {
+		uc.channelToGuildMu.Lock()
+		if uc.channelToGuild != nil {
+			delete(uc.channelToGuild, key)
+		}
+		uc.channelToGuildMu.Unlock()
 	}
 
-	uc.channelsMu.Lock()
-	defer uc.channelsMu.Unlock()
-
-	if _, ok := uc.channels[key]; !ok {
-		element := uc.channelsList.PushFront(key)
-		uc.channels[key] = &lruEntry{
-			key:       key,
-			value:     cached,
-			expiresAt: expiresAt,
-			element:   element,
-		}
-	}
+	uc.channels.SetWithExpiration(key, channel, expiresAt)
 }
 
 // encodeEntity serializes a Discord entity to JSON

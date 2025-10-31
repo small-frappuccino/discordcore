@@ -14,17 +14,17 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-// OptionExtractor simplifica extração de opções de comandos Discord
+// OptionExtractor simplifies extraction of options for Discord commands
 type OptionExtractor struct {
 	options []*discordgo.ApplicationCommandInteractionDataOption
 }
 
-// NewOptionExtractor cria um novo extrator de opções
+// NewOptionExtractor creates a new option extractor
 func NewOptionExtractor(options []*discordgo.ApplicationCommandInteractionDataOption) *OptionExtractor {
 	return &OptionExtractor{options: options}
 }
 
-// String extrai uma opção string pelo nome
+// String extracts a string option by name
 func (e *OptionExtractor) String(name string) string {
 	for _, opt := range e.options {
 		if opt.Name == name {
@@ -34,7 +34,7 @@ func (e *OptionExtractor) String(name string) string {
 	return ""
 }
 
-// StringRequired extrai uma opção string obrigatória
+// StringRequired extracts a required string option
 func (e *OptionExtractor) StringRequired(name string) (string, error) {
 	value := e.String(name)
 	if value == "" {
@@ -43,7 +43,7 @@ func (e *OptionExtractor) StringRequired(name string) (string, error) {
 	return value, nil
 }
 
-// Bool extrai uma opção booleana pelo nome
+// Bool extracts a boolean option by name
 func (e *OptionExtractor) Bool(name string) bool {
 	for _, opt := range e.options {
 		if opt.Name == name {
@@ -53,7 +53,7 @@ func (e *OptionExtractor) Bool(name string) bool {
 	return false
 }
 
-// Int extrai uma opção inteira pelo nome
+// Int extracts an integer option by name
 func (e *OptionExtractor) Int(name string) int64 {
 	for _, opt := range e.options {
 		if opt.Name == name {
@@ -63,7 +63,7 @@ func (e *OptionExtractor) Int(name string) int64 {
 	return 0
 }
 
-// Float extrai uma opção float pelo nome
+// Float extracts a float option by name
 func (e *OptionExtractor) Float(name string) float64 {
 	for _, opt := range e.options {
 		if opt.Name == name {
@@ -73,7 +73,7 @@ func (e *OptionExtractor) Float(name string) float64 {
 	return 0
 }
 
-// HasOption verifica se uma opção existe
+// HasOption checks whether an option exists
 func (e *OptionExtractor) HasOption(name string) bool {
 	for _, opt := range e.options {
 		if opt.Name == name {
@@ -83,7 +83,7 @@ func (e *OptionExtractor) HasOption(name string) bool {
 	return false
 }
 
-// GetAllOptions retorna todas as opções como map
+// GetAllOptions returns all options as a map
 func (e *OptionExtractor) GetAllOptions() map[string]interface{} {
 	result := make(map[string]interface{})
 	for _, opt := range e.options {
@@ -101,17 +101,17 @@ func (e *OptionExtractor) GetAllOptions() map[string]interface{} {
 	return result
 }
 
-// ConfigPersister gerencia persistência de configuração
+// ConfigPersister manages configuration persistence
 type ConfigPersister struct {
 	configManager *files.ConfigManager
 }
 
-// NewConfigPersister cria um novo persistidor de configuração
+// NewConfigPersister creates a new configuration persister
 func NewConfigPersister(cm *files.ConfigManager) *ConfigPersister {
 	return &ConfigPersister{configManager: cm}
 }
 
-// Save salva a configuração do servidor
+// Save saves the guild configuration
 func (cp *ConfigPersister) Save(config *files.GuildConfig) error {
 	if err := cp.configManager.AddGuildConfig(*config); err != nil {
 		return fmt.Errorf("failed to update config in memory: %w", err)
@@ -122,14 +122,13 @@ func (cp *ConfigPersister) Save(config *files.GuildConfig) error {
 	return nil
 }
 
-// SaveWithBackup salva a configuração com backup
+// SaveWithBackup saves the configuration with a backup
 func (cp *ConfigPersister) SaveWithBackup(config *files.GuildConfig) error {
-	// Implementar backup se necessário
+	// Implement backup if needed
 	return cp.Save(config)
 }
 
-// PermissionChecker gerencia verificação de permissões
-// PermissionChecker verifica permissões do usuário
+// PermissionChecker manages user permission checks
 type PermissionChecker struct {
 	session *discordgo.Session
 	config  *files.ConfigManager
@@ -149,85 +148,93 @@ func (pc *PermissionChecker) SetCache(unifiedCache *cache.UnifiedCache) {
 	pc.cache = unifiedCache
 }
 
-// HasPermission verifica se o usuário tem permissão para usar comandos
+// getOwnerID resolves the guild owner ID using cache -> state -> store -> REST (with write-backs)
+func (pc *PermissionChecker) getOwnerID(guildID string) (string, bool) {
+	// cache
+	if pc.cache != nil {
+		if g, ok := pc.cache.GetGuild(guildID); ok {
+			return g.OwnerID, true
+		}
+	}
+	// state
+	if pc.session != nil && pc.session.State != nil {
+		if g, _ := pc.session.State.Guild(guildID); g != nil {
+			if pc.cache != nil {
+				pc.cache.SetGuild(guildID, g)
+			}
+			return g.OwnerID, true
+		}
+	}
+	// store
+	if pc.store != nil {
+		if oid, ok, _ := pc.store.GetGuildOwnerID(guildID); ok {
+			return oid, true
+		}
+	}
+	// REST
+	if pc.session != nil {
+		if g, err := pc.session.Guild(guildID); err == nil && g != nil {
+			if pc.cache != nil {
+				pc.cache.SetGuild(guildID, g)
+			}
+			if pc.store != nil && g.OwnerID != "" {
+				_ = pc.store.SetGuildOwnerID(guildID, g.OwnerID)
+			}
+			return g.OwnerID, true
+		}
+	}
+	return "", false
+}
+
+// getMember resolves a guild member using cache -> state -> REST (with write-backs)
+func (pc *PermissionChecker) getMember(guildID, userID string) (*discordgo.Member, bool) {
+	// cache
+	if pc.cache != nil {
+		if m, ok := pc.cache.GetMember(guildID, userID); ok {
+			return m, true
+		}
+	}
+	// state
+	if pc.session != nil && pc.session.State != nil {
+		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
+			if pc.cache != nil {
+				pc.cache.SetMember(guildID, userID, m)
+			}
+			return m, true
+		}
+	}
+	// REST
+	if pc.session != nil {
+		if m, err := pc.session.GuildMember(guildID, userID); err == nil && m != nil {
+			if pc.cache != nil {
+				pc.cache.SetMember(guildID, userID, m)
+			}
+			return m, true
+		}
+	}
+	return nil, false
+}
+
+// HasPermission checks whether the user has permission to use commands
 func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	if guildID == "" {
 		return false
 	}
 	guildConfig := pc.config.GuildConfig(guildID)
 
-	// Try unified cache first
-	var ownerID string
-	if pc.cache != nil {
-		if guild, ok := pc.cache.GetGuild(guildID); ok {
-			ownerID = guild.OwnerID
-		}
-	}
-	// Fallback: state cache
-	if ownerID == "" && pc.session != nil && pc.session.State != nil {
-		if g, _ := pc.session.State.Guild(guildID); g != nil {
-			ownerID = g.OwnerID
-			if pc.cache != nil {
-				pc.cache.SetGuild(guildID, g)
-			}
-		}
-	}
-	// Fallback: store cache
-	if ownerID == "" && pc.store != nil {
-		if oid, ok, _ := pc.store.GetGuildOwnerID(guildID); ok {
-			ownerID = oid
-		}
-	}
-	// Fallback: REST and then persist in caches
-	if ownerID == "" {
-		guild, err := pc.session.Guild(guildID)
-		if err != nil {
-			return false
-		}
-		ownerID = guild.OwnerID
-		if pc.cache != nil {
-			pc.cache.SetGuild(guildID, guild)
-		}
-		if pc.store != nil && ownerID != "" {
-			_ = pc.store.SetGuildOwnerID(guildID, ownerID)
-		}
-	}
-	isOwner := ownerID == userID
+	ownerID, ok := pc.getOwnerID(guildID)
+	isOwner := ok && ownerID == userID
 
 	if guildConfig == nil || len(guildConfig.AllowedRoles) == 0 {
 		return isOwner
 	}
-
 	if isOwner {
 		return true
 	}
 
-	var member *discordgo.Member
-	var err error
-	// Try unified cache first
-	if pc.cache != nil {
-		if m, ok := pc.cache.GetMember(guildID, userID); ok {
-			member = m
-		}
-	}
-	// Fallback: state cache
-	if member == nil && pc.session != nil && pc.session.State != nil {
-		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
-			member = m
-			if pc.cache != nil {
-				pc.cache.SetMember(guildID, userID, m)
-			}
-		}
-	}
-	// Fallback: REST
-	if member == nil {
-		member, err = pc.session.GuildMember(guildID, userID)
-		if err != nil {
-			return false
-		}
-		if pc.cache != nil {
-			pc.cache.SetMember(guildID, userID, member)
-		}
+	member, ok := pc.getMember(guildID, userID)
+	if !ok || member == nil {
+		return false
 	}
 
 	for _, userRole := range member.Roles {
@@ -238,79 +245,23 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	return false
 }
 
-// HasRole verifica se o usuário tem uma role específica
+// HasRole checks whether the user has a specific role
 func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
-	var member *discordgo.Member
-	var err error
-	// Try unified cache first
-	if pc.cache != nil {
-		if m, ok := pc.cache.GetMember(guildID, userID); ok {
-			member = m
-		}
+	member, ok := pc.getMember(guildID, userID)
+	if !ok || member == nil {
+		return false
 	}
-	// Fallback: state cache
-	if member == nil && pc.session != nil && pc.session.State != nil {
-		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
-			member = m
-			if pc.cache != nil {
-				pc.cache.SetMember(guildID, userID, m)
-			}
-		}
-	}
-	// Fallback: REST
-	if member == nil {
-		member, err = pc.session.GuildMember(guildID, userID)
-		if err != nil {
-			return false
-		}
-		if pc.cache != nil {
-			pc.cache.SetMember(guildID, userID, member)
-		}
-	}
-
 	return slices.Contains(member.Roles, roleID)
 }
 
-// IsOwner verifica se o usuário é dono do servidor
+// IsOwner checks whether the user is the server owner
 func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
 	if guildID == "" {
 		return false
 	}
-	// Try unified cache first
-	var ownerID string
-	if pc.cache != nil {
-		if guild, ok := pc.cache.GetGuild(guildID); ok {
-			ownerID = guild.OwnerID
-		}
-	}
-	// Fallback: state cache
-	if ownerID == "" && pc.session != nil && pc.session.State != nil {
-		if g, _ := pc.session.State.Guild(guildID); g != nil {
-			ownerID = g.OwnerID
-			if pc.cache != nil {
-				pc.cache.SetGuild(guildID, g)
-			}
-		}
-	}
-	// Fallback: store cache
-	if ownerID == "" && pc.store != nil {
-		if oid, ok, _ := pc.store.GetGuildOwnerID(guildID); ok {
-			ownerID = oid
-		}
-	}
-	// Fallback: REST and then persist in caches
-	if ownerID == "" {
-		guild, err := pc.session.Guild(guildID)
-		if err != nil {
-			return false
-		}
-		ownerID = guild.OwnerID
-		if pc.cache != nil {
-			pc.cache.SetGuild(guildID, guild)
-		}
-		if pc.store != nil && ownerID != "" {
-			_ = pc.store.SetGuildOwnerID(guildID, ownerID)
-		}
+	ownerID, ok := pc.getOwnerID(guildID)
+	if !ok {
+		return false
 	}
 	return ownerID == userID
 }
@@ -500,7 +451,7 @@ func (ConfigurationUtils) EnsureGuildConfig(configManager *files.ConfigManager, 
 	return config
 }
 
-// CompareCommands compara dois comandos para verificar se são semanticamente iguais
+// CompareCommands compares two commands to check if they are semantically equal
 func CompareCommands(a, b *discordgo.ApplicationCommand) bool {
 	ca := struct {
 		Name        string                                `json:"name"`

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -47,4 +48,17 @@ func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
 		return "", fmt.Errorf("environment variable %q not set and home directory unresolved", tokenEnvName)
 	}
 	return "", fmt.Errorf("environment variable %q not set; attempted to load fallback file %s", tokenEnvName, envPath)
+}
+
+// EnvBool returns true if the named environment variable is set to a truthy value.
+// Accepted truthy values (case-insensitive, trimmed):
+// "1", "true", "yes", "y", "on"
+func EnvBool(name string) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
+	switch v {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }

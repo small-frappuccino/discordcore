@@ -177,10 +177,7 @@ func Run(appName, tokenEnv string) error {
 	)
 
 	// Automod service with TaskRouter adapters (gated by ALICE_DISABLE_AUTOMOD_LOGS)
-	disableAutomod := false
-	if v := os.Getenv("ALICE_DISABLE_AUTOMOD_LOGS"); v == "1" || v == "true" || v == "yes" || v == "y" || v == "on" {
-		disableAutomod = true
-	}
+	disableAutomod := util.EnvBool("ALICE_DISABLE_AUTOMOD_LOGS")
 	var automodWrapper *service.ServiceWrapper
 	if disableAutomod {
 		log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS; AutomodService will not start")
@@ -235,7 +232,7 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Admin commands
-	adminCommands := admin.NewAdminCommands(serviceManager)
+	adminCommands := admin.NewAdminCommands(serviceManager, unifiedCache)
 	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 
 	log.ApplicationLogger().Info("🔗 Slash commands sync completed")

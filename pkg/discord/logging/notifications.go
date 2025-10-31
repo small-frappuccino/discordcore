@@ -459,7 +459,7 @@ func formatDuration(d time.Duration) string {
 // truncateString trunca uma string para um tamanho máximo
 func truncateString(s string, maxLen int) string {
 	if s == "" {
-		return "*mensagem vazia*"
+		return "*empty message*"
 	}
 	if len(s) <= maxLen {
 		return s

@@ -15,15 +15,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
-// IDs específicos para atribuição automática de cargo
-const (
-	targetGuildID = "1375650791251120179" // Guild alvo
-	prereqRoleA   = "1375851519819124907" // Cargo pré-requisito A
-	prereqRoleB   = "1382471052394762280" // Cargo pré-requisito B
-	targetRoleID  = "1401062388135886929" // Cargo a ser atribuído automaticamente
-)
+// Hardcoded IDs for automatic role assignment
 
-// MemberEventService gerencia eventos de entrada e saída de usuários
+// MemberEventService manages member join/leave events
 type MemberEventService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
@@ -59,14 +53,14 @@ func (mes *MemberEventService) SetAdapters(adapters *task.NotificationAdapters) 
 	mes.adapters = adapters
 }
 
-// Start registra os handlers de eventos de membros
+// Start registers member event handlers
 func (mes *MemberEventService) Start() error {
 	if mes.isRunning {
 		return fmt.Errorf("member event service is already running")
 	}
 	mes.isRunning = true
 
-	// NEW: garantir mapa de joins
+	// Ensure join map is initialized
 	if mes.joinTimes == nil {
 		mes.joinTimes = make(map[string]time.Time)
 	}
@@ -90,7 +84,7 @@ func (mes *MemberEventService) Start() error {
 	return nil
 }
 
-// Stop para o serviço
+// Stop the service
 func (mes *MemberEventService) Stop() error {
 	if !mes.isRunning {
 		return fmt.Errorf("member event service is not running")
@@ -107,12 +101,12 @@ func (mes *MemberEventService) Stop() error {
 	return nil
 }
 
-// IsRunning retorna se o serviço está rodando
+// IsRunning returns whether the service is running
 func (mes *MemberEventService) IsRunning() bool {
 	return mes.isRunning
 }
 
-// handleGuildMemberAdd processa quando um usuário entra no servidor
+// handleGuildMemberAdd processes when a user joins the server
 func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	if m == nil || m.User == nil || m.User.Bot {
 		return
@@ -134,17 +128,17 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		return
 	}
 
-	// Calcular há quanto tempo a conta existe
+	// Calculate how long the account has existed
 	accountAge := mes.calculateAccountAge(m.User.ID)
 
-	// Persistir também em SQLite (melhor esforço)
+	// Also persist to SQLite (best effort)
 	if mes.store != nil {
 		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
 			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
 		}
 	}
 
-	// NEW: Registrar horário de entrada do membro (preciso) em memória
+	// NEW: Register precise member join timestamp in memory
 	if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
 		mes.joinMu.Lock()
 		if mes.joinTimes == nil {
@@ -168,22 +162,28 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
 
-	// Atribuição automática de cargo composta para a guild especificada
-	if m.GuildID == targetGuildID {
-		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
-			roles := member.Roles
-			if hasRoleID(roles, prereqRoleA) && hasRoleID(roles, prereqRoleB) && !hasRoleID(roles, targetRoleID) {
-				if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
-					slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
-				} else {
-					slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+	// Composite automatic role assignment for the specified guild
+	// Atribuição automática de cargo composta (config por guild)
+	if guildConfig.AutoRoleAssignmentEnabled {
+		targetRoleID := guildConfig.AutoRoleTargetRoleID
+		roleA := guildConfig.AutoRolePrereqRoleA
+		roleB := guildConfig.AutoRolePrereqRoleB
+		if targetRoleID != "" && roleA != "" && roleB != "" {
+			if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
+				roles := member.Roles
+				if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
+					if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
+						slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+					} else {
+						slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+					}
 				}
 			}
 		}
 	}
 }
 
-// handleGuildMemberRemove processa quando um usuário sai do servidor
+// handleGuildMemberRemove processes when a user leaves the server
 func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
 	if m == nil || m.User == nil || m.User.Bot {
 		return
@@ -205,7 +205,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		return
 	}
 
-	// Calcular há quanto tempo estava no servidor
+	// Calculate how long they were in the server
 	var serverTime time.Duration
 	var t time.Time
 	var ok bool
@@ -235,7 +235,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	}
 }
 
-// Função utilitária para verificar se o usuário possui um cargo específico
+// Utility function to check if the user has a specific role
 func hasRoleID(roles []string, roleID string) bool {
 	for _, r := range roles {
 		if r == roleID {
@@ -245,20 +245,27 @@ func hasRoleID(roles []string, roleID string) bool {
 	return false
 }
 
-// handleGuildMemberUpdate mantém a relação entre cargos:
-// - Se o usuário perder o cargo A, remove o cargo alvo.
-// - Se o usuário possuir A e B, concede o cargo alvo (se ainda não tiver).
+// handleGuildMemberUpdate maintains the role relationship:
+// - If the user loses role A, remove the target role.
+// - If the user has both A and B, grant the target role (if not already present).
 func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m == nil || m.User == nil || m.User.Bot {
 		return
 	}
-	if m.GuildID != targetGuildID {
+	guildConfig := mes.configManager.GuildConfig(m.GuildID)
+	if guildConfig == nil || !guildConfig.AutoRoleAssignmentEnabled {
 		return
 	}
 
+	targetRoleID := guildConfig.AutoRoleTargetRoleID
+	roleA := guildConfig.AutoRolePrereqRoleA
+	roleB := guildConfig.AutoRolePrereqRoleB
+	if targetRoleID == "" || roleA == "" || roleB == "" {
+		return
+	}
 	hasTarget := hasRoleID(m.Roles, targetRoleID)
-	hasA := hasRoleID(m.Roles, prereqRoleA)
-	hasB := hasRoleID(m.Roles, prereqRoleB)
+	hasA := hasRoleID(m.Roles, roleA)
+	hasB := hasRoleID(m.Roles, roleB)
 
 	// Se perdeu o cargo A e ainda tem o cargo alvo, remover o cargo alvo
 	if hasTarget && !hasA {

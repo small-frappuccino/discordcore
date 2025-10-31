@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -15,12 +16,14 @@ import (
 // AdminCommands provides administrative commands for service management
 type AdminCommands struct {
 	serviceManager *service.ServiceManager
+	unifiedCache   *cache.UnifiedCache
 }
 
 // NewAdminCommands creates a new admin commands handler
-func NewAdminCommands(serviceManager *service.ServiceManager) *AdminCommands {
+func NewAdminCommands(serviceManager *service.ServiceManager, unifiedCache *cache.UnifiedCache) *AdminCommands {
 	return &AdminCommands{
 		serviceManager: serviceManager,
+		unifiedCache:   unifiedCache,
 	}
 }
 
@@ -153,7 +156,24 @@ func (cmd *MetricsCommand) formatMetrics(ctx *core.Context) string {
 			ms = append(ms, "• No custom metrics available")
 		}
 
-		// Extra: exibir TTL do cache de roles configurado para o guild no bloco do monitoring
+		// Add aggregated unified cache metrics (using typed getters) when available
+		if name == "monitoring" {
+			if uc := cmd.adminCommands.unifiedCache; uc != nil {
+				mE, mH, mM, mEv := uc.MemberMetrics()
+				gE, gH, gM, gEv := uc.GuildMetrics()
+				rE, rH, rM, rEv := uc.RolesMetrics()
+				cE, cH, cM, cEv := uc.ChannelMetrics()
+				total := mE + gE + rE + cE
+
+				ms = append(ms, fmt.Sprintf("• cache_entries_total: %d", total))
+				ms = append(ms, fmt.Sprintf("• members: entries=%d hits=%d misses=%d evictions=%d", mE, mH, mM, mEv))
+				ms = append(ms, fmt.Sprintf("• guilds: entries=%d hits=%d misses=%d evictions=%d", gE, gH, gM, gEv))
+				ms = append(ms, fmt.Sprintf("• roles: entries=%d hits=%d misses=%d evictions=%d", rE, rH, rM, rEv))
+				ms = append(ms, fmt.Sprintf("• channels: entries=%d hits=%d misses=%d evictions=%d", cE, cH, cM, cEv))
+			}
+		}
+
+		// Extra: display the roles cache TTL configured for the guild in the monitoring section
 		if name == "monitoring" && ctx != nil && ctx.GuildConfig != nil {
 			ttl := strings.TrimSpace(ctx.GuildConfig.RolesCacheTTL)
 			if ttl == "" {

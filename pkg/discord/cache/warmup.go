@@ -46,9 +46,12 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 	if err := cache.Warmup(); err != nil {
 		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup from persistent cache: %v", err))
 	} else {
-		stats := cache.GetStats()
+		members, _, _, _ := cache.MemberMetrics()
+		guilds, _, _, _ := cache.GuildMetrics()
+		roles, _, _, _ := cache.RolesMetrics()
+		channels, _, _, _ := cache.ChannelMetrics()
 		log.ApplicationLogger().Info(fmt.Sprintf("✅ Loaded from persistent cache: %d members, %d guilds, %d roles, %d channels",
-			stats.MemberEntries, stats.GuildEntries, stats.RolesEntries, stats.ChannelEntries))
+			members, guilds, roles, channels))
 	}
 
 	// Step 2: Determine which guilds to warmup
