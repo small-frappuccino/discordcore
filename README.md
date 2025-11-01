@@ -1,81 +1,81 @@
 # DiscordCore
 
-Uma biblioteca modular em Go para bots do Discord que oferece monitoramento abrangente de eventos e gerenciamento de configurações.
+A modular Go library for Discord bots that provides comprehensive event monitoring and configuration management.
 
-## Variáveis de Ambiente (Tokens)
+## Environment Variables (Tokens)
 
-- ALICE_BOT_PRODUCTION_TOKEN: token de produção do bot Alice (usado pelo app alicebot)
-- ALICE_BOT_DEVELOPMENT_TOKEN: token de desenvolvimento para testes (usado pelo exemplo discordcore)
+- ALICE_BOT_PRODUCTION_TOKEN: production token for the Alice bot (used by the alicebot app)
+- ALICE_BOT_DEVELOPMENT_TOKEN: development token for testing (used by the discordcore example)
 
-O core primeiro verifica se a variável já está definida no ambiente. Se não estiver, tenta carregar $HOME/.local/bin/.env e, após carregar, verifica novamente as variáveis de ambiente.
+The core first checks if the variable is already defined in the environment. If it is not, it attempts to load $HOME/.local/bin/.env and, after loading, checks the environment variables again.
 
-## 🚀 Funcionalidades
+## Features
 
-### ✅ Implementadas
+### Implemented
 
-- **📸 Monitoramento de Avatar**: Detecta e registra mudanças de avatar dos usuários
-- **🛡️ Logs de AutoMod**: Registra ações do sistema de moderação automática nativo do Discord
-- **👋 Eventos de Membros**: Monitora entrada e saída de usuários com informações detalhadas
-- **💬 Logs de Mensagens**: Rastreia edições e deleções de mensagens
-- **⚙️ Gerenciamento de Configurações**: Sistema flexível de configuração por servidor
-- **🔧 Sistema de Comandos**: Framework para slash commands do Discord
+- Avatar Monitoring: Detects and logs user avatar changes
+- AutoMod Logs: Records actions from Discord’s native automatic moderation system
+- Member Events: Monitors user join and leave events with detailed information
+- Message Logs: Tracks message edits and deletions
+- Configuration Management: Flexible per-guild configuration system
+- Command System: Framework for Discord slash commands
 
-### 📋 Características dos Logs
+### Log Characteristics
 
-#### Entrada de Usuários
-- ✅ Mostra há quanto tempo a conta foi criada no Discord
-- ✅ Avatar do usuário
-- ✅ Informações de menção e ID
+#### User Joins
+- Shows how long ago the account was created on Discord
+- User avatar
+- Mention info and ID
 
-#### Saída de Usuários  
-- ✅ Tempo no servidor (limitado - sem dados históricos por padrão)
-- ✅ Avatar do usuário
-- ✅ Informações de menção e ID
+#### User Leaves
+- Time in the server (limited - no historical data by default)
+- User avatar
+- Mention info and ID
 
-#### Mensagens Editadas
-- ✅ Conteúdo antes e depois da edição
-- ✅ Canal onde foi editada
-- ✅ Autor da mensagem
-- ✅ Timestamp da edição
-- ✅ Canal separado para logs de mensagens
+#### Edited Messages
+- Content before and after the edit
+- Channel where it was edited
+- Message author
+- Edit timestamp
+- Separate channel for message logs
 
-#### Mensagens Deletadas
-- ✅ Conteúdo da mensagem original
-- ✅ Canal onde foi deletada
-- ✅ Autor da mensagem
-- ✅ Indicação de quem deletou (limitado pela API do Discord)
-- ✅ Canal separado para logs de mensagens
+#### Deleted Messages
+- Content of the original message
+- Channel where it was deleted
+- Message author
+- Indication of who deleted it (limited by the Discord API)
+- Separate channel for message logs
 
-## 🏗️ Arquitetura
+## Architecture
 
-### Componentes Principais
+### Main Components
 
 ```
 discordcore/
 ├── internal/
 │   ├── discord/
-│   │   ├── commands/         # Sistema de comandos slash
-│   │   ├── logging/          # Serviços de logging e monitoramento
-│   │   │   ├── monitoring.go      # Serviço principal de monitoramento
-│   │   │   ├── member_events.go   # Eventos de entrada/saída
-│   │   │   ├── message_events.go  # Eventos de mensagens
-│   │   │   ├── notifications.go   # Sistema de embeds/notificações
-│   │   │   └── automod.go         # Logs de automod
-│   │   └── session/          # Gerenciamento de sessão Discord
-│   ├── files/                # Gerenciamento de arquivos e cache
-│   └── util/                 # Utilitários gerais
-└── cmd/discordcore/          # Exemplo de implementação
+│   │   ├── commands/         # Slash command system
+│   │   ├── logging/          # Logging and monitoring services
+│   │   │   ├── monitoring.go      # Main monitoring service
+│   │   │   ├── member_events.go   # Join/leave events
+│   │   │   ├── message_events.go  # Message events
+│   │   │   ├── notifications.go   # Embeds/notifications system
+│   │   │   └── automod.go         # Automod logs
+│   │   └── session/          # Discord session management
+│   ├── files/                # File management and cache
+│   └── util/                 # General utilities
+└── cmd/discordcore/          # Implementation example
 ```
 
-## 📦 Instalação
+## Installation
 
 ```bash
 go get github.com/alice-bnuy/discordcore/v2
 ```
 
-## 🔧 Uso Básico
+## Basic Usage
 
-### Implementação Simples
+### Simple Implementation
 
 ```go
 package main
@@ -90,10 +90,10 @@ import (
 )
 
 func main() {
-    // Configurar token
+    // Configure token
     token := os.Getenv("DISCORD_BOT_TOKEN")
     
-    // Inicializar componentes
+    // Initialize components
     configManager := files.NewConfigManager()
     discordSession, err := session.NewDiscordSession(token)
     if err != nil {
@@ -106,39 +106,39 @@ func main() {
         log.Fatal(err)
     }
     
-    // Inicializar serviços de monitoramento
+    // Initialize monitoring services
     monitorService, err := logging.NewMonitoringService(discordSession, configManager, store)
     if err != nil {
         log.Fatal(err)
     }
     
-    // Inicializar automod
+    // Initialize automod
     automodService := logging.NewAutomodService(discordSession, configManager)
     
-    // Inicializar comandos
+    // Initialize commands
     commandHandler := commands.NewCommandHandler(discordSession, configManager)
     
-    // Iniciar tudo
+    // Start everything
     monitorService.Start()
     automodService.Start()
     commandHandler.SetupCommands()
     
-    // Logs são enviados para canais separados:
-    // - user_log_channel_id: avatares, entrada/saída
-    // - message_log_channel_id: edições/deleções de mensagens
-    // - automod_log_channel_id: ações de moderação
+    // Logs are sent to separate channels:
+    // - user_log_channel_id: avatars, joins/leaves
+    // - message_log_channel_id: message edits/deletions
+    // - automod_log_channel_id: moderation actions
     
     defer func() {
         monitorService.Stop()
         automodService.Stop()
     }()
     
-    // Aguardar interrupção
+    // Wait for interrupt
     util.WaitForInterrupt()
 }
 ```
 
-### Configuração por Servidor
+### Per-Guild Configuration
 
 ```json
 {
@@ -155,59 +155,59 @@ func main() {
 }
 ```
 
-## 🎯 Serviços Específicos
+## Specific Services
 
 ### MonitoringService
-Coordena todos os serviços de monitoramento:
+Coordinates all monitoring services:
 
 ```go
-// Inicializar
+// Initialize
 monitorService, err := logging.NewMonitoringService(session, configManager, cache)
 if err != nil {
     return err
 }
 
-// Iniciar todos os serviços
+// Start all services
 err = monitorService.Start()
 if err != nil {
     return err
 }
 
-// O MonitoringService gerencia automaticamente:
-// - UserWatcher (mudanças de avatar)
-// - MemberEventService (entrada/saída)
-// - MessageEventService (edições/deleções)
+// The MonitoringService automatically manages:
+// - UserWatcher (avatar changes)
+// - MemberEventService (joins/leaves)
+// - MessageEventService (edits/deletions)
 ```
 
-### Serviços Individuais
+### Individual Services
 
 #### MemberEventService
 ```go
-// Uso direto (opcional - geralmente gerenciado pelo MonitoringService)
+// Direct usage (optional - usually managed by MonitoringService)
 memberService := logging.NewMemberEventService(session, configManager, notifier)
 memberService.Start()
 ```
 
 #### MessageEventService
 ```go
-// Uso direto (opcional)
+// Direct usage (optional)
 messageService := logging.NewMessageEventService(session, configManager, notifier)
 messageService.Start()
 
-// Armazenamento de mensagens agora é persistido via SQLite; métricas de cache em memória foram descontinuadas.
+// Message storage is now persisted via SQLite; in-memory cache metrics have been discontinued.
 ```
 
-## 🛠️ Personalização
+## Customization
 
-### Implementando Novos Handlers
+### Implementing New Handlers
 
 ```go
-// Estender o NotificationSender
+// Extend NotificationSender
 func (ns *NotificationSender) SendCustomNotification(channelID string, data interface{}) error {
     embed := &discordgo.MessageEmbed{
-        Title:       "🔔 Evento Customizado",
+        Title:       "Custom Event",
         Color:       0x5865F2,
-        Description: "Sua lógica customizada aqui",
+        Description: "Your custom logic here",
     }
     
     _, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -215,80 +215,80 @@ func (ns *NotificationSender) SendCustomNotification(channelID string, data inte
 }
 ```
 
-### Adicionando Novos Comandos
+### Adding New Commands
 
 ```go
-// Implementar na estrutura de comandos existente
+// Implement within the existing command structure
 func (ch *CommandHandler) registerCustomCommands() error {
-    // Sua lógica de comandos customizados
+    // Your custom command logic
     return nil
 }
 ```
 
-## 🔍 Logs e Debugging
+## Logs and Debugging
 
-### Níveis de Log
-- **Info**: Eventos principais (entrada/saída, mudanças de avatar)
-- **Debug**: Cache de mensagens, detalhes internos
-- **Error**: Falhas de envio de notificações, erros de API
+### Log Levels
+- Info: Main events (joins/leaves, avatar changes)
+- Debug: Message cache, internal details
+- Error: Notification delivery failures, API errors
 
-### Estatísticas
+### Stats
 ```go
-// Configurações por servidor
+// Per-guild configuration
 config := configManager.GuildConfig("guild_id")
 ```
 
-## ⚡ Performance
+## Performance
 
-### Cache de Mensagens
-- Armazena mensagens por 24 horas para detectar edições
-- Limpeza automática a cada hora
-- Proteção thread-safe com RWMutex
+### Message Cache
+- Stores messages for 24 hours to detect edits
+- Automatic cleanup every hour
+- Thread-safe protection with RWMutex
 
-### Debounce de Avatares
-- Evita notificações duplicadas
-- Cache temporal de 5 segundos
-- Limpeza automática de entradas antigas
+### Avatar Debounce
+- Prevents duplicate notifications
+- 5-second temporary cache
+- Automatic cleanup of old entries
 
-### Verificações Periódicas
-- Checagem de avatares a cada 30 minutos
-- Inicialização automática de cache para novos servidores
+### Periodic Checks
+- Avatar checks every 30 minutes
+- Automatic cache initialization for new servers
 
-## 🔐 Permissões Necessárias
+## Required Permissions
 
-O bot precisa das seguintes permissões:
+The bot needs the following permissions:
 - `View Channels`
 - `Send Messages` 
 - `Embed Links`
 - `Read Message History`
 - `Use Slash Commands`
 
-### 📝 Configuração de Canais
+### Channel Configuration
 
-A biblioteca suporta canais separados para diferentes tipos de logs:
+The library supports separate channels for different types of logs:
 
-- **`user_log_channel_id`**: Entrada/saída de usuários e mudanças de avatar
-- **`message_log_channel_id`**: Edições e deleções de mensagens  
-- **`automod_log_channel_id`**: Ações do sistema de moderação automática
+- `user_log_channel_id`: User joins/leaves and avatar changes
+- `message_log_channel_id`: Message edits and deletions
+- `automod_log_channel_id`: Actions from the automatic moderation system
 
-Isso permite organizar melhor os logs e configurar permissões específicas por tipo de evento.
+This allows better organization of logs and configuring permissions specific to each event type.
 
-## 📚 Limitações Conhecidas
+## Known Limitations
 
-1. **Tempo no Servidor**: Sem dados históricos, não é possível calcular com precisão quanto tempo usuários antigos estavam no servidor
-2. **Quem Deletou**: A API do Discord não fornece informação direta sobre quem deletou uma mensagem
-3. **Cache de Mensagens**: Mensagens enviadas antes do bot iniciar não são rastreadas para edições
+1. Time in Server: Without historical data, it is not possible to precisely calculate how long older users were in the server
+2. Who Deleted: The Discord API does not directly provide information about who deleted a message
+3. Message Cache: Messages sent before the bot starts are not tracked for edits
 
-## 🛣️ Roadmap
+## Roadmap
 
-### Futuras Melhorias
-- [ ] Integração com audit logs para detecção de moderadores
-- [ ] Persistência de dados de entrada para cálculo preciso de tempo no servidor  
-- [ ] Sistema de webhooks para notificações externas
-- [ ] Dashboard web para configuração
-- [ ] Métricas e analytics avançados
+### Future Improvements
+- [ ] Integration with audit logs to detect moderators
+- [ ] Persist join data for precise time-in-server calculation
+- [ ] Webhook system for external notifications
+- [ ] Web dashboard for configuration
+- [ ] Advanced metrics and analytics
 
-## 📄 Dependências
+## Dependencies
 
 ```go
 require (
@@ -299,47 +299,47 @@ require (
 )
 ```
 
-## 📖 Exemplos de Embeds
+## Embed Examples
 
-### Entrada de Usuário
+### User Join
 ```
-👋 Membro entrou
-@usuario (123456789)
-Conta criada há: 2 anos, 5 meses
-```
-
-### Saída de Usuário  
-```
-👋 Membro saiu
-@usuario (123456789)  
-Tempo no servidor: Tempo desconhecido
+Member joined
+@user (123456789)
+Account created: 2 years, 5 months ago
 ```
 
-### Mensagem Editada
+### User Leave  
 ```
-✏️ Mensagem editada
-@usuario editou uma mensagem em #geral
-
-Antes: Olá mundo
-Depois: Olá mundo!!!
+Member left
+@user (123456789)  
+Time in server: Unknown
 ```
 
-### Mensagem Deletada
+### Message Edited
 ```
-🗑️ Mensagem deletada
-Mensagem de @usuario deletada em #geral
+Message edited
+@user edited a message in #general
 
-Conteúdo: Mensagem que foi deletada
-Deletado por: Usuário
+Before: Hello world
+After: Hello world!!!
 ```
 
-## 🤝 Contribuindo
+### Message Deleted
+```
+Message deleted
+Message by @user deleted in #general
 
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Abra um Pull Request
+Content: Message that was deleted
+Deleted by: User
+```
 
-## 📝 Licença
+## Contributing
 
-Este projeto é uma biblioteca interna. Consulte os termos de uso apropriados.
+1. Fork the project
+2. Create a branch for your feature
+3. Commit your changes
+4. Open a Pull Request
+
+## License
+
+This project is an internal library. Refer to the appropriate terms of use.
