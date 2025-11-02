@@ -338,7 +338,7 @@ func (tr *TaskRouter) ensureGroupLocked(key string) *groupWorker {
 	tr.groups[key] = gw
 	// Spawn up to GroupMaxParallel workers for this group
 	parallel := tr.effectiveGroupParallel()
-	for i := 0; i < parallel; i++ {
+	for range parallel {
 		tr.wg.Add(1)
 		go tr.groupLoop(gw)
 	}
@@ -478,14 +478,8 @@ func (tr *TaskRouter) jitter(d time.Duration, ratio float64) time.Duration {
 	return time.Duration(n)
 }
 
-func clampDuration(v, min, max time.Duration) time.Duration {
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
+func clampDuration(v, lo, hi time.Duration) time.Duration {
+	return max(min(v, hi), lo)
 }
 
 func (tr *TaskRouter) backgroundLoop() {

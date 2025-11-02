@@ -424,7 +424,7 @@ func (eh *ErrorHandler) calculateDelay(strategy RetryStrategy, attempt int) time
 
 func (eh *ErrorHandler) power(base, exp float64) float64 {
 	result := 1.0
-	for i := 0; i < int(exp); i++ {
+	for range int(exp) {
 		result *= base
 	}
 	return result

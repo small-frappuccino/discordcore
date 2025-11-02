@@ -25,9 +25,9 @@ type segment[T any] struct {
 	limit int
 
 	// Metrics
-	hits      uint64
-	misses    uint64
-	evictions uint64
+	hits      atomic.Uint64
+	misses    atomic.Uint64
+	evictions atomic.Uint64
 }
 
 type entry[T any] struct {
@@ -54,7 +54,7 @@ func newSegment[T any](ttl time.Duration, limit int) *segment[T] {
 func (s *segment[T]) Get(key string) (T, bool) {
 	var zero T
 	if key == "" {
-		atomic.AddUint64(&s.misses, 1)
+		s.misses.Add(1)
 		return zero, false
 	}
 
@@ -65,20 +65,20 @@ func (s *segment[T]) Get(key string) (T, bool) {
 
 	e, ok := s.data[key]
 	if !ok {
-		atomic.AddUint64(&s.misses, 1)
+		s.misses.Add(1)
 		return zero, false
 	}
 	// Expired?
 	if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
 		s.lru.Remove(e.elem)
 		delete(s.data, key)
-		atomic.AddUint64(&s.misses, 1)
+		s.misses.Add(1)
 		return zero, false
 	}
 
 	// Promote
 	s.lru.MoveToFront(e.elem)
-	atomic.AddUint64(&s.hits, 1)
+	s.hits.Add(1)
 	return e.value, true
 }
 
@@ -172,7 +172,7 @@ func (s *segment[T]) Invalidate(key string) {
 // Clear removes all entries from the segment.
 func (s *segment[T]) Clear() {
 	s.mu.Lock()
-	s.data = make(map[string]*entry[T])
+	clear(s.data)
 	s.lru = list.New()
 	s.mu.Unlock()
 }
@@ -282,7 +282,7 @@ func (s *segment[T]) evictLRU() {
 	key := back.Value.(string)
 	s.lru.Remove(back)
 	delete(s.data, key)
-	atomic.AddUint64(&s.evictions, 1)
+	s.evictions.Add(1)
 }
 
 // segmentStats summarizes a segment's state and counters.
@@ -303,9 +303,9 @@ type segmentStats struct {
 // Stats returns a snapshot of the segment's counters and configuration.
 // EntriesSeen = Hits + Misses; HitRate/MissRate computed when EntriesSeen > 0.
 func (s *segment[T]) Stats() segmentStats {
-	h := atomic.LoadUint64(&s.hits)
-	m := atomic.LoadUint64(&s.misses)
-	e := atomic.LoadUint64(&s.evictions)
+	h := s.hits.Load()
+	m := s.misses.Load()
+	e := s.evictions.Load()
 	size := s.Len()
 
 	total := h + m

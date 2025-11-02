@@ -3,6 +3,8 @@ package admin
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -338,7 +340,7 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	}
 
 	// Perform health check
-	healthCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	healthCtx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, fmt.Errorf("service status health check timeout"))
 	defer cancel()
 
 	health := info.Service.HealthCheck(healthCtx)
@@ -452,19 +454,33 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
-	// Group services by type
+	// Build sorted service names for deterministic output
+	names := slices.Collect(maps.Keys(services))
+	slices.Sort(names)
+
+	// Group by type in the order discovered from sorted service names
 	servicesByType := make(map[service.ServiceType][]string)
-	for name, info := range services {
+	typeOrder := make([]service.ServiceType, 0)
+	seenType := make(map[service.ServiceType]bool)
+	for _, name := range names {
+		info := services[name]
 		sType := info.Service.Type()
 		status := cmd.adminCommands.getServiceStatusIcon(info.State)
 		servicesByType[sType] = append(servicesByType[sType], fmt.Sprintf("%s %s", status, name))
+		if !seenType[sType] {
+			seenType[sType] = true
+			typeOrder = append(typeOrder, sType)
+		}
 	}
 
-	// Add fields for each service type
-	for sType, serviceList := range servicesByType {
+	// Emit fields in deterministic type order and sort within each group
+	for _, sType := range typeOrder {
+		list := servicesByType[sType]
+		// Sort for deterministic output
+		slices.Sort(list)
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   string(sType),
-			Value:  strings.Join(serviceList, "\n"),
+			Value:  strings.Join(list, "\n"),
 			Inline: true,
 		})
 	}
@@ -570,7 +586,7 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 	totalServices := len(services)
 
 	// Check health of all services
-	healthCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	healthCtx, cancel := context.WithTimeoutCause(context.Background(), 30*time.Second, fmt.Errorf("admin health check timeout"))
 	defer cancel()
 
 	for name, info := range services {

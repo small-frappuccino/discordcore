@@ -245,7 +245,7 @@ func Run(appName, tokenEnv string) error {
 	log.GlobalLogger.Sync()
 
 	// Graceful shutdown
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeoutCause(context.Background(), 30*time.Second, fmt.Errorf("application shutdown"))
 	defer shutdownCancel()
 
 	if err := serviceManager.StopAll(); err != nil {

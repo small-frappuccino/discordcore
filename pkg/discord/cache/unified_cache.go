@@ -2,7 +2,10 @@ package cache
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -485,11 +488,11 @@ func (uc *UnifiedCache) Clear() {
 
 	// Reset indices
 	uc.guildToChannelsMu.Lock()
-	uc.guildToChannels = make(map[string]map[string]struct{})
+	clear(uc.guildToChannels)
 	uc.guildToChannelsMu.Unlock()
 
 	uc.channelToGuildMu.Lock()
-	uc.channelToGuild = make(map[string]string)
+	clear(uc.channelToGuild)
 	uc.channelToGuildMu.Unlock()
 }
 
@@ -525,10 +528,7 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	uc.guildToChannelsMu.RLock()
 	var chIDs []string
 	if set, ok := uc.guildToChannels[guildID]; ok {
-		chIDs = make([]string, 0, len(set))
-		for cid := range set {
-			chIDs = append(chIDs, cid)
-		}
+		chIDs = slices.Collect(maps.Keys(set))
 	}
 	uc.guildToChannelsMu.RUnlock()
 	for _, cid := range chIDs {
@@ -719,7 +719,7 @@ func (uc *UnifiedCache) Persist() error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("persist cache: %d errors occurred", len(errs))
+		return fmt.Errorf("persist cache: %w", errors.Join(errs...))
 	}
 	return nil
 }

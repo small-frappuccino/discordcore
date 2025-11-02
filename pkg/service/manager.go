@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	stdErrors "errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -193,7 +195,7 @@ func (sm *ServiceManager) StartAll() error {
 	if len(startErrors) > 0 {
 		// Try to stop services that were started successfully
 		sm.StopAll()
-		return fmt.Errorf("failed to start services: %v", startErrors)
+		return fmt.Errorf("failed to start services: %w", stdErrors.Join(startErrors...))
 	}
 
 	// Start health monitoring
@@ -220,10 +222,8 @@ func (sm *ServiceManager) StopAll() error {
 	}
 
 	// Reverse the start order for shutdown
-	stopOrder := make([]string, len(startOrder))
-	for i, j := 0, len(startOrder)-1; i < j; i, j = i+1, j-1 {
-		stopOrder[i], stopOrder[j] = startOrder[j], startOrder[i]
-	}
+	stopOrder := slices.Clone(startOrder)
+	slices.Reverse(stopOrder)
 
 	var stopErrors []error
 	for _, name := range stopOrder {
@@ -234,7 +234,7 @@ func (sm *ServiceManager) StopAll() error {
 
 	if len(stopErrors) > 0 {
 		log.ErrorLoggerRaw().Error("Some services failed to stop cleanly", "errors", stopErrors)
-		return fmt.Errorf("failed to stop some services: %v", stopErrors)
+		return fmt.Errorf("failed to stop some services: %w", stdErrors.Join(stopErrors...))
 	}
 
 	log.ApplicationLogger().Info("All services stopped successfully")
@@ -334,7 +334,7 @@ func (sm *ServiceManager) StopService(name string) error {
 	}
 
 	// Stop the service
-	ctx, cancel := context.WithTimeout(context.Background(), sm.shutdownTimeout)
+	ctx, cancel := context.WithTimeoutCause(context.Background(), sm.shutdownTimeout, fmt.Errorf("shutdown timeout for service %q", name))
 	defer cancel()
 
 	log.ApplicationLogger().Info("Stopping service...", "service", name)
