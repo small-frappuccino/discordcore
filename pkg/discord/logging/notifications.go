@@ -110,7 +110,7 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 	return fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.%s?size=128", userID, avatarHash, format)
 }
 
-// SendMemberJoinNotification envia notificação de entrada de membro
+// SendMemberJoinNotification sends member join notification
 func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
 	joinAgeText := formatDurationSmart(accountAge)
 	if joinAgeText == "" {
@@ -136,7 +136,7 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 	return err
 }
 
-// SendMemberLeaveNotification envia notificação de saída de membro
+// SendMemberLeaveNotification sends member leave notification
 func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Member left",
@@ -190,7 +190,7 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 	return err
 }
 
-// SendMessageEditNotification envia notificação de edição de mensagem
+// SendMessageEditNotification sends message edit notification
 func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *task.CachedMessage, edited *discordgo.MessageUpdate) error {
 	// Build jump link (best effort)
 	var jumpURL string
@@ -260,7 +260,7 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 	return err
 }
 
-// SendMessageDeleteNotification envia notificação de deleção de mensagem
+// SendMessageDeleteNotification sends message deletion notification
 func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
 	// Resolve channel name (best effort; avoid API call by using session state)
 	channelName := ""
@@ -318,10 +318,10 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 	return err
 }
 
-// formatDurationFull mostra a duração no formato completo, omitindo unidades iniciais iguais a zero.
-// Ex.: "0 days 2 minutes 5 seconds" -> "2 minutes 5 seconds"
+// formatDurationFull shows the full duration, omitting leading zero-valued units.
+// e.g.: "0 days 2 minutes 5 seconds" -> "2 minutes 5 seconds"
 //
-//	"0 days 3 hours 0 minutes"   -> "3 hours 0 minutes"
+// "0 days 3 hours 0 minutes"   -> "3 hours 0 minutes"
 func formatDurationFull(d time.Duration) string {
 	if d < 0 {
 		d = 0
@@ -358,7 +358,7 @@ func formatDurationFull(d time.Duration) string {
 	return out
 }
 
-// formatDurationSmart formata listando todas as unidades com valor diferente de zero (sem abreviações).
+// formatDurationSmart lists all non-zero units (no abbreviations).
 func formatDurationSmart(d time.Duration) string {
 	if d < 0 {
 		d = 0
@@ -392,7 +392,7 @@ func formatDurationSmart(d time.Duration) string {
 			parts = append(parts, fmt.Sprintf("%d minutes", minutes))
 		}
 	}
-	// Inclui seconds se > 0 ou se nenhuma outra unidade foi incluída (ex.: tudo zero)
+	// Include seconds if > 0 or if no other unit was included (e.g., everything else is zero)
 	if seconds > 0 {
 		if seconds == 1 {
 			parts = append(parts, "1 second")
@@ -404,7 +404,7 @@ func formatDurationSmart(d time.Duration) string {
 	return strings.Join(parts, " ")
 }
 
-// formatDuration formata uma duração de tempo de forma legível
+// formatDuration formats a time duration in a human-readable way
 func formatDuration(d time.Duration) string {
 	if d == 0 {
 		return "`            `"
@@ -456,7 +456,7 @@ func formatDuration(d time.Duration) string {
 	return "Less than 1 minute"
 }
 
-// truncateString trunca uma string para um tamanho máximo
+// truncateString truncates a string to a maximum length
 func truncateString(s string, maxLen int) string {
 	if s == "" {
 		return "*empty message*"
@@ -478,14 +478,14 @@ func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	return err
 }
 
-// SendMemberRoleUpdateNotification envia notificação de atualização de cargo (add/remove)
+// SendMemberRoleUpdateNotification sends role update notification (add/remove)
 func (ns *NotificationSender) SendMemberRoleUpdateNotification(
 	channelID string,
-	actorID string, // quem realizou a ação (moderador/admin)
-	targetID string, // usuário alvo
-	targetUsername string, // nome do usuário alvo (opcional, pode vir vazio)
-	roleID string, // ID do cargo afetado
-	roleName string, // nome do cargo (fallback caso mention não seja desejada)
+	actorID string, // the actor who performed the action (moderator/admin)
+	targetID string, // target user
+	targetUsername string, // target user's name (optional, may be empty)
+	roleID string, // affected role ID
+	roleName string, // role name (fallback when mention is not desired)
 	action string, // "add" | "remove" | "added" | "removed"
 ) error {
 	if channelID == "" || targetID == "" || (roleID == "" && roleName == "") {

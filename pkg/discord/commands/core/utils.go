@@ -290,9 +290,9 @@ func (StringUtils) ProcessCommaSeparatedList(input string) []string {
 
 // SanitizeInput sanitizes user input
 func (StringUtils) SanitizeInput(input string) string {
-	// Remove caracteres de controle e espaços extras
+	// Remove control characters and extra spaces
 	input = strings.TrimSpace(input)
-	// Remove quebras de linha múltiplas
+	// Remove multiple line breaks
 	input = strings.ReplaceAll(input, "\n\n", "\n")
 	return input
 }
@@ -390,10 +390,10 @@ func GetBooleanOption(options []*discordgo.ApplicationCommandInteractionDataOpti
 	return false
 }
 
-// EmbedBuilder constrói embeds padronizados
+// EmbedBuilder builds standardized embeds
 type EmbedBuilder struct{}
 
-// Success cria um embed de sucesso
+// Success creates a success embed
 func (EmbedBuilder) Success(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -403,7 +403,7 @@ func (EmbedBuilder) Success(title, description string) *discordgo.MessageEmbed {
 	}
 }
 
-// Error cria um embed de erro
+// Error creates an error embed
 func (EmbedBuilder) Error(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -413,7 +413,7 @@ func (EmbedBuilder) Error(title, description string) *discordgo.MessageEmbed {
 	}
 }
 
-// Info cria um embed informativo
+// Info creates an informational embed
 func (EmbedBuilder) Info(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -423,7 +423,7 @@ func (EmbedBuilder) Info(title, description string) *discordgo.MessageEmbed {
 	}
 }
 
-// Warning cria um embed de aviso
+// Warning creates a warning embed
 func (EmbedBuilder) Warning(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       title,
@@ -433,10 +433,10 @@ func (EmbedBuilder) Warning(title, description string) *discordgo.MessageEmbed {
 	}
 }
 
-// ConfigurationUtils fornece utilitários para configuração
+// ConfigurationUtils provides configuration utilities
 type ConfigurationUtils struct{}
 
-// EnsureGuildConfig garante que existe uma configuração para o servidor
+// EnsureGuildConfig ensures there is a configuration for the server
 func (ConfigurationUtils) EnsureGuildConfig(configManager *files.ConfigManager, guildID string) *files.GuildConfig {
 	config := configManager.GuildConfig(guildID)
 	if config == nil {
@@ -468,12 +468,12 @@ func CompareCommands(a, b *discordgo.ApplicationCommand) bool {
 	return string(ba) == string(bb)
 }
 
-// GenerateID gera um ID único baseado no timestamp atual
+// GenerateID generates a unique ID based on the current timestamp
 func GenerateID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
 
-// RemoveFromSlice remove um item de uma slice
+// RemoveFromSlice removes an item from a slice
 func RemoveFromSlice[T comparable](slice []T, item T) []T {
 	for i, v := range slice {
 		if v == item {
@@ -483,7 +483,7 @@ func RemoveFromSlice[T comparable](slice []T, item T) []T {
 	return slice
 }
 
-// RemoveAtIndex remove um item em um índice específico
+// RemoveAtIndex removes an item at a specific index
 func RemoveAtIndex[T any](slice []T, index int) []T {
 	if index < 0 || index >= len(slice) {
 		return slice
@@ -491,7 +491,7 @@ func RemoveAtIndex[T any](slice []T, index int) []T {
 	return append(slice[:index], slice[index+1:]...)
 }
 
-// ContainsAny verifica se a slice contém algum dos items
+// ContainsAny checks whether the slice contains any of the items
 func ContainsAny[T comparable](slice []T, items ...T) bool {
 	for _, item := range items {
 		if slices.Contains(slice, item) {

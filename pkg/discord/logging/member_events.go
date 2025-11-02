@@ -25,19 +25,19 @@ type MemberEventService struct {
 	adapters      *task.NotificationAdapters
 	isRunning     bool
 
-	// Cache para tempos de entrada (membro e bot)
+	// Cache for join times (member and bot)
 
-	joinTimes map[string]time.Time // chave: guildID:userID
+	joinTimes map[string]time.Time // key: guildID:userID
 	joinMu    sync.RWMutex
 
-	// Persistência complementar (SQLite)
+	// Complementary persistence (SQLite)
 	store *storage.Store
 
 	// Cleanup control
 	cleanupStop chan struct{}
 }
 
-// NewMemberEventService cria uma nova instância do serviço de eventos de membros
+// NewMemberEventService creates a new instance of the member events service
 func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MemberEventService {
 	return &MemberEventService{
 		session:       session,
@@ -163,7 +163,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	}
 
 	// Composite automatic role assignment for the specified guild
-	// Atribuição automática de cargo composta (config por guild)
+	// Composite automatic role assignment (per-guild config)
 	if guildConfig.AutoRoleAssignmentEnabled {
 		targetRoleID := guildConfig.AutoRoleTargetRoleID
 		roleA := guildConfig.AutoRolePrereqRoleA
@@ -267,7 +267,7 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 	hasA := hasRoleID(m.Roles, roleA)
 	hasB := hasRoleID(m.Roles, roleB)
 
-	// Se perdeu o cargo A e ainda tem o cargo alvo, remover o cargo alvo
+	// If role A was lost and the target role is still present, remove the target role
 	if hasTarget && !hasA {
 		if err := mes.session.GuildMemberRoleRemove(m.GuildID, m.User.ID, targetRoleID); err != nil {
 			slog.Error(fmt.Sprintf("Failed to remove target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
@@ -277,7 +277,7 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 		return
 	}
 
-	// Se possui ambos os cargos pré-requisito e ainda não tem o cargo alvo, concede o cargo alvo
+	// If the user has both prerequisite roles and doesn't have the target role, grant the target role
 	if !hasTarget && hasA && hasB {
 		if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
 			slog.Error(fmt.Sprintf("Failed to grant target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
@@ -287,29 +287,29 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 	}
 }
 
-// calculateAccountAge calcula há quanto tempo a conta do Discord existe baseado no Snowflake ID
+// calculateAccountAge calculates how long the Discord account has existed based on the Snowflake ID
 func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration {
 	// Discord Snowflake: (timestamp_ms - DISCORD_EPOCH) << 22
-	const DISCORD_EPOCH = 1420070400000 // 01/01/2015 00:00:00 UTC em millisegundos
+	const DISCORD_EPOCH = 1420070400000 // 01/01/2015 00:00:00 UTC in milliseconds
 
-	// Converter string ID para uint64
+	// Convert string ID to uint64
 	snowflake, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
 		slog.Warn(fmt.Sprintf("Failed to parse user ID for account age calculation: userID=%s, error=%v", userID, err))
 		return 0
 	}
 
-	// Extrair timestamp do snowflake
+	// Extract timestamp from the snowflake
 	timestamp := (snowflake >> 22) + DISCORD_EPOCH
 	accountCreated := time.Unix(int64(timestamp/1000), int64((timestamp%1000)*1000000))
 
 	return time.Since(accountCreated)
 }
 
-// calculateServerTime tenta calcular há quanto tempo o usuário estava no servidor
-// Agora usa múltiplas fontes em ordem: memória -> SQLite
+// calculateServerTime tries to estimate how long the user was on the server
+// Now uses multiple sources in order: memory -> SQLite
 func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.Duration {
-	// 1) memória (mais preciso no runtime)
+	// 1) memory (most precise during runtime)
 	mes.joinMu.RLock()
 	t, ok := mes.joinTimes[guildID+":"+userID]
 	mes.joinMu.RUnlock()
@@ -317,7 +317,7 @@ func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.
 		return time.Since(t)
 	}
 
-	// 3) SQLite (novo repositório)
+	// 3) SQLite (new repository)
 	if mes.store != nil {
 		if t, ok, err := mes.store.GetMemberJoin(guildID, userID); err == nil && ok && !t.IsZero() {
 			return time.Since(t)
@@ -380,7 +380,7 @@ func (mes *MemberEventService) markEvent() {
 	}
 }
 
-// NEW: calcula há quanto tempo o bot está na guild (consulta Discord em tempo real)
+// NEW: calculates how long the bot has been in the guild (real-time Discord query)
 func (mes *MemberEventService) getBotTimeOnServer(guildID string) time.Duration {
 	if mes.session == nil || mes.session.State == nil || mes.session.State.User == nil {
 		return 0

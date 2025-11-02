@@ -83,7 +83,7 @@ type List struct {
 type Rule struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
-	Lists   []List `json:"lists"` // Conjunto de listas associadas à regra
+	Lists   []List `json:"lists"` // Set of lists associated with the rule
 	Enabled bool   `json:"enabled"`
 }
 
@@ -254,7 +254,7 @@ func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 	return mgr.SaveConfig()
 }
 
-// GetRolesCacheTTL obtém o TTL do cache de roles configurado (string original, ex.: "5m").
+// GetRolesCacheTTL gets the configured roles cache TTL (original string, e.g., "5m").
 func (mgr *ConfigManager) GetRolesCacheTTL(guildID string) string {
 	gcfg := mgr.GuildConfig(guildID)
 	if gcfg == nil {

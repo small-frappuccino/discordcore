@@ -22,7 +22,7 @@ const (
 	downtimeThreshold = 30 * time.Minute
 )
 
-// UserWatcher contém a lógica específica de processamento de mudanças de usuário.
+// UserWatcher contains the specific logic for processing user changes.
 type UserWatcher struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
@@ -345,7 +345,7 @@ func (ms *MonitoringService) Stop() error {
 	return nil
 }
 
-// initializeCache carrega os usuários atuais dos membros em todos os guilds configurados.
+// initializeCache loads the current member users for all configured guilds.
 func (ms *MonitoringService) initializeCache() {
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
@@ -366,7 +366,7 @@ func (ms *MonitoringService) initializeCache() {
 	// No-op: avatars are persisted per change in the SQLite store
 }
 
-// initializeGuildCache inicializa os avatares atuais dos membros em um guild específico.
+// initializeGuildCache initializes the current avatars of members in a specific guild.
 func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	if ms.store == nil {
 		log.ApplicationLogger().Warn("Store is nil; skipping cache initialization for guild", "guildID", guildID)
@@ -469,8 +469,8 @@ func (ms *MonitoringService) removeEventHandlers() {
 	ms.eventHandlers = nil
 }
 
-// ensureGuildsListed adiciona entradas mínimas de guild no discordcore.json
-// para todas as guilds presentes na sessão mas ausentes na configuração.
+// ensureGuildsListed adds minimal guild entries to discordcore.json
+// for all guilds present in the session but missing from the configuration.
 func (ms *MonitoringService) ensureGuildsListed() {
 	if ms.session == nil || ms.session.State == nil {
 		return
@@ -501,7 +501,7 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	}
 
 	if ms.configManager.GuildConfig(guildID) == nil {
-		// Guild nova: adicionar no config e inicializar cache
+		// New guild: add to config and initialize cache
 		if err := ms.configManager.RegisterGuild(s, guildID); err != nil {
 			log.ErrorLoggerRaw().Error("Falling back to minimal guild entry for guild", "guildID", guildID, "err", err)
 			if err2 := ms.configManager.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err2 != nil {
@@ -531,7 +531,7 @@ func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordg
 	}
 }
 
-// handlePresenceUpdate processa updates de presença (inclui avatar).
+// handlePresenceUpdate processes presence updates (includes avatar).
 func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *discordgo.PresenceUpdate) {
 	if m.User == nil {
 		return
@@ -547,7 +547,7 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 }
 
-// handleMemberUpdate processa updates de membro.
+// handleMemberUpdate processes member updates.
 func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m.User == nil {
 		return
@@ -598,7 +598,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			}
 		}
 
-		// 3) calcular diffs
+		// 3) compute diffs
 		curSet := make(map[string]struct{}, len(cur))
 		for _, r := range cur {
 			if r != "" {
@@ -638,7 +638,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			}
 			actorID := entry.UserID
 
-			// Verificação de recência da entry (via snowflake ID -> timestamp)
+			// Recency check of the entry (via Snowflake ID -> timestamp)
 			recentThreshold := 2 * time.Minute
 			if entry.ID != "" {
 				if sid, err := strconv.ParseUint(entry.ID, 10, 64); err == nil {
@@ -687,7 +687,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				}
 				switch *ch.Key {
 				case discordgo.AuditLogChangeKeyRoleAdd:
-					// considerar NewValue e OldValue por robustez
+					// consider NewValue and OldValue for robustness
 					added = append(added, extractRoles(ch.NewValue)...)
 					added = append(added, extractRoles(ch.OldValue)...)
 				case discordgo.AuditLogChangeKeyRoleRemove:
@@ -725,7 +725,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				return out
 			}
 
-			// Verificar com o Discord + DB quais mudanças realmente foram aplicadas
+			// Verify with Discord + DB which changes were actually applied
 			curRoles, verifiedAdded, verifiedRemoved := computeVerifiedDiff(m.GuildID, m.User.ID, m.Roles)
 
 			toSet := func(ids []string) map[string]struct{} {
@@ -740,7 +740,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			verifiedAddedSet := toSet(verifiedAdded)
 			verifiedRemovedSet := toSet(verifiedRemoved)
 
-			// Filtrar apenas os cargos que realmente foram adicionados/removidos segundo o estado atual
+			// Filter only the roles that were actually added/removed according to the current state
 			filteredAdded := make([]rolePartial, 0, len(added))
 			for _, r := range added {
 				if r.ID != "" {
@@ -758,14 +758,14 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				}
 			}
 
-			// Se nada restou após verificação, não enviar embed
+			// If nothing remains after verification, do not send an embed
 			if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
 				// Update the snapshot anyway to keep the DB consistent
 				if ms.store != nil && len(curRoles) > 0 {
 					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
 					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
 				}
-				// Continuar varrendo outras entries possíveis
+				// Continue scanning other possible entries
 				continue
 			}
 
@@ -816,7 +816,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	if tryFetchAndNotify() {
 		return
 	}
-	// Fallback por diff de roles quando audit log não produziu resultado
+	// Fallback by role diff when the audit log produced no result
 	if ms.store != nil {
 		curRoles := m.Roles
 		if len(curRoles) == 0 {
@@ -884,7 +884,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 
 }
 
-// handleUserUpdate processa updates de usuário em todos os guilds configurados.
+// handleUserUpdate processes user updates across all configured guilds.
 func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo.UserUpdate) {
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
@@ -937,7 +937,7 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	}
 }
 
-// ProcessChange executa a lógica específica de avatar: notificação e persistência.
+// ProcessChange performs avatar-specific logic: notification and persistence.
 func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username string) {
 	finalUsername := username
 	if finalUsername == "" {
