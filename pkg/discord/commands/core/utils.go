@@ -84,8 +84,8 @@ func (e *OptionExtractor) HasOption(name string) bool {
 }
 
 // GetAllOptions returns all options as a map
-func (e *OptionExtractor) GetAllOptions() map[string]interface{} {
-	result := make(map[string]interface{})
+func (e *OptionExtractor) GetAllOptions() map[string]any {
+	result := make(map[string]any)
 	for _, opt := range e.options {
 		switch opt.Type {
 		case discordgo.ApplicationCommandOptionString:
@@ -272,7 +272,7 @@ type StringUtils struct{}
 // ProcessCommaSeparatedList parses a comma-separated string
 func (StringUtils) ProcessCommaSeparatedList(input string) []string {
 	if input == "" {
-		return []string{}
+		return nil
 	}
 
 	items := strings.Split(input, ",")
@@ -477,7 +477,7 @@ func GenerateID(prefix string) string {
 func RemoveFromSlice[T comparable](slice []T, item T) []T {
 	for i, v := range slice {
 		if v == item {
-			return append(slice[:i], slice[i+1:]...)
+			return slices.Delete(slice, i, i+1)
 		}
 	}
 	return slice
@@ -488,7 +488,7 @@ func RemoveAtIndex[T any](slice []T, index int) []T {
 	if index < 0 || index >= len(slice) {
 		return slice
 	}
-	return append(slice[:index], slice[index+1:]...)
+	return slices.Delete(slice, index, index+1)
 }
 
 // ContainsAny checks whether the slice contains any of the items

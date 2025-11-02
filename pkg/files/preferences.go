@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -119,13 +120,10 @@ func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	if mgr.config == nil {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
 	}
-	var guilds []GuildConfig
-	for _, g := range mgr.config.Guilds {
-		if g.GuildID != guildCfg.GuildID {
-			guilds = append(guilds, g)
-		}
-	}
-	mgr.config.Guilds = append(guilds, guildCfg)
+	// Remove any existing entry with the same GuildID, then append the new config.
+	mgr.config.Guilds = append(slices.DeleteFunc(mgr.config.Guilds, func(g GuildConfig) bool {
+		return g.GuildID == guildCfg.GuildID
+	}), guildCfg)
 	return nil
 }
 
@@ -136,13 +134,9 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 	if mgr.config == nil {
 		return
 	}
-	var guilds []GuildConfig
-	for _, g := range mgr.config.Guilds {
-		if g.GuildID != guildID {
-			guilds = append(guilds, g)
-		}
-	}
-	mgr.config.Guilds = guilds
+	mgr.config.Guilds = slices.DeleteFunc(mgr.config.Guilds, func(g GuildConfig) bool {
+		return g.GuildID == guildID
+	})
 }
 
 // --- Guild Detection & Addition ---
@@ -153,7 +147,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 	if mgr.config == nil {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
 	}
-	mgr.config.Guilds = []GuildConfig{}
+	mgr.config.Guilds = make([]GuildConfig, 0, len(session.State.Guilds))
 	mgr.mu.Unlock()
 
 	for _, g := range session.State.Guilds {

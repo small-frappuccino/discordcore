@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -10,23 +11,21 @@ import (
 // WaitForInterrupt waits for an interrupt signal (SIGINT, SIGTERM)
 // and blocks until one is received
 func WaitForInterrupt() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	// Block until a signal is received
-	sig := <-c
-	log.Printf("Received interrupt signal: %s", sig.String())
+	<-ctx.Done()
+	log.Printf("Received interrupt; shutting down")
 }
 
 // WaitForInterruptWithCallback waits for an interrupt signal and executes
 // a callback function before returning
 func WaitForInterruptWithCallback(callback func()) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	// Block until a signal is received
-	sig := <-c
-	log.Printf("Received interrupt signal: %s", sig.String())
+	<-ctx.Done()
+	log.Printf("Received interrupt; executing shutdown callback")
 
 	if callback != nil {
 		callback()

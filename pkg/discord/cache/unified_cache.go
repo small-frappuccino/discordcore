@@ -861,7 +861,7 @@ func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channe
 }
 
 // encodeEntity serializes a Discord entity to JSON
-func encodeEntity(v interface{}) (string, error) {
+func encodeEntity(v any) (string, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return "", err
@@ -870,7 +870,7 @@ func encodeEntity(v interface{}) (string, error) {
 }
 
 // decodeEntity deserializes a Discord entity from JSON
-func decodeEntity(data string, v interface{}) error {
+func decodeEntity(data string, v any) error {
 	return json.Unmarshal([]byte(data), v)
 }
 

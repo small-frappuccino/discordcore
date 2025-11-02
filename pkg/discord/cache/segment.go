@@ -11,6 +11,8 @@ package cache
 
 import (
 	"container/list"
+	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -232,10 +234,7 @@ func (s *segment[T]) Len() int {
 // Keys returns a copy of current keys. Use with caution on large segments.
 func (s *segment[T]) Keys() []string {
 	s.mu.RLock()
-	keys := make([]string, 0, len(s.data))
-	for k := range s.data {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(s.data))
 	s.mu.RUnlock()
 	return keys
 }

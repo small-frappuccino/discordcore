@@ -50,7 +50,7 @@ func (m *JSONManager) Load(data any) error {
 }
 
 // Save marshals the provided data structure and writes it to the JSON file.
-func (m *JSONManager) Save(data interface{}) error {
+func (m *JSONManager) Save(data any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

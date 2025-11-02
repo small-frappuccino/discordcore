@@ -34,7 +34,7 @@ type BaseService struct {
 	healthMutex     sync.RWMutex
 
 	// Custom metrics
-	customMetrics    map[string]interface{}
+	customMetrics    map[string]any
 	customMetricsMux sync.RWMutex
 
 	// Hooks for subclasses to implement
@@ -253,7 +253,7 @@ func (bs *BaseService) SetHealthHook(hook func(ctx context.Context) HealthStatus
 }
 
 // SetCustomMetric sets a custom metric value
-func (bs *BaseService) SetCustomMetric(key string, value interface{}) {
+func (bs *BaseService) SetCustomMetric(key string, value any) {
 	bs.customMetricsMux.Lock()
 	defer bs.customMetricsMux.Unlock()
 	bs.customMetrics[key] = value

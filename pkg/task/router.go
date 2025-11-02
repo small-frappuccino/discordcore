@@ -3,7 +3,9 @@ package task
 import (
 	"context"
 	"errors"
+	"maps"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
 
@@ -251,6 +253,10 @@ func (tr *TaskRouter) Close() {
 				close(gw.ch)
 			}
 		}
+		// Clear internal maps
+		clear(tr.groups)
+		clear(tr.inflight)
+		clear(tr.handlers)
 		tr.mu.Unlock()
 		close(tr.stopCh)
 		tr.wg.Wait()
@@ -502,18 +508,16 @@ func (tr *TaskRouter) cleanupOnce() {
 
 	// Clean idempotency map
 	tr.mu.Lock()
-	for k, expiry := range tr.inflight {
-		if now.After(expiry) {
-			delete(tr.inflight, k)
-		}
-	}
+	maps.DeleteFunc(tr.inflight, func(_ string, expiry time.Time) bool {
+		return now.After(expiry)
+	})
 
 	// Stop idle groups
 	for key, gw := range tr.groups {
 		if gw == nil || gw.stopping {
 			continue
 		}
-		if now.Sub(gw.lastActive) >= tr.cfg.GroupIdleTTL && len(gw.ch) == 0 {
+		if time.Since(gw.lastActive) >= tr.cfg.GroupIdleTTL && len(gw.ch) == 0 {
 			gw.stopping = true
 			close(gw.ch)
 			delete(tr.groups, key)
@@ -533,6 +537,14 @@ func (tr *TaskRouter) runCronOnce() {
 			_ = tr.Dispatch(context.Background(), job.Task)
 			job.lastRun = now
 		}
+	}
+	// Trim trailing nil jobs and shrink capacity
+	last := len(tr.cronJobs)
+	for last > 0 && tr.cronJobs[last-1] == nil {
+		last--
+	}
+	if last != len(tr.cronJobs) {
+		tr.cronJobs = slices.Clip(tr.cronJobs[:last])
 	}
 	tr.cronMu.Unlock()
 }

@@ -116,12 +116,6 @@ func nextUTCTimestamp(from time.Time, hour, minute, second int) time.Time {
 	return time.Date(from.Year(), from.Month(), from.Day(), hour, minute, second, 0, time.UTC)
 }
 
-func clampInt(v, min, max int) int {
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
+func clampInt(v, lo, hi int) int {
+	return max(min(v, hi), lo)
 }

@@ -42,9 +42,8 @@ func getCurrentGitBranch() string {
 	}
 	line := strings.TrimSpace(string(data))
 	if strings.HasPrefix(line, "ref: ") {
-		parts := strings.Split(line, "/")
-		if len(parts) > 0 {
-			return parts[len(parts)-1]
+		if i := strings.LastIndex(line, "/"); i >= 0 && i+1 < len(line) {
+			return line[i+1:]
 		}
 	}
 	return line

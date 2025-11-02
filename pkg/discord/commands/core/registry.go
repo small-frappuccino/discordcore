@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -192,10 +193,7 @@ func (cm *CommandManager) SetupCommands() error {
 
 	// Build map of code-defined commands
 	codeCommands := cm.router.registry.GetAllCommands()
-	codeByName := make(map[string]Command, len(codeCommands))
-	for name, cmd := range codeCommands {
-		codeByName[name] = cmd
-	}
+	codeByName := maps.Clone(codeCommands)
 
 	// Create/Update commands as needed
 	created, updated, unchanged := 0, 0, 0
