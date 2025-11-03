@@ -271,6 +271,28 @@ The library supports separate channels for different types of logs:
 - `message_log_channel_id`: Message edits and deletions
 - `automod_log_channel_id`: Actions from the automatic moderation system
 
+#### Environment flags
+
+- `ALICE_DISABLE_ENTRY_EXIT_LOGS` — When set to a truthy value, disables the member join/leave pipeline (no entry/exit embeds or metrics).
+- `ALICE_DISABLE_USER_LOGS` — Disables avatar/role monitoring and notifications.
+- `ALICE_DISABLE_MESSAGE_LOGS` — Disables message edit/delete logging.
+- `ALICE_DISABLE_REACTION_LOGS` — Disables reaction metrics.
+
+#### Entry/Exit backfill (Option A)
+
+Enable an automatic, one-shot backfill right after services start to reconstruct join/leave data from a log channel:
+- `ALICE_BACKFILL_ENTRY_EXIT_ENABLED` — truthy to enable the job at startup.
+- `ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID` — the channel to scan (e.g., `1413465672708657216`).
+- `ALICE_BACKFILL_ENTRY_EXIT_START_DAY` — UTC day to scan in `YYYY-MM-DD` format; defaults to “today” if omitted.
+
+Behavior:
+- Runs once after initialization via the internal task system.
+- Scans the configured channel for the specified day, paging newest → oldest (100 messages per page) until leaving the day.
+- Parses only this bot’s own embeds with titles “Member joined” and “Member left”.
+- Updates the database by:
+  - Upserting member join timestamps using the embed/message timestamp.
+  - Incrementing `daily_member_joins` and `daily_member_leaves` counters for metrics.
+
 This allows better organization of logs and configuring permissions specific to each event type.
 
 ## Known Limitations

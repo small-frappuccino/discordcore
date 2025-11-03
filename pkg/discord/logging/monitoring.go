@@ -3,7 +3,9 @@ package logging
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -300,6 +302,134 @@ func (ms *MonitoringService) Start() error {
 	go func() {
 		_ = ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.refresh_roles"})
 	}()
+
+	// Register one-shot entry/exit backfill handler (Option A)
+	ms.router.RegisterHandler("monitor.backfill_entry_exit_day", func(ctx context.Context, payload any) error {
+		// Payload is expected to be: struct{ ChannelID, Day string }
+		// Day format: YYYY-MM-DD (UTC)
+		type pld struct {
+			ChannelID string
+			Day       string
+		}
+		p, _ := payload.(pld)
+		channelID := strings.TrimSpace(p.ChannelID)
+		day := strings.TrimSpace(p.Day)
+		if channelID == "" {
+			return nil
+		}
+		if day == "" {
+			day = time.Now().UTC().Format("2006-01-02")
+		}
+
+		start, err := time.Parse("2006-01-02", day)
+		if err != nil {
+			return nil
+		}
+		end := start.Add(24 * time.Hour)
+
+		// Resolve guild ID from channel
+		var guildID string
+		if ms.session != nil && ms.session.State != nil {
+			if ch, _ := ms.session.State.Channel(channelID); ch != nil {
+				guildID = ch.GuildID
+			}
+		}
+		if guildID == "" && ms.session != nil {
+			if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
+				guildID = ch.GuildID
+			}
+		}
+		if guildID == "" {
+			return nil
+		}
+
+		botID := ""
+		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
+			botID = ms.session.State.User.ID
+		}
+
+		var before string
+		for {
+			msgs, err := ms.session.ChannelMessages(channelID, 100, before, "", "")
+			if err != nil || len(msgs) == 0 {
+				break
+			}
+
+			// Messages come newest -> oldest
+			stop := false
+			for _, m := range msgs {
+				t := m.Timestamp.UTC()
+				// Stop if we've paged past the target day
+				if t.Before(start) {
+					stop = true
+					break
+				}
+				// Only consider messages within the day
+				if t.Before(end) && !t.Before(start) {
+					// Only parse our own embeds (join/leave)
+					if m.Author != nil && m.Author.ID == botID && len(m.Embeds) > 0 {
+						for _, em := range m.Embeds {
+							if em == nil || em.Title == "" || em.Description == "" {
+								continue
+							}
+							title := strings.ToLower(strings.TrimSpace(em.Title))
+							if title != "member joined" && title != "member left" {
+								continue
+							}
+
+							// Extract user ID from description: "**username** (<@id>, `id`)"
+							desc := em.Description
+							userID := ""
+							if i := strings.Index(desc, "`"); i >= 0 {
+								if j := strings.Index(desc[i+1:], "`"); j >= 0 {
+									userID = desc[i+1 : i+1+j]
+								}
+							}
+							if userID == "" {
+								continue
+							}
+
+							if ms.store != nil {
+								if title == "member joined" {
+									_ = ms.store.UpsertMemberJoin(guildID, userID, t)
+									_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
+								} else if title == "member left" {
+									_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Prepare next page or stop
+			before = msgs[len(msgs)-1].ID
+			if stop {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	// Optionally auto-dispatch the backfill task right after startup based on env
+	if util.EnvBool("ALICE_BACKFILL_ENTRY_EXIT_ENABLED") {
+		chID := strings.TrimSpace(os.Getenv("ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID"))
+		day := strings.TrimSpace(os.Getenv("ALICE_BACKFILL_ENTRY_EXIT_START_DAY")) // default: today UTC
+		if chID != "" {
+			if day == "" {
+				day = time.Now().UTC().Format("2006-01-02")
+			}
+			_ = ms.router.Dispatch(context.Background(), task.Task{
+				Type:    "monitor.backfill_entry_exit_day",
+				Payload: struct{ ChannelID, Day string }{ChannelID: chID, Day: day},
+				Options: task.TaskOptions{
+					GroupKey: "backfill:" + chID,
+				},
+			})
+			log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task", "channelID", chID, "day", day)
+		}
+	}
 
 	log.ApplicationLogger().Info("All monitoring services started successfully")
 	return nil
