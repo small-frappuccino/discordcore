@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -19,13 +20,15 @@ import (
 type AdminCommands struct {
 	serviceManager *service.ServiceManager
 	unifiedCache   *cache.UnifiedCache
+	store          *storage.Store
 }
 
 // NewAdminCommands creates a new admin commands handler
-func NewAdminCommands(serviceManager *service.ServiceManager, unifiedCache *cache.UnifiedCache) *AdminCommands {
+func NewAdminCommands(serviceManager *service.ServiceManager, unifiedCache *cache.UnifiedCache, store *storage.Store) *AdminCommands {
 	return &AdminCommands{
 		serviceManager: serviceManager,
 		unifiedCache:   unifiedCache,
+		store:          store,
 	}
 }
 
@@ -172,6 +175,21 @@ func (cmd *MetricsCommand) formatMetrics(ctx *core.Context) string {
 				ms = append(ms, fmt.Sprintf("• guilds: entries=%d hits=%d misses=%d evictions=%d", gE, gH, gM, gEv))
 				ms = append(ms, fmt.Sprintf("• roles: entries=%d hits=%d misses=%d evictions=%d", rE, rH, rM, rEv))
 				ms = append(ms, fmt.Sprintf("• channels: entries=%d hits=%d misses=%d evictions=%d", cE, cH, cM, cEv))
+			}
+
+			// Add persisted cache counts via Store (best effort)
+			if cmd.adminCommands.store != nil {
+				if stats, err := cmd.adminCommands.store.GetCacheStats(); err == nil && len(stats) > 0 {
+					total := 0
+					var perType []string
+					for t, c := range stats {
+						total += c
+						perType = append(perType, fmt.Sprintf("%s=%d", t, c))
+					}
+					slices.Sort(perType)
+					ms = append(ms, fmt.Sprintf("• persisted_cache_total: %d", total))
+					ms = append(ms, fmt.Sprintf("• persisted_cache: %s", strings.Join(perType, " ")))
+				}
 			}
 		}
 

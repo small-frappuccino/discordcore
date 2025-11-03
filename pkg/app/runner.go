@@ -237,7 +237,7 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Admin commands
-	adminCommands := admin.NewAdminCommands(serviceManager, unifiedCache)
+	adminCommands := admin.NewAdminCommands(serviceManager, unifiedCache, store)
 	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 
 	log.ApplicationLogger().Info("🔗 Slash commands sync completed")
