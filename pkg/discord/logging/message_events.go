@@ -206,6 +206,9 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		}
 	}
 
+	if mes.store != nil && m.Author != nil {
+		_ = mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, time.Now().UTC())
+	}
 	slog.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
 }
 

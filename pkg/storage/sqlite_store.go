@@ -713,6 +713,50 @@ CREATE TABLE IF NOT EXISTS persistent_cache (
 CREATE INDEX IF NOT EXISTS idx_persistent_cache_type ON persistent_cache(cache_type);
 CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expires_at);`
 
+	const createDailyMessageMetrics = `
+CREATE TABLE IF NOT EXISTS daily_message_metrics (
+  guild_id   TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  day        DATE NOT NULL,
+  count      INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, channel_id, user_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_msg_by_guild_day ON daily_message_metrics(guild_id, day);
+CREATE INDEX IF NOT EXISTS idx_daily_msg_by_channel_day ON daily_message_metrics(channel_id, day);`
+
+	const createDailyReactionMetrics = `
+CREATE TABLE IF NOT EXISTS daily_reaction_metrics (
+  guild_id   TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  user_id    TEXT NOT NULL,              -- reactor user id
+  day        DATE NOT NULL,
+  count      INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, channel_id, user_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_react_by_guild_day ON daily_reaction_metrics(guild_id, day);
+CREATE INDEX IF NOT EXISTS idx_daily_react_by_channel_day ON daily_reaction_metrics(channel_id, day);`
+
+	const createDailyMemberJoinsMetrics = `
+CREATE TABLE IF NOT EXISTS daily_member_joins (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  day      DATE NOT NULL,
+  count    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, user_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_joins_by_guild_day ON daily_member_joins(guild_id, day);`
+
+	const createDailyMemberLeavesMetrics = `
+CREATE TABLE IF NOT EXISTS daily_member_leaves (
+  guild_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  day      DATE NOT NULL,
+  count    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (guild_id, user_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_leaves_by_guild_day ON daily_member_leaves(guild_id, day);`
+
 	stmts := []string{
 		createMessages,
 		createMessagesHistory,
@@ -723,6 +767,10 @@ CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expi
 		createRuntimeMeta,
 		createRolesCurrent,
 		createPersistentCache,
+		createDailyMessageMetrics,
+		createDailyReactionMetrics,
+		createDailyMemberJoinsMetrics,
+		createDailyMemberLeavesMetrics,
 	}
 	for _, sqlText := range stmts {
 		if _, err := db.Exec(sqlText); err != nil {
@@ -1018,4 +1066,92 @@ func (s *Store) GetCacheStats() (map[string]int, error) {
 		stats[cacheType] = count
 	}
 	return stats, rows.Err()
+}
+
+// IncrementDailyMessageCount increments the per-day message count for a user in a channel.
+func (s *Store) IncrementDailyMessageCount(guildID, channelID, userID string, at time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || channelID == "" || userID == "" {
+		return nil
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	_, err := s.db.Exec(
+		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count)
+         VALUES (?, ?, ?, ?, 1)
+         ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
+           count = count + 1`,
+		guildID, channelID, userID, day,
+	)
+	return err
+}
+
+// IncrementDailyReactionCount increments the per-day reaction count for a user in a channel.
+func (s *Store) IncrementDailyReactionCount(guildID, channelID, userID string, at time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || channelID == "" || userID == "" {
+		return nil
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	_, err := s.db.Exec(
+		`INSERT INTO daily_reaction_metrics (guild_id, channel_id, user_id, day, count)
+         VALUES (?, ?, ?, ?, 1)
+         ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
+           count = count + 1`,
+		guildID, channelID, userID, day,
+	)
+	return err
+}
+
+// IncrementDailyMemberJoin increments the per-day member join counter (per user).
+func (s *Store) IncrementDailyMemberJoin(guildID, userID string, at time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	_, err := s.db.Exec(
+		`INSERT INTO daily_member_joins (guild_id, user_id, day, count)
+         VALUES (?, ?, ?, 1)
+         ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
+           count = count + 1`,
+		guildID, userID, day,
+	)
+	return err
+}
+
+// IncrementDailyMemberLeave increments the per-day member leave counter (per user).
+func (s *Store) IncrementDailyMemberLeave(guildID, userID string, at time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	_, err := s.db.Exec(
+		`INSERT INTO daily_member_leaves (guild_id, user_id, day, count)
+         VALUES (?, ?, ?, 1)
+         ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
+           count = count + 1`,
+		guildID, userID, day,
+	)
+	return err
 }

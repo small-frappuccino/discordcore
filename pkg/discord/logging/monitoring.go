@@ -43,22 +43,23 @@ func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManag
 
 // MonitoringService coordinates multi-guild handlers and delegates specific tasks (e.g., user).
 type MonitoringService struct {
-	session             *discordgo.Session
-	configManager       *files.ConfigManager
-	store               *storage.Store
-	notifier            *NotificationSender
-	adapters            *task.NotificationAdapters
-	router              *task.TaskRouter
-	userWatcher         *UserWatcher
-	memberEventService  *MemberEventService  // Service for member events
-	messageEventService *MessageEventService // Service for message events
-	isRunning           bool
-	stopChan            chan struct{}
-	stopOnce            sync.Once
-	runMu               sync.Mutex
-	recentChanges       map[string]time.Time // Debounce to avoid duplicates
-	changesMutex        sync.RWMutex
-	cronCancel          func()
+	session              *discordgo.Session
+	configManager        *files.ConfigManager
+	store                *storage.Store
+	notifier             *NotificationSender
+	adapters             *task.NotificationAdapters
+	router               *task.TaskRouter
+	userWatcher          *UserWatcher
+	memberEventService   *MemberEventService   // Service for member events
+	messageEventService  *MessageEventService  // Service for message events
+	reactionEventService *ReactionEventService // Service for reaction metrics
+	isRunning            bool
+	stopChan             chan struct{}
+	stopOnce             sync.Once
+	runMu                sync.Mutex
+	recentChanges        map[string]time.Time // Debounce to avoid duplicates
+	changesMutex         sync.RWMutex
+	cronCancel           func()
 
 	// Heartbeat runtime tracking
 	heartbeatTicker *time.Ticker
@@ -184,6 +185,28 @@ func (ms *MonitoringService) Start() error {
 			// Stop the member event service if start failed
 			ms.memberEventService.Stop()
 			return fmt.Errorf("failed to start message event service: %w", err)
+		}
+	}
+
+	// Gate reaction logging behind env flag
+	disableReactions := util.EnvBool("ALICE_DISABLE_REACTION_LOGS")
+	if disableReactions {
+		log.ApplicationLogger().Info("🛑 Reaction logging disabled by ALICE_DISABLE_REACTION_LOGS; ReactionEventService will not start")
+	} else {
+		// Lazily initialize service if not yet created
+		if ms.reactionEventService == nil {
+			ms.reactionEventService = NewReactionEventService(ms.session, ms.configManager, ms.store)
+		}
+		if err := ms.reactionEventService.Start(); err != nil {
+			ms.isRunning = false
+			// Stop previously started services on failure
+			if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
+				_ = ms.messageEventService.Stop()
+			}
+			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
+				_ = ms.memberEventService.Stop()
+			}
+			return fmt.Errorf("failed to start reaction event service: %w", err)
 		}
 	}
 
@@ -330,6 +353,11 @@ func (ms *MonitoringService) Stop() error {
 	if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 		if err := ms.messageEventService.Stop(); err != nil {
 			log.ErrorLoggerRaw().Error("Error stopping message event service", "err", err)
+		}
+	}
+	if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
+		if err := ms.reactionEventService.Stop(); err != nil {
+			log.ErrorLoggerRaw().Error("Error stopping reaction event service", "err", err)
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -56,7 +57,10 @@ func (ch *CommandHandler) registerConfigCommands() error {
 	// Register the /config group and simple commands (ping/echo)
 	config.NewConfigCommands(ch.configManager).RegisterCommands(router)
 
-	log.ApplicationLogger().Info("Config commands registered successfully")
+	// Register metrics commands (activity, members)
+	metrics.RegisterMetricsCommands(router)
+
+	log.ApplicationLogger().Info("Config and metrics commands registered successfully")
 	return nil
 }
 

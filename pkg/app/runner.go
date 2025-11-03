@@ -118,8 +118,13 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some configured guilds could not be accessed: %v", err))
 	}
 
-	// Periodic cleanup (every 6 hours)
-	cleanupStop := cache.SchedulePeriodicCleanup(store, 6*time.Hour)
+	// Periodic cleanup (every 6 hours), can be disabled via ALICE_DISABLE_DB_CLEANUP
+	var cleanupStop chan struct{}
+	if !util.EnvBool("ALICE_DISABLE_DB_CLEANUP") {
+		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
+	} else {
+		log.ApplicationLogger().Info("🛑 DB cleanup disabled by ALICE_DISABLE_DB_CLEANUP")
+	}
 	defer func() {
 		if cleanupStop != nil {
 			close(cleanupStop)

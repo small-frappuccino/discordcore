@@ -135,6 +135,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	if mes.store != nil {
 		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
 			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
+			_ = mes.store.IncrementDailyMemberJoin(m.GuildID, m.User.ID, time.Now().UTC())
 		}
 	}
 
@@ -219,6 +220,11 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	}
 
 	botTime := mes.getBotTimeOnServer(m.GuildID)
+
+	// Increment daily member leave metric
+	if mes.store != nil {
+		_ = mes.store.IncrementDailyMemberLeave(m.GuildID, m.User.ID, time.Now().UTC())
+	}
 
 	slog.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTime.String(), botTime.String()))
 
