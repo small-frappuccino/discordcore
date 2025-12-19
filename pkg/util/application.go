@@ -114,46 +114,65 @@ func EffectiveBotName() string {
 	return "alicebot"
 }
 
-// GetApplicationSupportPath (Linux-only) returns the base path for configuration files.
-// New layout: ~/.config/[BotName]
+// GetApplicationSupportPath returns the base path for configuration files using the unified OS rules:
+//   - Linux/Unix:  ~/.config/<AppName>
+//   - macOS:       ~/Library/Preferences/<AppName>
+//   - Windows:     %APPDATA%/<AppName>
 func GetApplicationSupportPath(_ string) string {
-	return filepath.Join(homeDir(), ".config", EffectiveBotName())
+	app := EffectiveBotName()
+	if dir := strings.TrimSpace(platformConfigDir(app)); dir != "" {
+		return dir
+	}
+	// Last-resort fallback if platform resolution fails unexpectedly.
+	return filepath.Join(".", "config", app)
 }
 
-// GetApplicationCachesPath (Linux-only) returns the base path for cache data.
-// New layout: ~/.cache/[BotName]
+// GetApplicationCachesPath returns the base path for cache files using the unified OS rules:
+//   - Linux/Unix:  ~/.cache/<AppName>
+//   - macOS:       ~/Library/Caches/<AppName>
+//   - Windows:     %APPDATA%/<AppName>/Cache
 func GetApplicationCachesPath() string {
-	return filepath.Join(homeDir(), ".cache", EffectiveBotName())
+	app := EffectiveBotName()
+	if dir := strings.TrimSpace(platformCacheDir(app)); dir != "" {
+		return dir
+	}
+	// Last-resort fallback if platform resolution fails unexpectedly.
+	return filepath.Join(".", "cache", app)
 }
 
 // Deprecated: MigrationCacheFilePath returns the path to the avatar cache JSON used only for migration.
-// Location (new): ~/Library/Cache/[BotName]/avatar/avatar_cache.json
 func MigrationCacheFilePath() string {
 	return filepath.Join(ApplicationCachesPath, "avatar", "avatar_cache.json")
 }
 
 // Deprecated: LegacyMigrationCacheFilePath returns the previous JSON cache path, used only for migration.
-// Location (legacy): ~/Library/Application Support/[BotName]/data/application_cache.json
 func LegacyMigrationCacheFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
 }
 
 // GetMessageDBPath returns the SQLite DB path for message persistence.
-// New Linux layout: ~/.cache/[BotName]/messages/messages.db
+// Layout: <CachesBase>/messages/messages.db
 func GetMessageDBPath() string {
 	return filepath.Join(ApplicationCachesPath, "messages", "messages.db")
 }
 
 // GetSettingsFilePath returns the path for the primary settings JSON.
-// Layout (explicit): ~/.config/[BotName]/preferences/settings.json
+// Layout: <ConfigBase>/preferences/settings.json
 func GetSettingsFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
 }
 
-// GetLogFilePath returns the path to the main log file.
-// New Linux layout: ~/.log/[BotName]/discordcore.log
+// GetLogFilePath returns the path to the main log file using the unified OS rules:
+//   - Linux/Unix:  ~/.log/<AppName>/discordcore.log
+//   - macOS:       ~/Library/Logs/<AppName>/discordcore.log
+//   - Windows:     %APPDATA%/<AppName>/Logs/discordcore.log
 func GetLogFilePath() string {
-	return filepath.Join(homeDir(), ".log", EffectiveBotName(), "discordcore.log")
+	app := EffectiveBotName()
+	base := strings.TrimSpace(platformLogDir(app))
+	if base == "" {
+		base = filepath.Join(".", "logs", app)
+	}
+	return filepath.Join(base, "discordcore.log")
 }
 
 // EnsureCacheDirs creates base cache directories as needed.
@@ -193,10 +212,16 @@ func fileExists(path string) bool {
 }
 
 func homeDir() string {
+	// Deprecated for base path resolution: kept for any legacy callers.
+	// Prefer OS-specific resolution via platformConfigDir/platformCacheDir/platformLogDir.
 	if h := os.Getenv("HOME"); h != "" {
 		return h
 	}
-	// Fallback to current working directory if HOME is not set (unlikely on macOS).
+	// Prefer UserHomeDir when HOME isn't set (notably on Windows).
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		return h
+	}
+	// Fallback to current working directory if no better option is available.
 	if wd, err := os.Getwd(); err == nil {
 		return wd
 	}

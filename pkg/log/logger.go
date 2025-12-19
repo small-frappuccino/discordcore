@@ -202,8 +202,10 @@ func (el *ErrorLogger) Fatalf(format string, v ...interface{}) {
 // --- Initialization & Helpers ---
 
 func getDefaultLogDir() string {
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".log", util.EffectiveBotName())
+	// Prefer the unified, OS-specific log location logic from util.
+	// This keeps Linux/macOS/Windows consistent with the rest of the app's filesystem layout.
+	if logPath := util.GetLogFilePath(); logPath != "" {
+		return filepath.Dir(logPath)
 	}
 	return filepath.Join(".", "logs")
 }
