@@ -28,9 +28,19 @@ import (
 func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
 	// Always attempt to load the fallback file to populate any missing vars (non-overwriting).
 	// Determine fallback path: $HOME/.local/bin/.env
-	home, homeErr := os.UserHomeDir()
+	//
+	// On Windows, shells and tooling often expect $HOME to be the authoritative home directory
+	// (especially when running under MSYS2/Git Bash). Prefer $HOME when it is set; otherwise
+	// fall back to os.UserHomeDir().
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if home == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			home = h
+		}
+	}
+
 	var envPath string
-	if homeErr == nil && home != "" {
+	if home != "" {
 		envPath = filepath.Join(home, ".local", "bin", ".env")
 		if info, statErr := os.Stat(envPath); statErr == nil && !info.IsDir() {
 			// godotenv.Load will NOT override variables that are already set.
