@@ -2,8 +2,8 @@ package logging
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,13 +16,31 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const (
 	heartbeatInterval = 5 * time.Minute
 	downtimeThreshold = 30 * time.Minute
 )
+
+const (
+	// Defaults (can be overridden by env).
+	defaultBotPermMirrorActorRoleID = "1376361448942342164"
+
+	// persistent_cache types
+	persistentCacheTypeBotRolePermSnapshot = "bot_role_perm_snapshot"
+
+	// persistent_cache key prefix
+	persistentCacheKeyPrefixBotRolePermSnapshot = "bot_role_perm_snapshot:"
+)
+
+type botRolePermSnapshot struct {
+	GuildID         string    `json:"guild_id"`
+	RoleID          string    `json:"role_id"`
+	PrevPermissions int64     `json:"prev_permissions"`
+	SavedAt         time.Time `json:"saved_at"`
+	SavedByUserID   string    `json:"saved_by_user_id"`
+}
 
 // UserWatcher contains the specific logic for processing user changes.
 type UserWatcher struct {
@@ -163,10 +181,13 @@ func (ms *MonitoringService) Start() error {
 	ms.rolesCacheCleanup = make(chan struct{})
 	go ms.rolesCacheCleanupLoop()
 
-	// Start member/message services (gate entry/exit logs via env)
-	disableEntryExit := util.EnvBool("ALICE_DISABLE_ENTRY_EXIT_LOGS")
+	// Start member/message services (gate entry/exit logs via runtime config)
+	disableEntryExit := false
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		disableEntryExit = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_ENTRY_EXIT_LOGS
+	}
 	if disableEntryExit {
-		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by ALICE_DISABLE_ENTRY_EXIT_LOGS; MemberEventService will not start")
+		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by runtime config ALICE_DISABLE_ENTRY_EXIT_LOGS; MemberEventService will not start")
 	} else {
 		if err := ms.memberEventService.Start(); err != nil {
 			ms.isRunning = false
@@ -174,13 +195,21 @@ func (ms *MonitoringService) Start() error {
 		}
 	}
 	// Optionally honor ALICE_DISABLE_AUTOMOD_LOGS here (Automod service is started elsewhere)
-	if util.EnvBool("ALICE_DISABLE_AUTOMOD_LOGS") {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS")
+	disableAutomod := false
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		disableAutomod = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_AUTOMOD_LOGS
 	}
-	// Gate message logging behind env flag
-	disableMsg := util.EnvBool("ALICE_DISABLE_MESSAGE_LOGS")
+	if disableAutomod {
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config ALICE_DISABLE_AUTOMOD_LOGS")
+	}
+
+	// Gate message logging behind runtime config
+	disableMsg := false
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		disableMsg = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_MESSAGE_LOGS
+	}
 	if disableMsg {
-		log.ApplicationLogger().Info("🛑 Message logging disabled by ALICE_DISABLE_MESSAGE_LOGS; MessageEventService will not start")
+		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config ALICE_DISABLE_MESSAGE_LOGS; MessageEventService will not start")
 	} else {
 		if err := ms.messageEventService.Start(); err != nil {
 			ms.isRunning = false
@@ -190,10 +219,13 @@ func (ms *MonitoringService) Start() error {
 		}
 	}
 
-	// Gate reaction logging behind env flag
-	disableReactions := util.EnvBool("ALICE_DISABLE_REACTION_LOGS")
+	// Gate reaction logging behind runtime config
+	disableReactions := false
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		disableReactions = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_REACTION_LOGS
+	}
 	if disableReactions {
-		log.ApplicationLogger().Info("🛑 Reaction logging disabled by ALICE_DISABLE_REACTION_LOGS; ReactionEventService will not start")
+		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config ALICE_DISABLE_REACTION_LOGS; ReactionEventService will not start")
 	} else {
 		// Lazily initialize service if not yet created
 		if ms.reactionEventService == nil {
@@ -412,10 +444,17 @@ func (ms *MonitoringService) Start() error {
 		return nil
 	})
 
-	// Optionally auto-dispatch the backfill task right after startup based on env
-	if util.EnvBool("ALICE_BACKFILL_ENTRY_EXIT_ENABLED") {
-		chID := strings.TrimSpace(os.Getenv("ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID"))
-		day := strings.TrimSpace(os.Getenv("ALICE_BACKFILL_ENTRY_EXIT_START_DAY")) // default: today UTC
+	// Optionally auto-dispatch the backfill task right after startup based on runtime config
+	enabled := false
+	chID := ""
+	day := ""
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		rc := ms.configManager.Config().RuntimeConfig
+		enabled = rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED
+		chID = strings.TrimSpace(rc.ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID)
+		day = strings.TrimSpace(rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY) // default: today UTC
+	}
+	if enabled {
 		if chID != "" {
 			if day == "" {
 				day = time.Now().UTC().Format("2006-01-02")
@@ -588,18 +627,100 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	}
 }
 
+// ApplyRuntimeToggles hot-applies a subset of runtime_config toggles without restarting the process.
+//
+// Scope:
+// - ALICE_DISABLE_ENTRY_EXIT_LOGS: start/stop MemberEventService
+// - ALICE_DISABLE_MESSAGE_LOGS: start/stop MessageEventService
+// - ALICE_DISABLE_REACTION_LOGS: start/stop ReactionEventService
+// - ALICE_DISABLE_USER_LOGS: re-register user-related handlers (presence/member/user updates)
+// - ALICE_DISABLE_BOT_ROLE_PERM_MIRROR / ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID: no-op here (checked at event time)
+//
+// Notes:
+// - Backfill settings are intentionally not handled here.
+// - This is safe to call even if MonitoringService is not running; it will no-op.
+func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.RuntimeConfig) error {
+	ms.runMu.Lock()
+	defer ms.runMu.Unlock()
+
+	if !ms.isRunning {
+		return nil
+	}
+
+	// Entry/Exit logs -> MemberEventService
+	if rc.ALICE_DISABLE_ENTRY_EXIT_LOGS {
+		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
+			_ = ms.memberEventService.Stop()
+		}
+	} else {
+		if ms.memberEventService != nil && !ms.memberEventService.IsRunning() {
+			if err := ms.memberEventService.Start(); err != nil {
+				return fmt.Errorf("start MemberEventService: %w", err)
+			}
+		}
+	}
+
+	// Message logs -> MessageEventService
+	if rc.ALICE_DISABLE_MESSAGE_LOGS {
+		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
+			_ = ms.messageEventService.Stop()
+		}
+	} else {
+		if ms.messageEventService != nil && !ms.messageEventService.IsRunning() {
+			if err := ms.messageEventService.Start(); err != nil {
+				return fmt.Errorf("start MessageEventService: %w", err)
+			}
+		}
+	}
+
+	// Reaction logs -> ReactionEventService
+	if rc.ALICE_DISABLE_REACTION_LOGS {
+		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
+			_ = ms.reactionEventService.Stop()
+		}
+	} else {
+		if ms.reactionEventService == nil {
+			ms.reactionEventService = NewReactionEventService(ms.session, ms.configManager, ms.store)
+		}
+		if !ms.reactionEventService.IsRunning() {
+			if err := ms.reactionEventService.Start(); err != nil {
+				return fmt.Errorf("start ReactionEventService: %w", err)
+			}
+		}
+	}
+
+	// User logs -> re-register handlers (presence/member/user updates)
+	ms.removeEventHandlers()
+	ms.setupEventHandlersFromRuntimeConfig(rc)
+
+	_ = ctx
+	return nil
+}
+
 // setupEventHandlers registra handlers do Discord.
 func (ms *MonitoringService) setupEventHandlers() {
+	// Delegate to config-driven version (keeps behavior in one spot).
+	rc := files.RuntimeConfig{}
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		rc = ms.configManager.Config().RuntimeConfig
+	}
+	ms.setupEventHandlersFromRuntimeConfig(rc)
+}
+
+// setupEventHandlersFromRuntimeConfig registers handlers based on the provided runtime config.
+// This is used both at startup and for hot-apply.
+func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.RuntimeConfig) {
 	// Store handler references for later removal
-	// Gate user logs (avatars and roles) via env
-	disableUser := util.EnvBool("ALICE_DISABLE_USER_LOGS")
+	// Gate user logs (avatars and roles) via runtime config
+	disableUser := rc.ALICE_DISABLE_USER_LOGS
+
 	if disableUser {
 		// Register only non-user handlers
 		ms.eventHandlers = append(ms.eventHandlers,
 			ms.session.AddHandler(ms.handleGuildCreate),
 			ms.session.AddHandler(ms.handleGuildUpdate),
 		)
-		log.ApplicationLogger().Info("🛑 User logs disabled by ALICE_DISABLE_USER_LOGS; avatar/role handlers not registered")
+		log.ApplicationLogger().Info("🛑 User logs disabled by runtime config ALICE_DISABLE_USER_LOGS; avatar/role handlers not registered")
 	} else {
 		ms.eventHandlers = append(ms.eventHandlers,
 			ms.session.AddHandler(ms.handlePresenceUpdate),
@@ -609,6 +730,13 @@ func (ms *MonitoringService) setupEventHandlers() {
 			ms.session.AddHandler(ms.handleGuildUpdate),
 		)
 	}
+
+	// Always keep an eye on role updates so bot-role permission resets can be detected.
+	// This is independent from ALICE_DISABLE_USER_LOGS (it can be a safety mechanism).
+	ms.eventHandlers = append(ms.eventHandlers,
+		ms.session.AddHandler(ms.handleRoleUpdateForBotPermMirroring),
+		ms.session.AddHandler(ms.handleRoleCreateForBotPermMirroring),
+	)
 }
 
 // removeEventHandlers removes all registered event handlers
@@ -1640,6 +1768,264 @@ func (ms *MonitoringService) Store() *storage.Store {
 // GetUnifiedCache exposes the unified cache for use by other components
 func (ms *MonitoringService) GetUnifiedCache() *cache.UnifiedCache {
 	return ms.unifiedCache
+}
+
+func (ms *MonitoringService) botRolePermSnapshotKey(guildID, roleID string) string {
+	if guildID == "" || roleID == "" {
+		return ""
+	}
+	return persistentCacheKeyPrefixBotRolePermSnapshot + guildID + ":" + roleID
+}
+
+func (ms *MonitoringService) botPermMirrorEnabled() bool {
+	// Enabled by default (safety feature).
+	// Previously gated via ALICE_DISABLE_BOT_ROLE_PERM_MIRROR env var; now read from runtime_config in settings.json.
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		return !ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR
+	}
+	return true
+}
+
+func (ms *MonitoringService) botPermMirrorActorRoleID() string {
+	// Previously overridable via ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID env var; now read from runtime_config in settings.json.
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		v := strings.TrimSpace(ms.configManager.Config().RuntimeConfig.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID)
+		if v != "" {
+			return v
+		}
+	}
+	return defaultBotPermMirrorActorRoleID
+}
+
+func (ms *MonitoringService) isBotManagedRole(guildID, roleID string) bool {
+	if guildID == "" || roleID == "" || ms.session == nil {
+		return false
+	}
+	roles, err := ms.session.GuildRoles(guildID)
+	if err != nil {
+		return false
+	}
+	for _, r := range roles {
+		if r == nil || r.ID != roleID {
+			continue
+		}
+		return r.Managed
+	}
+	return false
+}
+
+func (ms *MonitoringService) getRoleByID(guildID, roleID string) (*discordgo.Role, bool) {
+	if guildID == "" || roleID == "" || ms.session == nil {
+		return nil, false
+	}
+	roles, err := ms.session.GuildRoles(guildID)
+	if err != nil {
+		return nil, false
+	}
+	for _, r := range roles {
+		if r != nil && r.ID == roleID {
+			return r, true
+		}
+	}
+	return nil, false
+}
+
+func (ms *MonitoringService) findBotManagedRole(guildID string) (*discordgo.Role, bool) {
+	if guildID == "" || ms.session == nil {
+		return nil, false
+	}
+	roles, err := ms.session.GuildRoles(guildID)
+	if err != nil {
+		return nil, false
+	}
+	for _, r := range roles {
+		if r == nil {
+			continue
+		}
+		if r.Managed {
+			return r, true
+		}
+	}
+	return nil, false
+}
+
+func (ms *MonitoringService) saveBotRolePermSnapshot(guildID, roleID string, prevPerm int64, actorUserID string) {
+	if ms.store == nil || guildID == "" || roleID == "" {
+		return
+	}
+	snap := botRolePermSnapshot{
+		GuildID:         guildID,
+		RoleID:          roleID,
+		PrevPermissions: prevPerm,
+		SavedAt:         time.Now().UTC(),
+		SavedByUserID:   actorUserID,
+	}
+	b, err := json.Marshal(snap)
+	if err != nil {
+		return
+	}
+	// Keep snapshot for a long time; it is safe and small.
+	expiresAt := time.Now().UTC().Add(365 * 24 * time.Hour)
+	_ = ms.store.UpsertCacheEntry(ms.botRolePermSnapshotKey(guildID, roleID), persistentCacheTypeBotRolePermSnapshot, string(b), expiresAt)
+}
+
+func (ms *MonitoringService) getBotRolePermSnapshot(guildID, roleID string) (*botRolePermSnapshot, bool) {
+	if ms.store == nil {
+		return nil, false
+	}
+	key := ms.botRolePermSnapshotKey(guildID, roleID)
+	if key == "" {
+		return nil, false
+	}
+	tp, data, _, ok, err := ms.store.GetCacheEntry(key)
+	if err != nil || !ok || tp != persistentCacheTypeBotRolePermSnapshot || strings.TrimSpace(data) == "" {
+		return nil, false
+	}
+	var snap botRolePermSnapshot
+	if err := json.Unmarshal([]byte(data), &snap); err != nil {
+		return nil, false
+	}
+	if snap.GuildID == "" || snap.RoleID == "" {
+		return nil, false
+	}
+	return &snap, true
+}
+
+func (ms *MonitoringService) maybeRestoreBotRolePermissions(guildID, roleID string, newPerm int64) {
+	// If we have a stored snapshot and the role seems to have been reset, restore.
+	snap, ok := ms.getBotRolePermSnapshot(guildID, roleID)
+	if !ok || snap == nil {
+		return
+	}
+	// If current perms already match the snapshot, nothing to do.
+	if newPerm == snap.PrevPermissions {
+		return
+	}
+
+	// Restore only if this is a likely reset scenario:
+	// - The role is managed (bot/integration role)
+	// - Current perms are "smaller" than snapshot (common after reset)
+	if !ms.isBotManagedRole(guildID, roleID) {
+		return
+	}
+	if newPerm > snap.PrevPermissions {
+		// don't "downgrade" if somehow perms increased
+		return
+	}
+
+	if ms.session == nil {
+		return
+	}
+	perm := snap.PrevPermissions
+	_, _ = ms.session.GuildRoleEdit(guildID, roleID, &discordgo.RoleParams{
+		Permissions: &perm,
+	})
+}
+
+func (ms *MonitoringService) handleRoleCreateForBotPermMirroring(s *discordgo.Session, e *discordgo.GuildRoleCreate) {
+	if e == nil || e.Role == nil || e.GuildID == "" {
+		return
+	}
+	if !ms.botPermMirrorEnabled() {
+		return
+	}
+	// When a managed role is (re)created (common after bot add/re-add), try to restore.
+	if !e.Role.Managed {
+		return
+	}
+	ms.maybeRestoreBotRolePermissions(e.GuildID, e.Role.ID, e.Role.Permissions)
+}
+
+func (ms *MonitoringService) handleRoleUpdateForBotPermMirroring(s *discordgo.Session, e *discordgo.GuildRoleUpdate) {
+	if e == nil || e.Role == nil || e.GuildID == "" {
+		return
+	}
+	if !ms.botPermMirrorEnabled() {
+		return
+	}
+
+	// Only care about managed roles (bot/integration roles)
+	if !e.Role.Managed {
+		return
+	}
+
+	// Try to locate an audit log entry to understand who did it and snapshot previous perms
+	// when the actor has the privileged role.
+	actionType := int(discordgo.AuditLogActionRoleUpdate)
+	audit, err := ms.session.GuildAuditLog(e.GuildID, "", "", actionType, 10)
+	atomic.AddUint64(&ms.apiAuditLogCalls, 1)
+	if err == nil && audit != nil {
+		for _, entry := range audit.AuditLogEntries {
+			if entry == nil || entry.ActionType == nil {
+				continue
+			}
+			if *entry.ActionType != discordgo.AuditLogActionRoleUpdate {
+				continue
+			}
+			// Role update entries target the role id
+			if entry.TargetID != e.Role.ID {
+				continue
+			}
+
+			actorID := entry.UserID
+			if strings.TrimSpace(actorID) == "" {
+				break
+			}
+
+			// If actor lacks the mirroring role, do not snapshot; still allow restore path below.
+			actor, err := ms.getGuildMember(e.GuildID, actorID)
+			if err != nil || actor == nil {
+				break
+			}
+			hasActorRole := false
+			requiredRoleID := ms.botPermMirrorActorRoleID()
+			if requiredRoleID != "" {
+				for _, rid := range actor.Roles {
+					if rid == requiredRoleID {
+						hasActorRole = true
+						break
+					}
+				}
+			}
+			if !hasActorRole {
+				break
+			}
+
+			// Find the previous permissions from the audit log "changes".
+			var oldPerm *int64
+			for _, ch := range entry.Changes {
+				if ch == nil || ch.Key == nil {
+					continue
+				}
+				if *ch.Key != "permissions" {
+					continue
+				}
+				// OldValue/NewValue can be string or float64 depending on decoding.
+				switch v := ch.OldValue.(type) {
+				case string:
+					if p, err := strconv.ParseInt(v, 10, 64); err == nil {
+						oldPerm = &p
+					}
+				case float64:
+					p := int64(v)
+					oldPerm = &p
+				case int64:
+					p := v
+					oldPerm = &p
+				case int:
+					p := int64(v)
+					oldPerm = &p
+				}
+			}
+			if oldPerm != nil {
+				ms.saveBotRolePermSnapshot(e.GuildID, e.Role.ID, *oldPerm, actorID)
+			}
+			break
+		}
+	}
+
+	// If bot role permissions were reset (e.g., bot kicked/re-added), restore from snapshot.
+	ms.maybeRestoreBotRolePermissions(e.GuildID, e.Role.ID, e.Role.Permissions)
 }
 
 // Helper methods for cached API calls

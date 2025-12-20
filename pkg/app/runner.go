@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -19,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
@@ -47,17 +47,15 @@ func Run(appName, tokenEnv string) error {
 	// Ensure logs are flushed on exit
 	defer log.GlobalLogger.Sync()
 
-	// Theme configuration
-	if err := util.ConfigureThemeFromEnv(); err != nil {
-		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from %s: %v", "ALICE_BOT_THEME", err))
-	}
-	if os.Getenv("ALICE_BOT_THEME") == "" {
-		if err := util.SetTheme(""); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
-		} else {
-			log.ApplicationLogger().Info("🌈 Default theme applied")
-		}
-	}
+	// Theme configuration (now from settings.json runtime_config)
+	//
+	// IMPORTANT: configManager is created later (after config files are ensured).
+	// We cannot read runtime_config here without risking an undefined variable / nil config.
+	// Theme will be applied right after loading settings.json (see below).
+
+	// Runtime hot-apply manager (theme + ALICE_DISABLE_* toggles)
+	// NOTE: The /config runtime panel triggers Apply() after persisting settings.json.
+	var runtimeApplier *runtimeapply.Manager
 
 	// Global error handler
 	if err := errutil.InitializeGlobalErrorHandler(log.GlobalLogger); err != nil {
@@ -103,11 +101,28 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to load settings file: %v", err))
 	}
 
-	// SQLite store (support ALICE_MESSAGE_DB_PATH override)
-	dbPath := util.GetMessageDBPath()
-	if v := os.Getenv("ALICE_MESSAGE_DB_PATH"); v != "" {
-		dbPath = v
+	// Theme configuration (from settings.json runtime_config)
+	{
+		cfg := configManager.Config()
+		themeName := ""
+		if cfg != nil {
+			themeName = cfg.RuntimeConfig.ALICE_BOT_THEME
+		}
+
+		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "ALICE_BOT_THEME", err))
+		}
+		if themeName == "" {
+			if err := util.SetTheme(""); err != nil {
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
+			} else {
+				log.ApplicationLogger().Info("🌈 Default theme applied")
+			}
+		}
 	}
+
+	// SQLite store (hardcoded path; no runtime_config override)
+	dbPath := util.GetMessageDBPath()
 	store := storage.NewStore(dbPath)
 	if err := store.Init(); err != nil {
 		return fmt.Errorf("initialize SQLite store: %w", err)
@@ -118,12 +133,16 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some configured guilds could not be accessed: %v", err))
 	}
 
-	// Periodic cleanup (every 6 hours), can be disabled via ALICE_DISABLE_DB_CLEANUP
+	// Periodic cleanup (every 6 hours), can be disabled via runtime config (replaces ALICE_DISABLE_DB_CLEANUP)
 	var cleanupStop chan struct{}
-	if !util.EnvBool("ALICE_DISABLE_DB_CLEANUP") {
+	disableCleanup := false
+	if cfg := configManager.Config(); cfg != nil {
+		disableCleanup = cfg.RuntimeConfig.ALICE_DISABLE_DB_CLEANUP
+	}
+	if !disableCleanup {
 		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
 	} else {
-		log.ApplicationLogger().Info("🛑 DB cleanup disabled by ALICE_DISABLE_DB_CLEANUP")
+		log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config ALICE_DISABLE_DB_CLEANUP")
 	}
 	defer func() {
 		if cleanupStop != nil {
@@ -140,6 +159,13 @@ func Run(appName, tokenEnv string) error {
 		return fmt.Errorf("create monitoring service: %w", err)
 	}
 
+	// Create runtime hot-apply manager and set initial baseline from current config.
+	// This lets the runtime config panel apply environment-like toggles without a full restart.
+	runtimeApplier = runtimeapply.New(serviceManager, monitoringService)
+	if cfg := configManager.Config(); cfg != nil {
+		runtimeApplier.SetInitial(cfg.RuntimeConfig)
+	}
+
 	// Cache warmup (persisted + fetch missing)
 	// NOTE: Warmup responsibility is consolidated in the app runner.
 	// MonitoringService does not perform its own warmup to avoid duplicate work during startup.
@@ -154,15 +180,8 @@ func Run(appName, tokenEnv string) error {
 		}
 	}
 
-	// Periodic cache persistence (configurable via ALICE_UNIFIED_CACHE_PERSIST_INTERVAL; default 1h)
+	// Periodic cache persistence (hardcoded interval)
 	persistInterval := time.Hour
-	if v := os.Getenv("ALICE_UNIFIED_CACHE_PERSIST_INTERVAL"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			persistInterval = d
-		} else {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Invalid ALICE_UNIFIED_CACHE_PERSIST_INTERVAL=%q: %v; using default %v", v, err, persistInterval))
-		}
-	}
 	persistStop := unifiedCache.SetPersistInterval(persistInterval)
 	defer func() {
 		if persistStop != nil {
@@ -181,11 +200,14 @@ func Run(appName, tokenEnv string) error {
 		func() bool { return true },
 	)
 
-	// Automod service with TaskRouter adapters (gated by ALICE_DISABLE_AUTOMOD_LOGS)
-	disableAutomod := util.EnvBool("ALICE_DISABLE_AUTOMOD_LOGS")
+	// Automod service with TaskRouter adapters (gated by runtime config; replaces ALICE_DISABLE_AUTOMOD_LOGS)
+	disableAutomod := false
+	if cfg := configManager.Config(); cfg != nil {
+		disableAutomod = cfg.RuntimeConfig.ALICE_DISABLE_AUTOMOD_LOGS
+	}
 	var automodWrapper *service.ServiceWrapper
 	if disableAutomod {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by ALICE_DISABLE_AUTOMOD_LOGS; AutomodService will not start")
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config ALICE_DISABLE_AUTOMOD_LOGS; AutomodService will not start")
 	} else {
 		automodService := logging.NewAutomodService(discordSession, configManager)
 		automodRouter := task.NewRouter(task.Defaults())
@@ -226,6 +248,11 @@ func Run(appName, tokenEnv string) error {
 		return fmt.Errorf("configure slash commands: %w", err)
 	}
 
+	// NOTE:
+	// The runtime hot-apply manager is created here and kept alive for the lifetime of the process.
+	// The /config runtime panel should call runtimeApplier.Apply(ctx, nextRuntimeConfig) after saving.
+	_ = runtimeApplier
+
 	// Inject store and unified cache into command router
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {
@@ -233,6 +260,8 @@ func Run(appName, tokenEnv string) error {
 			if monitoringService != nil {
 				router.SetCache(monitoringService.GetUnifiedCache())
 			}
+			// Wire runtime hot-apply manager so /config runtime can apply changes immediately.
+			router.SetRuntimeApplier(runtimeApplier)
 		}
 	}
 

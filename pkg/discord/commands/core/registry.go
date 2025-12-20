@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -19,6 +20,11 @@ type CommandRouter struct {
 
 	permChecker     *PermissionChecker
 	autocompleteMap map[string]AutocompleteHandler
+
+	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
+	// It is set by the app runner and can be used by interaction handlers to apply changes
+	// immediately after persisting settings.json.
+	runtimeApplier *runtimeapply.Manager
 }
 
 // NewCommandRouter creates a new command router
@@ -408,4 +414,15 @@ func (cr *CommandRouter) SetCache(unifiedCache *cache.UnifiedCache) {
 	if cr.permChecker != nil {
 		cr.permChecker.SetCache(unifiedCache)
 	}
+}
+
+// SetRuntimeApplier sets the shared runtime hot-apply manager.
+// This is optional; if unset, hot-apply is simply not performed.
+func (cr *CommandRouter) SetRuntimeApplier(applier *runtimeapply.Manager) {
+	cr.runtimeApplier = applier
+}
+
+// GetRuntimeApplier returns the shared runtime hot-apply manager (if any).
+func (cr *CommandRouter) GetRuntimeApplier() *runtimeapply.Manager {
+	return cr.runtimeApplier
 }

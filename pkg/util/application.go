@@ -91,10 +91,11 @@ func SetTheme(name string) error {
 	return theme.SetCurrent(name)
 }
 
-// ConfigureThemeFromEnv loads theme from ALICE_BOT_THEME, if set.
-func ConfigureThemeFromEnv() error {
-	if v := os.Getenv("ALICE_BOT_THEME"); strings.TrimSpace(v) != "" {
-		return theme.SetCurrent(v)
+// ConfigureThemeFromConfig loads theme from settings.json runtime_config (ALICE_BOT_THEME), if set.
+// This replaces the previous environment-variable based theme selection.
+func ConfigureThemeFromConfig(themeName string) error {
+	if strings.TrimSpace(themeName) != "" {
+		return theme.SetCurrent(themeName)
 	}
 	return nil
 }

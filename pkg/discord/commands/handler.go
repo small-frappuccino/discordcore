@@ -7,11 +7,13 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
-// CommandHandler is the main handler that coordinates all bot commands
+// CommandHandler manages bot command setup and handling
 type CommandHandler struct {
 	session        *discordgo.Session
 	configManager  *files.ConfigManager
@@ -41,6 +43,20 @@ func (ch *CommandHandler) SetupCommands() error {
 		return fmt.Errorf("failed to register config commands: %w", err)
 	}
 
+	// Register runtime-config interactive handlers (components + modals)
+	// This is required because core.CommandRouter currently routes only slash commands.
+	//
+	// The runtime config panel needs the hot-apply manager to apply THEME + ALICE_DISABLE_* at runtime.
+	// Since these interactions do not go through the slash CommandRouter, we pass the shared applier
+	// via closure here.
+	var applier *runtimeapply.Manager
+	if ch.commandManager != nil {
+		if router := ch.commandManager.GetRouter(); router != nil {
+			applier = router.GetRuntimeApplier()
+		}
+	}
+	ch.session.AddHandler(runtime.HandleRuntimeConfigInteractions(ch.configManager, applier))
+
 	// Configure commands on Discord
 	if err := ch.commandManager.SetupCommands(); err != nil {
 		return fmt.Errorf("failed to setup commands: %w", err)
@@ -50,12 +66,20 @@ func (ch *CommandHandler) SetupCommands() error {
 	return nil
 }
 
-// registerConfigCommands registers configuration commands
+// GetCommandManager returns the command manager (for tests or extensions)
+func (ch *CommandHandler) GetCommandManager() *core.CommandManager {
+	return ch.commandManager
+}
+
+// registerConfigCommands registers configuration-related commands
 func (ch *CommandHandler) registerConfigCommands() error {
 	router := ch.commandManager.GetRouter()
 
 	// Register the /config group and simple commands (ping/echo)
 	config.NewConfigCommands(ch.configManager).RegisterCommands(router)
+
+	// Register the /config runtime panel (replaces env-var operational toggles)
+	runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
 
 	// Register metrics commands (activity, members)
 	metrics.RegisterMetricsCommands(router)
@@ -74,10 +98,7 @@ func (ch *CommandHandler) Shutdown() error {
 	return nil
 }
 
-// GetCommandManager returns the command manager (for tests or extensions)
-func (ch *CommandHandler) GetCommandManager() *core.CommandManager {
-	return ch.commandManager
-}
+
 
 // GetConfigManager returns the configuration manager
 func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {

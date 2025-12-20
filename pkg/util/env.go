@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -71,4 +72,26 @@ func EnvBool(name string) bool {
 	default:
 		return false
 	}
+}
+
+// EnvString returns the trimmed value of the environment variable, or def if empty/unset.
+func EnvString(name, def string) string {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+// EnvInt64 returns the parsed int64 value of the environment variable, or def if empty/unset/invalid.
+func EnvInt64(name string, def int64) int64 {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return def
+	}
+	return n
 }

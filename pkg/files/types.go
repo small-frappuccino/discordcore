@@ -10,6 +10,41 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
+// RuntimeConfig centralizes operational toggles/parameters that were previously
+// controlled via environment variables. These values are meant to be edited
+// from Discord via an interactive embed and persisted in settings.json.
+//
+// Keep names in CAPS to mirror the previous env var names and make auditing easy.
+type RuntimeConfig struct {
+	// THEME
+	ALICE_BOT_THEME string `json:"ALICE_BOT_THEME,omitempty"`
+
+	// SERVICES (LOGGING)
+	ALICE_DISABLE_DB_CLEANUP      bool `json:"ALICE_DISABLE_DB_CLEANUP,omitempty"`
+	ALICE_DISABLE_AUTOMOD_LOGS    bool `json:"ALICE_DISABLE_AUTOMOD_LOGS,omitempty"`
+	ALICE_DISABLE_MESSAGE_LOGS    bool `json:"ALICE_DISABLE_MESSAGE_LOGS,omitempty"`
+	ALICE_DISABLE_ENTRY_EXIT_LOGS bool `json:"ALICE_DISABLE_ENTRY_EXIT_LOGS,omitempty"`
+	ALICE_DISABLE_REACTION_LOGS   bool `json:"ALICE_DISABLE_REACTION_LOGS,omitempty"`
+	ALICE_DISABLE_USER_LOGS       bool `json:"ALICE_DISABLE_USER_LOGS,omitempty"`
+
+	// MESSAGE CACHE
+	ALICE_MESSAGE_CACHE_TTL_HOURS int  `json:"ALICE_MESSAGE_CACHE_TTL_HOURS,omitempty"`
+	ALICE_MESSAGE_DELETE_ON_LOG   bool `json:"ALICE_MESSAGE_DELETE_ON_LOG,omitempty"`
+	ALICE_MESSAGE_CACHE_CLEANUP   bool `json:"ALICE_MESSAGE_CACHE_CLEANUP,omitempty"`
+
+	// BACKFILL (ENTRY/EXIT)
+	ALICE_BACKFILL_ENTRY_EXIT_ENABLED    bool   `json:"ALICE_BACKFILL_ENTRY_EXIT_ENABLED,omitempty"`
+	ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID string `json:"ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID,omitempty"`
+	ALICE_BACKFILL_ENTRY_EXIT_START_DAY  string `json:"ALICE_BACKFILL_ENTRY_EXIT_START_DAY,omitempty"` // YYYY-MM-DD, default: today UTC when empty
+
+	// BOT ROLE PERMISSION MIRRORING (SAFETY)
+	// Previously controllable via env vars:
+	//   - ALICE_DISABLE_BOT_ROLE_PERM_MIRROR
+	//   - ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID
+	ALICE_DISABLE_BOT_ROLE_PERM_MIRROR       bool   `json:"ALICE_DISABLE_BOT_ROLE_PERM_MIRROR,omitempty"`
+	ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID string `json:"ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID,omitempty"`
+}
+
 // ## Config Types
 
 // GuildConfig holds the configuration for a specific guild.
@@ -41,6 +76,13 @@ type GuildConfig struct {
 // BotConfig holds the configuration for the bot.
 type BotConfig struct {
 	Guilds []GuildConfig `json:"guilds"`
+
+	// RuntimeConfig holds bot-level runtime overrides editable from Discord.
+	// This intentionally replaces the previous "env var toggles" for operational
+	// behavior (except for token), so settings can be managed in-app.
+	//
+	// NOTE: These are NOT environment variables. They are persisted in settings.json.
+	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
 // ConfigManager handles bot configuration management.

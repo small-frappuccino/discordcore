@@ -3,8 +3,6 @@ package logging
 import (
 	"fmt"
 	"log/slog"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // CachedMessage stores message data for comparison
@@ -32,13 +29,16 @@ type MessageEventService struct {
 	notifier      *NotificationSender
 	adapters      *task.NotificationAdapters
 	store         *storage.Store
-	isRunning     bool
+	isRunning bool
 
-	// Message cache configuration (env-controlled)
+	// Message cache configuration (populated from settings.json runtime_config)
 	cacheEnabled   bool
 	cacheTTL       time.Duration
 	deleteOnLog    bool
 	cleanupEnabled bool
+
+	// Versioning configuration (populated from settings.json runtime_config)
+	versioningEnabled bool
 }
 
 // NewMessageEventService creates a new instance of the message events service
@@ -59,25 +59,28 @@ func (mes *MessageEventService) Start() error {
 	}
 	mes.isRunning = true
 
-	// Load message cache configuration from environment
-	// ALICE_MESSAGE_CACHE_ENABLED: "1/true/on/yes" enables write-through caching (default: disabled)
-	// ALICE_MESSAGE_CACHE_TTL_HOURS: TTL for cached messages (default: 72 when enabled)
-	// ALICE_MESSAGE_DELETE_ON_LOG: delete message rows after logging deletions (default: disabled)
-	// ALICE_MESSAGE_CACHE_CLEANUP: run periodic cleanup of expired messages on start (default: disabled)
+	// Load message cache configuration from settings.json runtime_config,
+	// but keep cache + versioning hardcoded enabled.
 	{
-		mes.cacheEnabled = util.EnvBool("ALICE_MESSAGE_CACHE_ENABLED")
+		rc := files.RuntimeConfig{}
+		if mes.configManager != nil && mes.configManager.Config() != nil {
+			rc = mes.configManager.Config().RuntimeConfig
+		}
+
+		// Hardcoded enabled
+		mes.cacheEnabled = true
 
 		ttlHours := 72
-		if vv := strings.TrimSpace(os.Getenv("ALICE_MESSAGE_CACHE_TTL_HOURS")); vv != "" {
-			if n, err := strconv.Atoi(vv); err == nil && n > 0 {
-				ttlHours = n
-			}
+		if rc.ALICE_MESSAGE_CACHE_TTL_HOURS > 0 {
+			ttlHours = rc.ALICE_MESSAGE_CACHE_TTL_HOURS
 		}
 		mes.cacheTTL = time.Duration(ttlHours) * time.Hour
 
-		mes.deleteOnLog = util.EnvBool("ALICE_MESSAGE_DELETE_ON_LOG")
+		mes.deleteOnLog = rc.ALICE_MESSAGE_DELETE_ON_LOG
+		mes.cleanupEnabled = rc.ALICE_MESSAGE_CACHE_CLEANUP
 
-		mes.cleanupEnabled = util.EnvBool("ALICE_MESSAGE_CACHE_CLEANUP")
+		// Hardcoded enabled
+		mes.versioningEnabled = true
 	}
 
 	// Store should be injected and already initialized
@@ -188,8 +191,8 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 			HasExpiry:      true,
 		})
 
-		// Versioned history (v1) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
-		if util.EnvBool("ALICE_MESSAGE_VERSIONING_ENABLED") {
+		// Versioned history (v1) - hardcoded enabled
+		if mes.versioningEnabled {
 			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
 				GuildID:     guildID,
 				MessageID:   m.ID,
@@ -351,8 +354,8 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 			HasExpiry:      true,
 		})
 
-		// Versioned history (edit) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
-		if util.EnvBool("ALICE_MESSAGE_VERSIONING_ENABLED") {
+		// Versioned history (edit) - hardcoded enabled
+		if mes.versioningEnabled {
 			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
 				GuildID:   updated.GuildID,
 				MessageID: updated.ID,
@@ -485,8 +488,8 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	}
 
 	// Remove from cache and persistence (disabled by default)
-	// Versioned history (delete) - gated by ALICE_MESSAGE_VERSIONING_ENABLED
-	if util.EnvBool("ALICE_MESSAGE_VERSIONING_ENABLED") && mes.store != nil && cached.Author != nil {
+	// Versioned history (delete) - hardcoded enabled
+	if mes.versioningEnabled && mes.store != nil && cached.Author != nil {
 		_ = mes.store.InsertMessageVersion(storage.MessageVersion{
 			GuildID:   cached.GuildID,
 			MessageID: cached.ID,
