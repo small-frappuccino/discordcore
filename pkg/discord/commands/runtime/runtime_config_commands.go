@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +70,7 @@ const (
 	vtBool   valueType = "bool"
 	vtString valueType = "string"
 	vtDate   valueType = "date"
+	vtInt    valueType = "int"
 )
 
 type restartHint string
@@ -102,18 +104,53 @@ func (s panelState) encode() string {
 }
 
 func decodeState(raw string) panelState {
-	parts := strings.Split(raw, stateSep)
+	// Expected: mode|group|key
+	// Use SplitN to avoid accepting extra separators as additional state fields.
+	parts := strings.SplitN(raw, stateSep, 3)
 	st := panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyALICE_BOT_THEME}
-	if len(parts) >= 1 && strings.TrimSpace(parts[0]) != "" {
-		st.Mode = pageMode(strings.TrimSpace(parts[0]))
+	if len(parts) >= 1 {
+		if v := strings.TrimSpace(parts[0]); v != "" {
+			st.Mode = pageMode(v)
+		}
 	}
-	if len(parts) >= 2 && strings.TrimSpace(parts[1]) != "" {
-		st.Group = strings.TrimSpace(parts[1])
+	if len(parts) >= 2 {
+		if v := strings.TrimSpace(parts[1]); v != "" {
+			st.Group = v
+		}
 	}
-	if len(parts) >= 3 && strings.TrimSpace(parts[2]) != "" {
-		st.Key = runtimeKey(strings.TrimSpace(parts[2]))
+	if len(parts) >= 3 {
+		if v := strings.TrimSpace(parts[2]); v != "" {
+			st.Key = runtimeKey(v)
+		}
 	}
-	return st
+	return sanitizeState(st)
+}
+
+func sanitizeState(st panelState) panelState {
+	switch st.Mode {
+	case pageMain, pageHelp, pageDetail:
+		// ok
+	default:
+		st.Mode = pageMain
+	}
+
+	if st.Group == "" {
+		st.Group = "ALL"
+	}
+	if st.Group != "ALL" {
+		valid := false
+		for _, g := range allGroups() {
+			if g == st.Group {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			st.Group = "ALL"
+		}
+	}
+
+	return ensureKeyInGroup(st)
 }
 
 func (s panelState) withMode(m pageMode) panelState  { s.Mode = m; return s }
@@ -133,6 +170,11 @@ const (
 	runtimeKeyALICE_DISABLE_ENTRY_EXIT_LOGS runtimeKey = "ALICE_DISABLE_ENTRY_EXIT_LOGS"
 	runtimeKeyALICE_DISABLE_REACTION_LOGS   runtimeKey = "ALICE_DISABLE_REACTION_LOGS"
 	runtimeKeyALICE_DISABLE_USER_LOGS       runtimeKey = "ALICE_DISABLE_USER_LOGS"
+
+	// MESSAGE CACHE
+	runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS runtimeKey = "ALICE_MESSAGE_CACHE_TTL_HOURS"
+	runtimeKeyALICE_MESSAGE_DELETE_ON_LOG   runtimeKey = "ALICE_MESSAGE_DELETE_ON_LOG"
+	runtimeKeyALICE_MESSAGE_CACHE_CLEANUP   runtimeKey = "ALICE_MESSAGE_CACHE_CLEANUP"
 
 	// BACKFILL (ENTRY/EXIT)
 	runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED    runtimeKey = "ALICE_BACKFILL_ENTRY_EXIT_ENABLED"
@@ -202,6 +244,31 @@ func allSpecs() []spec {
 			Type:        vtBool,
 			DefaultHint: "false",
 			ShortHelp:   "Disable user log handlers (avatars/roles)",
+			RestartHint: restartRecommended,
+		},
+		{
+			Key:         runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS,
+			Group:       "MESSAGE CACHE",
+			Type:        vtInt,
+			DefaultHint: "72",
+			ShortHelp:   "Cache TTL in hours for message edit/delete logging (0 = default)",
+			RestartHint: restartRequired,
+			MaxInputLen: 8,
+		},
+		{
+			Key:         runtimeKeyALICE_MESSAGE_DELETE_ON_LOG,
+			Group:       "MESSAGE CACHE",
+			Type:        vtBool,
+			DefaultHint: "false",
+			ShortHelp:   "Delete cached message record after it is logged",
+			RestartHint: restartRecommended,
+		},
+		{
+			Key:         runtimeKeyALICE_MESSAGE_CACHE_CLEANUP,
+			Group:       "MESSAGE CACHE",
+			Type:        vtBool,
+			DefaultHint: "false",
+			ShortHelp:   "Cleanup expired cached messages on startup",
 			RestartHint: restartRecommended,
 		},
 		{
@@ -333,8 +400,10 @@ func newRuntimeSubCommand(configManager *files.ConfigManager) *runtimeSubCommand
 	return &runtimeSubCommand{configManager: configManager}
 }
 
-func (c *runtimeSubCommand) Name() string        { return commandName }
-func (c *runtimeSubCommand) Description() string { return "View and edit bot runtime configuration (replaces env vars)" }
+func (c *runtimeSubCommand) Name() string { return commandName }
+func (c *runtimeSubCommand) Description() string {
+	return "View and edit bot runtime configuration (replaces env vars)"
+}
 func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -429,6 +498,13 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 	case runtimeKeyALICE_DISABLE_USER_LOGS:
 		return fmtBool(rc.ALICE_DISABLE_USER_LOGS), true
 
+	case runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS:
+		return strconv.Itoa(rc.ALICE_MESSAGE_CACHE_TTL_HOURS), true
+	case runtimeKeyALICE_MESSAGE_DELETE_ON_LOG:
+		return fmtBool(rc.ALICE_MESSAGE_DELETE_ON_LOG), true
+	case runtimeKeyALICE_MESSAGE_CACHE_CLEANUP:
+		return fmtBool(rc.ALICE_MESSAGE_CACHE_CLEANUP), true
+
 	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED:
 		return fmtBool(rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED), true
 	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID:
@@ -471,6 +547,16 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 		rc.ALICE_DISABLE_USER_LOGS = false
 		return rc, true
 
+	case runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS:
+		rc.ALICE_MESSAGE_CACHE_TTL_HOURS = 0
+		return rc, true
+	case runtimeKeyALICE_MESSAGE_DELETE_ON_LOG:
+		rc.ALICE_MESSAGE_DELETE_ON_LOG = false
+		return rc, true
+	case runtimeKeyALICE_MESSAGE_CACHE_CLEANUP:
+		rc.ALICE_MESSAGE_CACHE_CLEANUP = false
+		return rc, true
+
 	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED:
 		rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED = false
 		return rc, true
@@ -503,6 +589,16 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 			return rc, err
 		}
 		return setBool(rc, sp.Key, b)
+	case vtInt:
+		// Empty resets to default behavior (keep omitempty output as zero-value).
+		if raw == "" {
+			return resetValueOrErr(rc, sp.Key)
+		}
+		v, err := parseNonNegativeInt(raw)
+		if err != nil {
+			return rc, err
+		}
+		return setInt(rc, sp.Key, v)
 	case vtDate:
 		if raw == "" {
 			if sp.Key == runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY {
@@ -539,6 +635,32 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 	}
 }
 
+func resetValueOrErr(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, error) {
+	next, ok := resetValue(rc, k)
+	if !ok {
+		return rc, fmt.Errorf("unknown key")
+	}
+	return next, nil
+}
+
+func setInt(rc files.RuntimeConfig, k runtimeKey, v int) (files.RuntimeConfig, error) {
+	switch k {
+	case runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS:
+		// Accept 0 to mean "use default" (service will fall back).
+		if v < 0 {
+			return rc, fmt.Errorf("must be >= 0")
+		}
+		// Guardrail against absurd values.
+		if v > 24*365 {
+			return rc, fmt.Errorf("too large (max %d)", 24*365)
+		}
+		rc.ALICE_MESSAGE_CACHE_TTL_HOURS = v
+		return rc, nil
+	default:
+		return rc, fmt.Errorf("not an int key")
+	}
+}
+
 func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig, error) {
 	switch k {
 	case runtimeKeyALICE_DISABLE_DB_CLEANUP:
@@ -553,6 +675,10 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 		rc.ALICE_DISABLE_REACTION_LOGS = v
 	case runtimeKeyALICE_DISABLE_USER_LOGS:
 		rc.ALICE_DISABLE_USER_LOGS = v
+	case runtimeKeyALICE_MESSAGE_DELETE_ON_LOG:
+		rc.ALICE_MESSAGE_DELETE_ON_LOG = v
+	case runtimeKeyALICE_MESSAGE_CACHE_CLEANUP:
+		rc.ALICE_MESSAGE_CACHE_CLEANUP = v
 	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED:
 		rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED = v
 	case runtimeKeyALICE_DISABLE_BOT_ROLE_PERM_MIRROR:
@@ -614,19 +740,12 @@ func groupFieldsForMain(rc files.RuntimeConfig, st panelState) []*discordgo.Mess
 		grouped[sp.Group] = append(grouped[sp.Group], line)
 	}
 
-	groupOrder := []string{"THEME", "SERVICES (LOGGING)", "BACKFILL", "SAFETY"}
+	groupOrder := []string{"THEME", "SERVICES (LOGGING)", "MESSAGE CACHE", "BACKFILL", "SAFETY"}
 	fields := []*discordgo.MessageEmbedField{}
 
 	if st.Group != "" && st.Group != "ALL" {
 		lines := grouped[st.Group]
-		if len(lines) == 0 {
-			lines = []string{"(no keys)"}
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   st.Group,
-			Value:  strings.Join(lines, "\n"),
-			Inline: false,
-		})
+		fields = append(fields, fieldsForLines(st.Group, lines)...)
 		return fields
 	}
 
@@ -635,14 +754,69 @@ func groupFieldsForMain(rc files.RuntimeConfig, st panelState) []*discordgo.Mess
 		if len(lines) == 0 {
 			continue
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   g,
-			Value:  strings.Join(lines, "\n"),
-			Inline: false,
-		})
+		fields = append(fields, fieldsForLines(g, lines)...)
+		if len(fields) >= 25 {
+			break
+		}
 	}
 
 	return fields
+}
+
+func fieldsForLines(name string, lines []string) []*discordgo.MessageEmbedField {
+	// Discord embed limits: max 25 fields; each Field.Value up to 1024 characters.
+	// This helper chunks long lists to avoid edit failures when the panel grows.
+	if len(lines) == 0 {
+		lines = []string{"(no keys)"}
+	}
+
+	const maxValueLen = 1024
+	out := make([]*discordgo.MessageEmbedField, 0, 1)
+	curName := name
+	curVal := ""
+
+	flush := func() {
+		if strings.TrimSpace(curVal) == "" {
+			curVal = "(no keys)"
+		}
+		out = append(out, &discordgo.MessageEmbedField{
+			Name:   curName,
+			Value:  curVal,
+			Inline: false,
+		})
+		curName = name + " (cont.)"
+		curVal = ""
+	}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		candidate := line
+		if curVal != "" {
+			candidate = curVal + "\n" + line
+		}
+		if len(candidate) > maxValueLen {
+			// If a single line is too long, truncate it (shouldn't happen with current formatting,
+			// but keep it safe for future keys/values).
+			if curVal == "" {
+				tr := line
+				if len(tr) > maxValueLen {
+					tr = tr[:maxValueLen]
+				}
+				curVal = tr
+				flush()
+				continue
+			}
+			flush()
+			curVal = line
+			continue
+		}
+		curVal = candidate
+	}
+	flush()
+	return out
 }
 
 func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.MessageEmbed {
@@ -757,6 +931,11 @@ func renderGroupSelectRow(st panelState) discordgo.ActionsRow {
 
 func renderKeySelectRow(st panelState) discordgo.ActionsRow {
 	specs := specsForGroup(st.Group)
+	tooMany := false
+	if len(specs) > 25 {
+		tooMany = true
+		specs = specs[:25]
+	}
 	opts := make([]discordgo.SelectMenuOption, 0, len(specs))
 	for _, sp := range specs {
 		desc := sp.ShortHelp
@@ -774,6 +953,13 @@ func renderKeySelectRow(st panelState) discordgo.ActionsRow {
 	placeholder := "Select key…"
 	if st.Group != "" && st.Group != "ALL" {
 		placeholder = "Select key in " + st.Group + "…"
+	}
+	if tooMany {
+		if st.Group == "ALL" {
+			placeholder = "Too many keys — select a group first…"
+		} else {
+			placeholder = "Showing first 25 keys in " + st.Group + "…"
+		}
 	}
 
 	return discordgo.ActionsRow{
@@ -801,16 +987,16 @@ func renderActionRow(st panelState) discordgo.ActionsRow {
 				Style:    discordgo.PrimaryButton,
 			},
 			discordgo.Button{
-				CustomID:  cidButtonToggle + stateSep + st.withMode(pageMain).encode(),
-				Label:     "TOGGLE",
-				Style:     discordgo.SecondaryButton,
-				Disabled:  !isBool,
+				CustomID: cidButtonToggle + stateSep + st.withMode(pageMain).encode(),
+				Label:    "TOGGLE",
+				Style:    discordgo.SecondaryButton,
+				Disabled: !isBool,
 			},
 			discordgo.Button{
-				CustomID:  cidButtonEdit + stateSep + st.withMode(pageMain).encode(),
-				Label:     "EDIT",
-				Style:     discordgo.SuccessButton,
-				Disabled:  isBool,
+				CustomID: cidButtonEdit + stateSep + st.withMode(pageMain).encode(),
+				Label:    "EDIT",
+				Style:    discordgo.SuccessButton,
+				Disabled: isBool,
 			},
 			discordgo.Button{
 				CustomID: cidButtonReset + stateSep + st.withMode(pageMain).encode(),
@@ -840,6 +1026,9 @@ func formatForEmbed(raw string, sp spec) string {
 	if v == "" {
 		return "—"
 	}
+	if sp.Type == vtInt && v == "0" {
+		return "—"
+	}
 	if sp.RedactInMain {
 		return "(configured)"
 	}
@@ -849,6 +1038,9 @@ func formatForEmbed(raw string, sp spec) string {
 func formatForDetails(raw string, _ spec) string {
 	v := strings.TrimSpace(raw)
 	if v == "" {
+		return "—"
+	}
+	if v == "0" {
 		return "—"
 	}
 	return v
@@ -1020,16 +1212,38 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 	case cidButtonEdit:
 		sp, ok := specByKey(st.Key)
 		if !ok {
-			_ = editInteractionMessage(s, i, errorEmbed("Unknown key"), nil)
+			// This interaction path normally opens a modal, so we intentionally do NOT
+			// ack with a message update earlier. If we hit an error, we must still
+			// respond once to avoid an "interaction failed" on the client.
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags: discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{
+						errorEmbed("Unknown key"),
+					},
+				},
+			})
 			return
 		}
 		if sp.Type == vtBool {
-			_ = editInteractionMessage(s, i, errorEmbed("EDIT is not valid for boolean keys (use TOGGLE)"), renderMainComponents(rc, st))
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags: discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{
+						errorEmbed("EDIT is not valid for boolean keys (use TOGGLE)"),
+					},
+				},
+			})
 			return
 		}
 
 		cur, _ := getValue(rc, st.Key)
 		if strings.TrimSpace(cur) == "" {
+			cur = ""
+		}
+		if sp.Type == vtInt && strings.TrimSpace(cur) == "0" {
 			cur = ""
 		}
 
@@ -1184,6 +1398,15 @@ func parseActionAndState(customID string) (action string, st panelState) {
 		return "", panelState{}
 	}
 	action = parts[0]
+	switch action {
+	case cidSelectGroup, cidSelectKey,
+		cidButtonMain, cidButtonHelp, cidButtonBack,
+		cidButtonDetail, cidButtonToggle, cidButtonEdit,
+		cidButtonReset, cidButtonReload:
+		// ok
+	default:
+		return "", panelState{}
+	}
 	st = decodeState(parts[1])
 	return action, st
 }
@@ -1236,6 +1459,21 @@ func parseBool(s string) (bool, error) {
 	default:
 		return false, fmt.Errorf("invalid bool (use true/false)")
 	}
+}
+
+func parseNonNegativeInt(s string) (int, error) {
+	v := strings.TrimSpace(s)
+	if v == "" {
+		return 0, fmt.Errorf("invalid int")
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("invalid int")
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("must be >= 0")
+	}
+	return n, nil
 }
 
 func fmtBool(b bool) string {
