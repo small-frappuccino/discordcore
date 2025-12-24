@@ -131,21 +131,35 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	// Calculate how long the account has existed
 	accountAge := mes.calculateAccountAge(m.User.ID)
 
-	// Also persist to SQLite (best effort)
-	if mes.store != nil {
-		if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
-			_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, member.JoinedAt)
-			_ = mes.store.IncrementDailyMemberJoin(m.GuildID, m.User.ID, time.Now().UTC())
+	// Resolve JoinedAt with minimal API usage:
+	// - Prefer the timestamp already present in the event payload.
+	// - Fallback to a single REST query only when missing.
+	joinedAt := time.Time{}
+	var member *discordgo.Member
+	if m.Member != nil {
+		member = m.Member
+		joinedAt = m.Member.JoinedAt
+	}
+	if joinedAt.IsZero() && mes.session != nil {
+		if mm, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && mm != nil {
+			member = mm
+			joinedAt = mm.JoinedAt
 		}
 	}
 
-	// NEW: Register precise member join timestamp in memory
-	if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && !member.JoinedAt.IsZero() {
+	// Persist absolute join time to SQLite (best effort)
+	if mes.store != nil && !joinedAt.IsZero() {
+		_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, joinedAt)
+		_ = mes.store.IncrementDailyMemberJoin(m.GuildID, m.User.ID, joinedAt)
+	}
+
+	// Register precise member join timestamp in memory
+	if !joinedAt.IsZero() {
 		mes.joinMu.Lock()
 		if mes.joinTimes == nil {
 			mes.joinTimes = make(map[string]time.Time)
 		}
-		mes.joinTimes[m.GuildID+":"+m.User.ID] = member.JoinedAt
+		mes.joinTimes[m.GuildID+":"+m.User.ID] = joinedAt
 		mes.joinMu.Unlock()
 	}
 
@@ -163,20 +177,31 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
 
-	// Composite automatic role assignment for the specified guild
 	// Composite automatic role assignment (per-guild config)
 	if guildConfig.AutoRoleAssignmentEnabled {
 		targetRoleID := guildConfig.AutoRoleTargetRoleID
 		roleA := guildConfig.AutoRolePrereqRoleA
 		roleB := guildConfig.AutoRolePrereqRoleB
 		if targetRoleID != "" && roleA != "" && roleB != "" {
-			if member, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
+			if member != nil {
 				roles := member.Roles
 				if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
 					if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
 						slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 					} else {
 						slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+					}
+				}
+			} else if mes.session != nil {
+				// As a last resort (only when role assignment is enabled), fetch member once.
+				if mm, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && mm != nil {
+					roles := mm.Roles
+					if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
+						if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
+							slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+						} else {
+							slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+						}
 					}
 				}
 			}

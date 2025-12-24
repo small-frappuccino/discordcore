@@ -50,9 +50,9 @@ type MonitoringHotApplier interface {
 // New creates a Manager. Any dependency can be nil; unsupported apply steps will be skipped.
 func New(sm *service.ServiceManager, monitoring MonitoringHotApplier) *Manager {
 	return &Manager{
-		serviceManager:      sm,
-		monitoringHotApply:  monitoring,
-		lastApplied:         files.RuntimeConfig{},
+		serviceManager:     sm,
+		monitoringHotApply: monitoring,
+		lastApplied:        files.RuntimeConfig{},
 	}
 }
 

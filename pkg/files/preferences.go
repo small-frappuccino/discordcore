@@ -173,6 +173,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 			CommandChannelID:        channelID,
 			UserLogChannelID:        channelID,
 			UserEntryLeaveChannelID: entryLeaveID,
+			WelcomeBacklogChannelID: "",
 			AllowedRoles:            roles,
 		}
 		mgr.mu.Lock()
@@ -225,6 +226,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		CommandChannelID:        channelID,
 		UserLogChannelID:        channelID,
 		UserEntryLeaveChannelID: entryLeaveID,
+		WelcomeBacklogChannelID: "",
 		AllowedRoles:            roles,
 	}
 	mgr.mu.Lock()

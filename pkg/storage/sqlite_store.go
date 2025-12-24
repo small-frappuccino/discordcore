@@ -174,20 +174,19 @@ func (s *Store) CleanupExpiredMessages() error {
 	return err
 }
 
-// CleanupObsoleteMemberJoins removes member join records for users who left guilds (older than retentionDays)
-func (s *Store) CleanupObsoleteMemberJoins(retentionDays int) (int64, error) {
+// CleanupObsoleteMemberJoins previously removed member join records based on age.
+//
+// IMPORTANT: we keep member join timestamps as long-lived historical data so that leave embeds
+// can compute "time on server" even for members who joined long before this feature existed.
+//
+// For now, this is a no-op.
+// If storage growth becomes a concern later, implement a cleanup policy based on an explicit
+// "left_at" / "last_seen" signal rather than `joined_at`.
+func (s *Store) CleanupObsoleteMemberJoins(_ int) (int64, error) {
 	if s.db == nil {
 		return 0, fmt.Errorf("store not initialized")
 	}
-	if retentionDays <= 0 {
-		retentionDays = 90 // default: keep 90 days of history
-	}
-	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	result, err := s.db.Exec(`DELETE FROM member_joins WHERE joined_at < ?`, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	return 0, nil
 }
 
 // CleanupObsoleteMemberRoles removes role records older than retentionDays

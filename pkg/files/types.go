@@ -52,7 +52,8 @@ type GuildConfig struct {
 	GuildID                 string    `json:"guild_id"`
 	CommandChannelID        string    `json:"command_channel_id"`
 	UserLogChannelID        string    `json:"user_log_channel_id"`         // For entry/exit logs and avatars
-	UserEntryLeaveChannelID string    `json:"user_entry_leave_channel_id"` // Dedicated channel for user entry/leave
+	UserEntryLeaveChannelID string    `json:"user_entry_leave_channel_id"` // Dedicated channel for user entry/leave (moderation/logs)
+	WelcomeBacklogChannelID string    `json:"welcome_backlog_channel_id"`  // Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)
 	MessageLogChannelID     string    `json:"message_log_channel_id"`      // For edited/deleted message logs
 	AutomodLogChannelID     string    `json:"automod_log_channel_id"`
 	AllowedRoles            []string  `json:"allowed_roles"`

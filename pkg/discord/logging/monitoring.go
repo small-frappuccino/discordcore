@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +18,71 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
+
+var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
+
+// parseEntryExitBackfillMessage extracts (eventType, userID) from messages in a welcome/entry-leave channel.
+// It supports:
+// - Alice embeds (sent by our bot) with title "Member Joined" / "Member Left".
+// - Mimu-like plain text messages containing a user mention and keywords "welcome" / "goodbye".
+func parseEntryExitBackfillMessage(m *discordgo.Message, botID string) (string, string, bool) {
+	if m == nil {
+		return "", "", false
+	}
+
+	// 1) Our own embed format (legacy backfill)
+	if m.Author != nil && botID != "" && m.Author.ID == botID && len(m.Embeds) > 0 {
+		for _, em := range m.Embeds {
+			if em == nil || em.Title == "" || em.Description == "" {
+				continue
+			}
+			title := strings.ToLower(strings.TrimSpace(em.Title))
+			if title != "member joined" && title != "member left" {
+				continue
+			}
+
+			// Extract user ID from description: "**username** (<@id>, `id`)"
+			desc := em.Description
+			userID := ""
+			if i := strings.Index(desc, "`"); i >= 0 {
+				if j := strings.Index(desc[i+1:], "`"); j >= 0 {
+					userID = desc[i+1 : i+1+j]
+				}
+			}
+			if userID == "" {
+				continue
+			}
+			if title == "member joined" {
+				return "join", userID, true
+			}
+			return "leave", userID, true
+		}
+	}
+
+	// 2) Mimu-like plain text
+	content := strings.TrimSpace(m.Content)
+	if content == "" {
+		return "", "", false
+	}
+	mm := mentionRe.FindStringSubmatch(content)
+	if len(mm) < 2 {
+		return "", "", false
+	}
+	userID := mm[1]
+	if userID == "" {
+		return "", "", false
+	}
+
+	lc := strings.ToLower(content)
+	// Keep it intentionally permissive; this is best-effort reconstruction.
+	if strings.Contains(lc, "goodbye") {
+		return "leave", userID, true
+	}
+	if strings.Contains(lc, "welcome") {
+		return "join", userID, true
+	}
+	return "", "", false
+}
 
 const (
 	heartbeatInterval = 5 * time.Minute
@@ -398,37 +464,13 @@ func (ms *MonitoringService) Start() error {
 				}
 				// Only consider messages within the day
 				if t.Before(end) && !t.Before(start) {
-					// Only parse our own embeds (join/leave)
-					if m.Author != nil && m.Author.ID == botID && len(m.Embeds) > 0 {
-						for _, em := range m.Embeds {
-							if em == nil || em.Title == "" || em.Description == "" {
-								continue
-							}
-							title := strings.ToLower(strings.TrimSpace(em.Title))
-							if title != "member joined" && title != "member left" {
-								continue
-							}
-
-							// Extract user ID from description: "**username** (<@id>, `id`)"
-							desc := em.Description
-							userID := ""
-							if i := strings.Index(desc, "`"); i >= 0 {
-								if j := strings.Index(desc[i+1:], "`"); j >= 0 {
-									userID = desc[i+1 : i+1+j]
-								}
-							}
-							if userID == "" {
-								continue
-							}
-
-							if ms.store != nil {
-								if title == "member joined" {
-									_ = ms.store.UpsertMemberJoin(guildID, userID, t)
-									_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
-								} else if title == "member left" {
-									_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
-								}
-							}
+					evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
+					if ok && ms.store != nil {
+						if evt == "join" {
+							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
+							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
+						} else if evt == "leave" {
+							_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
 						}
 					}
 				}
@@ -444,7 +486,105 @@ func (ms *MonitoringService) Start() error {
 		return nil
 	})
 
-	// Optionally auto-dispatch the backfill task right after startup based on runtime config
+	// Register range-based entry/exit backfill handler (used for downtime recovery and historical scans)
+	ms.router.RegisterHandler("monitor.backfill_entry_exit_range", func(ctx context.Context, payload any) error {
+		// Payload is expected to be: struct{ ChannelID, Start, End string }
+		// Start/End format: RFC3339 (UTC recommended)
+		type pld struct {
+			ChannelID string
+			Start     string
+			End       string
+		}
+		p, _ := payload.(pld)
+		channelID := strings.TrimSpace(p.ChannelID)
+		startRaw := strings.TrimSpace(p.Start)
+		endRaw := strings.TrimSpace(p.End)
+		if channelID == "" || startRaw == "" || endRaw == "" {
+			return nil
+		}
+
+		start, err := time.Parse(time.RFC3339, startRaw)
+		if err != nil {
+			return nil
+		}
+		end, err := time.Parse(time.RFC3339, endRaw)
+		if err != nil {
+			return nil
+		}
+		start = start.UTC()
+		end = end.UTC()
+		if !end.After(start) {
+			return nil
+		}
+
+		// Resolve guild ID from channel
+		var guildID string
+		if ms.session != nil && ms.session.State != nil {
+			if ch, _ := ms.session.State.Channel(channelID); ch != nil {
+				guildID = ch.GuildID
+			}
+		}
+		if guildID == "" && ms.session != nil {
+			if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
+				guildID = ch.GuildID
+			}
+		}
+		if guildID == "" {
+			return nil
+		}
+
+		botID := ""
+		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
+			botID = ms.session.State.User.ID
+		}
+
+		var before string
+		for {
+			msgs, err := ms.session.ChannelMessages(channelID, 100, before, "", "")
+			if err != nil || len(msgs) == 0 {
+				break
+			}
+
+			// Messages come newest -> oldest
+			stop := false
+			for _, m := range msgs {
+				t := m.Timestamp.UTC()
+				// Stop if we've paged past the target window
+				if t.Before(start) {
+					stop = true
+					break
+				}
+				// Only consider messages within the window
+				if t.Before(end) && !t.Before(start) {
+					evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
+					if ok && ms.store != nil {
+						if evt == "join" {
+							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
+							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
+						} else if evt == "leave" {
+							_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+						}
+					}
+				}
+			}
+
+			before = msgs[len(msgs)-1].ID
+			if stop {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	// Optionally auto-dispatch backfill tasks right after startup based on runtime config.
+	//
+	// Behavior:
+	// - If `ALICE_BACKFILL_ENTRY_EXIT_START_DAY` is set: run day-based scan (useful for historical pre-feature backfill).
+	// - Otherwise: if downtime is detected via `store.GetLastEvent()` and exceeds threshold, run a range scan to recover
+	//   what the gateway likely missed while the bot was offline.
+	//
+	// If a specific channel isn't provided, try each configured guild backlog/welcome channel.
 	enabled := false
 	chID := ""
 	day := ""
@@ -455,18 +595,66 @@ func (ms *MonitoringService) Start() error {
 		day = strings.TrimSpace(rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY) // default: today UTC
 	}
 	if enabled {
-		if chID != "" {
-			if day == "" {
-				day = time.Now().UTC().Format("2006-01-02")
+		if day != "" {
+			// Manual / historical mode (scan a whole day)
+			if chID != "" {
+				_ = ms.router.Dispatch(context.Background(), task.Task{
+					Type:    "monitor.backfill_entry_exit_day",
+					Payload: struct{ ChannelID, Day string }{ChannelID: chID, Day: day},
+					Options: task.TaskOptions{GroupKey: "backfill:" + chID},
+				})
+				log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", chID, "day", day)
+			} else if ms.configManager != nil && ms.configManager.Config() != nil {
+				for _, g := range ms.configManager.Config().Guilds {
+					cid := strings.TrimSpace(g.WelcomeBacklogChannelID)
+					if cid == "" {
+						cid = strings.TrimSpace(g.UserEntryLeaveChannelID)
+					}
+					if cid == "" {
+						continue
+					}
+					_ = ms.router.Dispatch(context.Background(), task.Task{
+						Type:    "monitor.backfill_entry_exit_day",
+						Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: day},
+						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+					})
+					log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
+				}
 			}
-			_ = ms.router.Dispatch(context.Background(), task.Task{
-				Type:    "monitor.backfill_entry_exit_day",
-				Payload: struct{ ChannelID, Day string }{ChannelID: chID, Day: day},
-				Options: task.TaskOptions{
-					GroupKey: "backfill:" + chID,
-				},
-			})
-			log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task", "channelID", chID, "day", day)
+		} else if ms.store != nil {
+			// Auto recovery mode (only if downtime is significant)
+			lastEvent, ok, err := ms.store.GetLastEvent()
+			if err == nil && ok {
+				downtime := time.Since(lastEvent)
+				if downtime > downtimeThreshold {
+					start := lastEvent.UTC().Format(time.RFC3339)
+					end := time.Now().UTC().Format(time.RFC3339)
+					if chID != "" {
+						_ = ms.router.Dispatch(context.Background(), task.Task{
+							Type:    "monitor.backfill_entry_exit_range",
+							Payload: struct{ ChannelID, Start, End string }{ChannelID: chID, Start: start, End: end},
+							Options: task.TaskOptions{GroupKey: "backfill:" + chID},
+						})
+						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (range)", "channelID", chID, "start", start, "end", end)
+					} else if ms.configManager != nil && ms.configManager.Config() != nil {
+						for _, g := range ms.configManager.Config().Guilds {
+							cid := strings.TrimSpace(g.WelcomeBacklogChannelID)
+							if cid == "" {
+								cid = strings.TrimSpace(g.UserEntryLeaveChannelID)
+							}
+							if cid == "" {
+								continue
+							}
+							_ = ms.router.Dispatch(context.Background(), task.Task{
+								Type:    "monitor.backfill_entry_exit_range",
+								Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+								Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+							})
+							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (range)", "channelID", cid, "start", start, "end", end)
+						}
+					}
+				}
+			}
 		}
 	}
 

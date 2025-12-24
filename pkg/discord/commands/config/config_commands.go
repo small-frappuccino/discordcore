@@ -125,6 +125,9 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 			Choices: []*discordgo.ApplicationCommandOptionChoice{
 				{Name: "command_channel", Value: "command_channel"},
 				{Name: "log_channel", Value: "log_channel"},
+				{Name: "entry_leave_channel", Value: "entry_leave_channel"},
+				{Name: "welcome_backlog_channel", Value: "welcome_backlog_channel"},
+				{Name: "message_log_channel", Value: "message_log_channel"},
 				{Name: "automod_channel", Value: "automod_channel"},
 			},
 		},
@@ -157,6 +160,12 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 			guildConfig.CommandChannelID = value
 		case "log_channel":
 			guildConfig.UserLogChannelID = value // also used by user join/leave/avatar logs
+		case "entry_leave_channel":
+			guildConfig.UserEntryLeaveChannelID = value
+		case "welcome_backlog_channel":
+			guildConfig.WelcomeBacklogChannelID = value
+		case "message_log_channel":
+			guildConfig.MessageLogChannelID = value
 		case "automod_channel":
 			guildConfig.AutomodLogChannelID = value
 		default:
@@ -202,6 +211,9 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	b.WriteString("**Server Configuration:**\n")
 	b.WriteString(fmt.Sprintf("Command Channel: %s\n", emptyToDash(ctx.GuildConfig.CommandChannelID)))
 	b.WriteString(fmt.Sprintf("Log Channel: %s\n", emptyToDash(ctx.GuildConfig.UserLogChannelID)))
+	b.WriteString(fmt.Sprintf("Entry/Leave Channel: %s\n", emptyToDash(ctx.GuildConfig.UserEntryLeaveChannelID)))
+	b.WriteString(fmt.Sprintf("Welcome Backlog Channel: %s\n", emptyToDash(ctx.GuildConfig.WelcomeBacklogChannelID)))
+	b.WriteString(fmt.Sprintf("Message Log Channel: %s\n", emptyToDash(ctx.GuildConfig.MessageLogChannelID)))
 	b.WriteString(fmt.Sprintf("Automod Channel: %s\n", emptyToDash(ctx.GuildConfig.AutomodLogChannelID)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.AllowedRoles)))
 
@@ -236,6 +248,9 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"**Available Configuration Options:**",
 		"`command_channel` - Channel for bot commands",
 		"`log_channel` - Channel for user logs (join/leave/avatar)",
+		"`entry_leave_channel` - Channel for entry/leave logs (moderators)",
+		"`welcome_backlog_channel` - Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)",
+		"`message_log_channel` - Channel for edited/deleted message logs",
 		"`automod_channel` - Channel for automod logs",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",

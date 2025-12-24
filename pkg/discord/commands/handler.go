@@ -98,8 +98,6 @@ func (ch *CommandHandler) Shutdown() error {
 	return nil
 }
 
-
-
 // GetConfigManager returns the configuration manager
 func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {
 	return ch.configManager

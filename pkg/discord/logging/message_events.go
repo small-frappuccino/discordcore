@@ -29,7 +29,7 @@ type MessageEventService struct {
 	notifier      *NotificationSender
 	adapters      *task.NotificationAdapters
 	store         *storage.Store
-	isRunning bool
+	isRunning     bool
 
 	// Message cache configuration (populated from settings.json runtime_config)
 	cacheEnabled   bool
