@@ -18,7 +18,7 @@ import (
 
 // RegisterMetricsCommands registers slash commands under the /metrics group.
 func RegisterMetricsCommands(router *core.CommandRouter) {
-	metricsGroup := core.NewGroupCommand("metrics", "Estatísticas e métricas do servidor", router.GetPermissionChecker())
+	metricsGroup := core.NewGroupCommand("metrics", "Server statistics and metrics", router.GetPermissionChecker())
 	metricsGroup.AddSubCommand(newActivityCommand())
 	metricsGroup.AddSubCommand(newServerStatsCommand())
 
@@ -205,7 +205,7 @@ func handleActivity(ctx *core.Context) error {
 func newServerStatsCommand() core.SubCommand {
 	return core.NewSimpleCommand(
 		"serverstats",
-		"Verifica a saúde do servidor e estatísticas de membros do banco de dados.",
+		"Checks server health and member statistics from the database.",
 		nil,
 		handleServerStats,
 		true,  // requiresGuild
