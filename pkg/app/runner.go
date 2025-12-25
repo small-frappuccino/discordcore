@@ -28,7 +28,7 @@ import (
 // a fallback $HOME/.local/bin/.env file will be loaded and the variable re-checked.
 // Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
 // remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
-func Run(appName, tokenEnv string) error {
+func Run(appName, appVersion, tokenEnv string) error {
 	started := time.Now()
 
 	// App name first (affects paths)
@@ -48,7 +48,7 @@ func Run(appName, tokenEnv string) error {
 	defer log.GlobalLogger.Sync()
 
 	// Theme configuration (now from settings.json runtime_config)
-	//
+
 	// IMPORTANT: configManager is created later (after config files are ensured).
 	// We cannot read runtime_config here without risking an undefined variable / nil config.
 	// Theme will be applied right after loading settings.json (see below).
@@ -65,7 +65,7 @@ func Run(appName, tokenEnv string) error {
 	// Error handler for service manager
 	errorHandler := errors.NewErrorHandler()
 
-	log.ApplicationLogger().Info(fmt.Sprintf("🚀 Starting %s...", appName))
+	log.ApplicationLogger().Info(fmt.Sprintf("🚀 Starting %s v%s (discordcore v%s)...", appName, appVersion, Version))
 
 	// Token must be present
 	if token == "" {
