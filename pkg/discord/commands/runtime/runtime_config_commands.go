@@ -830,13 +830,13 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 	lines := []string{
 		fmt.Sprintf("`%s`", sp.Key),
 		"",
-		fmt.Sprintf("**Grupo:** %s", sp.Group),
-		fmt.Sprintf("**Tipo:** %s", sp.Type),
+		fmt.Sprintf("**Group:** %s", sp.Group),
+		fmt.Sprintf("**Type:** %s", sp.Type),
 		fmt.Sprintf("**Default:** %s", sp.DefaultHint),
-		fmt.Sprintf("**Atual:** %s", cur),
+		fmt.Sprintf("**Current:** %s", cur),
 		"",
-		fmt.Sprintf("**Descrição:** %s", sp.ShortHelp),
-		fmt.Sprintf("**Efeito:** %s", sp.RestartHint),
+		fmt.Sprintf("**Description:** %s", sp.ShortHelp),
+		fmt.Sprintf("**Effect:** %s", sp.RestartHint),
 	}
 
 	return &discordgo.MessageEmbed{
@@ -844,7 +844,7 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 		Description: strings.Join(lines, "\n"),
 		Color:       theme.Muted(),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Use BACK para retornar ao painel.",
+			Text: "Use BACK to return to the panel.",
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -852,18 +852,18 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 
 func renderHelpEmbed() *discordgo.MessageEmbed {
 	desc := strings.Join([]string{
-		"Este painel edita `settings.json` em `runtime_config`.",
+		"This panel edits `settings.json` in `runtime_config`.",
 		"",
-		"**Notas:**",
-		"• Os nomes continuam em CAPS para manter compatibilidade mental com as env vars.",
-		"• O bot não lê mais essas opções via environment (token continua sendo env).",
-		"• Algumas mudanças podem ser hot-apply (THEME e alguns ALICE_DISABLE_*).",
+		"**Notes:**",
+		"• Names stay in ALL CAPS to preserve mental compatibility with env vars.",
+		"• The bot no longer reads these options from the environment (the token is still env).",
+		"• Some changes can be hot-applied (THEME and some ALICE_DISABLE_*).",
 		"",
-		"**Como editar:**",
-		"1) Filtre por grupo (opcional) e selecione uma key.",
+		"**How to edit:**",
+		"1) Filter by group (optional) and select a key.",
 		"2) Boolean: use TOGGLE.",
-		"3) Outros tipos: use EDIT e preencha o modal.",
-		"4) RESET limpa o valor e volta ao default do código.",
+		"3) Other types: use EDIT and fill the modal.",
+		"4) RESET clears the value and restores the code default.",
 	}, "\n")
 
 	return &discordgo.MessageEmbed{

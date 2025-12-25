@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -15,17 +16,18 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
-// RegisterMetricsCommands registers slash commands:
-// - /activity: message and reactions activity
-// - /members: weekly/monthly member enter/leave/net
+// RegisterMetricsCommands registers slash commands under the /metrics group.
 func RegisterMetricsCommands(router *core.CommandRouter) {
-	router.RegisterCommand(newActivityCommand())
-	router.RegisterCommand(newMembersCommand())
+	metricsGroup := core.NewGroupCommand("metrics", "Estatísticas e métricas do servidor", router.GetPermissionChecker())
+	metricsGroup.AddSubCommand(newActivityCommand())
+	metricsGroup.AddSubCommand(newServerStatsCommand())
+
+	router.RegisterCommand(metricsGroup)
 }
 
 // -------- Activity Command (messages + reactions) --------
 
-func newActivityCommand() core.Command {
+func newActivityCommand() core.SubCommand {
 	opts := []*discordgo.ApplicationCommandOption{
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
@@ -200,133 +202,127 @@ func handleActivity(ctx *core.Context) error {
 
 // -------- Members Command (weekly/monthly enter/leave/net) --------
 
-func newMembersCommand() core.Command {
-	opts := []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionBoolean,
-			Name:        "show_weekly",
-			Description: "Include weekly metrics",
-			Required:    false,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionBoolean,
-			Name:        "show_monthly",
-			Description: "Include monthly metrics",
-			Required:    false,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionBoolean,
-			Name:        "include_current",
-			Description: "Include current member count",
-			Required:    false,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        "format",
-			Description: "Embed format",
-			Required:    false,
-			Choices: []*discordgo.ApplicationCommandOptionChoice{
-				{Name: "full", Value: "full"},
-				{Name: "compact", Value: "compact"},
-			},
-		},
-	}
-
+func newServerStatsCommand() core.SubCommand {
 	return core.NewSimpleCommand(
-		"members",
-		"Weekly and monthly member join/leave and net gained",
-		opts,
-		handleMembers,
+		"serverstats",
+		"Verifica a saúde do servidor e estatísticas de membros do banco de dados.",
+		nil,
+		handleServerStats,
 		true,  // requiresGuild
 		false, // requiresPermissions
 	)
 }
 
-func handleMembers(ctx *core.Context) error {
+func handleServerStats(ctx *core.Context) error {
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
 		return respondError(s, i, "This command must be used in a server.")
 	}
 
-	// Options
-	showWeekly := getBoolOpt(i, "show_weekly", true)
-	showMonthly := getBoolOpt(i, "show_monthly", true)
-	includeCurrent := getBoolOpt(i, "include_current", true)
-	format := strings.ToLower(getStringOpt(i, "format", "full")) // full|compact
-
-	// Open metrics DB
+	// Open database
 	dbPath := util.GetMessageDBPath()
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return respondError(s, i, fmt.Sprintf("Failed to open metrics database: %v", err))
+		return respondError(s, i, fmt.Sprintf("Failed to open database: %v", err))
 	}
 	defer db.Close()
 
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Weekly window (last 7 days, inclusive of today)
-	weeklyCutoff := dayString(time.Now().UTC().AddDate(0, 0, -6))
-	// Monthly window (last 30 days, inclusive)
-	monthlyCutoff := dayString(time.Now().UTC().AddDate(0, 0, -29))
+	// 1) Current members (only those currently in the server)
+	currentMemberCount := 0
+	if g, err := s.State.Guild(ctx.GuildID); err == nil && g != nil {
+		currentMemberCount = g.MemberCount
+	}
+	if currentMemberCount == 0 {
+		// Fallback if the state doesn't have the information
+		if g, err := s.Guild(ctx.GuildID); err == nil && g != nil {
+			currentMemberCount = g.MemberCount
+		}
+	}
 
-	weeklyEnters := querySum(ctxTimeout, db, "SELECT COALESCE(SUM(count),0) FROM daily_member_joins WHERE guild_id=? AND day>=?", ctx.GuildID, weeklyCutoff)
-	monthlyEnters := querySum(ctxTimeout, db, "SELECT COALESCE(SUM(count),0) FROM daily_member_joins WHERE guild_id=? AND day>=?", ctx.GuildID, monthlyCutoff)
+	// 2) Historical total of members who have ever joined (based on member_joins)
+	totalHistoricJoins := querySum(ctxTimeout, db, "SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?", ctx.GuildID)
 
-	weeklyLeaves := querySum(ctxTimeout, db, "SELECT COALESCE(SUM(count),0) FROM daily_member_leaves WHERE guild_id=? AND day>=?", ctx.GuildID, weeklyCutoff)
-	monthlyLeaves := querySum(ctxTimeout, db, "SELECT COALESCE(SUM(count),0) FROM daily_member_leaves WHERE guild_id=? AND day>=?", ctx.GuildID, monthlyCutoff)
+	// 3) How many of those historically recorded members are still in the server
+	// Since we don't have a `current_members` table that is 100% reliable in real-time without constant sync,
+	// and iterating over all members via API/State can be expensive for large servers,
+	// we use a best-effort approach based on what we already have.
+	// If we have the member list in State, we can cross-check.
 
-	weeklyNet := weeklyEnters - weeklyLeaves
-	monthlyNet := monthlyEnters - monthlyLeaves
-
-	// Try to get current member count from state cache (best effort, no REST)
-	currentMembers := ""
-	if s != nil && s.State != nil {
-		if g, _ := s.State.Guild(ctx.GuildID); g != nil {
-			if g.MemberCount > 0 {
-				currentMembers = fmt.Sprintf("%d", g.MemberCount)
+	stillPresentCount := 0
+	if totalHistoricJoins > 0 {
+		// Fetch all user_ids that have ever joined
+		rows, err := db.QueryContext(ctxTimeout, "SELECT DISTINCT user_id FROM member_joins WHERE guild_id=?", ctx.GuildID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var userID string
+				if err := rows.Scan(&userID); err == nil {
+					// Check if the user is present in the bot state cache
+					if _, err := s.State.Member(ctx.GuildID, userID); err == nil {
+						stillPresentCount++
+					}
+				}
 			}
 		}
 	}
 
-	desc := "Weekly and monthly member stats"
-	fields := []*discordgo.MessageEmbedField{}
+	// If stillPresentCount is 0 but we have members, the state may not be populated (missing member intents).
+	// For bots with GuildMembers Intent, State usually contains members if the bot has "seen" them.
+	// If stillPresentCount == 0 and totalHistoricJoins > 0 and currentMemberCount > 0, we warn that accuracy depends on the cache.
 
-	if showWeekly {
-		val := fmt.Sprintf(":inbox_tray: Entered: %d\n:outbox_tray: Left: %d\n:chart_with_upwards_trend: Net: %d", weeklyEnters, weeklyLeaves, weeklyNet)
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Weekly",
-			Value:  val,
-			Inline: true,
-		})
-	}
-	if showMonthly {
-		val := fmt.Sprintf(":inbox_tray: Entered: %d\n:outbox_tray: Left: %d\n:chart_with_upwards_trend: Net: %d", monthlyEnters, monthlyLeaves, monthlyNet)
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Monthly",
-			Value:  val,
-			Inline: true,
-		})
+	fields := []*discordgo.MessageEmbedField{
+		{
+			Name:   "👥 Current Members",
+			Value:  fmt.Sprintf("`%d` members currently in the server.", currentMemberCount),
+			Inline: false,
+		},
+		{
+			Name:   "📥 Join History",
+			Value:  fmt.Sprintf("`%d` unique users recorded in the database since tracking began.", totalHistoricJoins),
+			Inline: false,
+		},
+		{
+			Name:   "✅ Retention",
+			Value:  fmt.Sprintf("`%d` of historically recorded users are still in the server.", stillPresentCount),
+			Inline: false,
+		},
 	}
 
-	if includeCurrent && currentMembers != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Current Members (approx.)",
-			Value:  currentMembers,
-			Inline: format == "compact",
-		})
+	// Database health (optional, but useful for the "dbhealth" context)
+	var dbSize int64
+	if info, err := os.Stat(dbPath); err == nil {
+		dbSize = info.Size()
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Members: Weekly and Monthly",
-		Color:       0x2ECC71, // green
-		Description: desc,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Title:       "📊 Server Health Stats",
+		Color:       0x3498DB, // Blue
+		Description: fmt.Sprintf("Data extracted from the database and bot state.\nDatabase size: `%s`", formatBytes(dbSize)),
 		Fields:      fields,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Note: retention accuracy depends on the bot's member cache.",
+		},
 	}
 
 	return respondEmbed(s, i, embed)
+}
+
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // -------- Helpers --------
