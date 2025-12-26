@@ -213,7 +213,7 @@ func (cm *CommandManager) SetupCommands() error {
 		if existing, ok := regByName[name]; ok {
 			// Command already exists, check if it needs updating
 			if CompareCommands(existing, desired) {
-				slog.Info(fmt.Sprintf("Command unchanged, skipping: %s", name))
+				slog.Info(fmt.Sprintf("Command unchanged: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
 				unchanged++
 				continue
 			}
@@ -222,14 +222,14 @@ func (cm *CommandManager) SetupCommands() error {
 			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired); err != nil {
 				return fmt.Errorf("error updating command '%s': %w", name, err)
 			}
-			slog.Info(fmt.Sprintf("Command updated: %s", name))
+			slog.Info(fmt.Sprintf("Command updated: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
 			updated++
 		} else {
 			// Create new command
 			if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired); err != nil {
 				return fmt.Errorf("error creating command '%s': %w", name, err)
 			}
-			slog.Info(fmt.Sprintf("Command created: %s", name))
+			slog.Info(fmt.Sprintf("Command created: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
 			created++
 		}
 	}
@@ -242,7 +242,7 @@ func (cm *CommandManager) SetupCommands() error {
 				slog.Warn(fmt.Sprintf("Error removing orphan command: %s, error: %v", rc.Name, err))
 				continue
 			}
-			slog.Info(fmt.Sprintf("Orphan command removed: %s", rc.Name))
+			slog.Info(fmt.Sprintf("Orphan command removed: /%s %s - %s", rc.Name, FormatOptions(rc.Options), rc.Description))
 			deleted++
 		}
 	}

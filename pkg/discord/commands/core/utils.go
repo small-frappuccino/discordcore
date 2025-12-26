@@ -500,3 +500,15 @@ func ContainsAny[T comparable](slice []T, items ...T) bool {
 	}
 	return false
 }
+
+// FormatOptions format options for logging
+func FormatOptions(options []*discordgo.ApplicationCommandOption) string {
+	if len(options) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, opt := range options {
+		parts = append(parts, fmt.Sprintf("%s (%s)", opt.Name, opt.Type.String()))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
