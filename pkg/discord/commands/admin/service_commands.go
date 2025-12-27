@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // AdminCommands provides administrative commands for service management
@@ -683,13 +684,23 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 	runningServices := cmd.adminCommands.serviceManager.GetRunningServices()
 
+	botName := util.EffectiveBotName()
+	if util.AppVersion != "" {
+		botName = fmt.Sprintf("%s %s", botName, util.AppVersion)
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title: "ℹ️ System Information",
 		Color: theme.SystemInfo(),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Bot Name",
-				Value:  "DiscordCore v2",
+				Name:   "Bot",
+				Value:  botName,
+				Inline: true,
+			},
+			{
+				Name:   "Core",
+				Value:  fmt.Sprintf("discordcore %s", util.DiscordCoreVersion),
 				Inline: true,
 			},
 			{

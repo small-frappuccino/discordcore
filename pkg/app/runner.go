@@ -65,7 +65,12 @@ func Run(appName, tokenEnv string) error {
 	// Error handler for service manager
 	errorHandler := errors.NewErrorHandler()
 
-	log.ApplicationLogger().Info(fmt.Sprintf("🚀 Starting %s (discordcore %s)...", appName, Version))
+	msg := fmt.Sprintf("🚀 Starting %s", appName)
+	if AppVersion() != "" {
+		msg += fmt.Sprintf(" %s", AppVersion())
+	}
+	msg += fmt.Sprintf(" (discordcore %s)...", Version)
+	log.ApplicationLogger().Info(msg)
 
 	// Token must be present
 	if token == "" {

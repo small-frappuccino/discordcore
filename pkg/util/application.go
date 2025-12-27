@@ -26,6 +26,17 @@ var (
 	CurrentGitBranch string
 )
 
+// DiscordCoreVersion is the current version of the discordcore package.
+const DiscordCoreVersion = "v0.141.0"
+
+// AppVersion is the version of the application using discordcore.
+var AppVersion string
+
+// SetAppVersion sets the version of the application using discordcore.
+func SetAppVersion(v string) {
+	AppVersion = v
+}
+
 func init() {
 	// Detect current git branch (best-effort; used for token selection).
 	CurrentGitBranch = getCurrentGitBranch()
