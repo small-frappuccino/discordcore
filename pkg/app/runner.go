@@ -28,7 +28,7 @@ import (
 // a fallback $HOME/.local/bin/.env file will be loaded and the variable re-checked.
 // Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
 // remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
-func Run(appName, appVersion, tokenEnv string) error {
+func Run(appName, tokenEnv string) error {
 	started := time.Now()
 
 	// App name first (affects paths)
@@ -65,7 +65,7 @@ func Run(appName, appVersion, tokenEnv string) error {
 	// Error handler for service manager
 	errorHandler := errors.NewErrorHandler()
 
-	log.ApplicationLogger().Info(fmt.Sprintf("🚀 Starting %s %s (discordcore %s)...", appName, appVersion, Version))
+	log.ApplicationLogger().Info(fmt.Sprintf("🚀 Starting %s (discordcore %s)...", appName, Version))
 
 	// Token must be present
 	if token == "" {

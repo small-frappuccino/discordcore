@@ -21,6 +21,7 @@ func RegisterMetricsCommands(router *core.CommandRouter) {
 	metricsGroup := core.NewGroupCommand("metrics", "Server statistics and metrics", router.GetPermissionChecker())
 	metricsGroup.AddSubCommand(newActivityCommand())
 	metricsGroup.AddSubCommand(newServerStatsCommand())
+	metricsGroup.AddSubCommand(newBackfillStatusCommand())
 
 	router.RegisterCommand(metricsGroup)
 }
@@ -532,4 +533,96 @@ func formatMaybeNet(enters, leaves int64, hasLeaves bool) string {
 		return fmt.Sprintf("%d (without leaves)", enters)
 	}
 	return fmt.Sprintf("%d", enters-leaves)
+}
+
+// -------- Backfill Status Command --------
+
+func newBackfillStatusCommand() core.SubCommand {
+	return core.NewSimpleCommand(
+		"backfill-status",
+		"Shows the progress of welcome channel message reading for entry/exit metrics.",
+		nil,
+		handleBackfillStatus,
+		true,  // requiresGuild
+		false, // requiresPermissions
+	)
+}
+
+func handleBackfillStatus(ctx *core.Context) error {
+	s := ctx.Session
+	i := ctx.Interaction
+
+	if ctx.GuildConfig == nil {
+		return respondError(s, i, "Guild configuration not found.")
+	}
+
+	channelID := strings.TrimSpace(ctx.GuildConfig.WelcomeBacklogChannelID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(ctx.GuildConfig.UserEntryLeaveChannelID)
+	}
+
+	if channelID == "" {
+		return respondError(s, i, "No welcome or entry/leave channel configured for this server.")
+	}
+
+	dbPath := util.GetMessageDBPath()
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return respondError(s, i, fmt.Sprintf("Failed to open database: %v", err))
+	}
+	defer db.Close()
+
+	// 1) First message date
+	var firstMsgDate string = "Unknown"
+	// Actually, to get the absolute first message, we can't easily do it with a single call unless we know the snowflake.
+	// Snowflake "0" or "1" is the beginning of time.
+	msgs, err := s.ChannelMessages(channelID, 1, "", "1", "") // after "1"
+	if err == nil && len(msgs) > 0 {
+		firstMsgDate = msgs[0].Timestamp.UTC().Format("2006-01-02 15:04:05 UTC")
+	}
+
+	// 2) Last processed message date (from metadata)
+	var lastProcessedDate string = "Never"
+	row := db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "backfill_progress:"+channelID)
+	var ts time.Time
+	if err := row.Scan(&ts); err == nil {
+		lastProcessedDate = ts.UTC().Format("2006-01-02 15:04:05 UTC")
+	}
+
+	// 3) Global last event
+	var lastEventDate string = "Never"
+	row = db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "last_event")
+	if err := row.Scan(&ts); err == nil {
+		lastEventDate = ts.UTC().Format("2006-01-02 15:04:05 UTC")
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "📖 Backfill & Reading Status",
+		Color: 0x2ECC71, // Green
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:  "📍 Target Channel",
+				Value: fmt.Sprintf("<#%s> (`%s`)", channelID, channelID),
+			},
+			{
+				Name:   "📅 First Message in Channel",
+				Value:  fmt.Sprintf("`%s`", firstMsgDate),
+				Inline: true,
+			},
+			{
+				Name:   "🕒 Last Processed (Backfill)",
+				Value:  fmt.Sprintf("`%s`", lastProcessedDate),
+				Inline: true,
+			},
+			{
+				Name:  "📡 Last Live Event Received",
+				Value: fmt.Sprintf("`%s`", lastEventDate),
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Reading progress tracks how far back the bot has scanned for entry/exit logs.",
+		},
+	}
+
+	return respondEmbed(s, i, embed)
 }

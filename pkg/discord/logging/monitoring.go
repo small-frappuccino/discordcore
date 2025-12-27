@@ -472,6 +472,8 @@ func (ms *MonitoringService) Start() error {
 						} else if evt == "leave" {
 							_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
 						}
+						// Record the oldest processed timestamp for this channel
+						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
 					}
 				}
 			}
@@ -564,6 +566,8 @@ func (ms *MonitoringService) Start() error {
 						} else if evt == "leave" {
 							_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
 						}
+						// Record the oldest processed timestamp for this channel
+						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
 					}
 				}
 			}

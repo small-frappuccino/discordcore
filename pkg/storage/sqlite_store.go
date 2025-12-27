@@ -485,6 +485,38 @@ func (s *Store) GetLastEvent() (time.Time, bool, error) {
 	return ts, true, nil
 }
 
+// SetMetadata records a timestamp associated with a specific key.
+func (s *Store) SetMetadata(key string, t time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if t.IsZero() {
+		t = time.Now().UTC()
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
+		key, t.UTC(),
+	)
+	return err
+}
+
+// GetMetadata retrieves the timestamp for a specific key.
+func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
+	if s.db == nil {
+		return time.Time{}, false, fmt.Errorf("store not initialized")
+	}
+	row := s.db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, key)
+	var ts time.Time
+	if err := row.Scan(&ts); err != nil {
+		if err == sql.ErrNoRows {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	return ts, true, nil
+}
+
 // SetGuildOwnerID sets or updates the cached owner ID for a guild.
 func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 	if s.db == nil {
