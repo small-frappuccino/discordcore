@@ -250,32 +250,32 @@ func (ms *MonitoringService) Start() error {
 	// Start member/message services (gate entry/exit logs via runtime config)
 	disableEntryExit := false
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		disableEntryExit = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_ENTRY_EXIT_LOGS
+		disableEntryExit = ms.configManager.Config().RuntimeConfig.DisableEntryExitLogs
 	}
 	if disableEntryExit {
-		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by runtime config ALICE_DISABLE_ENTRY_EXIT_LOGS; MemberEventService will not start")
+		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by runtime config disable_entry_exit_logs; MemberEventService will not start")
 	} else {
 		if err := ms.memberEventService.Start(); err != nil {
 			ms.isRunning = false
 			return fmt.Errorf("failed to start member event service: %w", err)
 		}
 	}
-	// Optionally honor ALICE_DISABLE_AUTOMOD_LOGS here (Automod service is started elsewhere)
+	// Optionally honor DisableAutomodLogs here (Automod service is started elsewhere)
 	disableAutomod := false
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		disableAutomod = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_AUTOMOD_LOGS
+		disableAutomod = ms.configManager.Config().RuntimeConfig.DisableAutomodLogs
 	}
 	if disableAutomod {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config ALICE_DISABLE_AUTOMOD_LOGS")
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config disable_automod_logs")
 	}
 
 	// Gate message logging behind runtime config
 	disableMsg := false
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		disableMsg = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_MESSAGE_LOGS
+		disableMsg = ms.configManager.Config().RuntimeConfig.DisableMessageLogs
 	}
 	if disableMsg {
-		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config ALICE_DISABLE_MESSAGE_LOGS; MessageEventService will not start")
+		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config disable_message_logs; MessageEventService will not start")
 	} else {
 		if err := ms.messageEventService.Start(); err != nil {
 			ms.isRunning = false
@@ -288,10 +288,10 @@ func (ms *MonitoringService) Start() error {
 	// Gate reaction logging behind runtime config
 	disableReactions := false
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		disableReactions = ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_REACTION_LOGS
+		disableReactions = ms.configManager.Config().RuntimeConfig.DisableReactionLogs
 	}
 	if disableReactions {
-		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config ALICE_DISABLE_REACTION_LOGS; ReactionEventService will not start")
+		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config disable_reaction_logs; ReactionEventService will not start")
 	} else {
 		// Lazily initialize service if not yet created
 		if ms.reactionEventService == nil {
@@ -594,9 +594,9 @@ func (ms *MonitoringService) Start() error {
 	day := ""
 	if ms.configManager != nil && ms.configManager.Config() != nil {
 		rc := ms.configManager.Config().RuntimeConfig
-		enabled = rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED
-		chID = strings.TrimSpace(rc.ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID)
-		day = strings.TrimSpace(rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY) // default: today UTC
+		enabled = rc.BackfillEnabled
+		chID = strings.TrimSpace(rc.BackfillChannelID)
+		day = strings.TrimSpace(rc.BackfillStartDay) // default: today UTC
 	}
 	if enabled {
 		if day != "" {
@@ -626,36 +626,74 @@ func (ms *MonitoringService) Start() error {
 				}
 			}
 		} else if ms.store != nil {
-			// Auto recovery mode (only if downtime is significant)
-			lastEvent, ok, err := ms.store.GetLastEvent()
-			if err == nil && ok {
-				downtime := time.Since(lastEvent)
-				if downtime > downtimeThreshold {
-					start := lastEvent.UTC().Format(time.RFC3339)
-					end := time.Now().UTC().Format(time.RFC3339)
-					if chID != "" {
+			// Auto recovery or intelligent initial backfill
+			//
+			// 1) Initial Backfill check: if a channel has "never" been processed,
+			//    we scan today to establish a baseline (Option: scan further back?).
+			// 2) Downtime check: recover what was missed while offline.
+
+			targetChannels := make([]string, 0)
+			if chID != "" {
+				targetChannels = append(targetChannels, chID)
+			} else if ms.configManager != nil && ms.configManager.Config() != nil {
+				for _, g := range ms.configManager.Config().Guilds {
+					cid := strings.TrimSpace(g.WelcomeBacklogChannelID)
+					if cid == "" {
+						cid = strings.TrimSpace(g.UserEntryLeaveChannelID)
+					}
+					if cid != "" {
+						targetChannels = append(targetChannels, cid)
+					}
+				}
+			}
+
+			lastEvent, hasLastEvent, _ := ms.store.GetLastEvent()
+			now := time.Now().UTC()
+			initialDays := 0
+			if ms.configManager != nil && ms.configManager.Config() != nil {
+				initialDays = ms.configManager.Config().RuntimeConfig.BackfillInitialDays
+			}
+
+			for _, cid := range targetChannels {
+				// Check progress for this channel
+				_, hasProgress, _ := ms.store.GetMetadata("backfill_progress:" + cid)
+
+				if !hasProgress {
+					if initialDays > 0 {
+						// "Never" case with initial days: trigger a backfill range from N days ago until now
+						start := now.AddDate(0, 0, -initialDays).Format(time.RFC3339)
+						end := now.Format(time.RFC3339)
 						_ = ms.router.Dispatch(context.Background(), task.Task{
 							Type:    "monitor.backfill_entry_exit_range",
-							Payload: struct{ ChannelID, Start, End string }{ChannelID: chID, Start: start, End: end},
-							Options: task.TaskOptions{GroupKey: "backfill:" + chID},
+							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 						})
-						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (range)", "channelID", chID, "start", start, "end", end)
-					} else if ms.configManager != nil && ms.configManager.Config() != nil {
-						for _, g := range ms.configManager.Config().Guilds {
-							cid := strings.TrimSpace(g.WelcomeBacklogChannelID)
-							if cid == "" {
-								cid = strings.TrimSpace(g.UserEntryLeaveChannelID)
-							}
-							if cid == "" {
-								continue
-							}
-							_ = ms.router.Dispatch(context.Background(), task.Task{
-								Type:    "monitor.backfill_entry_exit_range",
-								Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
-								Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-							})
-							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (range)", "channelID", cid, "start", start, "end", end)
-						}
+						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "days_back", initialDays)
+					} else {
+						// "Never" case: trigger a backfill for today to get started
+						today := now.Format("2006-01-02")
+						_ = ms.router.Dispatch(context.Background(), task.Task{
+							Type:    "monitor.backfill_entry_exit_day",
+							Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: today},
+							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+						})
+						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (today)", "channelID", cid)
+					}
+					continue
+				}
+
+				// If we have progress, check if we need downtime recovery
+				if hasLastEvent {
+					downtime := now.Sub(lastEvent)
+					if downtime > downtimeThreshold {
+						start := lastEvent.UTC().Format(time.RFC3339)
+						end := now.Format(time.RFC3339)
+						_ = ms.router.Dispatch(context.Background(), task.Task{
+							Type:    "monitor.backfill_entry_exit_range",
+							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+						})
+						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
 					}
 				}
 			}
@@ -840,7 +878,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Entry/Exit logs -> MemberEventService
-	if rc.ALICE_DISABLE_ENTRY_EXIT_LOGS {
+	if rc.DisableEntryExitLogs {
 		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 			_ = ms.memberEventService.Stop()
 		}
@@ -853,7 +891,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Message logs -> MessageEventService
-	if rc.ALICE_DISABLE_MESSAGE_LOGS {
+	if rc.DisableMessageLogs {
 		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 			_ = ms.messageEventService.Stop()
 		}
@@ -866,7 +904,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Reaction logs -> ReactionEventService
-	if rc.ALICE_DISABLE_REACTION_LOGS {
+	if rc.DisableReactionLogs {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
 			_ = ms.reactionEventService.Stop()
 		}
@@ -904,7 +942,7 @@ func (ms *MonitoringService) setupEventHandlers() {
 func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.RuntimeConfig) {
 	// Store handler references for later removal
 	// Gate user logs (avatars and roles) via runtime config
-	disableUser := rc.ALICE_DISABLE_USER_LOGS
+	disableUser := rc.DisableUserLogs
 
 	if disableUser {
 		// Register only non-user handlers
@@ -1962,6 +2000,10 @@ func (ms *MonitoringService) GetUnifiedCache() *cache.UnifiedCache {
 	return ms.unifiedCache
 }
 
+func (ms *MonitoringService) TaskRouter() *task.TaskRouter {
+	return ms.router
+}
+
 func (ms *MonitoringService) botRolePermSnapshotKey(guildID, roleID string) string {
 	if guildID == "" || roleID == "" {
 		return ""
@@ -1973,7 +2015,7 @@ func (ms *MonitoringService) botPermMirrorEnabled() bool {
 	// Enabled by default (safety feature).
 	// Previously gated via ALICE_DISABLE_BOT_ROLE_PERM_MIRROR env var; now read from runtime_config in settings.json.
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		return !ms.configManager.Config().RuntimeConfig.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR
+		return !ms.configManager.Config().RuntimeConfig.DisableBotRolePermMirror
 	}
 	return true
 }
@@ -1981,7 +2023,7 @@ func (ms *MonitoringService) botPermMirrorEnabled() bool {
 func (ms *MonitoringService) botPermMirrorActorRoleID() string {
 	// Previously overridable via ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID env var; now read from runtime_config in settings.json.
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		v := strings.TrimSpace(ms.configManager.Config().RuntimeConfig.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID)
+		v := strings.TrimSpace(ms.configManager.Config().RuntimeConfig.BotRolePermMirrorActorRoleID)
 		if v != "" {
 			return v
 		}

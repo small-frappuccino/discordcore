@@ -74,8 +74,8 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 	m.mu.Unlock()
 
 	// Apply theme if it changed
-	if prev.ALICE_BOT_THEME != next.ALICE_BOT_THEME {
-		if err := applyTheme(next.ALICE_BOT_THEME); err != nil {
+	if prev.BotTheme != next.BotTheme {
+		if err := applyTheme(next.BotTheme); err != nil {
 			return fmt.Errorf("apply theme: %w", err)
 		}
 	}
@@ -97,9 +97,9 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 	// In this repo today, `monitoring` is registered, `automod` may be registered depending
 	// on startup gating.
 	if m.serviceManager != nil {
-		if prev.ALICE_DISABLE_AUTOMOD_LOGS != next.ALICE_DISABLE_AUTOMOD_LOGS {
+		if prev.DisableAutomodLogs != next.DisableAutomodLogs {
 			// If disabled => stop. If enabled => start.
-			if next.ALICE_DISABLE_AUTOMOD_LOGS {
+			if next.DisableAutomodLogs {
 				_ = m.serviceManager.StopService("automod")
 			} else {
 				_ = m.serviceManager.StartService("automod")
@@ -124,24 +124,24 @@ func applyTheme(name string) error {
 }
 
 func monitoringTogglesChanged(prev, next files.RuntimeConfig) bool {
-	// These are all the ALICE_DISABLE_* toggles that affect MonitoringService sub-systems.
-	if prev.ALICE_DISABLE_ENTRY_EXIT_LOGS != next.ALICE_DISABLE_ENTRY_EXIT_LOGS {
+	// These are all the toggles that affect MonitoringService sub-systems.
+	if prev.DisableEntryExitLogs != next.DisableEntryExitLogs {
 		return true
 	}
-	if prev.ALICE_DISABLE_MESSAGE_LOGS != next.ALICE_DISABLE_MESSAGE_LOGS {
+	if prev.DisableMessageLogs != next.DisableMessageLogs {
 		return true
 	}
-	if prev.ALICE_DISABLE_REACTION_LOGS != next.ALICE_DISABLE_REACTION_LOGS {
+	if prev.DisableReactionLogs != next.DisableReactionLogs {
 		return true
 	}
-	if prev.ALICE_DISABLE_USER_LOGS != next.ALICE_DISABLE_USER_LOGS {
+	if prev.DisableUserLogs != next.DisableUserLogs {
 		return true
 	}
-	if prev.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR != next.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR {
+	if prev.DisableBotRolePermMirror != next.DisableBotRolePermMirror {
 		return true
 	}
 	// Actor role ID changes are meaningful for perm mirroring behavior.
-	if prev.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID != next.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID {
+	if prev.BotRolePermMirrorActorRoleID != next.BotRolePermMirrorActorRoleID {
 		return true
 	}
 	return false

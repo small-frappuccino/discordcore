@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
 // CommandRouter manages routing and execution of commands
@@ -25,6 +26,9 @@ type CommandRouter struct {
 	// It is set by the app runner and can be used by interaction handlers to apply changes
 	// immediately after persisting settings.json.
 	runtimeApplier *runtimeapply.Manager
+
+	// taskRouter is an optional shared task router (backfill, async notifications).
+	taskRouter *task.TaskRouter
 }
 
 // NewCommandRouter creates a new command router
@@ -78,6 +82,7 @@ func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.In
 // handleSlashCommand processes slash commands
 func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 	ctx := cr.contextBuilder.BuildContext(i)
+	ctx.SetRouter(cr)
 	commandName := i.ApplicationCommandData().Name
 
 	slog.Info("Processing slash command")
@@ -425,4 +430,14 @@ func (cr *CommandRouter) SetRuntimeApplier(applier *runtimeapply.Manager) {
 // GetRuntimeApplier returns the shared runtime hot-apply manager (if any).
 func (cr *CommandRouter) GetRuntimeApplier() *runtimeapply.Manager {
 	return cr.runtimeApplier
+}
+
+// SetTaskRouter sets the task router
+func (cr *CommandRouter) SetTaskRouter(router *task.TaskRouter) {
+	cr.taskRouter = router
+}
+
+// GetTaskRouter returns the task router
+func (cr *CommandRouter) GetTaskRouter() *task.TaskRouter {
+	return cr.taskRouter
 }

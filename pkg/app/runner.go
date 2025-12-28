@@ -111,11 +111,11 @@ func Run(appName, tokenEnv string) error {
 		cfg := configManager.Config()
 		themeName := ""
 		if cfg != nil {
-			themeName = cfg.RuntimeConfig.ALICE_BOT_THEME
+			themeName = cfg.RuntimeConfig.BotTheme
 		}
 
 		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "ALICE_BOT_THEME", err))
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
 		}
 		if themeName == "" {
 			if err := util.SetTheme(""); err != nil {
@@ -138,16 +138,16 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some configured guilds could not be accessed: %v", err))
 	}
 
-	// Periodic cleanup (every 6 hours), can be disabled via runtime config (replaces ALICE_DISABLE_DB_CLEANUP)
+	// Periodic cleanup (every 6 hours), can be disabled via runtime config
 	var cleanupStop chan struct{}
 	disableCleanup := false
 	if cfg := configManager.Config(); cfg != nil {
-		disableCleanup = cfg.RuntimeConfig.ALICE_DISABLE_DB_CLEANUP
+		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
 	}
 	if !disableCleanup {
 		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
 	} else {
-		log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config ALICE_DISABLE_DB_CLEANUP")
+		log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
 	}
 	defer func() {
 		if cleanupStop != nil {
@@ -205,14 +205,14 @@ func Run(appName, tokenEnv string) error {
 		func() bool { return true },
 	)
 
-	// Automod service with TaskRouter adapters (gated by runtime config; replaces ALICE_DISABLE_AUTOMOD_LOGS)
+	// Automod service with TaskRouter adapters (gated by runtime config)
 	disableAutomod := false
 	if cfg := configManager.Config(); cfg != nil {
-		disableAutomod = cfg.RuntimeConfig.ALICE_DISABLE_AUTOMOD_LOGS
+		disableAutomod = cfg.RuntimeConfig.DisableAutomodLogs
 	}
 	var automodWrapper *service.ServiceWrapper
 	if disableAutomod {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config ALICE_DISABLE_AUTOMOD_LOGS; AutomodService will not start")
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start")
 	} else {
 		automodService := logging.NewAutomodService(discordSession, configManager)
 		automodRouter := task.NewRouter(task.Defaults())
@@ -264,6 +264,7 @@ func Run(appName, tokenEnv string) error {
 			router.SetStore(store)
 			if monitoringService != nil {
 				router.SetCache(monitoringService.GetUnifiedCache())
+				router.SetTaskRouter(monitoringService.TaskRouter())
 			}
 			// Wire runtime hot-apply manager so /config runtime can apply changes immediately.
 			router.SetRuntimeApplier(runtimeApplier)

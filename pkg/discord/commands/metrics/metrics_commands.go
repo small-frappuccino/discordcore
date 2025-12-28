@@ -13,6 +13,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
@@ -22,6 +23,7 @@ func RegisterMetricsCommands(router *core.CommandRouter) {
 	metricsGroup.AddSubCommand(newActivityCommand())
 	metricsGroup.AddSubCommand(newServerStatsCommand())
 	metricsGroup.AddSubCommand(newBackfillStatusCommand())
+	metricsGroup.AddSubCommand(newBackfillRunCommand())
 
 	router.RegisterCommand(metricsGroup)
 }
@@ -621,6 +623,111 @@ func handleBackfillStatus(ctx *core.Context) error {
 		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "Reading progress tracks how far back the bot has scanned for entry/exit logs.",
+		},
+	}
+
+	return respondEmbed(s, i, embed)
+}
+
+func newBackfillRunCommand() core.SubCommand {
+	return core.NewSimpleCommand(
+		"backfill-run",
+		"Manually triggers a backfill for entry/exit logs.",
+		[]*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionChannel,
+				Name:        "channel",
+				Description: "Channel to scan. Defaults to configured welcome channel.",
+				Required:    false,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionInteger,
+				Name:        "days",
+				Description: "How many days to scan back. Default is 7.",
+				Required:    false,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "start_date",
+				Description: "Start date (YYYY-MM-DD). If provided, 'days' is ignored.",
+				Required:    false,
+			},
+		},
+		handleBackfillRun,
+		true, // requiresGuild
+		true, // requiresPermissions (Admin)
+	)
+}
+
+func handleBackfillRun(ctx *core.Context) error {
+	s := ctx.Session
+	i := ctx.Interaction
+
+	router := ctx.Router()
+	if router == nil {
+		return respondError(s, i, "Command router not available.")
+	}
+	taskRouter := router.GetTaskRouter()
+	if taskRouter == nil {
+		return respondError(s, i, "Task router not available (Monitoring service might be disabled).")
+	}
+
+	channelID := getChannelOpt(s, i, "channel", "")
+	if channelID == "" {
+		if ctx.GuildConfig != nil {
+			channelID = strings.TrimSpace(ctx.GuildConfig.WelcomeBacklogChannelID)
+			if channelID == "" {
+				channelID = strings.TrimSpace(ctx.GuildConfig.UserEntryLeaveChannelID)
+			}
+		}
+	}
+
+	if channelID == "" {
+		return respondError(s, i, "No channel specified and no default welcome channel configured.")
+	}
+
+	days := getIntOpt(i, "days", 7)
+	startDateRaw := getStringOpt(i, "start_date", "")
+
+	var taskType string
+	var payload any
+	var desc string
+
+	if startDateRaw != "" {
+		// Day mode
+		_, err := time.Parse("2006-01-02", startDateRaw)
+		if err != nil {
+			return respondError(s, i, "Invalid start_date format. Use YYYY-MM-DD.")
+		}
+		taskType = "monitor.backfill_entry_exit_day"
+		payload = struct{ ChannelID, Day string }{ChannelID: channelID, Day: startDateRaw}
+		desc = fmt.Sprintf("Scanning channel <#%s> for day `%s`.", channelID, startDateRaw)
+	} else {
+		// Range mode
+		now := time.Now().UTC()
+		start := now.AddDate(0, 0, -int(days)).Format(time.RFC3339)
+		end := now.Format(time.RFC3339)
+		taskType = "monitor.backfill_entry_exit_range"
+		payload = struct{ ChannelID, Start, End string }{ChannelID: channelID, Start: start, End: end}
+		desc = fmt.Sprintf("Scanning channel <#%s> for the last `%d` days.", channelID, days)
+	}
+
+	err := taskRouter.Dispatch(context.Background(), task.Task{
+		Type:    taskType,
+		Payload: payload,
+		Options: task.TaskOptions{GroupKey: "backfill:" + channelID},
+	})
+
+	if err != nil {
+		return respondError(s, i, fmt.Sprintf("Failed to dispatch backfill task: %v", err))
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "▶️ Backfill Started",
+		Description: desc,
+		Color:       0x3498DB, // Blue
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "This process runs in the background. Use /metrics backfill-status to check progress.",
 		},
 	}
 

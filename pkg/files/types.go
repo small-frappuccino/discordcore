@@ -17,32 +17,33 @@ import (
 // Keep names in CAPS to mirror the previous env var names and make auditing easy.
 type RuntimeConfig struct {
 	// THEME
-	ALICE_BOT_THEME string `json:"ALICE_BOT_THEME,omitempty"`
+	BotTheme string `json:"bot_theme,omitempty"`
 
 	// SERVICES (LOGGING)
-	ALICE_DISABLE_DB_CLEANUP      bool `json:"ALICE_DISABLE_DB_CLEANUP,omitempty"`
-	ALICE_DISABLE_AUTOMOD_LOGS    bool `json:"ALICE_DISABLE_AUTOMOD_LOGS,omitempty"`
-	ALICE_DISABLE_MESSAGE_LOGS    bool `json:"ALICE_DISABLE_MESSAGE_LOGS,omitempty"`
-	ALICE_DISABLE_ENTRY_EXIT_LOGS bool `json:"ALICE_DISABLE_ENTRY_EXIT_LOGS,omitempty"`
-	ALICE_DISABLE_REACTION_LOGS   bool `json:"ALICE_DISABLE_REACTION_LOGS,omitempty"`
-	ALICE_DISABLE_USER_LOGS       bool `json:"ALICE_DISABLE_USER_LOGS,omitempty"`
+	DisableDBCleanup     bool `json:"disable_db_cleanup,omitempty"`
+	DisableAutomodLogs   bool `json:"disable_automod_logs,omitempty"`
+	DisableMessageLogs   bool `json:"disable_message_logs,omitempty"`
+	DisableEntryExitLogs bool `json:"disable_entry_exit_logs,omitempty"`
+	DisableReactionLogs  bool `json:"disable_reaction_logs,omitempty"`
+	DisableUserLogs      bool `json:"disable_user_logs,omitempty"`
 
 	// MESSAGE CACHE
-	ALICE_MESSAGE_CACHE_TTL_HOURS int  `json:"ALICE_MESSAGE_CACHE_TTL_HOURS,omitempty"`
-	ALICE_MESSAGE_DELETE_ON_LOG   bool `json:"ALICE_MESSAGE_DELETE_ON_LOG,omitempty"`
-	ALICE_MESSAGE_CACHE_CLEANUP   bool `json:"ALICE_MESSAGE_CACHE_CLEANUP,omitempty"`
+	MessageCacheTTLHours int  `json:"message_cache_ttl_hours,omitempty"`
+	MessageDeleteOnLog   bool `json:"message_delete_on_log,omitempty"`
+	MessageCacheCleanup  bool `json:"message_cache_cleanup,omitempty"`
 
 	// BACKFILL (ENTRY/EXIT)
-	ALICE_BACKFILL_ENTRY_EXIT_ENABLED    bool   `json:"ALICE_BACKFILL_ENTRY_EXIT_ENABLED,omitempty"`
-	ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID string `json:"ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID,omitempty"`
-	ALICE_BACKFILL_ENTRY_EXIT_START_DAY  string `json:"ALICE_BACKFILL_ENTRY_EXIT_START_DAY,omitempty"` // YYYY-MM-DD, default: today UTC when empty
+	BackfillEnabled     bool   `json:"backfill_enabled,omitempty"`
+	BackfillChannelID   string `json:"backfill_channel_id,omitempty"`
+	BackfillStartDay    string `json:"backfill_start_day,omitempty"`    // YYYY-MM-DD, default: today UTC when empty
+	BackfillInitialDays int    `json:"backfill_initial_days,omitempty"` // Days to scan back when "Never" processed (default: 0 = today only)
 
 	// BOT ROLE PERMISSION MIRRORING (SAFETY)
 	// Previously controllable via env vars:
 	//   - ALICE_DISABLE_BOT_ROLE_PERM_MIRROR
 	//   - ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID
-	ALICE_DISABLE_BOT_ROLE_PERM_MIRROR       bool   `json:"ALICE_DISABLE_BOT_ROLE_PERM_MIRROR,omitempty"`
-	ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID string `json:"ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID,omitempty"`
+	DisableBotRolePermMirror     bool   `json:"disable_bot_role_perm_mirror,omitempty"`
+	BotRolePermMirrorActorRoleID string `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
 }
 
 // ## Config Types

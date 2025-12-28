@@ -36,6 +36,17 @@ type Context struct {
 	UserID      string
 	IsOwner     bool
 	GuildConfig *files.GuildConfig
+	router      *CommandRouter
+}
+
+// SetRouter sets the router in the context
+func (ctx *Context) SetRouter(router *CommandRouter) {
+	ctx.router = router
+}
+
+// Router returns the command router from the context
+func (ctx *Context) Router() *CommandRouter {
+	return ctx.router
 }
 
 // Response standardizes command responses

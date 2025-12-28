@@ -107,7 +107,7 @@ func decodeState(raw string) panelState {
 	// Expected: mode|group|key
 	// Use SplitN to avoid accepting extra separators as additional state fields.
 	parts := strings.SplitN(raw, stateSep, 3)
-	st := panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyALICE_BOT_THEME}
+	st := panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
 	if len(parts) >= 1 {
 		if v := strings.TrimSpace(parts[0]); v != "" {
 			st.Mode = pageMode(v)
@@ -161,36 +161,37 @@ func (s panelState) withKey(k runtimeKey) panelState { s.Key = k; return s }
 
 const (
 	// THEME
-	runtimeKeyALICE_BOT_THEME runtimeKey = "ALICE_BOT_THEME"
+	runtimeKeyBotTheme runtimeKey = "bot_theme"
 
 	// SERVICES (LOGGING)
-	runtimeKeyALICE_DISABLE_DB_CLEANUP      runtimeKey = "ALICE_DISABLE_DB_CLEANUP"
-	runtimeKeyALICE_DISABLE_AUTOMOD_LOGS    runtimeKey = "ALICE_DISABLE_AUTOMOD_LOGS"
-	runtimeKeyALICE_DISABLE_MESSAGE_LOGS    runtimeKey = "ALICE_DISABLE_MESSAGE_LOGS"
-	runtimeKeyALICE_DISABLE_ENTRY_EXIT_LOGS runtimeKey = "ALICE_DISABLE_ENTRY_EXIT_LOGS"
-	runtimeKeyALICE_DISABLE_REACTION_LOGS   runtimeKey = "ALICE_DISABLE_REACTION_LOGS"
-	runtimeKeyALICE_DISABLE_USER_LOGS       runtimeKey = "ALICE_DISABLE_USER_LOGS"
+	runtimeKeyDisableDBCleanup     runtimeKey = "disable_db_cleanup"
+	runtimeKeyDisableAutomodLogs   runtimeKey = "disable_automod_logs"
+	runtimeKeyDisableMessageLogs   runtimeKey = "disable_message_logs"
+	runtimeKeyDisableEntryExitLogs runtimeKey = "disable_entry_exit_logs"
+	runtimeKeyDisableReactionLogs  runtimeKey = "disable_reaction_logs"
+	runtimeKeyDisableUserLogs      runtimeKey = "disable_user_logs"
 
 	// MESSAGE CACHE
-	runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS runtimeKey = "ALICE_MESSAGE_CACHE_TTL_HOURS"
-	runtimeKeyALICE_MESSAGE_DELETE_ON_LOG   runtimeKey = "ALICE_MESSAGE_DELETE_ON_LOG"
-	runtimeKeyALICE_MESSAGE_CACHE_CLEANUP   runtimeKey = "ALICE_MESSAGE_CACHE_CLEANUP"
+	runtimeKeyMessageCacheTTLHours runtimeKey = "message_cache_ttl_hours"
+	runtimeKeyMessageDeleteOnLog   runtimeKey = "message_delete_on_log"
+	runtimeKeyMessageCacheCleanup  runtimeKey = "message_cache_cleanup"
 
 	// BACKFILL (ENTRY/EXIT)
-	runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED    runtimeKey = "ALICE_BACKFILL_ENTRY_EXIT_ENABLED"
-	runtimeKeyALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID runtimeKey = "ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID"
-	runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY  runtimeKey = "ALICE_BACKFILL_ENTRY_EXIT_START_DAY"
+	runtimeKeyBackfillEnabled     runtimeKey = "backfill_enabled"
+	runtimeKeyBackfillChannelID   runtimeKey = "backfill_channel_id"
+	runtimeKeyBackfillStartDay    runtimeKey = "backfill_start_day"
+	runtimeKeyBackfillInitialDays runtimeKey = "backfill_initial_days"
 
 	// BOT ROLE PERMISSION MIRRORING (SAFETY)
-	runtimeKeyALICE_DISABLE_BOT_ROLE_PERM_MIRROR       runtimeKey = "ALICE_DISABLE_BOT_ROLE_PERM_MIRROR"
-	runtimeKeyALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID runtimeKey = "ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID"
+	runtimeKeyDisableBotRolePermMirror     runtimeKey = "disable_bot_role_perm_mirror"
+	runtimeKeyBotRolePermMirrorActorRoleID runtimeKey = "bot_role_perm_mirror_actor_role_id"
 )
 
 func allSpecs() []spec {
 	// Keep groups stable and short (helps readability in embed fields)
 	return []spec{
 		{
-			Key:         runtimeKeyALICE_BOT_THEME,
+			Key:         runtimeKeyBotTheme,
 			Group:       "THEME",
 			Type:        vtString,
 			DefaultHint: "(default)",
@@ -199,7 +200,7 @@ func allSpecs() []spec {
 			MaxInputLen: 60,
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_DB_CLEANUP,
+			Key:         runtimeKeyDisableDBCleanup,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -207,7 +208,7 @@ func allSpecs() []spec {
 			RestartHint: restartRequired, // still a goroutine in runner; hot-apply intentionally not handled
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_AUTOMOD_LOGS,
+			Key:         runtimeKeyDisableAutomodLogs,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -215,7 +216,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_MESSAGE_LOGS,
+			Key:         runtimeKeyDisableMessageLogs,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -223,7 +224,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_ENTRY_EXIT_LOGS,
+			Key:         runtimeKeyDisableEntryExitLogs,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -231,7 +232,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_REACTION_LOGS,
+			Key:         runtimeKeyDisableReactionLogs,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -239,7 +240,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_USER_LOGS,
+			Key:         runtimeKeyDisableUserLogs,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -247,7 +248,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS,
+			Key:         runtimeKeyMessageCacheTTLHours,
 			Group:       "MESSAGE CACHE",
 			Type:        vtInt,
 			DefaultHint: "72",
@@ -256,7 +257,7 @@ func allSpecs() []spec {
 			MaxInputLen: 8,
 		},
 		{
-			Key:         runtimeKeyALICE_MESSAGE_DELETE_ON_LOG,
+			Key:         runtimeKeyMessageDeleteOnLog,
 			Group:       "MESSAGE CACHE",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -264,7 +265,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_MESSAGE_CACHE_CLEANUP,
+			Key:         runtimeKeyMessageCacheCleanup,
 			Group:       "MESSAGE CACHE",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -272,7 +273,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED,
+			Key:         runtimeKeyBackfillEnabled,
 			Group:       "BACKFILL",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -280,7 +281,7 @@ func allSpecs() []spec {
 			RestartHint: restartRequired,
 		},
 		{
-			Key:         runtimeKeyALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID,
+			Key:         runtimeKeyBackfillChannelID,
 			Group:       "BACKFILL",
 			Type:        vtString,
 			DefaultHint: "(empty)",
@@ -289,7 +290,7 @@ func allSpecs() []spec {
 			MaxInputLen: 32,
 		},
 		{
-			Key:         runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY,
+			Key:         runtimeKeyBackfillStartDay,
 			Group:       "BACKFILL",
 			Type:        vtDate,
 			DefaultHint: "today (UTC)",
@@ -298,7 +299,16 @@ func allSpecs() []spec {
 			MaxInputLen: 16,
 		},
 		{
-			Key:         runtimeKeyALICE_DISABLE_BOT_ROLE_PERM_MIRROR,
+			Key:         runtimeKeyBackfillInitialDays,
+			Group:       "BACKFILL",
+			Type:        vtInt,
+			DefaultHint: "0",
+			ShortHelp:   "Days to scan back when never processed",
+			RestartHint: restartRequired,
+			MaxInputLen: 8,
+		},
+		{
+			Key:         runtimeKeyDisableBotRolePermMirror,
 			Group:       "SAFETY",
 			Type:        vtBool,
 			DefaultHint: "false",
@@ -306,7 +316,7 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended, // effective at event time; no restart needed for behavior
 		},
 		{
-			Key:         runtimeKeyALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID,
+			Key:         runtimeKeyBotRolePermMirrorActorRoleID,
 			Group:       "SAFETY",
 			Type:        vtString,
 			DefaultHint: "(default)",
@@ -432,7 +442,7 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	st := panelState{
 		Mode:  pageMain,
 		Group: "ALL",
-		Key:   runtimeKeyALICE_BOT_THEME,
+		Key:   runtimeKeyBotTheme,
 	}
 
 	embed := renderMainEmbed(rc, st)
@@ -482,40 +492,42 @@ func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig) error {
 
 func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 	switch k {
-	case runtimeKeyALICE_BOT_THEME:
-		return rc.ALICE_BOT_THEME, true
+	case runtimeKeyBotTheme:
+		return rc.BotTheme, true
 
-	case runtimeKeyALICE_DISABLE_DB_CLEANUP:
-		return fmtBool(rc.ALICE_DISABLE_DB_CLEANUP), true
-	case runtimeKeyALICE_DISABLE_AUTOMOD_LOGS:
-		return fmtBool(rc.ALICE_DISABLE_AUTOMOD_LOGS), true
-	case runtimeKeyALICE_DISABLE_MESSAGE_LOGS:
-		return fmtBool(rc.ALICE_DISABLE_MESSAGE_LOGS), true
-	case runtimeKeyALICE_DISABLE_ENTRY_EXIT_LOGS:
-		return fmtBool(rc.ALICE_DISABLE_ENTRY_EXIT_LOGS), true
-	case runtimeKeyALICE_DISABLE_REACTION_LOGS:
-		return fmtBool(rc.ALICE_DISABLE_REACTION_LOGS), true
-	case runtimeKeyALICE_DISABLE_USER_LOGS:
-		return fmtBool(rc.ALICE_DISABLE_USER_LOGS), true
+	case runtimeKeyDisableDBCleanup:
+		return fmtBool(rc.DisableDBCleanup), true
+	case runtimeKeyDisableAutomodLogs:
+		return fmtBool(rc.DisableAutomodLogs), true
+	case runtimeKeyDisableMessageLogs:
+		return fmtBool(rc.DisableMessageLogs), true
+	case runtimeKeyDisableEntryExitLogs:
+		return fmtBool(rc.DisableEntryExitLogs), true
+	case runtimeKeyDisableReactionLogs:
+		return fmtBool(rc.DisableReactionLogs), true
+	case runtimeKeyDisableUserLogs:
+		return fmtBool(rc.DisableUserLogs), true
 
-	case runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS:
-		return strconv.Itoa(rc.ALICE_MESSAGE_CACHE_TTL_HOURS), true
-	case runtimeKeyALICE_MESSAGE_DELETE_ON_LOG:
-		return fmtBool(rc.ALICE_MESSAGE_DELETE_ON_LOG), true
-	case runtimeKeyALICE_MESSAGE_CACHE_CLEANUP:
-		return fmtBool(rc.ALICE_MESSAGE_CACHE_CLEANUP), true
+	case runtimeKeyMessageCacheTTLHours:
+		return strconv.Itoa(rc.MessageCacheTTLHours), true
+	case runtimeKeyMessageDeleteOnLog:
+		return fmtBool(rc.MessageDeleteOnLog), true
+	case runtimeKeyMessageCacheCleanup:
+		return fmtBool(rc.MessageCacheCleanup), true
 
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED:
-		return fmtBool(rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED), true
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID:
-		return rc.ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID, true
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY:
-		return rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY, true
+	case runtimeKeyBackfillEnabled:
+		return fmtBool(rc.BackfillEnabled), true
+	case runtimeKeyBackfillChannelID:
+		return rc.BackfillChannelID, true
+	case runtimeKeyBackfillStartDay:
+		return rc.BackfillStartDay, true
+	case runtimeKeyBackfillInitialDays:
+		return strconv.Itoa(rc.BackfillInitialDays), true
 
-	case runtimeKeyALICE_DISABLE_BOT_ROLE_PERM_MIRROR:
-		return fmtBool(rc.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR), true
-	case runtimeKeyALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID:
-		return rc.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID, true
+	case runtimeKeyDisableBotRolePermMirror:
+		return fmtBool(rc.DisableBotRolePermMirror), true
+	case runtimeKeyBotRolePermMirrorActorRoleID:
+		return rc.BotRolePermMirrorActorRoleID, true
 
 	default:
 		return "", false
@@ -524,54 +536,57 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 
 func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool) {
 	switch k {
-	case runtimeKeyALICE_BOT_THEME:
-		rc.ALICE_BOT_THEME = ""
+	case runtimeKeyBotTheme:
+		rc.BotTheme = ""
 		return rc, true
 
-	case runtimeKeyALICE_DISABLE_DB_CLEANUP:
-		rc.ALICE_DISABLE_DB_CLEANUP = false
+	case runtimeKeyDisableDBCleanup:
+		rc.DisableDBCleanup = false
 		return rc, true
-	case runtimeKeyALICE_DISABLE_AUTOMOD_LOGS:
-		rc.ALICE_DISABLE_AUTOMOD_LOGS = false
+	case runtimeKeyDisableAutomodLogs:
+		rc.DisableAutomodLogs = false
 		return rc, true
-	case runtimeKeyALICE_DISABLE_MESSAGE_LOGS:
-		rc.ALICE_DISABLE_MESSAGE_LOGS = false
+	case runtimeKeyDisableMessageLogs:
+		rc.DisableMessageLogs = false
 		return rc, true
-	case runtimeKeyALICE_DISABLE_ENTRY_EXIT_LOGS:
-		rc.ALICE_DISABLE_ENTRY_EXIT_LOGS = false
+	case runtimeKeyDisableEntryExitLogs:
+		rc.DisableEntryExitLogs = false
 		return rc, true
-	case runtimeKeyALICE_DISABLE_REACTION_LOGS:
-		rc.ALICE_DISABLE_REACTION_LOGS = false
+	case runtimeKeyDisableReactionLogs:
+		rc.DisableReactionLogs = false
 		return rc, true
-	case runtimeKeyALICE_DISABLE_USER_LOGS:
-		rc.ALICE_DISABLE_USER_LOGS = false
-		return rc, true
-
-	case runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS:
-		rc.ALICE_MESSAGE_CACHE_TTL_HOURS = 0
-		return rc, true
-	case runtimeKeyALICE_MESSAGE_DELETE_ON_LOG:
-		rc.ALICE_MESSAGE_DELETE_ON_LOG = false
-		return rc, true
-	case runtimeKeyALICE_MESSAGE_CACHE_CLEANUP:
-		rc.ALICE_MESSAGE_CACHE_CLEANUP = false
+	case runtimeKeyDisableUserLogs:
+		rc.DisableUserLogs = false
 		return rc, true
 
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED:
-		rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED = false
+	case runtimeKeyMessageCacheTTLHours:
+		rc.MessageCacheTTLHours = 0
 		return rc, true
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID:
-		rc.ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID = ""
+	case runtimeKeyMessageDeleteOnLog:
+		rc.MessageDeleteOnLog = false
 		return rc, true
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY:
-		rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY = ""
+	case runtimeKeyMessageCacheCleanup:
+		rc.MessageCacheCleanup = false
 		return rc, true
 
-	case runtimeKeyALICE_DISABLE_BOT_ROLE_PERM_MIRROR:
-		rc.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR = false
+	case runtimeKeyBackfillEnabled:
+		rc.BackfillEnabled = false
 		return rc, true
-	case runtimeKeyALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID:
-		rc.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID = ""
+	case runtimeKeyBackfillChannelID:
+		rc.BackfillChannelID = ""
+		return rc, true
+	case runtimeKeyBackfillStartDay:
+		rc.BackfillStartDay = ""
+		return rc, true
+	case runtimeKeyBackfillInitialDays:
+		rc.BackfillInitialDays = 0
+		return rc, true
+
+	case runtimeKeyDisableBotRolePermMirror:
+		rc.DisableBotRolePermMirror = false
+		return rc, true
+	case runtimeKeyBotRolePermMirrorActorRoleID:
+		rc.BotRolePermMirrorActorRoleID = ""
 		return rc, true
 
 	default:
@@ -601,8 +616,8 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		return setInt(rc, sp.Key, v)
 	case vtDate:
 		if raw == "" {
-			if sp.Key == runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY {
-				rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY = ""
+			if sp.Key == runtimeKeyBackfillStartDay {
+				rc.BackfillStartDay = ""
 				return rc, nil
 			}
 			return rc, nil
@@ -610,22 +625,22 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		if _, err := time.Parse("2006-01-02", raw); err != nil {
 			return rc, fmt.Errorf("invalid date (expected YYYY-MM-DD)")
 		}
-		if sp.Key == runtimeKeyALICE_BACKFILL_ENTRY_EXIT_START_DAY {
-			rc.ALICE_BACKFILL_ENTRY_EXIT_START_DAY = raw
+		if sp.Key == runtimeKeyBackfillStartDay {
+			rc.BackfillStartDay = raw
 			return rc, nil
 		}
 		return rc, fmt.Errorf("unsupported date key")
 	case vtString:
 		// Empty string is allowed to reset to default behavior
 		switch sp.Key {
-		case runtimeKeyALICE_BOT_THEME:
-			rc.ALICE_BOT_THEME = raw
+		case runtimeKeyBotTheme:
+			rc.BotTheme = raw
 			return rc, nil
-		case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID:
-			rc.ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID = raw
+		case runtimeKeyBackfillChannelID:
+			rc.BackfillChannelID = raw
 			return rc, nil
-		case runtimeKeyALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID:
-			rc.ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID = raw
+		case runtimeKeyBotRolePermMirrorActorRoleID:
+			rc.BotRolePermMirrorActorRoleID = raw
 			return rc, nil
 		default:
 			return rc, fmt.Errorf("unsupported string key")
@@ -645,7 +660,7 @@ func resetValueOrErr(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig,
 
 func setInt(rc files.RuntimeConfig, k runtimeKey, v int) (files.RuntimeConfig, error) {
 	switch k {
-	case runtimeKeyALICE_MESSAGE_CACHE_TTL_HOURS:
+	case runtimeKeyMessageCacheTTLHours:
 		// Accept 0 to mean "use default" (service will fall back).
 		if v < 0 {
 			return rc, fmt.Errorf("must be >= 0")
@@ -654,7 +669,13 @@ func setInt(rc files.RuntimeConfig, k runtimeKey, v int) (files.RuntimeConfig, e
 		if v > 24*365 {
 			return rc, fmt.Errorf("too large (max %d)", 24*365)
 		}
-		rc.ALICE_MESSAGE_CACHE_TTL_HOURS = v
+		rc.MessageCacheTTLHours = v
+		return rc, nil
+	case runtimeKeyBackfillInitialDays:
+		if v < 0 {
+			return rc, fmt.Errorf("must be >= 0")
+		}
+		rc.BackfillInitialDays = v
 		return rc, nil
 	default:
 		return rc, fmt.Errorf("not an int key")
@@ -663,26 +684,26 @@ func setInt(rc files.RuntimeConfig, k runtimeKey, v int) (files.RuntimeConfig, e
 
 func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig, error) {
 	switch k {
-	case runtimeKeyALICE_DISABLE_DB_CLEANUP:
-		rc.ALICE_DISABLE_DB_CLEANUP = v
-	case runtimeKeyALICE_DISABLE_AUTOMOD_LOGS:
-		rc.ALICE_DISABLE_AUTOMOD_LOGS = v
-	case runtimeKeyALICE_DISABLE_MESSAGE_LOGS:
-		rc.ALICE_DISABLE_MESSAGE_LOGS = v
-	case runtimeKeyALICE_DISABLE_ENTRY_EXIT_LOGS:
-		rc.ALICE_DISABLE_ENTRY_EXIT_LOGS = v
-	case runtimeKeyALICE_DISABLE_REACTION_LOGS:
-		rc.ALICE_DISABLE_REACTION_LOGS = v
-	case runtimeKeyALICE_DISABLE_USER_LOGS:
-		rc.ALICE_DISABLE_USER_LOGS = v
-	case runtimeKeyALICE_MESSAGE_DELETE_ON_LOG:
-		rc.ALICE_MESSAGE_DELETE_ON_LOG = v
-	case runtimeKeyALICE_MESSAGE_CACHE_CLEANUP:
-		rc.ALICE_MESSAGE_CACHE_CLEANUP = v
-	case runtimeKeyALICE_BACKFILL_ENTRY_EXIT_ENABLED:
-		rc.ALICE_BACKFILL_ENTRY_EXIT_ENABLED = v
-	case runtimeKeyALICE_DISABLE_BOT_ROLE_PERM_MIRROR:
-		rc.ALICE_DISABLE_BOT_ROLE_PERM_MIRROR = v
+	case runtimeKeyDisableDBCleanup:
+		rc.DisableDBCleanup = v
+	case runtimeKeyDisableAutomodLogs:
+		rc.DisableAutomodLogs = v
+	case runtimeKeyDisableMessageLogs:
+		rc.DisableMessageLogs = v
+	case runtimeKeyDisableEntryExitLogs:
+		rc.DisableEntryExitLogs = v
+	case runtimeKeyDisableReactionLogs:
+		rc.DisableReactionLogs = v
+	case runtimeKeyDisableUserLogs:
+		rc.DisableUserLogs = v
+	case runtimeKeyMessageDeleteOnLog:
+		rc.MessageDeleteOnLog = v
+	case runtimeKeyMessageCacheCleanup:
+		rc.MessageCacheCleanup = v
+	case runtimeKeyBackfillEnabled:
+		rc.BackfillEnabled = v
+	case runtimeKeyDisableBotRolePermMirror:
+		rc.DisableBotRolePermMirror = v
 	default:
 		return rc, fmt.Errorf("not a bool key")
 	}
@@ -1366,7 +1387,7 @@ func ensureKeyInGroup(st panelState) panelState {
 		if _, ok := specByKey(st.Key); ok {
 			return st
 		}
-		return st.withKey(runtimeKeyALICE_BOT_THEME)
+		return st.withKey(runtimeKeyBotTheme)
 	}
 
 	for _, sp := range specsForGroup(st.Group) {
@@ -1378,16 +1399,16 @@ func ensureKeyInGroup(st panelState) panelState {
 	if len(sps) > 0 {
 		return st.withKey(sps[0].Key)
 	}
-	return st.withKey(runtimeKeyALICE_BOT_THEME)
+	return st.withKey(runtimeKeyBotTheme)
 }
 
 // parseActionAndState decodes "action|mode|group|key"
 func parseActionAndState(customID string) (action string, st panelState) {
 	if customID == cidSelectGroup {
-		return cidSelectGroup, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyALICE_BOT_THEME}
+		return cidSelectGroup, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
 	}
 	if customID == cidSelectKey {
-		return cidSelectKey, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyALICE_BOT_THEME}
+		return cidSelectKey, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
 	}
 
 	if !strings.Contains(customID, stateSep) {

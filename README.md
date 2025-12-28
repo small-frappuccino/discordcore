@@ -291,21 +291,23 @@ The library supports separate channels for different types of logs:
 - `message_log_channel_id`: Message edits and deletions
 - `automod_log_channel_id`: Actions from the automatic moderation system
 
-#### Environment flags
+#### Runtime flags (settings.json)
 
-- `ALICE_DISABLE_ENTRY_EXIT_LOGS` — When set to a truthy value, disables the member join/leave pipeline (no entry/exit
-  embeds or metrics).
-- `ALICE_DISABLE_USER_LOGS` — Disables avatar/role monitoring and notifications.
-- `ALICE_DISABLE_MESSAGE_LOGS` — Disables message edit/delete logging.
-- `ALICE_DISABLE_REACTION_LOGS` — Disables reaction metrics.
+These operational toggles are managed via the `/config runtime` panel and persisted in `settings.json`:
 
-#### Entry/Exit backfill (Option A)
+- `disable_entry_exit_logs` — When set to `true`, disables the member join/leave pipeline (no entry/exit embeds or metrics).
+- `disable_user_logs` — Disables avatar/role monitoring and notifications.
+- `disable_message_logs` — Disables message edit/delete logging.
+- `disable_reaction_logs` — Disables reaction metrics.
+
+#### Entry/Exit backfill
 
 Enable an automatic, one-shot backfill right after services start to reconstruct join/leave data from a welcome/backlog channel:
 
-- `ALICE_BACKFILL_ENTRY_EXIT_ENABLED` — truthy to enable the job at startup.
-- `ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID` — the channel to scan (e.g., `1413465672708657216`).
-- `ALICE_BACKFILL_ENTRY_EXIT_START_DAY` — UTC day to scan in `YYYY-MM-DD` format; defaults to “today” if omitted.
+- `backfill_enabled` — `true` to enable the job at startup.
+- `backfill_channel_id` — the channel to scan (e.g., `1413465672708657216`).
+- `backfill_start_day` — UTC day to scan in `YYYY-MM-DD` format; defaults to “today” if omitted.
+- `backfill_initial_days` — Number of days to scan back when the bot has no progress recorded (default: 0).
 
 Behavior:
 
@@ -318,7 +320,7 @@ Behavior:
     - Upserting member join timestamps using the embed/message timestamp.
     - Incrementing `daily_member_joins` and `daily_member_leaves` counters for metrics.
 
-If `ALICE_BACKFILL_ENTRY_EXIT_ENABLED=true` and `ALICE_BACKFILL_ENTRY_EXIT_CHANNEL_ID` is empty, the backfill will be
+If `backfill_enabled=true` and `backfill_channel_id` is empty, the backfill will be
 auto-dispatched for each configured guild, preferring `welcome_backlog_channel_id` and falling back to
 `user_entry_leave_channel_id`.
 

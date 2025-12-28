@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.141.0"
+const DiscordCoreVersion = "v0.142.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string
@@ -102,7 +102,7 @@ func SetTheme(name string) error {
 	return theme.SetCurrent(name)
 }
 
-// ConfigureThemeFromConfig loads theme from settings.json runtime_config (ALICE_BOT_THEME), if set.
+// ConfigureThemeFromConfig loads theme from settings.json runtime_config (bot_theme), if set.
 // This replaces the previous environment-variable based theme selection.
 func ConfigureThemeFromConfig(themeName string) error {
 	if strings.TrimSpace(themeName) != "" {

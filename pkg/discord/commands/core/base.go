@@ -39,7 +39,7 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 
 	logger := log.GlobalLogger
 
-	return &Context{
+	ctx := &Context{
 		Session:     cb.session,
 		Interaction: i,
 		Config:      cb.configManager,
@@ -49,6 +49,8 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 		IsOwner:     isOwner,
 		GuildConfig: guildConfig,
 	}
+
+	return ctx
 }
 
 // isGuildOwner checks if the user is the server owner
