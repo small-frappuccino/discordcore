@@ -71,13 +71,13 @@ func (mes *MessageEventService) Start() error {
 		mes.cacheEnabled = true
 
 		ttlHours := 72
-		if rc.ALICE_MESSAGE_CACHE_TTL_HOURS > 0 {
-			ttlHours = rc.ALICE_MESSAGE_CACHE_TTL_HOURS
+		if rc.MessageCacheTTLHours > 0 {
+			ttlHours = rc.MessageCacheTTLHours
 		}
 		mes.cacheTTL = time.Duration(ttlHours) * time.Hour
 
-		mes.deleteOnLog = rc.ALICE_MESSAGE_DELETE_ON_LOG
-		mes.cleanupEnabled = rc.ALICE_MESSAGE_CACHE_CLEANUP
+		mes.deleteOnLog = rc.MessageDeleteOnLog
+		mes.cleanupEnabled = rc.MessageCacheCleanup
 
 		// Hardcoded enabled
 		mes.versioningEnabled = true
