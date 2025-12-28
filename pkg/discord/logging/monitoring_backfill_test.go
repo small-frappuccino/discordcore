@@ -57,6 +57,40 @@ func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
 	}
 }
 
+func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
+	t.Run("welcome to alice mains! @user", func(t *testing.T) {
+		m := &discordgo.Message{
+			Content: "welcome to alice mains! <@1234567890>",
+		}
+		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "")
+		if !ok {
+			t.Fatalf("expected ok=true")
+		}
+		if gotEvt != "join" {
+			t.Fatalf("expected evt=join, got %q", gotEvt)
+		}
+		if gotUserID != "1234567890" {
+			t.Fatalf("expected userID=1234567890, got %q", gotUserID)
+		}
+	})
+
+	t.Run("@user has left the server... :(", func(t *testing.T) {
+		m := &discordgo.Message{
+			Content: "<@987654321> has left the server... :(",
+		}
+		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "")
+		if !ok {
+			t.Fatalf("expected ok=true")
+		}
+		if gotEvt != "leave" {
+			t.Fatalf("expected evt=leave, got %q", gotEvt)
+		}
+		if gotUserID != "987654321" {
+			t.Fatalf("expected userID=987654321, got %q", gotUserID)
+		}
+	})
+}
+
 func TestParseEntryExitBackfillMessage_IgnoresNonMatching(t *testing.T) {
 	m := &discordgo.Message{Content: "hello world"}
 	_, _, ok := parseEntryExitBackfillMessage(m, "")

@@ -23,7 +23,6 @@ func RegisterMetricsCommands(router *core.CommandRouter) {
 	metricsGroup.AddSubCommand(newActivityCommand())
 	metricsGroup.AddSubCommand(newServerStatsCommand())
 	metricsGroup.AddSubCommand(newBackfillStatusCommand())
-	metricsGroup.AddSubCommand(newBackfillRunCommand())
 
 	router.RegisterCommand(metricsGroup)
 }

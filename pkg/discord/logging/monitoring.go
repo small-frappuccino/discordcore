@@ -64,6 +64,25 @@ func parseEntryExitBackfillMessage(m *discordgo.Message, botID string) (string, 
 	if content == "" {
 		return "", "", false
 	}
+
+	lc := strings.ToLower(content)
+
+	// New formats:
+	// "welcome to alice mains! @username"
+	// "@username has left the server... :("
+	if strings.HasPrefix(lc, "welcome to alice mains!") {
+		mm := mentionRe.FindStringSubmatch(content)
+		if len(mm) >= 2 {
+			return "join", mm[1], true
+		}
+	}
+	if strings.HasSuffix(lc, "has left the server... :(") {
+		mm := mentionRe.FindStringSubmatch(content)
+		if len(mm) >= 2 {
+			return "leave", mm[1], true
+		}
+	}
+
 	mm := mentionRe.FindStringSubmatch(content)
 	if len(mm) < 2 {
 		return "", "", false
@@ -73,7 +92,6 @@ func parseEntryExitBackfillMessage(m *discordgo.Message, botID string) (string, 
 		return "", "", false
 	}
 
-	lc := strings.ToLower(content)
 	// Keep it intentionally permissive; this is best-effort reconstruction.
 	if strings.Contains(lc, "goodbye") {
 		return "leave", userID, true
@@ -470,7 +488,18 @@ func (ms *MonitoringService) Start() error {
 							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
 							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
 						} else if evt == "leave" {
-							_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+							// If name was not in message, check if still in server via code
+							stillInServer := false
+							if ms.session != nil {
+								mem, err := ms.session.GuildMember(guildID, userID)
+								if err == nil && mem != nil {
+									stillInServer = true
+								}
+							}
+
+							if !stillInServer {
+								_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+							}
 						}
 						// Record the oldest processed timestamp for this channel
 						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
@@ -564,7 +593,18 @@ func (ms *MonitoringService) Start() error {
 							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
 							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
 						} else if evt == "leave" {
-							_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+							// If name was not in message, check if still in server via code
+							stillInServer := false
+							if ms.session != nil {
+								mem, err := ms.session.GuildMember(guildID, userID)
+								if err == nil && mem != nil {
+									stillInServer = true
+								}
+							}
+
+							if !stillInServer {
+								_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+							}
 						}
 						// Record the oldest processed timestamp for this channel
 						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
@@ -649,36 +689,22 @@ func (ms *MonitoringService) Start() error {
 
 			lastEvent, hasLastEvent, _ := ms.store.GetLastEvent()
 			now := time.Now().UTC()
-			initialDays := 0
-			if ms.configManager != nil && ms.configManager.Config() != nil {
-				initialDays = ms.configManager.Config().RuntimeConfig.BackfillInitialDays
-			}
 
 			for _, cid := range targetChannels {
 				// Check progress for this channel
 				_, hasProgress, _ := ms.store.GetMetadata("backfill_progress:" + cid)
 
 				if !hasProgress {
-					if initialDays > 0 {
-						// "Never" case with initial days: trigger a backfill range from N days ago until now
-						start := now.AddDate(0, 0, -initialDays).Format(time.RFC3339)
-						end := now.Format(time.RFC3339)
-						_ = ms.router.Dispatch(context.Background(), task.Task{
-							Type:    "monitor.backfill_entry_exit_range",
-							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
-							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-						})
-						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "days_back", initialDays)
-					} else {
-						// "Never" case: trigger a backfill for today to get started
-						today := now.Format("2006-01-02")
-						_ = ms.router.Dispatch(context.Background(), task.Task{
-							Type:    "monitor.backfill_entry_exit_day",
-							Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: today},
-							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-						})
-						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (today)", "channelID", cid)
-					}
+					// Use hardcoded start date: 2025-05-24
+					hardcodedStart, _ := time.Parse("2006-01-02", "2025-05-24")
+					start := hardcodedStart.Format(time.RFC3339)
+					end := now.Format(time.RFC3339)
+					_ = ms.router.Dispatch(context.Background(), task.Task{
+						Type:    "monitor.backfill_entry_exit_range",
+						Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+					})
+					log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (hardcoded range)", "channelID", cid, "start", start)
 					continue
 				}
 
