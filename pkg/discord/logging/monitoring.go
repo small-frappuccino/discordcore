@@ -687,6 +687,10 @@ func (ms *MonitoringService) Start() error {
 				}
 			}
 
+			if len(targetChannels) == 0 {
+				log.ApplicationLogger().Debug("No target channels for backfill check")
+			}
+
 			lastEvent, hasLastEvent, _ := ms.store.GetLastEvent()
 			now := time.Now().UTC()
 
@@ -720,10 +724,16 @@ func (ms *MonitoringService) Start() error {
 							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 						})
 						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+					} else {
+						log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
 					}
+				} else {
+					log.ApplicationLogger().Debug("No last event recorded, skipping downtime recovery", "channelID", cid)
 				}
 			}
 		}
+	} else {
+		log.ApplicationLogger().Info("Backfill is disabled by runtime config")
 	}
 
 	log.ApplicationLogger().Info("All monitoring services started successfully")
