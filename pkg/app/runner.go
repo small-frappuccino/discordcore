@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -65,11 +66,7 @@ func Run(appName, tokenEnv string) error {
 	// Error handler for service manager
 	errorHandler := errors.NewErrorHandler()
 
-	msg := fmt.Sprintf("🚀 Starting %s", appName)
-	if AppVersion() != "" {
-		msg += fmt.Sprintf(" %s", AppVersion())
-	}
-	msg += fmt.Sprintf(" (discordcore %s)...", Version)
+	msg := formatStartupMessage(appName, AppVersion(), Version)
 	log.ApplicationLogger().Info(msg)
 
 	// Token must be present
@@ -305,4 +302,27 @@ func Run(appName, tokenEnv string) error {
 
 	_ = shutdownCtx
 	return nil
+}
+
+// formatStartupMessage builds the startup log line.
+// Rules:
+// - If appVersion is empty: omit it.
+// - If coreVersion is empty: omit it.
+// - If appVersion equals coreVersion: omit the "(discordcore ...)" suffix to avoid redundant output.
+func formatStartupMessage(appName, appVersion, coreVersion string) string {
+	appName = strings.TrimSpace(appName)
+	appVersion = strings.TrimSpace(appVersion)
+	coreVersion = strings.TrimSpace(coreVersion)
+
+	msg := fmt.Sprintf("🚀 Starting %s", appName)
+	if appVersion != "" {
+		msg += fmt.Sprintf(" %s", appVersion)
+	}
+
+	// Avoid duplicated versions like: "alicebot v0.146.0 (discordcore v0.146.0)"
+	if coreVersion == "" || (appVersion != "" && appVersion == coreVersion) {
+		return msg + "..."
+	}
+
+	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
 }
