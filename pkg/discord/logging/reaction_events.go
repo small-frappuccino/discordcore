@@ -103,6 +103,14 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 	// Mark that we processed an event (best effort).
 	rs.markEvent()
 
+	cfg := rs.configManager.Config()
+	if cfg != nil {
+		rc := cfg.ResolveRuntimeConfig(guildID)
+		if rc.DisableReactionLogs {
+			return
+		}
+	}
+
 	// Increment per-day reaction count for the reactor.
 	if err := rs.store.IncrementDailyReactionCount(guildID, e.ChannelID, e.UserID, time.Now().UTC()); err != nil {
 		slog.Error("Failed to increment daily reaction count", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "err", err)

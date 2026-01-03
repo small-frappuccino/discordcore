@@ -62,6 +62,15 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if e == nil || e.GuildID == "" {
 		return
 	}
+
+	cfg := as.configManager.Config()
+	if cfg != nil {
+		rc := cfg.ResolveRuntimeConfig(e.GuildID)
+		if rc.DisableAutomodLogs {
+			return
+		}
+	}
+
 	// Find guild config for logging
 	guildCfg := as.configManager.GuildConfig(e.GuildID)
 	if guildCfg == nil {

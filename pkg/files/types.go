@@ -33,10 +33,9 @@ type RuntimeConfig struct {
 	MessageCacheCleanup  bool `json:"message_cache_cleanup,omitempty"`
 
 	// BACKFILL (ENTRY/EXIT)
-	BackfillEnabled     bool   `json:"backfill_enabled,omitempty"`
 	BackfillChannelID   string `json:"backfill_channel_id,omitempty"`
-	BackfillStartDay    string `json:"backfill_start_day,omitempty"`    // YYYY-MM-DD, default: today UTC when empty
-	BackfillInitialDays int    `json:"backfill_initial_days,omitempty"` // Days to scan back when "Never" processed (default: 0 = today only)
+	BackfillStartDay    string `json:"backfill_start_day,omitempty"` // YYYY-MM-DD, default: today UTC when empty
+	BackfillInitialDate string `json:"backfill_initial_date,omitempty"`
 
 	// BOT ROLE PERMISSION MIRRORING (SAFETY)
 	// Previously controllable via env vars:
@@ -73,6 +72,9 @@ type GuildConfig struct {
 	AutoRoleTargetRoleID      string `json:"auto_role_target_role_id,omitempty"`
 	AutoRolePrereqRoleA       string `json:"auto_role_prereq_role_a,omitempty"`
 	AutoRolePrereqRoleB       string `json:"auto_role_prereq_role_b,omitempty"`
+
+	// RuntimeConfig allows per-guild overrides for certain settings.
+	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
 // BotConfig holds the configuration for the bot.
@@ -85,6 +87,86 @@ type BotConfig struct {
 	//
 	// NOTE: These are NOT environment variables. They are persisted in settings.json.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
+}
+
+// ResolveRuntimeConfig retorna a configuração de runtime para uma guilda,
+// caindo para o global se o campo não estiver definido (zero-value).
+func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
+	global := cfg.RuntimeConfig
+	if guildID == "" {
+		return global
+	}
+
+	var guildRC RuntimeConfig
+	found := false
+	for _, g := range cfg.Guilds {
+		if g.GuildID == guildID {
+			guildRC = g.RuntimeConfig
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return global
+	}
+
+	// Manual merging logic. Fields that are zero-value in guildRC will use global values.
+	// This is better than a generic library for such a small struct and specific rules.
+	resolved := global
+
+	if guildRC.BotTheme != "" {
+		resolved.BotTheme = guildRC.BotTheme
+	}
+
+	if guildRC.DisableDBCleanup {
+		resolved.DisableDBCleanup = true
+	}
+	if guildRC.DisableAutomodLogs {
+		resolved.DisableAutomodLogs = true
+	}
+	if guildRC.DisableMessageLogs {
+		resolved.DisableMessageLogs = true
+	}
+	if guildRC.DisableEntryExitLogs {
+		resolved.DisableEntryExitLogs = true
+	}
+	if guildRC.DisableReactionLogs {
+		resolved.DisableReactionLogs = true
+	}
+	if guildRC.DisableUserLogs {
+		resolved.DisableUserLogs = true
+	}
+
+	if guildRC.MessageCacheTTLHours != 0 {
+		resolved.MessageCacheTTLHours = guildRC.MessageCacheTTLHours
+	}
+	if guildRC.MessageDeleteOnLog {
+		resolved.MessageDeleteOnLog = true
+	}
+	if guildRC.MessageCacheCleanup {
+		resolved.MessageCacheCleanup = true
+	}
+
+	if guildRC.BackfillChannelID != "" {
+		resolved.BackfillChannelID = guildRC.BackfillChannelID
+	}
+	if guildRC.BackfillStartDay != "" {
+		resolved.BackfillStartDay = guildRC.BackfillStartDay
+	}
+
+	// BackfillInitialDate is GuildOnly: it must be set in the guild config
+	// and does not fall back to the global config.
+	resolved.BackfillInitialDate = guildRC.BackfillInitialDate
+
+	if guildRC.DisableBotRolePermMirror {
+		resolved.DisableBotRolePermMirror = true
+	}
+	if guildRC.BotRolePermMirrorActorRoleID != "" {
+		resolved.BotRolePermMirrorActorRoleID = guildRC.BotRolePermMirrorActorRoleID
+	}
+
+	return resolved
 }
 
 // ConfigManager handles bot configuration management.

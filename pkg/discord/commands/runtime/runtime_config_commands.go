@@ -89,6 +89,7 @@ type spec struct {
 	RestartHint  restartHint
 	MaxInputLen  int // for modal input
 	RedactInMain bool
+	GuildOnly    bool
 }
 
 type panelState struct {
@@ -96,18 +97,19 @@ type panelState struct {
 	Group  string
 	Key    runtimeKey
 	Filter string // reserved for future search; not wired yet
+	Scope  string // "global" or guildID
 }
 
 func (s panelState) encode() string {
-	// mode|group|key
-	return string(s.Mode) + stateSep + s.Group + stateSep + string(s.Key)
+	// mode|group|key|scope
+	return string(s.Mode) + stateSep + s.Group + stateSep + string(s.Key) + stateSep + s.Scope
 }
 
 func decodeState(raw string) panelState {
-	// Expected: mode|group|key
+	// Expected: mode|group|key|scope
 	// Use SplitN to avoid accepting extra separators as additional state fields.
-	parts := strings.SplitN(raw, stateSep, 3)
-	st := panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
+	parts := strings.SplitN(raw, stateSep, 4)
+	st := panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme, Scope: "global"}
 	if len(parts) >= 1 {
 		if v := strings.TrimSpace(parts[0]); v != "" {
 			st.Mode = pageMode(v)
@@ -121,6 +123,11 @@ func decodeState(raw string) panelState {
 	if len(parts) >= 3 {
 		if v := strings.TrimSpace(parts[2]); v != "" {
 			st.Key = runtimeKey(v)
+		}
+	}
+	if len(parts) >= 4 {
+		if v := strings.TrimSpace(parts[3]); v != "" {
+			st.Scope = v
 		}
 	}
 	return sanitizeState(st)
@@ -156,6 +163,7 @@ func sanitizeState(st panelState) panelState {
 func (s panelState) withMode(m pageMode) panelState  { s.Mode = m; return s }
 func (s panelState) withGroup(g string) panelState   { s.Group = g; return s }
 func (s panelState) withKey(k runtimeKey) panelState { s.Key = k; return s }
+func (s panelState) withScope(sc string) panelState  { s.Scope = sc; return s }
 
 // --- Specs registry (single source of truth) ---
 
@@ -177,10 +185,9 @@ const (
 	runtimeKeyMessageCacheCleanup  runtimeKey = "message_cache_cleanup"
 
 	// BACKFILL (ENTRY/EXIT)
-	runtimeKeyBackfillEnabled     runtimeKey = "backfill_enabled"
 	runtimeKeyBackfillChannelID   runtimeKey = "backfill_channel_id"
 	runtimeKeyBackfillStartDay    runtimeKey = "backfill_start_day"
-	runtimeKeyBackfillInitialDays runtimeKey = "backfill_initial_days"
+	runtimeKeyBackfillInitialDate runtimeKey = "backfill_initial_date"
 
 	// BOT ROLE PERMISSION MIRRORING (SAFETY)
 	runtimeKeyDisableBotRolePermMirror     runtimeKey = "disable_bot_role_perm_mirror"
@@ -273,14 +280,6 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyBackfillEnabled,
-			Group:       "BACKFILL",
-			Type:        vtBool,
-			DefaultHint: "false",
-			ShortHelp:   "Auto-dispatch entry/exit backfill task on startup",
-			RestartHint: restartRequired,
-		},
-		{
 			Key:         runtimeKeyBackfillChannelID,
 			Group:       "BACKFILL",
 			Type:        vtString,
@@ -299,13 +298,14 @@ func allSpecs() []spec {
 			MaxInputLen: 16,
 		},
 		{
-			Key:         runtimeKeyBackfillInitialDays,
+			Key:         runtimeKeyBackfillInitialDate,
 			Group:       "BACKFILL",
-			Type:        vtInt,
-			DefaultHint: "0",
-			ShortHelp:   "Days to scan back when never processed",
+			Type:        vtDate,
+			DefaultHint: "(empty)",
+			ShortHelp:   "Initial scan start date (fixed) when never processed",
 			RestartHint: restartRequired,
-			MaxInputLen: 8,
+			MaxInputLen: 16,
+			GuildOnly:   true,
 		},
 		{
 			Key:         runtimeKeyDisableBotRolePermMirror,
@@ -434,7 +434,7 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 		ephemeral = true
 	}
 
-	rc, err := loadRuntimeConfig(ctx.Config)
+	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {
 		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("Failed to load runtime config: %v", err))
 	}
@@ -442,7 +442,15 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	st := panelState{
 		Mode:  pageMain,
 		Group: "ALL",
-		Key:   runtimeKeyBotTheme,
+		Scope: "global",
+	}
+
+	if ctx.Interaction.GuildID != "" {
+		st.Scope = ctx.Interaction.GuildID
+		// Try to load guild config, if fails or empty, we still have the global one as base
+		if grc, err := loadRuntimeConfig(ctx.Config, st.Scope); err == nil {
+			rc = grc
+		}
 	}
 
 	embed := renderMainEmbed(rc, st)
@@ -463,7 +471,7 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 
 // --- Persistence ---
 
-func loadRuntimeConfig(cm *files.ConfigManager) (files.RuntimeConfig, error) {
+func loadRuntimeConfig(cm *files.ConfigManager, scope string) (files.RuntimeConfig, error) {
 	if cm == nil {
 		return files.RuntimeConfig{}, fmt.Errorf("config manager is nil")
 	}
@@ -472,10 +480,18 @@ func loadRuntimeConfig(cm *files.ConfigManager) (files.RuntimeConfig, error) {
 	if cfg == nil {
 		return files.RuntimeConfig{}, nil
 	}
-	return cfg.RuntimeConfig, nil
+	if scope == "" || scope == "global" {
+		return cfg.RuntimeConfig, nil
+	}
+	// Per-guild
+	gcfg := cm.GuildConfig(scope)
+	if gcfg == nil {
+		return files.RuntimeConfig{}, fmt.Errorf("guild not found")
+	}
+	return gcfg.RuntimeConfig, nil
 }
 
-func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig) error {
+func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope string) error {
 	if cm == nil {
 		return fmt.Errorf("config manager is nil")
 	}
@@ -484,7 +500,22 @@ func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("settings.json not loaded (config is nil)")
 	}
-	cfg.RuntimeConfig = rc
+	if scope == "" || scope == "global" {
+		cfg.RuntimeConfig = rc
+	} else {
+		// Per-guild. Need to update it in the slice.
+		found := false
+		for i, g := range cfg.Guilds {
+			if g.GuildID == scope {
+				cfg.Guilds[i].RuntimeConfig = rc
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("guild config for %s not found in memory during save", scope)
+		}
+	}
 	return cm.SaveConfig()
 }
 
@@ -515,14 +546,12 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 	case runtimeKeyMessageCacheCleanup:
 		return fmtBool(rc.MessageCacheCleanup), true
 
-	case runtimeKeyBackfillEnabled:
-		return fmtBool(rc.BackfillEnabled), true
 	case runtimeKeyBackfillChannelID:
 		return rc.BackfillChannelID, true
 	case runtimeKeyBackfillStartDay:
 		return rc.BackfillStartDay, true
-	case runtimeKeyBackfillInitialDays:
-		return strconv.Itoa(rc.BackfillInitialDays), true
+	case runtimeKeyBackfillInitialDate:
+		return rc.BackfillInitialDate, true
 
 	case runtimeKeyDisableBotRolePermMirror:
 		return fmtBool(rc.DisableBotRolePermMirror), true
@@ -569,17 +598,14 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 		rc.MessageCacheCleanup = false
 		return rc, true
 
-	case runtimeKeyBackfillEnabled:
-		rc.BackfillEnabled = false
-		return rc, true
 	case runtimeKeyBackfillChannelID:
 		rc.BackfillChannelID = ""
 		return rc, true
 	case runtimeKeyBackfillStartDay:
 		rc.BackfillStartDay = ""
 		return rc, true
-	case runtimeKeyBackfillInitialDays:
-		rc.BackfillInitialDays = 0
+	case runtimeKeyBackfillInitialDate:
+		rc.BackfillInitialDate = ""
 		return rc, true
 
 	case runtimeKeyDisableBotRolePermMirror:
@@ -620,6 +646,10 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 				rc.BackfillStartDay = ""
 				return rc, nil
 			}
+			if sp.Key == runtimeKeyBackfillInitialDate {
+				rc.BackfillInitialDate = ""
+				return rc, nil
+			}
 			return rc, nil
 		}
 		if _, err := time.Parse("2006-01-02", raw); err != nil {
@@ -627,6 +657,10 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		}
 		if sp.Key == runtimeKeyBackfillStartDay {
 			rc.BackfillStartDay = raw
+			return rc, nil
+		}
+		if sp.Key == runtimeKeyBackfillInitialDate {
+			rc.BackfillInitialDate = raw
 			return rc, nil
 		}
 		return rc, fmt.Errorf("unsupported date key")
@@ -671,12 +705,9 @@ func setInt(rc files.RuntimeConfig, k runtimeKey, v int) (files.RuntimeConfig, e
 		}
 		rc.MessageCacheTTLHours = v
 		return rc, nil
-	case runtimeKeyBackfillInitialDays:
-		if v < 0 {
-			return rc, fmt.Errorf("must be >= 0")
-		}
-		rc.BackfillInitialDays = v
-		return rc, nil
+	case runtimeKeyBackfillInitialDate:
+		// String key (vtDate) handled in setValue switch
+		return rc, fmt.Errorf("use setValue for string/date keys")
 	default:
 		return rc, fmt.Errorf("not an int key")
 	}
@@ -700,8 +731,6 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 		rc.MessageDeleteOnLog = v
 	case runtimeKeyMessageCacheCleanup:
 		rc.MessageCacheCleanup = v
-	case runtimeKeyBackfillEnabled:
-		rc.BackfillEnabled = v
 	case runtimeKeyDisableBotRolePermMirror:
 		rc.DisableBotRolePermMirror = v
 	default:
@@ -728,9 +757,15 @@ func toggleBool(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, erro
 func renderMainEmbed(rc files.RuntimeConfig, st panelState) *discordgo.MessageEmbed {
 	sp, _ := specByKey(st.Key)
 
+	scopeDesc := "Global"
+	if st.Scope != "global" {
+		scopeDesc = fmt.Sprintf("Guild (`%s`)", st.Scope)
+	}
+
 	desc := strings.Join([]string{
 		"Painel para editar **runtime_config** (substitui as env vars operacionais).",
 		"",
+		fmt.Sprintf("Escopo: **%s**", scopeDesc),
 		fmt.Sprintf("Selecionada: `%s` • Tipo: **%s** • Default: **%s** • %s", sp.Key, sp.Type, sp.DefaultHint, sp.RestartHint),
 		"Use os menus para filtrar e navegar, e os botões para editar.",
 	}, "\n")
@@ -755,6 +790,9 @@ func groupFieldsForMain(rc files.RuntimeConfig, st panelState) []*discordgo.Mess
 
 	grouped := map[string][]string{}
 	for _, sp := range specs {
+		if sp.GuildOnly && st.Scope == "global" {
+			continue
+		}
 		raw, _ := getValue(rc, sp.Key)
 		display := formatForEmbed(raw, sp)
 		line := fmt.Sprintf("`%s`: **%s**", sp.Key, display)
@@ -848,9 +886,15 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 	raw, _ := getValue(rc, sp.Key)
 	cur := formatForDetails(raw, sp)
 
+	scopeDesc := "Global"
+	if st.Scope != "global" {
+		scopeDesc = fmt.Sprintf("Guild (`%s`)", st.Scope)
+	}
+
 	lines := []string{
 		fmt.Sprintf("`%s`", sp.Key),
 		"",
+		fmt.Sprintf("**Scope:** %s", scopeDesc),
 		fmt.Sprintf("**Group:** %s", sp.Group),
 		fmt.Sprintf("**Type:** %s", sp.Type),
 		fmt.Sprintf("**Default:** %s", sp.DefaultHint),
@@ -858,6 +902,10 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 		"",
 		fmt.Sprintf("**Description:** %s", sp.ShortHelp),
 		fmt.Sprintf("**Effect:** %s", sp.RestartHint),
+	}
+
+	if sp.GuildOnly {
+		lines = append(lines, "", "⚠️ **Note:** This setting can only be configured per-guild.")
 	}
 
 	return &discordgo.MessageEmbed{
@@ -952,6 +1000,17 @@ func renderGroupSelectRow(st panelState) discordgo.ActionsRow {
 
 func renderKeySelectRow(st panelState) discordgo.ActionsRow {
 	specs := specsForGroup(st.Group)
+
+	// Filter out GuildOnly specs when in global scope
+	filtered := make([]spec, 0, len(specs))
+	for _, sp := range specs {
+		if sp.GuildOnly && st.Scope == "global" {
+			continue
+		}
+		filtered = append(filtered, sp)
+	}
+	specs = filtered
+
 	tooMany := false
 	if len(specs) > 25 {
 		tooMany = true
@@ -1034,11 +1093,21 @@ func renderActionRow(st panelState) discordgo.ActionsRow {
 }
 
 func renderNavRow(st panelState) discordgo.ActionsRow {
+	components := []discordgo.MessageComponent{
+		discordgo.Button{CustomID: cidButtonHelp + stateSep + st.withMode(pageHelp).encode(), Label: "HELP", Style: discordgo.SecondaryButton},
+		discordgo.Button{CustomID: cidButtonMain + stateSep + st.withMode(pageMain).encode(), Label: "MAIN", Style: discordgo.SecondaryButton},
+	}
+
+	if st.Scope != "" && st.Scope != "global" {
+		components = append(components, discordgo.Button{
+			CustomID: cidButtonReload + stateSep + st.withScope("global").encode(),
+			Label:    "SWITCH TO GLOBAL",
+			Style:    discordgo.SecondaryButton,
+		})
+	}
+
 	return discordgo.ActionsRow{
-		Components: []discordgo.MessageComponent{
-			discordgo.Button{CustomID: cidButtonHelp + stateSep + st.withMode(pageHelp).encode(), Label: "HELP", Style: discordgo.SecondaryButton},
-			discordgo.Button{CustomID: cidButtonMain + stateSep + st.withMode(pageMain).encode(), Label: "MAIN", Style: discordgo.SecondaryButton},
-		},
+		Components: components,
 	}
 }
 
@@ -1112,7 +1181,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		})
 	}
 
-	rc, err := loadRuntimeConfig(configManager)
+	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
 		if action == cidButtonEdit {
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -1130,26 +1199,28 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		return
 	}
 
-	switch action {
-	case cidSelectGroup:
-		if len(cc.Values) == 0 {
-			embed := renderMainEmbed(rc, st.withMode(pageMain))
-			_ = editInteractionMessage(s, i, embed, renderMainComponents(rc, st.withMode(pageMain)))
-			return
+	// Guard: enforce restrictions
+	if sp, ok := specByKey(st.Key); ok {
+		if sp.GuildOnly && st.Scope == "global" {
+			// Skip editing if global
+			if action == cidButtonEdit || action == cidButtonToggle || action == cidButtonReset {
+				_ = editInteractionMessage(s, i, errorEmbed("This setting can only be configured per-guild."), renderMainComponents(rc, st))
+				return
+			}
 		}
-		st = decodeState(cc.Values[0]).withMode(pageMain)
-		st = ensureKeyInGroup(st)
-		embed := renderMainEmbed(rc, st)
-		_ = editInteractionMessage(s, i, embed, renderMainComponents(rc, st))
-		return
+	}
 
-	case cidSelectKey:
+	switch action {
+	case cidSelectGroup, cidSelectKey:
 		if len(cc.Values) == 0 {
 			embed := renderMainEmbed(rc, st.withMode(pageMain))
 			_ = editInteractionMessage(s, i, embed, renderMainComponents(rc, st.withMode(pageMain)))
 			return
 		}
-		st = decodeState(cc.Values[0]).withMode(pageMain)
+		// The value in the select menu options is the full encoded state.
+		st = decodeState(cc.Values[0])
+		rc, _ = loadRuntimeConfig(configManager, st.Scope)
+		st = ensureKeyInGroup(st.withMode(pageMain))
 		embed := renderMainEmbed(rc, st)
 		_ = editInteractionMessage(s, i, embed, renderMainComponents(rc, st))
 		return
@@ -1174,7 +1245,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		return
 
 	case cidButtonReload:
-		rc, _ = loadRuntimeConfig(configManager)
+		rc, _ = loadRuntimeConfig(configManager, st.Scope)
 		st = ensureKeyInGroup(st)
 		switch st.Mode {
 		case pageHelp:
@@ -1196,7 +1267,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 			_ = editInteractionMessage(s, i, errorEmbed("Unknown key"), nil)
 			return
 		}
-		if err := saveRuntimeConfig(configManager, rc2); err != nil {
+		if err := saveRuntimeConfig(configManager, rc2, st.Scope); err != nil {
 			_ = editInteractionMessage(s, i, errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil)
 			return
 		}
@@ -1221,7 +1292,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 			_ = editInteractionMessage(s, i, errorEmbed(fmt.Sprintf("Toggle failed: %v", err)), renderMainComponents(rc, st))
 			return
 		}
-		if err := saveRuntimeConfig(configManager, rc2); err != nil {
+		if err := saveRuntimeConfig(configManager, rc2, st.Scope); err != nil {
 			_ = editInteractionMessage(s, i, errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil)
 			return
 		}
@@ -1333,7 +1404,7 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 
 	val := extractModalValue(m, modalFieldValue)
 
-	rc, err := loadRuntimeConfig(configManager)
+	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
 		_ = editInteractionMessage(s, i, errorEmbed(fmt.Sprintf("Failed to load runtime config: %v", err)), nil)
 		return
@@ -1346,7 +1417,7 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 		_ = editInteractionMessage(s, i, embed, renderMainComponents(rc, st))
 		return
 	}
-	if err := saveRuntimeConfig(configManager, next); err != nil {
+	if err := saveRuntimeConfig(configManager, next, st.Scope); err != nil {
 		_ = editInteractionMessage(s, i, errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil)
 		return
 	}

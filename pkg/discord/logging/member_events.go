@@ -113,6 +113,15 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	}
 
 	mes.markEvent()
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return
+	}
+	rc := cfg.ResolveRuntimeConfig(m.GuildID)
+	if rc.DisableEntryExitLogs {
+		return
+	}
+
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil {
 		return
@@ -216,6 +225,15 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	}
 
 	mes.markEvent()
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return
+	}
+	rc := cfg.ResolveRuntimeConfig(m.GuildID)
+	if rc.DisableEntryExitLogs {
+		return
+	}
+
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil {
 		return

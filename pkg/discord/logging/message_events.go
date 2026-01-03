@@ -168,6 +168,16 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	}
 
 	// Check if the guild is configured
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return
+	}
+	rc := cfg.ResolveRuntimeConfig(guildID)
+	if rc.DisableMessageLogs {
+		slog.Debug("MessageCreate: message logs disabled for guild; skipping cache", "guildID", guildID)
+		return
+	}
+
 	guildConfig := mes.configManager.GuildConfig(guildID)
 	if guildConfig == nil {
 		slog.Debug("MessageCreate: no guild config; skipping cache", "guildID", guildID)
@@ -269,6 +279,15 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 
 	if cached == nil {
 		slog.Info("Message edit detected but original not in cache/persistence", "messageID", m.ID, "userID", m.Author.ID)
+		return
+	}
+
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return
+	}
+	rc := cfg.ResolveRuntimeConfig(cached.GuildID)
+	if rc.DisableMessageLogs {
 		return
 	}
 
@@ -420,6 +439,15 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 
 	if cached == nil {
 		slog.Info("Message delete detected but original not in cache/persistence", "messageID", m.ID, "channelID", m.ChannelID)
+		return
+	}
+
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return
+	}
+	rc := cfg.ResolveRuntimeConfig(cached.GuildID)
+	if rc.DisableMessageLogs {
 		return
 	}
 
