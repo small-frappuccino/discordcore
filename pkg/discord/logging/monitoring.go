@@ -452,15 +452,25 @@ func (ms *MonitoringService) Start() error {
 			return nil
 		}
 
+		log.ApplicationLogger().Info("📥 Starting entry/exit backfill (day)", "channelID", channelID, "guildID", guildID, "day", day)
+
 		botID := ""
 		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
 			botID = ms.session.State.User.ID
 		}
 
 		var before string
+		processedCount := 0
+		eventsFound := 0
+		startTime := time.Now()
+
 		for {
 			msgs, err := ms.session.ChannelMessages(channelID, 100, before, "", "")
-			if err != nil || len(msgs) == 0 {
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "channelID", channelID, "err", err)
+				break
+			}
+			if len(msgs) == 0 {
 				break
 			}
 
@@ -477,6 +487,7 @@ func (ms *MonitoringService) Start() error {
 				if t.Before(end) && !t.Before(start) {
 					evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
 					if ok && ms.store != nil {
+						eventsFound++
 						if evt == "join" {
 							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
 							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
@@ -498,6 +509,11 @@ func (ms *MonitoringService) Start() error {
 						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
 					}
 				}
+				processedCount++
+			}
+
+			if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
+				log.ApplicationLogger().Info("⏳ Backfill in progress (day)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
 			}
 
 			// Prepare next page or stop
@@ -507,6 +523,7 @@ func (ms *MonitoringService) Start() error {
 			}
 		}
 
+		log.ApplicationLogger().Info("✅ Backfill completed (day)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
 		return nil
 	})
 
@@ -557,15 +574,25 @@ func (ms *MonitoringService) Start() error {
 			return nil
 		}
 
+		log.ApplicationLogger().Info("📥 Starting entry/exit backfill (range)", "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
+
 		botID := ""
 		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
 			botID = ms.session.State.User.ID
 		}
 
 		var before string
+		processedCount := 0
+		eventsFound := 0
+		startTime := time.Now()
+
 		for {
 			msgs, err := ms.session.ChannelMessages(channelID, 100, before, "", "")
-			if err != nil || len(msgs) == 0 {
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill range", "channelID", channelID, "err", err)
+				break
+			}
+			if len(msgs) == 0 {
 				break
 			}
 
@@ -582,6 +609,7 @@ func (ms *MonitoringService) Start() error {
 				if t.Before(end) && !t.Before(start) {
 					evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
 					if ok && ms.store != nil {
+						eventsFound++
 						if evt == "join" {
 							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
 							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
@@ -603,6 +631,11 @@ func (ms *MonitoringService) Start() error {
 						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
 					}
 				}
+				processedCount++
+			}
+
+			if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
+				log.ApplicationLogger().Info("⏳ Backfill in progress (range)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
 			}
 
 			before = msgs[len(msgs)-1].ID
@@ -611,6 +644,7 @@ func (ms *MonitoringService) Start() error {
 			}
 		}
 
+		log.ApplicationLogger().Info("✅ Backfill completed (range)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
 		return nil
 	})
 
@@ -1927,12 +1961,17 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 		log.ErrorLoggerRaw().Error("Failed to read last heartbeat; skipping downtime check", "err", err)
 	} else {
 		if !okHB || time.Since(lastHB) > downtimeThreshold {
-			log.ApplicationLogger().Info("⏱️ Detected downtime > threshold; performing silent avatar refresh before enabling notifications")
+			downtimeDuration := "unknown"
+			if okHB {
+				downtimeDuration = time.Since(lastHB).Round(time.Second).String()
+			}
+			log.ApplicationLogger().Info("⏱️ Detected downtime; performing silent avatar refresh before enabling notifications", "downtime", downtimeDuration, "threshold", downtimeThreshold.String())
 			cfg := ms.configManager.Config()
 			if cfg == nil || len(cfg.Guilds) == 0 {
 				log.ApplicationLogger().Info("No configured guilds for startup silent refresh")
 				return
 			}
+			startTime := time.Now()
 			var wg sync.WaitGroup
 			for _, gcfg := range cfg.Guilds {
 				gid := gcfg.GuildID
@@ -1943,7 +1982,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 				}(gid)
 			}
 			wg.Wait()
-			log.ApplicationLogger().Info("✅ Silent avatar refresh completed")
+			log.ApplicationLogger().Info("✅ Silent avatar refresh completed", "duration", time.Since(startTime).Round(time.Millisecond))
 			return
 		}
 	}
