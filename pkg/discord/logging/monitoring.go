@@ -1487,9 +1487,8 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	changeKey := fmt.Sprintf("%s:%s:%s", guildID, userID, currentAvatar)
 	ms.changesMutex.RLock()
 	if lastChange, exists := ms.recentChanges[changeKey]; exists {
-		if time.Since(lastChange) < 5*time.Second {
+		if time.Since(lastChange) < 65*time.Second {
 			ms.changesMutex.RUnlock()
-			log.ApplicationLogger().Info("Avatar change ignored (debounce)", "userID", userID, "guildID", guildID)
 			return
 		}
 	}
@@ -1509,17 +1508,24 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	if changed {
 		ms.changesMutex.Lock()
 		ms.recentChanges[changeKey] = time.Now()
-		for key, timestamp := range ms.recentChanges {
-			if time.Since(timestamp) > time.Minute {
-				delete(ms.recentChanges, key)
+		// Clean up only occasionally to avoid CPU overhead on every event
+		if len(ms.recentChanges) > 100 {
+			for key, timestamp := range ms.recentChanges {
+				if time.Since(timestamp) > 5*time.Minute {
+					delete(ms.recentChanges, key)
+				}
 			}
 		}
 		ms.changesMutex.Unlock()
 
 		if ms.adapters != nil {
 			if err := ms.adapters.EnqueueProcessAvatarChange(guildID, userID, username, currentAvatar); err != nil {
-				log.ErrorLoggerRaw().Error("Failed to enqueue avatar change task; falling back to synchronous processing", "guildID", guildID, "userID", userID, "err", err)
-				ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+				if err.Error() == "duplicate task (idempotency key present)" {
+					log.ApplicationLogger().Info("Avatar change task already enqueued (idempotency)", "guildID", guildID, "userID", userID)
+				} else {
+					log.ErrorLoggerRaw().Error("Failed to enqueue avatar change task; falling back to synchronous processing", "guildID", guildID, "userID", userID, "err", err)
+					ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+				}
 			}
 		} else {
 			ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
