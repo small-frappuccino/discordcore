@@ -659,7 +659,6 @@ func (ms *MonitoringService) Start() error {
 	if ms.configManager != nil && ms.configManager.Config() != nil {
 		cfg := ms.configManager.Config()
 		globalRC := cfg.RuntimeConfig
-		initialDate := strings.TrimSpace(globalRC.BackfillInitialDate)
 
 		// Get all potential channels and their resolved configs
 		type backfillTarget struct {
@@ -700,6 +699,7 @@ func (ms *MonitoringService) Start() error {
 				cid := target.ChannelID
 				rc := target.RC
 				day := strings.TrimSpace(rc.BackfillStartDay)
+				initialDate := strings.TrimSpace(rc.BackfillInitialDate)
 
 				if day != "" {
 					_ = ms.router.Dispatch(context.Background(), task.Task{
@@ -712,9 +712,8 @@ func (ms *MonitoringService) Start() error {
 				}
 
 				// If no specific day, check for initial scan or recovery
-				// initialDate is GLOBAL ONLY per requirements
 				if initialDate == "" {
-					log.ApplicationLogger().Debug("Backfill skip for channel: no day set and global initial_date is empty", "channelID", cid)
+					log.ApplicationLogger().Debug("Backfill skip for channel: no day set and initial_date is empty", "channelID", cid)
 					continue
 				}
 
