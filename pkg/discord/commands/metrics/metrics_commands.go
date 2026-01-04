@@ -21,8 +21,7 @@ import (
 func RegisterMetricsCommands(router *core.CommandRouter) {
 	metricsGroup := core.NewGroupCommand("metrics", "Server statistics and metrics", router.GetPermissionChecker())
 	metricsGroup.AddSubCommand(newActivityCommand())
-	metricsGroup.AddSubCommand(newServerStatsCommand())
-	metricsGroup.AddSubCommand(newBackfillStatusCommand())
+	metricsGroup.AddSubCommand(newServerStatsCommand()) // We will change this to return a GroupCommand
 
 	router.RegisterCommand(metricsGroup)
 }
@@ -205,17 +204,39 @@ func handleActivity(ctx *core.Context) error {
 // -------- Members Command (weekly/monthly enter/leave/net) --------
 
 func newServerStatsCommand() core.SubCommand {
+	group := core.NewGroupCommand("serverstats", "Server health and member statistics.", nil)
+	group.AddSubCommand(newServerStatsHealthCommand())
+	group.AddSubCommand(newServerStatsPeriodicCommand("weekly", "Last 7 days of member metrics.", "7d"))
+	group.AddSubCommand(newServerStatsPeriodicCommand("monthly", "Last 30 days of member metrics.", "30d"))
+	group.AddSubCommand(newServerStatsPeriodicCommand("3months", "Last 90 days of member metrics.", "90d"))
+	return group
+}
+
+func newServerStatsHealthCommand() core.SubCommand {
 	return core.NewSimpleCommand(
-		"serverstats",
-		"Checks server health and member statistics from the database.",
+		"health",
+		"Checks server health and absolute member statistics.",
 		nil,
-		handleServerStats,
-		true,  // requiresGuild
-		false, // requiresPermissions
+		handleServerStatsHealth,
+		true,
+		false,
 	)
 }
 
-func handleServerStats(ctx *core.Context) error {
+func newServerStatsPeriodicCommand(name, desc, rangeVal string) core.SubCommand {
+	return core.NewSimpleCommand(
+		name,
+		desc,
+		nil,
+		func(ctx *core.Context) error {
+			return handleServerStatsPeriodic(ctx, rangeVal)
+		},
+		true,
+		false,
+	)
+}
+
+func handleServerStatsHealth(ctx *core.Context) error {
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
@@ -249,11 +270,6 @@ func handleServerStats(ctx *core.Context) error {
 	totalHistoricJoins := querySum(ctxTimeout, db, "SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?", ctx.GuildID)
 
 	// 3) How many of those historically recorded members are still in the server
-	// Since we don't have a `current_members` table that is 100% reliable in real-time without constant sync,
-	// and iterating over all members via API/State can be expensive for large servers,
-	// we use a best-effort approach based on what we already have.
-	// If we have the member list in State, we can cross-check.
-
 	stillPresentCount := 0
 	if totalHistoricJoins > 0 {
 		// Fetch all user_ids that have ever joined
@@ -271,10 +287,6 @@ func handleServerStats(ctx *core.Context) error {
 			}
 		}
 	}
-
-	// If stillPresentCount is 0 but we have members, the state may not be populated (missing member intents).
-	// For bots with GuildMembers Intent, State usually contains members if the bot has "seen" them.
-	// If stillPresentCount == 0 and totalHistoricJoins > 0 and currentMemberCount > 0, we warn that accuracy depends on the cache.
 
 	fields := []*discordgo.MessageEmbedField{
 		{
@@ -294,7 +306,7 @@ func handleServerStats(ctx *core.Context) error {
 		},
 	}
 
-	// Database health (optional, but useful for the "dbhealth" context)
+	// Database health
 	var dbSize int64
 	if info, err := os.Stat(dbPath); err == nil {
 		dbSize = info.Size()
@@ -309,6 +321,56 @@ func handleServerStats(ctx *core.Context) error {
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "Note: retention accuracy depends on the bot's member cache.",
 		},
+	}
+
+	return respondEmbed(s, i, embed)
+}
+
+func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
+	s := ctx.Session
+	i := ctx.Interaction
+	if ctx.GuildID == "" {
+		return respondError(s, i, "This command must be used in a server.")
+	}
+
+	dbPath := util.GetMessageDBPath()
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return respondError(s, i, fmt.Sprintf("Failed to open database: %v", err))
+	}
+	defer db.Close()
+
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cutoff, label := cutoffForRange(rangeVal)
+
+	joins := querySum(ctxTimeout, db, "SELECT SUM(count) FROM daily_member_joins WHERE guild_id=? AND day >= ?", ctx.GuildID, cutoff)
+	leaves := querySum(ctxTimeout, db, "SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=? AND day >= ?", ctx.GuildID, cutoff)
+
+	fields := []*discordgo.MessageEmbedField{
+		{
+			Name:   "📥 Members Joined",
+			Value:  fmt.Sprintf("`%d` joins in the last %s.", joins, label),
+			Inline: true,
+		},
+		{
+			Name:   "📤 Members Left",
+			Value:  fmt.Sprintf("`%d` leaves in the last %s.", leaves, label),
+			Inline: true,
+		},
+		{
+			Name:   "📈 Net Growth",
+			Value:  fmt.Sprintf("`%+d` members.", joins-leaves),
+			Inline: true,
+		},
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:     fmt.Sprintf("📊 Server Stats (%s)", label),
+		Color:     0x2ECC71, // Green
+		Fields:    fields,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
 	return respondEmbed(s, i, embed)
@@ -413,6 +475,8 @@ func cutoffForRange(rangeOpt string) (cutoffDay string, label string) {
 		return dayString(now.Add(-24 * time.Hour)), "Last 24h"
 	case "30d":
 		return dayString(now.AddDate(0, 0, -29)), "Last 30d"
+	case "90d":
+		return dayString(now.AddDate(0, 0, -89)), "Last 90d"
 	default:
 		return dayString(now.AddDate(0, 0, -6)), "Last 7d"
 	}
@@ -534,98 +598,6 @@ func formatMaybeNet(enters, leaves int64, hasLeaves bool) string {
 		return fmt.Sprintf("%d (without leaves)", enters)
 	}
 	return fmt.Sprintf("%d", enters-leaves)
-}
-
-// -------- Backfill Status Command --------
-
-func newBackfillStatusCommand() core.SubCommand {
-	return core.NewSimpleCommand(
-		"backfill-status",
-		"Shows the progress of welcome channel message reading for entry/exit metrics.",
-		nil,
-		handleBackfillStatus,
-		true,  // requiresGuild
-		false, // requiresPermissions
-	)
-}
-
-func handleBackfillStatus(ctx *core.Context) error {
-	s := ctx.Session
-	i := ctx.Interaction
-
-	if ctx.GuildConfig == nil {
-		return respondError(s, i, "Guild configuration not found.")
-	}
-
-	channelID := strings.TrimSpace(ctx.GuildConfig.WelcomeBacklogChannelID)
-	if channelID == "" {
-		channelID = strings.TrimSpace(ctx.GuildConfig.UserEntryLeaveChannelID)
-	}
-
-	if channelID == "" {
-		return respondError(s, i, "No welcome or entry/leave channel configured for this server.")
-	}
-
-	dbPath := util.GetMessageDBPath()
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return respondError(s, i, fmt.Sprintf("Failed to open database: %v", err))
-	}
-	defer db.Close()
-
-	// 1) First message date
-	var firstMsgDate string = "Unknown"
-	// Actually, to get the absolute first message, we can't easily do it with a single call unless we know the snowflake.
-	// Snowflake "0" or "1" is the beginning of time.
-	msgs, err := s.ChannelMessages(channelID, 1, "", "1", "") // after "1"
-	if err == nil && len(msgs) > 0 {
-		firstMsgDate = msgs[0].Timestamp.UTC().Format("2006-01-02 15:04:05 UTC")
-	}
-
-	// 2) Last processed message date (from metadata)
-	var lastProcessedDate string = "Never"
-	row := db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "backfill_progress:"+channelID)
-	var ts time.Time
-	if err := row.Scan(&ts); err == nil {
-		lastProcessedDate = ts.UTC().Format("2006-01-02 15:04:05 UTC")
-	}
-
-	// 3) Global last event
-	var lastEventDate string = "Never"
-	row = db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "last_event")
-	if err := row.Scan(&ts); err == nil {
-		lastEventDate = ts.UTC().Format("2006-01-02 15:04:05 UTC")
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title: "📖 Backfill & Reading Status",
-		Color: 0x2ECC71, // Green
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:  "📍 Target Channel",
-				Value: fmt.Sprintf("<#%s> (`%s`)", channelID, channelID),
-			},
-			{
-				Name:   "📅 First Message in Channel",
-				Value:  fmt.Sprintf("`%s`", firstMsgDate),
-				Inline: true,
-			},
-			{
-				Name:   "🕒 Last Processed (Backfill)",
-				Value:  fmt.Sprintf("`%s`", lastProcessedDate),
-				Inline: true,
-			},
-			{
-				Name:  "📡 Last Live Event Received",
-				Value: fmt.Sprintf("`%s`", lastEventDate),
-			},
-		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Reading progress tracks how far back the bot has scanned for entry/exit logs.",
-		},
-	}
-
-	return respondEmbed(s, i, embed)
 }
 
 func newBackfillRunCommand() core.SubCommand {
