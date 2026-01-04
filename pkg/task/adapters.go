@@ -7,7 +7,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -20,6 +19,11 @@ type NotificationSender interface {
 	SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error
 	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
 	SendAutomodActionNotification(channelID string, event *discordgo.AutoModerationActionExecution) error
+}
+
+// AvatarProcessor defines the logic for processing avatar changes.
+type AvatarProcessor interface {
+	ProcessChange(guildID, userID, currentAvatar, username string)
 }
 
 // CachedMessage is a minimal snapshot of a Discord message used for notifications.
@@ -88,11 +92,12 @@ type AvatarChangePayload struct {
 
 // NotificationAdapters wires NotificationSender and AvatarCache to the TaskRouter.
 type NotificationAdapters struct {
-	Router   *TaskRouter
-	Notifier NotificationSender
-	Store    *storage.Store
-	Config   *files.ConfigManager
-	Session  *discordgo.Session
+	Router          *TaskRouter
+	Notifier        NotificationSender
+	AvatarProcessor AvatarProcessor
+	Store           *storage.Store
+	Config          *files.ConfigManager
+	Session         *discordgo.Session
 }
 
 // NewNotificationAdapters creates adapters and registers task handlers.
@@ -112,6 +117,11 @@ func NewNotificationAdapters(
 	}
 	ad.RegisterHandlers()
 	return ad
+}
+
+// SetAvatarProcessor sets the processor for avatar change tasks.
+func (a *NotificationAdapters) SetAvatarProcessor(p AvatarProcessor) {
+	a.AvatarProcessor = p
 }
 
 // RegisterHandlers registers all handlers for the supported task types.
@@ -358,73 +368,23 @@ func (a *NotificationAdapters) handleSendAutomodAction(ctx context.Context, payl
 }
 
 func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, payload any) error {
-	if a.Notifier == nil || a.Store == nil || a.Config == nil {
-		return fmt.Errorf("dependencies not initialized")
-	}
 	p, ok := payload.(AvatarChangePayload)
 	if !ok || p.GuildID == "" || p.UserID == "" {
 		return fmt.Errorf("invalid payload for %s", TaskTypeProcessAvatarChange)
 	}
 
-	// Resolve username if not provided
-	username := p.Username
-	if username == "" && a.Session != nil {
-		if member, err := a.Session.GuildMember(p.GuildID, p.UserID); err == nil && member != nil && member.User != nil {
-			if member.User.Username != "" {
-				username = member.User.Username
-			} else if member.Nick != "" {
-				username = member.Nick
-			}
-		}
-	}
-	if username == "" {
-		username = p.UserID // fallback
-	}
-
-	var oldHash string
-	if h, _, ok, _ := a.Store.GetAvatar(p.GuildID, p.UserID); ok {
-		oldHash = h
-	}
-
-	change := files.AvatarChange{
-		UserID:    p.UserID,
-		Username:  username,
-		OldAvatar: oldHash,
-		NewAvatar: p.NewAvatar,
-		Timestamp: time.Now(),
-	}
-
-	// Find destination channel
-	gcfg := a.Config.GuildConfig(p.GuildID)
-	if gcfg == nil {
-		// No configuration; update avatar and exit (avoid retries)
-		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
-		log.ApplicationLogger().Info("No guild config found; skipping avatar notification", "guildID", p.GuildID, "userID", p.UserID)
+	if a.AvatarProcessor != nil {
+		a.AvatarProcessor.ProcessChange(p.GuildID, p.UserID, p.NewAvatar, p.Username)
 		return nil
 	}
 
-	channelID := gcfg.UserLogChannelID
-	if channelID == "" {
-		channelID = gcfg.CommandChannelID
-	}
-	// If there's still no channel, skip notification but update avatar in store
-	if channelID == "" {
-		log.ApplicationLogger().Info("No log channel configured; skipping avatar notification", "guildID", p.GuildID, "userID", p.UserID)
-		_, _, _ = a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
-		return nil
-	}
-
-	// Send notification
-	if err := a.Notifier.SendAvatarChangeNotification(channelID, change); err != nil {
+	// Fallback to minimal persistence if no processor is available (should not happen in production)
+	if a.Store != nil {
+		_, _, err := a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
 		return err
 	}
 
-	// Update current avatar in store
-	if _, _, err := a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now()); err != nil {
-		return err
-	}
-
-	return nil
+	return fmt.Errorf("avatar processor not initialized")
 }
 
 func (a *NotificationAdapters) handleFlushAvatarCache(ctx context.Context, payload any) error {

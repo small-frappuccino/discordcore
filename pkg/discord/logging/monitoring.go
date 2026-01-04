@@ -208,7 +208,7 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	}
 	n := NewNotificationSender(session)
 	router := task.NewRouter(task.Defaults())
-	adapters := task.NewNotificationAdapters(router, session, configManager, nil, n)
+	adapters := task.NewNotificationAdapters(router, session, configManager, store, n)
 
 	// Create unified cache with persistence enabled
 	cacheConfig := cache.DefaultCacheConfig()
@@ -237,6 +237,7 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	// Wire task adapters into sub-services
 	ms.memberEventService.SetAdapters(adapters)
 	ms.messageEventService.SetAdapters(adapters)
+	ms.adapters.SetAvatarProcessor(ms.userWatcher)
 	return ms, nil
 }
 
@@ -1494,13 +1495,17 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	}
 	ms.changesMutex.RUnlock()
 
-	oldHash, _, ok, _ := ms.store.GetAvatar(guildID, userID)
+	// Initial check using cache to avoid unnecessary enqueuing
 	changed := true
-	if ok {
-		changed = oldHash != currentAvatar
-	} else {
-		changed = currentAvatar != ""
+	if ms.unifiedCache != nil {
+		if member, ok := ms.unifiedCache.GetMember(guildID, userID); ok {
+			if member.User != nil && member.User.Avatar == currentAvatar {
+				// No change according to cache; skip unless it's a known stale case
+				changed = false
+			}
+		}
 	}
+
 	if changed {
 		ms.changesMutex.Lock()
 		ms.recentChanges[changeKey] = time.Now()
@@ -1511,20 +1516,37 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 		}
 		ms.changesMutex.Unlock()
 
-		ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+		if ms.adapters != nil {
+			if err := ms.adapters.EnqueueProcessAvatarChange(guildID, userID, username, currentAvatar); err != nil {
+				log.ErrorLoggerRaw().Error("Failed to enqueue avatar change task; falling back to synchronous processing", "guildID", guildID, "userID", userID, "err", err)
+				ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+			}
+		} else {
+			ms.userWatcher.ProcessChange(guildID, userID, currentAvatar, username)
+		}
 	}
 }
 
 // ProcessChange performs avatar-specific logic: notification and persistence.
+// It also verifies if the change is actual by comparing with the database to avoid redundant notifications.
 func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username string) {
+	// Synchronous DB check to verify if the change is actual and fetch old avatar
+	oldAvatar, _, ok, err := aw.store.GetAvatar(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error("Failed to fetch current avatar from store", "guildID", guildID, "userID", userID, "err", err)
+		// We continue anyway; if it's a real change, UpsertAvatar will handle it or fail later.
+	}
+
+	if ok && oldAvatar == currentAvatar {
+		// Change was already processed or is redundant
+		return
+	}
+
 	finalUsername := username
 	if finalUsername == "" {
 		finalUsername = aw.getUsernameForNotification(guildID, userID)
 	}
-	var oldAvatar string
-	if h, _, ok, _ := aw.store.GetAvatar(guildID, userID); ok {
-		oldAvatar = h
-	}
+
 	change := files.AvatarChange{
 		UserID:    userID,
 		Username:  finalUsername,
@@ -1532,10 +1554,12 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 		NewAvatar: currentAvatar,
 		Timestamp: time.Now(),
 	}
-	log.ApplicationLogger().Info("Avatar change detected", "userID", userID, "guildID", guildID, "old_avatar", oldAvatar, "new_avatar", currentAvatar)
+
+	log.ApplicationLogger().Info("Avatar change detected and processing", "userID", userID, "guildID", guildID, "old_avatar", oldAvatar, "new_avatar", currentAvatar)
+
 	guildConfig := aw.configManager.GuildConfig(guildID)
 	if guildConfig != nil {
-		channelID := guildConfig.UserLogChannelID // Renamed from AvatarLogChannelID
+		channelID := guildConfig.UserLogChannelID
 		if channelID == "" {
 			log.ErrorLoggerRaw().Error("UserLogChannelID not configured; notification not sent", "guildID", guildID)
 		} else {
@@ -1546,6 +1570,7 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 			}
 		}
 	}
+
 	if _, _, err := aw.store.UpsertAvatar(guildID, userID, currentAvatar, time.Now()); err != nil {
 		log.ErrorLoggerRaw().Error("Error saving avatar in store for guild", "guildID", guildID, "err", err)
 	}
