@@ -530,32 +530,58 @@ func (ms *MonitoringService) Start() error {
 
 	// Register range-based entry/exit backfill handler (used for downtime recovery and historical scans)
 	ms.router.RegisterHandler("monitor.backfill_entry_exit_range", func(ctx context.Context, payload any) error {
-		// Payload is expected to be: struct{ ChannelID, Start, End string }
-		// Start/End format: RFC3339 (UTC recommended)
-		type pld struct {
+		p, ok := payload.(struct {
 			ChannelID string
 			Start     string
 			End       string
+		})
+		if !ok {
+			// Try to handle map[string]interface{} as well, which is common if coming from JSON or some routers
+			if m, ok := payload.(map[string]any); ok {
+				p.ChannelID, _ = m["ChannelID"].(string)
+				p.Start, _ = m["Start"].(string)
+				p.End, _ = m["End"].(string)
+			} else {
+				// Try the other struct type just in case
+				type pld struct {
+					ChannelID string
+					Start     string
+					End       string
+				}
+				p2, ok2 := payload.(pld)
+				if ok2 {
+					p.ChannelID = p2.ChannelID
+					p.Start = p2.Start
+					p.End = p2.End
+				} else {
+					log.ErrorLoggerRaw().Error("Invalid payload type for monitor.backfill_entry_exit_range", "type", fmt.Sprintf("%T", payload))
+					return nil
+				}
+			}
 		}
-		p, _ := payload.(pld)
+
 		channelID := strings.TrimSpace(p.ChannelID)
 		startRaw := strings.TrimSpace(p.Start)
 		endRaw := strings.TrimSpace(p.End)
 		if channelID == "" || startRaw == "" || endRaw == "" {
+			log.ErrorLoggerRaw().Warn("Missing required fields for backfill range", "channelID", channelID, "start", startRaw, "end", endRaw)
 			return nil
 		}
 
 		start, err := time.Parse(time.RFC3339, startRaw)
 		if err != nil {
+			log.ErrorLoggerRaw().Error("Failed to parse start date for backfill range", "err", err, "start", startRaw)
 			return nil
 		}
 		end, err := time.Parse(time.RFC3339, endRaw)
 		if err != nil {
+			log.ErrorLoggerRaw().Error("Failed to parse end date for backfill range", "err", err, "end", endRaw)
 			return nil
 		}
 		start = start.UTC()
 		end = end.UTC()
 		if !end.After(start) {
+			log.ErrorLoggerRaw().Warn("End date must be after start date for backfill range", "start", start, "end", end)
 			return nil
 		}
 
@@ -572,6 +598,7 @@ func (ms *MonitoringService) Start() error {
 			}
 		}
 		if guildID == "" {
+			log.ErrorLoggerRaw().Warn("Could not resolve guild ID for channel during backfill", "channelID", channelID)
 			return nil
 		}
 
