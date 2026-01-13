@@ -7,6 +7,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -83,8 +84,10 @@ func (ch *CommandHandler) registerConfigCommands() error {
 
 	// Register metrics commands (activity, members)
 	metrics.RegisterMetricsCommands(router)
+	// Register moderation commands
+	moderation.RegisterModerationCommands(router)
 
-	log.ApplicationLogger().Info("Config and metrics commands registered successfully")
+	log.ApplicationLogger().Info("Config, metrics, and moderation commands registered successfully")
 	return nil
 }
 
