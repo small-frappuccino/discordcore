@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -103,6 +104,12 @@ func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 	}
 
 	// Check permissions
+	if ctx.GuildConfig != nil && len(ctx.GuildConfig.AllowedRoles) > 0 && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
+		slog.Warn("User without allowed role tried to use command")
+		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "You do not have permission to use this command")
+		return
+	}
+
 	if cmd.RequiresPermissions() && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
 		slog.Warn("User without permission tried to use command")
 		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "You do not have permission to use this command")
@@ -208,11 +215,17 @@ func (cm *CommandManager) SetupCommands() error {
 
 	// Create/Update commands as needed
 	created, updated, unchanged := 0, 0, 0
+	commandIDs := make(map[string]string, len(codeCommands))
+	lockDownPerms := cm.defaultMemberPermissions()
+	managePermissions := cm.shouldManageRolePermissions()
 	for name, cmd := range codeCommands {
 		desired := &discordgo.ApplicationCommand{
 			Name:        cmd.Name(),
 			Description: cmd.Description(),
 			Options:     cmd.Options(),
+		}
+		if lockDownPerms != nil {
+			desired.DefaultMemberPermissions = lockDownPerms
 		}
 
 		if existing, ok := regByName[name]; ok {
@@ -220,19 +233,30 @@ func (cm *CommandManager) SetupCommands() error {
 			if CompareCommands(existing, desired) {
 				slog.Info(fmt.Sprintf("Command unchanged: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
 				unchanged++
+				commandIDs[name] = existing.ID
 				continue
 			}
 
 			// Update command
-			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired); err != nil {
+			updatedCmd, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired)
+			if err != nil {
 				return fmt.Errorf("error updating command '%s': %w", name, err)
+			}
+			if updatedCmd != nil {
+				commandIDs[name] = updatedCmd.ID
+			} else {
+				commandIDs[name] = existing.ID
 			}
 			slog.Info(fmt.Sprintf("Command updated: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
 			updated++
 		} else {
 			// Create new command
-			if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired); err != nil {
+			createdCmd, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired)
+			if err != nil {
 				return fmt.Errorf("error creating command '%s': %w", name, err)
+			}
+			if createdCmd != nil {
+				commandIDs[name] = createdCmd.ID
 			}
 			slog.Info(fmt.Sprintf("Command created: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
 			created++
@@ -253,6 +277,12 @@ func (cm *CommandManager) SetupCommands() error {
 	}
 	// Log do resumo
 	slog.Info(fmt.Sprintf("Command synchronization completed: created=%d, updated=%d, deleted=%d, unchanged=%d, total=%d, mode=incremental", created, updated, deleted, unchanged, len(codeCommands)))
+
+	if managePermissions {
+		if err := cm.applyRoleCommandPermissions(commandIDs); err != nil {
+			slog.Warn("Failed to apply role-based command permissions", "err", err)
+		}
+	}
 
 	return nil
 }
@@ -356,6 +386,10 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 		return NewCommandError("This subcommand can only be used in a server", true)
 	}
 
+	if ctx.GuildConfig != nil && len(ctx.GuildConfig.AllowedRoles) > 0 && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
+		return NewCommandError("You do not have permission to use this subcommand", true)
+	}
+
 	if subcmd.RequiresPermissions() && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
 		return NewCommandError("You don't have permission to use this subcommand", true)
 	}
@@ -452,4 +486,108 @@ func (cr *CommandRouter) SetTaskRouter(router *task.TaskRouter) {
 // GetTaskRouter returns the task router
 func (cr *CommandRouter) GetTaskRouter() *task.TaskRouter {
 	return cr.taskRouter
+}
+
+func (cm *CommandManager) defaultMemberPermissions() *int64 {
+	if !cm.shouldManageRolePermissions() {
+		return nil
+	}
+	zero := int64(0)
+	return &zero
+}
+
+func (cm *CommandManager) shouldManageRolePermissions() bool {
+	cfg := cm.router.GetConfigManager().Config()
+	if cfg == nil || len(cfg.Guilds) == 0 {
+		return false
+	}
+	for _, guildCfg := range cfg.Guilds {
+		if len(guildCfg.AllowedRoles) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (cm *CommandManager) applyRoleCommandPermissions(commandIDs map[string]string) error {
+	if cm.session == nil || cm.session.State == nil || cm.session.State.User == nil {
+		return fmt.Errorf("session not ready for command permissions")
+	}
+	if len(commandIDs) == 0 {
+		return nil
+	}
+
+	cfg := cm.router.GetConfigManager().Config()
+	if cfg == nil || len(cfg.Guilds) == 0 {
+		return nil
+	}
+
+	appID := cm.session.State.User.ID
+	for _, guildCfg := range cfg.Guilds {
+		guildID := strings.TrimSpace(guildCfg.GuildID)
+		if guildID == "" {
+			continue
+		}
+
+		roleIDs := uniqueIDs(guildCfg.AllowedRoles)
+		perms := buildRolePermissions(guildID, roleIDs)
+		permList := &discordgo.ApplicationCommandPermissionsList{Permissions: perms}
+
+		for _, cmdID := range commandIDs {
+			if cmdID == "" {
+				continue
+			}
+			if err := cm.session.ApplicationCommandPermissionsEdit(appID, guildID, cmdID, permList); err != nil {
+				slog.Warn("Failed to set command permissions", "guildID", guildID, "commandID", cmdID, "err", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func uniqueIDs(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		clean := strings.TrimSpace(value)
+		if clean == "" {
+			continue
+		}
+		if _, ok := seen[clean]; ok {
+			continue
+		}
+		seen[clean] = struct{}{}
+		unique = append(unique, clean)
+	}
+	return unique
+}
+
+func buildRolePermissions(guildID string, roleIDs []string) []*discordgo.ApplicationCommandPermissions {
+	const maxPermissions = 10
+	perms := make([]*discordgo.ApplicationCommandPermissions, 0, len(roleIDs))
+
+	if len(roleIDs) == 0 {
+		return []*discordgo.ApplicationCommandPermissions{
+			{
+				ID:         guildID,
+				Type:       discordgo.ApplicationCommandPermissionTypeRole,
+				Permission: true,
+			},
+		}
+	}
+
+	for _, roleID := range roleIDs {
+		perms = append(perms, &discordgo.ApplicationCommandPermissions{
+			ID:         roleID,
+			Type:       discordgo.ApplicationCommandPermissionTypeRole,
+			Permission: true,
+		})
+		if len(perms) >= maxPermissions {
+			slog.Warn("Allowed roles exceed command permission limit; truncating list", "limit", maxPermissions)
+			break
+		}
+	}
+
+	return perms
 }
