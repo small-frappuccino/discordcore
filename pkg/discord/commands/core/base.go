@@ -82,8 +82,13 @@ func extractUserID(i *discordgo.InteractionCreate) string {
 // GetSubCommandName extracts the subcommand name from the interaction
 func GetSubCommandName(i *discordgo.InteractionCreate) string {
 	options := i.ApplicationCommandData().Options
-	if len(options) > 0 && options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
-		return options[0].Name
+	if len(options) > 0 {
+		if options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
+			return options[0].Name
+		}
+		if options[0].Type == discordgo.ApplicationCommandOptionSubCommandGroup && len(options[0].Options) > 0 {
+			return options[0].Options[0].Name
+		}
 	}
 	return ""
 }
@@ -91,8 +96,14 @@ func GetSubCommandName(i *discordgo.InteractionCreate) string {
 // GetSubCommandOptions extracts the subcommand options from the interaction
 func GetSubCommandOptions(i *discordgo.InteractionCreate) []*discordgo.ApplicationCommandInteractionDataOption {
 	options := i.ApplicationCommandData().Options
-	if len(options) > 0 && options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
-		return options[0].Options
+	if len(options) > 0 {
+		if options[0].Type == discordgo.ApplicationCommandOptionSubCommand {
+			return options[0].Options
+		}
+		if options[0].Type == discordgo.ApplicationCommandOptionSubCommandGroup && len(options[0].Options) > 0 {
+			// If it's a group, we return the options of the actual subcommand inside the group
+			return options[0].Options[0].Options
+		}
 	}
 	return options // Returns direct options if not a subcommand
 }
