@@ -295,11 +295,23 @@ func (gc *GroupCommand) Options() []*discordgo.ApplicationCommandOption {
 	options := make([]*discordgo.ApplicationCommandOption, 0, len(gc.subcommands))
 
 	for _, subcmd := range gc.subcommands {
+		// Determine type: if the subcommand itself has options that are also subcommands,
+		// then this entry must be a SubCommandGroup (Type 2).
+		// Otherwise, it's a regular SubCommand (Type 1).
+		optType := discordgo.ApplicationCommandOptionSubCommand
+		subOpts := subcmd.Options()
+		for _, so := range subOpts {
+			if so.Type == discordgo.ApplicationCommandOptionSubCommand || so.Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+				optType = discordgo.ApplicationCommandOptionSubCommandGroup
+				break
+			}
+		}
+
 		option := &discordgo.ApplicationCommandOption{
-			Type:        discordgo.ApplicationCommandOptionSubCommand,
+			Type:        optType,
 			Name:        subcmd.Name(),
 			Description: subcmd.Description(),
-			Options:     subcmd.Options(),
+			Options:     subOpts,
 		}
 		options = append(options, option)
 	}
