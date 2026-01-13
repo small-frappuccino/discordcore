@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,6 +78,28 @@ func (uc *UnifiedCache) memberPrefix(guildID string) string {
 		return ""
 	}
 	return guildID + ":"
+}
+
+func persistKey(cacheType, key string) string {
+	if cacheType == "" || key == "" {
+		return ""
+	}
+	return cacheType + ":" + key
+}
+
+func persistPrefix(cacheType, prefix string) string {
+	if cacheType == "" || prefix == "" {
+		return ""
+	}
+	return cacheType + ":" + prefix
+}
+
+func stripPersistKey(cacheType, key string) string {
+	prefix := cacheType + ":"
+	if strings.HasPrefix(key, prefix) {
+		return strings.TrimPrefix(key, prefix)
+	}
+	return key
 }
 
 // Cached value types
@@ -538,17 +561,28 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	// Clear from persistent storage if enabled
 	if uc.persistEnabled && uc.store != nil {
 		// Delete persistent cache entries for this guild using precise type+prefix filtering
-		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("member", guildID+":"); err != nil {
+		memberPrefix := uc.memberPrefix(guildID)
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("member", memberPrefix); err != nil {
 			return fmt.Errorf("delete member cache entries: %w", err)
 		}
-		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("guild", guildID); err != nil {
-			return fmt.Errorf("delete guild cache entry: %w", err)
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("member", persistPrefix("member", memberPrefix)); err != nil {
+			return fmt.Errorf("delete member cache entries (prefixed): %w", err)
 		}
-		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("roles", guildID); err != nil {
-			return fmt.Errorf("delete roles cache entry: %w", err)
+		if err := uc.store.DeleteCacheEntry(guildID); err != nil {
+			return fmt.Errorf("delete legacy guild/roles cache entry: %w", err)
 		}
-		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("channel", guildID+":"); err != nil {
+		if err := uc.store.DeleteCacheEntry(persistKey("guild", guildID)); err != nil {
+			return fmt.Errorf("delete guild cache entry (prefixed): %w", err)
+		}
+		if err := uc.store.DeleteCacheEntry(persistKey("roles", guildID)); err != nil {
+			return fmt.Errorf("delete roles cache entry (prefixed): %w", err)
+		}
+		channelPrefix := guildID + ":"
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("channel", channelPrefix); err != nil {
 			return fmt.Errorf("delete channel cache entries: %w", err)
+		}
+		if err := uc.store.DeleteCacheEntriesByTypeAndPrefix("channel", persistPrefix("channel", channelPrefix)); err != nil {
+			return fmt.Errorf("delete channel cache entries (prefixed): %w", err)
 		}
 	}
 
@@ -651,7 +685,8 @@ func (uc *UnifiedCache) Persist() error {
 				continue
 			}
 			exp, _ := uc.members.GetExpiration(key)
-			if err := uc.store.UpsertCacheEntry(key, "member", data, exp); err != nil {
+			persistedKey := persistKey("member", key)
+			if err := uc.store.UpsertCacheEntry(persistedKey, "member", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist member %s: %w", key, err))
 			}
 		}
@@ -670,7 +705,8 @@ func (uc *UnifiedCache) Persist() error {
 				continue
 			}
 			exp, _ := uc.guilds.GetExpiration(key)
-			if err := uc.store.UpsertCacheEntry(key, "guild", data, exp); err != nil {
+			persistedKey := persistKey("guild", key)
+			if err := uc.store.UpsertCacheEntry(persistedKey, "guild", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist guild %s: %w", key, err))
 			}
 		}
@@ -689,7 +725,8 @@ func (uc *UnifiedCache) Persist() error {
 				continue
 			}
 			exp, _ := uc.roles.GetExpiration(key)
-			if err := uc.store.UpsertCacheEntry(key, "roles", data, exp); err != nil {
+			persistedKey := persistKey("roles", key)
+			if err := uc.store.UpsertCacheEntry(persistedKey, "roles", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist roles %s: %w", key, err))
 			}
 		}
@@ -707,12 +744,13 @@ func (uc *UnifiedCache) Persist() error {
 				errs = append(errs, fmt.Errorf("encode channel %s: %w", key, err))
 				continue
 			}
-			persistKey := key
+			cacheKey := key
 			if ch.GuildID != "" {
-				persistKey = ch.GuildID + ":" + ch.ID
+				cacheKey = ch.GuildID + ":" + ch.ID
 			}
+			cacheKey = persistKey("channel", cacheKey)
 			exp, _ := uc.channels.GetExpiration(key)
-			if err := uc.store.UpsertCacheEntry(persistKey, "channel", data, exp); err != nil {
+			if err := uc.store.UpsertCacheEntry(cacheKey, "channel", data, exp); err != nil {
 				errs = append(errs, fmt.Errorf("persist channel %s: %w", key, err))
 			}
 		}
@@ -751,7 +789,8 @@ func (uc *UnifiedCache) Warmup() error {
 			continue // Skip corrupted entries
 		}
 		// Use internal method to avoid LRU eviction during warmup
-		uc.setMemberInternal(entry.Key, &member, entry.ExpiresAt)
+		key := stripPersistKey("member", entry.Key)
+		uc.setMemberInternal(key, &member, entry.ExpiresAt)
 		totalLoaded++
 	}
 
@@ -765,7 +804,8 @@ func (uc *UnifiedCache) Warmup() error {
 		if err := decodeEntity(entry.Data, &guild); err != nil {
 			continue
 		}
-		uc.setGuildInternal(entry.Key, &guild, entry.ExpiresAt)
+		key := stripPersistKey("guild", entry.Key)
+		uc.setGuildInternal(key, &guild, entry.ExpiresAt)
 		totalLoaded++
 	}
 
@@ -779,7 +819,8 @@ func (uc *UnifiedCache) Warmup() error {
 		if err := decodeEntity(entry.Data, &roles); err != nil {
 			continue
 		}
-		uc.setRolesInternal(entry.Key, roles, entry.ExpiresAt)
+		key := stripPersistKey("roles", entry.Key)
+		uc.setRolesInternal(key, roles, entry.ExpiresAt)
 		totalLoaded++
 	}
 
