@@ -179,6 +179,10 @@ const (
 	runtimeKeyDisableReactionLogs  runtimeKey = "disable_reaction_logs"
 	runtimeKeyDisableUserLogs      runtimeKey = "disable_user_logs"
 
+	// PRESENCE WATCH
+	runtimeKeyPresenceWatchUserID runtimeKey = "presence_watch_user_id"
+	runtimeKeyPresenceWatchBot    runtimeKey = "presence_watch_bot"
+
 	// MESSAGE CACHE
 	runtimeKeyMessageCacheTTLHours runtimeKey = "message_cache_ttl_hours"
 	runtimeKeyMessageDeleteOnLog   runtimeKey = "message_delete_on_log"
@@ -252,6 +256,23 @@ func allSpecs() []spec {
 			Type:        vtBool,
 			DefaultHint: "false",
 			ShortHelp:   "Disable user log handlers (avatars/roles)",
+			RestartHint: restartRecommended,
+		},
+		{
+			Key:         runtimeKeyPresenceWatchUserID,
+			Group:       "PRESENCE WATCH",
+			Type:        vtString,
+			DefaultHint: "(empty)",
+			ShortHelp:   "Log presence updates for a specific user ID",
+			RestartHint: restartRecommended,
+			MaxInputLen: 32,
+		},
+		{
+			Key:         runtimeKeyPresenceWatchBot,
+			Group:       "PRESENCE WATCH",
+			Type:        vtBool,
+			DefaultHint: "false",
+			ShortHelp:   "Log presence updates for the bot user",
 			RestartHint: restartRecommended,
 		},
 		{
@@ -539,6 +560,11 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 	case runtimeKeyDisableUserLogs:
 		return fmtBool(rc.DisableUserLogs), true
 
+	case runtimeKeyPresenceWatchUserID:
+		return rc.PresenceWatchUserID, true
+	case runtimeKeyPresenceWatchBot:
+		return fmtBool(rc.PresenceWatchBot), true
+
 	case runtimeKeyMessageCacheTTLHours:
 		return strconv.Itoa(rc.MessageCacheTTLHours), true
 	case runtimeKeyMessageDeleteOnLog:
@@ -586,6 +612,13 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 		return rc, true
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = false
+		return rc, true
+
+	case runtimeKeyPresenceWatchUserID:
+		rc.PresenceWatchUserID = ""
+		return rc, true
+	case runtimeKeyPresenceWatchBot:
+		rc.PresenceWatchBot = false
 		return rc, true
 
 	case runtimeKeyMessageCacheTTLHours:
@@ -670,6 +703,9 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		case runtimeKeyBotTheme:
 			rc.BotTheme = raw
 			return rc, nil
+		case runtimeKeyPresenceWatchUserID:
+			rc.PresenceWatchUserID = raw
+			return rc, nil
 		case runtimeKeyBackfillChannelID:
 			rc.BackfillChannelID = raw
 			return rc, nil
@@ -727,6 +763,8 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 		rc.DisableReactionLogs = v
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = v
+	case runtimeKeyPresenceWatchBot:
+		rc.PresenceWatchBot = v
 	case runtimeKeyMessageDeleteOnLog:
 		rc.MessageDeleteOnLog = v
 	case runtimeKeyMessageCacheCleanup:

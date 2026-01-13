@@ -27,6 +27,10 @@ type RuntimeConfig struct {
 	DisableReactionLogs  bool `json:"disable_reaction_logs,omitempty"`
 	DisableUserLogs      bool `json:"disable_user_logs,omitempty"`
 
+	// PRESENCE WATCH
+	PresenceWatchUserID string `json:"presence_watch_user_id,omitempty"`
+	PresenceWatchBot    bool   `json:"presence_watch_bot,omitempty"`
+
 	// MESSAGE CACHE
 	MessageCacheTTLHours int  `json:"message_cache_ttl_hours,omitempty"`
 	MessageDeleteOnLog   bool `json:"message_delete_on_log,omitempty"`
@@ -136,6 +140,12 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildRC.DisableUserLogs {
 		resolved.DisableUserLogs = true
+	}
+	if guildRC.PresenceWatchUserID != "" {
+		resolved.PresenceWatchUserID = guildRC.PresenceWatchUserID
+	}
+	if guildRC.PresenceWatchBot {
+		resolved.PresenceWatchBot = true
 	}
 
 	if guildRC.MessageCacheTTLHours != 0 {

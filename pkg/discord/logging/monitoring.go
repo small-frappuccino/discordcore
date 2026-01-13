@@ -181,6 +181,10 @@ type MonitoringService struct {
 	// Event handler references for cleanup
 	eventHandlers []interface{}
 
+	// Presence watch tracking for targeted logs
+	presenceWatchMu sync.Mutex
+	presenceWatch   map[string]presenceSnapshot
+
 	// Metrics counters
 	apiAuditLogCalls     uint64
 	apiGuildMemberCalls  uint64
@@ -193,6 +197,11 @@ type MonitoringService struct {
 type cachedRoles struct {
 	roles     []string
 	expiresAt time.Time
+}
+
+type presenceSnapshot struct {
+	Status       discordgo.Status
+	ClientStatus discordgo.ClientStatus
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
@@ -233,6 +242,7 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		rolesTTL:            5 * time.Minute,
 		rolesCacheCleanup:   make(chan struct{}),
 		eventHandlers:       make([]interface{}, 0),
+		presenceWatch:       make(map[string]presenceSnapshot),
 	}
 	// Wire task adapters into sub-services
 	ms.memberEventService.SetAdapters(adapters)
@@ -1146,10 +1156,189 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 	}
 	if m.User.Username == "" {
 		log.ApplicationLogger().Debug("PresenceUpdate ignored (empty username)", "userID", m.User.ID, "guildID", m.GuildID)
+		ms.handlePresenceWatch(m)
 		return
 	}
 	ms.markEvent()
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
+	ms.handlePresenceWatch(m)
+}
+
+func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
+	if m == nil || m.User == nil || ms.configManager == nil {
+		return
+	}
+	cfg := ms.configManager.Config()
+	if cfg == nil {
+		return
+	}
+	rc := cfg.ResolveRuntimeConfig(m.GuildID)
+	watchUserID := strings.TrimSpace(rc.PresenceWatchUserID)
+	watchBot := rc.PresenceWatchBot
+	if watchUserID == "" && !watchBot {
+		return
+	}
+
+	userID := strings.TrimSpace(m.User.ID)
+	if userID == "" {
+		return
+	}
+
+	botID := ""
+	if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
+		botID = ms.session.State.User.ID
+	}
+	isBotTarget := watchBot && botID != "" && userID == botID
+	isUserTarget := watchUserID != "" && userID == watchUserID
+	if !isBotTarget && !isUserTarget {
+		return
+	}
+
+	snap := presenceSnapshot{
+		Status:       normalizeStatus(m.Status),
+		ClientStatus: normalizeClientStatus(m.ClientStatus),
+	}
+
+	ms.presenceWatchMu.Lock()
+	prev, hasPrev := ms.presenceWatch[userID]
+	if hasPrev && presenceSnapshotEqual(prev, snap) {
+		ms.presenceWatchMu.Unlock()
+		return
+	}
+	ms.presenceWatch[userID] = snap
+	ms.presenceWatchMu.Unlock()
+
+	statusChange := ""
+	if hasPrev {
+		if normalizeStatus(prev.Status) != normalizeStatus(snap.Status) {
+			statusChange = fmt.Sprintf("%s -> %s", statusDisplay(prev.Status), statusDisplay(snap.Status))
+		}
+	} else {
+		statusChange = statusDisplay(snap.Status)
+	}
+
+	deviceChanges := deviceStatusChanges(prev.ClientStatus, snap.ClientStatus)
+
+	username := strings.TrimSpace(m.User.Username)
+	if username == "" {
+		username = userID
+	}
+
+	target := "user"
+	if isBotTarget {
+		target = "bot"
+	}
+
+	fields := []any{
+		"target", target,
+		"userID", userID,
+		"username", username,
+		"status", presenceStatusLabel(snap.Status, snap.ClientStatus),
+		"devices", clientStatusSummary(snap.ClientStatus),
+	}
+	if m.GuildID != "" {
+		fields = append(fields, "guildID", m.GuildID)
+	}
+	if statusChange != "" {
+		fields = append(fields, "status_change", statusChange)
+	}
+	if len(deviceChanges) > 0 {
+		fields = append(fields, "device_changes", strings.Join(deviceChanges, "; "))
+	}
+
+	log.ApplicationLogger().Info("Presence watch update", fields...)
+}
+
+func presenceSnapshotEqual(a, b presenceSnapshot) bool {
+	if normalizeStatus(a.Status) != normalizeStatus(b.Status) {
+		return false
+	}
+	return clientStatusEqual(a.ClientStatus, b.ClientStatus)
+}
+
+func normalizeStatus(status discordgo.Status) discordgo.Status {
+	if strings.TrimSpace(string(status)) == "" {
+		return discordgo.StatusOffline
+	}
+	return status
+}
+
+func normalizeClientStatus(cs discordgo.ClientStatus) discordgo.ClientStatus {
+	cs.Desktop = normalizeStatus(cs.Desktop)
+	cs.Mobile = normalizeStatus(cs.Mobile)
+	cs.Web = normalizeStatus(cs.Web)
+	return cs
+}
+
+func clientStatusEqual(a, b discordgo.ClientStatus) bool {
+	a = normalizeClientStatus(a)
+	b = normalizeClientStatus(b)
+	return a.Desktop == b.Desktop && a.Mobile == b.Mobile && a.Web == b.Web
+}
+
+func isActiveStatus(status discordgo.Status) bool {
+	switch normalizeStatus(status) {
+	case discordgo.StatusOnline, discordgo.StatusIdle, discordgo.StatusDoNotDisturb:
+		return true
+	default:
+		return false
+	}
+}
+
+func statusDisplay(status discordgo.Status) string {
+	switch normalizeStatus(status) {
+	case discordgo.StatusOnline:
+		return "online"
+	case discordgo.StatusIdle:
+		return "idle (away)"
+	case discordgo.StatusDoNotDisturb:
+		return "dnd"
+	case discordgo.StatusInvisible:
+		return "invisible"
+	case discordgo.StatusOffline:
+		return "offline"
+	default:
+		return string(status)
+	}
+}
+
+func presenceStatusLabel(status discordgo.Status, client discordgo.ClientStatus) string {
+	label := statusDisplay(status)
+	if isActiveStatus(client.Mobile) {
+		label += " (mobile)"
+	}
+	return label
+}
+
+func clientStatusSummary(cs discordgo.ClientStatus) string {
+	cs = normalizeClientStatus(cs)
+	return fmt.Sprintf("desktop=%s mobile=%s web=%s", statusDisplay(cs.Desktop), statusDisplay(cs.Mobile), statusDisplay(cs.Web))
+}
+
+func deviceStatusChanges(prev, cur discordgo.ClientStatus) []string {
+	prev = normalizeClientStatus(prev)
+	cur = normalizeClientStatus(cur)
+	changes := []string{}
+	addChange := func(label string, prevStatus, curStatus discordgo.Status) {
+		prevActive := isActiveStatus(prevStatus)
+		curActive := isActiveStatus(curStatus)
+		if prevActive != curActive {
+			if curActive {
+				changes = append(changes, fmt.Sprintf("%s entered (%s)", label, statusDisplay(curStatus)))
+			} else {
+				changes = append(changes, fmt.Sprintf("%s left", label))
+			}
+			return
+		}
+		if prevStatus != curStatus {
+			changes = append(changes, fmt.Sprintf("%s status %s -> %s", label, statusDisplay(prevStatus), statusDisplay(curStatus)))
+		}
+	}
+
+	addChange("desktop", prev.Desktop, cur.Desktop)
+	addChange("mobile", prev.Mobile, cur.Mobile)
+	addChange("web", prev.Web, cur.Web)
+	return changes
 }
 
 // handleMemberUpdate processes member updates.
