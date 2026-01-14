@@ -81,6 +81,18 @@ type GuildConfig struct {
 	AutoRolePrereqRoleA       string `json:"auto_role_prereq_role_a,omitempty"`
 	AutoRolePrereqRoleB       string `json:"auto_role_prereq_role_b,omitempty"`
 
+	// Unverified purge (per-guild): periodically kick members that didn't get the verified role
+	// within a grace period since joining.
+	UnverifiedPurgeEnabled          bool     `json:"unverified_purge_enabled,omitempty"`
+	UnverifiedPurgeVerifiedRoleID   string   `json:"unverified_purge_verified_role_id,omitempty"`
+	UnverifiedPurgeGraceDays        int      `json:"unverified_purge_grace_days,omitempty"`         // default: 7
+	UnverifiedPurgeScanIntervalMins int      `json:"unverified_purge_scan_interval_mins,omitempty"` // default: 120
+	UnverifiedPurgeInitialDelaySecs int      `json:"unverified_purge_initial_delay_secs,omitempty"` // default: 120
+	UnverifiedPurgeKicksPerSecond   int      `json:"unverified_purge_kicks_per_second,omitempty"`   // default: 4
+	UnverifiedPurgeMaxKicksPerRun   int      `json:"unverified_purge_max_kicks_per_run,omitempty"`  // default: 200
+	UnverifiedPurgeExemptRoleIDs    []string `json:"unverified_purge_exempt_role_ids,omitempty"`    // optional
+	UnverifiedPurgeDryRun           bool     `json:"unverified_purge_dry_run,omitempty"`            // log only, do not kick
+
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }

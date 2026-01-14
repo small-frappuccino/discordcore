@@ -353,6 +353,14 @@ func (ms *MonitoringService) Start() error {
 				continue
 			}
 			for _, member := range members {
+				if member == nil || member.User == nil {
+					continue
+				}
+				if !member.JoinedAt.IsZero() {
+					if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
+						log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
+					}
+				}
 				if len(member.Roles) == 0 {
 					continue
 				}

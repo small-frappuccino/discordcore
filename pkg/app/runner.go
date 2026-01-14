@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
+	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/errors"
@@ -235,6 +236,37 @@ func Run(appName, tokenEnv string) error {
 	if automodWrapper != nil {
 		if err := serviceManager.Register(automodWrapper); err != nil {
 			return fmt.Errorf("register automod service: %w", err)
+		}
+	}
+
+	// Unverified purge service (optional; enabled per-guild in settings.json)
+	{
+		cfg := configManager.Config()
+		enabled := false
+		if cfg != nil {
+			for _, g := range cfg.Guilds {
+				if g.UnverifiedPurgeEnabled && strings.TrimSpace(g.UnverifiedPurgeVerifiedRoleID) != "" {
+					enabled = true
+					break
+				}
+			}
+		}
+
+		if enabled {
+			unverifiedPurgeService := maintenance.NewUnverifiedPurgeService(discordSession, configManager, store)
+			unverifiedPurgeWrapper := service.NewServiceWrapper(
+				"unverified-purge",
+				service.TypeMonitoring,
+				service.PriorityNormal,
+				[]string{"monitoring"},
+				func() error { unverifiedPurgeService.Start(); return nil },
+				func() error { unverifiedPurgeService.Stop(); return nil },
+				func() bool { return unverifiedPurgeService.IsRunning() },
+			)
+			if err := serviceManager.Register(unverifiedPurgeWrapper); err != nil {
+				return fmt.Errorf("register unverified purge service: %w", err)
+			}
+			log.ApplicationLogger().Info("✅ Unverified purge enabled")
 		}
 	}
 
