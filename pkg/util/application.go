@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.164.0"
+const DiscordCoreVersion = "v0.165.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string
@@ -172,6 +172,12 @@ func GetMessageDBPath() string {
 // Layout: <ConfigBase>/preferences/settings.json
 func GetSettingsFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
+}
+
+// GetCustomRPCFilePath returns the path for the custom Discord RPC JSON.
+// Layout: <ConfigBase>/preferences/custom-rpc.json
+func GetCustomRPCFilePath() string {
+	return filepath.Join(ApplicationSupportPath, "preferences", "custom-rpc.json")
 }
 
 // GetLogFilePath returns the path to the main log file using the unified OS rules:

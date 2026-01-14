@@ -93,6 +93,60 @@ type BotConfig struct {
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
+// CustomRPCConfig holds profiles for local Discord Rich Presence.
+type CustomRPCConfig struct {
+	DefaultProfile string             `json:"default_profile,omitempty"`
+	UserProfiles   map[string]string  `json:"user_profiles,omitempty"`
+	Profiles       []CustomRPCProfile `json:"profiles,omitempty"`
+}
+
+// CustomRPCProfile defines a single Rich Presence profile.
+type CustomRPCProfile struct {
+	Name                  string             `json:"name"`
+	Disabled              bool               `json:"disabled,omitempty"`
+	User                  string             `json:"user,omitempty"`
+	ApplicationID         string             `json:"application_id"`
+	Type                  string             `json:"type,omitempty"`
+	URL                   string             `json:"url,omitempty"`
+	Details               string             `json:"details,omitempty"`
+	State                 string             `json:"state,omitempty"`
+	Party                 RPCPartyConfig     `json:"party,omitempty"`
+	Timestamp             RPCTimestampConfig `json:"timestamp,omitempty"`
+	Assets                RPCAssetsConfig    `json:"assets,omitempty"`
+	Buttons               []RPCButtonConfig  `json:"buttons,omitempty"`
+	UpdateIntervalSeconds int                `json:"update_interval_seconds,omitempty"`
+}
+
+// RPCPartyConfig controls the optional party size display.
+type RPCPartyConfig struct {
+	ID      string `json:"id,omitempty"`
+	Current int    `json:"current,omitempty"`
+	Max     int    `json:"max,omitempty"`
+}
+
+// RPCTimestampConfig controls timestamp behavior.
+type RPCTimestampConfig struct {
+	Mode      string `json:"mode,omitempty"`
+	StartUnix int64  `json:"start_unix,omitempty"`
+	EndUnix   int64  `json:"end_unix,omitempty"`
+	Start     string `json:"start,omitempty"`
+	End       string `json:"end,omitempty"`
+}
+
+// RPCAssetsConfig controls asset keys and hover text.
+type RPCAssetsConfig struct {
+	LargeImageKey string `json:"large_image_key,omitempty"`
+	LargeText     string `json:"large_text,omitempty"`
+	SmallImageKey string `json:"small_image_key,omitempty"`
+	SmallText     string `json:"small_text,omitempty"`
+}
+
+// RPCButtonConfig defines a label + URL button.
+type RPCButtonConfig struct {
+	Label string `json:"label,omitempty"`
+	URL   string `json:"url,omitempty"`
+}
+
 // ResolveRuntimeConfig retorna a configuração de runtime para uma guilda,
 // caindo para o global se o campo não estiver definido (zero-value).
 func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
