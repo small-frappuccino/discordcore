@@ -243,16 +243,21 @@ func Run(appName, tokenEnv string) error {
 	{
 		cfg := configManager.Config()
 		enabled := false
+		preview := false
 		if cfg != nil {
 			for _, g := range cfg.Guilds {
-				if g.UnverifiedPurgeEnabled && strings.TrimSpace(g.UnverifiedPurgeVerifiedRoleID) != "" {
+				if strings.TrimSpace(g.UnverifiedPurgeVerifiedRoleID) == "" {
+					continue
+				}
+				if g.UnverifiedPurgeEnabled {
 					enabled = true
-					break
+				} else {
+					preview = true
 				}
 			}
 		}
 
-		if enabled {
+		if enabled || preview {
 			unverifiedPurgeService := maintenance.NewUnverifiedPurgeService(discordSession, configManager, store)
 			unverifiedPurgeWrapper := service.NewServiceWrapper(
 				"unverified-purge",
@@ -266,7 +271,11 @@ func Run(appName, tokenEnv string) error {
 			if err := serviceManager.Register(unverifiedPurgeWrapper); err != nil {
 				return fmt.Errorf("register unverified purge service: %w", err)
 			}
-			log.ApplicationLogger().Info("✅ Unverified purge enabled")
+			if enabled {
+				log.ApplicationLogger().Info("✅ Unverified purge enabled")
+			} else {
+				log.ApplicationLogger().Info("✅ Unverified purge preview enabled (purge disabled per-guild)")
+			}
 		}
 	}
 

@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 type UnverifiedPurgeService struct {
@@ -109,13 +111,19 @@ func (s *UnverifiedPurgeService) runOnce() {
 	now := time.Now().UTC()
 
 	for _, gcfg := range cfg.Guilds {
-		if !gcfg.UnverifiedPurgeEnabled {
+		previewOnly := !gcfg.UnverifiedPurgeEnabled
+		if !gcfg.UnverifiedPurgeEnabled && strings.TrimSpace(gcfg.UnverifiedPurgeVerifiedRoleID) == "" {
 			continue
 		}
 		verifiedRoleID := strings.TrimSpace(gcfg.UnverifiedPurgeVerifiedRoleID)
 		if verifiedRoleID == "" {
 			log.ApplicationLogger().Warn("unverified purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
 			continue
+		}
+
+		botID := ""
+		if s.session.State != nil && s.session.State.User != nil {
+			botID = s.session.State.User.ID
 		}
 
 		graceDays := resolveInt(gcfg.UnverifiedPurgeGraceDays, 7)
@@ -151,10 +159,6 @@ func (s *UnverifiedPurgeService) runOnce() {
 			candidates = append(candidates, purgeCandidate{userID: userID, joinedAt: joinedAt})
 		}
 
-		if len(candidates) == 0 {
-			continue
-		}
-
 		sort.Slice(candidates, func(i, j int) bool {
 			return candidates[i].joinedAt.Before(candidates[j].joinedAt)
 		})
@@ -168,6 +172,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 		}
 
 		var throttle <-chan time.Time
+		var throttleTicker *time.Ticker
 		kps := gcfg.UnverifiedPurgeKicksPerSecond
 		if kps <= 0 {
 			kps = 4
@@ -177,13 +182,14 @@ func (s *UnverifiedPurgeService) runOnce() {
 			if interval < 50*time.Millisecond {
 				interval = 50 * time.Millisecond
 			}
-			t := time.NewTicker(interval)
-			defer t.Stop()
-			throttle = t.C
+			throttleTicker = time.NewTicker(interval)
+			throttle = throttleTicker.C
 		}
 
 		kicked := 0
 		checked := 0
+		var affectedIDs []string
+		var previewEntries []string
 		for _, c := range candidates {
 			if throttle != nil {
 				select {
@@ -215,6 +221,16 @@ func (s *UnverifiedPurgeService) runOnce() {
 			checked++
 			if gcfg.UnverifiedPurgeDryRun {
 				log.ApplicationLogger().Info("unverified purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
+				affectedIDs = append(affectedIDs, c.userID)
+				continue
+			}
+			if previewOnly {
+				display := member.User.Username
+				if display == "" {
+					display = "unknown"
+				}
+				previewEntries = append(previewEntries, fmt.Sprintf("%s (`%s`)", display, c.userID))
+				affectedIDs = append(affectedIDs, c.userID)
 				continue
 			}
 
@@ -225,11 +241,19 @@ func (s *UnverifiedPurgeService) runOnce() {
 				continue
 			}
 			kicked++
+			affectedIDs = append(affectedIDs, c.userID)
 		}
 
-		if kicked > 0 || gcfg.UnverifiedPurgeDryRun {
-			log.ApplicationLogger().Info("unverified purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurgeDryRun)
+		if throttleTicker != nil {
+			throttleTicker.Stop()
 		}
+
+		log.ApplicationLogger().Info("unverified purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurgeDryRun)
+		if previewOnly {
+			s.logPreviewEntries(gcfg.GuildID, previewEntries, len(candidates))
+			continue
+		}
+		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.UnverifiedPurgeDryRun, affectedIDs)
 	}
 }
 
@@ -251,6 +275,103 @@ func (s *UnverifiedPurgeService) resolveScanInterval() time.Duration {
 		mins = 5
 	}
 	return time.Duration(mins) * time.Minute
+}
+
+func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID string, graceDays int, cutoff time.Time, candidates, checked, kicked, maxKicks, kps int, dryRun bool, affectedIDs []string) {
+	if s.session == nil || s.configManager == nil || guildID == "" {
+		return
+	}
+
+	if botID == "" && s.session.State != nil && s.session.State.User != nil {
+		botID = s.session.State.User.ID
+	}
+	if !logging.ShouldLogModerationEvent(s.configManager, guildID, botID, botID, logging.ModerationSourceUnknown) {
+		return
+	}
+	channelID, ok := logging.ResolveModerationLogChannel(s.session, s.configManager, guildID)
+	if !ok || strings.TrimSpace(channelID) == "" {
+		return
+	}
+
+	mode := "Live"
+	if dryRun {
+		mode = "Dry run"
+	}
+
+	title := "Unverified Member Purge"
+	desc := fmt.Sprintf("Automated cleanup of members who haven't received <@&%s> within **%d days** of joining.", verifiedRoleID, graceDays)
+	if candidates == 0 {
+		desc += "\n\nNo action required."
+	}
+
+	fields := []*discordgo.MessageEmbedField{
+		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
+		{Name: "Mode", Value: mode, Inline: true},
+		{Name: "Verified Role", Value: "<@&" + verifiedRoleID + "> (`" + verifiedRoleID + "`)", Inline: false},
+		{Name: "Joined Before", Value: fmt.Sprintf("<t:%d:F> (<t:%d:R>)", cutoff.Unix(), cutoff.Unix()), Inline: true},
+		{Name: "Candidates", Value: fmt.Sprintf("%d", candidates), Inline: true},
+		{Name: "Checked", Value: fmt.Sprintf("%d", checked), Inline: true},
+		{Name: "Kicked", Value: fmt.Sprintf("%d", kicked), Inline: true},
+		{Name: "Limits", Value: fmt.Sprintf("%d/s, max %d per run", kps, maxKicks), Inline: true},
+	}
+
+	if len(affectedIDs) > 0 {
+		maxList := 20
+		if len(affectedIDs) < maxList {
+			maxList = len(affectedIDs)
+		}
+		lines := make([]string, 0, maxList+1)
+		for i := 0; i < maxList; i++ {
+			id := affectedIDs[i]
+			lines = append(lines, fmt.Sprintf("<@%s> (`%s`)", id, id))
+		}
+		if len(affectedIDs) > maxList {
+			lines = append(lines, fmt.Sprintf("…and %d more", len(affectedIDs)-maxList))
+		}
+		label := "Affected Members"
+		if dryRun {
+			label = "Would Remove"
+		}
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   label,
+			Value:  truncateFieldValue(strings.Join(lines, "\n")),
+			Inline: false,
+		})
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       title,
+		Color:       theme.Warning(),
+		Description: desc,
+		Fields:      fields,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "unverified-purge",
+		},
+	}
+
+	if _, err := s.session.ChannelMessageSendEmbed(channelID, embed); err != nil {
+		log.ErrorLoggerRaw().Error("Failed to send unverified purge moderation log", "guildID", guildID, "channelID", channelID, "err", err)
+	}
+}
+
+func (s *UnverifiedPurgeService) logPreviewEntries(guildID string, entries []string, candidates int) {
+	if len(entries) == 0 {
+		if candidates > 0 {
+			log.ApplicationLogger().Info("unverified purge preview: no eligible members after verification", "guildID", guildID, "candidates", candidates)
+		}
+		return
+	}
+
+	maxList := 50
+	if len(entries) < maxList {
+		maxList = len(entries)
+	}
+	lines := strings.Join(entries[:maxList], ", ")
+	if len(entries) > maxList {
+		lines += fmt.Sprintf(", and %d more", len(entries)-maxList)
+	}
+	log.ApplicationLogger().Info("unverified purge preview (disabled): eligible members without verified role", "guildID", guildID, "count", len(entries), "members", lines)
 }
 
 func (s *UnverifiedPurgeService) resolveInitialDelay() time.Duration {
@@ -314,4 +435,15 @@ func truncateAuditReason(reason string) string {
 		return reason
 	}
 	return reason[:maxLen]
+}
+
+func truncateFieldValue(value string) string {
+	const maxLen = 1024
+	if len(value) <= maxLen {
+		return value
+	}
+	if maxLen <= 3 {
+		return value[:maxLen]
+	}
+	return value[:maxLen-3] + "..."
 }
