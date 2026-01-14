@@ -129,6 +129,7 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 				{Name: "welcome_backlog_channel", Value: "welcome_backlog_channel"},
 				{Name: "message_log_channel", Value: "message_log_channel"},
 				{Name: "automod_channel", Value: "automod_channel"},
+				{Name: "moderation_log_channel", Value: "moderation_log_channel"},
 			},
 		},
 		{
@@ -168,6 +169,8 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 			guildConfig.MessageLogChannelID = value
 		case "automod_channel":
 			guildConfig.AutomodLogChannelID = value
+		case "moderation_log_channel":
+			guildConfig.ModerationLogChannelID = value
 		default:
 			return core.NewValidationError("key", "Invalid configuration key")
 		}
@@ -215,6 +218,7 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	b.WriteString(fmt.Sprintf("Welcome Backlog Channel: %s\n", emptyToDash(ctx.GuildConfig.WelcomeBacklogChannelID)))
 	b.WriteString(fmt.Sprintf("Message Log Channel: %s\n", emptyToDash(ctx.GuildConfig.MessageLogChannelID)))
 	b.WriteString(fmt.Sprintf("Automod Channel: %s\n", emptyToDash(ctx.GuildConfig.AutomodLogChannelID)))
+	b.WriteString(fmt.Sprintf("Moderation Log Channel: %s\n", emptyToDash(ctx.GuildConfig.ModerationLogChannelID)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.AllowedRoles)))
 
 	builder := core.NewResponseBuilder(ctx.Session).
@@ -252,6 +256,7 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`welcome_backlog_channel` - Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)",
 		"`message_log_channel` - Channel for edited/deleted message logs",
 		"`automod_channel` - Channel for automod logs",
+		"`moderation_log_channel` - Dedicated channel for moderation logs",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
 	}

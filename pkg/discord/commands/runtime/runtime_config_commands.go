@@ -178,6 +178,7 @@ const (
 	runtimeKeyDisableEntryExitLogs runtimeKey = "disable_entry_exit_logs"
 	runtimeKeyDisableReactionLogs  runtimeKey = "disable_reaction_logs"
 	runtimeKeyDisableUserLogs      runtimeKey = "disable_user_logs"
+	runtimeKeyModerationLogMode    runtimeKey = "moderation_log_mode"
 
 	// PRESENCE WATCH
 	runtimeKeyPresenceWatchUserID runtimeKey = "presence_watch_user_id"
@@ -257,6 +258,15 @@ func allSpecs() []spec {
 			DefaultHint: "false",
 			ShortHelp:   "Disable user log handlers (avatars/roles)",
 			RestartHint: restartRecommended,
+		},
+		{
+			Key:         runtimeKeyModerationLogMode,
+			Group:       "MODERATION",
+			Type:        vtString,
+			DefaultHint: "alice_only",
+			ShortHelp:   "Moderation log mode: off | alice_only | all",
+			RestartHint: restartRecommended,
+			MaxInputLen: 16,
 		},
 		{
 			Key:         runtimeKeyPresenceWatchUserID,
@@ -559,6 +569,8 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 		return fmtBool(rc.DisableReactionLogs), true
 	case runtimeKeyDisableUserLogs:
 		return fmtBool(rc.DisableUserLogs), true
+	case runtimeKeyModerationLogMode:
+		return rc.ModerationLogMode, true
 
 	case runtimeKeyPresenceWatchUserID:
 		return rc.PresenceWatchUserID, true
@@ -612,6 +624,9 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 		return rc, true
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = false
+		return rc, true
+	case runtimeKeyModerationLogMode:
+		rc.ModerationLogMode = ""
 		return rc, true
 
 	case runtimeKeyPresenceWatchUserID:
@@ -712,6 +727,19 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		case runtimeKeyBotRolePermMirrorActorRoleID:
 			rc.BotRolePermMirrorActorRoleID = raw
 			return rc, nil
+		case runtimeKeyModerationLogMode:
+			if raw == "" {
+				rc.ModerationLogMode = ""
+				return rc, nil
+			}
+			v := strings.ToLower(strings.TrimSpace(raw))
+			switch v {
+			case "off", "alice_only", "all":
+				rc.ModerationLogMode = v
+				return rc, nil
+			default:
+				return rc, fmt.Errorf("invalid moderation_log_mode (use off | alice_only | all)")
+			}
 		default:
 			return rc, fmt.Errorf("unsupported string key")
 		}
@@ -837,7 +865,7 @@ func groupFieldsForMain(rc files.RuntimeConfig, st panelState) []*discordgo.Mess
 		grouped[sp.Group] = append(grouped[sp.Group], line)
 	}
 
-	groupOrder := []string{"THEME", "SERVICES (LOGGING)", "MESSAGE CACHE", "BACKFILL", "SAFETY"}
+	groupOrder := []string{"THEME", "SERVICES (LOGGING)", "MODERATION", "MESSAGE CACHE", "BACKFILL", "SAFETY"}
 	fields := []*discordgo.MessageEmbedField{}
 
 	if st.Group != "" && st.Group != "ALL" {

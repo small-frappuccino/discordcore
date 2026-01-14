@@ -1354,12 +1354,14 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	// Avatar change logging (already in place)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 
-	// Role update logging (via Audit Log)
-	channelID := gcfg.UserLogChannelID
-	if channelID == "" {
-		channelID = gcfg.CommandChannelID
+	botID := ""
+	if s != nil && s.State != nil && s.State.User != nil {
+		botID = s.State.User.ID
 	}
-	if channelID == "" {
+
+	// Role update logging (via Audit Log)
+	channelID, ok := ResolveModerationLogChannel(ms.session, ms.configManager, m.GuildID)
+	if !ok {
 		return
 	}
 
@@ -1563,6 +1565,14 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				continue
 			}
 
+			if !ShouldLogModerationEvent(ms.configManager, m.GuildID, actorID, botID, ModerationSourceAuditLog) {
+				if ms.store != nil && len(curRoles) > 0 {
+					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
+					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+				}
+				return true
+			}
+
 			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>, `%s`)", actorID, m.User.Username, m.User.ID, m.User.ID)
 			embed := &discordgo.MessageEmbed{
 				Title:       "Roles updated",
@@ -1623,6 +1633,14 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			_, addedIDs, removedIDs = computeVerifiedDiff(m.GuildID, m.User.ID, curRoles)
 
 			if len(addedIDs) > 0 || len(removedIDs) > 0 {
+				if !ShouldLogModerationEvent(ms.configManager, m.GuildID, "", botID, ModerationSourceUnknown) {
+					if ms.store != nil {
+						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
+					}
+					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+					return
+				}
+
 				buildListIDs := func(list []string) string {
 					if len(list) == 0 {
 						return "None"

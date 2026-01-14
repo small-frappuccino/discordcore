@@ -3,6 +3,7 @@ package files
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ type RuntimeConfig struct {
 	DisableEntryExitLogs bool `json:"disable_entry_exit_logs,omitempty"`
 	DisableReactionLogs  bool `json:"disable_reaction_logs,omitempty"`
 	DisableUserLogs      bool `json:"disable_user_logs,omitempty"`
+	// MODERATION LOGS
+	ModerationLogMode string `json:"moderation_log_mode,omitempty"` // off | alice_only | all (default: alice_only)
 
 	// PRESENCE WATCH
 	PresenceWatchUserID string `json:"presence_watch_user_id,omitempty"`
@@ -60,6 +63,7 @@ type GuildConfig struct {
 	WelcomeBacklogChannelID string    `json:"welcome_backlog_channel_id"`  // Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)
 	MessageLogChannelID     string    `json:"message_log_channel_id"`      // For edited/deleted message logs
 	AutomodLogChannelID     string    `json:"automod_log_channel_id"`
+	ModerationLogChannelID  string    `json:"moderation_log_channel_id"` // Dedicated moderation log channel (exclusive)
 	AllowedRoles            []string  `json:"allowed_roles"`
 	Rulesets                []Ruleset `json:"rulesets,omitempty"`
 	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
@@ -92,6 +96,15 @@ type BotConfig struct {
 	// NOTE: These are NOT environment variables. They are persisted in settings.json.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
+
+// ModerationLogMode describes which moderation events should be recorded.
+type ModerationLogMode string
+
+const (
+	ModerationLogOff       ModerationLogMode = "off"
+	ModerationLogAliceOnly ModerationLogMode = "alice_only"
+	ModerationLogAll       ModerationLogMode = "all"
+)
 
 // CustomRPCConfig holds profiles for local Discord Rich Presence.
 type CustomRPCConfig struct {
@@ -195,6 +208,9 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	if guildRC.DisableUserLogs {
 		resolved.DisableUserLogs = true
 	}
+	if guildRC.ModerationLogMode != "" {
+		resolved.ModerationLogMode = guildRC.ModerationLogMode
+	}
 	if guildRC.PresenceWatchUserID != "" {
 		resolved.PresenceWatchUserID = guildRC.PresenceWatchUserID
 	}
@@ -231,6 +247,20 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 
 	return resolved
+}
+
+// NormalizeModerationLogMode returns a safe, defaulted moderation log mode.
+func NormalizeModerationLogMode(raw string) ModerationLogMode {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(ModerationLogOff):
+		return ModerationLogOff
+	case string(ModerationLogAll):
+		return ModerationLogAll
+	case string(ModerationLogAliceOnly):
+		return ModerationLogAliceOnly
+	default:
+		return ModerationLogAliceOnly
+	}
 }
 
 // ConfigManager handles bot configuration management.

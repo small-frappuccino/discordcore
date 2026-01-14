@@ -5,9 +5,13 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 const (
@@ -93,6 +97,13 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 	if truncated {
 		message += " (reason truncated to 512 characters)"
 	}
+	sendModerationLog(ctx, moderationLogPayload{
+		Action:      "ban",
+		TargetID:    userID,
+		TargetLabel: userID,
+		Reason:      reason,
+		RequestedBy: ctx.UserID,
+	})
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
 }
 
@@ -163,6 +174,14 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 	}
 
 	message := buildMassBanMessage(len(memberIDs), bannedCount, reason, truncated, invalidTokens, skipped, failed)
+	sendModerationLog(ctx, moderationLogPayload{
+		Action:      "massban",
+		TargetID:    "",
+		TargetLabel: fmt.Sprintf("%d users", bannedCount),
+		Reason:      reason,
+		RequestedBy: ctx.UserID,
+		Extra:       buildMassBanLogDetails(len(memberIDs), bannedCount, invalidTokens, skipped, failed),
+	})
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
 }
 
@@ -447,4 +466,94 @@ func highestRolePosition(member *discordgo.Member, rolesByID map[string]*discord
 		}
 	}
 	return pos
+}
+
+type moderationLogPayload struct {
+	Action      string
+	TargetID    string
+	TargetLabel string
+	Reason      string
+	RequestedBy string
+	Extra       string
+}
+
+func buildMassBanLogDetails(total, banned int, invalid, skipped, failed []string) string {
+	parts := []string{fmt.Sprintf("Total: %d", total), fmt.Sprintf("Banned: %d", banned)}
+	if len(invalid) > 0 {
+		parts = append(parts, fmt.Sprintf("Invalid: %d", len(invalid)))
+	}
+	if len(skipped) > 0 {
+		parts = append(parts, fmt.Sprintf("Skipped: %d", len(skipped)))
+	}
+	if len(failed) > 0 {
+		parts = append(parts, fmt.Sprintf("Failed: %d", len(failed)))
+	}
+	return strings.Join(parts, " | ")
+}
+
+func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
+	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
+		return
+	}
+	botID := ""
+	if ctx.Session.State != nil && ctx.Session.State.User != nil {
+		botID = ctx.Session.State.User.ID
+	}
+	if !logging.ShouldLogModerationEvent(ctx.Config, ctx.GuildID, botID, botID, logging.ModerationSourceCommand) {
+		return
+	}
+	channelID, ok := logging.ResolveModerationLogChannel(ctx.Session, ctx.Config, ctx.GuildID)
+	if !ok {
+		return
+	}
+
+	action := strings.TrimSpace(payload.Action)
+	targetLabel := strings.TrimSpace(payload.TargetLabel)
+	if targetLabel == "" {
+		targetLabel = payload.TargetID
+	}
+	if targetLabel == "" {
+		targetLabel = "unknown"
+	}
+	reason := strings.TrimSpace(payload.Reason)
+	if reason == "" {
+		reason = "No reason provided"
+	}
+
+	fields := []*discordgo.MessageEmbedField{
+		{Name: "Action", Value: action, Inline: true},
+		{Name: "Target", Value: targetLabel, Inline: true},
+		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
+	}
+	if payload.RequestedBy != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Requested by",
+			Value:  "<@" + payload.RequestedBy + "> (`" + payload.RequestedBy + "`)",
+			Inline: true,
+		})
+	}
+	fields = append(fields, &discordgo.MessageEmbedField{
+		Name:   "Reason",
+		Value:  reason,
+		Inline: false,
+	})
+	if payload.Extra != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Details",
+			Value:  payload.Extra,
+			Inline: false,
+		})
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "Moderation action",
+		Color:       theme.Warning(),
+		Description: fmt.Sprintf("Moderation action executed by <@%s>.", botID),
+		Fields:      fields,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
+		log.ErrorLoggerRaw().Error("Failed to send moderation log", "guildID", ctx.GuildID, "channelID", channelID, "action", action, "err", err)
+	}
 }

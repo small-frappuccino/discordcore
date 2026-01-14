@@ -71,17 +71,16 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		}
 	}
 
-	// Find guild config for logging
-	guildCfg := as.configManager.GuildConfig(e.GuildID)
-	if guildCfg == nil {
+	botID := ""
+	if s != nil && s.State != nil && s.State.User != nil {
+		botID = s.State.User.ID
+	}
+	if !ShouldLogModerationEvent(as.configManager, e.GuildID, "", botID, ModerationSourceGateway) {
 		return
 	}
 
-	logChannelID := guildCfg.AutomodLogChannelID
-	if logChannelID == "" {
-		logChannelID = guildCfg.CommandChannelID
-	}
-	if logChannelID == "" {
+	logChannelID, ok := ResolveModerationLogChannel(s, as.configManager, e.GuildID)
+	if !ok {
 		return
 	}
 
