@@ -136,9 +136,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	}
 
 	// Prefer dedicated entry/leave channel; fallback to general user log channel
-	logChannelID := guildConfig.UserEntryLeaveChannelID
+	logChannelID := guildConfig.Channels.EntryLeaveLog
 	if logChannelID == "" {
-		logChannelID = guildConfig.UserLogChannelID
+		logChannelID = guildConfig.Channels.UserActivityLog
 	}
 	if logChannelID == "" {
 		slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
@@ -195,11 +195,12 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	}
 
 	// Composite automatic role assignment (per-guild config)
-	if guildConfig.AutoRoleAssignmentEnabled {
-		targetRoleID := guildConfig.AutoRoleTargetRoleID
-		roleA := guildConfig.AutoRolePrereqRoleA
-		roleB := guildConfig.AutoRolePrereqRoleB
-		if targetRoleID != "" && roleA != "" && roleB != "" {
+	if guildConfig.Roles.AutoAssignment.Enabled {
+		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
+		required := guildConfig.Roles.AutoAssignment.RequiredRoles
+		if targetRoleID != "" && len(required) >= 2 {
+			roleA := required[0]
+			roleB := required[1]
 			if member != nil {
 				roles := member.Roles
 				if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
@@ -255,9 +256,9 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	}
 
 	// Prefer dedicated entry/leave channel; fallback to general user log channel
-	logChannelID := guildConfig.UserEntryLeaveChannelID
+	logChannelID := guildConfig.Channels.EntryLeaveLog
 	if logChannelID == "" {
-		logChannelID = guildConfig.UserLogChannelID
+		logChannelID = guildConfig.Channels.UserActivityLog
 	}
 	if logChannelID == "" {
 		slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
@@ -325,16 +326,17 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 	defer done()
 
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
-	if guildConfig == nil || !guildConfig.AutoRoleAssignmentEnabled {
+	if guildConfig == nil || !guildConfig.Roles.AutoAssignment.Enabled {
 		return
 	}
 
-	targetRoleID := guildConfig.AutoRoleTargetRoleID
-	roleA := guildConfig.AutoRolePrereqRoleA
-	roleB := guildConfig.AutoRolePrereqRoleB
-	if targetRoleID == "" || roleA == "" || roleB == "" {
+	targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
+	required := guildConfig.Roles.AutoAssignment.RequiredRoles
+	if targetRoleID == "" || len(required) < 2 {
 		return
 	}
+	roleA := required[0]
+	roleB := required[1]
 	hasTarget := hasRoleID(m.Roles, targetRoleID)
 	hasA := hasRoleID(m.Roles, roleA)
 	hasB := hasRoleID(m.Roles, roleB)

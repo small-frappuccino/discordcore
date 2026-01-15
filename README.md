@@ -88,14 +88,20 @@ A minimal example:
   "guilds": [
     {
       "guild_id": "123456789",
-      "command_channel_id": "987654321",
-      "user_log_channel_id": "111111111",
-      "user_entry_leave_channel_id": "444444444",
-      "welcome_backlog_channel_id": "555555555",
-      "verification_channel_id": "666666666",
-      "message_log_channel_id": "999999999",
-      "automod_log_channel_id": "222222222",
-      "allowed_roles": ["333333333"],
+      "channels": {
+        "commands": "987654321",
+        "user_activity_log": "111111111",
+        "entry_leave_log": "444444444",
+        "welcome_backlog": "555555555",
+        "verification_chat": "666666666",
+        "message_audit_log": "999999999",
+        "automod_log": "222222222",
+        "moderation_log": "333333334"
+      },
+      "roles": {
+        "allowed": ["333333333"],
+        "verification_role": "333333335"
+      },
       "runtime_config": {
         "disable_message_logs": false
       }
@@ -139,8 +145,8 @@ Backfill runs automatically on startup when configured:
 Channels are resolved in this order:
 
 - `runtime_config.backfill_channel_id` (global)
-- `welcome_backlog_channel_id`
-- `user_entry_leave_channel_id`
+- `channels.welcome_backlog`
+- `channels.entry_leave_log`
 
 Parsed sources:
 

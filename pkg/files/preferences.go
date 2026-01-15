@@ -169,12 +169,15 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 
 		entryLeaveID := FindEntryLeaveChannel(session, g.ID)
 		guildCfg := GuildConfig{
-			GuildID:                 g.ID,
-			CommandChannelID:        channelID,
-			UserLogChannelID:        channelID,
-			UserEntryLeaveChannelID: entryLeaveID,
-			WelcomeBacklogChannelID: "",
-			AllowedRoles:            roles,
+			GuildID: g.ID,
+			Channels: ChannelsConfig{
+				Commands:        channelID,
+				UserActivityLog: channelID,
+				EntryLeaveLog:   entryLeaveID,
+			},
+			Roles: RolesConfig{
+				Allowed: roles,
+			},
 		}
 		mgr.mu.Lock()
 		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
@@ -222,12 +225,15 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	}
 
 	guildCfg := GuildConfig{
-		GuildID:                 guildID,
-		CommandChannelID:        channelID,
-		UserLogChannelID:        channelID,
-		UserEntryLeaveChannelID: entryLeaveID,
-		WelcomeBacklogChannelID: "",
-		AllowedRoles:            roles,
+		GuildID: guildID,
+		Channels: ChannelsConfig{
+			Commands:        channelID,
+			UserActivityLog: channelID,
+			EntryLeaveLog:   entryLeaveID,
+		},
+		Roles: RolesConfig{
+			Allowed: roles,
+		},
 	}
 	mgr.mu.Lock()
 	mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)

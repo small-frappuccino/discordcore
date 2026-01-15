@@ -381,9 +381,11 @@ func (ms *MonitoringService) Start() error {
 		if ms.store != nil && ms.session != nil {
 			for _, gcfg := range cfg.Guilds {
 				// Skip guilds without auto-role assignment enabled or missing config
-				if !gcfg.AutoRoleAssignmentEnabled || gcfg.AutoRoleTargetRoleID == "" || gcfg.AutoRolePrereqRoleA == "" || gcfg.AutoRolePrereqRoleB == "" {
+				if !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
 					continue
 				}
+				roleA := gcfg.Roles.AutoAssignment.RequiredRoles[0]
+				roleB := gcfg.Roles.AutoAssignment.RequiredRoles[1]
 				memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
 				if err != nil {
 					log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
@@ -392,26 +394,26 @@ func (ms *MonitoringService) Start() error {
 				for userID, roles := range memberRoles {
 					hasA, hasB, hasTarget := false, false, false
 					for _, r := range roles {
-						if r == gcfg.AutoRolePrereqRoleA {
+						if r == roleA {
 							hasA = true
-						} else if r == gcfg.AutoRolePrereqRoleB {
+						} else if r == roleB {
 							hasB = true
-						} else if r == gcfg.AutoRoleTargetRoleID {
+						} else if r == gcfg.Roles.AutoAssignment.TargetRoleID {
 							hasTarget = true
 						}
 					}
 					// Grant target role if both prerequisites are present and target is missing
 					if hasA && hasB && !hasTarget {
-						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, gcfg.AutoRoleTargetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.AutoRoleTargetRoleID, "err", err)
+						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, gcfg.Roles.AutoAssignment.TargetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.Roles.AutoAssignment.TargetRoleID, "err", err)
 						} else {
 							reconciledAdds++
 						}
 					}
 					// Remove target role if prerequisite A is missing
 					if hasTarget && !hasA {
-						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, gcfg.AutoRoleTargetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.AutoRoleTargetRoleID, "err", err)
+						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, gcfg.Roles.AutoAssignment.TargetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.Roles.AutoAssignment.TargetRoleID, "err", err)
 						} else {
 							reconciledRemoves++
 						}
@@ -725,9 +727,9 @@ func (ms *MonitoringService) Start() error {
 
 		// Guild targets
 		for _, g := range cfg.Guilds {
-			cid := strings.TrimSpace(g.WelcomeBacklogChannelID)
+			cid := strings.TrimSpace(g.Channels.WelcomeBacklog)
 			if cid == "" {
-				cid = strings.TrimSpace(g.UserEntryLeaveChannelID)
+				cid = strings.TrimSpace(g.Channels.EntryLeaveLog)
 			}
 			if cid != "" {
 				targets = append(targets, backfillTarget{
@@ -1861,9 +1863,9 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 
 	guildConfig := aw.configManager.GuildConfig(guildID)
 	if guildConfig != nil {
-		channelID := guildConfig.UserLogChannelID
+		channelID := guildConfig.Channels.UserActivityLog
 		if channelID == "" {
-			log.ErrorLoggerRaw().Error("UserLogChannelID not configured; notification not sent", "guildID", guildID)
+			log.ErrorLoggerRaw().Error("User activity log channel not configured; notification not sent", "guildID", guildID)
 		} else {
 			if err := aw.notifier.SendAvatarChangeNotification(channelID, change); err != nil {
 				log.ErrorLoggerRaw().Error("Error sending notification", "channelID", channelID, "userID", userID, "guildID", guildID, "err", err)

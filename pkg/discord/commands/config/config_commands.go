@@ -123,14 +123,14 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 			Description: "Configuration key",
 			Required:    true,
 			Choices: []*discordgo.ApplicationCommandOptionChoice{
-				{Name: "command_channel", Value: "command_channel"},
-				{Name: "log_channel", Value: "log_channel"},
-				{Name: "entry_leave_channel", Value: "entry_leave_channel"},
-				{Name: "welcome_backlog_channel", Value: "welcome_backlog_channel"},
-				{Name: "verification_channel", Value: "verification_channel"},
-				{Name: "message_log_channel", Value: "message_log_channel"},
-				{Name: "automod_channel", Value: "automod_channel"},
-				{Name: "moderation_log_channel", Value: "moderation_log_channel"},
+				{Name: "channels.commands", Value: "channels.commands"},
+				{Name: "channels.user_activity_log", Value: "channels.user_activity_log"},
+				{Name: "channels.entry_leave_log", Value: "channels.entry_leave_log"},
+				{Name: "channels.welcome_backlog", Value: "channels.welcome_backlog"},
+				{Name: "channels.verification_chat", Value: "channels.verification_chat"},
+				{Name: "channels.message_audit_log", Value: "channels.message_audit_log"},
+				{Name: "channels.automod_log", Value: "channels.automod_log"},
+				{Name: "channels.moderation_log", Value: "channels.moderation_log"},
 			},
 		},
 		{
@@ -158,22 +158,22 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	// Safely mutate guild config
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		switch key {
-		case "command_channel":
-			guildConfig.CommandChannelID = value
-		case "log_channel":
-			guildConfig.UserLogChannelID = value // also used by user join/leave/avatar logs
-		case "entry_leave_channel":
-			guildConfig.UserEntryLeaveChannelID = value
-		case "welcome_backlog_channel":
-			guildConfig.WelcomeBacklogChannelID = value
-		case "verification_channel":
-			guildConfig.VerificationChannelID = value
-		case "message_log_channel":
-			guildConfig.MessageLogChannelID = value
-		case "automod_channel":
-			guildConfig.AutomodLogChannelID = value
-		case "moderation_log_channel":
-			guildConfig.ModerationLogChannelID = value
+		case "channels.commands":
+			guildConfig.Channels.Commands = value
+		case "channels.user_activity_log":
+			guildConfig.Channels.UserActivityLog = value // also used by user join/leave/avatar logs
+		case "channels.entry_leave_log":
+			guildConfig.Channels.EntryLeaveLog = value
+		case "channels.welcome_backlog":
+			guildConfig.Channels.WelcomeBacklog = value
+		case "channels.verification_chat":
+			guildConfig.Channels.VerificationChat = value
+		case "channels.message_audit_log":
+			guildConfig.Channels.MessageAuditLog = value
+		case "channels.automod_log":
+			guildConfig.Channels.AutomodLog = value
+		case "channels.moderation_log":
+			guildConfig.Channels.ModerationLog = value
 		default:
 			return core.NewValidationError("key", "Invalid configuration key")
 		}
@@ -215,15 +215,15 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 
 	var b strings.Builder
 	b.WriteString("**Server Configuration:**\n")
-	b.WriteString(fmt.Sprintf("Command Channel: %s\n", emptyToDash(ctx.GuildConfig.CommandChannelID)))
-	b.WriteString(fmt.Sprintf("Log Channel: %s\n", emptyToDash(ctx.GuildConfig.UserLogChannelID)))
-	b.WriteString(fmt.Sprintf("Entry/Leave Channel: %s\n", emptyToDash(ctx.GuildConfig.UserEntryLeaveChannelID)))
-	b.WriteString(fmt.Sprintf("Welcome Backlog Channel: %s\n", emptyToDash(ctx.GuildConfig.WelcomeBacklogChannelID)))
-	b.WriteString(fmt.Sprintf("Verification Channel: %s\n", emptyToDash(ctx.GuildConfig.VerificationChannelID)))
-	b.WriteString(fmt.Sprintf("Message Log Channel: %s\n", emptyToDash(ctx.GuildConfig.MessageLogChannelID)))
-	b.WriteString(fmt.Sprintf("Automod Channel: %s\n", emptyToDash(ctx.GuildConfig.AutomodLogChannelID)))
-	b.WriteString(fmt.Sprintf("Moderation Log Channel: %s\n", emptyToDash(ctx.GuildConfig.ModerationLogChannelID)))
-	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.AllowedRoles)))
+	b.WriteString(fmt.Sprintf("Command Channel: %s\n", emptyToDash(ctx.GuildConfig.Channels.Commands)))
+	b.WriteString(fmt.Sprintf("User Activity Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.UserActivityLog)))
+	b.WriteString(fmt.Sprintf("Entry/Leave Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.EntryLeaveLog)))
+	b.WriteString(fmt.Sprintf("Welcome Backlog: %s\n", emptyToDash(ctx.GuildConfig.Channels.WelcomeBacklog)))
+	b.WriteString(fmt.Sprintf("Verification Chat: %s\n", emptyToDash(ctx.GuildConfig.Channels.VerificationChat)))
+	b.WriteString(fmt.Sprintf("Message Audit Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.MessageAuditLog)))
+	b.WriteString(fmt.Sprintf("Automod Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.AutomodLog)))
+	b.WriteString(fmt.Sprintf("Moderation Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.ModerationLog)))
+	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
 	builder := core.NewResponseBuilder(ctx.Session).
 		WithEmbed().
@@ -254,14 +254,14 @@ func (c *ConfigListSubCommand) RequiresPermissions() bool { return true }
 func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 	options := []string{
 		"**Available Configuration Options:**",
-		"`command_channel` - Channel for bot commands",
-		"`log_channel` - Channel for user logs (join/leave/avatar)",
-		"`entry_leave_channel` - Channel for entry/leave logs (moderators)",
-		"`welcome_backlog_channel` - Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)",
-		"`verification_channel` - Dedicated channel for verification chat cleanup (e.g., Mimu verify)",
-		"`message_log_channel` - Channel for edited/deleted message logs",
-		"`automod_channel` - Channel for automod logs",
-		"`moderation_log_channel` - Dedicated channel for moderation logs",
+		"`channels.commands` - Channel for bot commands",
+		"`channels.user_activity_log` - Channel for user logs (join/leave/avatar)",
+		"`channels.entry_leave_log` - Channel for entry/leave logs (moderators)",
+		"`channels.welcome_backlog` - Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)",
+		"`channels.verification_chat` - Dedicated channel for verification chat cleanup (e.g., Mimu verify)",
+		"`channels.message_audit_log` - Channel for edited/deleted message logs",
+		"`channels.automod_log` - Channel for automod logs",
+		"`channels.moderation_log` - Dedicated channel for moderation logs",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
 	}

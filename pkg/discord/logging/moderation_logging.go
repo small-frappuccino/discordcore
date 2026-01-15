@@ -52,7 +52,7 @@ func ResolveModerationLogChannel(session *discordgo.Session, configManager *file
 	if gcfg == nil {
 		return "", false
 	}
-	channelID := strings.TrimSpace(gcfg.ModerationLogChannelID)
+	channelID := strings.TrimSpace(gcfg.Channels.ModerationLog)
 	if channelID == "" {
 		return "", false
 	}
@@ -79,19 +79,19 @@ func isSharedModerationChannel(channelID string, gcfg *files.GuildConfig) bool {
 	if gcfg == nil || channelID == "" {
 		return false
 	}
-	if channelID == gcfg.CommandChannelID {
+	if channelID == gcfg.Channels.Commands {
 		return true
 	}
-	if channelID == gcfg.UserLogChannelID {
+	if channelID == gcfg.Channels.UserActivityLog {
 		return true
 	}
-	if channelID == gcfg.UserEntryLeaveChannelID {
+	if channelID == gcfg.Channels.EntryLeaveLog {
 		return true
 	}
-	if channelID == gcfg.MessageLogChannelID {
+	if channelID == gcfg.Channels.MessageAuditLog {
 		return true
 	}
-	if channelID == gcfg.AutomodLogChannelID {
+	if channelID == gcfg.Channels.AutomodLog {
 		return true
 	}
 	return false

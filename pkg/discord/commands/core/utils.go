@@ -225,7 +225,7 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	ownerID, ok := pc.getOwnerID(guildID)
 	isOwner := ok && ownerID == userID
 
-	if guildConfig == nil || len(guildConfig.AllowedRoles) == 0 {
+	if guildConfig == nil || len(guildConfig.Roles.Allowed) == 0 {
 		return isOwner
 	}
 	if isOwner {
@@ -238,7 +238,7 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	}
 
 	for _, userRole := range member.Roles {
-		if slices.Contains(guildConfig.AllowedRoles, userRole) {
+		if slices.Contains(guildConfig.Roles.Allowed, userRole) {
 			return true
 		}
 	}
@@ -441,11 +441,11 @@ func (ConfigurationUtils) EnsureGuildConfig(configManager *files.ConfigManager, 
 	config := configManager.GuildConfig(guildID)
 	if config == nil {
 		config = &files.GuildConfig{
-			GuildID:      guildID,
-			AllowedRoles: []string{},
-			Rulesets:     []files.Ruleset{},
-			LooseLists:   []files.Rule{},
-			Blocklist:    []string{},
+			GuildID:    guildID,
+			Roles:      files.RolesConfig{Allowed: []string{}},
+			Rulesets:   []files.Ruleset{},
+			LooseLists: []files.Rule{},
+			Blocklist:  []string{},
 		}
 	}
 	return config

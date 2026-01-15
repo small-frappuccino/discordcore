@@ -54,21 +54,52 @@ type RuntimeConfig struct {
 
 // ## Config Types
 
+// ChannelsConfig groups channel IDs per guild.
+type ChannelsConfig struct {
+	Commands         string `json:"commands,omitempty"`
+	UserActivityLog  string `json:"user_activity_log,omitempty"` // For entry/exit logs and avatars
+	EntryLeaveLog    string `json:"entry_leave_log,omitempty"`   // Dedicated channel for user entry/leave (moderation/logs)
+	WelcomeBacklog   string `json:"welcome_backlog,omitempty"`   // Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)
+	VerificationChat string `json:"verification_chat,omitempty"` // Dedicated channel for verification chat cleanup (e.g., Mimu verify)
+	MessageAuditLog  string `json:"message_audit_log,omitempty"` // For edited/deleted message logs
+	AutomodLog       string `json:"automod_log,omitempty"`
+	ModerationLog    string `json:"moderation_log,omitempty"` // Dedicated moderation log channel (exclusive)
+}
+
+// AutoAssignmentConfig defines automatic role assignment rules.
+type AutoAssignmentConfig struct {
+	Enabled       bool     `json:"enabled,omitempty"`
+	TargetRoleID  string   `json:"target_role,omitempty"`
+	RequiredRoles []string `json:"required_roles,omitempty"`
+}
+
+// RolesConfig groups role-related settings per guild.
+type RolesConfig struct {
+	Allowed          []string             `json:"allowed,omitempty"`
+	AutoAssignment   AutoAssignmentConfig `json:"auto_assignment,omitempty"`
+	VerificationRole string               `json:"verification_role,omitempty"`
+}
+
+// UnverifiedPurgeConfig controls purging unverified members per guild.
+type UnverifiedPurgeConfig struct {
+	Enabled          bool     `json:"enabled,omitempty"`
+	GraceDays        int      `json:"grace_days,omitempty"`         // default: 7
+	ScanIntervalMins int      `json:"scan_interval_mins,omitempty"` // default: 120
+	InitialDelaySecs int      `json:"initial_delay_secs,omitempty"` // default: 120
+	KicksPerSecond   int      `json:"kps,omitempty"`                // default: 4
+	MaxKicksPerRun   int      `json:"max_kicks_per_run,omitempty"`  // default: 200
+	ExemptRoleIDs    []string `json:"exempt_role_ids,omitempty"`    // optional
+	DryRun           bool     `json:"dry_run,omitempty"`            // log only, do not kick
+}
+
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID                 string    `json:"guild_id"`
-	CommandChannelID        string    `json:"command_channel_id"`
-	UserLogChannelID        string    `json:"user_log_channel_id"`         // For entry/exit logs and avatars
-	UserEntryLeaveChannelID string    `json:"user_entry_leave_channel_id"` // Dedicated channel for user entry/leave (moderation/logs)
-	WelcomeBacklogChannelID string    `json:"welcome_backlog_channel_id"`  // Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)
-	VerificationChannelID   string    `json:"verification_channel_id"`     // Dedicated channel for verification chat cleanup (e.g., Mimu verify)
-	MessageLogChannelID     string    `json:"message_log_channel_id"`      // For edited/deleted message logs
-	AutomodLogChannelID     string    `json:"automod_log_channel_id"`
-	ModerationLogChannelID  string    `json:"moderation_log_channel_id"` // Dedicated moderation log channel (exclusive)
-	AllowedRoles            []string  `json:"allowed_roles"`
-	Rulesets                []Ruleset `json:"rulesets,omitempty"`
-	LooseLists              []Rule    `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
-	Blocklist               []string  `json:"blocklist,omitempty"`
+	GuildID    string         `json:"guild_id"`
+	Channels   ChannelsConfig `json:"channels,omitempty"`
+	Roles      RolesConfig    `json:"roles,omitempty"`
+	Rulesets   []Ruleset      `json:"rulesets,omitempty"`
+	LooseLists []Rule         `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
+	Blocklist  []string       `json:"blocklist,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
 	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")
@@ -76,23 +107,7 @@ type GuildConfig struct {
 	GuildCacheTTL   string `json:"guild_cache_ttl,omitempty"`   // e.g.: "15m", "30m" (default: "15m")
 	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // e.g.: "15m", "30m" (default: "15m")
 
-	// Auto role assignment configuration (per-guild)
-	AutoRoleAssignmentEnabled bool   `json:"auto_role_assignment_enabled,omitempty"`
-	AutoRoleTargetRoleID      string `json:"auto_role_target_role_id,omitempty"`
-	AutoRolePrereqRoleA       string `json:"auto_role_prereq_role_a,omitempty"`
-	AutoRolePrereqRoleB       string `json:"auto_role_prereq_role_b,omitempty"`
-
-	// Non-verified members purge (per-guild): periodically kick members that didn't get the verified role
-	// within a grace period since joining.
-	UnverifiedPurgeEnabled          bool     `json:"unverified_purge_enabled,omitempty"`
-	UnverifiedPurgeVerifiedRoleID   string   `json:"unverified_purge_verified_role_id,omitempty"`
-	UnverifiedPurgeGraceDays        int      `json:"unverified_purge_grace_days,omitempty"`         // default: 7
-	UnverifiedPurgeScanIntervalMins int      `json:"unverified_purge_scan_interval_mins,omitempty"` // default: 120
-	UnverifiedPurgeInitialDelaySecs int      `json:"unverified_purge_initial_delay_secs,omitempty"` // default: 120
-	UnverifiedPurgeKicksPerSecond   int      `json:"unverified_purge_kicks_per_second,omitempty"`   // default: 4
-	UnverifiedPurgeMaxKicksPerRun   int      `json:"unverified_purge_max_kicks_per_run,omitempty"`  // default: 200
-	UnverifiedPurgeExemptRoleIDs    []string `json:"unverified_purge_exempt_role_ids,omitempty"`    // optional
-	UnverifiedPurgeDryRun           bool     `json:"unverified_purge_dry_run,omitempty"`            // log only, do not kick
+	UnverifiedPurge UnverifiedPurgeConfig `json:"unverified_purge,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`

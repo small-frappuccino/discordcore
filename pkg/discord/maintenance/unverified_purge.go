@@ -111,11 +111,11 @@ func (s *UnverifiedPurgeService) runOnce() {
 	now := time.Now().UTC()
 
 	for _, gcfg := range cfg.Guilds {
-		previewOnly := !gcfg.UnverifiedPurgeEnabled
-		if !gcfg.UnverifiedPurgeEnabled && strings.TrimSpace(gcfg.UnverifiedPurgeVerifiedRoleID) == "" {
+		previewOnly := !gcfg.UnverifiedPurge.Enabled
+		if !gcfg.UnverifiedPurge.Enabled && strings.TrimSpace(gcfg.Roles.VerificationRole) == "" {
 			continue
 		}
-		verifiedRoleID := strings.TrimSpace(gcfg.UnverifiedPurgeVerifiedRoleID)
+		verifiedRoleID := strings.TrimSpace(gcfg.Roles.VerificationRole)
 		if verifiedRoleID == "" {
 			log.ApplicationLogger().Warn("Non-Verified Members Purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
 			continue
@@ -126,7 +126,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			botID = s.session.State.User.ID
 		}
 
-		graceDays := resolveInt(gcfg.UnverifiedPurgeGraceDays, 7)
+		graceDays := resolveInt(gcfg.UnverifiedPurge.GraceDays, 7)
 		cutoff := now.Add(-time.Duration(graceDays) * 24 * time.Hour)
 
 		joins, err := s.store.GetAllMemberJoins(gcfg.GuildID)
@@ -140,8 +140,8 @@ func (s *UnverifiedPurgeService) runOnce() {
 			memberRoles = map[string][]string{}
 		}
 
-		exempt := make(map[string]struct{}, len(gcfg.UnverifiedPurgeExemptRoleIDs))
-		for _, rid := range gcfg.UnverifiedPurgeExemptRoleIDs {
+		exempt := make(map[string]struct{}, len(gcfg.UnverifiedPurge.ExemptRoleIDs))
+		for _, rid := range gcfg.UnverifiedPurge.ExemptRoleIDs {
 			rid = strings.TrimSpace(rid)
 			if rid != "" {
 				exempt[rid] = struct{}{}
@@ -163,7 +163,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			return candidates[i].joinedAt.Before(candidates[j].joinedAt)
 		})
 
-		maxKicks := resolveInt(gcfg.UnverifiedPurgeMaxKicksPerRun, 200)
+		maxKicks := resolveInt(gcfg.UnverifiedPurge.MaxKicksPerRun, 200)
 		if maxKicks < 1 {
 			maxKicks = len(candidates)
 		}
@@ -173,7 +173,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 
 		var throttle <-chan time.Time
 		var throttleTicker *time.Ticker
-		kps := gcfg.UnverifiedPurgeKicksPerSecond
+		kps := gcfg.UnverifiedPurge.KicksPerSecond
 		if kps <= 0 {
 			kps = 4
 		}
@@ -222,7 +222,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			}
 
 			checked++
-			if gcfg.UnverifiedPurgeDryRun {
+			if gcfg.UnverifiedPurge.DryRun {
 				log.ApplicationLogger().Info("Non-Verified Members Purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
 				affectedIDs = append(affectedIDs, c.userID)
 				continue
@@ -251,12 +251,12 @@ func (s *UnverifiedPurgeService) runOnce() {
 			throttleTicker.Stop()
 		}
 
-		log.ApplicationLogger().Info("Non-Verified Members Purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurgeDryRun)
+		log.ApplicationLogger().Info("Non-Verified Members Purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurge.DryRun)
 		if previewOnly {
 			s.logPreviewEntries(gcfg.GuildID, previewEntries, len(candidates))
 			continue
 		}
-		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.UnverifiedPurgeDryRun, affectedIDs)
+		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.UnverifiedPurge.DryRun, affectedIDs)
 	}
 }
 
@@ -267,11 +267,11 @@ func (s *UnverifiedPurgeService) resolveScanInterval() time.Duration {
 	}
 	mins := 120
 	for _, g := range cfg.Guilds {
-		if !g.UnverifiedPurgeEnabled {
+		if !g.UnverifiedPurge.Enabled {
 			continue
 		}
-		if g.UnverifiedPurgeScanIntervalMins > 0 && g.UnverifiedPurgeScanIntervalMins < mins {
-			mins = g.UnverifiedPurgeScanIntervalMins
+		if g.UnverifiedPurge.ScanIntervalMins > 0 && g.UnverifiedPurge.ScanIntervalMins < mins {
+			mins = g.UnverifiedPurge.ScanIntervalMins
 		}
 	}
 	if mins < 5 {
@@ -357,11 +357,11 @@ func (s *UnverifiedPurgeService) resolveInitialDelay() time.Duration {
 	}
 	secs := 120
 	for _, g := range cfg.Guilds {
-		if !g.UnverifiedPurgeEnabled {
+		if !g.UnverifiedPurge.Enabled {
 			continue
 		}
-		if g.UnverifiedPurgeInitialDelaySecs > 0 && g.UnverifiedPurgeInitialDelaySecs < secs {
-			secs = g.UnverifiedPurgeInitialDelaySecs
+		if g.UnverifiedPurge.InitialDelaySecs > 0 && g.UnverifiedPurge.InitialDelaySecs < secs {
+			secs = g.UnverifiedPurge.InitialDelaySecs
 		}
 	}
 	if secs < 0 {
@@ -423,4 +423,3 @@ func truncateFieldValue(value string) string {
 	}
 	return value[:maxLen-3] + "..."
 }
-

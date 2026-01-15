@@ -177,7 +177,7 @@ func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 func TestHandleSlashCommandPermissionDenied(t *testing.T) {
 	session, rec := newTestSession(t)
 	config := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
-	_ = config.AddGuildConfig(files.GuildConfig{GuildID: "guild", AllowedRoles: []string{"role"}})
+	_ = config.AddGuildConfig(files.GuildConfig{GuildID: "guild", Roles: files.RolesConfig{Allowed: []string{"role"}}})
 	router := NewCommandRouter(session, config)
 
 	router.RegisterCommand(testCommand{name: "secure", requiresPermissions: true, handler: func(*Context) error {

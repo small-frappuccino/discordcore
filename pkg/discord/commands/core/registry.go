@@ -116,7 +116,7 @@ func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
 	}
 
 	// Check permissions
-	if ctx.GuildConfig != nil && len(ctx.GuildConfig.AllowedRoles) > 0 && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
+	if ctx.GuildConfig != nil && len(ctx.GuildConfig.Roles.Allowed) > 0 && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
 		slog.Warn("User without allowed role tried to use command")
 		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "You do not have permission to use this command")
 		return
@@ -386,7 +386,7 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 		return NewCommandError("This subcommand can only be used in a server", true)
 	}
 
-	if ctx.GuildConfig != nil && len(ctx.GuildConfig.AllowedRoles) > 0 && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
+	if ctx.GuildConfig != nil && len(ctx.GuildConfig.Roles.Allowed) > 0 && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
 		return NewCommandError("You do not have permission to use this subcommand", true)
 	}
 

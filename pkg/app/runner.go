@@ -9,8 +9,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
-	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
@@ -246,10 +246,10 @@ func Run(appName, tokenEnv string) error {
 		preview := false
 		if cfg != nil {
 			for _, g := range cfg.Guilds {
-				if strings.TrimSpace(g.UnverifiedPurgeVerifiedRoleID) == "" {
+				if strings.TrimSpace(g.Roles.VerificationRole) == "" {
 					continue
 				}
-				if g.UnverifiedPurgeEnabled {
+				if g.UnverifiedPurge.Enabled {
 					enabled = true
 				} else {
 					preview = true
@@ -367,4 +367,3 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
 }
-

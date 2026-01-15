@@ -60,15 +60,15 @@ type MessageEventService struct {
 	auditCacheTTL time.Duration
 	auditEntryMax time.Duration
 
-	verifyMu       sync.Mutex
-	verifyPending  map[string]time.Time
+	verifyMu      sync.Mutex
+	verifyPending map[string]time.Time
 }
 
 const (
-	verificationCleanupInterval    = 5 * time.Minute
+	verificationCleanupInterval     = 5 * time.Minute
 	verificationInactivityThreshold = 30 * time.Minute
-	verificationMimuEmbedMessageID = "1375847102344593482"
-	verificationPendingWindow      = 30 * time.Minute
+	verificationMimuEmbedMessageID  = "1375847102344593482"
+	verificationPendingWindow       = 30 * time.Minute
 )
 
 // NewMessageEventService creates a new instance of the message events service
@@ -242,7 +242,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 
-	if strings.TrimSpace(guildConfig.VerificationChannelID) == m.ChannelID {
+	if strings.TrimSpace(guildConfig.Channels.VerificationChat) == m.ChannelID {
 		mes.cleanupPreviousVerificationMessages(guildID, m.ChannelID, m.Author.ID, m.ID)
 		mes.markVerificationPendingIfUnverified(s, guildConfig, m)
 	}
@@ -649,14 +649,14 @@ func (mes *MessageEventService) fallbackMessageLogChannel(g *files.GuildConfig) 
 	if g == nil {
 		return ""
 	}
-	if g.MessageLogChannelID != "" {
-		return g.MessageLogChannelID
+	if g.Channels.MessageAuditLog != "" {
+		return g.Channels.MessageAuditLog
 	}
-	if g.UserLogChannelID != "" {
-		return g.UserLogChannelID
+	if g.Channels.UserActivityLog != "" {
+		return g.Channels.UserActivityLog
 	}
-	if g.CommandChannelID != "" {
-		return g.CommandChannelID
+	if g.Channels.Commands != "" {
+		return g.Channels.Commands
 	}
 	return ""
 }
@@ -716,7 +716,7 @@ func (mes *MessageEventService) cleanupVerificationChannels() {
 	}
 
 	for _, gcfg := range cfg.Guilds {
-		channelID := strings.TrimSpace(gcfg.VerificationChannelID)
+		channelID := strings.TrimSpace(gcfg.Channels.VerificationChat)
 		if channelID == "" {
 			continue
 		}
@@ -840,7 +840,7 @@ func (mes *MessageEventService) markVerificationPendingIfUnverified(s *discordgo
 	if gcfg == nil || m == nil || m.Author == nil || m.Author.Bot {
 		return
 	}
-	verifiedRoleID := strings.TrimSpace(gcfg.UnverifiedPurgeVerifiedRoleID)
+	verifiedRoleID := strings.TrimSpace(gcfg.Roles.VerificationRole)
 	if verifiedRoleID == "" {
 		return
 	}
@@ -878,11 +878,11 @@ func (mes *MessageEventService) handleGuildMemberUpdate(s *discordgo.Session, m 
 	if guildConfig == nil {
 		return
 	}
-	channelID := strings.TrimSpace(guildConfig.VerificationChannelID)
+	channelID := strings.TrimSpace(guildConfig.Channels.VerificationChat)
 	if channelID == "" {
 		return
 	}
-	verifiedRoleID := strings.TrimSpace(guildConfig.UnverifiedPurgeVerifiedRoleID)
+	verifiedRoleID := strings.TrimSpace(guildConfig.Roles.VerificationRole)
 	if verifiedRoleID == "" {
 		return
 	}

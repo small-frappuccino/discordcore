@@ -56,9 +56,11 @@ func TestResolveModerationLogChannelShared(t *testing.T) {
 
 	cm := files.NewConfigManagerWithPath("test-settings.json")
 	if err := cm.AddGuildConfig(files.GuildConfig{
-		GuildID:                guildID,
-		ModerationLogChannelID: channelID,
-		UserLogChannelID:       channelID,
+		GuildID: guildID,
+		Channels: files.ChannelsConfig{
+			ModerationLog:   channelID,
+			UserActivityLog: channelID,
+		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
@@ -78,8 +80,10 @@ func TestResolveModerationLogChannelValid(t *testing.T) {
 
 	cm := files.NewConfigManagerWithPath("test-settings.json")
 	if err := cm.AddGuildConfig(files.GuildConfig{
-		GuildID:                guildID,
-		ModerationLogChannelID: channelID,
+		GuildID: guildID,
+		Channels: files.ChannelsConfig{
+			ModerationLog: channelID,
+		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
