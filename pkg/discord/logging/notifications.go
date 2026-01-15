@@ -223,9 +223,12 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Message Edited",
 		Color:       theme.MessageEdit(),
 		Description: desc,
+		Author: &discordgo.MessageEmbedAuthor{
+			Name:    "Message Edited",
+			IconURL: ns.buildAvatarURL(original.Author.ID, original.Author.Avatar),
+		},
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "User",
@@ -252,9 +255,6 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 				Value:  truncateString(edited.Content, 1000),
 				Inline: false,
 			},
-		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: ns.buildAvatarURL(original.Author.ID, original.Author.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
@@ -286,8 +286,11 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "Message Deleted",
 		Color: theme.MessageDelete(),
+		Author: &discordgo.MessageEmbedAuthor{
+			Name:    "Message Deleted",
+			IconURL: ns.buildAvatarURL(deleted.Author.ID, deleted.Author.Avatar),
+		},
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "User",
@@ -314,9 +317,6 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 				Value:  deletedByLabel,
 				Inline: true,
 			},
-		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: ns.buildAvatarURL(deleted.Author.ID, deleted.Author.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{

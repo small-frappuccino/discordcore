@@ -206,6 +206,9 @@ func (s *UnverifiedPurgeService) runOnce() {
 			if member.User.Bot {
 				continue
 			}
+			if member.PremiumSince != nil {
+				continue
+			}
 
 			joinedAt := member.JoinedAt
 			if joinedAt.IsZero() {
