@@ -171,17 +171,16 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 			continue
 		}
 		bannedCount++
+		sendModerationLog(ctx, moderationLogPayload{
+			Action:      "ban",
+			TargetID:    memberID,
+			TargetLabel: memberID,
+			Reason:      reason,
+			RequestedBy: ctx.UserID,
+		})
 	}
 
 	message := buildMassBanMessage(len(memberIDs), bannedCount, reason, truncated, invalidTokens, skipped, failed)
-	sendModerationLog(ctx, moderationLogPayload{
-		Action:      "massban",
-		TargetID:    "",
-		TargetLabel: fmt.Sprintf("%d users", bannedCount),
-		Reason:      reason,
-		RequestedBy: ctx.UserID,
-		Extra:       buildMassBanLogDetails(len(memberIDs), bannedCount, invalidTokens, skipped, failed),
-	})
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
 }
 
@@ -519,12 +518,21 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	if reason == "" {
 		reason = "No reason provided"
 	}
+	caseID := ""
+	if ctx.Interaction != nil {
+		caseID = strings.TrimSpace(ctx.Interaction.ID)
+	}
 
 	fields := []*discordgo.MessageEmbedField{
 		{Name: "Action", Value: action, Inline: true},
-		{Name: "Target", Value: targetLabel, Inline: true},
-		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
 	}
+	if caseID != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "Case", Value: "`" + caseID + "`", Inline: true})
+	}
+	fields = append(fields,
+		&discordgo.MessageEmbedField{Name: "Target", Value: targetLabel, Inline: true},
+		&discordgo.MessageEmbedField{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
+	)
 	if payload.RequestedBy != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Requested by",
