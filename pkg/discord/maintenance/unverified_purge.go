@@ -99,6 +99,11 @@ type purgeCandidate struct {
 	joinedAt time.Time
 }
 
+type affectedMember struct {
+	userID string
+	roles  []string
+}
+
 func (s *UnverifiedPurgeService) runOnce() {
 	cfg := s.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
@@ -188,7 +193,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 
 		kicked := 0
 		checked := 0
-		var affectedIDs []string
+		var affectedMembers []affectedMember
 		var previewEntries []string
 		for _, c := range candidates {
 			if throttle != nil {
@@ -224,7 +229,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			checked++
 			if gcfg.UnverifiedPurge.DryRun {
 				log.ApplicationLogger().Info("Non-Verified Members Purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
-				affectedIDs = append(affectedIDs, c.userID)
+				affectedMembers = append(affectedMembers, affectedMember{userID: c.userID, roles: member.Roles})
 				continue
 			}
 			if previewOnly {
@@ -233,7 +238,6 @@ func (s *UnverifiedPurgeService) runOnce() {
 					display = "unknown"
 				}
 				previewEntries = append(previewEntries, fmt.Sprintf("%s (`%s`)", display, c.userID))
-				affectedIDs = append(affectedIDs, c.userID)
 				continue
 			}
 
@@ -244,7 +248,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 				continue
 			}
 			kicked++
-			affectedIDs = append(affectedIDs, c.userID)
+			affectedMembers = append(affectedMembers, affectedMember{userID: c.userID, roles: member.Roles})
 		}
 
 		if throttleTicker != nil {
@@ -256,7 +260,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			s.logPreviewEntries(gcfg.GuildID, previewEntries, len(candidates))
 			continue
 		}
-		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.UnverifiedPurge.DryRun, affectedIDs)
+		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.UnverifiedPurge.DryRun, affectedMembers)
 	}
 }
 
@@ -280,11 +284,11 @@ func (s *UnverifiedPurgeService) resolveScanInterval() time.Duration {
 	return time.Duration(mins) * time.Minute
 }
 
-func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID string, graceDays int, cutoff time.Time, candidates, checked, kicked, maxKicks, kps int, dryRun bool, affectedIDs []string) {
+func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID string, graceDays int, cutoff time.Time, candidates, checked, kicked, maxKicks, kps int, dryRun bool, affectedMembers []affectedMember) {
 	if s.session == nil || s.configManager == nil || guildID == "" {
 		return
 	}
-	if candidates == 0 || len(affectedIDs) == 0 {
+	if candidates == 0 || len(affectedMembers) == 0 {
 		return
 	}
 
@@ -305,7 +309,7 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 	}
 
 	title := "Non-Verified Members Purge"
-	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**.", verifiedRoleID, graceDays)
+	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**. Members listed below did not have <@&%s> at the time of the purge.", verifiedRoleID, graceDays, verifiedRoleID)
 
 	fields := []*discordgo.MessageEmbedField{
 		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
@@ -313,6 +317,20 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 		{Name: "Verified Role", Value: "<@&" + verifiedRoleID + "> (`" + verifiedRoleID + "`)", Inline: false},
 		{Name: "Joined Before", Value: fmt.Sprintf("<t:%d:R>", cutoff.Unix()), Inline: true},
 		{Name: "Removed", Value: fmt.Sprintf("%d", kicked), Inline: true},
+	}
+
+	if len(affectedMembers) > 0 {
+		entries, omitted := buildAffectedMembersList(affectedMembers, 1024)
+		if entries != "" {
+			if omitted > 0 {
+				entries = fmt.Sprintf("%s\n... and %d more", entries, omitted)
+			}
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   "Affected Members (roles)",
+				Value:  truncateFieldValue(entries),
+				Inline: false,
+			})
+		}
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -422,4 +440,45 @@ func truncateFieldValue(value string) string {
 		return value[:maxLen]
 	}
 	return value[:maxLen-3] + "..."
+}
+
+func buildAffectedMembersList(members []affectedMember, maxLen int) (string, int) {
+	if len(members) == 0 || maxLen <= 0 {
+		return "", 0
+	}
+
+	var b strings.Builder
+	omitted := 0
+
+	for i, m := range members {
+		roles := "roles: none"
+		if len(m.roles) > 0 {
+			roleMentions := make([]string, 0, len(m.roles))
+			for _, roleID := range m.roles {
+				if strings.TrimSpace(roleID) == "" {
+					continue
+				}
+				roleMentions = append(roleMentions, "<@&"+roleID+">")
+			}
+			if len(roleMentions) > 0 {
+				roles = "roles: " + strings.Join(roleMentions, ", ")
+			}
+		}
+
+		line := fmt.Sprintf("- <@%s> (`%s`): %s", m.userID, m.userID, roles)
+		lineLen := len(line)
+		if b.Len() > 0 {
+			lineLen++
+		}
+		if b.Len()+lineLen > maxLen {
+			omitted = len(members) - i
+			break
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(line)
+	}
+
+	return b.String(), omitted
 }
