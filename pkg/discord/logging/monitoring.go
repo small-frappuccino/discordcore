@@ -1736,6 +1736,9 @@ func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo
 
 // checkAvatarChange aplica debounce e delega processamento ao UserWatcher.
 func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, username string) {
+	if currentAvatar == "" {
+		currentAvatar = "default"
+	}
 	changeKey := fmt.Sprintf("%s:%s:%s", guildID, userID, currentAvatar)
 	ms.changesMutex.RLock()
 	if lastChange, exists := ms.recentChanges[changeKey]; exists {
@@ -2318,7 +2321,7 @@ func (ms *MonitoringService) performPeriodicCheck() {
 
 			avatarHash := member.User.Avatar
 			if avatarHash == "" {
-				continue
+				avatarHash = "default"
 			}
 			ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
 		}
