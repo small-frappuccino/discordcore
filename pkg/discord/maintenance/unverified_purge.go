@@ -117,7 +117,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 		}
 		verifiedRoleID := strings.TrimSpace(gcfg.UnverifiedPurgeVerifiedRoleID)
 		if verifiedRoleID == "" {
-			log.ApplicationLogger().Warn("unverified purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
+			log.ApplicationLogger().Warn("Non-Verified Members Purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
 			continue
 		}
 
@@ -131,12 +131,12 @@ func (s *UnverifiedPurgeService) runOnce() {
 
 		joins, err := s.store.GetAllMemberJoins(gcfg.GuildID)
 		if err != nil {
-			log.ApplicationLogger().Warn("unverified purge: failed to load member joins", "guildID", gcfg.GuildID, "err", err)
+			log.ApplicationLogger().Warn("Non-Verified Members Purge: failed to load member joins", "guildID", gcfg.GuildID, "err", err)
 			continue
 		}
 		memberRoles, err := s.store.GetAllGuildMemberRoles(gcfg.GuildID)
 		if err != nil {
-			log.ApplicationLogger().Warn("unverified purge: failed to load member roles", "guildID", gcfg.GuildID, "err", err)
+			log.ApplicationLogger().Warn("Non-Verified Members Purge: failed to load member roles", "guildID", gcfg.GuildID, "err", err)
 			memberRoles = map[string][]string{}
 		}
 
@@ -220,7 +220,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 
 			checked++
 			if gcfg.UnverifiedPurgeDryRun {
-				log.ApplicationLogger().Info("unverified purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
+				log.ApplicationLogger().Info("Non-Verified Members Purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
 				affectedIDs = append(affectedIDs, c.userID)
 				continue
 			}
@@ -234,10 +234,10 @@ func (s *UnverifiedPurgeService) runOnce() {
 				continue
 			}
 
-			reason := fmt.Sprintf("unverified-purge: missing verified role after %d days", graceDays)
+			reason := fmt.Sprintf("nonverified-members-purge: missing verified role after %d days", graceDays)
 			reason = truncateAuditReason(reason)
 			if err := s.session.GuildMemberDeleteWithReason(gcfg.GuildID, c.userID, reason); err != nil {
-				log.ApplicationLogger().Warn("unverified purge: failed to kick member", "guildID", gcfg.GuildID, "userID", c.userID, "err", err)
+				log.ApplicationLogger().Warn("Non-Verified Members Purge: failed to kick member", "guildID", gcfg.GuildID, "userID", c.userID, "err", err)
 				continue
 			}
 			kicked++
@@ -248,7 +248,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			throttleTicker.Stop()
 		}
 
-		log.ApplicationLogger().Info("unverified purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurgeDryRun)
+		log.ApplicationLogger().Info("Non-Verified Members Purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurgeDryRun)
 		if previewOnly {
 			s.logPreviewEntries(gcfg.GuildID, previewEntries, len(candidates))
 			continue
@@ -281,7 +281,7 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 	if s.session == nil || s.configManager == nil || guildID == "" {
 		return
 	}
-	if candidates == 0 {
+	if candidates == 0 || len(affectedIDs) == 0 {
 		return
 	}
 
@@ -301,7 +301,7 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 		mode = "Dry run"
 	}
 
-	title := "Unverified Purge"
+	title := "Non-Verified Members Purge"
 	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**.", verifiedRoleID, graceDays)
 
 	fields := []*discordgo.MessageEmbedField{
@@ -319,19 +319,19 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "unverified-purge",
+			Text: "nonverified-members-purge",
 		},
 	}
 
 	if _, err := s.session.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send unverified purge moderation log", "guildID", guildID, "channelID", channelID, "err", err)
+		log.ErrorLoggerRaw().Error("Failed to send Non-Verified Members Purge moderation log", "guildID", guildID, "channelID", channelID, "err", err)
 	}
 }
 
 func (s *UnverifiedPurgeService) logPreviewEntries(guildID string, entries []string, candidates int) {
 	if len(entries) == 0 {
 		if candidates > 0 {
-			log.ApplicationLogger().Info("unverified purge preview: no eligible members after verification", "guildID", guildID, "candidates", candidates)
+			log.ApplicationLogger().Info("Non-Verified Members Purge preview: no eligible members after verification", "guildID", guildID, "candidates", candidates)
 		}
 		return
 	}
@@ -344,7 +344,7 @@ func (s *UnverifiedPurgeService) logPreviewEntries(guildID string, entries []str
 	if len(entries) > maxList {
 		lines += fmt.Sprintf(", and %d more", len(entries)-maxList)
 	}
-	log.ApplicationLogger().Info("unverified purge preview (disabled): eligible members without verified role", "guildID", guildID, "count", len(entries), "members", lines)
+	log.ApplicationLogger().Info("Non-Verified Members Purge preview (disabled): eligible members without verified role", "guildID", guildID, "count", len(entries), "members", lines)
 }
 
 func (s *UnverifiedPurgeService) resolveInitialDelay() time.Duration {
@@ -420,3 +420,4 @@ func truncateFieldValue(value string) string {
 	}
 	return value[:maxLen-3] + "..."
 }
+

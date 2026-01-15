@@ -239,7 +239,7 @@ func Run(appName, tokenEnv string) error {
 		}
 	}
 
-	// Unverified purge service (optional; enabled per-guild in settings.json)
+	// Non-verified members purge service (optional; enabled per-guild in settings.json)
 	{
 		cfg := configManager.Config()
 		enabled := false
@@ -260,7 +260,7 @@ func Run(appName, tokenEnv string) error {
 		if enabled || preview {
 			unverifiedPurgeService := maintenance.NewUnverifiedPurgeService(discordSession, configManager, store)
 			unverifiedPurgeWrapper := service.NewServiceWrapper(
-				"unverified-purge",
+				"nonverified-members-purge",
 				service.TypeMonitoring,
 				service.PriorityNormal,
 				[]string{"monitoring"},
@@ -269,12 +269,12 @@ func Run(appName, tokenEnv string) error {
 				func() bool { return unverifiedPurgeService.IsRunning() },
 			)
 			if err := serviceManager.Register(unverifiedPurgeWrapper); err != nil {
-				return fmt.Errorf("register unverified purge service: %w", err)
+				return fmt.Errorf("register Non-verified members purge service: %w", err)
 			}
 			if enabled {
-				log.ApplicationLogger().Info("✅ Unverified purge enabled")
+				log.ApplicationLogger().Info("✅ Non-verified members purge enabled")
 			} else {
-				log.ApplicationLogger().Info("✅ Unverified purge preview enabled (purge disabled per-guild)")
+				log.ApplicationLogger().Info("✅ Non-verified members purge preview enabled (purge disabled per-guild)")
 			}
 		}
 	}
@@ -367,3 +367,4 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
 }
+

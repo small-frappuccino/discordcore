@@ -81,7 +81,7 @@ type GuildConfig struct {
 	AutoRolePrereqRoleA       string `json:"auto_role_prereq_role_a,omitempty"`
 	AutoRolePrereqRoleB       string `json:"auto_role_prereq_role_b,omitempty"`
 
-	// Unverified purge (per-guild): periodically kick members that didn't get the verified role
+	// Non-verified members purge (per-guild): periodically kick members that didn't get the verified role
 	// within a grace period since joining.
 	UnverifiedPurgeEnabled          bool     `json:"unverified_purge_enabled,omitempty"`
 	UnverifiedPurgeVerifiedRoleID   string   `json:"unverified_purge_verified_role_id,omitempty"`
