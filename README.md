@@ -92,6 +92,7 @@ A minimal example:
       "user_log_channel_id": "111111111",
       "user_entry_leave_channel_id": "444444444",
       "welcome_backlog_channel_id": "555555555",
+      "verification_channel_id": "666666666",
       "message_log_channel_id": "999999999",
       "automod_log_channel_id": "222222222",
       "allowed_roles": ["333333333"],

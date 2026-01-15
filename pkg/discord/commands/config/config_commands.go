@@ -127,6 +127,7 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 				{Name: "log_channel", Value: "log_channel"},
 				{Name: "entry_leave_channel", Value: "entry_leave_channel"},
 				{Name: "welcome_backlog_channel", Value: "welcome_backlog_channel"},
+				{Name: "verification_channel", Value: "verification_channel"},
 				{Name: "message_log_channel", Value: "message_log_channel"},
 				{Name: "automod_channel", Value: "automod_channel"},
 				{Name: "moderation_log_channel", Value: "moderation_log_channel"},
@@ -165,6 +166,8 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 			guildConfig.UserEntryLeaveChannelID = value
 		case "welcome_backlog_channel":
 			guildConfig.WelcomeBacklogChannelID = value
+		case "verification_channel":
+			guildConfig.VerificationChannelID = value
 		case "message_log_channel":
 			guildConfig.MessageLogChannelID = value
 		case "automod_channel":
@@ -216,6 +219,7 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	b.WriteString(fmt.Sprintf("Log Channel: %s\n", emptyToDash(ctx.GuildConfig.UserLogChannelID)))
 	b.WriteString(fmt.Sprintf("Entry/Leave Channel: %s\n", emptyToDash(ctx.GuildConfig.UserEntryLeaveChannelID)))
 	b.WriteString(fmt.Sprintf("Welcome Backlog Channel: %s\n", emptyToDash(ctx.GuildConfig.WelcomeBacklogChannelID)))
+	b.WriteString(fmt.Sprintf("Verification Channel: %s\n", emptyToDash(ctx.GuildConfig.VerificationChannelID)))
 	b.WriteString(fmt.Sprintf("Message Log Channel: %s\n", emptyToDash(ctx.GuildConfig.MessageLogChannelID)))
 	b.WriteString(fmt.Sprintf("Automod Channel: %s\n", emptyToDash(ctx.GuildConfig.AutomodLogChannelID)))
 	b.WriteString(fmt.Sprintf("Moderation Log Channel: %s\n", emptyToDash(ctx.GuildConfig.ModerationLogChannelID)))
@@ -254,6 +258,7 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`log_channel` - Channel for user logs (join/leave/avatar)",
 		"`entry_leave_channel` - Channel for entry/leave logs (moderators)",
 		"`welcome_backlog_channel` - Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)",
+		"`verification_channel` - Dedicated channel for verification chat cleanup (e.g., Mimu verify)",
 		"`message_log_channel` - Channel for edited/deleted message logs",
 		"`automod_channel` - Channel for automod logs",
 		"`moderation_log_channel` - Dedicated channel for moderation logs",
