@@ -14,8 +14,8 @@ import (
 
 const (
 	ErrSendMessage  = "error sending message: %w"
-	ErrErrorTitle   = "❌ Error"
-	ErrSuccessTitle = "✅ Success"
+	ErrErrorTitle   = "Error"
+	ErrSuccessTitle = "Success"
 )
 
 type NotificationSender struct {
@@ -34,7 +34,7 @@ func (ns *NotificationSender) SendAvatarChangeNotification(channelID string, cha
 		return nil
 	}
 
-	// Check if this is a real avatar change or just default avatar → default avatar
+	// Check if this is a real avatar change or just default avatar -> default avatar
 	if change.OldAvatar == "" && change.NewAvatar == "" {
 		// Both are default avatars, do not send notification
 		return nil
@@ -55,11 +55,12 @@ func (ns *NotificationSender) createAvatarChangeEmbeds(change files.AvatarChange
 	oldAvatarURL := ns.buildAvatarURL(change.UserID, change.OldAvatar)
 	newAvatarURL := ns.buildAvatarURL(change.UserID, change.NewAvatar)
 
-	// First embed - Always keep the title "Avatar changed"
+	// First embed - Previous avatar
 	firstEmbed := &discordgo.MessageEmbed{
-		Title:       "Avatar changed",
+		Title:       "Previous Avatar",
 		Color:       theme.AvatarChange(),
-		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", change.Username, change.UserID, change.UserID),
+		Description: formatUserLabel(change.Username, change.UserID),
+		Timestamp:   change.Timestamp.Format(time.RFC3339),
 	}
 
 	// Always add old avatar thumbnail
@@ -69,9 +70,8 @@ func (ns *NotificationSender) createAvatarChangeEmbeds(change files.AvatarChange
 
 	// Second embed - New avatar (always sent)
 	secondEmbed := &discordgo.MessageEmbed{
-		Title:     "...To",
-		Color:     theme.AvatarChange(),
-		Timestamp: change.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+		Title: "New Avatar",
+		Color: theme.AvatarChange(),
 	}
 
 	// Always add new avatar thumbnail
@@ -114,20 +114,23 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
 	joinAgeText := formatDurationSmart(accountAge)
 	if joinAgeText == "" {
-		joinAgeText = "— ago"
+		joinAgeText = "- ago"
 	} else {
 		joinAgeText = joinAgeText + " ago"
 	}
 	embed := &discordgo.MessageEmbed{
-		Title:       "Member joined",
+		Title:       "Member Joined",
 		Color:       theme.MemberJoin(),
-		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
+		Description: formatUserLabel(member.User.Username, member.User.ID),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Account created",
+				Name:   "Account Created",
 				Value:  joinAgeText,
 				Inline: true,
 			},
+		},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -139,10 +142,13 @@ func (ns *NotificationSender) SendMemberJoinNotification(channelID string, membe
 // SendMemberLeaveNotification sends member leave notification
 func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
 	embed := &discordgo.MessageEmbed{
-		Title:       "Member left",
+		Title:       "Member Left",
 		Color:       theme.MemberLeave(),
-		Description: fmt.Sprintf("**%s** (<@%s>, `%s`)", member.User.Username, member.User.ID, member.User.ID),
-		Timestamp:   time.Now().Format(time.RFC3339),
+		Description: formatUserLabel(member.User.Username, member.User.ID),
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
 	var fields []*discordgo.MessageEmbedField
@@ -151,19 +157,19 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 		// Build human-readable server time with fallback when formatting yields empty (e.g., <1s)
 		serverTimeText := formatDurationSmart(serverTime)
 		if serverTimeText == "" {
-			serverTimeText = "— ago"
+			serverTimeText = "- ago"
 		} else {
 			serverTimeText = serverTimeText + " ago"
 		}
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Time on server",
+			Name:   "Time on Server",
 			Value:  serverTimeText,
 			Inline: true,
 		})
 	} else {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Time on server",
-			Value:  "— ago",
+			Name:   "Time on Server",
+			Value:  "- ago",
 			Inline: true,
 		})
 	}
@@ -207,8 +213,8 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 		}
 	}
 
-	userField := fmt.Sprintf("**%s** (<@%s>, `%s`)", original.Author.Username, original.Author.ID, original.Author.ID)
-	channelField := fmt.Sprintf("<#%s>, `%s`", original.ChannelID, original.ChannelID)
+	userField := formatUserLabel(original.Author.Username, original.Author.ID)
+	channelField := formatChannelLabel(original.ChannelID)
 	messageTime := original.Timestamp.Format("January 2, 2006 at 3:04 PM")
 
 	desc := ""
@@ -217,7 +223,7 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "✏️ Message Edited",
+		Title:       "Message Edited",
 		Color:       theme.MessageEdit(),
 		Description: desc,
 		Fields: []*discordgo.MessageEmbedField{
@@ -271,12 +277,16 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 		}
 	}
 
-	userField := fmt.Sprintf("**%s** (<@%s>, `%s`)", deleted.Author.Username, deleted.Author.ID, deleted.Author.ID)
-	channelField := fmt.Sprintf("<#%s>, `%s`", deleted.ChannelID, deleted.ChannelID)
+	userField := formatUserLabel(deleted.Author.Username, deleted.Author.ID)
+	channelField := formatChannelLabel(deleted.ChannelID)
 	messageTime := deleted.Timestamp.Format("January 2, 2006 at 3:04 PM")
+	deletedByLabel := strings.TrimSpace(deletedBy)
+	if deletedByLabel == "" {
+		deletedByLabel = "Unknown"
+	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "🗑️ Message Deleted",
+		Title: "Message Deleted",
 		Color: theme.MessageDelete(),
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -300,8 +310,8 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 				Inline: false,
 			},
 			{
-				Name:   "Deleted by",
-				Value:  deletedBy,
+				Name:   "Deleted By",
+				Value:  deletedByLabel,
 				Inline: true,
 			},
 		},
@@ -469,9 +479,10 @@ func truncateString(s string, maxLen int) string {
 
 func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
-		Title:       "ℹ️ Info",
+		Title:       "Info",
 		Description: message,
 		Color:       theme.MemberRoleUpdate(),
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -492,11 +503,6 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(
 		return nil
 	}
 
-	displayName := targetUsername
-	if displayName == "" {
-		displayName = targetID
-	}
-
 	act := "Updated"
 	switch {
 	case strings.EqualFold(action, "add") || strings.EqualFold(action, "added"):
@@ -505,23 +511,19 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(
 		act = "Removed"
 	}
 
-	roleDisplay := ""
-	if roleID != "" {
-		roleDisplay = "<@&" + roleID + ">"
-	}
-	if roleDisplay == "" && roleName != "" {
-		roleDisplay = "`" + roleName + "`"
-	}
-	if roleDisplay == "" && roleID != "" {
-		roleDisplay = "`" + roleID + "`"
-	}
-
-	desc := fmt.Sprintf("<@%s> %s role for **%s** (<@%s>, `%s`)", actorID, strings.ToLower(act), displayName, targetID, targetID)
+	roleDisplay := formatRoleLabel(roleID, roleName)
+	targetLabel := formatUserLabel(targetUsername, targetID)
+	actorLabel := formatUserRef(actorID)
 	embed := &discordgo.MessageEmbed{
-		Title:       "Role updated",
+		Title:       "Role Updated",
 		Color:       theme.MemberRoleUpdate(),
-		Description: desc,
+		Description: targetLabel,
 		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Actor",
+				Value:  actorLabel,
+				Inline: true,
+			},
 			{
 				Name:   "Role",
 				Value:  roleDisplay,
@@ -545,6 +547,7 @@ func (ns *NotificationSender) SendErrorMessage(channelID, message string) error 
 		Title:       ErrErrorTitle,
 		Description: message,
 		Color:       theme.MessageDelete(),
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -556,6 +559,7 @@ func (ns *NotificationSender) SendSuccessMessage(channelID, message string) erro
 		Title:       ErrSuccessTitle,
 		Description: message,
 		Color:       theme.MemberJoin(),
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -567,8 +571,12 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 		return nil
 	}
 
-	title := "AutoMod action executed"
-	desc := "A native AutoMod rule was triggered."
+	title := "AutoMod Action"
+	desc := "Native AutoMod rule triggered."
+	channelValue := formatChannelLabel(e.ChannelID)
+	if e.ChannelID == "" {
+		channelValue = "DM/Unknown"
+	}
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: desc,
@@ -577,17 +585,12 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "User",
-				Value:  "<@" + e.UserID + "> (`" + e.UserID + "`)",
+				Value:  formatUserRef(e.UserID),
 				Inline: true,
 			},
 			{
-				Name: "Channel",
-				Value: func() string {
-					if e.ChannelID != "" {
-						return "<#" + e.ChannelID + ">, `" + e.ChannelID + "`"
-					}
-					return "(DM/unknown)"
-				}(),
+				Name:   "Channel",
+				Value:  channelValue,
 				Inline: true,
 			},
 		},
@@ -615,11 +618,11 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 	if content != "" {
 		excerpt := content
 		if len(excerpt) > 200 {
-			excerpt = excerpt[:200] + "…"
+			excerpt = excerpt[:200] + "..."
 		}
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Excerpt",
-			Value:  "```" + excerpt + "```",
+			Value:  "```" + sanitizeForCodeBlock(excerpt) + "```",
 			Inline: false,
 		})
 	}

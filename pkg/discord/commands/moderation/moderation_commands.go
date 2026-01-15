@@ -507,12 +507,16 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	}
 
 	action := strings.TrimSpace(payload.Action)
+	targetID := strings.TrimSpace(payload.TargetID)
 	targetLabel := strings.TrimSpace(payload.TargetLabel)
-	if targetLabel == "" {
-		targetLabel = payload.TargetID
-	}
-	if targetLabel == "" {
-		targetLabel = "unknown"
+	targetValue := "Unknown"
+	switch {
+	case targetID == "" && targetLabel != "":
+		targetValue = targetLabel
+	case targetID != "" && (targetLabel == "" || targetLabel == targetID):
+		targetValue = "<@" + targetID + "> (`" + targetID + "`)"
+	case targetID != "":
+		targetValue = fmt.Sprintf("**%s** (<@%s>, `%s`)", targetLabel, targetID, targetID)
 	}
 	reason := strings.TrimSpace(payload.Reason)
 	if reason == "" {
@@ -527,15 +531,15 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 		{Name: "Action", Value: action, Inline: true},
 	}
 	if caseID != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "Case", Value: "`" + caseID + "`", Inline: true})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "Case ID", Value: "`" + caseID + "`", Inline: true})
 	}
 	fields = append(fields,
-		&discordgo.MessageEmbedField{Name: "Target", Value: targetLabel, Inline: true},
+		&discordgo.MessageEmbedField{Name: "Target", Value: targetValue, Inline: true},
 		&discordgo.MessageEmbedField{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
 	)
 	if payload.RequestedBy != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Requested by",
+			Name:   "Requested By",
 			Value:  "<@" + payload.RequestedBy + "> (`" + payload.RequestedBy + "`)",
 			Inline: true,
 		})
@@ -554,7 +558,7 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Moderation action",
+		Title:       "Moderation Action",
 		Color:       theme.AutomodAction(),
 		Description: fmt.Sprintf("Moderation action executed by <@%s>.", botID),
 		Fields:      fields,

@@ -14,6 +14,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
@@ -192,7 +193,7 @@ func handleActivity(ctx *core.Context) error {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
-		Color:       0x5865F2, // blurple
+		Color:       theme.Primary(),
 		Description: "Message and reaction activity across channels and users.",
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields:      fields,
@@ -314,7 +315,7 @@ func handleServerStatsHealth(ctx *core.Context) error {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "📊 Server Health Stats",
-		Color:       0x3498DB, // Blue
+		Color:       theme.Info(),
 		Description: fmt.Sprintf("Data extracted from the database and bot state.\nDatabase size: `%s`", formatBytes(dbSize)),
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
@@ -368,7 +369,7 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 
 	embed := &discordgo.MessageEmbed{
 		Title:     fmt.Sprintf("📊 Server Stats (%s)", label),
-		Color:     0x2ECC71, // Green
+		Color:     theme.Success(),
 		Fields:    fields,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -696,7 +697,7 @@ func handleBackfillRun(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "▶️ Backfill Started",
 		Description: desc,
-		Color:       0x3498DB, // Blue
+		Color:       theme.Info(),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "This process runs in the background. Use /metrics backfill-status to check progress.",
 		},

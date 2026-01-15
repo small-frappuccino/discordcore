@@ -1582,9 +1582,11 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				return true
 			}
 
-			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>, `%s`)", actorID, m.User.Username, m.User.ID, m.User.ID)
+			targetLabel := formatUserLabel(m.User.Username, m.User.ID)
+			actorLabel := formatUserRef(actorID)
+			desc := fmt.Sprintf("**Target:** %s\n**Actor:** %s", targetLabel, actorLabel)
 			embed := &discordgo.MessageEmbed{
-				Title:       "Roles updated",
+				Title:       "Roles Updated",
 				Color:       theme.MemberRoleUpdate(),
 				Description: desc,
 				Fields: []*discordgo.MessageEmbedField{
@@ -1600,6 +1602,9 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 					},
 				},
 				Timestamp: time.Now().Format(time.RFC3339),
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: "Source: Audit Log",
+				},
 			}
 
 			atomic.AddUint64(&ms.apiMessagesSent, 1)
@@ -1667,9 +1672,11 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 					}
 					return out
 				}
-				desc := fmt.Sprintf("Role changes detected for **%s** (<@%s>, `%s`)", m.User.Username, m.User.ID, m.User.ID)
+				targetLabel := formatUserLabel(m.User.Username, m.User.ID)
+				actorLabel := formatUserRef("")
+				desc := fmt.Sprintf("**Target:** %s\n**Actor:** %s", targetLabel, actorLabel)
 				embed := &discordgo.MessageEmbed{
-					Title:       "Roles updated (fallback)",
+					Title:       "Roles Updated",
 					Color:       theme.MemberRoleUpdate(),
 					Description: desc,
 					Fields: []*discordgo.MessageEmbedField{
@@ -1685,6 +1692,9 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 						},
 					},
 					Timestamp: time.Now().Format(time.RFC3339),
+					Footer: &discordgo.MessageEmbedFooter{
+						Text: "Source: Role Diff",
+					},
 				}
 				if _, sendErr := ms.session.ChannelMessageSendEmbed(channelID, embed); sendErr != nil {
 					log.ErrorLoggerRaw().Error("Failed to send fallback role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", sendErr)

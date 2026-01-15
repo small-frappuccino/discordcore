@@ -93,30 +93,29 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	}
 
 	// Build embed from event data (fallback when adapters are not available)
-	title := "AutoMod action executed"
-	desc := "A native AutoMod rule was triggered."
+	title := "AutoMod Action"
+	desc := "Native AutoMod rule triggered."
+	channelValue := formatChannelLabel(e.ChannelID)
+	if e.ChannelID == "" {
+		channelValue = "DM/Unknown"
+	}
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: desc,
 		Color:       theme.AutomodAction(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "User", Value: "<@" + e.UserID + "> (``" + e.UserID + "``)", Inline: true},
-			{Name: "Channel", Value: func() string {
-				if e.ChannelID != "" {
-					return "<#" + e.ChannelID + ">"
-				}
-				return "(DM/unknown)"
-			}(), Inline: true},
+			{Name: "User", Value: formatUserRef(e.UserID), Inline: true},
+			{Name: "Channel", Value: channelValue, Inline: true},
 		},
 	}
 
 	// Include rule info
 	if e.RuleID != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "``" + e.RuleID + "``", Inline: true})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
 	}
 	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched", Value: "``" + e.MatchedKeyword + "``", Inline: true})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched", Value: "`" + e.MatchedKeyword + "`", Inline: true})
 	}
 	// Include a short excerpt (content or matched content if present)
 	content := e.Content
@@ -126,7 +125,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if strings.TrimSpace(content) != "" {
 		excerpt := content
 		if len(excerpt) > 200 {
-			excerpt = excerpt[:200] + "…"
+			excerpt = excerpt[:200] + "..."
 		}
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Excerpt",
