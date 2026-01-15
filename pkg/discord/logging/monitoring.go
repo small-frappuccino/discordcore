@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -1124,6 +1126,12 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 		return
 	}
 
+	done := perf.StartGatewayEvent(
+		"guild_create",
+		slog.String("guildID", guildID),
+	)
+	defer done()
+
 	if ms.configManager.GuildConfig(guildID) == nil {
 		// New guild: add to config and initialize cache
 		if err := ms.configManager.RegisterGuild(s, guildID); err != nil {
@@ -1147,6 +1155,13 @@ func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordg
 	if e == nil || e.Guild == nil || e.Guild.ID == "" {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"guild_update",
+		slog.String("guildID", e.Guild.ID),
+	)
+	defer done()
+
 	if ms.store != nil {
 		if prev, ok, _ := ms.store.GetGuildOwnerID(e.Guild.ID); ok && prev != e.Guild.OwnerID {
 			log.ApplicationLogger().Info("Guild owner changed", "guildID", e.Guild.ID, "from", prev, "to", e.Guild.OwnerID)
@@ -1168,6 +1183,14 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 		ms.handlePresenceWatch(m)
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"presence_update",
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.User.ID),
+	)
+	defer done()
+
 	ms.markEvent()
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 	ms.handlePresenceWatch(m)
@@ -1355,6 +1378,14 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	if m.User == nil {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"guild_member_update.monitoring",
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.User.ID),
+	)
+	defer done()
+
 	gcfg := ms.configManager.GuildConfig(m.GuildID)
 	if gcfg == nil {
 		return
@@ -1717,6 +1748,16 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 
 // handleUserUpdate processes user updates across all configured guilds.
 func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo.UserUpdate) {
+	if m == nil || m.User == nil {
+		return
+	}
+
+	done := perf.StartGatewayEvent(
+		"user_update",
+		slog.String("userID", m.User.ID),
+	)
+	defer done()
+
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return
@@ -2515,6 +2556,15 @@ func (ms *MonitoringService) handleRoleCreateForBotPermMirroring(s *discordgo.Se
 	if e == nil || e.Role == nil || e.GuildID == "" {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"guild_role_create",
+		slog.String("guildID", e.GuildID),
+		slog.String("roleID", e.Role.ID),
+		slog.Bool("managed", e.Role.Managed),
+	)
+	defer done()
+
 	if !ms.botPermMirrorEnabled(e.GuildID) {
 		return
 	}
@@ -2529,6 +2579,15 @@ func (ms *MonitoringService) handleRoleUpdateForBotPermMirroring(s *discordgo.Se
 	if e == nil || e.Role == nil || e.GuildID == "" {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"guild_role_update",
+		slog.String("guildID", e.GuildID),
+		slog.String("roleID", e.Role.ID),
+		slog.Bool("managed", e.Role.Managed),
+	)
+	defer done()
+
 	if !ms.botPermMirrorEnabled(e.GuildID) {
 		return
 	}

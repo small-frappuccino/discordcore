@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
@@ -94,6 +95,14 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 		slog.Debug("ReactionAdd: guildID missing; skipping metrics", "channelID", e.ChannelID, "userID", e.UserID)
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"message_reaction_add",
+		slog.String("guildID", guildID),
+		slog.String("channelID", e.ChannelID),
+		slog.String("userID", e.UserID),
+	)
+	defer done()
 
 	// Skip if no store is available
 	if rs.store == nil {

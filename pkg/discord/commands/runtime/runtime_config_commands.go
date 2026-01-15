@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -1212,6 +1214,20 @@ func HandleRuntimeConfigInteractions(configManager *files.ConfigManager, applier
 		if i == nil || s == nil {
 			return
 		}
+
+		userID := ""
+		if i.Member != nil && i.Member.User != nil {
+			userID = i.Member.User.ID
+		} else if i.User != nil {
+			userID = i.User.ID
+		}
+		done := perf.StartGatewayEvent(
+			"interaction_create.runtime_config",
+			slog.Int("interactionType", int(i.Type)),
+			slog.String("guildID", i.GuildID),
+			slog.String("userID", userID),
+		)
+		defer done()
 
 		switch i.Type {
 		case discordgo.InteractionMessageComponent:

@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -67,6 +68,18 @@ func (cr *CommandRouter) RegisterAutocomplete(commandName string, handler Autoco
 
 // HandleInteraction routes interactions to the appropriate handlers
 func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i == nil {
+		return
+	}
+
+	done := perf.StartGatewayEvent(
+		"interaction_create",
+		slog.Int("interactionType", int(i.Type)),
+		slog.String("guildID", i.GuildID),
+		slog.String("userID", extractUserID(i)),
+	)
+	defer done()
+
 	if IsAutocompleteInteraction(i) {
 		cr.handleAutocomplete(i)
 		return

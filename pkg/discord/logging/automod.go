@@ -1,10 +1,12 @@
 package logging
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -70,6 +72,15 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 			return
 		}
 	}
+
+	done := perf.StartGatewayEvent(
+		"auto_moderation_action_execution",
+		slog.String("guildID", e.GuildID),
+		slog.String("channelID", e.ChannelID),
+		slog.String("userID", e.UserID),
+		slog.String("ruleID", e.RuleID),
+	)
+	defer done()
 
 	botID := ""
 	if s != nil && s.State != nil && s.State.User != nil {

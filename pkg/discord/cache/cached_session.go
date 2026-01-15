@@ -1,7 +1,10 @@
 package cache
 
 import (
+	"log/slog"
+
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 )
 
 // CachedSession wraps a discordgo.Session and provides automatic caching for frequently accessed data.
@@ -130,6 +133,16 @@ func (cs *CachedSession) Channel(channelID string) (*discordgo.Channel, error) {
 func (cs *CachedSession) registerInvalidationHandlers() {
 	// Invalidate member cache on updates
 	cs.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
+		userID := ""
+		if m.User != nil {
+			userID = m.User.ID
+		}
+		done := perf.StartGatewayEvent(
+			"cache.guild_member_update",
+			slog.String("guildID", m.GuildID),
+			slog.String("userID", userID),
+		)
+		defer done()
 		if m.User != nil {
 			cs.cache.InvalidateMember(m.GuildID, m.User.ID)
 		}
@@ -137,6 +150,16 @@ func (cs *CachedSession) registerInvalidationHandlers() {
 
 	// Invalidate member cache on removal
 	cs.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
+		userID := ""
+		if m.User != nil {
+			userID = m.User.ID
+		}
+		done := perf.StartGatewayEvent(
+			"cache.guild_member_remove",
+			slog.String("guildID", m.GuildID),
+			slog.String("userID", userID),
+		)
+		defer done()
 		if m.User != nil {
 			cs.cache.InvalidateMember(m.GuildID, m.User.ID)
 		}
@@ -144,28 +167,63 @@ func (cs *CachedSession) registerInvalidationHandlers() {
 
 	// Invalidate guild cache on updates
 	cs.session.AddHandler(func(s *discordgo.Session, g *discordgo.GuildUpdate) {
+		done := perf.StartGatewayEvent(
+			"cache.guild_update",
+			slog.String("guildID", g.ID),
+		)
+		defer done()
 		cs.cache.InvalidateGuild(g.ID)
 	})
 
 	// Invalidate roles cache on role updates
 	cs.session.AddHandler(func(s *discordgo.Session, r *discordgo.GuildRoleCreate) {
+		done := perf.StartGatewayEvent(
+			"cache.guild_role_create",
+			slog.String("guildID", r.GuildID),
+			slog.String("roleID", r.Role.ID),
+		)
+		defer done()
 		cs.cache.InvalidateRoles(r.GuildID)
 	})
 
 	cs.session.AddHandler(func(s *discordgo.Session, r *discordgo.GuildRoleUpdate) {
+		done := perf.StartGatewayEvent(
+			"cache.guild_role_update",
+			slog.String("guildID", r.GuildID),
+			slog.String("roleID", r.Role.ID),
+		)
+		defer done()
 		cs.cache.InvalidateRoles(r.GuildID)
 	})
 
 	cs.session.AddHandler(func(s *discordgo.Session, r *discordgo.GuildRoleDelete) {
+		done := perf.StartGatewayEvent(
+			"cache.guild_role_delete",
+			slog.String("guildID", r.GuildID),
+			slog.String("roleID", r.RoleID),
+		)
+		defer done()
 		cs.cache.InvalidateRoles(r.GuildID)
 	})
 
 	// Invalidate channel cache on updates
 	cs.session.AddHandler(func(s *discordgo.Session, c *discordgo.ChannelUpdate) {
+		done := perf.StartGatewayEvent(
+			"cache.channel_update",
+			slog.String("guildID", c.GuildID),
+			slog.String("channelID", c.ID),
+		)
+		defer done()
 		cs.cache.InvalidateChannel(c.ID)
 	})
 
 	cs.session.AddHandler(func(s *discordgo.Session, c *discordgo.ChannelDelete) {
+		done := perf.StartGatewayEvent(
+			"cache.channel_delete",
+			slog.String("guildID", c.GuildID),
+			slog.String("channelID", c.ID),
+		)
+		defer done()
 		cs.cache.InvalidateChannel(c.ID)
 	})
 }

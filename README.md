@@ -1,404 +1,175 @@
-# DiscordCore
+# Discordcore
 
-A modular Go library for Discord bots that provides comprehensive event monitoring and configuration management.
+Discordcore is the core Discord bot library and service layer used by Alicebot. It owns all Discord-facing behavior, data persistence, caching, and runtime configuration.
 
-## Environment Variables (Tokens)
+## Highlights
 
-- ALICE_BOT_PRODUCTION_TOKEN: production token for the Alice bot (used by the alicebot app)
-- ALICE_BOT_DEVELOPMENT_TOKEN: development token for testing (used by the discordcore example)
+- Monitoring services for members, messages, reactions, and avatar changes
+- Native AutoMod action logging
+- Moderation and audit logging helpers
+- Slash command framework with runtime configuration panel
+- SQLite-backed persistence for metrics and message history
+- Unified cache with TTL and persistence
+- Task router for backfill and scheduled jobs
+- Gateway handler performance warnings (slow-path logging)
 
-The core first checks if the variable is already defined in the environment. If it is not, it attempts to load $
-HOME/.local/bin/.env and, after loading, checks the environment variables again.
-
-## Features
-
-### Implemented
-
-- Avatar Monitoring: Detects and logs user avatar changes
-- AutoMod Logs: Records actions from Discord’s native automatic moderation system
-- Member Events: Monitors user join and leave events with detailed information
-- Message Logs: Tracks message edits and deletions
-- Configuration Management: Flexible per-guild configuration system
-- Command System: Framework for Discord slash commands
-
-### Log Characteristics
-
-#### User Joins
-
-- Shows how long ago the account was created on Discord
-- User avatar
-- Mention info and ID
-
-#### User Leaves
-
-- Time in the server (limited - no historical data by default)
-- User avatar
-- Mention info and ID
-
-#### Edited Messages
-
-- Content before and after the edit
-- Channel where it was edited
-- Message author
-- Edit timestamp
-- Separate channel for message logs
-
-#### Deleted Messages
-
-- Content of the original message
-- Channel where it was deleted
-- Message author
-- Indication of who deleted it (limited by the Discord API)
-- Separate channel for message logs
-
-## Architecture
-
-### Main Components
+## Repository layout
 
 ```
-discordcore/
-├── internal/
-│   ├── discord/
-│   │   ├── commands/         # Slash command system
-│   │   ├── logging/          # Logging and monitoring services
-│   │   │   ├── monitoring.go      # Main monitoring service
-│   │   │   ├── member_events.go   # Join/leave events
-│   │   │   ├── message_events.go  # Message events
-│   │   │   ├── notifications.go   # Embeds/notifications system
-│   │   │   └── automod.go         # Automod logs
-│   │   └── session/          # Discord session management
-│   ├── files/                # File management and cache
-│   └── util/                 # General utilities
-└── cmd/discordcore/          # Implementation example
+cmd/discordcore/      # Example runner
+pkg/discord/          # Discord services, logging, commands, cache
+pkg/files/            # settings.json configuration
+pkg/storage/          # SQLite store
+pkg/task/             # Task router and scheduler
+pkg/util/             # Shared utilities
 ```
 
-## Installation
-
-```bash
-go get github.com/alice-bnuy/discordcore/v2
-```
-
-## Basic Usage
-
-### Simple Implementation
+## Quick start (example)
 
 ```go
 package main
 
 import (
-	"github.com/alice-bnuy/discordcore/v2/internal/discord/commands"
-	"github.com/alice-bnuy/discordcore/v2/internal/discord/logging"
-	"github.com/alice-bnuy/discordcore/v2/internal/discord/session"
-	"github.com/alice-bnuy/discordcore/v2/internal/files"
-	"github.com/alice-bnuy/discordcore/v2/internal/storage"
-	"github.com/alice-bnuy/discordcore/v2/internal/util"
+	"log"
+
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/discord/session"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 func main() {
-	// Configure token
-	token := os.Getenv("DISCORD_BOT_TOKEN")
-
-	// Initialize components
-	configManager := files.NewConfigManager()
-	discordSession, err := session.NewDiscordSession(token)
+	cfg := files.NewConfigManager()
+	token, err := util.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Initialize SQLite store for persistence
+	dg, err := session.NewDiscordSession(token)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	store := storage.NewStore(util.GetMessageDBPath())
 	if err := store.Init(); err != nil {
 		log.Fatal(err)
 	}
 
-	// Initialize monitoring services
-	monitorService, err := logging.NewMonitoringService(discordSession, configManager, store)
+	monitor, err := logging.NewMonitoringService(dg, cfg, store)
 	if err != nil {
 		log.Fatal(err)
 	}
+	automod := logging.NewAutomodService(dg, cfg)
+	cmds := commands.NewCommandHandler(dg, cfg)
 
-	// Initialize automod
-	automodService := logging.NewAutomodService(discordSession, configManager)
+	if err := monitor.Start(); err != nil {
+		log.Fatal(err)
+	}
+	automod.Start()
+	if err := cmds.SetupCommands(); err != nil {
+		log.Fatal(err)
+	}
 
-	// Initialize commands
-	commandHandler := commands.NewCommandHandler(discordSession, configManager)
+	defer monitor.Stop()
+	defer automod.Stop()
 
-	// Start everything
-	monitorService.Start()
-	automodService.Start()
-	commandHandler.SetupCommands()
-
-	// Logs are sent to separate channels:
-	// - user_entry_leave_channel_id: joins/leaves (moderation/logs)
-	// - welcome_backlog_channel_id: public welcome/goodbye channel used for backfill (optional)
-	// - user_log_channel_id: avatar changes (and fallback if entry/leave channel isn't set)
-	// - message_log_channel_id: message edits/deletions
-	// - automod_log_channel_id: moderation actions
-
-	defer func() {
-		monitorService.Stop()
-		automodService.Stop()
-	}()
-
-	// Wait for interrupt
 	util.WaitForInterrupt()
 }
 ```
 
-### Per-Guild Configuration
+## Configuration (settings.json)
+
+A minimal example:
 
 ```json
 {
-	  "guilds": [
-	    {
-	      "guild_id": "123456789",
-	      "command_channel_id": "987654321",
-	      "user_log_channel_id": "111111111",
-	      "user_entry_leave_channel_id": "444444444",
-	      "welcome_backlog_channel_id": "555555555",
-	      "message_log_channel_id": "999999999",
-	      "automod_log_channel_id": "222222222",
-	      "allowed_roles": ["333333333"]
-	    }
-	  ]
-	}
-```
-
-## Specific Services
-
-### MonitoringService
-
-Coordinates all monitoring services:
-
-```go
-// Initialize
-monitorService, err := logging.NewMonitoringService(session, configManager, cache)
-if err != nil {
-    return err
-}
-
-// Start all services
-err = monitorService.Start()
-if err != nil {
-    return err
-}
-
-// The MonitoringService automatically manages:
-// - UserWatcher (avatar changes)
-// - MemberEventService (joins/leaves)
-// - MessageEventService (edits/deletions)
-```
-
-### Individual Services
-
-#### MemberEventService
-
-```go
-// Direct usage (optional - usually managed by MonitoringService)
-memberService := logging.NewMemberEventService(session, configManager, notifier)
-memberService.Start()
-```
-
-#### MessageEventService
-
-```go
-// Direct usage (optional)
-messageService := logging.NewMessageEventService(session, configManager, notifier)
-messageService.Start()
-
-// Message storage is now persisted via SQLite; in-memory cache metrics have been discontinued.
-```
-
-## Customization
-
-### Implementing New Handlers
-
-```go
-// Extend NotificationSender
-func (ns *NotificationSender) SendCustomNotification(channelID string, data interface{}) error {
-    embed := &discordgo.MessageEmbed{
-        Title:       "Custom Event",
-        Color:       0x5865F2,
-        Description: "Your custom logic here",
+  "guilds": [
+    {
+      "guild_id": "123456789",
+      "command_channel_id": "987654321",
+      "user_log_channel_id": "111111111",
+      "user_entry_leave_channel_id": "444444444",
+      "welcome_backlog_channel_id": "555555555",
+      "message_log_channel_id": "999999999",
+      "automod_log_channel_id": "222222222",
+      "allowed_roles": ["333333333"],
+      "runtime_config": {
+        "disable_message_logs": false
+      }
     }
-    
-    _, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
-    return err
+  ],
+  "runtime_config": {
+    "moderation_log_mode": "alice_only"
+  }
 }
 ```
 
-### Adding New Commands
+## Runtime configuration panel
 
-```go
-// Implement within the existing command structure
-func (ch *CommandHandler) registerCustomCommands() error {
-    // Your custom command logic
-    return nil
-}
+Use `/config runtime` in Discord to edit `settings.json` at runtime. Toggles include:
+
+- `disable_entry_exit_logs`
+- `disable_user_logs`
+- `disable_message_logs`
+- `disable_reaction_logs`
+- `disable_automod_logs`
+- `moderation_log_mode`
+- `message_cache_ttl_hours`
+- `message_delete_on_log`
+- `message_cache_cleanup`
+- `presence_watch_user_id`
+- `presence_watch_bot`
+- `backfill_channel_id`
+- `backfill_start_day`
+- `backfill_initial_date`
+- `disable_bot_role_perm_mirror`
+- `bot_role_perm_mirror_actor_role_id`
+
+## Entry/exit backfill
+
+Backfill runs automatically on startup when configured:
+
+- If `backfill_start_day` is set, a day scan runs for that date.
+- Otherwise, if `backfill_initial_date` is set and there is no prior progress, a range scan runs from that date to now.
+- If a last event exists and downtime exceeds the threshold, a range scan runs from last event to now.
+
+Channels are resolved in this order:
+
+- `runtime_config.backfill_channel_id` (global)
+- `welcome_backlog_channel_id`
+- `user_entry_leave_channel_id`
+
+Parsed sources:
+
+- Alicebot embeds titled "Member Joined" / "Member Left"
+- Mimu-style welcome/goodbye messages with mentions
+
+## Gateway performance warnings
+
+Slow gateway handlers are logged by default.
+
+- `ALICE_GATEWAY_PERF_THRESHOLD_MS` (default: 200)
+- Set to `0` to disable
+
+## Required permissions
+
+- View Channels
+- Send Messages
+- Embed Links
+- Read Message History
+- Use Slash Commands
+
+## Testing
+
+```bash
+
+go test ./...
+
+go vet ./...
 ```
-
-## Logs and Debugging
-
-### Log Levels
-
-- Info: Main events (joins/leaves, avatar changes)
-- Debug: Message cache, internal details
-- Error: Notification delivery failures, API errors
-
-### Stats
-
-```go
-// Per-guild configuration
-config := configManager.GuildConfig("guild_id")
-```
-
-## Performance
-
-### Message Cache
-
-- Stores messages for 24 hours to detect edits
-- Automatic cleanup every hour
-- Thread-safe protection with RWMutex
-
-### Avatar Debounce
-
-- Prevents duplicate notifications
-- 5-second temporary cache
-- Automatic cleanup of old entries
-
-### Periodic Checks
-
-- Avatar checks every 30 minutes
-- Automatic cache initialization for new servers
-
-## Required Permissions
-
-The bot needs the following permissions:
-
-- `View Channels`
-- `Send Messages`
-- `Embed Links`
-- `Read Message History`
-- `Use Slash Commands`
-
-### Channel Configuration
-
-The library supports separate channels for different types of logs:
-
-- `user_entry_leave_channel_id`: User joins/leaves (moderation/logs)
-- `welcome_backlog_channel_id`: Public welcome/goodbye channel used for backlog/backfill (optional)
-- `user_log_channel_id`: Avatar changes (and fallback channel)
-- `message_log_channel_id`: Message edits and deletions
-- `automod_log_channel_id`: Actions from the automatic moderation system
-
-#### Runtime flags (settings.json)
-
-These operational toggles are managed via the `/config runtime` panel and persisted in `settings.json`:
-
-- `disable_entry_exit_logs` — When set to `true`, disables the member join/leave pipeline (no entry/exit embeds or metrics).
-- `disable_user_logs` — Disables avatar/role monitoring and notifications.
-- `disable_message_logs` — Disables message edit/delete logging.
-- `disable_reaction_logs` — Disables reaction metrics.
-
-#### Entry/Exit backfill
-
-Enable an automatic, one-shot backfill right after services start to reconstruct join/leave data from a welcome/backlog channel:
-
-- `backfill_enabled` — `true` to enable the job at startup.
-- `backfill_channel_id` — the channel to scan (e.g., `1413465672708657216`).
-- `backfill_start_day` — UTC day to scan in `YYYY-MM-DD` format; defaults to “today” if omitted.
-- `backfill_initial_days` — Number of days to scan back when the bot has no progress recorded (default: 0).
-
-Behavior:
-
-- Runs once after initialization via the internal task system.
-- Scans the configured channel for the specified day, paging newest → oldest (100 messages per page) until leaving the day.
-- Parses:
-    - This bot’s own embeds with titles “Member joined” and “Member left”.
-    - Mimu-like text messages containing a user mention and the keywords “welcome” / “goodbye”.
-- Updates the database by:
-    - Upserting member join timestamps using the embed/message timestamp.
-    - Incrementing `daily_member_joins` and `daily_member_leaves` counters for metrics.
-
-If `backfill_enabled=true` and `backfill_channel_id` is empty, the backfill will be
-auto-dispatched for each configured guild, preferring `welcome_backlog_channel_id` and falling back to
-`user_entry_leave_channel_id`.
-
-This allows better organization of logs and configuring permissions specific to each event type.
-
-## Known Limitations
-
-1. Time in Server: Without historical data, it is not possible to precisely calculate how long older users were in the
-   server
-2. Who Deleted: The Discord API does not directly provide information about who deleted a message
-3. Message Cache: Messages sent before the bot starts are not tracked for edits
-
-## Roadmap
-
-### Future Improvements
-
-- [ ] Integration with audit logs to detect moderators
-- [ ] Persist join data for precise time-in-server calculation
-- [ ] Webhook system for external notifications
-- [ ] Web dashboard for configuration
-- [ ] Advanced metrics and analytics
-
-## Dependencies
-
-```go
-require (
-    github.com/alice-bnuy/errutil v1.1.0
-    github.com/alice-bnuy/logutil v1.0.0
-    github.com/bwmarrin/discordgo v0.29.0
-    github.com/joho/godotenv v1.5.1
-)
-```
-
-## Embed Examples
-
-### User Join
-
-```
-Member joined
-@user (123456789)
-Account created: 2 years, 5 months ago
-```
-
-### User Leave
-
-```
-Member left
-@user (123456789)  
-Time in server: Unknown
-```
-
-### Message Edited
-
-```
-Message edited
-@user edited a message in #general
-
-Before: Hello world
-After: Hello world!!!
-```
-
-### Message Deleted
-
-```
-Message deleted
-Message by @user deleted in #general
-
-Content: Message that was deleted
-Deleted by: User
-```
-
-## Contributing
-
-1. Fork the project
-2. Create a branch for your feature
-3. Commit your changes
-4. Open a Pull Request
 
 ## License
 
-This project is an internal library. Refer to the appropriate terms of use.
+Internal project. Refer to the repository license for terms.

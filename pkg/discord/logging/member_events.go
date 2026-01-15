@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -111,6 +112,13 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	if m == nil || m.User == nil || m.User.Bot {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"guild_member_add",
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.User.ID),
+	)
+	defer done()
 
 	mes.markEvent()
 	cfg := mes.configManager.Config()
@@ -224,6 +232,13 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		return
 	}
 
+	done := perf.StartGatewayEvent(
+		"guild_member_remove",
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.User.ID),
+	)
+	defer done()
+
 	mes.markEvent()
 	cfg := mes.configManager.Config()
 	if cfg == nil {
@@ -301,6 +316,14 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 	if m == nil || m.User == nil || m.User.Bot {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"guild_member_update",
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.User.ID),
+	)
+	defer done()
+
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil || !guildConfig.AutoRoleAssignmentEnabled {
 		return

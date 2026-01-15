@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -149,6 +150,16 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		slog.Debug("MessageCreate: ignoring bot message", "channelID", m.ChannelID, "userID", m.Author.ID)
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"message_create",
+		slog.String("guildID", m.GuildID),
+		slog.String("channelID", m.ChannelID),
+		slog.String("messageID", m.ID),
+		slog.String("userID", m.Author.ID),
+	)
+	defer done()
+
 	if m.Content == "" {
 		// Build a concise summary for non-text messages so we can still cache deletes/edits
 		extra := ""
@@ -255,6 +266,13 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		slog.Debug("MessageUpdate: ignoring bot edit", "messageID", m.ID, "userID", m.Author.ID, "channelID", m.ChannelID)
 		return
 	}
+	done := perf.StartGatewayEvent(
+		"message_update",
+		slog.String("guildID", m.GuildID),
+		slog.String("channelID", m.ChannelID),
+		slog.String("messageID", m.ID),
+	)
+	defer done()
 	authorID := ""
 	if m.Author != nil {
 		authorID = m.Author.ID
@@ -427,6 +445,14 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 	if m == nil {
 		return
 	}
+
+	done := perf.StartGatewayEvent(
+		"message_delete",
+		slog.String("guildID", m.GuildID),
+		slog.String("channelID", m.ChannelID),
+		slog.String("messageID", m.ID),
+	)
+	defer done()
 
 	var cached *CachedMessage
 
