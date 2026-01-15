@@ -471,7 +471,7 @@ func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "ℹ️ Info",
 		Description: message,
-		Color:       theme.Info(),
+		Color:       theme.MemberRoleUpdate(),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -544,7 +544,7 @@ func (ns *NotificationSender) SendErrorMessage(channelID, message string) error 
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrErrorTitle,
 		Description: message,
-		Color:       theme.Error(),
+		Color:       theme.MessageDelete(),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
@@ -555,7 +555,7 @@ func (ns *NotificationSender) SendSuccessMessage(channelID, message string) erro
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrSuccessTitle,
 		Description: message,
-		Color:       theme.Success(),
+		Color:       theme.MemberJoin(),
 	}
 
 	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)

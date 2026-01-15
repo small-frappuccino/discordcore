@@ -17,6 +17,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
 var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
@@ -1584,7 +1585,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			desc := fmt.Sprintf("<@%s> updated roles for **%s** (<@%s>, `%s`)", actorID, m.User.Username, m.User.ID, m.User.ID)
 			embed := &discordgo.MessageEmbed{
 				Title:       "Roles updated",
-				Color:       0x3498db,
+				Color:       theme.MemberRoleUpdate(),
 				Description: desc,
 				Fields: []*discordgo.MessageEmbedField{
 					{
@@ -1669,7 +1670,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				desc := fmt.Sprintf("Role changes detected for **%s** (<@%s>, `%s`)", m.User.Username, m.User.ID, m.User.ID)
 				embed := &discordgo.MessageEmbed{
 					Title:       "Roles updated (fallback)",
-					Color:       0x3498db,
+					Color:       theme.MemberRoleUpdate(),
 					Description: desc,
 					Fields: []*discordgo.MessageEmbedField{
 						{

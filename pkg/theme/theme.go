@@ -103,29 +103,29 @@ func (t *Theme) ensureDefaults() {
 	}
 
 	if t.AvatarChange == 0 {
-		t.AvatarChange = t.Primary
+		t.AvatarChange = 0x7AA2F7
 	}
 	if t.MemberJoin == 0 {
-		t.MemberJoin = 0x4DF475 // legacy green used by current embeds
+		t.MemberJoin = 0x9ECE6A
 	}
 	if t.MemberLeave == 0 {
-		t.MemberLeave = t.Danger // stronger red
+		t.MemberLeave = 0xF7768E
 	}
 	if t.MessageEdit == 0 {
-		t.MessageEdit = t.Warning
+		t.MessageEdit = 0xE0AF68
 	}
 	if t.MessageDelete == 0 {
-		t.MessageDelete = t.Error
+		t.MessageDelete = 0xF7768E
 	}
 	if t.AutomodAction == 0 {
-		t.AutomodAction = 0xFF5555 // legacy automod color
+		t.AutomodAction = 0xF7768E
 	}
 	if t.MemberRoleUpdate == 0 {
-		t.MemberRoleUpdate = t.Info
+		t.MemberRoleUpdate = 0x7AA2F7
 	}
 }
 
-// defaultTheme returns the current built-in theme (mirrors existing hardcoded colors).
+// defaultTheme returns the current built-in theme.
 func defaultTheme() *Theme {
 	th := &Theme{
 		Name:    "default",
@@ -148,13 +148,13 @@ func defaultTheme() *Theme {
 		StatusError:    0xED4245,
 		StatusDefault:  0x99AAB5,
 
-		AvatarChange:     0x5865F2,
-		MemberJoin:       0x57F287,
-		MemberLeave:      0xED4245,
-		MessageEdit:      0xF59E0B,
-		MessageDelete:    0xED4245,
-		AutomodAction:    0xED4245,
-		MemberRoleUpdate: 0x3B82F6,
+		AvatarChange:     0x7AA2F7,
+		MemberJoin:       0x9ECE6A,
+		MemberLeave:      0xF7768E,
+		MessageEdit:      0xE0AF68,
+		MessageDelete:    0xF7768E,
+		AutomodAction:    0xF7768E,
+		MemberRoleUpdate: 0x7AA2F7,
 	}
 	th.ensureDefaults()
 	return th

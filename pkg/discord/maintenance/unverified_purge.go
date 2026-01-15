@@ -314,7 +314,7 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
-		Color:       theme.Warning(),
+		Color:       theme.AutomodAction(),
 		Description: desc,
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),

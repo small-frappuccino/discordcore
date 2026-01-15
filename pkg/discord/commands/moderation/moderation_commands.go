@@ -555,7 +555,7 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Moderation action",
-		Color:       theme.Warning(),
+		Color:       theme.AutomodAction(),
 		Description: fmt.Sprintf("Moderation action executed by <@%s>.", botID),
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
