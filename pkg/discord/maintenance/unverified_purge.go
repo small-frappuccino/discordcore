@@ -281,6 +281,9 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 	if s.session == nil || s.configManager == nil || guildID == "" {
 		return
 	}
+	if candidates == 0 {
+		return
+	}
 
 	if botID == "" && s.session.State != nil && s.session.State.User != nil {
 		botID = s.session.State.User.ID
@@ -298,45 +301,15 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 		mode = "Dry run"
 	}
 
-	title := "Unverified Member Purge"
-	desc := fmt.Sprintf("Automated cleanup of members who haven't received <@&%s> within **%d days** of joining.", verifiedRoleID, graceDays)
-	if candidates == 0 {
-		desc += "\n\nNo action required."
-	}
+	title := "Unverified Purge"
+	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**.", verifiedRoleID, graceDays)
 
 	fields := []*discordgo.MessageEmbedField{
 		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
 		{Name: "Mode", Value: mode, Inline: true},
 		{Name: "Verified Role", Value: "<@&" + verifiedRoleID + "> (`" + verifiedRoleID + "`)", Inline: false},
-		{Name: "Joined Before", Value: fmt.Sprintf("<t:%d:F> (<t:%d:R>)", cutoff.Unix(), cutoff.Unix()), Inline: true},
-		{Name: "Candidates", Value: fmt.Sprintf("%d", candidates), Inline: true},
-		{Name: "Checked", Value: fmt.Sprintf("%d", checked), Inline: true},
-		{Name: "Kicked", Value: fmt.Sprintf("%d", kicked), Inline: true},
-		{Name: "Limits", Value: fmt.Sprintf("%d/s, max %d per run", kps, maxKicks), Inline: true},
-	}
-
-	if len(affectedIDs) > 0 {
-		maxList := 20
-		if len(affectedIDs) < maxList {
-			maxList = len(affectedIDs)
-		}
-		lines := make([]string, 0, maxList+1)
-		for i := 0; i < maxList; i++ {
-			id := affectedIDs[i]
-			lines = append(lines, fmt.Sprintf("<@%s> (`%s`)", id, id))
-		}
-		if len(affectedIDs) > maxList {
-			lines = append(lines, fmt.Sprintf("…and %d more", len(affectedIDs)-maxList))
-		}
-		label := "Affected Members"
-		if dryRun {
-			label = "Would Remove"
-		}
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   label,
-			Value:  truncateFieldValue(strings.Join(lines, "\n")),
-			Inline: false,
-		})
+		{Name: "Joined Before", Value: fmt.Sprintf("<t:%d:R>", cutoff.Unix()), Inline: true},
+		{Name: "Removed", Value: fmt.Sprintf("%d", kicked), Inline: true},
 	}
 
 	embed := &discordgo.MessageEmbed{
