@@ -37,7 +37,6 @@ func NewConfigManagerWithPath(configPath string) *ConfigManager {
 // Load loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
 	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
 
 	if mgr.config == nil {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
@@ -47,8 +46,10 @@ func (mgr *ConfigManager) LoadConfig() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigFileNotFound, mgr.configFilePath))
+			mgr.mu.Unlock()
 			return nil
 		}
+		mgr.mu.Unlock()
 		return errutil.HandleConfigError("read", mgr.configFilePath, func() error { return err })
 	}
 
@@ -56,6 +57,18 @@ func (mgr *ConfigManager) LoadConfig() error {
 		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigNoGuilds, mgr.configFilePath))
 	}
 
+	dupCount, err := mgr.rebuildGuildIndexLocked("load")
+	if err != nil {
+		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.configFilePath)
+	}
+	mgr.mu.Unlock()
+
+	if dupCount > 0 {
+		if saveErr := mgr.SaveConfig(); saveErr != nil {
+			return fmt.Errorf("save config after dedupe: %w", saveErr)
+		}
+		log.ApplicationLogger().Info("Saved config after dedupe", "path", mgr.configFilePath, "duplicates", dupCount)
+	}
 	return nil
 }
 
@@ -100,17 +113,96 @@ func (mgr *ConfigManager) HasAnyGuilds() bool {
 
 // GuildConfig returns the configuration for a specific guild.
 func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-	if mgr.config == nil {
+	if guildID == "" {
 		return nil
 	}
-	for i := range mgr.config.Guilds {
-		if mgr.config.Guilds[i].GuildID == guildID {
-			return &mgr.config.Guilds[i]
+	mgr.mu.RLock()
+	if mgr.config == nil {
+		mgr.mu.RUnlock()
+		return nil
+	}
+	if mgr.guildIndex != nil {
+		if idx, ok := mgr.guildIndex[guildID]; ok {
+			if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == guildID {
+				gc := &mgr.config.Guilds[idx]
+				mgr.mu.RUnlock()
+				return gc
+			}
 		}
 	}
+	mgr.mu.RUnlock()
+	mgr.indexMisses.Add(1)
+	// Fallback: rebuild index and try once more under write lock.
+	return mgr.guildConfigWithRebuild(guildID)
+}
+
+func (mgr *ConfigManager) guildConfigWithRebuild(guildID string) *GuildConfig {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	if mgr.config == nil || guildID == "" {
+		return nil
+	}
+	if _, err := mgr.rebuildGuildIndexLocked("lookup_miss"); err != nil {
+		log.ApplicationLogger().Warn("Guild config index rebuild warning", "guildID", guildID, "error", err)
+	}
+	if idx, ok := mgr.guildIndex[guildID]; ok {
+		if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == guildID {
+			return &mgr.config.Guilds[idx]
+		}
+	}
+	log.ApplicationLogger().Info("Guild config not found", "guildID", guildID)
 	return nil
+}
+
+func (mgr *ConfigManager) rebuildGuildIndexLocked(reason string) (int, error) {
+	mgr.indexRebuilds.Add(1)
+	if mgr.config == nil {
+		mgr.guildIndex = nil
+		log.ApplicationLogger().Info("Guild config index cleared", "reason", reason)
+		return 0, nil
+	}
+	index := make(map[string]int, len(mgr.config.Guilds))
+	deduped := make([]GuildConfig, 0, len(mgr.config.Guilds))
+	dupCount := 0
+
+	for _, g := range mgr.config.Guilds {
+		gid := g.GuildID
+		if gid == "" {
+			deduped = append(deduped, g)
+			continue
+		}
+		if _, exists := index[gid]; exists {
+			dupCount++
+			continue
+		}
+		index[gid] = len(deduped)
+		deduped = append(deduped, g)
+	}
+
+	if dupCount > 0 {
+		mgr.indexDuplicates.Add(uint64(dupCount))
+		log.ApplicationLogger().Warn("Duplicate guild configs removed", "reason", reason, "duplicates", dupCount, "remaining", len(deduped))
+		mgr.config.Guilds = deduped
+	}
+
+	mgr.guildIndex = index
+	log.ApplicationLogger().Info("Guild config index rebuilt", "reason", reason, "guilds", len(mgr.config.Guilds))
+	if dupCount > 0 {
+		return dupCount, fmt.Errorf("removed %d duplicate guild configs", dupCount)
+	}
+	return dupCount, nil
+}
+
+// GuildIndexStats returns counters for index rebuilds, misses, and duplicate removals.
+func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
+	if mgr == nil {
+		return GuildIndexStats{}
+	}
+	return GuildIndexStats{
+		Rebuilds:   mgr.indexRebuilds.Load(),
+		Misses:     mgr.indexMisses.Load(),
+		Duplicates: mgr.indexDuplicates.Load(),
+	}
 }
 
 // AddGuildConfig adds or replaces a guild configuration.
@@ -124,6 +216,9 @@ func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.config.Guilds = append(slices.DeleteFunc(mgr.config.Guilds, func(g GuildConfig) bool {
 		return g.GuildID == guildCfg.GuildID
 	}), guildCfg)
+	if _, err := mgr.rebuildGuildIndexLocked("add"); err != nil {
+		return fmt.Errorf("add guild config: %w", err)
+	}
 	return nil
 }
 
@@ -137,6 +232,9 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 	mgr.config.Guilds = slices.DeleteFunc(mgr.config.Guilds, func(g GuildConfig) bool {
 		return g.GuildID == guildID
 	})
+	if _, err := mgr.rebuildGuildIndexLocked("remove"); err != nil {
+		log.ApplicationLogger().Warn("Guild config index rebuild warning", "guildID", guildID, "error", err)
+	}
 }
 
 // --- Guild Detection & Addition ---
@@ -184,6 +282,11 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		mgr.mu.Unlock()
 		log.ApplicationLogger().Info("Guild added", "guildName", fullGuild.Name, "guildID", g.ID, "channelID", channelID)
 	}
+	mgr.mu.Lock()
+	if _, err := mgr.rebuildGuildIndexLocked("detect"); err != nil {
+		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err)
+	}
+	mgr.mu.Unlock()
 	return mgr.SaveConfig()
 }
 
@@ -237,6 +340,9 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	}
 	mgr.mu.Lock()
 	mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
+	if _, err := mgr.rebuildGuildIndexLocked("register"); err != nil {
+		log.ApplicationLogger().Warn("Guild config index rebuild warning", "guildID", guildID, "error", err)
+	}
 	mgr.mu.Unlock()
 	channelName := channelID
 	if ch, err := session.Channel(channelID); err == nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -310,11 +311,22 @@ func NormalizeModerationLogMode(raw string) ModerationLogMode {
 
 // ConfigManager handles bot configuration management.
 type ConfigManager struct {
-	configFilePath string
-	logsDirPath    string
-	config         *BotConfig
-	mu             sync.RWMutex
-	jsonManager    *util.JSONManager
+	configFilePath  string
+	logsDirPath     string
+	config          *BotConfig
+	guildIndex      map[string]int
+	indexRebuilds   atomic.Uint64
+	indexMisses     atomic.Uint64
+	indexDuplicates atomic.Uint64
+	mu              sync.RWMutex
+	jsonManager     *util.JSONManager
+}
+
+// GuildIndexStats exposes counters for the guild config index.
+type GuildIndexStats struct {
+	Rebuilds   uint64
+	Misses     uint64
+	Duplicates uint64
 }
 
 // AvatarChange holds information about a user's avatar change.
