@@ -256,6 +256,7 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	// Wire task adapters into sub-services
 	ms.memberEventService.SetAdapters(adapters)
 	ms.messageEventService.SetAdapters(adapters)
+	ms.messageEventService.SetTaskRouter(router)
 	ms.adapters.SetAvatarProcessor(ms.userWatcher)
 	return ms, nil
 }

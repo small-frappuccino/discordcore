@@ -99,6 +99,7 @@ var (
 	ErrRouterClosed    = errors.New("task router is closed")
 	ErrUnknownTaskType = errors.New("unknown task type")
 	ErrDuplicateTask   = errors.New("duplicate task (idempotency key present)")
+	ErrRetrySilent     = errors.New("retryable task error (silent)")
 )
 
 const globalGroup = "_global"
@@ -394,19 +395,31 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 		}()
 
 		if err != nil {
+			silent := errors.Is(err, ErrRetrySilent)
 			// Retry if allowed
 			if enq.attempt < eff.MaxAttempts {
 				delay := tr.computeBackoff(eff.InitialBackoff, eff.MaxBackoff, enq.attempt)
 				attempt := enq.attempt + 1
 
-				log.ApplicationLogger().Warn("Task failed, scheduling retry",
-					"type", enq.task.Type,
-					"group", gw.key,
-					"attempt", attempt,
-					"max_attempts", eff.MaxAttempts,
-					"backoff", delay.String(),
-					"err", err,
-				)
+				if silent {
+					log.ApplicationLogger().Debug("Task failed, scheduling retry",
+						"type", enq.task.Type,
+						"group", gw.key,
+						"attempt", attempt,
+						"max_attempts", eff.MaxAttempts,
+						"backoff", delay.String(),
+						"err", err,
+					)
+				} else {
+					log.ApplicationLogger().Warn("Task failed, scheduling retry",
+						"type", enq.task.Type,
+						"group", gw.key,
+						"attempt", attempt,
+						"max_attempts", eff.MaxAttempts,
+						"backoff", delay.String(),
+						"err", err,
+					)
+				}
 
 				// Re-enqueue after backoff (same group)
 				tr.wg.Add(1)
@@ -441,12 +454,21 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 				continue
 			}
 
-			log.ErrorLoggerRaw().Error("Task failed; max attempts reached",
-				"type", enq.task.Type,
-				"group", gw.key,
-				"attempts", enq.attempt,
-				"err", err,
-			)
+			if silent {
+				log.ApplicationLogger().Info("Task dropped after retry window",
+					"type", enq.task.Type,
+					"group", gw.key,
+					"attempts", enq.attempt,
+					"err", err,
+				)
+			} else {
+				log.ErrorLoggerRaw().Error("Task failed; max attempts reached",
+					"type", enq.task.Type,
+					"group", gw.key,
+					"attempts", enq.attempt,
+					"err", err,
+				)
+			}
 		}
 
 		// Success or final failure: allow idempotency key to naturally expire.
