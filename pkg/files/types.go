@@ -66,6 +66,22 @@ type ChannelsConfig struct {
 	ModerationLog    string `json:"moderation_log,omitempty"` // Dedicated moderation log channel (exclusive)
 }
 
+// StatsChannelConfig defines a channel that should reflect a member count.
+type StatsChannelConfig struct {
+	ChannelID    string `json:"channel_id,omitempty"`
+	Label        string `json:"label,omitempty"`
+	NameTemplate string `json:"name_template,omitempty"` // Supports {label} and {count}
+	MemberType   string `json:"member_type,omitempty"`   // all|humans|bots (default: all)
+	RoleID       string `json:"role_id,omitempty"`       // Optional role filter
+}
+
+// StatsConfig groups the periodic stats channel updates for a guild.
+type StatsConfig struct {
+	Enabled            bool                 `json:"enabled,omitempty"`
+	UpdateIntervalMins int                  `json:"update_interval_mins,omitempty"` // default: 30
+	Channels           []StatsChannelConfig `json:"channels,omitempty"`
+}
+
 // AutoAssignmentConfig defines automatic role assignment rules.
 type AutoAssignmentConfig struct {
 	Enabled       bool     `json:"enabled,omitempty"`
@@ -97,6 +113,7 @@ type GuildConfig struct {
 	GuildID    string         `json:"guild_id"`
 	Channels   ChannelsConfig `json:"channels,omitempty"`
 	Roles      RolesConfig    `json:"roles,omitempty"`
+	Stats      StatsConfig    `json:"stats,omitempty"`
 	Rulesets   []Ruleset      `json:"rulesets,omitempty"`
 	LooseLists []Rule         `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
 	Blocklist  []string       `json:"blocklist,omitempty"`

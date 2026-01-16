@@ -188,6 +188,11 @@ type MonitoringService struct {
 	presenceWatchMu sync.Mutex
 	presenceWatch   map[string]presenceSnapshot
 
+	// Stats channel updates
+	statsCronCancel func()
+	statsLastRun    map[string]time.Time
+	statsMu         sync.Mutex
+
 	// Metrics counters
 	apiAuditLogCalls     uint64
 	apiGuildMemberCalls  uint64
@@ -246,6 +251,7 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		rolesCacheCleanup:   make(chan struct{}),
 		eventHandlers:       make([]interface{}, 0),
 		presenceWatch:       make(map[string]presenceSnapshot),
+		statsLastRun:        make(map[string]time.Time),
 	}
 	// Wire task adapters into sub-services
 	ms.memberEventService.SetAdapters(adapters)
@@ -425,15 +431,25 @@ func (ms *MonitoringService) Start() error {
 		return nil
 	})
 
+	ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
+		ms.updateStatsChannels()
+		return nil
+	})
+
 	// Using TaskRouter scheduler helpers for daily scheduling
 	// Schedule periodic jobs
 	ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars"})
+	ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels"})
 	// Schedule daily roles refresh at 03:00 UTC
 	ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
 
 	// Trigger one-time roles refresh on startup (non-blocking)
 	go func() {
 		_ = ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.refresh_roles"})
+	}()
+
+	go func() {
+		_ = ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.update_stats_channels"})
 	}()
 
 	// Register one-shot entry/exit backfill handler (Option A)
@@ -875,6 +891,9 @@ func (ms *MonitoringService) Stop() error {
 	// Cancel cron before closing router
 	if ms.cronCancel != nil {
 		ms.cronCancel()
+	}
+	if ms.statsCronCancel != nil {
+		ms.statsCronCancel()
 	}
 
 	if ms.router != nil {
