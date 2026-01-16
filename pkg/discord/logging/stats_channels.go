@@ -209,9 +209,9 @@ func renderStatsChannelName(label, template string, count int) string {
 	tmpl := strings.TrimSpace(template)
 	if tmpl == "" {
 		if label == "" {
-			return fmt.Sprintf("%d", count)
+			return fmt.Sprintf("☆  ☆ : %d", count)
 		}
-		return fmt.Sprintf("%s: %d", label, count)
+		return fmt.Sprintf("☆ %s ☆ : %d", strings.ToLower(label), count)
 	}
 	out := strings.ReplaceAll(tmpl, "{count}", fmt.Sprintf("%d", count))
 	out = strings.ReplaceAll(out, "{label}", label)
