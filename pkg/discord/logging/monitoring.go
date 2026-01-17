@@ -1421,9 +1421,9 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		botID = s.State.User.ID
 	}
 
-	// Role update logging (via Audit Log)
-	channelID, ok := ResolveModerationLogChannel(ms.session, ms.configManager, m.GuildID)
-	if !ok {
+	// Role update logging goes to user activity log (same channel as avatar changes)
+	channelID := strings.TrimSpace(gcfg.Channels.UserActivityLog)
+	if channelID == "" {
 		return
 	}
 

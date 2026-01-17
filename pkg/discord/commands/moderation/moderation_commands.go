@@ -18,6 +18,8 @@ const (
 	maxAuditLogReasonLen = 512
 	minSnowflakeLength   = 15
 	maxSnowflakeLength   = 21
+	cleanMaxDelete       = 100
+	cleanMaxFetch        = 500
 )
 
 var userMentionRe = regexp.MustCompile(`^<@!?(\d+)>$`)
@@ -33,6 +35,7 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 	moderationGroup.AddSubCommand(newBanCommand())
 	moderationGroup.AddSubCommand(newMassBanCommand())
 
+	router.RegisterCommand(newCleanCommand())
 	router.RegisterCommand(moderationGroup)
 }
 
@@ -184,6 +187,131 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
 }
 
+type cleanCommand struct{}
+
+func newCleanCommand() *cleanCommand { return &cleanCommand{} }
+
+func (c *cleanCommand) Name() string { return "clean" }
+
+func (c *cleanCommand) Description() string {
+	return "Delete recent messages in this channel"
+}
+
+func (c *cleanCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        "num",
+			Description: "How many messages to delete (max 100)",
+			Required:    true,
+			MinValue:    floatPtr(1),
+			MaxValue:    float64(cleanMaxDelete),
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionUser,
+			Name:        "user",
+			Description: "Only delete messages from a specific user",
+			Required:    false,
+		},
+	}
+}
+
+func (c *cleanCommand) RequiresGuild() bool { return true }
+
+func (c *cleanCommand) RequiresPermissions() bool { return true }
+
+func (c *cleanCommand) Handle(ctx *core.Context) error {
+	if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
+		return core.NewCommandError("Session not ready. Try again shortly.", true)
+	}
+	channelID := strings.TrimSpace(ctx.Interaction.ChannelID)
+	if channelID == "" {
+		return core.NewCommandError("Channel not available for this command.", true)
+	}
+
+	extractor := core.NewOptionExtractor(ctx.Interaction.ApplicationCommandData().Options)
+	num := extractor.Int("num")
+	if num <= 0 {
+		return core.NewCommandError("Please provide a valid number of messages to delete.", true)
+	}
+	if num > cleanMaxDelete {
+		return core.NewCommandError("You can delete up to 100 messages at a time.", true)
+	}
+
+	userID, userLabel, err := resolveCleanUserOption(ctx)
+	if err != nil {
+		return core.NewCommandError(err.Error(), true)
+	}
+
+	if err := ensureManageMessagesPermission(ctx); err != nil {
+		return err
+	}
+
+	messages, err := fetchMessagesForClean(ctx.Session, channelID, int(num), userID)
+	if err != nil {
+		return core.NewCommandError(fmt.Sprintf("Failed to fetch messages: %v", err), true)
+	}
+	if len(messages) == 0 {
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No matching messages found.")
+	}
+
+	cutoff := time.Now().Add(-14 * 24 * time.Hour)
+	deleteIDs := make([]string, 0, len(messages))
+	skippedOld := 0
+	for _, msg := range messages {
+		if msg == nil || msg.ID == "" {
+			continue
+		}
+		if !msg.Timestamp.IsZero() && msg.Timestamp.Before(cutoff) {
+			skippedOld++
+			continue
+		}
+		deleteIDs = append(deleteIDs, msg.ID)
+	}
+	if len(deleteIDs) == 0 {
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No messages could be deleted (all were too old).")
+	}
+
+	deleted, failed := deleteMessageIDs(ctx.Session, channelID, deleteIDs)
+	filterLabel := "any user"
+	if userID != "" {
+		filterLabel = "<@" + userID + ">"
+	}
+
+	log.ApplicationLogger().Info(
+		"Clean command executed",
+		"guildID", ctx.GuildID,
+		"channelID", channelID,
+		"requested", num,
+		"deleted", deleted,
+		"skipped_old", skippedOld,
+		"failed", failed,
+		"user_filter", userID,
+	)
+
+	sendModerationLog(ctx, moderationLogPayload{
+		Action:      "clean",
+		TargetID:    userID,
+		TargetLabel: userLabel,
+		Reason:      fmt.Sprintf("Deleted %d message(s)", deleted),
+		RequestedBy: ctx.UserID,
+		Extra:       fmt.Sprintf("Channel: <#%s> (`%s`) | Filter: %s | Requested: %d | Deleted: %d | Skipped (old): %d | Failed: %d", channelID, channelID, filterLabel, num, deleted, skippedOld, failed),
+	})
+
+	message := fmt.Sprintf("Deleted %d message(s) in <#%s>.", deleted, channelID)
+	if userID != "" {
+		message = fmt.Sprintf("Deleted %d message(s) from <@%s> in <#%s>.", deleted, userID, channelID)
+	}
+	if skippedOld > 0 {
+		message += fmt.Sprintf(" Skipped %d message(s) older than 14 days.", skippedOld)
+	}
+	if failed > 0 {
+		message += fmt.Sprintf(" Failed to delete %d message(s).", failed)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, message)
+}
+
 func parseMemberIDs(input string) ([]string, []string) {
 	rawIDs := strings.FieldsFunc(input, func(r rune) bool {
 		return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t'
@@ -234,6 +362,172 @@ func buildMassBanMessage(total, banned int, reason string, truncated bool, inval
 	}
 	return message
 }
+
+func resolveCleanUserOption(ctx *core.Context) (string, string, error) {
+	if ctx == nil || ctx.Interaction == nil {
+		return "", "", nil
+	}
+	for _, opt := range ctx.Interaction.ApplicationCommandData().Options {
+		if opt == nil || opt.Name != "user" {
+			continue
+		}
+		switch opt.Type {
+		case discordgo.ApplicationCommandOptionUser:
+			if user := opt.UserValue(ctx.Session); user != nil {
+				return user.ID, user.Username, nil
+			}
+			if raw, ok := opt.Value.(string); ok {
+				if normalized, ok := normalizeUserID(raw); ok {
+					return normalized, "", nil
+				}
+				return "", "", fmt.Errorf("Invalid user ID or mention.")
+			}
+		case discordgo.ApplicationCommandOptionString:
+			raw := strings.TrimSpace(opt.StringValue())
+			if raw == "" {
+				return "", "", nil
+			}
+			normalized, ok := normalizeUserID(raw)
+			if !ok {
+				return "", "", fmt.Errorf("Invalid user ID or mention.")
+			}
+			return normalized, "", nil
+		}
+	}
+	return "", "", nil
+}
+
+func ensureManageMessagesPermission(ctx *core.Context) error {
+	if ctx == nil || ctx.Session == nil {
+		return core.NewCommandError("Session not ready. Try again shortly.", true)
+	}
+
+	roles, err := getGuildRoles(ctx.Session, ctx.GuildID)
+	if err != nil {
+		return core.NewCommandError("Failed to resolve server roles.", true)
+	}
+	rolesByID := buildRoleIndex(roles)
+
+	ownerID, _ := getGuildOwnerID(ctx.Session, ctx.GuildID)
+
+	botID := ""
+	if ctx.Session.State != nil && ctx.Session.State.User != nil {
+		botID = ctx.Session.State.User.ID
+	}
+	if botID == "" {
+		return core.NewCommandError("Bot identity not available.", true)
+	}
+
+	actorMember := ctx.Interaction.Member
+	if actorMember == nil || actorMember.User == nil {
+		var ok bool
+		actorMember, ok = getMember(ctx.Session, ctx.GuildID, ctx.UserID)
+		if !ok || actorMember == nil {
+			return core.NewCommandError("Unable to resolve your member record.", true)
+		}
+	}
+
+	botMember, ok := getMember(ctx.Session, ctx.GuildID, botID)
+	if !ok || botMember == nil {
+		return core.NewCommandError("Unable to resolve the bot member record.", true)
+	}
+
+	actorIsOwner := ctx.IsOwner || (ownerID != "" && ctx.UserID == ownerID)
+	botIsOwner := ownerID != "" && botID == ownerID
+
+	if !actorIsOwner && !memberHasPermission(actorMember, rolesByID, ctx.GuildID, ownerID, discordgo.PermissionManageMessages) {
+		return core.NewCommandError("You need the Manage Messages permission to use this command.", true)
+	}
+	if !botIsOwner && !memberHasPermission(botMember, rolesByID, ctx.GuildID, ownerID, discordgo.PermissionManageMessages) {
+		return core.NewCommandError("I need the Manage Messages permission to delete messages.", true)
+	}
+	return nil
+}
+
+func fetchMessagesForClean(session *discordgo.Session, channelID string, target int, userID string) ([]*discordgo.Message, error) {
+	if session == nil || channelID == "" || target <= 0 {
+		return nil, nil
+	}
+	var out []*discordgo.Message
+	beforeID := ""
+	fetched := 0
+	for fetched < cleanMaxFetch && len(out) < target {
+		batchSize := minInt(100, cleanMaxFetch-fetched)
+		msgs, err := session.ChannelMessages(channelID, batchSize, beforeID, "", "")
+		if err != nil {
+			return nil, err
+		}
+		if len(msgs) == 0 {
+			break
+		}
+		fetched += len(msgs)
+		for _, msg := range msgs {
+			if msg == nil || msg.ID == "" {
+				continue
+			}
+			if userID != "" {
+				if msg.Author == nil || msg.Author.ID != userID {
+					continue
+				}
+			}
+			out = append(out, msg)
+			if len(out) >= target {
+				break
+			}
+		}
+		beforeID = msgs[len(msgs)-1].ID
+	}
+	return out, nil
+}
+
+func deleteMessageIDs(session *discordgo.Session, channelID string, ids []string) (int, int) {
+	if session == nil || channelID == "" || len(ids) == 0 {
+		return 0, 0
+	}
+	deleted := 0
+	failed := 0
+	for _, chunk := range chunkStrings(ids, 100) {
+		if len(chunk) == 1 {
+			if err := session.ChannelMessageDelete(channelID, chunk[0]); err != nil {
+				failed++
+				continue
+			}
+			deleted++
+			continue
+		}
+		if err := session.ChannelMessagesBulkDelete(channelID, chunk); err != nil {
+			failed += len(chunk)
+			continue
+		}
+		deleted += len(chunk)
+	}
+	return deleted, failed
+}
+
+func chunkStrings(values []string, size int) [][]string {
+	if size <= 0 {
+		return nil
+	}
+	var out [][]string
+	for len(values) > 0 {
+		if len(values) <= size {
+			out = append(out, values)
+			break
+		}
+		out = append(out, values[:size])
+		values = values[size:]
+	}
+	return out
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func floatPtr(v float64) *float64 { return &v }
 
 type banContext struct {
 	rolesByID    map[string]*discordgo.Role
