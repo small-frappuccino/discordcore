@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -909,14 +910,12 @@ func (mes *MessageEventService) cleanupIdleVerificationChannel(guildID, channelI
 		return
 	}
 
-	removed := 0
-	for _, msgID := range toDelete {
-		if err := mes.session.ChannelMessageDelete(channelID, msgID); err != nil {
-			slog.Warn("Verification cleanup: failed to delete stale message", "guildID", guildID, "channelID", channelID, "messageID", msgID, "error", err)
-			continue
-		}
-		removed++
-	}
+	removed, _ := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
+		Mode: cleanup.DeleteModeSingleOnly,
+		OnDeleteError: func(messageID string, err error) {
+			slog.Warn("Verification cleanup: failed to delete stale message", "guildID", guildID, "channelID", channelID, "messageID", messageID, "error", err)
+		},
+	})
 
 	if removed > 0 {
 		slog.Info("Verification cleanup: removed stale messages", "guildID", guildID, "channelID", channelID, "removed", removed)
@@ -934,7 +933,7 @@ func (mes *MessageEventService) cleanupPreviousVerificationMessages(guildID, cha
 		return
 	}
 
-	removed := 0
+	toDelete := make([]string, 0, len(msgs))
 	for _, msg := range msgs {
 		if msg == nil || msg.Author == nil {
 			continue
@@ -945,12 +944,18 @@ func (mes *MessageEventService) cleanupPreviousVerificationMessages(guildID, cha
 		if msg.Author.ID != userID {
 			continue
 		}
-		if err := mes.session.ChannelMessageDelete(channelID, msg.ID); err != nil {
-			slog.Warn("Verification cleanup: failed to delete previous message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", msg.ID, "error", err)
-			continue
-		}
-		removed++
+		toDelete = append(toDelete, msg.ID)
 	}
+	if len(toDelete) == 0 {
+		return
+	}
+
+	removed, _ := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
+		Mode: cleanup.DeleteModeSingleOnly,
+		OnDeleteError: func(messageID string, err error) {
+			slog.Warn("Verification cleanup: failed to delete previous message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", messageID, "error", err)
+		},
+	})
 
 	if removed > 0 {
 		slog.Info("Verification cleanup: removed previous messages", "guildID", guildID, "channelID", channelID, "userID", userID, "removed", removed)
@@ -968,7 +973,7 @@ func (mes *MessageEventService) cleanupAllVerificationMessagesForUser(guildID, c
 		return
 	}
 
-	removed := 0
+	toDelete := make([]string, 0, len(msgs))
 	for _, msg := range msgs {
 		if msg == nil || msg.Author == nil {
 			continue
@@ -979,12 +984,18 @@ func (mes *MessageEventService) cleanupAllVerificationMessagesForUser(guildID, c
 		if msg.Author.ID != userID {
 			continue
 		}
-		if err := mes.session.ChannelMessageDelete(channelID, msg.ID); err != nil {
-			slog.Warn("Verification cleanup: failed to delete verified user message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", msg.ID, "error", err)
-			continue
-		}
-		removed++
+		toDelete = append(toDelete, msg.ID)
 	}
+	if len(toDelete) == 0 {
+		return
+	}
+
+	removed, _ := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
+		Mode: cleanup.DeleteModeSingleOnly,
+		OnDeleteError: func(messageID string, err error) {
+			slog.Warn("Verification cleanup: failed to delete verified user message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", messageID, "error", err)
+		},
+	})
 
 	if removed > 0 {
 		slog.Info("Verification cleanup: removed verified user messages", "guildID", guildID, "channelID", channelID, "userID", userID, "removed", removed)

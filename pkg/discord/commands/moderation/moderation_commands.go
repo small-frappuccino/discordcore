@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -272,7 +273,9 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No messages could be deleted (all were too old).")
 	}
 
-	deleted, failed := deleteMessageIDs(ctx.Session, channelID, deleteIDs)
+	deleted, failed := cleanup.DeleteMessages(ctx.Session, channelID, deleteIDs, cleanup.DeleteOptions{
+		Mode: cleanup.DeleteModeBulkPreferred,
+	})
 	filterLabel := "any user"
 	if userID != "" {
 		filterLabel = "<@" + userID + ">"
@@ -489,46 +492,6 @@ func fetchMessagesForClean(session *discordgo.Session, channelID string, target 
 		beforeID = msgs[len(msgs)-1].ID
 	}
 	return out, nil
-}
-
-func deleteMessageIDs(session *discordgo.Session, channelID string, ids []string) (int, int) {
-	if session == nil || channelID == "" || len(ids) == 0 {
-		return 0, 0
-	}
-	deleted := 0
-	failed := 0
-	for _, chunk := range chunkStrings(ids, 100) {
-		if len(chunk) == 1 {
-			if err := session.ChannelMessageDelete(channelID, chunk[0]); err != nil {
-				failed++
-				continue
-			}
-			deleted++
-			continue
-		}
-		if err := session.ChannelMessagesBulkDelete(channelID, chunk); err != nil {
-			failed += len(chunk)
-			continue
-		}
-		deleted += len(chunk)
-	}
-	return deleted, failed
-}
-
-func chunkStrings(values []string, size int) [][]string {
-	if size <= 0 {
-		return nil
-	}
-	var out [][]string
-	for len(values) > 0 {
-		if len(values) <= size {
-			out = append(out, values)
-			break
-		}
-		out = append(out, values[:size])
-		values = values[size:]
-	}
-	return out
 }
 
 func minInt(a, b int) int {
