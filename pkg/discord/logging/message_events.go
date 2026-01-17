@@ -1070,7 +1070,7 @@ func (mes *MessageEventService) handleGuildMemberUpdate(s *discordgo.Session, m 
 // determineDeletedBy tries to resolve the actor for a deletion via audit log (best-effort).
 func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID, channelID, authorID string) string {
 	if s == nil || guildID == "" || authorID == "" {
-		return "User"
+		return ""
 	}
 
 	cacheKey := authorID + ":" + channelID
@@ -1080,21 +1080,21 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 		if entry, ok := mes.auditCache[guildID]; ok && time.Since(entry.fetchedAt) < mes.auditCacheTTL {
 			if userID := mes.pickAuditEntry(entry.entries, cacheKey); userID != "" {
 				mes.auditCacheMu.Unlock()
-				return "<@" + userID + ">"
+				return userID
 			}
 			if userID := mes.pickAuditEntry(entry.entries, cacheFallbackKey); userID != "" {
 				mes.auditCacheMu.Unlock()
-				return "<@" + userID + ">"
+				return userID
 			}
 			mes.auditCacheMu.Unlock()
-			return "User"
+			return ""
 		}
 		mes.auditCacheMu.Unlock()
 	}
 
 	al, err := s.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMessageDelete), 50)
 	if err != nil || al == nil {
-		return "User"
+		return ""
 	}
 
 	now := time.Now()
@@ -1104,6 +1104,9 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 			continue
 		}
 		if entry.TargetID == "" || entry.UserID == "" {
+			continue
+		}
+		if entry.UserID == authorID {
 			continue
 		}
 		createdAt := now
@@ -1139,13 +1142,13 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 		}
 		mes.auditCacheMu.Unlock()
 		if userID := mes.pickAuditEntry(entries, cacheKey); userID != "" {
-			return "<@" + userID + ">"
+			return userID
 		}
 		if userID := mes.pickAuditEntry(entries, cacheFallbackKey); userID != "" {
-			return "<@" + userID + ">"
+			return userID
 		}
 	}
-	return "User"
+	return ""
 }
 
 func (mes *MessageEventService) pickAuditEntry(entries map[string]auditCacheValue, key string) string {

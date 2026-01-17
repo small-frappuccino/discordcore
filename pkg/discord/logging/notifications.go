@@ -280,9 +280,40 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 	userField := formatUserLabel(deleted.Author.Username, deleted.Author.ID)
 	channelField := formatChannelLabel(deleted.ChannelID)
 	messageTime := deleted.Timestamp.Format("January 2, 2006 at 3:04 PM")
-	deletedByLabel := strings.TrimSpace(deletedBy)
-	if deletedByLabel == "" {
-		deletedByLabel = "Unknown"
+	moderatorID := strings.TrimSpace(deletedBy)
+	showModerator := moderatorID != ""
+	if deleted.Author != nil && deleted.Author.ID != "" && moderatorID == deleted.Author.ID {
+		showModerator = false
+	}
+
+	fields := []*discordgo.MessageEmbedField{
+		{
+			Name:   "User",
+			Value:  userField,
+			Inline: true,
+		},
+		{
+			Name:   "Channel",
+			Value:  channelField,
+			Inline: true,
+		},
+		{
+			Name:   "Message Timestamp",
+			Value:  messageTime,
+			Inline: true,
+		},
+		{
+			Name:   "Message",
+			Value:  truncateString(deleted.Content, 1000),
+			Inline: false,
+		},
+	}
+	if showModerator {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Responsible Moderator",
+			Value:  formatUserRef(moderatorID),
+			Inline: true,
+		})
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -291,33 +322,7 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 			Name:    "Message Deleted",
 			IconURL: ns.buildAvatarURL(deleted.Author.ID, deleted.Author.Avatar),
 		},
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "User",
-				Value:  userField,
-				Inline: true,
-			},
-			{
-				Name:   "Channel",
-				Value:  channelField,
-				Inline: true,
-			},
-			{
-				Name:   "Message Timestamp",
-				Value:  messageTime,
-				Inline: true,
-			},
-			{
-				Name:   "Message",
-				Value:  truncateString(deleted.Content, 1000),
-				Inline: false,
-			},
-			{
-				Name:   "Deleted By",
-				Value:  deletedByLabel,
-				Inline: true,
-			},
-		},
+		Fields:    fields,
 		Timestamp: time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "Message ID: " + deleted.ID,
