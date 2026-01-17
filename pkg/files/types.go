@@ -28,6 +28,7 @@ type RuntimeConfig struct {
 	DisableEntryExitLogs bool `json:"disable_entry_exit_logs,omitempty"`
 	DisableReactionLogs  bool `json:"disable_reaction_logs,omitempty"`
 	DisableUserLogs      bool `json:"disable_user_logs,omitempty"`
+	DisableCleanLog      bool `json:"disable_clean_log,omitempty"`
 	// MODERATION LOGS
 	ModerationLogMode string `json:"moderation_log_mode,omitempty"` // off | alice_only | all (default: alice_only)
 
@@ -253,6 +254,9 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildRC.DisableUserLogs {
 		resolved.DisableUserLogs = true
+	}
+	if guildRC.DisableCleanLog {
+		resolved.DisableCleanLog = true
 	}
 	if guildRC.ModerationLogMode != "" {
 		resolved.ModerationLogMode = guildRC.ModerationLogMode

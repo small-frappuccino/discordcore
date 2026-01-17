@@ -180,6 +180,7 @@ const (
 	runtimeKeyDisableEntryExitLogs runtimeKey = "disable_entry_exit_logs"
 	runtimeKeyDisableReactionLogs  runtimeKey = "disable_reaction_logs"
 	runtimeKeyDisableUserLogs      runtimeKey = "disable_user_logs"
+	runtimeKeyDisableCleanLog      runtimeKey = "disable_clean_log"
 	runtimeKeyModerationLogMode    runtimeKey = "moderation_log_mode"
 
 	// PRESENCE WATCH
@@ -259,6 +260,14 @@ func allSpecs() []spec {
 			Type:        vtBool,
 			DefaultHint: "false",
 			ShortHelp:   "Disable user log handlers (avatars/roles)",
+			RestartHint: restartRecommended,
+		},
+		{
+			Key:         runtimeKeyDisableCleanLog,
+			Group:       "SERVICES (LOGGING)",
+			Type:        vtBool,
+			DefaultHint: "false",
+			ShortHelp:   "Disable /clean logging to the moderation channel",
 			RestartHint: restartRecommended,
 		},
 		{
@@ -571,6 +580,8 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 		return fmtBool(rc.DisableReactionLogs), true
 	case runtimeKeyDisableUserLogs:
 		return fmtBool(rc.DisableUserLogs), true
+	case runtimeKeyDisableCleanLog:
+		return fmtBool(rc.DisableCleanLog), true
 	case runtimeKeyModerationLogMode:
 		return rc.ModerationLogMode, true
 
@@ -626,6 +637,9 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 		return rc, true
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = false
+		return rc, true
+	case runtimeKeyDisableCleanLog:
+		rc.DisableCleanLog = false
 		return rc, true
 	case runtimeKeyModerationLogMode:
 		rc.ModerationLogMode = ""
@@ -793,6 +807,8 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 		rc.DisableReactionLogs = v
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = v
+	case runtimeKeyDisableCleanLog:
+		rc.DisableCleanLog = v
 	case runtimeKeyPresenceWatchBot:
 		rc.PresenceWatchBot = v
 	case runtimeKeyMessageDeleteOnLog:

@@ -289,14 +289,25 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 		"user_filter", userID,
 	)
 
-	sendModerationLog(ctx, moderationLogPayload{
-		Action:      "clean",
-		TargetID:    userID,
-		TargetLabel: userLabel,
-		Reason:      fmt.Sprintf("Deleted %d message(s)", deleted),
-		RequestedBy: ctx.UserID,
-		Extra:       fmt.Sprintf("Channel: <#%s> (`%s`) | Filter: %s | Requested: %d | Deleted: %d | Skipped (old): %d | Failed: %d", channelID, channelID, filterLabel, num, deleted, skippedOld, failed),
-	})
+	shouldLog := true
+	if ctx.Config != nil && ctx.GuildID != "" {
+		if cfg := ctx.Config.Config(); cfg != nil {
+			rc := cfg.ResolveRuntimeConfig(ctx.GuildID)
+			if rc.DisableCleanLog {
+				shouldLog = false
+			}
+		}
+	}
+	if shouldLog {
+		sendModerationLog(ctx, moderationLogPayload{
+			Action:      "clean",
+			TargetID:    userID,
+			TargetLabel: userLabel,
+			Reason:      fmt.Sprintf("Deleted %d message(s)", deleted),
+			RequestedBy: ctx.UserID,
+			Extra:       fmt.Sprintf("Channel: <#%s> (`%s`) | Filter: %s | Requested: %d | Deleted: %d | Skipped (old): %d | Failed: %d", channelID, channelID, filterLabel, num, deleted, skippedOld, failed),
+		})
+	}
 
 	message := fmt.Sprintf("Deleted %d message(s) in <#%s>.", deleted, channelID)
 	if userID != "" {
