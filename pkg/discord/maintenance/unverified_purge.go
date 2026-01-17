@@ -128,6 +128,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			log.ApplicationLogger().Warn("Non-Verified Members Purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
 			continue
 		}
+		boosterRoleID := strings.TrimSpace(gcfg.Roles.BoosterRole)
 
 		botID := ""
 		if s.session.State != nil && s.session.State.User != nil {
@@ -162,6 +163,9 @@ func (s *UnverifiedPurgeService) runOnce() {
 				continue
 			}
 			if hasRole(memberRoles[userID], verifiedRoleID) || hasAnyRole(memberRoles[userID], exempt) {
+				continue
+			}
+			if boosterRoleID != "" && hasRole(memberRoles[userID], boosterRoleID) {
 				continue
 			}
 			candidates = append(candidates, purgeCandidate{userID: userID, joinedAt: joinedAt})
@@ -212,6 +216,9 @@ func (s *UnverifiedPurgeService) runOnce() {
 				continue
 			}
 			if member.User.Bot {
+				continue
+			}
+			if boosterRoleID != "" && hasRole(member.Roles, boosterRoleID) {
 				continue
 			}
 			if member.PremiumSince != nil {
@@ -315,7 +322,17 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 	}
 
 	title := "Non-Verified Members Purge"
-	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**. Members listed below did not have <@&%s> at the time of the purge.", verifiedRoleID, graceDays, verifiedRoleID)
+	boosterRoleID := ""
+	if s.configManager != nil {
+		if gcfg := s.configManager.GuildConfig(guildID); gcfg != nil {
+			boosterRoleID = strings.TrimSpace(gcfg.Roles.BoosterRole)
+		}
+	}
+	boosterLabel := "the Bunny Booster role"
+	if boosterRoleID != "" {
+		boosterLabel = fmt.Sprintf("the Bunny Booster role <@&%s>", boosterRoleID)
+	}
+	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**. Members listed below did not have <@&%s> at the time of the purge and also did **not** have %s.", verifiedRoleID, graceDays, verifiedRoleID, boosterLabel)
 
 	fields := []*discordgo.MessageEmbedField{
 		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},

@@ -188,6 +188,7 @@ type RolesConfig struct {
 	Allowed          []string             `json:"allowed,omitempty"`
 	AutoAssignment   AutoAssignmentConfig `json:"auto_assignment,omitempty"`
 	VerificationRole string               `json:"verification_role,omitempty"`
+	BoosterRole      string               `json:"booster_role,omitempty"`
 }
 
 // UnverifiedPurgeConfig controls purging unverified members per guild.
