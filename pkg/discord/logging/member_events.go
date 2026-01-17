@@ -129,6 +129,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	if rc.DisableEntryExitLogs {
 		return
 	}
+	if !cfg.ResolveFeatures(m.GuildID).Logging.EntryExit {
+		return
+	}
 
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil {
@@ -195,7 +198,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	}
 
 	// Composite automatic role assignment (per-guild config)
-	if guildConfig.Roles.AutoAssignment.Enabled {
+	if cfg.ResolveFeatures(m.GuildID).AutoRoleAssign && guildConfig.Roles.AutoAssignment.Enabled {
 		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
 		required := guildConfig.Roles.AutoAssignment.RequiredRoles
 		if targetRoleID != "" && len(required) >= 2 {
@@ -247,6 +250,9 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	}
 	rc := cfg.ResolveRuntimeConfig(m.GuildID)
 	if rc.DisableEntryExitLogs {
+		return
+	}
+	if !cfg.ResolveFeatures(m.GuildID).Logging.EntryExit {
 		return
 	}
 
@@ -325,8 +331,15 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 	)
 	defer done()
 
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return
+	}
 	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil || !guildConfig.Roles.AutoAssignment.Enabled {
+		return
+	}
+	if !cfg.ResolveFeatures(m.GuildID).AutoRoleAssign {
 		return
 	}
 

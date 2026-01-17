@@ -123,8 +123,11 @@ func (mes *MessageEventService) Start() error {
 	// but keep cache + versioning hardcoded enabled.
 	{
 		rc := files.RuntimeConfig{}
+		features := (&files.BotConfig{}).ResolveFeatures("")
 		if mes.configManager != nil && mes.configManager.Config() != nil {
-			rc = mes.configManager.Config().RuntimeConfig
+			cfg := mes.configManager.Config()
+			rc = cfg.RuntimeConfig
+			features = cfg.ResolveFeatures("")
 		}
 
 		// Hardcoded enabled
@@ -137,7 +140,7 @@ func (mes *MessageEventService) Start() error {
 		mes.cacheTTL = time.Duration(ttlHours) * time.Hour
 
 		mes.deleteOnLog = rc.MessageDeleteOnLog
-		mes.cleanupEnabled = rc.MessageCacheCleanup
+		mes.cleanupEnabled = rc.MessageCacheCleanup && features.MessageCache.CleanupOnStartup
 
 		// Hardcoded enabled
 		mes.versioningEnabled = true
@@ -265,6 +268,10 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		slog.Debug("MessageCreate: message logs disabled for guild; skipping cache", "guildID", guildID)
 		return
 	}
+	if !cfg.ResolveFeatures(guildID).Logging.Message {
+		slog.Debug("MessageCreate: message logs disabled by features; skipping cache", "guildID", guildID)
+		return
+	}
 
 	guildConfig := mes.configManager.GuildConfig(guildID)
 	if guildConfig == nil {
@@ -390,6 +397,20 @@ func (mes *MessageEventService) markEvent() {
 	if mes.store != nil {
 		_ = mes.store.SetLastEvent(time.Now())
 	}
+}
+
+func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
+	if !mes.deleteOnLog {
+		return false
+	}
+	if mes.configManager == nil {
+		return mes.deleteOnLog
+	}
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return mes.deleteOnLog
+	}
+	return cfg.ResolveFeatures(guildID).MessageCache.DeleteOnLog
 }
 
 func (mes *MessageEventService) GetCacheStats() map[string]any {
@@ -523,6 +544,9 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 	}
 	rc := cfg.ResolveRuntimeConfig(cached.GuildID)
 	if rc.DisableMessageLogs {
+		return nil
+	}
+	if !cfg.ResolveFeatures(cached.GuildID).Logging.Message {
 		return nil
 	}
 
@@ -670,11 +694,14 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 	if rc.DisableMessageLogs {
 		return nil
 	}
+	if !cfg.ResolveFeatures(cached.GuildID).Logging.Message {
+		return nil
+	}
 
 	// Skip if bot
 	if cached.Author.Bot {
 		// Deletion from store is disabled by default
-		if mes.deleteOnLog && mes.store != nil {
+		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
 		return nil
@@ -683,7 +710,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
 	if guildConfig == nil {
 		// Deletion from store is disabled by default
-		if mes.deleteOnLog && mes.store != nil {
+		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
 		return nil
@@ -693,7 +720,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 	if logChannelID == "" {
 		slog.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		// Deletion from store is disabled by default
-		if mes.deleteOnLog && mes.store != nil {
+		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 		}
 		return nil
@@ -748,7 +775,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 			CreatedAt: time.Now().UTC(),
 		})
 	}
-	if mes.deleteOnLog && mes.store != nil {
+	if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
 		_ = mes.store.DeleteMessage(m.GuildID, m.ID)
 	}
 	return nil

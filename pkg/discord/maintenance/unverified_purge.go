@@ -116,6 +116,9 @@ func (s *UnverifiedPurgeService) runOnce() {
 	now := time.Now().UTC()
 
 	for _, gcfg := range cfg.Guilds {
+		if !cfg.ResolveFeatures(gcfg.GuildID).UnverifiedPurge {
+			continue
+		}
 		previewOnly := !gcfg.UnverifiedPurge.Enabled
 		if !gcfg.UnverifiedPurge.Enabled && strings.TrimSpace(gcfg.Roles.VerificationRole) == "" {
 			continue
@@ -271,6 +274,9 @@ func (s *UnverifiedPurgeService) resolveScanInterval() time.Duration {
 	}
 	mins := 120
 	for _, g := range cfg.Guilds {
+		if !cfg.ResolveFeatures(g.GuildID).UnverifiedPurge {
+			continue
+		}
 		if !g.UnverifiedPurge.Enabled {
 			continue
 		}
@@ -375,6 +381,9 @@ func (s *UnverifiedPurgeService) resolveInitialDelay() time.Duration {
 	}
 	secs := 120
 	for _, g := range cfg.Guilds {
+		if !cfg.ResolveFeatures(g.GuildID).UnverifiedPurge {
+			continue
+		}
 		if !g.UnverifiedPurge.Enabled {
 			continue
 		}

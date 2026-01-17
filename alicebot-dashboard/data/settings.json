@@ -1,22 +1,63 @@
 {
   "executablePath": "C:\\Users\\alice\\.local\\bin\\alicebot.exe",
+  "features": {
+    "services": {
+      "monitoring": true,
+      "automod": true,
+      "commands": true,
+      "adminCommands": true
+    },
+    "logging": {
+      "message": true,
+      "entryExit": true,
+      "reaction": true,
+      "user": true,
+      "automod": true,
+      "clean": true,
+      "moderation": true
+    },
+    "messageCache": {
+      "cleanupOnStartup": false,
+      "deleteOnLog": false
+    },
+    "presenceWatch": {
+      "bot": false
+    },
+    "maintenance": {
+      "dbCleanup": true
+    },
+    "safety": {
+      "botRolePermMirror": true
+    },
+    "backfill": {
+      "enabled": true
+    }
+  },
   "guilds": [
     {
       "id": "123456789012345678",
       "name": "Alice Community",
       "enabled": true,
-      "monitoringEnabled": true,
-      "automodEnabled": true,
+      "features": {
+        "monitoring": true,
+        "automod": true,
+        "statsChannels": false,
+        "autoRoleAssignment": false,
+        "unverifiedPurge": false
+      },
       "notificationChannelId": "987654321098765432"
     },
     {
       "id": "234567890123456789",
       "name": "Dev Lounge",
       "enabled": true,
-      "monitoringEnabled": false,
-      "automodEnabled": false
+      "features": {
+        "monitoring": false,
+        "automod": false,
+        "statsChannels": false,
+        "autoRoleAssignment": false,
+        "unverifiedPurge": false
+      }
     }
-  ],
-  "automodEnabled": true,
-  "monitoringEnabled": true
+  ]
 }

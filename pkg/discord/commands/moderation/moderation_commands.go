@@ -299,6 +299,9 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 			if rc.DisableCleanLog {
 				shouldLog = false
 			}
+			if !cfg.ResolveFeatures(ctx.GuildID).Logging.Clean {
+				shouldLog = false
+			}
 		}
 	}
 	if shouldLog {

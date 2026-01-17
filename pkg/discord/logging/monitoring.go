@@ -291,13 +291,17 @@ func (ms *MonitoringService) Start() error {
 	if ms.configManager != nil && ms.configManager.Config() != nil {
 		globalRC = ms.configManager.Config().RuntimeConfig
 	}
+	globalFeatures := (&files.BotConfig{}).ResolveFeatures("")
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		globalFeatures = ms.configManager.Config().ResolveFeatures("")
+	}
 
 	// Start member/message services (gate entry/exit logs via runtime config)
 	// Note: these services are currently global, so we use global config for startup.
 	// Per-guild toggles would need these services to be guild-aware or filtered.
-	disableEntryExit := globalRC.DisableEntryExitLogs
+	disableEntryExit := globalRC.DisableEntryExitLogs || !globalFeatures.Logging.EntryExit
 	if disableEntryExit {
-		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by global runtime config; MemberEventService will not start")
+		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by runtime config/features; MemberEventService will not start")
 	} else {
 		if err := ms.memberEventService.Start(); err != nil {
 			ms.isRunning = false
@@ -305,13 +309,13 @@ func (ms *MonitoringService) Start() error {
 		}
 	}
 	// Optionally honor DisableAutomodLogs here (Automod service is started elsewhere)
-	if globalRC.DisableAutomodLogs {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by global runtime config")
+	if globalRC.DisableAutomodLogs || !globalFeatures.Logging.Automod {
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config/features")
 	}
 
 	// Gate message logging behind runtime config
-	if globalRC.DisableMessageLogs {
-		log.ApplicationLogger().Info("🛑 Message logging disabled by global runtime config; MessageEventService will not start")
+	if globalRC.DisableMessageLogs || !globalFeatures.Logging.Message {
+		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
 	} else {
 		if err := ms.messageEventService.Start(); err != nil {
 			ms.isRunning = false
@@ -322,8 +326,8 @@ func (ms *MonitoringService) Start() error {
 	}
 
 	// Gate reaction logging behind runtime config
-	if globalRC.DisableReactionLogs {
-		log.ApplicationLogger().Info("🛑 Reaction logging disabled by global runtime config; ReactionEventService will not start")
+	if globalRC.DisableReactionLogs || !globalFeatures.Logging.Reaction {
+		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config/features; ReactionEventService will not start")
 	} else {
 		// Lazily initialize service if not yet created
 		if ms.reactionEventService == nil {
@@ -387,8 +391,9 @@ func (ms *MonitoringService) Start() error {
 		reconciledRemoves := 0
 		if ms.store != nil && ms.session != nil {
 			for _, gcfg := range cfg.Guilds {
+				features := cfg.ResolveFeatures(gcfg.GuildID)
 				// Skip guilds without auto-role assignment enabled or missing config
-				if !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
+				if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
 					continue
 				}
 				roleA := gcfg.Roles.AutoAssignment.RequiredRoles[0]
@@ -729,16 +734,18 @@ func (ms *MonitoringService) Start() error {
 
 		// Get all potential channels and their resolved configs
 		type backfillTarget struct {
-			ChannelID string
-			RC        files.RuntimeConfig
+			ChannelID      string
+			RC             files.RuntimeConfig
+			FeatureEnabled bool
 		}
 		targets := make([]backfillTarget, 0)
 
 		// Global target if configured
 		if globalRC.BackfillChannelID != "" {
 			targets = append(targets, backfillTarget{
-				ChannelID: strings.TrimSpace(globalRC.BackfillChannelID),
-				RC:        globalRC,
+				ChannelID:      strings.TrimSpace(globalRC.BackfillChannelID),
+				RC:             globalRC,
+				FeatureEnabled: cfg.ResolveFeatures("").Backfill.Enabled,
 			})
 		}
 
@@ -749,9 +756,11 @@ func (ms *MonitoringService) Start() error {
 				cid = strings.TrimSpace(g.Channels.EntryLeaveLog)
 			}
 			if cid != "" {
+				featureEnabled := cfg.ResolveFeatures(g.GuildID).Backfill.Enabled
 				targets = append(targets, backfillTarget{
-					ChannelID: cid,
-					RC:        cfg.ResolveRuntimeConfig(g.GuildID),
+					ChannelID:      cid,
+					RC:             cfg.ResolveRuntimeConfig(g.GuildID),
+					FeatureEnabled: featureEnabled,
 				})
 			}
 		}
@@ -765,6 +774,10 @@ func (ms *MonitoringService) Start() error {
 			for _, target := range targets {
 				cid := target.ChannelID
 				rc := target.RC
+				if !target.FeatureEnabled {
+					log.ApplicationLogger().Debug("Backfill disabled by features.backfill.enabled", "channelID", cid)
+					continue
+				}
 				day := strings.TrimSpace(rc.BackfillStartDay)
 				initialDate := strings.TrimSpace(rc.BackfillInitialDate)
 
@@ -1009,8 +1022,13 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		return nil
 	}
 
+	features := (&files.BotConfig{}).ResolveFeatures("")
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		features = ms.configManager.Config().ResolveFeatures("")
+	}
+
 	// Entry/Exit logs -> MemberEventService
-	if rc.DisableEntryExitLogs {
+	if rc.DisableEntryExitLogs || !features.Logging.EntryExit {
 		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 			_ = ms.memberEventService.Stop()
 		}
@@ -1023,7 +1041,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Message logs -> MessageEventService
-	if rc.DisableMessageLogs {
+	if rc.DisableMessageLogs || !features.Logging.Message {
 		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 			_ = ms.messageEventService.Stop()
 		}
@@ -1036,7 +1054,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Reaction logs -> ReactionEventService
-	if rc.DisableReactionLogs {
+	if rc.DisableReactionLogs || !features.Logging.Reaction {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
 			_ = ms.reactionEventService.Stop()
 		}
@@ -1074,7 +1092,11 @@ func (ms *MonitoringService) setupEventHandlers() {
 func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.RuntimeConfig) {
 	// Store handler references for later removal
 	// Gate user logs (avatars and roles) via runtime config
-	disableUser := rc.DisableUserLogs
+	features := (&files.BotConfig{}).ResolveFeatures("")
+	if ms.configManager != nil && ms.configManager.Config() != nil {
+		features = ms.configManager.Config().ResolveFeatures("")
+	}
+	disableUser := rc.DisableUserLogs || !features.Logging.User
 
 	if disableUser {
 		// Register only non-user handlers
@@ -1082,7 +1104,7 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 			ms.session.AddHandler(ms.handleGuildCreate),
 			ms.session.AddHandler(ms.handleGuildUpdate),
 		)
-		log.ApplicationLogger().Info("🛑 User logs disabled by runtime config ALICE_DISABLE_USER_LOGS; avatar/role handlers not registered")
+		log.ApplicationLogger().Info("🛑 User logs disabled by runtime config/features; avatar/role handlers not registered")
 	} else {
 		ms.eventHandlers = append(ms.eventHandlers,
 			ms.session.AddHandler(ms.handlePresenceUpdate),
@@ -1227,8 +1249,15 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 		return
 	}
 	rc := cfg.ResolveRuntimeConfig(m.GuildID)
+	features := cfg.ResolveFeatures(m.GuildID)
 	watchUserID := strings.TrimSpace(rc.PresenceWatchUserID)
 	watchBot := rc.PresenceWatchBot
+	if !features.PresenceWatch.User {
+		watchUserID = ""
+	}
+	if !features.PresenceWatch.Bot {
+		watchBot = false
+	}
 	if watchUserID == "" && !watchBot {
 		return
 	}
@@ -2431,7 +2460,12 @@ func (ms *MonitoringService) botPermMirrorEnabled(guildID string) bool {
 	// Enabled by default (safety feature).
 	// Previously gated via ALICE_DISABLE_BOT_ROLE_PERM_MIRROR env var; now read from runtime_config in settings.json.
 	if ms.configManager != nil && ms.configManager.Config() != nil {
-		rc := ms.configManager.Config().ResolveRuntimeConfig(guildID)
+		cfg := ms.configManager.Config()
+		rc := cfg.ResolveRuntimeConfig(guildID)
+		features := cfg.ResolveFeatures(guildID)
+		if !features.Safety.BotRolePermMirror {
+			return false
+		}
 		return !rc.DisableBotRolePermMirror
 	}
 	return true

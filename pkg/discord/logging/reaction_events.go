@@ -118,6 +118,9 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 		if rc.DisableReactionLogs {
 			return
 		}
+		if !cfg.ResolveFeatures(guildID).Logging.Reaction {
+			return
+		}
 	}
 
 	// Increment per-day reaction count for the reactor.

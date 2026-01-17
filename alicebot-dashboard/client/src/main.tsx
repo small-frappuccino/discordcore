@@ -25,20 +25,60 @@ type ProcessStatus = {
   executablePath: string;
 };
 
+type FeatureSettings = {
+  services: {
+    monitoring: boolean;
+    automod: boolean;
+    commands: boolean;
+    adminCommands: boolean;
+  };
+  logging: {
+    message: boolean;
+    entryExit: boolean;
+    reaction: boolean;
+    user: boolean;
+    automod: boolean;
+    clean: boolean;
+    moderation: boolean;
+  };
+  messageCache: {
+    cleanupOnStartup: boolean;
+    deleteOnLog: boolean;
+  };
+  presenceWatch: {
+    bot: boolean;
+  };
+  maintenance: {
+    dbCleanup: boolean;
+  };
+  safety: {
+    botRolePermMirror: boolean;
+  };
+  backfill: {
+    enabled: boolean;
+  };
+};
+
+type GuildFeatureSettings = {
+  monitoring: boolean;
+  automod: boolean;
+  statsChannels: boolean;
+  autoRoleAssignment: boolean;
+  unverifiedPurge: boolean;
+};
+
 type GuildSettings = {
   id: string;
   name?: string;
   enabled: boolean;
-  monitoringEnabled: boolean;
-  automodEnabled: boolean;
+  features: GuildFeatureSettings;
   notificationChannelId?: string;
 };
 
 type Settings = {
   executablePath: string;
   guilds: GuildSettings[];
-  automodEnabled: boolean;
-  monitoringEnabled: boolean;
+  features: FeatureSettings;
 };
 
 type ServiceStatus = { id: string; name: string; status: string };
@@ -379,7 +419,17 @@ const GuildsPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => void
 }) => (
   <div>
     <h2>Guilds</h2>
-    <Table headers={["Guild", "Enabled", "Monitoring", "Automod"]}>
+    <Table
+      headers={[
+        "Guild",
+        "Enabled",
+        "Monitoring",
+        "Automod",
+        "Stats",
+        "Auto Role",
+        "Unverified Purge",
+      ]}
+    >
       {settings.guilds.map((guild) => (
         <tr key={guild.id}>
           <td>
@@ -401,12 +451,17 @@ const GuildsPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => void
           </td>
           <td>
             <Toggle
-              checked={guild.monitoringEnabled}
+              checked={guild.features.monitoring}
               onChange={(value) =>
                 onUpdate({
                   ...settings,
                   guilds: settings.guilds.map((item) =>
-                    item.id === guild.id ? { ...item, monitoringEnabled: value } : item
+                    item.id === guild.id
+                      ? {
+                          ...item,
+                          features: { ...item.features, monitoring: value },
+                        }
+                      : item
                   ),
                 })
               }
@@ -414,12 +469,71 @@ const GuildsPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => void
           </td>
           <td>
             <Toggle
-              checked={guild.automodEnabled}
+              checked={guild.features.automod}
               onChange={(value) =>
                 onUpdate({
                   ...settings,
                   guilds: settings.guilds.map((item) =>
-                    item.id === guild.id ? { ...item, automodEnabled: value } : item
+                    item.id === guild.id
+                      ? {
+                          ...item,
+                          features: { ...item.features, automod: value },
+                        }
+                      : item
+                  ),
+                })
+              }
+            />
+          </td>
+          <td>
+            <Toggle
+              checked={guild.features.statsChannels}
+              onChange={(value) =>
+                onUpdate({
+                  ...settings,
+                  guilds: settings.guilds.map((item) =>
+                    item.id === guild.id
+                      ? {
+                          ...item,
+                          features: { ...item.features, statsChannels: value },
+                        }
+                      : item
+                  ),
+                })
+              }
+            />
+          </td>
+          <td>
+            <Toggle
+              checked={guild.features.autoRoleAssignment}
+              onChange={(value) =>
+                onUpdate({
+                  ...settings,
+                  guilds: settings.guilds.map((item) =>
+                    item.id === guild.id
+                      ? {
+                          ...item,
+                          features: { ...item.features, autoRoleAssignment: value },
+                        }
+                      : item
+                  ),
+                })
+              }
+            />
+          </td>
+          <td>
+            <Toggle
+              checked={guild.features.unverifiedPurge}
+              onChange={(value) =>
+                onUpdate({
+                  ...settings,
+                  guilds: settings.guilds.map((item) =>
+                    item.id === guild.id
+                      ? {
+                          ...item,
+                          features: { ...item.features, unverifiedPurge: value },
+                        }
+                      : item
                   ),
                 })
               }
@@ -440,8 +554,16 @@ const MonitoringPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => 
     <div className="form-row">
       <label>Monitoring Enabled</label>
       <Toggle
-        checked={settings.monitoringEnabled}
-        onChange={(value) => onUpdate({ ...settings, monitoringEnabled: value })}
+        checked={settings.features.services.monitoring}
+        onChange={(value) =>
+          onUpdate({
+            ...settings,
+            features: {
+              ...settings.features,
+              services: { ...settings.features.services, monitoring: value },
+            },
+          })
+        }
       />
     </div>
     <Table headers={["Guild", "Monitoring", "Notification Channel"]}>
@@ -450,12 +572,17 @@ const MonitoringPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => 
           <td>{guild.name ?? guild.id}</td>
           <td>
             <Toggle
-              checked={guild.monitoringEnabled}
+              checked={guild.features.monitoring}
               onChange={(value) =>
                 onUpdate({
                   ...settings,
                   guilds: settings.guilds.map((item) =>
-                    item.id === guild.id ? { ...item, monitoringEnabled: value } : item
+                    item.id === guild.id
+                      ? {
+                          ...item,
+                          features: { ...item.features, monitoring: value },
+                        }
+                      : item
                   ),
                 })
               }
@@ -493,8 +620,16 @@ const AutomodPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => voi
     <div className="form-row">
       <label>Automod Enabled</label>
       <Toggle
-        checked={settings.automodEnabled}
-        onChange={(value) => onUpdate({ ...settings, automodEnabled: value })}
+        checked={settings.features.services.automod}
+        onChange={(value) =>
+          onUpdate({
+            ...settings,
+            features: {
+              ...settings.features,
+              services: { ...settings.features.services, automod: value },
+            },
+          })
+        }
       />
     </div>
     <Card title="Rules (placeholder)">
@@ -649,6 +784,237 @@ const SettingsPage: React.FC<{
       >
         Save Settings
       </button>
+      <Card title="Feature Toggles">
+        <div className="form-grid">
+          <label>Monitoring service</label>
+          <Toggle
+            checked={settings.features.services.monitoring}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  services: { ...settings.features.services, monitoring: value },
+                },
+              })
+            }
+          />
+          <label>Automod service</label>
+          <Toggle
+            checked={settings.features.services.automod}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  services: { ...settings.features.services, automod: value },
+                },
+              })
+            }
+          />
+          <label>Commands</label>
+          <Toggle
+            checked={settings.features.services.commands}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  services: { ...settings.features.services, commands: value },
+                },
+              })
+            }
+          />
+          <label>Admin commands</label>
+          <Toggle
+            checked={settings.features.services.adminCommands}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  services: { ...settings.features.services, adminCommands: value },
+                },
+              })
+            }
+          />
+          <label>Message logs</label>
+          <Toggle
+            checked={settings.features.logging.message}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, message: value },
+                },
+              })
+            }
+          />
+          <label>Entry/exit logs</label>
+          <Toggle
+            checked={settings.features.logging.entryExit}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, entryExit: value },
+                },
+              })
+            }
+          />
+          <label>Reaction logs</label>
+          <Toggle
+            checked={settings.features.logging.reaction}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, reaction: value },
+                },
+              })
+            }
+          />
+          <label>User logs</label>
+          <Toggle
+            checked={settings.features.logging.user}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, user: value },
+                },
+              })
+            }
+          />
+          <label>Automod logs</label>
+          <Toggle
+            checked={settings.features.logging.automod}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, automod: value },
+                },
+              })
+            }
+          />
+          <label>Clean log</label>
+          <Toggle
+            checked={settings.features.logging.clean}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, clean: value },
+                },
+              })
+            }
+          />
+          <label>Moderation logs</label>
+          <Toggle
+            checked={settings.features.logging.moderation}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  logging: { ...settings.features.logging, moderation: value },
+                },
+              })
+            }
+          />
+          <label>Message cache cleanup</label>
+          <Toggle
+            checked={settings.features.messageCache.cleanupOnStartup}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  messageCache: {
+                    ...settings.features.messageCache,
+                    cleanupOnStartup: value,
+                  },
+                },
+              })
+            }
+          />
+          <label>Message delete on log</label>
+          <Toggle
+            checked={settings.features.messageCache.deleteOnLog}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  messageCache: {
+                    ...settings.features.messageCache,
+                    deleteOnLog: value,
+                  },
+                },
+              })
+            }
+          />
+          <label>Presence watch (bot)</label>
+          <Toggle
+            checked={settings.features.presenceWatch.bot}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  presenceWatch: { ...settings.features.presenceWatch, bot: value },
+                },
+              })
+            }
+          />
+          <label>DB cleanup</label>
+          <Toggle
+            checked={settings.features.maintenance.dbCleanup}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  maintenance: { ...settings.features.maintenance, dbCleanup: value },
+                },
+              })
+            }
+          />
+          <label>Bot role perm mirror</label>
+          <Toggle
+            checked={settings.features.safety.botRolePermMirror}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  safety: { ...settings.features.safety, botRolePermMirror: value },
+                },
+              })
+            }
+          />
+          <label>Entry/exit backfill</label>
+          <Toggle
+            checked={settings.features.backfill.enabled}
+            onChange={(value) =>
+              onUpdate({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  backfill: { ...settings.features.backfill, enabled: value },
+                },
+              })
+            }
+          />
+        </div>
+      </Card>
       <Card title="Settings JSON">
         <pre className="json-view">{JSON.stringify(settings, null, 2)}</pre>
       </Card>

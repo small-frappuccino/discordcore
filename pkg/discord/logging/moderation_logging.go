@@ -28,6 +28,9 @@ func ShouldLogModerationEvent(configManager *files.ConfigManager, guildID, actor
 	if cfg == nil {
 		return false
 	}
+	if !cfg.ResolveFeatures(guildID).Logging.Moderation {
+		return false
+	}
 	rc := cfg.ResolveRuntimeConfig(guildID)
 	mode := files.NormalizeModerationLogMode(rc.ModerationLogMode)
 

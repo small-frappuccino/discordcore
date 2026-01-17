@@ -104,6 +104,12 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to load settings file: %v", err))
 	}
 
+	features := (&files.BotConfig{}).ResolveFeatures("")
+	if cfg := configManager.Config(); cfg != nil {
+		features = cfg.ResolveFeatures("")
+	}
+	monitoringEnabled := features.Services.Monitoring
+
 	// Theme configuration (from settings.json runtime_config)
 	{
 		cfg := configManager.Config()
@@ -139,13 +145,18 @@ func Run(appName, tokenEnv string) error {
 	// Periodic cleanup (every 6 hours), can be disabled via runtime config
 	var cleanupStop chan struct{}
 	disableCleanup := false
+	cleanupEnabled := features.Maintenance.DBCleanup
 	if cfg := configManager.Config(); cfg != nil {
 		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
 	}
-	if !disableCleanup {
+	if cleanupEnabled && !disableCleanup {
 		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
 	} else {
-		log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
+		if !cleanupEnabled {
+			log.ApplicationLogger().Info("🛑 DB cleanup disabled by features.maintenance.db_cleanup")
+		} else {
+			log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
+		}
 	}
 	defer func() {
 		if cleanupStop != nil {
@@ -173,19 +184,24 @@ func Run(appName, tokenEnv string) error {
 	// NOTE: Warmup responsibility is consolidated in the app runner.
 	// MonitoringService does not perform its own warmup to avoid duplicate work during startup.
 	unifiedCache := monitoringService.GetUnifiedCache()
-	if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
-		log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)")
-	} else {
-		warmupConfig := cache.DefaultWarmupConfig()
-		warmupConfig.MaxMembersPerGuild = 500 // mitigate initial load
-		if err := cache.IntelligentWarmup(discordSession, unifiedCache, store, warmupConfig); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Intelligent warmup failed (continuing): %v", err))
+	if monitoringEnabled {
+		if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
+			log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)")
+		} else {
+			warmupConfig := cache.DefaultWarmupConfig()
+			warmupConfig.MaxMembersPerGuild = 500 // mitigate initial load
+			if err := cache.IntelligentWarmup(discordSession, unifiedCache, store, warmupConfig); err != nil {
+				log.ApplicationLogger().Warn(fmt.Sprintf("Intelligent warmup failed (continuing): %v", err))
+			}
 		}
 	}
 
 	// Periodic cache persistence (hardcoded interval)
 	persistInterval := time.Hour
-	persistStop := unifiedCache.SetPersistInterval(persistInterval)
+	var persistStop chan struct{}
+	if monitoringEnabled {
+		persistStop = unifiedCache.SetPersistInterval(persistInterval)
+	}
 	defer func() {
 		if persistStop != nil {
 			close(persistStop)
@@ -193,15 +209,20 @@ func Run(appName, tokenEnv string) error {
 	}()
 
 	// Wrap monitoring
-	monitoringWrapper := service.NewServiceWrapper(
-		"monitoring",
-		service.TypeMonitoring,
-		service.PriorityHigh,
-		[]string{},
-		func() error { return monitoringService.Start() },
-		func() error { return monitoringService.Stop() },
-		func() bool { return true },
-	)
+	var monitoringWrapper *service.ServiceWrapper
+	if monitoringEnabled {
+		monitoringWrapper = service.NewServiceWrapper(
+			"monitoring",
+			service.TypeMonitoring,
+			service.PriorityHigh,
+			[]string{},
+			func() error { return monitoringService.Start() },
+			func() error { return monitoringService.Stop() },
+			func() bool { return true },
+		)
+	} else {
+		log.ApplicationLogger().Info("🛑 Monitoring service disabled by features.services.monitoring")
+	}
 
 	// Automod service with TaskRouter adapters (gated by runtime config)
 	disableAutomod := false
@@ -209,7 +230,11 @@ func Run(appName, tokenEnv string) error {
 		disableAutomod = cfg.RuntimeConfig.DisableAutomodLogs
 	}
 	var automodWrapper *service.ServiceWrapper
-	if disableAutomod {
+	if !features.Services.Automod {
+		log.ApplicationLogger().Info("🛑 Automod service disabled by features.services.automod")
+	} else if !features.Logging.Automod {
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by features.logging.automod; AutomodService will not start")
+	} else if disableAutomod {
 		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start")
 	} else {
 		automodService := logging.NewAutomodService(discordSession, configManager)
@@ -230,8 +255,10 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Register services
-	if err := serviceManager.Register(monitoringWrapper); err != nil {
-		return fmt.Errorf("register monitoring service: %w", err)
+	if monitoringWrapper != nil {
+		if err := serviceManager.Register(monitoringWrapper); err != nil {
+			return fmt.Errorf("register monitoring service: %w", err)
+		}
 	}
 	if automodWrapper != nil {
 		if err := serviceManager.Register(automodWrapper); err != nil {
@@ -246,6 +273,10 @@ func Run(appName, tokenEnv string) error {
 		preview := false
 		if cfg != nil {
 			for _, g := range cfg.Guilds {
+				feature := cfg.ResolveFeatures(g.GuildID)
+				if !feature.UnverifiedPurge {
+					continue
+				}
 				if strings.TrimSpace(g.Roles.VerificationRole) == "" {
 					continue
 				}
@@ -286,9 +317,14 @@ func Run(appName, tokenEnv string) error {
 	}
 
 	// Commands
-	commandHandler := commands.NewCommandHandler(discordSession, configManager)
-	if err := commandHandler.SetupCommands(); err != nil {
-		return fmt.Errorf("configure slash commands: %w", err)
+	var commandHandler *commands.CommandHandler
+	if features.Services.Commands {
+		commandHandler = commands.NewCommandHandler(discordSession, configManager)
+		if err := commandHandler.SetupCommands(); err != nil {
+			return fmt.Errorf("configure slash commands: %w", err)
+		}
+	} else {
+		log.ApplicationLogger().Info("🛑 Commands disabled by features.services.commands")
 	}
 
 	// NOTE:
@@ -297,21 +333,31 @@ func Run(appName, tokenEnv string) error {
 	_ = runtimeApplier
 
 	// Inject store and unified cache into command router
-	if cm := commandHandler.GetCommandManager(); cm != nil {
-		if router := cm.GetRouter(); router != nil {
-			router.SetStore(store)
-			if monitoringService != nil {
-				router.SetCache(monitoringService.GetUnifiedCache())
-				router.SetTaskRouter(monitoringService.TaskRouter())
+	if commandHandler != nil {
+		if cm := commandHandler.GetCommandManager(); cm != nil {
+			if router := cm.GetRouter(); router != nil {
+				router.SetStore(store)
+				if monitoringService != nil {
+					router.SetCache(monitoringService.GetUnifiedCache())
+					router.SetTaskRouter(monitoringService.TaskRouter())
+				}
+				// Wire runtime hot-apply manager so /config runtime can apply changes immediately.
+				router.SetRuntimeApplier(runtimeApplier)
 			}
-			// Wire runtime hot-apply manager so /config runtime can apply changes immediately.
-			router.SetRuntimeApplier(runtimeApplier)
 		}
 	}
 
 	// Admin commands
-	adminCommands := admin.NewAdminCommands(serviceManager, unifiedCache, store)
-	adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
+	if features.Services.AdminCommands {
+		if commandHandler != nil {
+			adminCommands := admin.NewAdminCommands(serviceManager, unifiedCache, store)
+			adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
+		} else {
+			log.ApplicationLogger().Warn("Admin commands enabled but commands are disabled; skipping admin command registration")
+		}
+	} else {
+		log.ApplicationLogger().Info("🛑 Admin commands disabled by features.services.admin_commands")
+	}
 
 	log.ApplicationLogger().Info("🔗 Slash commands sync completed")
 	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))

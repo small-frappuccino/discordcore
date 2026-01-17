@@ -22,6 +22,10 @@ func (ms *MonitoringService) updateStatsChannels() {
 	}
 
 	for _, gcfg := range cfg.Guilds {
+		features := cfg.ResolveFeatures(gcfg.GuildID)
+		if !features.StatsChannels {
+			continue
+		}
 		if !statsEnabled(gcfg.Stats) {
 			continue
 		}
