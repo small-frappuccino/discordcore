@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
@@ -178,6 +179,25 @@ func Run(appName, tokenEnv string) error {
 	runtimeApplier = runtimeapply.New(serviceManager, monitoringService)
 	if cfg := configManager.Config(); cfg != nil {
 		runtimeApplier.SetInitial(cfg.RuntimeConfig)
+	}
+
+	controlAddr := strings.TrimSpace(util.EnvString("ALICE_CONTROL_ADDR", ""))
+	var controlServer *control.Server
+	if controlAddr != "" {
+		controlServer = control.NewServer(controlAddr, configManager, runtimeApplier)
+		if controlServer == nil {
+			log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
+		} else if err := controlServer.Start(); err != nil {
+			return fmt.Errorf("start control server: %w", err)
+		} else {
+			defer func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := controlServer.Stop(ctx); err != nil {
+					log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
+				}
+			}()
+		}
 	}
 
 	// Cache warmup (persisted + fetch missing)

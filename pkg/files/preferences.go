@@ -77,6 +77,10 @@ func (mgr *ConfigManager) SaveConfig() error {
 	mgr.mu.RLock()
 	defer mgr.mu.RUnlock()
 
+	return mgr.saveConfigLocked()
+}
+
+func (mgr *ConfigManager) saveConfigLocked() error {
 	if mgr.config == nil {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
@@ -88,6 +92,28 @@ func (mgr *ConfigManager) SaveConfig() error {
 
 	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.configFilePath))
 	return nil
+}
+
+// UpdateRuntimeConfig mutates runtime_config and persists the change.
+func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (RuntimeConfig, error) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	if mgr.config == nil {
+		mgr.config = &BotConfig{}
+	}
+
+	if fn != nil {
+		if err := fn(&mgr.config.RuntimeConfig); err != nil {
+			return RuntimeConfig{}, err
+		}
+	}
+
+	if err := mgr.saveConfigLocked(); err != nil {
+		return RuntimeConfig{}, err
+	}
+
+	return mgr.config.RuntimeConfig, nil
 }
 
 // --- Getters ---
