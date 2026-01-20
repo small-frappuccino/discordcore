@@ -328,11 +328,11 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 			boosterRoleID = strings.TrimSpace(gcfg.Roles.BoosterRole)
 		}
 	}
-	boosterLabel := "the Bunny Booster role"
+	boosterLabel := "the booster role"
 	if boosterRoleID != "" {
-		boosterLabel = fmt.Sprintf("the Bunny Booster role <@&%s>", boosterRoleID)
+		boosterLabel = fmt.Sprintf("the <@&%s> role", boosterRoleID)
 	}
-	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**. Members listed below did not have <@&%s> at the time of the purge and also did **not** have %s.", verifiedRoleID, graceDays, verifiedRoleID, boosterLabel)
+	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**. Members listed below did not have <@&%s> at the time of the purge and also did not have %s.", verifiedRoleID, graceDays, verifiedRoleID, boosterLabel)
 
 	fields := []*discordgo.MessageEmbedField{
 		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
