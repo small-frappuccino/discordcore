@@ -286,7 +286,7 @@ func Run(appName, tokenEnv string) error {
 		}
 	}
 
-	// Non-verified members purge service (optional; enabled per-guild in settings.json)
+	// Nonverified members purge service (optional; enabled per-guild in settings.json)
 	{
 		cfg := configManager.Config()
 		enabled := false
@@ -294,13 +294,13 @@ func Run(appName, tokenEnv string) error {
 		if cfg != nil {
 			for _, g := range cfg.Guilds {
 				feature := cfg.ResolveFeatures(g.GuildID)
-				if !feature.UnverifiedPurge {
+				if !feature.NonverifiedPurge {
 					continue
 				}
 				if strings.TrimSpace(g.Roles.VerificationRole) == "" {
 					continue
 				}
-				if g.UnverifiedPurge.Enabled {
+				if g.NonverifiedPurge.Enabled {
 					enabled = true
 				} else {
 					preview = true
@@ -309,23 +309,23 @@ func Run(appName, tokenEnv string) error {
 		}
 
 		if enabled || preview {
-			unverifiedPurgeService := maintenance.NewUnverifiedPurgeService(discordSession, configManager, store)
-			unverifiedPurgeWrapper := service.NewServiceWrapper(
+			nonverifiedPurgeService := maintenance.NewNonverifiedPurgeService(discordSession, configManager, store)
+			nonverifiedPurgeWrapper := service.NewServiceWrapper(
 				"nonverified-members-purge",
 				service.TypeMonitoring,
 				service.PriorityNormal,
 				[]string{"monitoring"},
-				func() error { unverifiedPurgeService.Start(); return nil },
-				func() error { unverifiedPurgeService.Stop(); return nil },
-				func() bool { return unverifiedPurgeService.IsRunning() },
+				func() error { nonverifiedPurgeService.Start(); return nil },
+				func() error { nonverifiedPurgeService.Stop(); return nil },
+				func() bool { return nonverifiedPurgeService.IsRunning() },
 			)
-			if err := serviceManager.Register(unverifiedPurgeWrapper); err != nil {
-				return fmt.Errorf("register Non-verified members purge service: %w", err)
+			if err := serviceManager.Register(nonverifiedPurgeWrapper); err != nil {
+				return fmt.Errorf("register Nonverified members purge service: %w", err)
 			}
 			if enabled {
-				log.ApplicationLogger().Info("✅ Non-verified members purge enabled")
+				log.ApplicationLogger().Info("✅ Nonverified members purge enabled")
 			} else {
-				log.ApplicationLogger().Info("✅ Non-verified members purge preview enabled (purge disabled per-guild)")
+				log.ApplicationLogger().Info("✅ Nonverified members purge preview enabled (purge disabled per-guild)")
 			}
 		}
 	}
@@ -433,3 +433,4 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
 }
+

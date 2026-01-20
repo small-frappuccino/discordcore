@@ -15,7 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-type UnverifiedPurgeService struct {
+type NonverifiedPurgeService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
 	store         *storage.Store
@@ -28,8 +28,8 @@ type UnverifiedPurgeService struct {
 	running bool
 }
 
-func NewUnverifiedPurgeService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *UnverifiedPurgeService {
-	return &UnverifiedPurgeService{
+func NewNonverifiedPurgeService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *NonverifiedPurgeService {
+	return &NonverifiedPurgeService{
 		session:       session,
 		configManager: configManager,
 		store:         store,
@@ -37,7 +37,7 @@ func NewUnverifiedPurgeService(session *discordgo.Session, configManager *files.
 	}
 }
 
-func (s *UnverifiedPurgeService) Start() {
+func (s *NonverifiedPurgeService) Start() {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -50,7 +50,7 @@ func (s *UnverifiedPurgeService) Start() {
 	go s.loop()
 }
 
-func (s *UnverifiedPurgeService) Stop() {
+func (s *NonverifiedPurgeService) Stop() {
 	s.stopOnce.Do(func() { close(s.stopCh) })
 	s.wg.Wait()
 
@@ -59,13 +59,13 @@ func (s *UnverifiedPurgeService) Stop() {
 	s.mu.Unlock()
 }
 
-func (s *UnverifiedPurgeService) IsRunning() bool {
+func (s *NonverifiedPurgeService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.running
 }
 
-func (s *UnverifiedPurgeService) loop() {
+func (s *NonverifiedPurgeService) loop() {
 	defer s.wg.Done()
 
 	initialDelay := s.resolveInitialDelay()
@@ -104,7 +104,7 @@ type affectedMember struct {
 	roles  []string
 }
 
-func (s *UnverifiedPurgeService) runOnce() {
+func (s *NonverifiedPurgeService) runOnce() {
 	cfg := s.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return
@@ -116,16 +116,16 @@ func (s *UnverifiedPurgeService) runOnce() {
 	now := time.Now().UTC()
 
 	for _, gcfg := range cfg.Guilds {
-		if !cfg.ResolveFeatures(gcfg.GuildID).UnverifiedPurge {
+		if !cfg.ResolveFeatures(gcfg.GuildID).NonverifiedPurge {
 			continue
 		}
-		previewOnly := !gcfg.UnverifiedPurge.Enabled
-		if !gcfg.UnverifiedPurge.Enabled && strings.TrimSpace(gcfg.Roles.VerificationRole) == "" {
+		previewOnly := !gcfg.NonverifiedPurge.Enabled
+		if !gcfg.NonverifiedPurge.Enabled && strings.TrimSpace(gcfg.Roles.VerificationRole) == "" {
 			continue
 		}
 		verifiedRoleID := strings.TrimSpace(gcfg.Roles.VerificationRole)
 		if verifiedRoleID == "" {
-			log.ApplicationLogger().Warn("Non-Verified Members Purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
+			log.ApplicationLogger().Warn("Nonverified Members Purge enabled but verified role id is empty", "guildID", gcfg.GuildID)
 			continue
 		}
 		boosterRoleID := strings.TrimSpace(gcfg.Roles.BoosterRole)
@@ -135,22 +135,22 @@ func (s *UnverifiedPurgeService) runOnce() {
 			botID = s.session.State.User.ID
 		}
 
-		graceDays := resolveInt(gcfg.UnverifiedPurge.GraceDays, 7)
+		graceDays := resolveInt(gcfg.NonverifiedPurge.GraceDays, 7)
 		cutoff := now.Add(-time.Duration(graceDays) * 24 * time.Hour)
 
 		joins, err := s.store.GetAllMemberJoins(gcfg.GuildID)
 		if err != nil {
-			log.ApplicationLogger().Warn("Non-Verified Members Purge: failed to load member joins", "guildID", gcfg.GuildID, "err", err)
+			log.ApplicationLogger().Warn("Nonverified Members Purge: failed to load member joins", "guildID", gcfg.GuildID, "err", err)
 			continue
 		}
 		memberRoles, err := s.store.GetAllGuildMemberRoles(gcfg.GuildID)
 		if err != nil {
-			log.ApplicationLogger().Warn("Non-Verified Members Purge: failed to load member roles", "guildID", gcfg.GuildID, "err", err)
+			log.ApplicationLogger().Warn("Nonverified Members Purge: failed to load member roles", "guildID", gcfg.GuildID, "err", err)
 			memberRoles = map[string][]string{}
 		}
 
-		exempt := make(map[string]struct{}, len(gcfg.UnverifiedPurge.ExemptRoleIDs))
-		for _, rid := range gcfg.UnverifiedPurge.ExemptRoleIDs {
+		exempt := make(map[string]struct{}, len(gcfg.NonverifiedPurge.ExemptRoleIDs))
+		for _, rid := range gcfg.NonverifiedPurge.ExemptRoleIDs {
 			rid = strings.TrimSpace(rid)
 			if rid != "" {
 				exempt[rid] = struct{}{}
@@ -175,7 +175,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			return candidates[i].joinedAt.Before(candidates[j].joinedAt)
 		})
 
-		maxKicks := resolveInt(gcfg.UnverifiedPurge.MaxKicksPerRun, 200)
+		maxKicks := resolveInt(gcfg.NonverifiedPurge.MaxKicksPerRun, 200)
 		if maxKicks < 1 {
 			maxKicks = len(candidates)
 		}
@@ -185,7 +185,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 
 		var throttle <-chan time.Time
 		var throttleTicker *time.Ticker
-		kps := gcfg.UnverifiedPurge.KicksPerSecond
+		kps := gcfg.NonverifiedPurge.KicksPerSecond
 		if kps <= 0 {
 			kps = 4
 		}
@@ -237,8 +237,8 @@ func (s *UnverifiedPurgeService) runOnce() {
 			}
 
 			checked++
-			if gcfg.UnverifiedPurge.DryRun {
-				log.ApplicationLogger().Info("Non-Verified Members Purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
+			if gcfg.NonverifiedPurge.DryRun {
+				log.ApplicationLogger().Info("Nonverified Members Purge (dry-run): would kick member", "guildID", gcfg.GuildID, "userID", c.userID, "joinedAt", joinedAt.Format(time.RFC3339))
 				affectedMembers = append(affectedMembers, affectedMember{userID: c.userID, roles: member.Roles})
 				continue
 			}
@@ -254,7 +254,7 @@ func (s *UnverifiedPurgeService) runOnce() {
 			reason := fmt.Sprintf("nonverified-members-purge: missing verified role after %d days", graceDays)
 			reason = truncateAuditReason(reason)
 			if err := s.session.GuildMemberDeleteWithReason(gcfg.GuildID, c.userID, reason); err != nil {
-				log.ApplicationLogger().Warn("Non-Verified Members Purge: failed to kick member", "guildID", gcfg.GuildID, "userID", c.userID, "err", err)
+				log.ApplicationLogger().Warn("Nonverified Members Purge: failed to kick member", "guildID", gcfg.GuildID, "userID", c.userID, "err", err)
 				continue
 			}
 			kicked++
@@ -265,30 +265,30 @@ func (s *UnverifiedPurgeService) runOnce() {
 			throttleTicker.Stop()
 		}
 
-		log.ApplicationLogger().Info("Non-Verified Members Purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.UnverifiedPurge.DryRun)
+		log.ApplicationLogger().Info("Nonverified Members Purge completed", "guildID", gcfg.GuildID, "candidates", len(candidates), "checked", checked, "kicked", kicked, "dryRun", gcfg.NonverifiedPurge.DryRun)
 		if previewOnly {
 			s.logPreviewEntries(gcfg.GuildID, previewEntries, len(candidates))
 			continue
 		}
-		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.UnverifiedPurge.DryRun, affectedMembers)
+		s.sendRunEmbed(gcfg.GuildID, botID, verifiedRoleID, graceDays, cutoff, len(candidates), checked, kicked, maxKicks, kps, gcfg.NonverifiedPurge.DryRun, affectedMembers)
 	}
 }
 
-func (s *UnverifiedPurgeService) resolveScanInterval() time.Duration {
+func (s *NonverifiedPurgeService) resolveScanInterval() time.Duration {
 	cfg := s.configManager.Config()
 	if cfg == nil {
 		return 2 * time.Hour
 	}
 	mins := 120
 	for _, g := range cfg.Guilds {
-		if !cfg.ResolveFeatures(g.GuildID).UnverifiedPurge {
+		if !cfg.ResolveFeatures(g.GuildID).NonverifiedPurge {
 			continue
 		}
-		if !g.UnverifiedPurge.Enabled {
+		if !g.NonverifiedPurge.Enabled {
 			continue
 		}
-		if g.UnverifiedPurge.ScanIntervalMins > 0 && g.UnverifiedPurge.ScanIntervalMins < mins {
-			mins = g.UnverifiedPurge.ScanIntervalMins
+		if g.NonverifiedPurge.ScanIntervalMins > 0 && g.NonverifiedPurge.ScanIntervalMins < mins {
+			mins = g.NonverifiedPurge.ScanIntervalMins
 		}
 	}
 	if mins < 5 {
@@ -297,7 +297,7 @@ func (s *UnverifiedPurgeService) resolveScanInterval() time.Duration {
 	return time.Duration(mins) * time.Minute
 }
 
-func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID string, graceDays int, cutoff time.Time, candidates, checked, kicked, maxKicks, kps int, dryRun bool, affectedMembers []affectedMember) {
+func (s *NonverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID string, graceDays int, cutoff time.Time, candidates, checked, kicked, maxKicks, kps int, dryRun bool, affectedMembers []affectedMember) {
 	if s.session == nil || s.configManager == nil || guildID == "" {
 		return
 	}
@@ -321,7 +321,7 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 		mode = "Dry run"
 	}
 
-	title := "Non-Verified Members Purge"
+	title := "Nonverified Purge"
 	boosterRoleID := ""
 	if s.configManager != nil {
 		if gcfg := s.configManager.GuildConfig(guildID); gcfg != nil {
@@ -332,13 +332,13 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 	if boosterRoleID != "" {
 		boosterLabel = fmt.Sprintf("the <@&%s> role", boosterRoleID)
 	}
-	desc := fmt.Sprintf("Summary for members without <@&%s> after **%d days**. Members listed below did not have <@&%s> at the time of the purge and also did not have %s.", verifiedRoleID, graceDays, verifiedRoleID, boosterLabel)
+	desc := fmt.Sprintf("Members without <@&%s> for **%d days**. Excludes %s.", verifiedRoleID, graceDays, boosterLabel)
 
 	fields := []*discordgo.MessageEmbedField{
 		{Name: "Actor", Value: "<@" + botID + "> (`" + botID + "`)", Inline: true},
 		{Name: "Mode", Value: mode, Inline: true},
-		{Name: "Verified Role", Value: "<@&" + verifiedRoleID + "> (`" + verifiedRoleID + "`)", Inline: false},
-		{Name: "Joined Before", Value: fmt.Sprintf("<t:%d:R>", cutoff.Unix()), Inline: true},
+		{Name: "Verified role", Value: "<@&" + verifiedRoleID + "> (`" + verifiedRoleID + "`)", Inline: false},
+		{Name: "Joined before", Value: fmt.Sprintf("<t:%d:R>", cutoff.Unix()), Inline: true},
 		{Name: "Removed", Value: fmt.Sprintf("%d", kicked), Inline: true},
 	}
 
@@ -349,7 +349,7 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 				entries = fmt.Sprintf("%s\n... and %d more", entries, omitted)
 			}
 			fields = append(fields, &discordgo.MessageEmbedField{
-				Name:   "Affected Members (roles)",
+				Name:   "Affected members",
 				Value:  truncateFieldValue(entries),
 				Inline: false,
 			})
@@ -368,14 +368,14 @@ func (s *UnverifiedPurgeService) sendRunEmbed(guildID, botID, verifiedRoleID str
 	}
 
 	if _, err := s.session.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send Non-Verified Members Purge moderation log", "guildID", guildID, "channelID", channelID, "err", err)
+		log.ErrorLoggerRaw().Error("Failed to send Nonverified Members Purge moderation log", "guildID", guildID, "channelID", channelID, "err", err)
 	}
 }
 
-func (s *UnverifiedPurgeService) logPreviewEntries(guildID string, entries []string, candidates int) {
+func (s *NonverifiedPurgeService) logPreviewEntries(guildID string, entries []string, candidates int) {
 	if len(entries) == 0 {
 		if candidates > 0 {
-			log.ApplicationLogger().Info("Non-Verified Members Purge preview: no eligible members after verification", "guildID", guildID, "candidates", candidates)
+			log.ApplicationLogger().Info("Nonverified Members Purge preview: no eligible members after verification", "guildID", guildID, "candidates", candidates)
 		}
 		return
 	}
@@ -388,24 +388,24 @@ func (s *UnverifiedPurgeService) logPreviewEntries(guildID string, entries []str
 	if len(entries) > maxList {
 		lines += fmt.Sprintf(", and %d more", len(entries)-maxList)
 	}
-	log.ApplicationLogger().Info("Non-Verified Members Purge preview (disabled): eligible members without verified role", "guildID", guildID, "count", len(entries), "members", lines)
+	log.ApplicationLogger().Info("Nonverified Members Purge preview (disabled): eligible members without verified role", "guildID", guildID, "count", len(entries), "members", lines)
 }
 
-func (s *UnverifiedPurgeService) resolveInitialDelay() time.Duration {
+func (s *NonverifiedPurgeService) resolveInitialDelay() time.Duration {
 	cfg := s.configManager.Config()
 	if cfg == nil {
 		return 2 * time.Minute
 	}
 	secs := 120
 	for _, g := range cfg.Guilds {
-		if !cfg.ResolveFeatures(g.GuildID).UnverifiedPurge {
+		if !cfg.ResolveFeatures(g.GuildID).NonverifiedPurge {
 			continue
 		}
-		if !g.UnverifiedPurge.Enabled {
+		if !g.NonverifiedPurge.Enabled {
 			continue
 		}
-		if g.UnverifiedPurge.InitialDelaySecs > 0 && g.UnverifiedPurge.InitialDelaySecs < secs {
-			secs = g.UnverifiedPurge.InitialDelaySecs
+		if g.NonverifiedPurge.InitialDelaySecs > 0 && g.NonverifiedPurge.InitialDelaySecs < secs {
+			secs = g.NonverifiedPurge.InitialDelaySecs
 		}
 	}
 	if secs < 0 {
@@ -508,3 +508,4 @@ func buildAffectedMembersList(members []affectedMember, maxLen int) (string, int
 
 	return b.String(), omitted
 }
+

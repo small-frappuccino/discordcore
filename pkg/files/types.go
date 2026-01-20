@@ -1,6 +1,7 @@
 package files
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -105,7 +106,17 @@ type FeatureToggles struct {
 	Backfill        FeatureBackfillToggles      `json:"backfill,omitempty"`
 	StatsChannels   *bool                       `json:"stats_channels,omitempty"`
 	AutoRoleAssign  *bool                       `json:"auto_role_assignment,omitempty"`
-	UnverifiedPurge *bool                       `json:"unverified_purge,omitempty"`
+	NonverifiedPurge *bool                       `json:"nonverified_purge,omitempty"`
+}
+
+func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
+	type alias FeatureToggles
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*ft = FeatureToggles(parsed)
+	return nil
 }
 
 type ResolvedFeatureToggles struct {
@@ -143,7 +154,7 @@ type ResolvedFeatureToggles struct {
 	}
 	StatsChannels   bool
 	AutoRoleAssign  bool
-	UnverifiedPurge bool
+	NonverifiedPurge bool
 }
 
 // ## Config Types
@@ -191,8 +202,8 @@ type RolesConfig struct {
 	BoosterRole      string               `json:"booster_role,omitempty"`
 }
 
-// UnverifiedPurgeConfig controls purging unverified members per guild.
-type UnverifiedPurgeConfig struct {
+// NonverifiedPurgeConfig controls purging nonverified members per guild.
+type NonverifiedPurgeConfig struct {
 	Enabled          bool     `json:"enabled,omitempty"`
 	GraceDays        int      `json:"grace_days,omitempty"`         // default: 7
 	ScanIntervalMins int      `json:"scan_interval_mins,omitempty"` // default: 120
@@ -220,10 +231,20 @@ type GuildConfig struct {
 	GuildCacheTTL   string `json:"guild_cache_ttl,omitempty"`   // e.g.: "15m", "30m" (default: "15m")
 	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // e.g.: "15m", "30m" (default: "15m")
 
-	UnverifiedPurge UnverifiedPurgeConfig `json:"unverified_purge,omitempty"`
+	NonverifiedPurge NonverifiedPurgeConfig `json:"nonverified_purge,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
+}
+
+func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
+	type alias GuildConfig
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*gc = GuildConfig(parsed)
+	return nil
 }
 
 // BotConfig holds the configuration for the bot.
@@ -449,7 +470,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 
 	out.StatsChannels = resolveFeatureBool(guild.StatsChannels, global.StatsChannels, true)
 	out.AutoRoleAssign = resolveFeatureBool(guild.AutoRoleAssign, global.AutoRoleAssign, true)
-	out.UnverifiedPurge = resolveFeatureBool(guild.UnverifiedPurge, global.UnverifiedPurge, true)
+	out.NonverifiedPurge = resolveFeatureBool(guild.NonverifiedPurge, global.NonverifiedPurge, true)
 
 	return out
 }
@@ -820,3 +841,10 @@ func IsRetryableError(err error) bool {
 // ## General Errors
 
 var ErrRateLimited = errors.New("rate limited")
+
+
+
+
+
+
+

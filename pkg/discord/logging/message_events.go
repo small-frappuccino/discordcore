@@ -281,7 +281,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 
 	if strings.TrimSpace(guildConfig.Channels.VerificationChat) == m.ChannelID {
 		mes.cleanupPreviousVerificationMessages(guildID, m.ChannelID, m.Author.ID, m.ID)
-		mes.markVerificationPendingIfUnverified(s, guildConfig, m)
+		mes.markVerificationPendingIfNonverified(s, guildConfig, m)
 	}
 
 	mes.markEvent()
@@ -1029,7 +1029,7 @@ func (mes *MessageEventService) cleanupAllVerificationMessagesForUser(guildID, c
 	}
 }
 
-func (mes *MessageEventService) markVerificationPendingIfUnverified(s *discordgo.Session, gcfg *files.GuildConfig, m *discordgo.MessageCreate) {
+func (mes *MessageEventService) markVerificationPendingIfNonverified(s *discordgo.Session, gcfg *files.GuildConfig, m *discordgo.MessageCreate) {
 	if gcfg == nil || m == nil || m.Author == nil || m.Author.Bot {
 		return
 	}
@@ -1225,3 +1225,4 @@ func snowflakeTimestamp(id string) (time.Time, bool) {
 	ms := int64(raw>>22) + discordEpochMS
 	return time.Unix(0, ms*int64(time.Millisecond)), true
 }
+

@@ -51,7 +51,7 @@ export type GuildFeatureSettings = {
   automod: boolean;
   statsChannels: boolean;
   autoRoleAssignment: boolean;
-  unverifiedPurge: boolean;
+  nonverifiedPurge: boolean;
 };
 
 export type ProcessStatus = {
@@ -83,3 +83,4 @@ export type Settings = {
   guilds: GuildSettings[];
   features: FeatureSettings;
 };
+
