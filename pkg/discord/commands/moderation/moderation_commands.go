@@ -175,15 +175,9 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 			continue
 		}
 		bannedCount++
-		sendModerationLog(ctx, moderationLogPayload{
-			Action:      "ban",
-			TargetID:    memberID,
-			TargetLabel: memberID,
-			Reason:      reason,
-			RequestedBy: ctx.UserID,
-		})
 	}
 
+	sendMassBanLogSimple(ctx, bannedCount)
 	message := buildMassBanMessage(len(memberIDs), bannedCount, reason, truncated, invalidTokens, skipped, failed)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
 }
@@ -838,5 +832,33 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 
 	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
 		log.ErrorLoggerRaw().Error("Failed to send moderation log", "guildID", ctx.GuildID, "channelID", channelID, "action", action, "err", err)
+	}
+}
+
+func sendMassBanLogSimple(ctx *core.Context, bannedCount int) {
+	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
+		return
+	}
+	botID := ""
+	if ctx.Session.State != nil && ctx.Session.State.User != nil {
+		botID = ctx.Session.State.User.ID
+	}
+	if !logging.ShouldLogModerationEvent(ctx.Config, ctx.GuildID, botID, botID, logging.ModerationSourceCommand) {
+		return
+	}
+	channelID, ok := logging.ResolveModerationLogChannel(ctx.Session, ctx.Config, ctx.GuildID)
+	if !ok {
+		return
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "Mass Ban",
+		Description: fmt.Sprintf("Banned %d member(s).", bannedCount),
+		Color:       theme.AutomodAction(),
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
+		log.ErrorLoggerRaw().Error("Failed to send mass ban log", "guildID", ctx.GuildID, "channelID", channelID, "err", err)
 	}
 }
