@@ -93,22 +93,20 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), true)
 	}
 
+	targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, userID)
+
 	if err := ctx.Session.GuildBanCreateWithReason(ctx.GuildID, userID, reason, 0); err != nil {
 		return core.NewCommandError(fmt.Sprintf("Failed to ban user %s: %v", userID, err), true)
 	}
 
-	message := fmt.Sprintf("Banned user `%s`. Reason: %s", userID, reason)
-	if truncated {
-		message += " (reason truncated to 512 characters)"
-	}
-	sendModerationLog(ctx, moderationLogPayload{
+	sendBanActionLog(ctx, moderationLogPayload{
 		Action:      "ban",
 		TargetID:    userID,
-		TargetLabel: userID,
+		TargetLabel: targetUsername,
 		Reason:      reason,
 		RequestedBy: ctx.UserID,
 	})
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildBanCommandMessage(targetUsername, reason, truncated))
 }
 
 type massBanCommand struct{}
@@ -177,9 +175,18 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 		bannedCount++
 	}
 
-	sendMassBanLogSimple(ctx, bannedCount)
-	message := buildMassBanMessage(len(memberIDs), bannedCount, reason, truncated, invalidTokens, skipped, failed)
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, message)
+	extra := buildMassBanLogDetails(len(memberIDs), bannedCount, invalidTokens, skipped, failed)
+	if truncated {
+		extra += " | Reason truncated to 512 characters"
+	}
+	sendBanActionLog(ctx, moderationLogPayload{
+		Action:      "massban",
+		TargetLabel: fmt.Sprintf("%d user(s) banned", bannedCount),
+		Reason:      reason,
+		RequestedBy: ctx.UserID,
+		Extra:       extra,
+	})
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMassBanCommandMessage(bannedCount))
 }
 
 type cleanCommand struct{}
@@ -357,21 +364,20 @@ func parseMemberIDs(input string) ([]string, []string) {
 	return ids, invalid
 }
 
-func buildMassBanMessage(total, banned int, reason string, truncated bool, invalid, skipped, failed []string) string {
-	message := fmt.Sprintf("Banned %d of %d user(s). Reason: %s", banned, total, reason)
+func buildBanCommandMessage(targetUsername, reason string, truncated bool) string {
+	targetLabel := strings.TrimSpace(targetUsername)
+	if targetLabel == "" {
+		targetLabel = "unknown user"
+	}
+	message := fmt.Sprintf("Banned **%s**. Reason: %s", targetLabel, reason)
 	if truncated {
-		message += "\nNote: reason truncated to 512 characters."
-	}
-	if len(invalid) > 0 {
-		message += "\nInvalid: " + strings.Join(invalid, ", ")
-	}
-	if len(skipped) > 0 {
-		message += "\nSkipped: " + strings.Join(skipped, "; ")
-	}
-	if len(failed) > 0 {
-		message += "\nFailed: " + strings.Join(failed, "; ")
+		message += " (reason truncated to 512 characters)"
 	}
 	return message
+}
+
+func buildMassBanCommandMessage(banned int) string {
+	return fmt.Sprintf("Banned %d user(s).", banned)
 }
 
 func resolveCleanUserOption(ctx *core.Context) (string, string, error) {
@@ -691,6 +697,24 @@ func getMember(session *discordgo.Session, guildID, userID string) (*discordgo.M
 	return member, true
 }
 
+func resolveUserDisplayName(session *discordgo.Session, guildID, userID string) string {
+	if session == nil || userID == "" {
+		return userID
+	}
+	if member, ok := getMember(session, guildID, userID); ok && member != nil && member.User != nil {
+		if username := strings.TrimSpace(member.User.Username); username != "" {
+			return username
+		}
+	}
+	user, err := session.User(userID)
+	if err == nil && user != nil {
+		if username := strings.TrimSpace(user.Username); username != "" {
+			return username
+		}
+	}
+	return userID
+}
+
 func memberHasPermission(member *discordgo.Member, rolesByID map[string]*discordgo.Role, guildID, ownerID string, perm int64) bool {
 	if member == nil || member.User == nil {
 		return false
@@ -835,7 +859,7 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	}
 }
 
-func sendMassBanLogSimple(ctx *core.Context, bannedCount int) {
+func sendBanActionLog(ctx *core.Context, payload moderationLogPayload) {
 	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
 		return
 	}
@@ -851,14 +875,70 @@ func sendMassBanLogSimple(ctx *core.Context, bannedCount int) {
 		return
 	}
 
+	action := strings.TrimSpace(payload.Action)
+	if action == "" {
+		action = "ban"
+	}
+	reason := strings.TrimSpace(payload.Reason)
+	if reason == "" {
+		reason = "No reason provided"
+	}
+	targetID := strings.TrimSpace(payload.TargetID)
+	targetLabel := strings.TrimSpace(payload.TargetLabel)
+	targetValue := "Unknown target"
+	switch {
+	case targetID == "" && targetLabel != "":
+		targetValue = targetLabel
+	case targetID != "" && (targetLabel == "" || targetLabel == targetID):
+		targetValue = fmt.Sprintf("`%s`", targetID)
+	case targetID != "":
+		targetValue = fmt.Sprintf("**%s** (`%s`)", targetLabel, targetID)
+	}
+	actorID := strings.TrimSpace(payload.RequestedBy)
+	if actorID == "" {
+		actorID = botID
+	}
+	actorValue := fmt.Sprintf("<@%s> (`%s`)", actorID, actorID)
+	actionValue := "Ban"
+	if strings.EqualFold(action, "massban") {
+		actionValue = "Mass Ban"
+	}
+	caseID := ""
+	if ctx.Interaction != nil {
+		caseID = strings.TrimSpace(ctx.Interaction.ID)
+	}
+
 	embed := &discordgo.MessageEmbed{
-		Title:       "Mass Ban",
-		Description: fmt.Sprintf("Banned %d member(s).", bannedCount),
+		Title:       "Ban Action",
+		Description: targetValue,
 		Color:       theme.AutomodAction(),
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Actor", Value: actorValue, Inline: true},
+			{Name: "Action", Value: actionValue, Inline: true},
+		},
+	}
+	if caseID != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Case ID",
+			Value:  "`" + caseID + "`",
+			Inline: true,
+		})
+	}
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name:   "Reason",
+		Value:  reason,
+		Inline: false,
+	})
+	if payload.Extra != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   "Details",
+			Value:  payload.Extra,
+			Inline: false,
+		})
 	}
 
 	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send mass ban log", "guildID", ctx.GuildID, "channelID", channelID, "err", err)
+		log.ErrorLoggerRaw().Error("Failed to send ban action log", "guildID", ctx.GuildID, "channelID", channelID, "action", action, "err", err)
 	}
 }

@@ -21,6 +21,24 @@ func TestBuildMassBanLogDetails(t *testing.T) {
 	}
 }
 
+func TestBuildBanCommandMessageUsesUsername(t *testing.T) {
+	t.Parallel()
+
+	got := buildBanCommandMessage("alice", "rule violation", false)
+	if !containsAll(got, []string{"alice", "rule violation"}) {
+		t.Fatalf("unexpected message: %q", got)
+	}
+}
+
+func TestBuildMassBanCommandMessageOnlyCount(t *testing.T) {
+	t.Parallel()
+
+	got := buildMassBanCommandMessage(4)
+	if got != "Banned 4 user(s)." {
+		t.Fatalf("unexpected message: %q", got)
+	}
+}
+
 func TestSendModerationLogNoChannel(t *testing.T) {
 	t.Parallel()
 
