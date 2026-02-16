@@ -70,7 +70,7 @@ func (ns *NotificationSender) createAvatarChangeEmbed(change files.AvatarChange)
 			},
 			{
 				Name:   "Previous Avatar",
-				Value:  "[Click to view previous avatar](" + oldAvatarURL + ")",
+				Value:  "[See previous avatar](" + oldAvatarURL + ")",
 				Inline: true,
 			},
 		},
