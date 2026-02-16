@@ -103,7 +103,7 @@ func (t *Theme) ensureDefaults() {
 	}
 
 	if t.AvatarChange == 0 {
-		t.AvatarChange = 0x7AA2F7
+		t.AvatarChange = 0x73DACA
 	}
 	if t.MemberJoin == 0 {
 		t.MemberJoin = 0x9ECE6A
@@ -148,7 +148,7 @@ func defaultTheme() *Theme {
 		StatusError:    0xED4245,
 		StatusDefault:  0x99AAB5,
 
-		AvatarChange:     0x7AA2F7,
+		AvatarChange:     0x73DACA,
 		MemberJoin:       0x9ECE6A,
 		MemberLeave:      0xF7768E,
 		MessageEdit:      0xE0AF68,

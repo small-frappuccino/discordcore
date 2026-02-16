@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -242,6 +243,7 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 		return nil
 	}
 	group := event.GuildID
+	idempotencyKey := automodIdempotencyKey(event)
 	return a.Router.Dispatch(context.Background(), Task{
 		Type: TaskTypeSendAutomodAction,
 		Payload: AutomodActionPayload{
@@ -250,13 +252,30 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 		},
 		Options: TaskOptions{
 			GroupKey:       group,
-			IdempotencyKey: fmt.Sprintf("automod:%s:%s:%s:%s", event.GuildID, event.RuleID, event.UserID, event.MessageID),
+			IdempotencyKey: idempotencyKey,
 			IdempotencyTTL: 10 * time.Second,
 			MaxAttempts:    3,
 			InitialBackoff: 1 * time.Second,
 			MaxBackoff:     10 * time.Second,
 		},
 	})
+}
+
+func automodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
+	if event == nil {
+		return ""
+	}
+	messageID := strings.TrimSpace(event.MessageID)
+	if messageID != "" {
+		return fmt.Sprintf("automod:%s:%s:%s:msg:%s", event.GuildID, event.RuleID, event.UserID, messageID)
+	}
+	alertSystemMessageID := strings.TrimSpace(event.AlertSystemMessageID)
+	if alertSystemMessageID != "" {
+		return fmt.Sprintf("automod:%s:%s:%s:alert:%s", event.GuildID, event.RuleID, event.UserID, alertSystemMessageID)
+	}
+	// Some native actions may not include a stable message identifier.
+	// In that case, avoid accidental dedupe drops.
+	return ""
 }
 
 // EnqueueProcessAvatarChange enqueues processing of an avatar change.

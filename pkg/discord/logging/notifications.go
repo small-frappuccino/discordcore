@@ -40,9 +40,9 @@ func (ns *NotificationSender) SendAvatarChangeNotification(channelID string, cha
 		return nil
 	}
 
-	embeds := ns.createAvatarChangeEmbeds(change)
+	embed := ns.createAvatarChangeEmbed(change)
 
-	_, err := ns.session.ChannelMessageSendEmbeds(channelID, embeds)
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
 	if err != nil {
 		return fmt.Errorf(ErrSendMessage, err)
 	}
@@ -50,36 +50,38 @@ func (ns *NotificationSender) SendAvatarChangeNotification(channelID string, cha
 	return nil
 }
 
-func (ns *NotificationSender) createAvatarChangeEmbeds(change files.AvatarChange) []*discordgo.MessageEmbed {
+func (ns *NotificationSender) createAvatarChangeEmbed(change files.AvatarChange) *discordgo.MessageEmbed {
 	// Build avatar URLs
 	oldAvatarURL := ns.buildAvatarURL(change.UserID, change.OldAvatar)
 	newAvatarURL := ns.buildAvatarURL(change.UserID, change.NewAvatar)
 
-	// First embed - Previous avatar
-	firstEmbed := &discordgo.MessageEmbed{
-		Title:       "Previous Avatar",
+	embed := &discordgo.MessageEmbed{
 		Color:       theme.AvatarChange(),
-		Description: formatUserLabel(change.Username, change.UserID),
+		Description: "Avatar updated",
 		Timestamp:   change.Timestamp.Format(time.RFC3339),
+		Author: &discordgo.MessageEmbedAuthor{
+			Name: "Avatar Updated",
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "User",
+				Value:  formatUserLabel(change.Username, change.UserID),
+				Inline: true,
+			},
+			{
+				Name:   "Previous Avatar",
+				Value:  "[Click to view previous avatar](" + oldAvatarURL + ")",
+				Inline: true,
+			},
+		},
 	}
 
-	// Always add old avatar thumbnail
-	firstEmbed.Thumbnail = &discordgo.MessageEmbedThumbnail{
-		URL: oldAvatarURL,
-	}
-
-	// Second embed - New avatar (always sent)
-	secondEmbed := &discordgo.MessageEmbed{
-		Title: "New Avatar",
-		Color: theme.AvatarChange(),
-	}
-
-	// Always add new avatar thumbnail
-	secondEmbed.Thumbnail = &discordgo.MessageEmbedThumbnail{
+	// Show only the new avatar in the embed media.
+	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
 		URL: newAvatarURL,
 	}
 
-	return []*discordgo.MessageEmbed{firstEmbed, secondEmbed}
+	return embed
 }
 
 func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {

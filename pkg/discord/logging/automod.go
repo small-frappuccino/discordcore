@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -65,12 +66,8 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	cfg := as.configManager.Config()
-	if cfg != nil {
-		rc := cfg.ResolveRuntimeConfig(e.GuildID)
-		if rc.DisableAutomodLogs {
-			return
-		}
+	if !shouldLogAutomodEvent(as.configManager, e.GuildID) {
+		return
 	}
 
 	done := perf.StartGatewayEvent(
@@ -82,15 +79,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	)
 	defer done()
 
-	botID := ""
-	if s != nil && s.State != nil && s.State.User != nil {
-		botID = s.State.User.ID
-	}
-	if !ShouldLogModerationEvent(as.configManager, e.GuildID, "", botID, ModerationSourceGateway) {
-		return
-	}
-
-	logChannelID, ok := ResolveModerationLogChannel(s, as.configManager, e.GuildID)
+	logChannelID, ok := resolveAutomodLogChannel(s, as.configManager, e.GuildID)
 	if !ok {
 		return
 	}
@@ -98,9 +87,14 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	// If adapters are wired, enqueue via TaskRouter for retries/backoff
 	if as.adapters != nil {
 		if err := as.adapters.EnqueueAutomodAction(logChannelID, e); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
+			if errors.Is(err, task.ErrDuplicateTask) {
+				log.ApplicationLogger().Debug("Dropped duplicate automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "messageID", e.MessageID, "alertSystemMessageID", e.AlertSystemMessageID)
+				return
+			}
+			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task; falling back to synchronous send", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
+		} else {
+			return
 		}
-		return
 	}
 
 	// Build embed from event data (fallback when adapters are not available)
@@ -148,6 +142,51 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
 		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
 	}
+}
+
+func shouldLogAutomodEvent(configManager *files.ConfigManager, guildID string) bool {
+	if configManager == nil {
+		return false
+	}
+	cfg := configManager.Config()
+	if cfg == nil {
+		return false
+	}
+	if !cfg.ResolveFeatures(guildID).Logging.Automod {
+		return false
+	}
+	rc := cfg.ResolveRuntimeConfig(guildID)
+	return !rc.DisableAutomodLogs
+}
+
+func resolveAutomodLogChannel(session *discordgo.Session, configManager *files.ConfigManager, guildID string) (string, bool) {
+	if configManager == nil {
+		return "", false
+	}
+	gcfg := configManager.GuildConfig(guildID)
+	if gcfg == nil {
+		return "", false
+	}
+
+	// Prefer dedicated automod channel; fallback to moderation channel for backward compatibility.
+	channelID := strings.TrimSpace(gcfg.Channels.AutomodLog)
+	if channelID == "" {
+		channelID = strings.TrimSpace(gcfg.Channels.ModerationLog)
+	}
+	if channelID == "" {
+		return "", false
+	}
+
+	botID := ""
+	if session != nil && session.State != nil && session.State.User != nil {
+		botID = session.State.User.ID
+	}
+	if err := validateModerationLogChannel(session, guildID, channelID, botID); err != nil {
+		log.ErrorLoggerRaw().Error("Automod log channel validation failed", "guildID", guildID, "channelID", channelID, "err", err)
+		return "", false
+	}
+
+	return channelID, true
 }
 
 // sanitizeForCodeBlock prevents breaking out of the code fence and removes backticks.
