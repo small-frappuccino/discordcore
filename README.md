@@ -102,13 +102,16 @@ A minimal example:
         "allowed": ["333333333"],
         "verification_role": "333333335"
       },
+      "user_prune": {
+        "enabled": false
+      },
       "runtime_config": {
         "disable_message_logs": false
       }
     }
   ],
   "runtime_config": {
-    "moderation_log_mode": "alice_only"
+    "moderation_logging": true
   }
 }
 ```
@@ -122,7 +125,7 @@ Use `/config runtime` in Discord to edit `settings.json` at runtime. Toggles inc
 - `disable_message_logs`
 - `disable_reaction_logs`
 - `disable_automod_logs`
-- `moderation_log_mode`
+- `moderation_logging`
 - `message_cache_ttl_hours`
 - `message_delete_on_log`
 - `message_cache_cleanup`

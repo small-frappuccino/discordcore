@@ -40,11 +40,12 @@ func TestShouldLogAutomodEvent(t *testing.T) {
 		t.Fatal("expected automod logging disabled by runtime config")
 	}
 
-	// Moderation mode must not gate automod-native events.
+	// Moderation logging toggle must not gate automod-native events.
 	cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = false
-	cfg.RuntimeConfig.ModerationLogMode = "off"
+	disabledModeration := false
+	cfg.RuntimeConfig.ModerationLogging = &disabledModeration
 	if !shouldLogAutomodEvent(cm, guildID) {
-		t.Fatal("expected automod logging independent from moderation_log_mode")
+		t.Fatal("expected automod logging independent from moderation_logging")
 	}
 }
 

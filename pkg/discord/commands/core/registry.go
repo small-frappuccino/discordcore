@@ -22,6 +22,7 @@ type CommandRouter struct {
 
 	permChecker     *PermissionChecker
 	autocompleteMap map[string]AutocompleteHandler
+	store           *storage.Store
 
 	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
 	// It is set by the app runner and can be used by interaction handlers to apply changes
@@ -455,9 +456,15 @@ func (cr *CommandRouter) GetPermissionChecker() *PermissionChecker {
 
 // SetStore sets the shared store for the permission checker to enable local OwnerID cache usage.
 func (cr *CommandRouter) SetStore(store *storage.Store) {
+	cr.store = store
 	if cr.permChecker != nil {
 		cr.permChecker.SetStore(store)
 	}
+}
+
+// GetStore returns the shared store used by the router, if any.
+func (cr *CommandRouter) GetStore() *storage.Store {
+	return cr.store
 }
 
 // SetCache sets the unified cache for the permission checker to reduce API calls.

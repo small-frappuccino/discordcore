@@ -64,7 +64,7 @@ type GuildFeatureSettings = {
   automod: boolean;
   statsChannels: boolean;
   autoRoleAssignment: boolean;
-  nonverifiedPurge: boolean;
+  userPrune: boolean;
 };
 
 type GuildSettings = {
@@ -427,7 +427,7 @@ const GuildsPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => void
         "Automod",
         "Stats",
         "Auto Role",
-        "Nonverified Purge",
+        "User Prune",
       ]}
     >
       {settings.guilds.map((guild) => (
@@ -523,7 +523,7 @@ const GuildsPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => void
           </td>
           <td>
             <Toggle
-              checked={guild.features.nonverifiedPurge}
+              checked={guild.features.userPrune}
               onChange={(value) =>
                 onUpdate({
                   ...settings,
@@ -531,7 +531,7 @@ const GuildsPage: React.FC<{ settings: Settings; onUpdate: (s: Settings) => void
                     item.id === guild.id
                       ? {
                           ...item,
-                          features: { ...item.features, nonverifiedPurge: value },
+                          features: { ...item.features, userPrune: value },
                         }
                       : item
                   ),
@@ -1026,5 +1026,6 @@ const container = document.getElementById("root");
 if (container) {
   createRoot(container).render(<App />);
 }
+
 
 

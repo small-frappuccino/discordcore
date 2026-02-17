@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -517,6 +518,56 @@ func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
 	return ts, true, nil
 }
 
+// NextModerationCaseNumber atomically increments and returns the next moderation case number for a guild.
+func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return 0, fmt.Errorf("guildID is empty")
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.Exec(
+		`INSERT INTO moderation_cases (guild_id, last_case_number)
+         VALUES (?, 0)
+         ON CONFLICT(guild_id) DO NOTHING`,
+		guildID,
+	); err != nil {
+		return 0, err
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE moderation_cases
+         SET last_case_number = last_case_number + 1
+         WHERE guild_id = ?`,
+		guildID,
+	); err != nil {
+		return 0, err
+	}
+
+	var next int64
+	if err := tx.QueryRow(
+		`SELECT last_case_number FROM moderation_cases WHERE guild_id = ?`,
+		guildID,
+	).Scan(&next); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
 // SetGuildOwnerID sets or updates the cached owner ID for a guild.
 func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 	if s.db == nil {
@@ -723,6 +774,12 @@ CREATE TABLE IF NOT EXISTS runtime_meta (
   ts  TIMESTAMP NOT NULL
 );`
 
+	const createModerationCases = `
+CREATE TABLE IF NOT EXISTS moderation_cases (
+  guild_id         TEXT PRIMARY KEY,
+  last_case_number INTEGER NOT NULL DEFAULT 0
+ );`
+
 	const createRolesCurrent = `
 CREATE TABLE IF NOT EXISTS roles_current (
   guild_id   TEXT NOT NULL,
@@ -796,6 +853,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_leaves_by_guild_day ON daily_member_leaves(
 		createAvatarsHistory,
 		createGuildMeta,
 		createRuntimeMeta,
+		createModerationCases,
 		createRolesCurrent,
 		createPersistentCache,
 		createDailyMessageMetrics,

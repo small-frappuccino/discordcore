@@ -43,7 +43,7 @@
         "automod": true,
         "statsChannels": false,
         "autoRoleAssignment": false,
-        "nonverifiedPurge": false
+        "userPrune": false
       },
       "notificationChannelId": "987654321098765432"
     },
@@ -56,9 +56,10 @@
         "automod": false,
         "statsChannels": false,
         "autoRoleAssignment": false,
-        "nonverifiedPurge": false
+        "userPrune": false
       }
     }
   ]
 }
+
 

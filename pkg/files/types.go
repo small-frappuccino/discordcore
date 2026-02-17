@@ -31,7 +31,12 @@ type RuntimeConfig struct {
 	DisableUserLogs      bool `json:"disable_user_logs,omitempty"`
 	DisableCleanLog      bool `json:"disable_clean_log,omitempty"`
 	// MODERATION LOGS
-	ModerationLogMode string `json:"moderation_log_mode,omitempty"` // off | alice_only | all (default: alice_only)
+	// true/nil: send moderation logs automatically
+	// false: do not send moderation logs
+	ModerationLogging *bool `json:"moderation_logging,omitempty"`
+	// Deprecated: legacy mode key kept for backward compatibility with older settings.
+	// New behavior ignores mode semantics and only uses moderation_logging true/false.
+	ModerationLogMode string `json:"moderation_log_mode,omitempty"`
 
 	// PRESENCE WATCH
 	PresenceWatchUserID string `json:"presence_watch_user_id,omitempty"`
@@ -97,16 +102,16 @@ type FeatureBackfillToggles struct {
 }
 
 type FeatureToggles struct {
-	Services        FeatureServiceToggles       `json:"services,omitempty"`
-	Logging         FeatureLoggingToggles       `json:"logging,omitempty"`
-	MessageCache    FeatureMessageCacheToggles  `json:"message_cache,omitempty"`
-	PresenceWatch   FeaturePresenceWatchToggles `json:"presence_watch,omitempty"`
-	Maintenance     FeatureMaintenanceToggles   `json:"maintenance,omitempty"`
-	Safety          FeatureSafetyToggles        `json:"safety,omitempty"`
-	Backfill        FeatureBackfillToggles      `json:"backfill,omitempty"`
-	StatsChannels   *bool                       `json:"stats_channels,omitempty"`
-	AutoRoleAssign  *bool                       `json:"auto_role_assignment,omitempty"`
-	NonverifiedPurge *bool                       `json:"nonverified_purge,omitempty"`
+	Services       FeatureServiceToggles       `json:"services,omitempty"`
+	Logging        FeatureLoggingToggles       `json:"logging,omitempty"`
+	MessageCache   FeatureMessageCacheToggles  `json:"message_cache,omitempty"`
+	PresenceWatch  FeaturePresenceWatchToggles `json:"presence_watch,omitempty"`
+	Maintenance    FeatureMaintenanceToggles   `json:"maintenance,omitempty"`
+	Safety         FeatureSafetyToggles        `json:"safety,omitempty"`
+	Backfill       FeatureBackfillToggles      `json:"backfill,omitempty"`
+	StatsChannels  *bool                       `json:"stats_channels,omitempty"`
+	AutoRoleAssign *bool                       `json:"auto_role_assignment,omitempty"`
+	UserPrune      *bool                       `json:"user_prune,omitempty"`
 }
 
 func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
@@ -152,9 +157,9 @@ type ResolvedFeatureToggles struct {
 	Backfill struct {
 		Enabled bool
 	}
-	StatsChannels   bool
-	AutoRoleAssign  bool
-	NonverifiedPurge bool
+	StatsChannels  bool
+	AutoRoleAssign bool
+	UserPrune      bool
 }
 
 // ## Config Types
@@ -202,16 +207,27 @@ type RolesConfig struct {
 	BoosterRole      string               `json:"booster_role,omitempty"`
 }
 
-// NonverifiedPurgeConfig controls purging nonverified members per guild.
-type NonverifiedPurgeConfig struct {
-	Enabled          bool     `json:"enabled,omitempty"`
-	GraceDays        int      `json:"grace_days,omitempty"`         // default: 7
-	ScanIntervalMins int      `json:"scan_interval_mins,omitempty"` // default: 120
-	InitialDelaySecs int      `json:"initial_delay_secs,omitempty"` // default: 120
-	KicksPerSecond   int      `json:"kps,omitempty"`                // default: 4
-	MaxKicksPerRun   int      `json:"max_kicks_per_run,omitempty"`  // default: 200
-	ExemptRoleIDs    []string `json:"exempt_role_ids,omitempty"`    // optional
-	DryRun           bool     `json:"dry_run,omitempty"`            // log only, do not kick
+// UserPruneConfig controls periodic user pruning per guild.
+type UserPruneConfig struct {
+	// Enabled toggles the automatic monthly prune.
+	// true: execute native Discord prune automatically on day 28 (30-day inactivity window)
+	// false: do not execute automatically
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	GraceDays int `json:"grace_days,omitempty"`
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	ScanIntervalMins int `json:"scan_interval_mins,omitempty"`
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	InitialDelaySecs int `json:"initial_delay_secs,omitempty"`
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	KicksPerSecond int `json:"kps,omitempty"`
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	MaxKicksPerRun int `json:"max_kicks_per_run,omitempty"`
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	ExemptRoleIDs []string `json:"exempt_role_ids,omitempty"`
+	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
+	DryRun bool `json:"dry_run,omitempty"`
 }
 
 // GuildConfig holds the configuration for a specific guild.
@@ -231,7 +247,7 @@ type GuildConfig struct {
 	GuildCacheTTL   string `json:"guild_cache_ttl,omitempty"`   // e.g.: "15m", "30m" (default: "15m")
 	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // e.g.: "15m", "30m" (default: "15m")
 
-	NonverifiedPurge NonverifiedPurgeConfig `json:"nonverified_purge,omitempty"`
+	UserPrune UserPruneConfig `json:"user_prune,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
@@ -261,15 +277,6 @@ type BotConfig struct {
 	// NOTE: These are NOT environment variables. They are persisted in settings.json.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
-
-// ModerationLogMode describes which moderation events should be recorded.
-type ModerationLogMode string
-
-const (
-	ModerationLogOff       ModerationLogMode = "off"
-	ModerationLogAliceOnly ModerationLogMode = "alice_only"
-	ModerationLogAll       ModerationLogMode = "all"
-)
 
 // CustomRPCConfig holds profiles for local Discord Rich Presence.
 type CustomRPCConfig struct {
@@ -329,6 +336,9 @@ type RPCButtonConfig struct {
 // caindo para o global se o campo não estiver definido (zero-value).
 func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	global := cfg.RuntimeConfig
+	if global.ModerationLogging == nil {
+		global.ModerationLogging = boolPtr(global.ModerationLoggingEnabled())
+	}
 	if guildID == "" {
 		return global
 	}
@@ -376,8 +386,10 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	if guildRC.DisableCleanLog {
 		resolved.DisableCleanLog = true
 	}
-	if guildRC.ModerationLogMode != "" {
-		resolved.ModerationLogMode = guildRC.ModerationLogMode
+	if guildRC.ModerationLogging != nil {
+		resolved.ModerationLogging = boolPtr(*guildRC.ModerationLogging)
+	} else if guildRC.ModerationLogMode != "" {
+		resolved.ModerationLogging = boolPtr(guildRC.ModerationLoggingEnabled())
 	}
 	if guildRC.PresenceWatchUserID != "" {
 		resolved.PresenceWatchUserID = guildRC.PresenceWatchUserID
@@ -415,6 +427,20 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 
 	return resolved
+}
+
+// ModerationLoggingEnabled resolves whether moderation logs should be sent.
+// New key: runtime_config.moderation_logging (true/false).
+// Backward compatibility: when unset, moderation_log_mode="off" disables logs; any other value enables.
+func (rc RuntimeConfig) ModerationLoggingEnabled() bool {
+	if rc.ModerationLogging != nil {
+		return *rc.ModerationLogging
+	}
+	return strings.ToLower(strings.TrimSpace(rc.ModerationLogMode)) != "off"
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 func resolveFeatureBool(guildVal *bool, globalVal *bool, def bool) bool {
@@ -470,23 +496,9 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 
 	out.StatsChannels = resolveFeatureBool(guild.StatsChannels, global.StatsChannels, true)
 	out.AutoRoleAssign = resolveFeatureBool(guild.AutoRoleAssign, global.AutoRoleAssign, true)
-	out.NonverifiedPurge = resolveFeatureBool(guild.NonverifiedPurge, global.NonverifiedPurge, true)
+	out.UserPrune = resolveFeatureBool(guild.UserPrune, global.UserPrune, true)
 
 	return out
-}
-
-// NormalizeModerationLogMode returns a safe, defaulted moderation log mode.
-func NormalizeModerationLogMode(raw string) ModerationLogMode {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case string(ModerationLogOff):
-		return ModerationLogOff
-	case string(ModerationLogAll):
-		return ModerationLogAll
-	case string(ModerationLogAliceOnly):
-		return ModerationLogAliceOnly
-	default:
-		return ModerationLogAliceOnly
-	}
 }
 
 // ConfigManager handles bot configuration management.
@@ -841,10 +853,3 @@ func IsRetryableError(err error) bool {
 // ## General Errors
 
 var ErrRateLimited = errors.New("rate limited")
-
-
-
-
-
-
-

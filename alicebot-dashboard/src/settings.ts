@@ -17,7 +17,7 @@ const defaultGuilds: GuildSettings[] = [
       automod: true,
       statsChannels: false,
       autoRoleAssignment: false,
-      nonverifiedPurge: false,
+      userPrune: false,
     },
     notificationChannelId: "987654321098765432",
   },
@@ -30,7 +30,7 @@ const defaultGuilds: GuildSettings[] = [
       automod: false,
       statsChannels: false,
       autoRoleAssignment: false,
-      nonverifiedPurge: false,
+      userPrune: false,
     },
   },
 ];
@@ -74,7 +74,7 @@ const defaultGuildFeatures: GuildFeatureSettings = {
   automod: true,
   statsChannels: false,
   autoRoleAssignment: false,
-  nonverifiedPurge: false,
+  userPrune: false,
 };
 
 const defaultSettings: Settings = {
@@ -91,7 +91,7 @@ const isGuildSettings = (value: GuildSettings): boolean => {
     typeof value.features?.automod === "boolean" &&
     typeof value.features?.statsChannels === "boolean" &&
     typeof value.features?.autoRoleAssignment === "boolean" &&
-    typeof value.features?.nonverifiedPurge === "boolean"
+    typeof value.features?.userPrune === "boolean"
   );
 };
 
@@ -245,9 +245,9 @@ const sanitizeGuildFeatures = (
       data.autoRoleAssignment,
       defaultGuildFeatures.autoRoleAssignment
     ),
-    nonverifiedPurge: boolOrDefault(
-      data.nonverifiedPurge,
-      defaultGuildFeatures.nonverifiedPurge
+    userPrune: boolOrDefault(
+      data.userPrune,
+      defaultGuildFeatures.userPrune
     ),
   };
 };
@@ -320,5 +320,6 @@ export const validateSettingsPayload = (
 
   return { ok: true, settings: sanitizeSettings(parsed) };
 };
+
 
 

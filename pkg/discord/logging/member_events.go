@@ -125,16 +125,57 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	if cfg == nil {
 		return
 	}
+	guildConfig := mes.configManager.GuildConfig(m.GuildID)
+	if guildConfig == nil {
+		return
+	}
+	features := cfg.ResolveFeatures(m.GuildID)
+
+	// Keep member from the gateway payload when available.
+	var member *discordgo.Member
+	if m.Member != nil {
+		member = m.Member
+	}
+
+	// Composite automatic role assignment (per-guild config).
+	// This must not depend on entry/exit logging toggles.
+	if mes.session != nil && features.AutoRoleAssign && guildConfig.Roles.AutoAssignment.Enabled {
+		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
+		required := guildConfig.Roles.AutoAssignment.RequiredRoles
+		if targetRoleID != "" && len(required) >= 2 {
+			roleA := required[0]
+			roleB := required[1]
+			if member != nil {
+				roles := member.Roles
+				if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
+					if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
+						slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+					} else {
+						slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+					}
+				}
+			} else {
+				// As a last resort (only when role assignment is enabled), fetch member once.
+				if mm, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && mm != nil {
+					member = mm
+					roles := mm.Roles
+					if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
+						if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
+							slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+						} else {
+							slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+						}
+					}
+				}
+			}
+		}
+	}
+
 	rc := cfg.ResolveRuntimeConfig(m.GuildID)
 	if rc.DisableEntryExitLogs {
 		return
 	}
-	if !cfg.ResolveFeatures(m.GuildID).Logging.EntryExit {
-		return
-	}
-
-	guildConfig := mes.configManager.GuildConfig(m.GuildID)
-	if guildConfig == nil {
+	if !features.Logging.EntryExit {
 		return
 	}
 
@@ -155,10 +196,8 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 	// - Prefer the timestamp already present in the event payload.
 	// - Fallback to a single REST query only when missing.
 	joinedAt := time.Time{}
-	var member *discordgo.Member
-	if m.Member != nil {
-		member = m.Member
-		joinedAt = m.Member.JoinedAt
+	if member != nil {
+		joinedAt = member.JoinedAt
 	}
 	if joinedAt.IsZero() && mes.session != nil {
 		if mm, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && mm != nil {
@@ -197,37 +236,6 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
 
-	// Composite automatic role assignment (per-guild config)
-	if cfg.ResolveFeatures(m.GuildID).AutoRoleAssign && guildConfig.Roles.AutoAssignment.Enabled {
-		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
-		required := guildConfig.Roles.AutoAssignment.RequiredRoles
-		if targetRoleID != "" && len(required) >= 2 {
-			roleA := required[0]
-			roleB := required[1]
-			if member != nil {
-				roles := member.Roles
-				if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
-					if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
-						slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
-					} else {
-						slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
-					}
-				}
-			} else if mes.session != nil {
-				// As a last resort (only when role assignment is enabled), fetch member once.
-				if mm, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && mm != nil {
-					roles := mm.Roles
-					if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
-						if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
-							slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
-						} else {
-							slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
-						}
-					}
-				}
-			}
-		}
-	}
 }
 
 // handleGuildMemberRemove processes when a user leaves the server

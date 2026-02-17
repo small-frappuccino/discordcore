@@ -181,7 +181,7 @@ const (
 	runtimeKeyDisableReactionLogs  runtimeKey = "disable_reaction_logs"
 	runtimeKeyDisableUserLogs      runtimeKey = "disable_user_logs"
 	runtimeKeyDisableCleanLog      runtimeKey = "disable_clean_log"
-	runtimeKeyModerationLogMode    runtimeKey = "moderation_log_mode"
+	runtimeKeyModerationLogging    runtimeKey = "moderation_logging"
 
 	// PRESENCE WATCH
 	runtimeKeyPresenceWatchUserID runtimeKey = "presence_watch_user_id"
@@ -271,13 +271,12 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 		},
 		{
-			Key:         runtimeKeyModerationLogMode,
+			Key:         runtimeKeyModerationLogging,
 			Group:       "MODERATION",
-			Type:        vtString,
-			DefaultHint: "alice_only",
-			ShortHelp:   "Moderation log mode: off | alice_only | all",
+			Type:        vtBool,
+			DefaultHint: "true",
+			ShortHelp:   "Enable/disable moderation case embeds",
 			RestartHint: restartRecommended,
-			MaxInputLen: 16,
 		},
 		{
 			Key:         runtimeKeyPresenceWatchUserID,
@@ -582,8 +581,8 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 		return fmtBool(rc.DisableUserLogs), true
 	case runtimeKeyDisableCleanLog:
 		return fmtBool(rc.DisableCleanLog), true
-	case runtimeKeyModerationLogMode:
-		return rc.ModerationLogMode, true
+	case runtimeKeyModerationLogging:
+		return fmtBool(rc.ModerationLoggingEnabled()), true
 
 	case runtimeKeyPresenceWatchUserID:
 		return rc.PresenceWatchUserID, true
@@ -641,8 +640,8 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 	case runtimeKeyDisableCleanLog:
 		rc.DisableCleanLog = false
 		return rc, true
-	case runtimeKeyModerationLogMode:
-		rc.ModerationLogMode = ""
+	case runtimeKeyModerationLogging:
+		rc.ModerationLogging = nil
 		return rc, true
 
 	case runtimeKeyPresenceWatchUserID:
@@ -743,19 +742,6 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		case runtimeKeyBotRolePermMirrorActorRoleID:
 			rc.BotRolePermMirrorActorRoleID = raw
 			return rc, nil
-		case runtimeKeyModerationLogMode:
-			if raw == "" {
-				rc.ModerationLogMode = ""
-				return rc, nil
-			}
-			v := strings.ToLower(strings.TrimSpace(raw))
-			switch v {
-			case "off", "alice_only", "all":
-				rc.ModerationLogMode = v
-				return rc, nil
-			default:
-				return rc, fmt.Errorf("invalid moderation_log_mode (use off | alice_only | all)")
-			}
 		default:
 			return rc, fmt.Errorf("unsupported string key")
 		}
@@ -809,6 +795,8 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 		rc.DisableUserLogs = v
 	case runtimeKeyDisableCleanLog:
 		rc.DisableCleanLog = v
+	case runtimeKeyModerationLogging:
+		rc.ModerationLogging = boolPtr(v)
 	case runtimeKeyPresenceWatchBot:
 		rc.PresenceWatchBot = v
 	case runtimeKeyMessageDeleteOnLog:
@@ -1671,4 +1659,8 @@ func fmtBool(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

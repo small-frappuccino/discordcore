@@ -19,8 +19,10 @@ const (
 	ModerationSourceUnknown  ModerationEventSource = "unknown"
 )
 
-// ShouldLogModerationEvent applies the moderation log mode filter (off | alice_only | all).
-func ShouldLogModerationEvent(configManager *files.ConfigManager, guildID, actorID, botID string, _ ModerationEventSource) bool {
+// ShouldLogModerationEvent applies the moderation_logging toggle.
+// true (or unset): send moderation logs
+// false: do not send moderation logs
+func ShouldLogModerationEvent(configManager *files.ConfigManager, guildID, _, _ string, _ ModerationEventSource) bool {
 	if configManager == nil {
 		return false
 	}
@@ -28,22 +30,8 @@ func ShouldLogModerationEvent(configManager *files.ConfigManager, guildID, actor
 	if cfg == nil {
 		return false
 	}
-	if !cfg.ResolveFeatures(guildID).Logging.Moderation {
-		return false
-	}
 	rc := cfg.ResolveRuntimeConfig(guildID)
-	mode := files.NormalizeModerationLogMode(rc.ModerationLogMode)
-
-	switch mode {
-	case files.ModerationLogOff:
-		return false
-	case files.ModerationLogAll:
-		return true
-	case files.ModerationLogAliceOnly:
-		return actorID != "" && botID != "" && actorID == botID
-	default:
-		return false
-	}
+	return rc.ModerationLoggingEnabled()
 }
 
 // ResolveModerationLogChannel validates and returns the configured moderation log channel.

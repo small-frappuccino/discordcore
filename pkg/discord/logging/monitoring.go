@@ -296,12 +296,11 @@ func (ms *MonitoringService) Start() error {
 		globalFeatures = ms.configManager.Config().ResolveFeatures("")
 	}
 
-	// Start member/message services (gate entry/exit logs via runtime config)
+	// Start member/message services (member events are needed for entry/exit logs and auto-role assignment).
 	// Note: these services are currently global, so we use global config for startup.
 	// Per-guild toggles would need these services to be guild-aware or filtered.
-	disableEntryExit := globalRC.DisableEntryExitLogs || !globalFeatures.Logging.EntryExit
-	if disableEntryExit {
-		log.ApplicationLogger().Info("🛑 Entry/exit logs disabled by runtime config/features; MemberEventService will not start")
+	if !ms.shouldRunMemberEventService(globalRC) {
+		log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
 	} else {
 		if err := ms.memberEventService.Start(); err != nil {
 			ms.isRunning = false
@@ -320,7 +319,9 @@ func (ms *MonitoringService) Start() error {
 		if err := ms.messageEventService.Start(); err != nil {
 			ms.isRunning = false
 			// Stop the member event service if start failed
-			ms.memberEventService.Stop()
+			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
+				_ = ms.memberEventService.Stop()
+			}
 			return fmt.Errorf("failed to start message event service: %w", err)
 		}
 	}
@@ -846,6 +847,38 @@ func (ms *MonitoringService) Start() error {
 	return nil
 }
 
+func shouldRunMemberEventService(cfg *files.BotConfig, globalRC files.RuntimeConfig) bool {
+	if cfg == nil {
+		return false
+	}
+
+	// Global/default behavior still matters for guilds that only inherit config.
+	globalFeatures := cfg.ResolveFeatures("")
+	if !globalRC.DisableEntryExitLogs && globalFeatures.Logging.EntryExit {
+		return true
+	}
+
+	for _, guildCfg := range cfg.Guilds {
+		features := cfg.ResolveFeatures(guildCfg.GuildID)
+		guildDisableEntryExit := globalRC.DisableEntryExitLogs || guildCfg.RuntimeConfig.DisableEntryExitLogs
+		if !guildDisableEntryExit && features.Logging.EntryExit {
+			return true
+		}
+		if features.AutoRoleAssign && guildCfg.Roles.AutoAssignment.Enabled {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (ms *MonitoringService) shouldRunMemberEventService(globalRC files.RuntimeConfig) bool {
+	if ms.configManager == nil {
+		return false
+	}
+	return shouldRunMemberEventService(ms.configManager.Config(), globalRC)
+}
+
 // Stop stops the monitoring service. Returns error if not running.
 func (ms *MonitoringService) Stop() error {
 	ms.runMu.Lock()
@@ -888,8 +921,10 @@ func (ms *MonitoringService) Stop() error {
 	ms.removeEventHandlers()
 
 	// Stop services
-	if err := ms.memberEventService.Stop(); err != nil {
-		log.ErrorLoggerRaw().Error("Error stopping member event service", "err", err)
+	if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
+		if err := ms.memberEventService.Stop(); err != nil {
+			log.ErrorLoggerRaw().Error("Error stopping member event service", "err", err)
+		}
 	}
 	if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 		if err := ms.messageEventService.Stop(); err != nil {
@@ -1027,8 +1062,8 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		features = ms.configManager.Config().ResolveFeatures("")
 	}
 
-	// Entry/Exit logs -> MemberEventService
-	if rc.DisableEntryExitLogs || !features.Logging.EntryExit {
+	// Entry/Exit logs and auto-role assignment -> MemberEventService
+	if !ms.shouldRunMemberEventService(rc) {
 		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 			_ = ms.memberEventService.Stop()
 		}

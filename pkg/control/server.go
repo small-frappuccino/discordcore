@@ -171,25 +171,30 @@ func (s *Server) applyRuntimePatch(patch map[string]json.RawMessage) (files.Runt
 type setterFunc func(*files.RuntimeConfig, json.RawMessage) error
 
 var runtimeConfigFieldSetters = map[string]setterFunc{
-	"bot_theme":                             stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BotTheme = v }),
-	"disable_db_cleanup":                    boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableDBCleanup = v }),
-	"disable_automod_logs":                  boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableAutomodLogs = v }),
-	"disable_message_logs":                  boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableMessageLogs = v }),
-	"disable_entry_exit_logs":               boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableEntryExitLogs = v }),
-	"disable_reaction_logs":                 boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableReactionLogs = v }),
-	"disable_user_logs":                     boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableUserLogs = v }),
-	"disable_clean_log":                     boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableCleanLog = v }),
-	"moderation_log_mode":                   stringSetter(func(rc *files.RuntimeConfig, v string) { rc.ModerationLogMode = v }),
-	"presence_watch_user_id":                stringSetter(func(rc *files.RuntimeConfig, v string) { rc.PresenceWatchUserID = v }),
-	"presence_watch_bot":                    boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.PresenceWatchBot = v }),
-	"message_cache_ttl_hours":               intSetter(func(rc *files.RuntimeConfig, v int) { rc.MessageCacheTTLHours = v }),
-	"message_delete_on_log":                 boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageDeleteOnLog = v }),
-	"message_cache_cleanup":                 boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageCacheCleanup = v }),
-	"backfill_channel_id":                   stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillChannelID = v }),
-	"backfill_start_day":                    stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillStartDay = v }),
-	"backfill_initial_date":                 stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillInitialDate = v }),
-	"disable_bot_role_perm_mirror":          boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableBotRolePermMirror = v }),
-	"bot_role_perm_mirror_actor_role_id":     stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BotRolePermMirrorActorRoleID = v }),
+	"bot_theme":               stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BotTheme = v }),
+	"disable_db_cleanup":      boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableDBCleanup = v }),
+	"disable_automod_logs":    boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableAutomodLogs = v }),
+	"disable_message_logs":    boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableMessageLogs = v }),
+	"disable_entry_exit_logs": boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableEntryExitLogs = v }),
+	"disable_reaction_logs":   boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableReactionLogs = v }),
+	"disable_user_logs":       boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableUserLogs = v }),
+	"disable_clean_log":       boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableCleanLog = v }),
+	"moderation_logging":      boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.ModerationLogging = boolPtr(v) }),
+	// Deprecated (legacy). Accepted for backward compatibility; converted to moderation_logging.
+	"moderation_log_mode": stringSetter(func(rc *files.RuntimeConfig, v string) {
+		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(v)) != "off")
+		rc.ModerationLogMode = v
+	}),
+	"presence_watch_user_id":             stringSetter(func(rc *files.RuntimeConfig, v string) { rc.PresenceWatchUserID = v }),
+	"presence_watch_bot":                 boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.PresenceWatchBot = v }),
+	"message_cache_ttl_hours":            intSetter(func(rc *files.RuntimeConfig, v int) { rc.MessageCacheTTLHours = v }),
+	"message_delete_on_log":              boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageDeleteOnLog = v }),
+	"message_cache_cleanup":              boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageCacheCleanup = v }),
+	"backfill_channel_id":                stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillChannelID = v }),
+	"backfill_start_day":                 stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillStartDay = v }),
+	"backfill_initial_date":              stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillInitialDate = v }),
+	"disable_bot_role_perm_mirror":       boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableBotRolePermMirror = v }),
+	"bot_role_perm_mirror_actor_role_id": stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BotRolePermMirrorActorRoleID = v }),
 }
 
 func stringSetter(assign func(*files.RuntimeConfig, string)) setterFunc {
@@ -290,4 +295,8 @@ func decodeInt(raw json.RawMessage) (int, error) {
 		return 0, err
 	}
 	return int(f), nil
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

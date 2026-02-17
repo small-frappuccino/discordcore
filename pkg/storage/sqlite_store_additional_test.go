@@ -31,6 +31,7 @@ func TestSchemaInitialized(t *testing.T) {
 		"persistent_cache": false,
 		"guild_meta":       false,
 		"runtime_meta":     false,
+		"moderation_cases": false,
 		"roles_current":    false,
 	}
 	for rows.Next() {
@@ -109,5 +110,37 @@ func TestHeartbeatMetadataRoundTrip(t *testing.T) {
 	got, ok, err := store.GetHeartbeat()
 	if err != nil || !ok || !got.Equal(ts) {
 		t.Fatalf("heartbeat mismatch: ts=%v ok=%v err=%v", got, ok, err)
+	}
+}
+
+func TestNextModerationCaseNumberSequentialPerGuild(t *testing.T) {
+	store := newTempStore(t)
+
+	n1, err := store.NextModerationCaseNumber("g1")
+	if err != nil {
+		t.Fatalf("next case 1: %v", err)
+	}
+	n2, err := store.NextModerationCaseNumber("g1")
+	if err != nil {
+		t.Fatalf("next case 2: %v", err)
+	}
+	if n1 != 1 || n2 != 2 {
+		t.Fatalf("unexpected sequence for g1: n1=%d n2=%d", n1, n2)
+	}
+
+	nOther, err := store.NextModerationCaseNumber("g2")
+	if err != nil {
+		t.Fatalf("next case g2: %v", err)
+	}
+	if nOther != 1 {
+		t.Fatalf("expected independent sequence for g2 to start at 1, got %d", nOther)
+	}
+}
+
+func TestNextModerationCaseNumberRejectsEmptyGuildID(t *testing.T) {
+	store := newTempStore(t)
+
+	if _, err := store.NextModerationCaseNumber("   "); err == nil {
+		t.Fatal("expected error for empty guildID")
 	}
 }

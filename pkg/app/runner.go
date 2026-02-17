@@ -286,47 +286,38 @@ func Run(appName, tokenEnv string) error {
 		}
 	}
 
-	// Nonverified members purge service (optional; enabled per-guild in settings.json)
+	// User prune service (optional; native Discord prune, day 28, 30-day window)
 	{
 		cfg := configManager.Config()
 		enabled := false
-		preview := false
 		if cfg != nil {
 			for _, g := range cfg.Guilds {
 				feature := cfg.ResolveFeatures(g.GuildID)
-				if !feature.NonverifiedPurge {
+				if !feature.UserPrune {
 					continue
 				}
-				if strings.TrimSpace(g.Roles.VerificationRole) == "" {
-					continue
-				}
-				if g.NonverifiedPurge.Enabled {
+				if g.UserPrune.Enabled {
 					enabled = true
-				} else {
-					preview = true
+					break
 				}
 			}
 		}
 
-		if enabled || preview {
-			nonverifiedPurgeService := maintenance.NewNonverifiedPurgeService(discordSession, configManager, store)
-			nonverifiedPurgeWrapper := service.NewServiceWrapper(
-				"nonverified-members-purge",
+		if enabled {
+			userPruneService := maintenance.NewUserPruneService(discordSession, configManager, store)
+			userPruneWrapper := service.NewServiceWrapper(
+				"user-prune",
 				service.TypeMonitoring,
 				service.PriorityNormal,
 				[]string{"monitoring"},
-				func() error { nonverifiedPurgeService.Start(); return nil },
-				func() error { nonverifiedPurgeService.Stop(); return nil },
-				func() bool { return nonverifiedPurgeService.IsRunning() },
+				func() error { userPruneService.Start(); return nil },
+				func() error { userPruneService.Stop(); return nil },
+				func() bool { return userPruneService.IsRunning() },
 			)
-			if err := serviceManager.Register(nonverifiedPurgeWrapper); err != nil {
-				return fmt.Errorf("register Nonverified members purge service: %w", err)
+			if err := serviceManager.Register(userPruneWrapper); err != nil {
+				return fmt.Errorf("register user prune service: %w", err)
 			}
-			if enabled {
-				log.ApplicationLogger().Info("✅ Nonverified members purge enabled")
-			} else {
-				log.ApplicationLogger().Info("✅ Nonverified members purge preview enabled (purge disabled per-guild)")
-			}
+			log.ApplicationLogger().Info("✅ User prune enabled (Discord native prune: day 28, 30 days)")
 		}
 	}
 
@@ -433,4 +424,3 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
 }
-
