@@ -21,6 +21,7 @@ const (
 	LogEventReactionMetric LogEventType = "reaction_metric"
 	LogEventAutomodAction  LogEventType = "automod_action"
 	LogEventModerationCase LogEventType = "moderation_case"
+	LogEventCleanAction    LogEventType = "clean_action"
 )
 
 // LogEventCategory groups events by subsystem.
@@ -32,17 +33,6 @@ const (
 	LogCategoryReaction   LogEventCategory = "reaction"
 	LogCategoryAutomod    LogEventCategory = "automod"
 	LogCategoryModeration LogEventCategory = "moderation"
-)
-
-type logChannelKey string
-
-const (
-	logChannelUserActivity logChannelKey = "user_activity_log"
-	logChannelEntryLeave   logChannelKey = "entry_leave_log"
-	logChannelMessageAudit logChannelKey = "message_audit_log"
-	logChannelCommands     logChannelKey = "commands"
-	logChannelAutomod      logChannelKey = "automod_log"
-	logChannelModeration   logChannelKey = "moderation_log"
 )
 
 // EmitReason is a deterministic reason for a should-emit decision.
@@ -60,12 +50,14 @@ const (
 	EmitReasonFeatureLoggingReactionDisabled   EmitReason = "feature_logging_reaction_disabled"
 	EmitReasonFeatureLoggingAutomodDisabled    EmitReason = "feature_logging_automod_disabled"
 	EmitReasonFeatureLoggingModerationDisabled EmitReason = "feature_logging_moderation_disabled"
+	EmitReasonFeatureLoggingCleanDisabled      EmitReason = "feature_logging_clean_disabled"
 	EmitReasonRuntimeDisableUserLogs           EmitReason = "runtime_disable_user_logs"
 	EmitReasonRuntimeDisableEntryExitLogs      EmitReason = "runtime_disable_entry_exit_logs"
 	EmitReasonRuntimeDisableMessageLogs        EmitReason = "runtime_disable_message_logs"
 	EmitReasonRuntimeDisableReactionLogs       EmitReason = "runtime_disable_reaction_logs"
 	EmitReasonRuntimeDisableAutomodLogs        EmitReason = "runtime_disable_automod_logs"
 	EmitReasonRuntimeModerationLoggingOff      EmitReason = "runtime_moderation_logging_off"
+	EmitReasonRuntimeDisableCleanLog           EmitReason = "runtime_disable_clean_log"
 	EmitReasonNoChannelConfigured              EmitReason = "no_channel_configured"
 	EmitReasonMissingIntent                    EmitReason = "missing_intent"
 	EmitReasonChannelInvalid                   EmitReason = "channel_invalid"
@@ -78,8 +70,6 @@ type LogEventCapability struct {
 	RequiredIntentsMask int
 	RequiredPermsMask   int64
 	RequiresChannel     bool
-	PreferredChannel    logChannelKey
-	FallbackChannels    []logChannelKey
 	// Toggles documents the two policy layers:
 	// 1) `features.*` => product behavior (fine-grain enablement)
 	// 2) `runtime_config.disable_*` => operational kill switch
@@ -107,8 +97,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: 0,
 		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:     true,
-		PreferredChannel:    logChannelUserActivity,
-		Toggles:             []string{"runtime_config.disable_user_logs", "features.logging.user"},
+		Toggles:             []string{"runtime_config.disable_user_logs", "features.logging.avatar_logging"},
 	},
 	LogEventRoleChange: {
 		EventType:           LogEventRoleChange,
@@ -116,8 +105,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMembers),
 		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:     true,
-		PreferredChannel:    logChannelUserActivity,
-		Toggles:             []string{"runtime_config.disable_user_logs", "features.logging.user"},
+		Toggles:             []string{"runtime_config.disable_user_logs", "features.logging.role_update"},
 	},
 	LogEventMemberJoin: {
 		EventType:           LogEventMemberJoin,
@@ -125,9 +113,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMembers),
 		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:     true,
-		PreferredChannel:    logChannelEntryLeave,
-		FallbackChannels:    []logChannelKey{logChannelUserActivity},
-		Toggles:             []string{"runtime_config.disable_entry_exit_logs", "features.logging.entry_exit"},
+		Toggles:             []string{"runtime_config.disable_entry_exit_logs", "features.logging.member_join"},
 	},
 	LogEventMemberLeave: {
 		EventType:           LogEventMemberLeave,
@@ -135,9 +121,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMembers),
 		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:     true,
-		PreferredChannel:    logChannelEntryLeave,
-		FallbackChannels:    []logChannelKey{logChannelUserActivity},
-		Toggles:             []string{"runtime_config.disable_entry_exit_logs", "features.logging.entry_exit"},
+		Toggles:             []string{"runtime_config.disable_entry_exit_logs", "features.logging.member_leave"},
 	},
 	LogEventMessageProcess: {
 		EventType:           LogEventMessageProcess,
@@ -145,7 +129,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMessages),
 		RequiredPermsMask:   0,
 		RequiresChannel:     false,
-		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message"},
+		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message_process"},
 	},
 	LogEventMessageEdit: {
 		EventType:           LogEventMessageEdit,
@@ -153,9 +137,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMessages),
 		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:     true,
-		PreferredChannel:    logChannelMessageAudit,
-		FallbackChannels:    []logChannelKey{logChannelUserActivity, logChannelCommands},
-		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message"},
+		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message_edit"},
 	},
 	LogEventMessageDelete: {
 		EventType:           LogEventMessageDelete,
@@ -163,9 +145,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMessages),
 		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:     true,
-		PreferredChannel:    logChannelMessageAudit,
-		FallbackChannels:    []logChannelKey{logChannelUserActivity, logChannelCommands},
-		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message"},
+		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message_delete"},
 	},
 	LogEventReactionMetric: {
 		EventType:           LogEventReactionMetric,
@@ -173,7 +153,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask: int(discordgo.IntentsGuildMessageReactions),
 		RequiredPermsMask:   0,
 		RequiresChannel:     false,
-		Toggles:             []string{"runtime_config.disable_reaction_logs", "features.logging.reaction"},
+		Toggles:             []string{"runtime_config.disable_reaction_logs", "features.logging.reaction_metric"},
 	},
 	LogEventAutomodAction: {
 		EventType:            LogEventAutomodAction,
@@ -181,9 +161,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask:  int(discordgo.IntentAutoModerationExecution),
 		RequiredPermsMask:    int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:      true,
-		PreferredChannel:     logChannelAutomod,
-		FallbackChannels:     []logChannelKey{logChannelModeration},
-		Toggles:              []string{"runtime_config.disable_automod_logs", "features.logging.automod"},
+		Toggles:              []string{"runtime_config.disable_automod_logs", "features.logging.automod_action"},
 		ValidateChannelPerms: true,
 	},
 	LogEventModerationCase: {
@@ -192,10 +170,18 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		RequiredIntentsMask:        0,
 		RequiredPermsMask:          int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
 		RequiresChannel:            true,
-		PreferredChannel:           logChannelModeration,
-		Toggles:                    []string{"runtime_config.moderation_logging", "features.logging.moderation"},
+		Toggles:                    []string{"runtime_config.moderation_logging", "features.logging.moderation_case"},
 		ValidateChannelPerms:       true,
 		RequireExclusiveModeration: true,
+	},
+	LogEventCleanAction: {
+		EventType:            LogEventCleanAction,
+		Category:             LogCategoryModeration,
+		RequiredIntentsMask:  0,
+		RequiredPermsMask:    int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiresChannel:      true,
+		Toggles:              []string{"runtime_config.disable_clean_log", "features.logging.clean_action"},
+		ValidateChannelPerms: true,
 	},
 }
 
@@ -206,6 +192,16 @@ func LogEventCapabilities() map[LogEventType]LogEventCapability {
 		out[k] = v
 	}
 	return out
+}
+
+// ResolveLogChannel returns the resolved channel ID for an event in a guild.
+// Resolution is deterministic and event-specific.
+func ResolveLogChannel(eventType LogEventType, guildID string, configManager *files.ConfigManager) string {
+	if guildID == "" || configManager == nil {
+		return ""
+	}
+	gcfg := configManager.GuildConfig(guildID)
+	return resolveLogChannelForGuild(eventType, gcfg)
 }
 
 // ShouldEmitLogEvent centralizes event gating and channel resolution.
@@ -250,30 +246,66 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 	features := cfg.ResolveFeatures(guildID)
 
 	switch eventType {
-	case LogEventAvatarChange, LogEventRoleChange:
+	case LogEventAvatarChange:
 		if rc.DisableUserLogs {
 			decision.Reason = EmitReasonRuntimeDisableUserLogs
 			return decision
 		}
-		if !features.Logging.User {
+		if !features.Logging.AvatarLogging {
 			decision.Reason = EmitReasonFeatureLoggingUserDisabled
 			return decision
 		}
-	case LogEventMemberJoin, LogEventMemberLeave:
+	case LogEventRoleChange:
+		if rc.DisableUserLogs {
+			decision.Reason = EmitReasonRuntimeDisableUserLogs
+			return decision
+		}
+		if !features.Logging.RoleUpdate {
+			decision.Reason = EmitReasonFeatureLoggingUserDisabled
+			return decision
+		}
+	case LogEventMemberJoin:
 		if rc.DisableEntryExitLogs {
 			decision.Reason = EmitReasonRuntimeDisableEntryExitLogs
 			return decision
 		}
-		if !features.Logging.EntryExit {
+		if !features.Logging.MemberJoin {
 			decision.Reason = EmitReasonFeatureLoggingEntryExitDisabled
 			return decision
 		}
-	case LogEventMessageProcess, LogEventMessageEdit, LogEventMessageDelete:
+	case LogEventMemberLeave:
+		if rc.DisableEntryExitLogs {
+			decision.Reason = EmitReasonRuntimeDisableEntryExitLogs
+			return decision
+		}
+		if !features.Logging.MemberLeave {
+			decision.Reason = EmitReasonFeatureLoggingEntryExitDisabled
+			return decision
+		}
+	case LogEventMessageProcess:
 		if rc.DisableMessageLogs {
 			decision.Reason = EmitReasonRuntimeDisableMessageLogs
 			return decision
 		}
-		if !features.Logging.Message {
+		if !features.Logging.MessageProcess {
+			decision.Reason = EmitReasonFeatureLoggingMessageDisabled
+			return decision
+		}
+	case LogEventMessageEdit:
+		if rc.DisableMessageLogs {
+			decision.Reason = EmitReasonRuntimeDisableMessageLogs
+			return decision
+		}
+		if !features.Logging.MessageEdit {
+			decision.Reason = EmitReasonFeatureLoggingMessageDisabled
+			return decision
+		}
+	case LogEventMessageDelete:
+		if rc.DisableMessageLogs {
+			decision.Reason = EmitReasonRuntimeDisableMessageLogs
+			return decision
+		}
+		if !features.Logging.MessageDelete {
 			decision.Reason = EmitReasonFeatureLoggingMessageDisabled
 			return decision
 		}
@@ -282,7 +314,7 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 			decision.Reason = EmitReasonRuntimeDisableReactionLogs
 			return decision
 		}
-		if !features.Logging.Reaction {
+		if !features.Logging.ReactionMetric {
 			decision.Reason = EmitReasonFeatureLoggingReactionDisabled
 			return decision
 		}
@@ -291,7 +323,7 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 			decision.Reason = EmitReasonRuntimeDisableAutomodLogs
 			return decision
 		}
-		if !features.Logging.Automod {
+		if !features.Logging.AutomodAction {
 			decision.Reason = EmitReasonFeatureLoggingAutomodDisabled
 			return decision
 		}
@@ -300,14 +332,23 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 			decision.Reason = EmitReasonRuntimeModerationLoggingOff
 			return decision
 		}
-		if !features.Logging.Moderation {
+		if !features.Logging.ModerationCase {
 			decision.Reason = EmitReasonFeatureLoggingModerationDisabled
+			return decision
+		}
+	case LogEventCleanAction:
+		if rc.DisableCleanLog {
+			decision.Reason = EmitReasonRuntimeDisableCleanLog
+			return decision
+		}
+		if !features.Logging.CleanAction {
+			decision.Reason = EmitReasonFeatureLoggingCleanDisabled
 			return decision
 		}
 	}
 
 	if capability.RequiresChannel {
-		channelID := resolveLogChannelFromCapability(gcfg, capability)
+		channelID := resolveLogChannelForGuild(eventType, gcfg)
 		if channelID == "" {
 			decision.Reason = EmitReasonNoChannelConfigured
 			return decision
@@ -345,41 +386,40 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 	return decision
 }
 
-func resolveLogChannelFromCapability(gcfg *files.GuildConfig, capability LogEventCapability) string {
+func resolveLogChannelForGuild(eventType LogEventType, gcfg *files.GuildConfig) string {
 	if gcfg == nil {
 		return ""
 	}
-	channelID := resolveLogChannelKey(gcfg, capability.PreferredChannel)
-	if channelID != "" {
-		return channelID
-	}
-	for _, fallback := range capability.FallbackChannels {
-		channelID = resolveLogChannelKey(gcfg, fallback)
-		if channelID != "" {
-			return channelID
-		}
-	}
-	return ""
-}
-
-func resolveLogChannelKey(gcfg *files.GuildConfig, key logChannelKey) string {
-	if gcfg == nil {
-		return ""
-	}
-	switch key {
-	case logChannelUserActivity:
-		return strings.TrimSpace(gcfg.Channels.UserActivityLog)
-	case logChannelEntryLeave:
-		return strings.TrimSpace(gcfg.Channels.EntryLeaveLog)
-	case logChannelMessageAudit:
-		return strings.TrimSpace(gcfg.Channels.MessageAuditLog)
-	case logChannelCommands:
-		return strings.TrimSpace(gcfg.Channels.Commands)
-	case logChannelAutomod:
-		return strings.TrimSpace(gcfg.Channels.AutomodLog)
-	case logChannelModeration:
-		return strings.TrimSpace(gcfg.Channels.ModerationLog)
+	channels := gcfg.Channels
+	switch eventType {
+	case LogEventAvatarChange:
+		return firstNonEmptyChannel(channels.AvatarLogging)
+	case LogEventRoleChange:
+		return firstNonEmptyChannel(channels.RoleUpdate)
+	case LogEventMemberJoin:
+		return firstNonEmptyChannel(channels.MemberJoin, channels.MemberLeave)
+	case LogEventMemberLeave:
+		return firstNonEmptyChannel(channels.MemberLeave, channels.MemberJoin)
+	case LogEventMessageEdit:
+		return firstNonEmptyChannel(channels.MessageEdit, channels.MessageDelete)
+	case LogEventMessageDelete:
+		return firstNonEmptyChannel(channels.MessageDelete, channels.MessageEdit)
+	case LogEventAutomodAction:
+		return firstNonEmptyChannel(channels.AutomodAction)
+	case LogEventModerationCase:
+		return firstNonEmptyChannel(channels.ModerationCase)
+	case LogEventCleanAction:
+		return firstNonEmptyChannel(channels.CleanAction, channels.ModerationCase)
 	default:
 		return ""
 	}
+}
+
+func firstNonEmptyChannel(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

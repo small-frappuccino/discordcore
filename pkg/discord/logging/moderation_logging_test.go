@@ -17,8 +17,8 @@ func TestResolveModerationLogChannelShared(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			ModerationLog:   channelID,
-			UserActivityLog: channelID,
+			ModerationCase: channelID,
+			AvatarLogging:  channelID,
 		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
@@ -41,7 +41,7 @@ func TestResolveModerationLogChannelValid(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			ModerationLog: channelID,
+			ModerationCase: channelID,
 		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)

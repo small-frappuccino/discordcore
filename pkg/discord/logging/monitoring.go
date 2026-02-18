@@ -308,12 +308,12 @@ func (ms *MonitoringService) Start() error {
 		}
 	}
 	// Optionally honor DisableAutomodLogs here (Automod service is started elsewhere)
-	if globalRC.DisableAutomodLogs || !globalFeatures.Logging.Automod {
+	if globalRC.DisableAutomodLogs || !globalFeatures.Logging.AutomodAction {
 		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config/features")
 	}
 
 	// Gate message logging behind runtime config
-	if globalRC.DisableMessageLogs || !globalFeatures.Logging.Message {
+	if globalRC.DisableMessageLogs || !(globalFeatures.Logging.MessageProcess || globalFeatures.Logging.MessageEdit || globalFeatures.Logging.MessageDelete) {
 		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
 	} else {
 		if err := ms.messageEventService.Start(); err != nil {
@@ -327,7 +327,7 @@ func (ms *MonitoringService) Start() error {
 	}
 
 	// Gate reaction logging behind runtime config
-	if globalRC.DisableReactionLogs || !globalFeatures.Logging.Reaction {
+	if globalRC.DisableReactionLogs || !globalFeatures.Logging.ReactionMetric {
 		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config/features; ReactionEventService will not start")
 	} else {
 		// Lazily initialize service if not yet created
@@ -752,10 +752,7 @@ func (ms *MonitoringService) Start() error {
 
 		// Guild targets
 		for _, g := range cfg.Guilds {
-			cid := strings.TrimSpace(g.Channels.WelcomeBacklog)
-			if cid == "" {
-				cid = strings.TrimSpace(g.Channels.EntryLeaveLog)
-			}
+			cid := g.Channels.BackfillChannelID()
 			if cid != "" {
 				featureEnabled := cfg.ResolveFeatures(g.GuildID).Backfill.Enabled
 				targets = append(targets, backfillTarget{
@@ -854,14 +851,14 @@ func shouldRunMemberEventService(cfg *files.BotConfig, globalRC files.RuntimeCon
 
 	// Global/default behavior still matters for guilds that only inherit config.
 	globalFeatures := cfg.ResolveFeatures("")
-	if !globalRC.DisableEntryExitLogs && globalFeatures.Logging.EntryExit {
+	if !globalRC.DisableEntryExitLogs && (globalFeatures.Logging.MemberJoin || globalFeatures.Logging.MemberLeave) {
 		return true
 	}
 
 	for _, guildCfg := range cfg.Guilds {
 		features := cfg.ResolveFeatures(guildCfg.GuildID)
 		guildDisableEntryExit := globalRC.DisableEntryExitLogs || guildCfg.RuntimeConfig.DisableEntryExitLogs
-		if !guildDisableEntryExit && features.Logging.EntryExit {
+		if !guildDisableEntryExit && (features.Logging.MemberJoin || features.Logging.MemberLeave) {
 			return true
 		}
 		if features.AutoRoleAssign && guildCfg.Roles.AutoAssignment.Enabled {
@@ -1076,7 +1073,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Message logs -> MessageEventService
-	if rc.DisableMessageLogs || !features.Logging.Message {
+	if rc.DisableMessageLogs || !(features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete) {
 		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 			_ = ms.messageEventService.Stop()
 		}
@@ -1089,7 +1086,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Reaction logs -> ReactionEventService
-	if rc.DisableReactionLogs || !features.Logging.Reaction {
+	if rc.DisableReactionLogs || !features.Logging.ReactionMetric {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
 			_ = ms.reactionEventService.Stop()
 		}
@@ -1131,7 +1128,7 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 	if ms.configManager != nil && ms.configManager.Config() != nil {
 		features = ms.configManager.Config().ResolveFeatures("")
 	}
-	disableUser := rc.DisableUserLogs || !features.Logging.User
+	disableUser := rc.DisableUserLogs || (!features.Logging.AvatarLogging && !features.Logging.RoleUpdate)
 
 	if disableUser {
 		// Register only non-user handlers

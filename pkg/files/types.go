@@ -70,13 +70,17 @@ type FeatureServiceToggles struct {
 }
 
 type FeatureLoggingToggles struct {
-	Message    *bool `json:"message,omitempty"`
-	EntryExit  *bool `json:"entry_exit,omitempty"`
-	Reaction   *bool `json:"reaction,omitempty"`
-	User       *bool `json:"user,omitempty"`
-	Automod    *bool `json:"automod,omitempty"`
-	Clean      *bool `json:"clean,omitempty"`
-	Moderation *bool `json:"moderation,omitempty"`
+	AvatarLogging  *bool `json:"avatar_logging,omitempty"`
+	RoleUpdate     *bool `json:"role_update,omitempty"`
+	MemberJoin     *bool `json:"member_join,omitempty"`
+	MemberLeave    *bool `json:"member_leave,omitempty"`
+	MessageProcess *bool `json:"message_process,omitempty"`
+	MessageEdit    *bool `json:"message_edit,omitempty"`
+	MessageDelete  *bool `json:"message_delete,omitempty"`
+	ReactionMetric *bool `json:"reaction_metric,omitempty"`
+	AutomodAction  *bool `json:"automod_action,omitempty"`
+	ModerationCase *bool `json:"moderation_case,omitempty"`
+	CleanAction    *bool `json:"clean_action,omitempty"`
 }
 
 type FeatureMessageCacheToggles struct {
@@ -132,13 +136,17 @@ type ResolvedFeatureToggles struct {
 		AdminCommands bool
 	}
 	Logging struct {
-		Message    bool
-		EntryExit  bool
-		Reaction   bool
-		User       bool
-		Automod    bool
-		Clean      bool
-		Moderation bool
+		AvatarLogging  bool
+		RoleUpdate     bool
+		MemberJoin     bool
+		MemberLeave    bool
+		MessageProcess bool
+		MessageEdit    bool
+		MessageDelete  bool
+		ReactionMetric bool
+		AutomodAction  bool
+		ModerationCase bool
+		CleanAction    bool
 	}
 	MessageCache struct {
 		CleanupOnStartup bool
@@ -166,14 +174,28 @@ type ResolvedFeatureToggles struct {
 
 // ChannelsConfig groups channel IDs per guild.
 type ChannelsConfig struct {
-	Commands         string `json:"commands,omitempty"`
-	UserActivityLog  string `json:"user_activity_log,omitempty"` // For entry/exit logs and avatars
-	EntryLeaveLog    string `json:"entry_leave_log,omitempty"`   // Dedicated channel for user entry/leave (moderation/logs)
-	WelcomeBacklog   string `json:"welcome_backlog,omitempty"`   // Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)
-	VerificationChat string `json:"verification_chat,omitempty"` // Dedicated channel for verification chat cleanup (e.g., Mimu verify)
-	MessageAuditLog  string `json:"message_audit_log,omitempty"` // For edited/deleted message logs
-	AutomodLog       string `json:"automod_log,omitempty"`
-	ModerationLog    string `json:"moderation_log,omitempty"` // Dedicated moderation log channel (exclusive)
+	Commands string `json:"commands,omitempty"`
+
+	// Event/feature-scoped channels (canonical settings schema).
+	AvatarLogging       string `json:"avatar_logging,omitempty"`
+	RoleUpdate          string `json:"role_update,omitempty"`
+	MemberJoin          string `json:"member_join,omitempty"`
+	MemberLeave         string `json:"member_leave,omitempty"`
+	MessageEdit         string `json:"message_edit,omitempty"`
+	MessageDelete       string `json:"message_delete,omitempty"`
+	AutomodAction       string `json:"automod_action,omitempty"`
+	ModerationCase      string `json:"moderation_case,omitempty"`
+	CleanAction         string `json:"clean_action,omitempty"`
+	EntryBackfill       string `json:"entry_backfill,omitempty"`
+	VerificationCleanup string `json:"verification_cleanup,omitempty"`
+}
+
+func (cc ChannelsConfig) BackfillChannelID() string {
+	return strings.TrimSpace(cc.EntryBackfill)
+}
+
+func (cc ChannelsConfig) VerificationCleanupChannelID() string {
+	return strings.TrimSpace(cc.VerificationCleanup)
 }
 
 // StatsChannelConfig defines a channel that should reflect a member count.
@@ -476,13 +498,17 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	out.Services.Commands = resolveFeatureBool(guild.Services.Commands, global.Services.Commands, true)
 	out.Services.AdminCommands = resolveFeatureBool(guild.Services.AdminCommands, global.Services.AdminCommands, true)
 
-	out.Logging.Message = resolveFeatureBool(guild.Logging.Message, global.Logging.Message, true)
-	out.Logging.EntryExit = resolveFeatureBool(guild.Logging.EntryExit, global.Logging.EntryExit, true)
-	out.Logging.Reaction = resolveFeatureBool(guild.Logging.Reaction, global.Logging.Reaction, true)
-	out.Logging.User = resolveFeatureBool(guild.Logging.User, global.Logging.User, true)
-	out.Logging.Automod = resolveFeatureBool(guild.Logging.Automod, global.Logging.Automod, true)
-	out.Logging.Clean = resolveFeatureBool(guild.Logging.Clean, global.Logging.Clean, true)
-	out.Logging.Moderation = resolveFeatureBool(guild.Logging.Moderation, global.Logging.Moderation, true)
+	out.Logging.AvatarLogging = resolveFeatureBool(guild.Logging.AvatarLogging, global.Logging.AvatarLogging, true)
+	out.Logging.RoleUpdate = resolveFeatureBool(guild.Logging.RoleUpdate, global.Logging.RoleUpdate, true)
+	out.Logging.MemberJoin = resolveFeatureBool(guild.Logging.MemberJoin, global.Logging.MemberJoin, true)
+	out.Logging.MemberLeave = resolveFeatureBool(guild.Logging.MemberLeave, global.Logging.MemberLeave, true)
+	out.Logging.MessageProcess = resolveFeatureBool(guild.Logging.MessageProcess, global.Logging.MessageProcess, true)
+	out.Logging.MessageEdit = resolveFeatureBool(guild.Logging.MessageEdit, global.Logging.MessageEdit, true)
+	out.Logging.MessageDelete = resolveFeatureBool(guild.Logging.MessageDelete, global.Logging.MessageDelete, true)
+	out.Logging.ReactionMetric = resolveFeatureBool(guild.Logging.ReactionMetric, global.Logging.ReactionMetric, true)
+	out.Logging.AutomodAction = resolveFeatureBool(guild.Logging.AutomodAction, global.Logging.AutomodAction, true)
+	out.Logging.ModerationCase = resolveFeatureBool(guild.Logging.ModerationCase, global.Logging.ModerationCase, true)
+	out.Logging.CleanAction = resolveFeatureBool(guild.Logging.CleanAction, global.Logging.CleanAction, true)
 
 	out.MessageCache.CleanupOnStartup = resolveFeatureBool(guild.MessageCache.CleanupOnStartup, global.MessageCache.CleanupOnStartup, false)
 	out.MessageCache.DeleteOnLog = resolveFeatureBool(guild.MessageCache.DeleteOnLog, global.MessageCache.DeleteOnLog, false)

@@ -252,8 +252,8 @@ func Run(appName, tokenEnv string) error {
 	var automodWrapper *service.ServiceWrapper
 	if !features.Services.Automod {
 		log.ApplicationLogger().Info("🛑 Automod service disabled by features.services.automod")
-	} else if !features.Logging.Automod {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by features.logging.automod; AutomodService will not start")
+	} else if !features.Logging.AutomodAction {
+		log.ApplicationLogger().Info("🛑 Automod logs disabled by features.logging.automod_action; AutomodService will not start")
 	} else if disableAutomod {
 		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start")
 	} else {

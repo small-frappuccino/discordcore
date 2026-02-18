@@ -124,13 +124,17 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 			Required:    true,
 			Choices: []*discordgo.ApplicationCommandOptionChoice{
 				{Name: "channels.commands", Value: "channels.commands"},
-				{Name: "channels.user_activity_log", Value: "channels.user_activity_log"},
-				{Name: "channels.entry_leave_log", Value: "channels.entry_leave_log"},
-				{Name: "channels.welcome_backlog", Value: "channels.welcome_backlog"},
-				{Name: "channels.verification_chat", Value: "channels.verification_chat"},
-				{Name: "channels.message_audit_log", Value: "channels.message_audit_log"},
-				{Name: "channels.automod_log", Value: "channels.automod_log"},
-				{Name: "channels.moderation_log", Value: "channels.moderation_log"},
+				{Name: "channels.avatar_logging", Value: "channels.avatar_logging"},
+				{Name: "channels.role_update", Value: "channels.role_update"},
+				{Name: "channels.member_join", Value: "channels.member_join"},
+				{Name: "channels.member_leave", Value: "channels.member_leave"},
+				{Name: "channels.message_edit", Value: "channels.message_edit"},
+				{Name: "channels.message_delete", Value: "channels.message_delete"},
+				{Name: "channels.automod_action", Value: "channels.automod_action"},
+				{Name: "channels.moderation_case", Value: "channels.moderation_case"},
+				{Name: "channels.clean_action", Value: "channels.clean_action"},
+				{Name: "channels.entry_backfill", Value: "channels.entry_backfill"},
+				{Name: "channels.verification_cleanup", Value: "channels.verification_cleanup"},
 			},
 		},
 		{
@@ -160,20 +164,28 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 		switch key {
 		case "channels.commands":
 			guildConfig.Channels.Commands = value
-		case "channels.user_activity_log":
-			guildConfig.Channels.UserActivityLog = value // also used by user join/leave/avatar logs
-		case "channels.entry_leave_log":
-			guildConfig.Channels.EntryLeaveLog = value
-		case "channels.welcome_backlog":
-			guildConfig.Channels.WelcomeBacklog = value
-		case "channels.verification_chat":
-			guildConfig.Channels.VerificationChat = value
-		case "channels.message_audit_log":
-			guildConfig.Channels.MessageAuditLog = value
-		case "channels.automod_log":
-			guildConfig.Channels.AutomodLog = value
-		case "channels.moderation_log":
-			guildConfig.Channels.ModerationLog = value
+		case "channels.avatar_logging":
+			guildConfig.Channels.AvatarLogging = value
+		case "channels.role_update":
+			guildConfig.Channels.RoleUpdate = value
+		case "channels.member_join":
+			guildConfig.Channels.MemberJoin = value
+		case "channels.member_leave":
+			guildConfig.Channels.MemberLeave = value
+		case "channels.message_edit":
+			guildConfig.Channels.MessageEdit = value
+		case "channels.message_delete":
+			guildConfig.Channels.MessageDelete = value
+		case "channels.automod_action":
+			guildConfig.Channels.AutomodAction = value
+		case "channels.moderation_case":
+			guildConfig.Channels.ModerationCase = value
+		case "channels.clean_action":
+			guildConfig.Channels.CleanAction = value
+		case "channels.entry_backfill":
+			guildConfig.Channels.EntryBackfill = value
+		case "channels.verification_cleanup":
+			guildConfig.Channels.VerificationCleanup = value
 		default:
 			return core.NewValidationError("key", "Invalid configuration key")
 		}
@@ -216,13 +228,17 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	var b strings.Builder
 	b.WriteString("**Server Configuration:**\n")
 	b.WriteString(fmt.Sprintf("Command Channel: %s\n", emptyToDash(ctx.GuildConfig.Channels.Commands)))
-	b.WriteString(fmt.Sprintf("User Activity Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.UserActivityLog)))
-	b.WriteString(fmt.Sprintf("Entry/Leave Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.EntryLeaveLog)))
-	b.WriteString(fmt.Sprintf("Welcome Backlog: %s\n", emptyToDash(ctx.GuildConfig.Channels.WelcomeBacklog)))
-	b.WriteString(fmt.Sprintf("Verification Chat: %s\n", emptyToDash(ctx.GuildConfig.Channels.VerificationChat)))
-	b.WriteString(fmt.Sprintf("Message Audit Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.MessageAuditLog)))
-	b.WriteString(fmt.Sprintf("Automod Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.AutomodLog)))
-	b.WriteString(fmt.Sprintf("Moderation Log: %s\n", emptyToDash(ctx.GuildConfig.Channels.ModerationLog)))
+	b.WriteString(fmt.Sprintf("Avatar Logging: %s\n", emptyToDash(ctx.GuildConfig.Channels.AvatarLogging)))
+	b.WriteString(fmt.Sprintf("Role Update: %s\n", emptyToDash(ctx.GuildConfig.Channels.RoleUpdate)))
+	b.WriteString(fmt.Sprintf("Member Join: %s\n", emptyToDash(ctx.GuildConfig.Channels.MemberJoin)))
+	b.WriteString(fmt.Sprintf("Member Leave: %s\n", emptyToDash(ctx.GuildConfig.Channels.MemberLeave)))
+	b.WriteString(fmt.Sprintf("Message Edit: %s\n", emptyToDash(ctx.GuildConfig.Channels.MessageEdit)))
+	b.WriteString(fmt.Sprintf("Message Delete: %s\n", emptyToDash(ctx.GuildConfig.Channels.MessageDelete)))
+	b.WriteString(fmt.Sprintf("Automod Action: %s\n", emptyToDash(ctx.GuildConfig.Channels.AutomodAction)))
+	b.WriteString(fmt.Sprintf("Moderation Case: %s\n", emptyToDash(ctx.GuildConfig.Channels.ModerationCase)))
+	b.WriteString(fmt.Sprintf("Clean Action: %s\n", emptyToDash(ctx.GuildConfig.Channels.CleanAction)))
+	b.WriteString(fmt.Sprintf("Entry Backfill: %s\n", emptyToDash(ctx.GuildConfig.Channels.EntryBackfill)))
+	b.WriteString(fmt.Sprintf("Verification Cleanup: %s\n", emptyToDash(ctx.GuildConfig.Channels.VerificationCleanup)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
 	builder := core.NewResponseBuilder(ctx.Session).
@@ -255,13 +271,17 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 	options := []string{
 		"**Available Configuration Options:**",
 		"`channels.commands` - Channel for bot commands",
-		"`channels.user_activity_log` - Channel for user logs (join/leave/avatar)",
-		"`channels.entry_leave_log` - Channel for entry/leave logs (moderators)",
-		"`channels.welcome_backlog` - Public welcome/goodbye channel used for backlog/backfill (e.g., Mimu)",
-		"`channels.verification_chat` - Dedicated channel for verification chat cleanup (e.g., Mimu verify)",
-		"`channels.message_audit_log` - Channel for edited/deleted message logs",
-		"`channels.automod_log` - Channel for automod logs",
-		"`channels.moderation_log` - Dedicated channel for moderation logs",
+		"`channels.avatar_logging` - Channel for avatar change logs",
+		"`channels.role_update` - Channel for role update logs",
+		"`channels.member_join` - Channel for member join logs",
+		"`channels.member_leave` - Channel for member leave logs",
+		"`channels.message_edit` - Channel for message edit logs",
+		"`channels.message_delete` - Channel for message delete logs",
+		"`channels.automod_action` - Channel for automod action logs",
+		"`channels.moderation_case` - Dedicated channel for moderation case logs",
+		"`channels.clean_action` - Channel for /clean action logs",
+		"`channels.entry_backfill` - Channel used by entry/leave backfill",
+		"`channels.verification_cleanup` - Channel used for verification cleanup routines",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
 	}

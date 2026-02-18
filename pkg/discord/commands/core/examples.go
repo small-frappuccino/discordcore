@@ -220,8 +220,8 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 			Required:    true,
 			Choices: []*discordgo.ApplicationCommandOptionChoice{
 				{Name: "channels.commands", Value: "channels.commands"},
-				{Name: "channels.user_activity_log", Value: "channels.user_activity_log"},
-				{Name: "channels.automod_log", Value: "channels.automod_log"},
+				{Name: "channels.avatar_logging", Value: "channels.avatar_logging"},
+				{Name: "channels.automod_action", Value: "channels.automod_action"},
 			},
 		},
 		{
@@ -259,10 +259,10 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 		switch key {
 		case "channels.commands":
 			guildConfig.Channels.Commands = value
-		case "channels.user_activity_log":
-			guildConfig.Channels.UserActivityLog = value
-		case "channels.automod_log":
-			guildConfig.Channels.AutomodLog = value
+		case "channels.avatar_logging":
+			guildConfig.Channels.AvatarLogging = value
+		case "channels.automod_action":
+			guildConfig.Channels.AutomodAction = value
 		default:
 			return NewValidationError("key", "Invalid configuration key")
 		}
@@ -320,8 +320,8 @@ func (c *ConfigGetSubCommand) Handle(ctx *Context) error {
 	var config strings.Builder
 	config.WriteString("**Server Configuration:**\n")
 	config.WriteString(fmt.Sprintf("Command Channel: %s\n", ctx.GuildConfig.Channels.Commands))
-	config.WriteString(fmt.Sprintf("User Activity Log: %s\n", ctx.GuildConfig.Channels.UserActivityLog))
-	config.WriteString(fmt.Sprintf("Automod Log: %s\n", ctx.GuildConfig.Channels.AutomodLog))
+	config.WriteString(fmt.Sprintf("Avatar Logging: %s\n", ctx.GuildConfig.Channels.AvatarLogging))
+	config.WriteString(fmt.Sprintf("Automod Action: %s\n", ctx.GuildConfig.Channels.AutomodAction))
 	config.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
 	builder := NewResponseBuilder(ctx.Session).
@@ -365,8 +365,8 @@ func (c *ConfigListSubCommand) Handle(ctx *Context) error {
 	options := []string{
 		"**Available Configuration Options:**",
 		"`channels.commands` - Channel for bot commands",
-		"`channels.user_activity_log` - Channel for user logs",
-		"`channels.automod_log` - Channel for automod logs",
+		"`channels.avatar_logging` - Channel for avatar logs",
+		"`channels.automod_action` - Channel for automod logs",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
 	}
@@ -397,8 +397,8 @@ func (h *ConfigAutocompleteHandler) HandleAutocomplete(ctx *Context, focusedOpti
 	case "key":
 		return []*discordgo.ApplicationCommandOptionChoice{
 			{Name: "Command Channel", Value: "channels.commands"},
-			{Name: "Log Channel", Value: "channels.user_activity_log"},
-			{Name: "Automod Channel", Value: "channels.automod_log"},
+			{Name: "Avatar Log", Value: "channels.avatar_logging"},
+			{Name: "Automod Channel", Value: "channels.automod_action"},
 		}, nil
 
 	case "value":

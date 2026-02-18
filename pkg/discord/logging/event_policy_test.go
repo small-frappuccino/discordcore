@@ -11,12 +11,12 @@ func TestShouldEmitLogEventRoleChange(t *testing.T) {
 	t.Parallel()
 
 	guildID := "g-role"
-	channelID := "c-user"
+	channelID := "c-role"
 	cm := files.NewConfigManagerWithPath("test-settings.json")
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			UserActivityLog: channelID,
+			RoleUpdate: channelID,
 		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
@@ -45,7 +45,7 @@ func TestShouldEmitLogEventRoleChangeMissingIntent(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			UserActivityLog: "c-user",
+			RoleUpdate: "c-role",
 		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
@@ -74,7 +74,7 @@ func TestShouldEmitLogEventRoleChangeDisabledByRuntime(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			UserActivityLog: "c-user",
+			RoleUpdate: "c-role",
 		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
@@ -108,13 +108,13 @@ func TestShouldEmitLogEventMemberJoinChannelFallback(t *testing.T) {
 		},
 	}
 
-	t.Run("prefers entry_leave_log", func(t *testing.T) {
+	t.Run("prefers member_join", func(t *testing.T) {
 		cm := files.NewConfigManagerWithPath("test-settings.json")
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: "g-join-1",
 			Channels: files.ChannelsConfig{
-				EntryLeaveLog:   "c-entry",
-				UserActivityLog: "c-user",
+				MemberJoin:  "c-join",
+				MemberLeave: "c-leave",
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -124,17 +124,17 @@ func TestShouldEmitLogEventMemberJoinChannelFallback(t *testing.T) {
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
-		if decision.ChannelID != "c-entry" {
-			t.Fatalf("expected entry/leave channel, got %q", decision.ChannelID)
+		if decision.ChannelID != "c-join" {
+			t.Fatalf("expected member_join channel, got %q", decision.ChannelID)
 		}
 	})
 
-	t.Run("falls back to user_activity_log", func(t *testing.T) {
+	t.Run("falls back to member_leave", func(t *testing.T) {
 		cm := files.NewConfigManagerWithPath("test-settings.json")
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: "g-join-2",
 			Channels: files.ChannelsConfig{
-				UserActivityLog: "c-user",
+				MemberLeave: "c-leave",
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -144,8 +144,8 @@ func TestShouldEmitLogEventMemberJoinChannelFallback(t *testing.T) {
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
-		if decision.ChannelID != "c-user" {
-			t.Fatalf("expected user activity fallback channel, got %q", decision.ChannelID)
+		if decision.ChannelID != "c-leave" {
+			t.Fatalf("expected member_leave fallback channel, got %q", decision.ChannelID)
 		}
 	})
 }
@@ -163,7 +163,7 @@ func TestShouldEmitLogEventModerationCase(t *testing.T) {
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
 			Channels: files.ChannelsConfig{
-				ModerationLog: channelID,
+				ModerationCase: channelID,
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -190,11 +190,11 @@ func TestShouldEmitLogEventModerationCase(t *testing.T) {
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID + "-feature",
 			Channels: files.ChannelsConfig{
-				ModerationLog: channelID,
+				ModerationCase: channelID,
 			},
 			Features: files.FeatureToggles{
 				Logging: files.FeatureLoggingToggles{
-					Moderation: &disabled,
+					ModerationCase: &disabled,
 				},
 			},
 		}); err != nil {
@@ -215,7 +215,7 @@ func TestShouldEmitLogEventModerationCase(t *testing.T) {
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID + "-enabled",
 			Channels: files.ChannelsConfig{
-				ModerationLog: channelID,
+				ModerationCase: channelID,
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -240,14 +240,13 @@ func TestShouldEmitLogEventMessageDeleteChannelFallback(t *testing.T) {
 		},
 	}
 
-	t.Run("prefers message_audit_log", func(t *testing.T) {
+	t.Run("prefers message_delete", func(t *testing.T) {
 		cm := files.NewConfigManagerWithPath("test-settings.json")
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: "g-msg-1",
 			Channels: files.ChannelsConfig{
-				MessageAuditLog: "c-message",
-				UserActivityLog: "c-user",
-				Commands:        "c-commands",
+				MessageDelete: "c-delete",
+				MessageEdit:   "c-edit",
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -257,18 +256,17 @@ func TestShouldEmitLogEventMessageDeleteChannelFallback(t *testing.T) {
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
-		if decision.ChannelID != "c-message" {
-			t.Fatalf("expected message audit channel, got %q", decision.ChannelID)
+		if decision.ChannelID != "c-delete" {
+			t.Fatalf("expected message_delete channel, got %q", decision.ChannelID)
 		}
 	})
 
-	t.Run("falls back to user_activity_log then commands", func(t *testing.T) {
+	t.Run("falls back to message_edit", func(t *testing.T) {
 		cm := files.NewConfigManagerWithPath("test-settings.json")
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: "g-msg-2",
 			Channels: files.ChannelsConfig{
-				UserActivityLog: "c-user",
-				Commands:        "c-commands",
+				MessageEdit: "c-edit",
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -278,28 +276,25 @@ func TestShouldEmitLogEventMessageDeleteChannelFallback(t *testing.T) {
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
-		if decision.ChannelID != "c-user" {
-			t.Fatalf("expected user activity fallback channel, got %q", decision.ChannelID)
+		if decision.ChannelID != "c-edit" {
+			t.Fatalf("expected message_edit fallback channel, got %q", decision.ChannelID)
 		}
 	})
 
-	t.Run("uses commands when others missing", func(t *testing.T) {
+	t.Run("disabled when no channel configured", func(t *testing.T) {
 		cm := files.NewConfigManagerWithPath("test-settings.json")
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: "g-msg-3",
-			Channels: files.ChannelsConfig{
-				Commands: "c-commands",
-			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
 		decision := ShouldEmitLogEvent(session, cm, LogEventMessageDelete, "g-msg-3")
-		if !decision.Enabled {
-			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
+		if decision.Enabled {
+			t.Fatal("expected disabled decision")
 		}
-		if decision.ChannelID != "c-commands" {
-			t.Fatalf("expected commands fallback channel, got %q", decision.ChannelID)
+		if decision.Reason != EmitReasonNoChannelConfigured {
+			t.Fatalf("expected no channel reason, got %s", decision.Reason)
 		}
 	})
 }
@@ -349,7 +344,7 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 			GuildID: guildID,
 			Features: files.FeatureToggles{
 				Logging: files.FeatureLoggingToggles{
-					Message: &enabled,
+					MessageProcess: &enabled,
 				},
 			},
 		}); err != nil {
@@ -374,7 +369,7 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 
 		cfg.Guilds[0].RuntimeConfig.DisableMessageLogs = false
 		disabled := false
-		cfg.Guilds[0].Features.Logging.Message = &disabled
+		cfg.Guilds[0].Features.Logging.MessageProcess = &disabled
 		decision = ShouldEmitLogEvent(session, cm, LogEventMessageProcess, guildID)
 		if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingMessageDisabled {
 			t.Fatalf("expected feature toggle reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
@@ -389,7 +384,7 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 			GuildID: guildID,
 			Features: files.FeatureToggles{
 				Logging: files.FeatureLoggingToggles{
-					Reaction: &enabled,
+					ReactionMetric: &enabled,
 				},
 			},
 		}); err != nil {
@@ -414,7 +409,7 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 
 		cfg.Guilds[0].RuntimeConfig.DisableReactionLogs = false
 		disabled := false
-		cfg.Guilds[0].Features.Logging.Reaction = &disabled
+		cfg.Guilds[0].Features.Logging.ReactionMetric = &disabled
 		decision = ShouldEmitLogEvent(session, cm, LogEventReactionMetric, guildID)
 		if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingReactionDisabled {
 			t.Fatalf("expected feature toggle reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
@@ -432,11 +427,11 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
 			Channels: files.ChannelsConfig{
-				AutomodLog: channelID,
+				AutomodAction: channelID,
 			},
 			Features: files.FeatureToggles{
 				Logging: files.FeatureLoggingToggles{
-					Automod: &enabled,
+					AutomodAction: &enabled,
 				},
 			},
 		}); err != nil {
@@ -458,10 +453,77 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 
 		cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = false
 		disabled := false
-		cfg.Guilds[0].Features.Logging.Automod = &disabled
+		cfg.Guilds[0].Features.Logging.AutomodAction = &disabled
 		decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
 		if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingAutomodDisabled {
 			t.Fatalf("expected feature toggle reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 	})
+}
+
+func TestShouldEmitLogEventCleanAction(t *testing.T) {
+	t.Parallel()
+
+	guildID := "g-clean"
+	channelID := "c-clean"
+	botID := "bot"
+	perms := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
+
+	cm := files.NewConfigManagerWithPath("test-settings.json")
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID: guildID,
+		Channels: files.ChannelsConfig{
+			CleanAction: channelID,
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	session := testSessionWithChannel(guildID, channelID, botID, perms)
+
+	decision := ShouldEmitLogEvent(session, cm, LogEventCleanAction, guildID)
+	if !decision.Enabled {
+		t.Fatalf("expected clean logging enabled by default, got reason=%s", decision.Reason)
+	}
+	if decision.ChannelID != channelID {
+		t.Fatalf("expected clean channel %q, got %q", channelID, decision.ChannelID)
+	}
+
+	cfg := cm.Config()
+	if cfg == nil {
+		t.Fatal("config is nil")
+	}
+
+	cfg.Guilds[0].RuntimeConfig.DisableCleanLog = true
+	decision = ShouldEmitLogEvent(session, cm, LogEventCleanAction, guildID)
+	if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableCleanLog {
+		t.Fatalf("expected clean disabled by runtime switch, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
+	}
+
+	cfg.Guilds[0].RuntimeConfig.DisableCleanLog = false
+	disabled := false
+	cfg.Guilds[0].Features.Logging.CleanAction = &disabled
+	decision = ShouldEmitLogEvent(session, cm, LogEventCleanAction, guildID)
+	if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingCleanDisabled {
+		t.Fatalf("expected clean disabled by feature toggle, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
+	}
+}
+
+func TestResolveLogChannelCleanFallback(t *testing.T) {
+	t.Parallel()
+
+	guildID := "g-clean-fallback"
+	cm := files.NewConfigManagerWithPath("test-settings.json")
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID: guildID,
+		Channels: files.ChannelsConfig{
+			ModerationCase: "c-mod",
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	if got := ResolveLogChannel(LogEventCleanAction, guildID, cm); got != "c-mod" {
+		t.Fatalf("expected clean fallback to moderation_case, got %q", got)
+	}
 }

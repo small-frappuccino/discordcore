@@ -292,12 +292,19 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 		roles := FindAdminRoles(session, g.ID, fullGuild.OwnerID)
 
 		entryLeaveID := FindEntryLeaveChannel(session, g.ID)
+		if entryLeaveID == "" {
+			entryLeaveID = channelID
+		}
 		guildCfg := GuildConfig{
 			GuildID: g.ID,
 			Channels: ChannelsConfig{
-				Commands:        channelID,
-				UserActivityLog: channelID,
-				EntryLeaveLog:   entryLeaveID,
+				Commands:      channelID,
+				AvatarLogging: channelID,
+				RoleUpdate:    channelID,
+				MemberJoin:    entryLeaveID,
+				MemberLeave:   entryLeaveID,
+				MessageEdit:   channelID,
+				MessageDelete: channelID,
 			},
 			Roles: RolesConfig{
 				Allowed: roles,
@@ -356,9 +363,13 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	guildCfg := GuildConfig{
 		GuildID: guildID,
 		Channels: ChannelsConfig{
-			Commands:        channelID,
-			UserActivityLog: channelID,
-			EntryLeaveLog:   entryLeaveID,
+			Commands:      channelID,
+			AvatarLogging: channelID,
+			RoleUpdate:    channelID,
+			MemberJoin:    entryLeaveID,
+			MemberLeave:   entryLeaveID,
+			MessageEdit:   channelID,
+			MessageDelete: channelID,
 		},
 		Roles: RolesConfig{
 			Allowed: roles,

@@ -18,7 +18,7 @@ func ResolveModerationLogChannel(session *discordgo.Session, configManager *file
 	if gcfg == nil {
 		return "", false
 	}
-	channelID := strings.TrimSpace(gcfg.Channels.ModerationLog)
+	channelID := ResolveLogChannel(LogEventModerationCase, guildID, configManager)
 	if channelID == "" {
 		return "", false
 	}
@@ -42,23 +42,25 @@ func ResolveModerationLogChannel(session *discordgo.Session, configManager *file
 }
 
 func isSharedModerationChannel(channelID string, gcfg *files.GuildConfig) bool {
+	channelID = strings.TrimSpace(channelID)
 	if gcfg == nil || channelID == "" {
 		return false
 	}
-	if channelID == gcfg.Channels.Commands {
-		return true
+	sharedCandidates := []string{
+		gcfg.Channels.Commands,
+		gcfg.Channels.AvatarLogging,
+		gcfg.Channels.RoleUpdate,
+		gcfg.Channels.MemberJoin,
+		gcfg.Channels.MemberLeave,
+		gcfg.Channels.MessageEdit,
+		gcfg.Channels.MessageDelete,
+		gcfg.Channels.AutomodAction,
+		gcfg.Channels.CleanAction,
 	}
-	if channelID == gcfg.Channels.UserActivityLog {
-		return true
-	}
-	if channelID == gcfg.Channels.EntryLeaveLog {
-		return true
-	}
-	if channelID == gcfg.Channels.MessageAuditLog {
-		return true
-	}
-	if channelID == gcfg.Channels.AutomodLog {
-		return true
+	for _, candidate := range sharedCandidates {
+		if strings.TrimSpace(candidate) == channelID {
+			return true
+		}
 	}
 	return false
 }

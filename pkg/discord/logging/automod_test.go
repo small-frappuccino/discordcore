@@ -19,7 +19,7 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			AutomodLog: channelID,
+			AutomodAction: channelID,
 		},
 	}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
@@ -39,14 +39,14 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 	}
 
 	disabled := false
-	cfg.Guilds[0].Features.Logging.Automod = &disabled
+	cfg.Guilds[0].Features.Logging.AutomodAction = &disabled
 	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
 	if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingAutomodDisabled {
 		t.Fatalf("expected automod disabled by feature toggle, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 
 	enabled := true
-	cfg.Guilds[0].Features.Logging.Automod = &enabled
+	cfg.Guilds[0].Features.Logging.AutomodAction = &enabled
 	cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = true
 	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
 	if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableAutomodLogs {
@@ -77,8 +77,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
 			Channels: files.ChannelsConfig{
-				AutomodLog:    automodChannelID,
-				ModerationLog: "c-mod",
+				AutomodAction: automodChannelID,
 			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
@@ -95,28 +94,24 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to moderation channel", func(t *testing.T) {
+	t.Run("requires dedicated automod channel", func(t *testing.T) {
 		guildID := "g-automod-fallback"
-		moderationChannelID := "c-mod"
 
 		cm := files.NewConfigManagerWithPath("test-settings.json")
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
-			Channels: files.ChannelsConfig{
-				ModerationLog: moderationChannelID,
-			},
 		}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		session := testSessionWithChannel(guildID, moderationChannelID, botID, perms)
+		session := testSessionWithChannel(guildID, "c-other", botID, perms)
 		session.Identify.Intents = discordgo.IntentAutoModerationExecution
 		decision := ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
-		if !decision.Enabled {
-			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
+		if decision.Enabled {
+			t.Fatal("expected disabled decision")
 		}
-		if decision.ChannelID != moderationChannelID {
-			t.Fatalf("expected channel %q, got %q", moderationChannelID, decision.ChannelID)
+		if decision.Reason != EmitReasonNoChannelConfigured {
+			t.Fatalf("expected reason %s, got %s", EmitReasonNoChannelConfigured, decision.Reason)
 		}
 	})
 }

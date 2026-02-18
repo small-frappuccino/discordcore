@@ -166,23 +166,24 @@ func TestResolveMessageDeleteLogChannelFallbackOrder(t *testing.T) {
 
 	gcfg := &files.GuildConfig{
 		Channels: files.ChannelsConfig{
-			Commands:        "c-commands",
-			UserActivityLog: "c-user",
-			MessageAuditLog: "c-msg",
+			MessageDelete: "c-delete",
+			MessageEdit:   "c-edit",
 		},
 	}
-	if got := resolveMessageDeleteLogChannel(gcfg); got != "c-msg" {
-		t.Fatalf("expected message_audit_log first, got %q", got)
+	ctx := &core.Context{GuildConfig: gcfg}
+
+	if got := resolveMessageDeleteLogChannel(ctx); got != "c-delete" {
+		t.Fatalf("expected message_delete first, got %q", got)
 	}
 
-	gcfg.Channels.MessageAuditLog = ""
-	if got := resolveMessageDeleteLogChannel(gcfg); got != "c-user" {
-		t.Fatalf("expected user_activity_log fallback, got %q", got)
+	gcfg.Channels.MessageDelete = ""
+	if got := resolveMessageDeleteLogChannel(ctx); got != "c-edit" {
+		t.Fatalf("expected message_edit fallback, got %q", got)
 	}
 
-	gcfg.Channels.UserActivityLog = ""
-	if got := resolveMessageDeleteLogChannel(gcfg); got != "c-commands" {
-		t.Fatalf("expected commands fallback, got %q", got)
+	gcfg.Channels.MessageEdit = ""
+	if got := resolveMessageDeleteLogChannel(ctx); got != "" {
+		t.Fatalf("expected no channel fallback, got %q", got)
 	}
 }
 
@@ -207,9 +208,9 @@ func TestShouldSendCleanUsageMessageDeleteEmbed(t *testing.T) {
 
 	cm.Config().RuntimeConfig.DisableMessageLogs = false
 	disableMessage := false
-	cm.Config().Features.Logging.Message = &disableMessage
+	cm.Config().Features.Logging.MessageDelete = &disableMessage
 	if shouldSendCleanUsageMessageDeleteEmbed(ctx) {
-		t.Fatal("expected disabled when features.logging.message is false")
+		t.Fatal("expected disabled when features.logging.message_delete is false")
 	}
 }
 

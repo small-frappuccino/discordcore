@@ -25,7 +25,7 @@ func TestShouldRunMemberEventService(t *testing.T) {
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
-						EntryExit: boolPtr(true),
+						MemberJoin: boolPtr(true),
 					},
 				},
 			},
@@ -36,7 +36,8 @@ func TestShouldRunMemberEventService(t *testing.T) {
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
-						EntryExit: boolPtr(false),
+						MemberJoin:  boolPtr(false),
+						MemberLeave: boolPtr(false),
 					},
 					AutoRoleAssign: boolPtr(false),
 				},
@@ -56,7 +57,8 @@ func TestShouldRunMemberEventService(t *testing.T) {
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
-						EntryExit: boolPtr(false),
+						MemberJoin:  boolPtr(false),
+						MemberLeave: boolPtr(false),
 					},
 					AutoRoleAssign: boolPtr(false),
 				},
@@ -80,7 +82,8 @@ func TestShouldRunMemberEventService(t *testing.T) {
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
-						EntryExit: boolPtr(false),
+						MemberJoin:  boolPtr(false),
+						MemberLeave: boolPtr(false),
 					},
 					AutoRoleAssign: boolPtr(false),
 				},
@@ -104,7 +107,8 @@ func TestShouldRunMemberEventService(t *testing.T) {
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
-						EntryExit: boolPtr(false),
+						MemberJoin:  boolPtr(false),
+						MemberLeave: boolPtr(false),
 					},
 				},
 				Guilds: []files.GuildConfig{
@@ -112,7 +116,7 @@ func TestShouldRunMemberEventService(t *testing.T) {
 						GuildID: "1",
 						Features: files.FeatureToggles{
 							Logging: files.FeatureLoggingToggles{
-								EntryExit: boolPtr(true),
+								MemberJoin: boolPtr(true),
 							},
 						},
 					},

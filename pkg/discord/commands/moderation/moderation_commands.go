@@ -13,7 +13,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
@@ -804,28 +803,14 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 		Failed:     failed,
 	})
 
-	shouldLog := true
-	if ctx.Config != nil && ctx.GuildID != "" {
-		if cfg := ctx.Config.Config(); cfg != nil {
-			rc := cfg.ResolveRuntimeConfig(ctx.GuildID)
-			if rc.DisableCleanLog {
-				shouldLog = false
-			}
-			if !cfg.ResolveFeatures(ctx.GuildID).Logging.Clean {
-				shouldLog = false
-			}
-		}
-	}
-	if shouldLog {
-		sendModerationLog(ctx, moderationLogPayload{
-			Action:      "clean",
-			TargetID:    userID,
-			TargetLabel: userLabel,
-			Reason:      fmt.Sprintf("Deleted %d message(s)", deleted),
-			RequestedBy: ctx.UserID,
-			Extra:       fmt.Sprintf("Channel: <#%s> (`%s`) | Filter: %s | Requested: %d | Deleted: %d | Skipped (old): %d | Failed: %d", channelID, channelID, filterLabel, num, deleted, skippedOld, failed),
-		})
-	}
+	sendModerationLogForEvent(ctx, moderationLogPayload{
+		Action:      "clean",
+		TargetID:    userID,
+		TargetLabel: userLabel,
+		Reason:      fmt.Sprintf("Deleted %d message(s)", deleted),
+		RequestedBy: ctx.UserID,
+		Extra:       fmt.Sprintf("Channel: <#%s> (`%s`) | Filter: %s | Requested: %d | Deleted: %d | Skipped (old): %d | Failed: %d", channelID, channelID, filterLabel, num, deleted, skippedOld, failed),
+	}, logging.LogEventCleanAction)
 
 	message := fmt.Sprintf("Deleted %d message(s) in <#%s>.", deleted, channelID)
 	if userID != "" {
@@ -1423,24 +1408,29 @@ func shouldSendCleanUsageMessageDeleteEmbed(ctx *core.Context) bool {
 	if cfg == nil {
 		return false
 	}
-	if !cfg.ResolveFeatures(ctx.GuildID).Logging.Message {
+	if !cfg.ResolveFeatures(ctx.GuildID).Logging.MessageDelete {
 		return false
 	}
 	rc := cfg.ResolveRuntimeConfig(ctx.GuildID)
 	return !rc.DisableMessageLogs
 }
 
-func resolveMessageDeleteLogChannel(gcfg *files.GuildConfig) string {
-	if gcfg == nil {
+func resolveMessageDeleteLogChannel(ctx *core.Context) string {
+	if ctx == nil {
 		return ""
 	}
-	if cid := strings.TrimSpace(gcfg.Channels.MessageAuditLog); cid != "" {
+	if ctx.Config != nil && ctx.GuildID != "" {
+		if cid := logging.ResolveLogChannel(logging.LogEventMessageDelete, ctx.GuildID, ctx.Config); cid != "" {
+			return cid
+		}
+	}
+	if ctx.GuildConfig == nil {
+		return ""
+	}
+	if cid := strings.TrimSpace(ctx.GuildConfig.Channels.MessageDelete); cid != "" {
 		return cid
 	}
-	if cid := strings.TrimSpace(gcfg.Channels.UserActivityLog); cid != "" {
-		return cid
-	}
-	if cid := strings.TrimSpace(gcfg.Channels.Commands); cid != "" {
+	if cid := strings.TrimSpace(ctx.GuildConfig.Channels.MessageEdit); cid != "" {
 		return cid
 	}
 	return ""
@@ -1454,7 +1444,7 @@ func sendCleanUsageMessageDeleteEmbed(ctx *core.Context, payload cleanUsagePaylo
 		return
 	}
 
-	logChannelID := resolveMessageDeleteLogChannel(ctx.GuildConfig)
+	logChannelID := resolveMessageDeleteLogChannel(ctx)
 	if logChannelID == "" {
 		return
 	}
@@ -1607,6 +1597,10 @@ func humanizeModerationAction(raw string) string {
 }
 
 func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
+	sendModerationLogForEvent(ctx, payload, logging.LogEventModerationCase)
+}
+
+func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) {
 	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
 		return
 	}
@@ -1614,7 +1608,7 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, logging.LogEventModerationCase, ctx.GuildID)
+	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, eventType, ctx.GuildID)
 	if !emit.Enabled {
 		return
 	}

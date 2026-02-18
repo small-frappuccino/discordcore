@@ -647,10 +647,7 @@ func handleBackfillRun(ctx *core.Context) error {
 	channelID := getChannelOpt(s, i, "channel", "")
 	if channelID == "" {
 		if ctx.GuildConfig != nil {
-			channelID = strings.TrimSpace(ctx.GuildConfig.Channels.WelcomeBacklog)
-			if channelID == "" {
-				channelID = strings.TrimSpace(ctx.GuildConfig.Channels.EntryLeaveLog)
-			}
+			channelID = ctx.GuildConfig.Channels.BackfillChannelID()
 		}
 	}
 

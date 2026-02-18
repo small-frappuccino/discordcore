@@ -270,7 +270,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 
-	if strings.TrimSpace(guildConfig.Channels.VerificationChat) == m.ChannelID {
+	if guildConfig.Channels.VerificationCleanupChannelID() == m.ChannelID {
 		mes.cleanupPreviousVerificationMessages(guildID, m.ChannelID, m.Author.ID, m.ID)
 		mes.markVerificationPendingIfNonverified(s, guildConfig, m)
 	}
@@ -844,7 +844,7 @@ func (mes *MessageEventService) cleanupVerificationChannels() {
 	}
 
 	for _, gcfg := range cfg.Guilds {
-		channelID := strings.TrimSpace(gcfg.Channels.VerificationChat)
+		channelID := gcfg.Channels.VerificationCleanupChannelID()
 		if channelID == "" {
 			continue
 		}
@@ -1016,7 +1016,7 @@ func (mes *MessageEventService) handleGuildMemberUpdate(s *discordgo.Session, m 
 	if guildConfig == nil {
 		return
 	}
-	channelID := strings.TrimSpace(guildConfig.Channels.VerificationChat)
+	channelID := guildConfig.Channels.VerificationCleanupChannelID()
 	if channelID == "" {
 		return
 	}

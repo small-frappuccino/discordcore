@@ -90,13 +90,32 @@ A minimal example:
       "guild_id": "123456789",
       "channels": {
         "commands": "987654321",
-        "user_activity_log": "111111111",
-        "entry_leave_log": "444444444",
-        "welcome_backlog": "555555555",
-        "verification_chat": "666666666",
-        "message_audit_log": "999999999",
-        "automod_log": "222222222",
-        "moderation_log": "333333334"
+        "avatar_logging": "111111111",
+        "role_update": "111111111",
+        "member_join": "444444444",
+        "member_leave": "444444444",
+        "message_edit": "999999999",
+        "message_delete": "999999999",
+        "automod_action": "222222222",
+        "moderation_case": "333333334",
+        "clean_action": "333333335",
+        "entry_backfill": "555555555",
+        "verification_cleanup": "666666666"
+      },
+      "features": {
+        "logging": {
+          "avatar_logging": true,
+          "role_update": true,
+          "member_join": true,
+          "member_leave": true,
+          "message_process": true,
+          "message_edit": true,
+          "message_delete": true,
+          "reaction_metric": true,
+          "automod_action": true,
+          "moderation_case": true,
+          "clean_action": false
+        }
       },
       "roles": {
         "allowed": ["333333333"],
@@ -154,8 +173,7 @@ Backfill runs automatically on startup when configured:
 Channels are resolved in this order:
 
 - `runtime_config.backfill_channel_id` (global)
-- `channels.welcome_backlog`
-- `channels.entry_leave_log`
+- `channels.entry_backfill`
 
 Parsed sources:
 
