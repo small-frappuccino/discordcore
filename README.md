@@ -137,6 +137,12 @@ Use `/config runtime` in Discord to edit `settings.json` at runtime. Toggles inc
 - `disable_bot_role_perm_mirror`
 - `bot_role_perm_mirror_actor_role_id`
 
+Policy precedence for logging/event emission:
+
+1. `runtime_config.disable_*` (or `runtime_config.moderation_logging=false`) acts as an operational kill switch and wins first.
+2. `features.logging.*` controls product behavior (fine-grain enablement) when kill switch is not active.
+3. Channel resolution/validation and intent checks run after toggles.
+
 ## Entry/exit backfill
 
 Backfill runs automatically on startup when configured:

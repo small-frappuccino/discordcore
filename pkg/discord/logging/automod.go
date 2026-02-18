@@ -66,10 +66,6 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	if !shouldLogAutomodEvent(as.configManager, e.GuildID) {
-		return
-	}
-
 	done := perf.StartGatewayEvent(
 		"auto_moderation_action_execution",
 		slog.String("guildID", e.GuildID),
@@ -79,10 +75,12 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	)
 	defer done()
 
-	logChannelID, ok := resolveAutomodLogChannel(s, as.configManager, e.GuildID)
-	if !ok {
+	emit := ShouldEmitLogEvent(s, as.configManager, LogEventAutomodAction, e.GuildID)
+	if !emit.Enabled {
+		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
 		return
 	}
+	logChannelID := emit.ChannelID
 
 	// If adapters are wired, enqueue via TaskRouter for retries/backoff
 	if as.adapters != nil {
@@ -142,51 +140,6 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
 		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
 	}
-}
-
-func shouldLogAutomodEvent(configManager *files.ConfigManager, guildID string) bool {
-	if configManager == nil {
-		return false
-	}
-	cfg := configManager.Config()
-	if cfg == nil {
-		return false
-	}
-	if !cfg.ResolveFeatures(guildID).Logging.Automod {
-		return false
-	}
-	rc := cfg.ResolveRuntimeConfig(guildID)
-	return !rc.DisableAutomodLogs
-}
-
-func resolveAutomodLogChannel(session *discordgo.Session, configManager *files.ConfigManager, guildID string) (string, bool) {
-	if configManager == nil {
-		return "", false
-	}
-	gcfg := configManager.GuildConfig(guildID)
-	if gcfg == nil {
-		return "", false
-	}
-
-	// Prefer dedicated automod channel; fallback to moderation channel for backward compatibility.
-	channelID := strings.TrimSpace(gcfg.Channels.AutomodLog)
-	if channelID == "" {
-		channelID = strings.TrimSpace(gcfg.Channels.ModerationLog)
-	}
-	if channelID == "" {
-		return "", false
-	}
-
-	botID := ""
-	if session != nil && session.State != nil && session.State.User != nil {
-		botID = session.State.User.ID
-	}
-	if err := validateModerationLogChannel(session, guildID, channelID, botID); err != nil {
-		log.ErrorLoggerRaw().Error("Automod log channel validation failed", "guildID", guildID, "channelID", channelID, "err", err)
-		return "", false
-	}
-
-	return channelID, true
 }
 
 // sanitizeForCodeBlock prevents breaking out of the code fence and removes backticks.

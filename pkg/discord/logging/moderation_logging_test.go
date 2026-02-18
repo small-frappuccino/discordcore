@@ -7,55 +7,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-func TestShouldLogModerationEventToggle(t *testing.T) {
-	t.Parallel()
-
-	guildID := "g1"
-	botID := "bot"
-
-	cm := files.NewConfigManagerWithPath("test-settings.json")
-	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
-		t.Fatalf("AddGuildConfig: %v", err)
-	}
-
-	cfg := cm.Config()
-	if cfg == nil {
-		t.Fatal("config is nil")
-	}
-
-	// Default: enabled when unset.
-	cfg.RuntimeConfig.ModerationLogging = nil
-	cfg.RuntimeConfig.ModerationLogMode = ""
-	if !ShouldLogModerationEvent(cm, guildID, botID, botID, ModerationSourceCommand) {
-		t.Fatal("expected moderation logging enabled by default")
-	}
-
-	enabled := true
-	cfg.RuntimeConfig.ModerationLogging = &enabled
-	if !ShouldLogModerationEvent(cm, guildID, botID, "any-actor", ModerationSourceCommand) {
-		t.Fatal("expected moderation_logging=true to allow logs")
-	}
-
-	disabled := false
-	cfg.RuntimeConfig.ModerationLogging = &disabled
-	if ShouldLogModerationEvent(cm, guildID, botID, botID, ModerationSourceCommand) {
-		t.Fatal("expected moderation_logging=false to block logs")
-	}
-
-	// Legacy fallback for old settings: off disables.
-	cfg.RuntimeConfig.ModerationLogging = nil
-	cfg.RuntimeConfig.ModerationLogMode = "off"
-	if ShouldLogModerationEvent(cm, guildID, botID, botID, ModerationSourceCommand) {
-		t.Fatal("expected legacy moderation_log_mode=off to disable logs when moderation_logging is unset")
-	}
-
-	// Legacy fallback for old settings: non-off enables.
-	cfg.RuntimeConfig.ModerationLogMode = "alice_only"
-	if !ShouldLogModerationEvent(cm, guildID, botID, "any-actor", ModerationSourceCommand) {
-		t.Fatal("expected legacy moderation_log_mode=alice_only to enable logs when moderation_logging is unset")
-	}
-}
-
 func TestResolveModerationLogChannelShared(t *testing.T) {
 	t.Parallel()
 

@@ -1480,16 +1480,12 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	// Avatar change logging (already in place)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 
-	botID := ""
-	if s != nil && s.State != nil && s.State.User != nil {
-		botID = s.State.User.ID
-	}
-
-	// Role update logging goes to user activity log (same channel as avatar changes)
-	channelID := strings.TrimSpace(gcfg.Channels.UserActivityLog)
-	if channelID == "" {
+	emit := ShouldEmitLogEvent(ms.session, ms.configManager, LogEventRoleChange, m.GuildID)
+	if !emit.Enabled {
+		log.ApplicationLogger().Debug("Role update notification suppressed by policy", "guildID", m.GuildID, "userID", m.User.ID, "reason", emit.Reason)
 		return
 	}
+	channelID := emit.ChannelID
 
 	// Fetch role update audit log using constant with a short retry
 	actionType := int(discordgo.AuditLogActionMemberRoleUpdate)
@@ -1682,6 +1678,15 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 
 			// If nothing remains after verification, do not send an embed
 			if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
+				log.ApplicationLogger().Debug(
+					"Role update skipped after verification produced empty delta",
+					"guildID", m.GuildID,
+					"userID", m.User.ID,
+					"auditAddedCount", len(added),
+					"auditRemovedCount", len(removed),
+					"verifiedAddedCount", len(verifiedAdded),
+					"verifiedRemovedCount", len(verifiedRemoved),
+				)
 				// Update the snapshot anyway to keep the DB consistent
 				if ms.store != nil && len(curRoles) > 0 {
 					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
@@ -1689,14 +1694,6 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				}
 				// Continue scanning other possible entries
 				continue
-			}
-
-			if !ShouldLogModerationEvent(ms.configManager, m.GuildID, actorID, botID, ModerationSourceAuditLog) {
-				if ms.store != nil && len(curRoles) > 0 {
-					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
-					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
-				}
-				return true
 			}
 
 			targetLabel := formatUserLabel(m.User.Username, m.User.ID)
@@ -1764,14 +1761,6 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			_, addedIDs, removedIDs = computeVerifiedDiff(m.GuildID, m.User.ID, curRoles)
 
 			if len(addedIDs) > 0 || len(removedIDs) > 0 {
-				if !ShouldLogModerationEvent(ms.configManager, m.GuildID, "", botID, ModerationSourceUnknown) {
-					if ms.store != nil {
-						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
-					}
-					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
-					return
-				}
-
 				buildListIDs := func(list []string) string {
 					if len(list) == 0 {
 						return "None"
@@ -1826,6 +1815,12 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
 				}
 
+			} else {
+				log.ApplicationLogger().Debug(
+					"Role update fallback diff produced empty delta; no notification sent",
+					"guildID", m.GuildID,
+					"userID", m.User.ID,
+				)
 			}
 		}
 	}
@@ -1945,17 +1940,18 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 
 	log.ApplicationLogger().Info("Avatar change detected and processing", "userID", userID, "guildID", guildID, "old_avatar", oldAvatar, "new_avatar", currentAvatar)
 
-	guildConfig := aw.configManager.GuildConfig(guildID)
-	if guildConfig != nil {
-		channelID := guildConfig.Channels.UserActivityLog
-		if channelID == "" {
+	emit := ShouldEmitLogEvent(aw.session, aw.configManager, LogEventAvatarChange, guildID)
+	if !emit.Enabled {
+		if emit.Reason == EmitReasonNoChannelConfigured {
 			log.ErrorLoggerRaw().Error("User activity log channel not configured; notification not sent", "guildID", guildID)
 		} else {
-			if err := aw.notifier.SendAvatarChangeNotification(channelID, change); err != nil {
-				log.ErrorLoggerRaw().Error("Error sending notification", "channelID", channelID, "userID", userID, "guildID", guildID, "err", err)
-			} else {
-				log.ApplicationLogger().Info("Avatar notification sent successfully", "channelID", channelID, "userID", userID, "guildID", guildID)
-			}
+			log.ApplicationLogger().Debug("Avatar notification suppressed by policy", "guildID", guildID, "userID", userID, "reason", emit.Reason)
+		}
+	} else {
+		if err := aw.notifier.SendAvatarChangeNotification(emit.ChannelID, change); err != nil {
+			log.ErrorLoggerRaw().Error("Error sending notification", "channelID", emit.ChannelID, "userID", userID, "guildID", guildID, "err", err)
+		} else {
+			log.ApplicationLogger().Info("Avatar notification sent successfully", "channelID", emit.ChannelID, "userID", userID, "guildID", guildID)
 		}
 	}
 

@@ -1614,13 +1614,11 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	if !logging.ShouldLogModerationEvent(ctx.Config, ctx.GuildID, botID, botID, logging.ModerationSourceCommand) {
+	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, logging.LogEventModerationCase, ctx.GuildID)
+	if !emit.Enabled {
 		return
 	}
-	channelID, ok := logging.ResolveModerationLogChannel(ctx.Session, ctx.Config, ctx.GuildID)
-	if !ok {
-		return
-	}
+	channelID := emit.ChannelID
 
 	action := strings.TrimSpace(payload.Action)
 	targetID := strings.TrimSpace(payload.TargetID)
@@ -1715,13 +1713,11 @@ func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	if !logging.ShouldLogModerationEvent(ctx.Config, ctx.GuildID, botID, botID, logging.ModerationSourceCommand) {
+	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, logging.LogEventModerationCase, ctx.GuildID)
+	if !emit.Enabled {
 		return
 	}
-	channelID, ok := logging.ResolveModerationLogChannel(ctx.Session, ctx.Config, ctx.GuildID)
-	if !ok {
-		return
-	}
+	channelID := emit.ChannelID
 	caseNumber, hasCaseNumber := nextGuildCaseNumber(ctx)
 
 	action := strings.TrimSpace(payload.Action)

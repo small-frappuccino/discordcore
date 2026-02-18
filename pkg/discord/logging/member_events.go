@@ -171,23 +171,16 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		}
 	}
 
-	rc := cfg.ResolveRuntimeConfig(m.GuildID)
-	if rc.DisableEntryExitLogs {
+	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMemberJoin, m.GuildID)
+	if !emit.Enabled {
+		if emit.Reason == EmitReasonNoChannelConfigured {
+			slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
+		} else {
+			slog.Debug(fmt.Sprintf("Member join notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
+		}
 		return
 	}
-	if !features.Logging.EntryExit {
-		return
-	}
-
-	// Prefer dedicated entry/leave channel; fallback to general user log channel
-	logChannelID := guildConfig.Channels.EntryLeaveLog
-	if logChannelID == "" {
-		logChannelID = guildConfig.Channels.UserActivityLog
-	}
-	if logChannelID == "" {
-		slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
-		return
-	}
+	logChannelID := emit.ChannelID
 
 	// Calculate how long the account has existed
 	accountAge := mes.calculateAccountAge(m.User.ID)
@@ -256,28 +249,16 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	if cfg == nil {
 		return
 	}
-	rc := cfg.ResolveRuntimeConfig(m.GuildID)
-	if rc.DisableEntryExitLogs {
+	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMemberLeave, m.GuildID)
+	if !emit.Enabled {
+		if emit.Reason == EmitReasonNoChannelConfigured {
+			slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
+		} else {
+			slog.Debug(fmt.Sprintf("Member leave notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
+		}
 		return
 	}
-	if !cfg.ResolveFeatures(m.GuildID).Logging.EntryExit {
-		return
-	}
-
-	guildConfig := mes.configManager.GuildConfig(m.GuildID)
-	if guildConfig == nil {
-		return
-	}
-
-	// Prefer dedicated entry/leave channel; fallback to general user log channel
-	logChannelID := guildConfig.Channels.EntryLeaveLog
-	if logChannelID == "" {
-		logChannelID = guildConfig.Channels.UserActivityLog
-	}
-	if logChannelID == "" {
-		slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
-		return
-	}
+	logChannelID := emit.ChannelID
 
 	// Calculate how long they were in the server
 	var serverTime time.Duration

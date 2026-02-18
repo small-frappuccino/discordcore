@@ -258,18 +258,9 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		return
 	}
 
-	// Check if the guild is configured
-	cfg := mes.configManager.Config()
-	if cfg == nil {
-		return
-	}
-	rc := cfg.ResolveRuntimeConfig(guildID)
-	if rc.DisableMessageLogs {
-		slog.Debug("MessageCreate: message logs disabled for guild; skipping cache", "guildID", guildID)
-		return
-	}
-	if !cfg.ResolveFeatures(guildID).Logging.Message {
-		slog.Debug("MessageCreate: message logs disabled by features; skipping cache", "guildID", guildID)
+	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageProcess, guildID)
+	if !emit.Enabled {
+		slog.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
 		return
 	}
 
@@ -538,17 +529,16 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 		return nil
 	}
 
-	cfg := mes.configManager.Config()
-	if cfg == nil {
+	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageEdit, cached.GuildID)
+	if !emit.Enabled {
+		if emit.Reason == EmitReasonNoChannelConfigured {
+			slog.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
+		} else {
+			slog.Debug("MessageUpdate: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
+		}
 		return nil
 	}
-	rc := cfg.ResolveRuntimeConfig(cached.GuildID)
-	if rc.DisableMessageLogs {
-		return nil
-	}
-	if !cfg.ResolveFeatures(cached.GuildID).Logging.Message {
-		return nil
-	}
+	logChannelID := emit.ChannelID
 
 	// Ensure latest content; MessageUpdate may omit content. Also enrich empty content with context.
 	contentResolved := true
@@ -570,18 +560,6 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 	// Check that the content actually changed (compare effective strings)
 	if cached.Content == m.Content {
 		slog.Debug("MessageUpdate: content unchanged; skipping notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID)
-		return nil
-	}
-
-	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
-	if guildConfig == nil {
-		slog.Debug("MessageUpdate: no guild config; skipping notification", "guildID", cached.GuildID, "messageID", m.ID)
-		return nil
-	}
-
-	logChannelID := mes.fallbackMessageLogChannel(guildConfig)
-	if logChannelID == "" {
-		slog.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		return nil
 	}
 
@@ -686,39 +664,23 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 		return nil
 	}
 
-	cfg := mes.configManager.Config()
-	if cfg == nil {
+	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageDelete, cached.GuildID)
+	if !emit.Enabled {
+		if emit.Reason == EmitReasonNoChannelConfigured {
+			slog.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
+		} else {
+			slog.Debug("MessageDelete: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
+		}
+		// Deletion from store is disabled by default
+		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
+			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+		}
 		return nil
 	}
-	rc := cfg.ResolveRuntimeConfig(cached.GuildID)
-	if rc.DisableMessageLogs {
-		return nil
-	}
-	if !cfg.ResolveFeatures(cached.GuildID).Logging.Message {
-		return nil
-	}
+	logChannelID := emit.ChannelID
 
 	// Skip if bot
 	if cached.Author.Bot {
-		// Deletion from store is disabled by default
-		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
-		}
-		return nil
-	}
-
-	guildConfig := mes.configManager.GuildConfig(cached.GuildID)
-	if guildConfig == nil {
-		// Deletion from store is disabled by default
-		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
-		}
-		return nil
-	}
-
-	logChannelID := mes.fallbackMessageLogChannel(guildConfig)
-	if logChannelID == "" {
-		slog.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		// Deletion from store is disabled by default
 		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
 			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
@@ -825,23 +787,6 @@ func cloneMessageDelete(m *discordgo.MessageDelete) *discordgo.MessageDelete {
 	}
 	copy := *m
 	return &copy
-}
-
-// fallbackMessageLogChannel chooses the best available channel for message logs.
-func (mes *MessageEventService) fallbackMessageLogChannel(g *files.GuildConfig) string {
-	if g == nil {
-		return ""
-	}
-	if g.Channels.MessageAuditLog != "" {
-		return g.Channels.MessageAuditLog
-	}
-	if g.Channels.UserActivityLog != "" {
-		return g.Channels.UserActivityLog
-	}
-	if g.Channels.Commands != "" {
-		return g.Channels.Commands
-	}
-	return ""
 }
 
 // summarizeMessageContent enriches content with a concise summary when the message has
@@ -1225,4 +1170,3 @@ func snowflakeTimestamp(id string) (time.Time, bool) {
 	ms := int64(raw>>22) + discordEpochMS
 	return time.Unix(0, ms*int64(time.Millisecond)), true
 }
-

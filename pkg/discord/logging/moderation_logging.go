@@ -9,31 +9,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
-// ModerationEventSource describes where the moderation signal came from.
-type ModerationEventSource string
-
-const (
-	ModerationSourceGateway  ModerationEventSource = "gateway"
-	ModerationSourceAuditLog ModerationEventSource = "audit_log"
-	ModerationSourceCommand  ModerationEventSource = "command"
-	ModerationSourceUnknown  ModerationEventSource = "unknown"
-)
-
-// ShouldLogModerationEvent applies the moderation_logging toggle.
-// true (or unset): send moderation logs
-// false: do not send moderation logs
-func ShouldLogModerationEvent(configManager *files.ConfigManager, guildID, _, _ string, _ ModerationEventSource) bool {
-	if configManager == nil {
-		return false
-	}
-	cfg := configManager.Config()
-	if cfg == nil {
-		return false
-	}
-	rc := cfg.ResolveRuntimeConfig(guildID)
-	return rc.ModerationLoggingEnabled()
-}
-
 // ResolveModerationLogChannel validates and returns the configured moderation log channel.
 func ResolveModerationLogChannel(session *discordgo.Session, configManager *files.ConfigManager, guildID string) (string, bool) {
 	if configManager == nil {

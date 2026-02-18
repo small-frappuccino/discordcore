@@ -112,15 +112,10 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 	// Mark that we processed an event (best effort).
 	rs.markEvent()
 
-	cfg := rs.configManager.Config()
-	if cfg != nil {
-		rc := cfg.ResolveRuntimeConfig(guildID)
-		if rc.DisableReactionLogs {
-			return
-		}
-		if !cfg.ResolveFeatures(guildID).Logging.Reaction {
-			return
-		}
+	emit := ShouldEmitLogEvent(rs.session, rs.configManager, LogEventReactionMetric, guildID)
+	if !emit.Enabled {
+		slog.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
+		return
 	}
 
 	// Increment per-day reaction count for the reactor.

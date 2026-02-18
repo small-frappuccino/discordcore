@@ -303,14 +303,11 @@ func (s *UserPruneService) sendRunEmbed(guildID, botID string, estimated, pruned
 	if botID == "" {
 		botID = s.currentBotID()
 	}
-	if !logging.ShouldLogModerationEvent(s.configManager, guildID, botID, botID, logging.ModerationSourceUnknown) {
+	emit := logging.ShouldEmitLogEvent(s.session, s.configManager, logging.LogEventModerationCase, guildID)
+	if !emit.Enabled || strings.TrimSpace(emit.ChannelID) == "" {
 		return
 	}
-
-	channelID, ok := logging.ResolveModerationLogChannel(s.session, s.configManager, guildID)
-	if !ok || strings.TrimSpace(channelID) == "" {
-		return
-	}
+	channelID := emit.ChannelID
 
 	casePart := "?"
 	if caseNum, hasCase := s.nextGuildCaseNumber(guildID); hasCase && caseNum > 0 {
