@@ -1,6 +1,7 @@
 package files
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +59,95 @@ type RuntimeConfig struct {
 	//   - ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID
 	DisableBotRolePermMirror     bool   `json:"disable_bot_role_perm_mirror,omitempty"`
 	BotRolePermMirrorActorRoleID string `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
+
+	// Webhook embed message patch (global or per-guild override).
+	// Intended for editing an existing webhook message embed by ID.
+	WebhookEmbedUpdates []WebhookEmbedUpdateConfig `json:"webhook_embed_updates,omitempty"`
+	// Deprecated: single-item legacy key kept for backward compatibility.
+	WebhookEmbedUpdate WebhookEmbedUpdateConfig `json:"webhook_embed_update,omitempty"`
+	// Remote validation behavior for webhook embed targets used by CRUD commands.
+	WebhookEmbedValidation WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+}
+
+// WebhookEmbedUpdateConfig defines how to patch an existing webhook message embed.
+type WebhookEmbedUpdateConfig struct {
+	MessageID  string          `json:"message_id,omitempty"`
+	WebhookURL string          `json:"webhook_url,omitempty"`
+	Embed      json.RawMessage `json:"embed,omitempty"`
+}
+
+const (
+	WebhookEmbedValidationModeOff    = "off"
+	WebhookEmbedValidationModeSoft   = "soft"
+	WebhookEmbedValidationModeStrict = "strict"
+
+	DefaultWebhookEmbedValidationTimeoutMS = 3000
+)
+
+// WebhookEmbedValidationConfig controls remote validation behavior for webhook targets.
+// mode:
+// - off: no remote validation
+// - soft: validate remotely, but persist even on failure
+// - strict: validate remotely and fail before persisting when validation fails
+type WebhookEmbedValidationConfig struct {
+	Mode      string `json:"mode,omitempty"`
+	TimeoutMS int    `json:"timeout_ms,omitempty"`
+}
+
+// Normalized returns a canonical config with safe defaults.
+func (c WebhookEmbedValidationConfig) Normalized() WebhookEmbedValidationConfig {
+	mode := normalizeWebhookEmbedValidationMode(c.Mode)
+	timeout := c.TimeoutMS
+	if timeout <= 0 {
+		timeout = DefaultWebhookEmbedValidationTimeoutMS
+	}
+	return WebhookEmbedValidationConfig{
+		Mode:      mode,
+		TimeoutMS: timeout,
+	}
+}
+
+func normalizeWebhookEmbedValidationMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case WebhookEmbedValidationModeSoft:
+		return WebhookEmbedValidationModeSoft
+	case WebhookEmbedValidationModeStrict:
+		return WebhookEmbedValidationModeStrict
+	default:
+		return WebhookEmbedValidationModeOff
+	}
+}
+
+// IsZero reports whether all fields are unset.
+func (c WebhookEmbedUpdateConfig) IsZero() bool {
+	return strings.TrimSpace(c.MessageID) == "" &&
+		strings.TrimSpace(c.WebhookURL) == "" &&
+		len(bytes.TrimSpace(c.Embed)) == 0
+}
+
+// NormalizedWebhookEmbedUpdates returns a normalized list:
+// - prefers webhook_embed_updates when any non-empty entries exist
+// - falls back to legacy webhook_embed_update when list is empty
+func (rc RuntimeConfig) NormalizedWebhookEmbedUpdates() []WebhookEmbedUpdateConfig {
+	updates := make([]WebhookEmbedUpdateConfig, 0, len(rc.WebhookEmbedUpdates))
+	for _, item := range rc.WebhookEmbedUpdates {
+		if item.IsZero() {
+			continue
+		}
+		updates = append(updates, item)
+	}
+	if len(updates) > 0 {
+		return updates
+	}
+	if !rc.WebhookEmbedUpdate.IsZero() {
+		return []WebhookEmbedUpdateConfig{rc.WebhookEmbedUpdate}
+	}
+	return nil
+}
+
+// EffectiveWebhookEmbedValidation resolves webhook_embed_validation defaults.
+func (rc RuntimeConfig) EffectiveWebhookEmbedValidation() WebhookEmbedValidationConfig {
+	return rc.WebhookEmbedValidation.Normalized()
 }
 
 // Feature toggles are optional overrides for runtime behavior.
@@ -446,6 +536,16 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildRC.BotRolePermMirrorActorRoleID != "" {
 		resolved.BotRolePermMirrorActorRoleID = guildRC.BotRolePermMirrorActorRoleID
+	}
+	if mode := strings.TrimSpace(guildRC.WebhookEmbedValidation.Mode); mode != "" {
+		resolved.WebhookEmbedValidation.Mode = mode
+	}
+	if guildRC.WebhookEmbedValidation.TimeoutMS > 0 {
+		resolved.WebhookEmbedValidation.TimeoutMS = guildRC.WebhookEmbedValidation.TimeoutMS
+	}
+	if guildUpdates := guildRC.NormalizedWebhookEmbedUpdates(); len(guildUpdates) > 0 {
+		resolved.WebhookEmbedUpdates = append([]WebhookEmbedUpdateConfig(nil), guildUpdates...)
+		resolved.WebhookEmbedUpdate = WebhookEmbedUpdateConfig{}
 	}
 
 	return resolved

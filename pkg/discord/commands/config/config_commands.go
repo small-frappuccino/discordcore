@@ -23,17 +23,33 @@ func NewConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
 
 // RegisterCommands registers the /config command group and optional simple commands in the provided router.
 func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
-	// Build /config group with permission checks
+	if router == nil {
+		return
+	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-	group := core.NewGroupCommand("config", "Manage server configuration", checker)
+	// Build /config group with permission checks (or reuse existing group).
+	var group *core.GroupCommand
+	if existing, ok := router.GetRegistry().GetCommand("config"); ok {
+		if g, ok := existing.(*core.GroupCommand); ok {
+			group = g
+		}
+	}
+	if group == nil {
+		checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+		group = core.NewGroupCommand("config", "Manage server configuration", checker)
+	}
 
 	// Attach subcommands
 	group.AddSubCommand(NewConfigSetSubCommand(cc.configManager))
 	group.AddSubCommand(NewConfigGetSubCommand(cc.configManager))
 	group.AddSubCommand(NewConfigListSubCommand(cc.configManager))
+	group.AddSubCommand(NewConfigWebhookEmbedCreateSubCommand(cc.configManager))
+	group.AddSubCommand(NewConfigWebhookEmbedReadSubCommand(cc.configManager))
+	group.AddSubCommand(NewConfigWebhookEmbedUpdateSubCommand(cc.configManager))
+	group.AddSubCommand(NewConfigWebhookEmbedDeleteSubCommand(cc.configManager))
+	group.AddSubCommand(NewConfigWebhookEmbedListSubCommand(cc.configManager))
 
-	// Register the group
+	// Register (or refresh) the group.
 	router.RegisterCommand(group)
 
 	// Optionally register simple commands (useful for quick health checks of the routing stack)
@@ -284,6 +300,12 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`channels.verification_cleanup` - Channel used for verification cleanup routines",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
+		"",
+		"`/config webhook_embed_create` - Add webhook embed patch entry",
+		"`/config webhook_embed_read` - Show one webhook embed patch entry",
+		"`/config webhook_embed_update` - Update existing webhook embed patch entry",
+		"`/config webhook_embed_delete` - Delete webhook embed patch entry",
+		"`/config webhook_embed_list` - List webhook embed patch entries",
 	}
 
 	builder := core.NewResponseBuilder(ctx.Session).

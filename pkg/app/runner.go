@@ -13,6 +13,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
+	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -103,6 +104,35 @@ func Run(appName, tokenEnv string) error {
 	configManager := files.NewConfigManager()
 	if err := configManager.LoadConfig(); err != nil {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to load settings file: %v", err))
+	}
+	if cfg := configManager.Config(); cfg != nil {
+		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
+			operation := fmt.Sprintf(
+				"runtime_config.webhook_embed_updates[%s:%d]",
+				item.scope,
+				item.index,
+			)
+			if err := webhook.PatchMessageEmbed(discordSession, webhook.MessageEmbedPatch{
+				MessageID:  item.update.MessageID,
+				WebhookURL: item.update.WebhookURL,
+				Embed:      item.update.Embed,
+			}); err != nil {
+				log.ApplicationLogger().Warn(
+					"Webhook embed patch failed",
+					"operation", operation,
+					"scope", item.scope,
+					"messageID", strings.TrimSpace(item.update.MessageID),
+					"error", err,
+				)
+			} else {
+				log.ApplicationLogger().Info(
+					"Webhook embed patch applied",
+					"operation", operation,
+					"scope", item.scope,
+					"messageID", strings.TrimSpace(item.update.MessageID),
+				)
+			}
+		}
 	}
 
 	features := (&files.BotConfig{}).ResolveFeatures("")
@@ -423,4 +453,42 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 	}
 
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
+}
+
+type startupWebhookEmbedUpdate struct {
+	scope  string
+	index  int
+	update files.WebhookEmbedUpdateConfig
+}
+
+func collectStartupWebhookEmbedUpdates(cfg *files.BotConfig) []startupWebhookEmbedUpdate {
+	if cfg == nil {
+		return nil
+	}
+
+	var out []startupWebhookEmbedUpdate
+
+	for idx, update := range cfg.RuntimeConfig.NormalizedWebhookEmbedUpdates() {
+		out = append(out, startupWebhookEmbedUpdate{
+			scope:  "global",
+			index:  idx,
+			update: update,
+		})
+	}
+
+	for _, guild := range cfg.Guilds {
+		guildID := strings.TrimSpace(guild.GuildID)
+		if guildID == "" {
+			continue
+		}
+		for idx, update := range guild.RuntimeConfig.NormalizedWebhookEmbedUpdates() {
+			out = append(out, startupWebhookEmbedUpdate{
+				scope:  "guild:" + guildID,
+				index:  idx,
+				update: update,
+			})
+		}
+	}
+
+	return out
 }

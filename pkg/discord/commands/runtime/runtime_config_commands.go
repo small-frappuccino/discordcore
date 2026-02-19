@@ -434,6 +434,17 @@ func NewRuntimeConfigCommands(configManager *files.ConfigManager) *ConfigCommand
 
 // RegisterCommands registers `/config runtime`.
 func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
+	if router == nil {
+		return
+	}
+
+	if existing, ok := router.GetRegistry().GetCommand(groupName); ok {
+		if group, ok := existing.(*core.GroupCommand); ok {
+			group.AddSubCommand(newRuntimeSubCommand(cc.configManager))
+			return
+		}
+	}
+
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	group := core.NewGroupCommand(groupName, "Manage server configuration", checker)
 

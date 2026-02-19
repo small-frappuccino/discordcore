@@ -130,7 +130,17 @@ A minimal example:
     }
   ],
   "runtime_config": {
-    "moderation_logging": true
+    "moderation_logging": true,
+    "webhook_embed_updates": [
+      {
+        "message_id": "123456789012345678",
+        "webhook_url": "https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN",
+        "embed": {
+          "title": "Updated embed title",
+          "description": "Updated embed description"
+        }
+      }
+    ]
   }
 }
 ```
@@ -155,6 +165,21 @@ Use `/config runtime` in Discord to edit `settings.json` at runtime. Toggles inc
 - `backfill_initial_date`
 - `disable_bot_role_perm_mirror`
 - `bot_role_perm_mirror_actor_role_id`
+- `webhook_embed_updates` (manual JSON list: message_id + webhook_url + embed)
+
+Webhook embed update CRUD commands:
+
+- `/config webhook_embed_create`
+- `/config webhook_embed_read`
+- `/config webhook_embed_update`
+- `/config webhook_embed_delete`
+- `/config webhook_embed_list`
+
+Notes:
+
+- In guild context, omitted `scope` defaults to `guild` (safer default).
+- Use `scope=global` explicitly when you want to change global runtime config.
+- `webhook_embed_create`, `webhook_embed_update`, and `webhook_embed_delete` support `apply_now=true` to patch the message immediately.
 
 Policy precedence for logging/event emission:
 
