@@ -13,3 +13,7 @@ vendor/
 # Temporary files
 tmp/
 .tmp/
+
+# Web tooling (discordcore/web)
+web/node_modules/
+web/dist/

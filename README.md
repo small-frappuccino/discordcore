@@ -19,9 +19,11 @@ Discordcore is the core Discord bot library and service layer used by Alicebot. 
 cmd/discordcore/      # Example runner
 pkg/discord/          # Discord services, logging, commands, cache
 pkg/files/            # settings.json configuration
+pkg/partners/         # Partner board rendering services (template + list -> embeds)
 pkg/storage/          # SQLite store
 pkg/task/             # Task router and scheduler
 pkg/util/             # Shared utilities
+web/                  # Bun + Vite + React + TS/TSX frontend scaffold
 ```
 
 ## Quick start (example)
@@ -175,11 +177,112 @@ Webhook embed update CRUD commands:
 - `/config webhook_embed_delete`
 - `/config webhook_embed_list`
 
+Partner CRUD commands:
+
+- `/partner add`
+- `/partner read`
+- `/partner update`
+- `/partner delete`
+- `/partner list`
+- `/partner sync`
+
+Note: `/addpartner` is not registered. Use `/partner add`.
+
+## Control API (Bearer auth)
+
+Control API is optional and starts only when both env vars are set:
+
+- `ALICE_CONTROL_ADDR` (example: `127.0.0.1:8080`)
+- `ALICE_CONTROL_BEARER_TOKEN` (required when `ALICE_CONTROL_ADDR` is set)
+
+Authentication contract:
+
+- Header must be `Authorization: Bearer <token>`
+- Missing/invalid scheme/token returns `401`
+- Wrong token returns `403`
+- Requests without configured server token are denied (`Start()` fails)
+
+Partner board endpoints (all under `/v1/guilds/{guild_id}`):
+
+- `GET /partner-board`
+- `GET|PUT /partner-board/target`
+- `GET|PUT /partner-board/template`
+- `GET|POST|PUT|DELETE /partner-board/partners`
+- `POST /partner-board/sync`
+
 Notes:
 
 - In guild context, omitted `scope` defaults to `guild` (safer default).
 - Use `scope=global` explicitly when you want to change global runtime config.
 - `webhook_embed_create`, `webhook_embed_update`, and `webhook_embed_delete` support `apply_now=true` to patch the message immediately.
+
+## Partner board renderer foundation
+
+`pkg/partners` provides a reusable render service that converts:
+
+- a board template (`PartnerBoardTemplate`)
+- a partner list (`[]PartnerRecord`)
+
+into final Discord embeds (`[]*discordgo.MessageEmbed`).
+
+Current capabilities:
+
+- token-based templates for section headers, lines, and footer text
+- deterministic grouping by fandom (with optional sort disable)
+- deterministic partner sorting within each fandom (with optional sort disable)
+- auto-splitting across multiple embeds while respecting description limits
+- validation for required fields and URL format
+
+This package is intentionally UI-agnostic and command-agnostic.
+
+## Partner board config primitives
+
+Guild config now includes `partner_board` with:
+
+- `target` (`type`, `message_id`, `channel_id`, `webhook_url`)
+- `template` (render template fields)
+- `partners` (fandom/name/link records)
+
+Target abstraction supports:
+
+- `webhook_message` (`message_id` + `webhook_url`)
+- `channel_message` (`message_id` + `channel_id`)
+
+Partner CRUD helper methods are available on `ConfigManager`:
+
+- `SetPartnerBoardTarget` / `GetPartnerBoardTarget`
+- `CreatePartner` / `GetPartner` / `ListPartners` / `UpdatePartner` / `DeletePartner`
+
+Rules enforced by CRUD:
+
+- invite link must be a Discord invite URL
+- deduplication by normalized partner name and invite link
+- deterministic ordering by fandom, then name, then link
+
+## Web development scaffold
+
+`web/` is a frontend foundation inspired by the Homeimmob stack, ready for future admin panels:
+
+- Bun package scripts
+- Vite + React + TypeScript (TS/TSX)
+- baseline ESLint setup
+- typed Control API client (`web/src/api/control.ts`)
+- partner board admin wiring (`web/src/App.tsx`) for target/template/partners/sync
+
+Local dev contract:
+
+- The Vite dev server proxies `/v1/*` to `VITE_CONTROL_API_PROXY_TARGET` (default: `http://127.0.0.1:8080`)
+- `VITE_CONTROL_API_BASE_URL` defaults to current origin
+- `VITE_CONTROL_API_BEARER_TOKEN` should match `ALICE_CONTROL_BEARER_TOKEN`
+- `VITE_CONTROL_API_GUILD_ID` can prefill the guild selector
+
+Quick start:
+
+```bash
+cd web
+bun install
+bun run dev
+```
 
 Policy precedence for logging/event emission:
 

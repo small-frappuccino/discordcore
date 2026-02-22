@@ -8,17 +8,21 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
 // CommandHandler manages bot command setup and handling
 type CommandHandler struct {
-	session        *discordgo.Session
-	configManager  *files.ConfigManager
-	commandManager *core.CommandManager
+	session             *discordgo.Session
+	configManager       *files.ConfigManager
+	commandManager      *core.CommandManager
+	partnerBoardService partners.BoardService
+	partnerSyncExecutor partners.GuildSyncExecutor
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -72,6 +76,16 @@ func (ch *CommandHandler) GetCommandManager() *core.CommandManager {
 	return ch.commandManager
 }
 
+// SetPartnerBoardService injects partner board application service for /partner commands.
+func (ch *CommandHandler) SetPartnerBoardService(service partners.BoardService) {
+	ch.partnerBoardService = service
+}
+
+// SetPartnerBoardSyncExecutor injects a sync executor used by /partner sync.
+func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor) {
+	ch.partnerSyncExecutor = executor
+}
+
 // registerConfigCommands registers configuration-related commands
 func (ch *CommandHandler) registerConfigCommands() error {
 	router := ch.commandManager.GetRouter()
@@ -84,10 +98,20 @@ func (ch *CommandHandler) registerConfigCommands() error {
 
 	// Register metrics commands (activity, members)
 	metrics.RegisterMetricsCommands(router)
+	// Register partner CRUD commands
+	if ch.partnerBoardService != nil || ch.partnerSyncExecutor != nil {
+		boardService := ch.partnerBoardService
+		if boardService == nil {
+			boardService = partners.NewBoardApplicationService(ch.configManager, nil)
+		}
+		partner.NewPartnerCommandsWithServices(boardService, ch.partnerSyncExecutor).RegisterCommands(router)
+	} else {
+		partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
+	}
 	// Register moderation commands
 	moderation.RegisterModerationCommands(router)
 
-	log.ApplicationLogger().Info("Config, metrics, and moderation commands registered successfully")
+	log.ApplicationLogger().Info("Config, partner, metrics, and moderation commands registered successfully")
 	return nil
 }
 

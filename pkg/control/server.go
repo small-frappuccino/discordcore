@@ -3,6 +3,7 @@ package control
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,22 +12,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/discord/messageupdate"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
 const (
 	defaultMaxBodyBytes = 64 * 1024
+	defaultSyncTimeout  = 20 * time.Second
 )
 
 // Server exposes operational controls for a running Discordcore instance.
 type Server struct {
-	addr           string
-	configManager  *files.ConfigManager
-	runtimeApplier *runtimeapply.Manager
-	httpServer     *http.Server
-	listener       net.Listener
+	addr                string
+	authBearerToken     string
+	configManager       *files.ConfigManager
+	partnerBoardService partners.BoardService
+	partnerBoardSyncer  partners.GuildSyncExecutor
+	runtimeApplier      *runtimeapply.Manager
+	httpServer          *http.Server
+	listener            net.Listener
 }
 
 // NewServer returns nil if addr is empty.
@@ -38,9 +45,10 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 
 	mux := http.NewServeMux()
 	s := &Server{
-		addr:           addr,
-		configManager:  configManager,
-		runtimeApplier: runtimeApplier,
+		addr:                addr,
+		configManager:       configManager,
+		partnerBoardService: partners.NewBoardApplicationService(configManager, nil),
+		runtimeApplier:      runtimeApplier,
 	}
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -49,14 +57,42 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	}
 
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
+	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
 
 	return s
+}
+
+// SetPartnerBoardService overrides the board application service used by partner-board routes.
+func (s *Server) SetPartnerBoardService(service partners.BoardService) {
+	if s == nil || service == nil {
+		return
+	}
+	s.partnerBoardService = service
+}
+
+// SetPartnerBoardSyncExecutor overrides sync execution used by /partner-board/sync endpoint.
+func (s *Server) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor) {
+	if s == nil || executor == nil {
+		return
+	}
+	s.partnerBoardSyncer = executor
+}
+
+// SetBearerToken configures bearer token authentication for control routes.
+func (s *Server) SetBearerToken(token string) {
+	if s == nil {
+		return
+	}
+	s.authBearerToken = strings.TrimSpace(token)
 }
 
 // Start opens the control server listening socket.
 func (s *Server) Start() error {
 	if s == nil {
 		return nil
+	}
+	if strings.TrimSpace(s.authBearerToken) == "" {
+		return fmt.Errorf("start control server: bearer token is required")
 	}
 
 	ln, err := net.Listen("tcp", s.httpServer.Addr)
@@ -97,6 +133,10 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeRequest(w, r) {
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -299,4 +339,398 @@ func decodeInt(raw json.RawMessage) (int, error) {
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeRequest(w, r) {
+		return
+	}
+
+	if s.configManager == nil {
+		http.Error(w, "config manager unavailable", http.StatusInternalServerError)
+		return
+	}
+	if s.partnerBoardService == nil {
+		http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	guildID, tail, ok := splitGuildRoute(r.URL.Path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if guildID == "" {
+		http.Error(w, "guild_id is required", http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case len(tail) == 1 && tail[0] == "partner-board":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handlePartnerBoardGet(w, r, guildID)
+		return
+	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "target":
+		switch r.Method {
+		case http.MethodGet:
+			s.handlePartnerBoardTargetGet(w, r, guildID)
+		case http.MethodPut:
+			s.handlePartnerBoardTargetPut(w, r, guildID)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "template":
+		switch r.Method {
+		case http.MethodGet:
+			s.handlePartnerBoardTemplateGet(w, r, guildID)
+		case http.MethodPut:
+			s.handlePartnerBoardTemplatePut(w, r, guildID)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "partners":
+		switch r.Method {
+		case http.MethodGet:
+			s.handlePartnerBoardPartnersList(w, r, guildID)
+		case http.MethodPost:
+			s.handlePartnerBoardPartnersCreate(w, r, guildID)
+		case http.MethodPut:
+			s.handlePartnerBoardPartnersUpdate(w, r, guildID)
+		case http.MethodDelete:
+			s.handlePartnerBoardPartnersDelete(w, r, guildID)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "sync":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handlePartnerBoardSyncPost(w, r, guildID)
+		return
+	default:
+		http.NotFound(w, r)
+		return
+	}
+}
+
+func (s *Server) handlePartnerBoardGet(w http.ResponseWriter, r *http.Request, guildID string) {
+	board, err := s.partnerBoardService.GetPartnerBoard(guildID)
+	if err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to read partner board: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":        "ok",
+		"guild_id":      guildID,
+		"partner_board": board,
+	})
+}
+
+func (s *Server) handlePartnerBoardTargetGet(w http.ResponseWriter, r *http.Request, guildID string) {
+	target, err := s.partnerBoardService.GetPartnerBoardTarget(guildID)
+	if err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to read partner board target: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"target":   target,
+	})
+}
+
+func (s *Server) handlePartnerBoardTargetPut(w http.ResponseWriter, r *http.Request, guildID string) {
+	var payload files.EmbedUpdateTargetConfig
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		return
+	}
+
+	if err := s.partnerBoardService.SetPartnerBoardTarget(guildID, payload); err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to set partner board target: %v", err), status)
+		return
+	}
+
+	target, err := s.partnerBoardService.GetPartnerBoardTarget(guildID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read updated target: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"target":   target,
+	})
+}
+
+func (s *Server) handlePartnerBoardTemplateGet(w http.ResponseWriter, r *http.Request, guildID string) {
+	template, err := s.partnerBoardService.GetPartnerBoardTemplate(guildID)
+	if err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to read partner board template: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"template": template,
+	})
+}
+
+func (s *Server) handlePartnerBoardTemplatePut(w http.ResponseWriter, r *http.Request, guildID string) {
+	var payload files.PartnerBoardTemplateConfig
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		return
+	}
+
+	if err := s.partnerBoardService.SetPartnerBoardTemplate(guildID, payload); err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to set partner board template: %v", err), status)
+		return
+	}
+
+	template, err := s.partnerBoardService.GetPartnerBoardTemplate(guildID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read updated template: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"template": template,
+	})
+}
+
+func (s *Server) handlePartnerBoardPartnersList(w http.ResponseWriter, r *http.Request, guildID string) {
+	partners, err := s.partnerBoardService.ListPartners(guildID)
+	if err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to list partners: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"partners": partners,
+	})
+}
+
+func (s *Server) handlePartnerBoardPartnersCreate(w http.ResponseWriter, r *http.Request, guildID string) {
+	var payload files.PartnerEntryConfig
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		return
+	}
+
+	if err := s.partnerBoardService.CreatePartner(guildID, payload); err != nil {
+		status := partnerBoardErrorStatus(err)
+		if errors.Is(err, files.ErrPartnerAlreadyExists) {
+			status = http.StatusConflict
+		}
+		http.Error(w, fmt.Sprintf("failed to create partner: %v", err), status)
+		return
+	}
+
+	created, err := s.partnerBoardService.GetPartner(guildID, payload.Name)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read created partner: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"partner":  created,
+	})
+}
+
+func (s *Server) handlePartnerBoardPartnersUpdate(w http.ResponseWriter, r *http.Request, guildID string) {
+	var payload struct {
+		CurrentName string                   `json:"current_name"`
+		Partner     files.PartnerEntryConfig `json:"partner"`
+	}
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		return
+	}
+
+	if strings.TrimSpace(payload.CurrentName) == "" {
+		http.Error(w, "failed to update partner: current_name is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.partnerBoardService.UpdatePartner(guildID, payload.CurrentName, payload.Partner); err != nil {
+		status := partnerBoardErrorStatus(err)
+		if errors.Is(err, files.ErrPartnerNotFound) {
+			status = http.StatusNotFound
+		} else if errors.Is(err, files.ErrPartnerAlreadyExists) {
+			status = http.StatusConflict
+		}
+		http.Error(w, fmt.Sprintf("failed to update partner: %v", err), status)
+		return
+	}
+
+	updated, err := s.partnerBoardService.GetPartner(guildID, payload.Partner.Name)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read updated partner: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"partner":  updated,
+	})
+}
+
+func (s *Server) handlePartnerBoardPartnersDelete(w http.ResponseWriter, r *http.Request, guildID string) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		http.Error(w, "failed to delete partner: name query parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.partnerBoardService.DeletePartner(guildID, name); err != nil {
+		status := partnerBoardErrorStatus(err)
+		if errors.Is(err, files.ErrPartnerNotFound) {
+			status = http.StatusNotFound
+		}
+		http.Error(w, fmt.Sprintf("failed to delete partner: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"deleted":  strings.TrimSpace(name),
+	})
+}
+
+func (s *Server) handlePartnerBoardSyncPost(w http.ResponseWriter, r *http.Request, guildID string) {
+	if s.partnerBoardSyncer == nil {
+		http.Error(w, "partner board sync unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), defaultSyncTimeout)
+	defer cancel()
+
+	if err := s.partnerBoardSyncer.SyncGuild(ctx, guildID); err != nil {
+		status := partnerBoardErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to sync partner board: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"synced":   true,
+	})
+}
+
+func partnerBoardErrorStatus(err error) int {
+	if err == nil {
+		return http.StatusInternalServerError
+	}
+
+	switch {
+	case errors.Is(err, files.ErrGuildConfigNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, files.ErrInvalidPartnerBoardInput),
+		errors.Is(err, messageupdate.ErrInvalidTarget),
+		errors.Is(err, partners.ErrInvalidPartnerBoardEntry),
+		errors.Is(err, partners.ErrInvalidPartnerBoardTemplate),
+		errors.Is(err, partners.ErrPartnerBoardExceedsEmbedLimit):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) bool {
+	if s == nil {
+		http.Error(w, "control server unavailable", http.StatusInternalServerError)
+		return false
+	}
+
+	token := strings.TrimSpace(s.authBearerToken)
+	if token == "" {
+		http.Error(w, "control authentication is not configured", http.StatusServiceUnavailable)
+		return false
+	}
+
+	authz := strings.TrimSpace(r.Header.Get("Authorization"))
+	if authz == "" {
+		http.Error(w, "missing authorization header", http.StatusUnauthorized)
+		return false
+	}
+	if !strings.HasPrefix(authz, "Bearer ") {
+		http.Error(w, "invalid authorization scheme", http.StatusUnauthorized)
+		return false
+	}
+	provided := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
+	if provided == "" {
+		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+func splitGuildRoute(path string) (string, []string, bool) {
+	const prefix = "/v1/guilds/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", nil, false
+	}
+
+	trimmed := strings.Trim(path[len(prefix):], "/")
+	if trimmed == "" {
+		return "", nil, false
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 0 {
+		return "", nil, false
+	}
+
+	guildID := strings.TrimSpace(parts[0])
+	tail := []string{}
+	if len(parts) > 1 {
+		tail = parts[1:]
+	}
+	return guildID, tail, true
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, defaultMaxBodyBytes)
+	defer r.Body.Close()
+
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		http.Error(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
+		return err
+	}
+	return nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload map[string]any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.ApplicationLogger().Error("Failed to encode control response", "status", status, "err", err)
+	}
 }

@@ -319,6 +319,61 @@ type RolesConfig struct {
 	BoosterRole      string               `json:"booster_role,omitempty"`
 }
 
+const (
+	EmbedUpdateTargetTypeWebhookMessage = "webhook_message"
+	EmbedUpdateTargetTypeChannelMessage = "channel_message"
+)
+
+// EmbedUpdateTargetConfig defines the target used to update one existing message embed.
+// Supported target types:
+// - webhook_message: requires message_id + webhook_url
+// - channel_message: requires message_id + channel_id
+type EmbedUpdateTargetConfig struct {
+	Type       string `json:"type,omitempty"`
+	MessageID  string `json:"message_id,omitempty"`
+	ChannelID  string `json:"channel_id,omitempty"`
+	WebhookURL string `json:"webhook_url,omitempty"`
+}
+
+// IsZero reports whether all fields are empty.
+func (c EmbedUpdateTargetConfig) IsZero() bool {
+	return strings.TrimSpace(c.Type) == "" &&
+		strings.TrimSpace(c.MessageID) == "" &&
+		strings.TrimSpace(c.ChannelID) == "" &&
+		strings.TrimSpace(c.WebhookURL) == ""
+}
+
+// PartnerEntryConfig defines one partner record for a board.
+type PartnerEntryConfig struct {
+	Fandom string `json:"fandom,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Link   string `json:"link,omitempty"`
+}
+
+// PartnerBoardTemplateConfig controls board rendering behavior.
+type PartnerBoardTemplateConfig struct {
+	Title                      string `json:"title,omitempty"`
+	ContinuationTitle          string `json:"continuation_title,omitempty"`
+	Intro                      string `json:"intro,omitempty"`
+	SectionHeaderTemplate      string `json:"section_header_template,omitempty"`
+	SectionContinuationSuffix  string `json:"section_continuation_suffix,omitempty"`
+	SectionContinuationPattern string `json:"section_continuation_template,omitempty"`
+	LineTemplate               string `json:"line_template,omitempty"`
+	EmptyStateText             string `json:"empty_state_text,omitempty"`
+	FooterTemplate             string `json:"footer_template,omitempty"`
+	OtherFandomLabel           string `json:"other_fandom_label,omitempty"`
+	Color                      int    `json:"color,omitempty"`
+	DisableFandomSorting       bool   `json:"disable_fandom_sorting,omitempty"`
+	DisablePartnerSorting      bool   `json:"disable_partner_sorting,omitempty"`
+}
+
+// PartnerBoardConfig stores target, template, and partner records.
+type PartnerBoardConfig struct {
+	Target   EmbedUpdateTargetConfig    `json:"target,omitempty"`
+	Template PartnerBoardTemplateConfig `json:"template,omitempty"`
+	Partners []PartnerEntryConfig       `json:"partners,omitempty"`
+}
+
 // UserPruneConfig controls periodic user pruning per guild.
 type UserPruneConfig struct {
 	// Enabled toggles the automatic monthly prune.
@@ -360,6 +415,8 @@ type GuildConfig struct {
 	ChannelCacheTTL string `json:"channel_cache_ttl,omitempty"` // e.g.: "15m", "30m" (default: "15m")
 
 	UserPrune UserPruneConfig `json:"user_prune,omitempty"`
+
+	PartnerBoard PartnerBoardConfig `json:"partner_board,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`

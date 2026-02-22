@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -211,15 +212,39 @@ func Run(appName, tokenEnv string) error {
 		runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
+	partnerSyncService := partners.NewBoardSyncService(configManager)
+	partnerSyncExecutor := partners.NewSessionBoundBoardSyncExecutor(partnerSyncService, discordSession)
+	partnerAutoSyncCoordinator := partners.NewAutoSyncCoordinator(partnerSyncExecutor, partners.AutoSyncCoordinatorOptions{})
+	if err := partnerAutoSyncCoordinator.Start(); err != nil {
+		return fmt.Errorf("start partner auto-sync coordinator: %w", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := partnerAutoSyncCoordinator.Stop(ctx); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to stop partner auto-sync coordinator cleanly", "err", err)
+		}
+	}()
+
+	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerAutoSyncCoordinator)
+
 	controlAddr := strings.TrimSpace(util.EnvString("ALICE_CONTROL_ADDR", ""))
+	controlBearerToken := strings.TrimSpace(util.EnvString("ALICE_CONTROL_BEARER_TOKEN", ""))
 	var controlServer *control.Server
 	if controlAddr != "" {
+		if controlBearerToken == "" {
+			return fmt.Errorf("ALICE_CONTROL_BEARER_TOKEN is required when ALICE_CONTROL_ADDR is set")
+		}
 		controlServer = control.NewServer(controlAddr, configManager, runtimeApplier)
 		if controlServer == nil {
 			log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
-		} else if err := controlServer.Start(); err != nil {
-			return fmt.Errorf("start control server: %w", err)
 		} else {
+			controlServer.SetBearerToken(controlBearerToken)
+			controlServer.SetPartnerBoardService(partnerBoardAppService)
+			controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
+			if err := controlServer.Start(); err != nil {
+				return fmt.Errorf("start control server: %w", err)
+			}
 			defer func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
@@ -361,6 +386,8 @@ func Run(appName, tokenEnv string) error {
 	var commandHandler *commands.CommandHandler
 	if features.Services.Commands {
 		commandHandler = commands.NewCommandHandler(discordSession, configManager)
+		commandHandler.SetPartnerBoardService(partnerBoardAppService)
+		commandHandler.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
 		if err := commandHandler.SetupCommands(); err != nil {
 			return fmt.Errorf("configure slash commands: %w", err)
 		}
