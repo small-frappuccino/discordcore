@@ -92,12 +92,6 @@ func (c *PartnerAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        optionFandom,
-			Description: "Fandom/group label (example: Genshin Impact)",
-			Required:    false,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        optionName,
 			Description: "Partner server name",
 			Required:    true,
@@ -107,6 +101,12 @@ func (c *PartnerAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 			Name:        optionLink,
 			Description: "Discord invite URL",
 			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        optionFandom,
+			Description: "Fandom/group label (example: Genshin Impact)",
+			Required:    false,
 		},
 	}
 }
@@ -211,12 +211,6 @@ func (c *PartnerUpdateSubCommand) Options() []*discordgo.ApplicationCommandOptio
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        optionFandom,
-			Description: "Fandom/group label (example: Genshin Impact)",
-			Required:    false,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        optionName,
 			Description: "New partner server name",
 			Required:    true,
@@ -226,6 +220,12 @@ func (c *PartnerUpdateSubCommand) Options() []*discordgo.ApplicationCommandOptio
 			Name:        optionLink,
 			Description: "New Discord invite URL",
 			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        optionFandom,
+			Description: "Fandom/group label (example: Genshin Impact)",
+			Required:    false,
 		},
 	}
 }
