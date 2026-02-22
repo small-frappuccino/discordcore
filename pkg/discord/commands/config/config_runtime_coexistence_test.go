@@ -103,3 +103,35 @@ func TestConfigRuntimeCoexistenceCommandOptionsAreSubcommands(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigSubcommandsRequiredOptionsBeforeOptional(t *testing.T) {
+	session, _ := newConfigCommandTestSession(t)
+	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	router := core.NewCommandRouter(session, cm)
+	NewConfigCommands(cm).RegisterCommands(router)
+	runtimecfg.NewRuntimeConfigCommands(cm).RegisterCommands(router)
+
+	cmd, ok := router.GetRegistry().GetCommand("config")
+	if !ok {
+		t.Fatal("expected /config command")
+	}
+
+	for _, sub := range cmd.Options() {
+		if sub == nil || sub.Type != discordgo.ApplicationCommandOptionSubCommand || len(sub.Options) == 0 {
+			continue
+		}
+		seenOptional := false
+		for _, opt := range sub.Options {
+			if opt == nil {
+				continue
+			}
+			if !opt.Required {
+				seenOptional = true
+				continue
+			}
+			if seenOptional {
+				t.Fatalf("subcommand %q has required option %q after optional options", sub.Name, opt.Name)
+			}
+		}
+	}
+}

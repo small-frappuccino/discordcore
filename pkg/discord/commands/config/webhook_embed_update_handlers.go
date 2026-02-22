@@ -222,12 +222,6 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Options() []*discordgo.ApplicationC
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        optionNewMessage,
-			Description: "New message ID (optional; defaults to existing message_id)",
-			Required:    false,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        optionWebhookURL,
 			Description: "Webhook URL that owns the target message",
 			Required:    true,
@@ -237,6 +231,12 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Options() []*discordgo.ApplicationC
 			Name:        optionEmbedJSON,
 			Description: "Embed JSON (object or array)",
 			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        optionNewMessage,
+			Description: "New message ID (optional; defaults to existing message_id)",
+			Required:    false,
 		},
 		webhookScopeOption(),
 		applyNowOption(),
