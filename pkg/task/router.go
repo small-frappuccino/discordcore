@@ -430,22 +430,14 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 					select {
 					case <-timer.C:
 						et.attempt = attempt
-						// If group channel is closed (router shutting down), drop.
-						tr.mu.RLock()
-						g := tr.groups[gw.key]
-						tr.mu.RUnlock()
-						if g == nil {
-							return
-						}
-						select {
-						case g.ch <- et:
-						default:
-							// Best-effort: if buffer is full, try a blocking send unless router is closing.
-							select {
-							case g.ch <- et:
-							case <-tr.stopCh:
-								return
-							}
+						// Retry enqueue can race with idle cleanup closing the group channel.
+						// Use a panic-safe enqueue path that recreates the group when needed.
+						if ok := tr.enqueueRetry(gw.key, et); !ok {
+							log.ApplicationLogger().Debug("Task retry dropped while enqueuing",
+								"type", et.task.Type,
+								"group", gw.key,
+								"attempt", et.attempt,
+							)
 						}
 					case <-tr.stopCh:
 						return
@@ -473,6 +465,84 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 
 		// Success or final failure: allow idempotency key to naturally expire.
 		tr.maybeReleaseIdempotency(enq.task, eff)
+	}
+}
+
+func (tr *TaskRouter) enqueueRetry(groupKey string, et *enqueuedTask) bool {
+	if groupKey == "" || et == nil {
+		return false
+	}
+
+	const maxEnqueueAttempts = 3
+	for i := 0; i < maxEnqueueAttempts; i++ {
+		select {
+		case <-tr.stopCh:
+			return false
+		default:
+		}
+
+		gw, ok := tr.getOrCreateGroupForRetry(groupKey)
+		if !ok || gw == nil {
+			return false
+		}
+
+		if tr.sendToGroup(gw, et) {
+			return true
+		}
+
+		// If enqueue failed, the channel may have been closed concurrently.
+		// Remove stale group reference so the next attempt can recreate workers.
+		tr.mu.Lock()
+		if current, exists := tr.groups[groupKey]; exists && current == gw {
+			delete(tr.groups, groupKey)
+		}
+		tr.mu.Unlock()
+	}
+
+	return false
+}
+
+func (tr *TaskRouter) getOrCreateGroupForRetry(groupKey string) (*groupWorker, bool) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+
+	if tr.closed {
+		return nil, false
+	}
+
+	if gw, exists := tr.groups[groupKey]; exists && gw != nil {
+		if gw.stopping {
+			delete(tr.groups, groupKey)
+		} else {
+			return gw, true
+		}
+	}
+
+	return tr.ensureGroupLocked(groupKey), true
+}
+
+func (tr *TaskRouter) sendToGroup(gw *groupWorker, et *enqueuedTask) (ok bool) {
+	if gw == nil || gw.ch == nil || et == nil {
+		return false
+	}
+
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+
+	select {
+	case gw.ch <- et:
+		return true
+	default:
+		// Best-effort: if buffer is full, try a blocking send unless router is closing.
+		select {
+		case gw.ch <- et:
+			return true
+		case <-tr.stopCh:
+			return false
+		}
 	}
 }
 

@@ -20,11 +20,12 @@ import (
 
 // MemberEventService manages member join/leave events
 type MemberEventService struct {
-	session       *discordgo.Session
-	configManager *files.ConfigManager
-	notifier      *NotificationSender
-	adapters      *task.NotificationAdapters
-	isRunning     bool
+	session        *discordgo.Session
+	configManager  *files.ConfigManager
+	notifier       *NotificationSender
+	adapters       *task.NotificationAdapters
+	isRunning      bool
+	handlerCancels []func()
 
 	// Cache for join times (member and bot)
 
@@ -36,17 +37,19 @@ type MemberEventService struct {
 
 	// Cleanup control
 	cleanupStop chan struct{}
+	cleanupWG   sync.WaitGroup
 }
 
 // NewMemberEventService creates a new instance of the member events service
 func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MemberEventService {
 	return &MemberEventService{
-		session:       session,
-		configManager: configManager,
-		notifier:      notifier,
-		store:         store,
-		isRunning:     false,
-		cleanupStop:   make(chan struct{}),
+		session:        session,
+		configManager:  configManager,
+		notifier:       notifier,
+		store:          store,
+		isRunning:      false,
+		cleanupStop:    make(chan struct{}),
+		handlerCancels: make([]func(), 0, 3),
 	}
 }
 
@@ -73,13 +76,17 @@ func (mes *MemberEventService) Start() error {
 		}
 	}
 
-	mes.session.AddHandler(mes.handleGuildMemberAdd)
-	mes.session.AddHandler(mes.handleGuildMemberUpdate)
-	mes.session.AddHandler(mes.handleGuildMemberRemove)
+	mes.handlerCancels = append(mes.handlerCancels,
+		mes.session.AddHandler(mes.handleGuildMemberAdd),
+		mes.session.AddHandler(mes.handleGuildMemberUpdate),
+		mes.session.AddHandler(mes.handleGuildMemberRemove),
+	)
 
 	// Start periodic cleanup of old joinTimes entries
 	mes.cleanupStop = make(chan struct{})
-	go mes.cleanupLoop()
+	cleanupStop := mes.cleanupStop
+	mes.cleanupWG.Add(1)
+	go mes.cleanupLoop(cleanupStop)
 
 	slog.Info("Member event service started")
 	return nil
@@ -97,6 +104,14 @@ func (mes *MemberEventService) Stop() error {
 		close(mes.cleanupStop)
 		mes.cleanupStop = nil
 	}
+	mes.cleanupWG.Wait()
+
+	for _, cancel := range mes.handlerCancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	mes.handlerCancels = nil
 
 	slog.Info("Member event service stopped")
 	return nil
@@ -201,8 +216,12 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 
 	// Persist absolute join time to SQLite (best effort)
 	if mes.store != nil && !joinedAt.IsZero() {
-		_ = mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, joinedAt)
-		_ = mes.store.IncrementDailyMemberJoin(m.GuildID, m.User.ID, joinedAt)
+		if err := mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, joinedAt); err != nil {
+			slog.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
+		}
+		if err := mes.store.IncrementDailyMemberJoin(m.GuildID, m.User.ID, joinedAt); err != nil {
+			slog.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
+		}
 	}
 
 	// Register precise member join timestamp in memory
@@ -277,7 +296,9 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 
 	// Increment daily member leave metric
 	if mes.store != nil {
-		_ = mes.store.IncrementDailyMemberLeave(m.GuildID, m.User.ID, time.Now().UTC())
+		if err := mes.store.IncrementDailyMemberLeave(m.GuildID, m.User.ID, time.Now().UTC()); err != nil {
+			slog.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
+		}
 	}
 
 	slog.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTime.String(), botTime.String()))
@@ -403,7 +424,9 @@ func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.
 }
 
 // cleanupLoop periodically removes old entries from joinTimes map
-func (mes *MemberEventService) cleanupLoop() {
+func (mes *MemberEventService) cleanupLoop(stop <-chan struct{}) {
+	defer mes.cleanupWG.Done()
+
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
@@ -411,7 +434,7 @@ func (mes *MemberEventService) cleanupLoop() {
 		select {
 		case <-ticker.C:
 			mes.cleanupJoinTimes()
-		case <-mes.cleanupStop:
+		case <-stop:
 			return
 		}
 	}
@@ -452,7 +475,9 @@ func (mes *MemberEventService) cleanupJoinTimes() {
 
 func (mes *MemberEventService) markEvent() {
 	if mes.store != nil {
-		_ = mes.store.SetLastEvent(time.Now())
+		if err := mes.store.SetLastEvent(time.Now()); err != nil {
+			slog.Warn("Failed to persist last member event timestamp", "error", err)
+		}
 	}
 }
 

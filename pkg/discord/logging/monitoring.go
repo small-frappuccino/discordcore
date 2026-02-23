@@ -110,6 +110,8 @@ const (
 	downtimeThreshold = 30 * time.Minute
 )
 
+var heartbeatTickInterval = heartbeatInterval
+
 const (
 	// Defaults (can be overridden by env).
 	defaultBotPermMirrorActorRoleID = "1376361448942342164"
@@ -452,11 +454,15 @@ func (ms *MonitoringService) Start() error {
 
 	// Trigger one-time roles refresh on startup (non-blocking)
 	go func() {
-		_ = ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.refresh_roles"})
+		if err := ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.refresh_roles"}); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.refresh_roles", "err", err)
+		}
 	}()
 
 	go func() {
-		_ = ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.update_stats_channels"})
+		if err := ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.update_stats_channels"}); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.update_stats_channels", "err", err)
+		}
 	}()
 
 	// Register one-shot entry/exit backfill handler (Option A)
@@ -536,8 +542,12 @@ func (ms *MonitoringService) Start() error {
 					if ok && ms.store != nil {
 						eventsFound++
 						if evt == "join" {
-							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
-							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
+							if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
+								log.ApplicationLogger().Warn("Backfill(day): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+							}
+							if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
+								log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+							}
 						} else if evt == "leave" {
 							// If name was not in message, check if still in server via code
 							stillInServer := false
@@ -549,11 +559,15 @@ func (ms *MonitoringService) Start() error {
 							}
 
 							if !stillInServer {
-								_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+								if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
+									log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+								}
 							}
 						}
 						// Record the oldest processed timestamp for this channel
-						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
+						if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
+							log.ApplicationLogger().Warn("Backfill(day): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+						}
 					}
 				}
 				processedCount++
@@ -685,8 +699,12 @@ func (ms *MonitoringService) Start() error {
 					if ok && ms.store != nil {
 						eventsFound++
 						if evt == "join" {
-							_ = ms.store.UpsertMemberJoin(guildID, userID, t)
-							_ = ms.store.IncrementDailyMemberJoin(guildID, userID, t)
+							if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
+								log.ApplicationLogger().Warn("Backfill(range): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+							}
+							if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
+								log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+							}
 						} else if evt == "leave" {
 							// If name was not in message, check if still in server via code
 							stillInServer := false
@@ -698,11 +716,15 @@ func (ms *MonitoringService) Start() error {
 							}
 
 							if !stillInServer {
-								_ = ms.store.IncrementDailyMemberLeave(guildID, userID, t)
+								if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
+									log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+								}
 							}
 						}
 						// Record the oldest processed timestamp for this channel
-						_ = ms.store.SetMetadata("backfill_progress:"+channelID, t)
+						if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
+							log.ApplicationLogger().Warn("Backfill(range): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+						}
 					}
 				}
 				processedCount++
@@ -780,12 +802,15 @@ func (ms *MonitoringService) Start() error {
 				initialDate := strings.TrimSpace(rc.BackfillInitialDate)
 
 				if day != "" {
-					_ = ms.router.Dispatch(context.Background(), task.Task{
+					if err := ms.router.Dispatch(context.Background(), task.Task{
 						Type:    "monitor.backfill_entry_exit_day",
 						Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: day},
 						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					})
-					log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
+					}); err != nil {
+						log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
+					} else {
+						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
+					}
 					continue
 				}
 
@@ -807,12 +832,15 @@ func (ms *MonitoringService) Start() error {
 					}
 					start := parsedDate.Format(time.RFC3339)
 					end := now.Format(time.RFC3339)
-					_ = ms.router.Dispatch(context.Background(), task.Task{
+					if err := ms.router.Dispatch(context.Background(), task.Task{
 						Type:    "monitor.backfill_entry_exit_range",
 						Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
 						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					})
-					log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
+					}); err != nil {
+						log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
+					} else {
+						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
+					}
 					continue
 				}
 
@@ -822,12 +850,15 @@ func (ms *MonitoringService) Start() error {
 					if downtime > downtimeThreshold {
 						start := lastEvent.UTC().Format(time.RFC3339)
 						end := now.Format(time.RFC3339)
-						_ = ms.router.Dispatch(context.Background(), task.Task{
+						if err := ms.router.Dispatch(context.Background(), task.Task{
 							Type:    "monitor.backfill_entry_exit_range",
 							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
 							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-						})
-						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+						}); err != nil {
+							log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
+						} else {
+							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+						}
 					} else {
 						log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
 					}
@@ -984,7 +1015,9 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		return
 	}
 	log.ApplicationLogger().Info("Initializing cache for guild", "guildName", guild.Name, "guildID", guild.ID)
-	_ = ms.store.SetGuildOwnerID(guildID, guild.OwnerID)
+	if err := ms.store.SetGuildOwnerID(guildID, guild.OwnerID); err != nil {
+		log.ApplicationLogger().Warn("Failed to persist guild owner ID during cache initialization", "guildID", guildID, "ownerID", guild.OwnerID, "err", err)
+	}
 
 	// Set bot join time if missing
 	if _, ok, _ := ms.store.GetBotSince(guildID); !ok {
@@ -1003,9 +1036,14 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 			}
 		}
 		if botMember != nil && !botMember.JoinedAt.IsZero() {
-			_ = ms.store.SetBotSince(guildID, botMember.JoinedAt)
+			if err := ms.store.SetBotSince(guildID, botMember.JoinedAt); err != nil {
+				log.ApplicationLogger().Warn("Failed to persist bot join timestamp", "guildID", guildID, "joinedAt", botMember.JoinedAt, "err", err)
+			}
 		} else {
-			_ = ms.store.SetBotSince(guildID, time.Now())
+			now := time.Now()
+			if err := ms.store.SetBotSince(guildID, now); err != nil {
+				log.ApplicationLogger().Warn("Failed to persist fallback bot join timestamp", "guildID", guildID, "joinedAt", now, "err", err)
+			}
 		}
 	}
 	members, err := ms.fetchAllGuildMembers(guildID)
@@ -1018,17 +1056,23 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		if avatarHash == "" {
 			avatarHash = "default"
 		}
-		_, _, _ = ms.store.UpsertAvatar(guildID, member.User.ID, avatarHash, time.Now())
+		if _, _, err := ms.store.UpsertAvatar(guildID, member.User.ID, avatarHash, time.Now()); err != nil {
+			log.ApplicationLogger().Warn("Failed to persist member avatar snapshot", "guildID", guildID, "userID", member.User.ID, "err", err)
+		}
 		// Persist roles snapshot for the member to enable efficient role diffing later
 		if ms.store != nil && len(member.Roles) > 0 {
-			_ = ms.store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now())
+			if err := ms.store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now()); err != nil {
+				log.ApplicationLogger().Warn("Failed to persist member roles snapshot", "guildID", guildID, "userID", member.User.ID, "err", err)
+			}
 			ms.cacheRolesSet(guildID, member.User.ID, member.Roles)
 		}
 
 		// Backfill missing member join date using Discord data
 		if ms.store != nil && !member.JoinedAt.IsZero() {
 			if _, ok, _ := ms.store.GetMemberJoin(guildID, member.User.ID); !ok {
-				_ = ms.store.UpsertMemberJoin(guildID, member.User.ID, member.JoinedAt)
+				if err := ms.store.UpsertMemberJoin(guildID, member.User.ID, member.JoinedAt); err != nil {
+					log.ApplicationLogger().Warn("Failed to backfill member join timestamp", "guildID", guildID, "userID", member.User.ID, "joinedAt", member.JoinedAt, "err", err)
+				}
 			}
 		}
 	}
@@ -1686,8 +1730,17 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 				)
 				// Update the snapshot anyway to keep the DB consistent
 				if ms.store != nil && len(curRoles) > 0 {
-					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
-					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+					if err := ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now()); err != nil {
+						log.ApplicationLogger().Warn(
+							"Failed to persist role snapshot after verification skip",
+							"guildID", m.GuildID,
+							"userID", m.User.ID,
+							"roleCount", len(curRoles),
+							"err", err,
+						)
+					} else {
+						ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+					}
 				}
 				// Continue scanning other possible entries
 				continue
@@ -2007,7 +2060,9 @@ func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string
 
 func (ms *MonitoringService) markEvent() {
 	if ms.store != nil {
-		_ = ms.store.SetLastEvent(time.Now())
+		if err := ms.store.SetLastEvent(time.Now()); err != nil {
+			log.ApplicationLogger().Warn("Failed to persist monitoring last event timestamp", "err", err)
+		}
 	}
 }
 
@@ -2015,10 +2070,12 @@ func (ms *MonitoringService) startHeartbeat() {
 	if ms.store == nil || ms.heartbeatTicker != nil {
 		return
 	}
-	ms.heartbeatTicker = time.NewTicker(heartbeatInterval)
+	ms.heartbeatTicker = time.NewTicker(heartbeatTickInterval)
 	ms.heartbeatStop = make(chan struct{})
 	// Set immediately on startup
-	_ = ms.store.SetHeartbeat(time.Now())
+	if err := ms.store.SetHeartbeat(time.Now()); err != nil {
+		log.ApplicationLogger().Warn("Failed to persist startup heartbeat", "err", err)
+	}
 	go func() {
 		for {
 			select {
@@ -2435,7 +2492,9 @@ func (ms *MonitoringService) performPeriodicCheck() {
 			// Backfill missing member join date using Discord data
 			if ms.store != nil && !member.JoinedAt.IsZero() {
 				if _, ok, _ := ms.store.GetMemberJoin(gcfg.GuildID, member.User.ID); !ok {
-					_ = ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt)
+					if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
+						log.ApplicationLogger().Warn("Periodic check: failed to backfill member join timestamp", "guildID", gcfg.GuildID, "userID", member.User.ID, "joinedAt", member.JoinedAt, "err", err)
+					}
 				}
 			}
 
@@ -2631,9 +2690,17 @@ func (ms *MonitoringService) maybeRestoreBotRolePermissions(guildID, roleID stri
 		return
 	}
 	perm := snap.PrevPermissions
-	_, _ = ms.session.GuildRoleEdit(guildID, roleID, &discordgo.RoleParams{
+	if _, err := ms.session.GuildRoleEdit(guildID, roleID, &discordgo.RoleParams{
 		Permissions: &perm,
-	})
+	}); err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Failed to restore bot managed role permissions from snapshot",
+			"guildID", guildID,
+			"roleID", roleID,
+			"targetPermissions", perm,
+			"err", err,
+		)
+	}
 }
 
 func (ms *MonitoringService) handleRoleCreateForBotPermMirroring(s *discordgo.Session, e *discordgo.GuildRoleCreate) {

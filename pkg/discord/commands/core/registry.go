@@ -178,9 +178,10 @@ func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
 
 // CommandManager manages the lifecycle of commands on Discord
 type CommandManager struct {
-	session *discordgo.Session
-	router  *CommandRouter
-	logger  *log.Logger
+	session                  *discordgo.Session
+	router                   *CommandRouter
+	logger                   *log.Logger
+	interactionHandlerCancel func()
 }
 
 // NewCommandManager creates a new command manager
@@ -202,18 +203,29 @@ func (cm *CommandManager) GetRouter() *CommandRouter {
 
 // SetupCommands configures and synchronizes commands with Discord
 func (cm *CommandManager) SetupCommands() error {
-	// Register interaction handler
-	cm.session.AddHandler(cm.router.HandleInteraction)
-
 	// Verify session state is properly initialized
 	if cm.session == nil || cm.session.State == nil || cm.session.State.User == nil {
 		return fmt.Errorf("session not properly initialized")
 	}
 
+	// Prevent duplicated interaction handling in reinit/hot-reload paths.
+	if cm.interactionHandlerCancel != nil {
+		cm.interactionHandlerCancel()
+		cm.interactionHandlerCancel = nil
+	}
+	cm.interactionHandlerCancel = cm.session.AddHandler(cm.router.HandleInteraction)
+	rollback := func(err error) error {
+		if cm.interactionHandlerCancel != nil {
+			cm.interactionHandlerCancel()
+			cm.interactionHandlerCancel = nil
+		}
+		return err
+	}
+
 	// Fetch commands already registered on Discord
 	registered, err := cm.session.ApplicationCommands(cm.session.State.User.ID, "")
 	if err != nil {
-		return fmt.Errorf("failed to fetch registered commands: %w", err)
+		return rollback(fmt.Errorf("failed to fetch registered commands: %w", err))
 	}
 
 	// Build map of registered commands
@@ -233,7 +245,7 @@ func (cm *CommandManager) SetupCommands() error {
 		desired := &discordgo.ApplicationCommand{
 			Name:        cmd.Name(),
 			Description: cmd.Description(),
-			Options:     cmd.Options(),
+			Options:     normalizeCommandOptions(cmd.Options()),
 		}
 		if existing, ok := regByName[name]; ok {
 			// Command already exists, check if it needs updating
@@ -247,7 +259,7 @@ func (cm *CommandManager) SetupCommands() error {
 			// Update command
 			updatedCmd, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired)
 			if err != nil {
-				return fmt.Errorf("error updating command '%s': %w", name, err)
+				return rollback(fmt.Errorf("error updating command '%s': %w", name, err))
 			}
 			if updatedCmd != nil {
 				commandIDs[name] = updatedCmd.ID
@@ -260,7 +272,7 @@ func (cm *CommandManager) SetupCommands() error {
 			// Create new command
 			createdCmd, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired)
 			if err != nil {
-				return fmt.Errorf("error creating command '%s': %w", name, err)
+				return rollback(fmt.Errorf("error creating command '%s': %w", name, err))
 			}
 			if createdCmd != nil {
 				commandIDs[name] = createdCmd.ID
@@ -285,6 +297,15 @@ func (cm *CommandManager) SetupCommands() error {
 	// Log do resumo
 	slog.Info(fmt.Sprintf("Command synchronization completed: created=%d, updated=%d, deleted=%d, unchanged=%d, total=%d, mode=incremental", created, updated, deleted, unchanged, len(codeCommands)))
 
+	return nil
+}
+
+// Shutdown unregisters command interaction handlers.
+func (cm *CommandManager) Shutdown() error {
+	if cm.interactionHandlerCancel != nil {
+		cm.interactionHandlerCancel()
+		cm.interactionHandlerCancel = nil
+	}
 	return nil
 }
 

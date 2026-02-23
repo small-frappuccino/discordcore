@@ -40,14 +40,15 @@ type auditCacheValue struct {
 
 // MessageEventService manages message events (delete/edit)
 type MessageEventService struct {
-	session       *discordgo.Session
-	configManager *files.ConfigManager
-	notifier      *NotificationSender
-	adapters      *task.NotificationAdapters
-	store         *storage.Store
-	isRunning     bool
-	verifyStop    chan struct{}
-	verifyWG      sync.WaitGroup
+	session        *discordgo.Session
+	configManager  *files.ConfigManager
+	notifier       *NotificationSender
+	adapters       *task.NotificationAdapters
+	store          *storage.Store
+	isRunning      bool
+	verifyStop     chan struct{}
+	verifyWG       sync.WaitGroup
+	handlerCancels []func()
 
 	// Message cache configuration (populated from settings.json runtime_config)
 	cacheEnabled   bool
@@ -99,16 +100,17 @@ type messageDeleteTaskPayload struct {
 // NewMessageEventService creates a new instance of the message events service
 func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MessageEventService {
 	return &MessageEventService{
-		session:       session,
-		configManager: configManager,
-		notifier:      notifier,
-		store:         store,
-		isRunning:     false,
-		auditCache:    make(map[string]auditCacheEntry),
-		auditCacheTTL: 2 * time.Second,
-		auditEntryMax: 15 * time.Second,
-		verifyStop:    make(chan struct{}),
-		verifyPending: make(map[string]time.Time),
+		session:        session,
+		configManager:  configManager,
+		notifier:       notifier,
+		store:          store,
+		isRunning:      false,
+		auditCache:     make(map[string]auditCacheEntry),
+		auditCacheTTL:  2 * time.Second,
+		auditEntryMax:  15 * time.Second,
+		verifyStop:     make(chan struct{}),
+		verifyPending:  make(map[string]time.Time),
+		handlerCancels: make([]func(), 0, 4),
 	}
 }
 
@@ -149,13 +151,17 @@ func (mes *MessageEventService) Start() error {
 	// Store should be injected and already initialized
 	// Cleanup is gated by env and disabled by default (do not delete by default)
 	if mes.store != nil && mes.cleanupEnabled {
-		_ = mes.store.CleanupExpiredMessages()
+		if err := mes.store.CleanupExpiredMessages(); err != nil {
+			slog.Warn("MessageEventService: startup cleanup failed", "error", err)
+		}
 	}
 
-	mes.session.AddHandler(mes.handleMessageCreate)
-	mes.session.AddHandler(mes.handleMessageUpdate)
-	mes.session.AddHandler(mes.handleMessageDelete)
-	mes.session.AddHandler(mes.handleGuildMemberUpdate)
+	mes.handlerCancels = append(mes.handlerCancels,
+		mes.session.AddHandler(mes.handleMessageCreate),
+		mes.session.AddHandler(mes.handleMessageUpdate),
+		mes.session.AddHandler(mes.handleMessageDelete),
+		mes.session.AddHandler(mes.handleGuildMemberUpdate),
+	)
 
 	if mes.taskRouter != nil {
 		mes.taskRouter.RegisterHandler(taskTypeMessageUpdateProcess, mes.handleMessageUpdateTask)
@@ -165,8 +171,9 @@ func (mes *MessageEventService) Start() error {
 	if mes.verifyStop == nil {
 		mes.verifyStop = make(chan struct{})
 	}
+	verifyStop := mes.verifyStop
 	mes.verifyWG.Add(1)
-	go mes.verificationCleanupLoop()
+	go mes.verificationCleanupLoop(verifyStop)
 
 	// TTL cache handles cleanup internally
 
@@ -180,6 +187,13 @@ func (mes *MessageEventService) Stop() error {
 		return fmt.Errorf("message event service is not running")
 	}
 	mes.isRunning = false
+
+	for _, cancel := range mes.handlerCancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	mes.handlerCancels = nil
 
 	if mes.verifyStop != nil {
 		close(mes.verifyStop)
@@ -279,7 +293,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 
 	// Persist to SQLite (write-through; best effort)
 	if mes.cacheEnabled && mes.store != nil && m.Author != nil {
-		_ = mes.store.UpsertMessage(storage.MessageRecord{
+		if err := mes.store.UpsertMessage(storage.MessageRecord{
 			GuildID:        guildID,
 			MessageID:      m.ID,
 			ChannelID:      m.ChannelID,
@@ -290,11 +304,13 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 			CachedAt:       time.Now().UTC(),
 			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
 			HasExpiry:      true,
-		})
+		}); err != nil {
+			slog.Warn("MessageCreate: failed to persist message cache entry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+		}
 
 		// Versioned history (v1) - hardcoded enabled
 		if mes.versioningEnabled {
-			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
+			if err := mes.store.InsertMessageVersion(storage.MessageVersion{
 				GuildID:     guildID,
 				MessageID:   m.ID,
 				ChannelID:   m.ChannelID,
@@ -306,12 +322,16 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 				Embeds:      len(m.Embeds),
 				Stickers:    len(m.StickerItems),
 				CreatedAt:   time.Now().UTC(),
-			})
+			}); err != nil {
+				slog.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+			}
 		}
 	}
 
 	if mes.store != nil && m.Author != nil {
-		_ = mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, time.Now().UTC())
+		if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, time.Now().UTC()); err != nil {
+			slog.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+		}
 	}
 	slog.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
 }
@@ -350,7 +370,9 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 		return
 	}
 
-	_ = mes.processMessageUpdate(s, m, true)
+	if err := mes.processMessageUpdate(s, m, true); err != nil {
+		slog.Error("MessageUpdate: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
+	}
 }
 
 // handleMessageDelete processes message deletions
@@ -378,7 +400,9 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 		return
 	}
 
-	_ = mes.processMessageDelete(s, m, true)
+	if err := mes.processMessageDelete(s, m, true); err != nil {
+		slog.Error("MessageDelete: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
+	}
 }
 
 // Persistent storage (SQLite) handles expiration and cleanup
@@ -386,7 +410,9 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 // markEvent stores the last event timestamp (best effort)
 func (mes *MessageEventService) markEvent() {
 	if mes.store != nil {
-		_ = mes.store.SetLastEvent(time.Now())
+		if err := mes.store.SetLastEvent(time.Now()); err != nil {
+			slog.Warn("MessageEventService: failed to persist last event timestamp", "error", err)
+		}
 	}
 }
 
@@ -606,7 +632,7 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 		Timestamp: cached.Timestamp,
 	}
 	if contentResolved && mes.cacheEnabled && mes.store != nil && updated.Author != nil {
-		_ = mes.store.UpsertMessage(storage.MessageRecord{
+		if err := mes.store.UpsertMessage(storage.MessageRecord{
 			GuildID:        updated.GuildID,
 			MessageID:      updated.ID,
 			ChannelID:      updated.ChannelID,
@@ -617,11 +643,13 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 			CachedAt:       time.Now().UTC(),
 			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
 			HasExpiry:      true,
-		})
+		}); err != nil {
+			slog.Warn("MessageUpdate: failed to persist updated message cache entry", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+		}
 
 		// Versioned history (edit) - hardcoded enabled
 		if mes.versioningEnabled {
-			_ = mes.store.InsertMessageVersion(storage.MessageVersion{
+			if err := mes.store.InsertMessageVersion(storage.MessageVersion{
 				GuildID:   updated.GuildID,
 				MessageID: updated.ID,
 				ChannelID: updated.ChannelID,
@@ -629,7 +657,9 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 				EventType: "edit",
 				Content:   m.Content,
 				CreatedAt: time.Now().UTC(),
-			})
+			}); err != nil {
+				slog.Warn("MessageUpdate: failed to persist message edit version", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+			}
 		}
 	}
 	slog.Info("MessageUpdate: store updated with new content", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID)
@@ -673,7 +703,9 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 		}
 		// Deletion from store is disabled by default
 		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+			if err := mes.store.DeleteMessage(m.GuildID, m.ID); err != nil {
+				slog.Warn("MessageDelete: failed to delete message cache entry after suppressed notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "error", err)
+			}
 		}
 		return nil
 	}
@@ -683,7 +715,9 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 	if cached.Author.Bot {
 		// Deletion from store is disabled by default
 		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-			_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+			if err := mes.store.DeleteMessage(m.GuildID, m.ID); err != nil {
+				slog.Warn("MessageDelete: failed to delete cached bot message", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "error", err)
+			}
 		}
 		return nil
 	}
@@ -727,7 +761,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 	// Remove from cache and persistence (disabled by default)
 	// Versioned history (delete) - hardcoded enabled
 	if mes.versioningEnabled && mes.store != nil && cached.Author != nil {
-		_ = mes.store.InsertMessageVersion(storage.MessageVersion{
+		if err := mes.store.InsertMessageVersion(storage.MessageVersion{
 			GuildID:   cached.GuildID,
 			MessageID: cached.ID,
 			ChannelID: cached.ChannelID,
@@ -735,10 +769,14 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 			EventType: "delete",
 			Content:   cached.Content,
 			CreatedAt: time.Now().UTC(),
-		})
+		}); err != nil {
+			slog.Warn("MessageDelete: failed to persist message delete version", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "error", err)
+		}
 	}
 	if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-		_ = mes.store.DeleteMessage(m.GuildID, m.ID)
+		if err := mes.store.DeleteMessage(m.GuildID, m.ID); err != nil {
+			slog.Warn("MessageDelete: failed to delete message cache entry", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "error", err)
+		}
 	}
 	return nil
 }
@@ -814,7 +852,7 @@ func (mes *MessageEventService) summarizeMessageContent(msg *discordgo.Message, 
 	return base + "\n" + strings.TrimSpace(extra)
 }
 
-func (mes *MessageEventService) verificationCleanupLoop() {
+func (mes *MessageEventService) verificationCleanupLoop(stop <-chan struct{}) {
 	defer mes.verifyWG.Done()
 
 	if verificationCleanupInterval <= 0 {
@@ -828,7 +866,7 @@ func (mes *MessageEventService) verificationCleanupLoop() {
 		select {
 		case <-ticker.C:
 			mes.cleanupVerificationChannels()
-		case <-mes.verifyStop:
+		case <-stop:
 			return
 		}
 	}

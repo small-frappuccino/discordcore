@@ -26,6 +26,15 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
+var (
+	newDiscordSession      = session.NewDiscordSession
+	newCommandHandler      = commands.NewCommandHandler
+	setupCommandHandler    = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
+	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
+	waitForInterrupt       = util.WaitForInterrupt
+	shutdownDelay          = time.Sleep
+)
+
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
 // appName affects config/cache/log paths; tokenEnv is the environment variable containing the bot token.
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
@@ -81,7 +90,7 @@ func Run(appName, tokenEnv string) error {
 	// Discord session
 	log.DiscordLogger().Info("🔑 Attempting to authenticate with Discord API...")
 	log.DiscordLogger().Info("Using bot token (value redacted)")
-	discordSession, err := session.NewDiscordSession(token)
+	discordSession, err := newDiscordSession(token)
 	if err != nil {
 		return fmt.Errorf("create discord session: %w", err)
 	}
@@ -385,10 +394,10 @@ func Run(appName, tokenEnv string) error {
 	// Commands
 	var commandHandler *commands.CommandHandler
 	if features.Services.Commands {
-		commandHandler = commands.NewCommandHandler(discordSession, configManager)
+		commandHandler = newCommandHandler(discordSession, configManager)
 		commandHandler.SetPartnerBoardService(partnerBoardAppService)
 		commandHandler.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
-		if err := commandHandler.SetupCommands(); err != nil {
+		if err := setupCommandHandler(commandHandler); err != nil {
 			return fmt.Errorf("configure slash commands: %w", err)
 		}
 	} else {
@@ -432,7 +441,7 @@ func Run(appName, tokenEnv string) error {
 	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
 
 	// Wait for shutdown signal
-	util.WaitForInterrupt()
+	waitForInterrupt()
 	log.ApplicationLogger().Info(fmt.Sprintf("🛑 Stopping %s...", appName))
 	log.GlobalLogger.Sync()
 
@@ -444,8 +453,14 @@ func Run(appName, tokenEnv string) error {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some services failed to stop cleanly: %v", err))
 	}
 
+	if commandHandler != nil {
+		if err := shutdownCommandHandler(commandHandler); err != nil {
+			log.ErrorLoggerRaw().Error("Command handler shutdown failed", "err", err)
+		}
+	}
+
 	// Allow services to finish final writes before closing store
-	time.Sleep(100 * time.Millisecond)
+	shutdownDelay(100 * time.Millisecond)
 
 	if store != nil {
 		_ = store.Close()

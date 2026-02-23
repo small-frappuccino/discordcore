@@ -135,3 +135,88 @@ func TestScheduleEveryRunsAndCancels(t *testing.T) {
 		t.Fatalf("scheduled task continued running after cancel")
 	}
 }
+
+func TestSendToGroupClosedChannelDoesNotPanic(t *testing.T) {
+	router := NewRouter(newTestConfig())
+	t.Cleanup(router.Close)
+
+	gw := &groupWorker{
+		key: "g1",
+		ch:  make(chan *enqueuedTask, 1),
+	}
+	close(gw.ch)
+
+	ok := router.sendToGroup(gw, &enqueuedTask{task: Task{Type: "noop"}})
+	if ok {
+		t.Fatalf("expected sendToGroup to fail when channel is closed")
+	}
+}
+
+func TestEnqueueRetryRecoversFromClosedGroupChannel(t *testing.T) {
+	router := NewRouter(newTestConfig())
+	t.Cleanup(router.Close)
+
+	done := make(chan struct{}, 1)
+	router.RegisterHandler("retry", func(ctx context.Context, payload any) error {
+		done <- struct{}{}
+		return nil
+	})
+
+	stale := &groupWorker{
+		key:        "g1",
+		ch:         make(chan *enqueuedTask, 1),
+		lastActive: time.Now(),
+	}
+	close(stale.ch)
+
+	router.mu.Lock()
+	router.groups["g1"] = stale
+	router.mu.Unlock()
+
+	ok := router.enqueueRetry("g1", &enqueuedTask{
+		task: Task{
+			Type: "retry",
+			Options: TaskOptions{
+				GroupKey: "g1",
+			},
+		},
+		attempt: 2,
+	})
+	if !ok {
+		t.Fatalf("expected enqueueRetry to recover by recreating the group")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("re-enqueued task did not execute in time")
+	}
+}
+
+func TestRunCronOnce_UpdatesLastRunEvenWhenDispatchFails(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.CleanupInterval = time.Hour
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	job := &cronJob{
+		Interval: time.Millisecond,
+		Task: Task{
+			Type: "missing-handler",
+		},
+	}
+
+	router.cronMu.Lock()
+	router.cronJobs = append(router.cronJobs, job)
+	router.cronMu.Unlock()
+
+	if !job.lastRun.IsZero() {
+		t.Fatalf("expected zero lastRun before cron execution")
+	}
+
+	router.runCronOnce()
+
+	if job.lastRun.IsZero() {
+		t.Fatalf("expected cron job lastRun to be updated even when dispatch fails")
+	}
+}

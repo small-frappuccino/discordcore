@@ -451,18 +451,60 @@ func (ConfigurationUtils) EnsureGuildConfig(configManager *files.ConfigManager, 
 	return config
 }
 
-// CompareCommands compares two commands to check if they are semantically equal
+// normalizeCommandOptions ensures required options come before optional options,
+// recursively for nested option trees, while preserving relative order.
+func normalizeCommandOptions(options []*discordgo.ApplicationCommandOption) []*discordgo.ApplicationCommandOption {
+	if len(options) == 0 {
+		return nil
+	}
+
+	required := make([]*discordgo.ApplicationCommandOption, 0, len(options))
+	optional := make([]*discordgo.ApplicationCommandOption, 0, len(options))
+
+	for _, opt := range options {
+		if opt == nil {
+			continue
+		}
+		cloned := *opt
+		cloned.Options = normalizeCommandOptions(opt.Options)
+
+		if len(opt.Choices) > 0 {
+			cloned.Choices = append([]*discordgo.ApplicationCommandOptionChoice(nil), opt.Choices...)
+		}
+		if len(opt.ChannelTypes) > 0 {
+			cloned.ChannelTypes = append([]discordgo.ChannelType(nil), opt.ChannelTypes...)
+		}
+
+		if cloned.Required {
+			required = append(required, &cloned)
+		} else {
+			optional = append(optional, &cloned)
+		}
+	}
+
+	out := make([]*discordgo.ApplicationCommandOption, 0, len(required)+len(optional))
+	out = append(out, required...)
+	out = append(out, optional...)
+	return out
+}
+
+// CompareCommands compares two commands to check if they are semantically equal.
+// Option order is normalized so equivalent command definitions with required-first
+// normalization compare as equal.
 func CompareCommands(a, b *discordgo.ApplicationCommand) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
 	ca := struct {
 		Name        string                                `json:"name"`
 		Description string                                `json:"description"`
 		Options     []*discordgo.ApplicationCommandOption `json:"options"`
-	}{a.Name, a.Description, a.Options}
+	}{a.Name, a.Description, normalizeCommandOptions(a.Options)}
 	cb := struct {
 		Name        string                                `json:"name"`
 		Description string                                `json:"description"`
 		Options     []*discordgo.ApplicationCommandOption `json:"options"`
-	}{b.Name, b.Description, b.Options}
+	}{b.Name, b.Description, normalizeCommandOptions(b.Options)}
 	ba, _ := json.Marshal(ca)
 	bb, _ := json.Marshal(cb)
 	return string(ba) == string(bb)

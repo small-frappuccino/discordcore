@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -18,11 +19,12 @@ import (
 
 // CommandHandler manages bot command setup and handling
 type CommandHandler struct {
-	session             *discordgo.Session
-	configManager       *files.ConfigManager
-	commandManager      *core.CommandManager
-	partnerBoardService partners.BoardService
-	partnerSyncExecutor partners.GuildSyncExecutor
+	session              *discordgo.Session
+	configManager        *files.ConfigManager
+	commandManager       *core.CommandManager
+	runtimeHandlerCancel func()
+	partnerBoardService  partners.BoardService
+	partnerSyncExecutor  partners.GuildSyncExecutor
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -39,6 +41,14 @@ func NewCommandHandler(
 // SetupCommands initializes and registers all bot commands
 func (ch *CommandHandler) SetupCommands() error {
 	log.ApplicationLogger().Info("Setting up bot commands...")
+
+	// Re-init safety: avoid duplicated handlers if setup is called more than once.
+	if ch.commandManager != nil || ch.runtimeHandlerCancel != nil {
+		log.ApplicationLogger().Warn("Command setup called with active handlers; cleaning previous registrations first")
+		if err := ch.Shutdown(); err != nil {
+			return fmt.Errorf("cleanup previous command handlers: %w", err)
+		}
+	}
 
 	// Create the command manager
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
@@ -60,10 +70,20 @@ func (ch *CommandHandler) SetupCommands() error {
 			applier = router.GetRuntimeApplier()
 		}
 	}
-	ch.session.AddHandler(runtime.HandleRuntimeConfigInteractions(ch.configManager, applier))
+	ch.runtimeHandlerCancel = ch.session.AddHandler(runtime.HandleRuntimeConfigInteractions(ch.configManager, applier))
 
 	// Configure commands on Discord
 	if err := ch.commandManager.SetupCommands(); err != nil {
+		if ch.runtimeHandlerCancel != nil {
+			ch.runtimeHandlerCancel()
+			ch.runtimeHandlerCancel = nil
+		}
+		if ch.commandManager != nil {
+			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
+				log.ErrorLoggerRaw().Error("Failed to rollback command manager handler registration", "err", shutdownErr)
+			}
+			ch.commandManager = nil
+		}
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
@@ -119,10 +139,20 @@ func (ch *CommandHandler) registerConfigCommands() error {
 func (ch *CommandHandler) Shutdown() error {
 	log.ApplicationLogger().Info("Shutting down command handler...")
 
-	// You can add cleanup logic here if needed
-	// For example, save settings, clear caches, etc.
+	var errs []error
+	if ch.runtimeHandlerCancel != nil {
+		ch.runtimeHandlerCancel()
+		ch.runtimeHandlerCancel = nil
+	}
 
-	return nil
+	if ch.commandManager != nil {
+		if err := ch.commandManager.Shutdown(); err != nil {
+			errs = append(errs, fmt.Errorf("shutdown command manager: %w", err))
+		}
+		ch.commandManager = nil
+	}
+
+	return errors.Join(errs...)
 }
 
 // GetConfigManager returns the configuration manager
