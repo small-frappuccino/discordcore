@@ -80,7 +80,7 @@ func DefaultWarmupConfig() WarmupConfig {
 // IntelligentWarmup performs cache warmup by loading persisted cache and fetching missing data
 func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *storage.Store, config WarmupConfig) error {
 	startTime := time.Now()
-	log.ApplicationLogger().Info("?? Starting intelligent cache warmup...")
+	log.ApplicationLogger().Info("🚀 Starting cache warmup (persistent preload + Discord backfill)...")
 
 	ws := newWarmupSession(session)
 
@@ -92,8 +92,12 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		guilds, _, _, _ := cache.GuildMetrics()
 		roles, _, _, _ := cache.RolesMetrics()
 		channels, _, _, _ := cache.ChannelMetrics()
-		log.ApplicationLogger().Info(fmt.Sprintf("? Loaded from persistent cache: %d members, %d guilds, %d roles, %d channels",
-			members, guilds, roles, channels))
+		preloadMsg := fmt.Sprintf("💾 Restored from persistent cache: %d members, %d guilds, %d roles, %d channels",
+			members, guilds, roles, channels)
+		if members == 0 && guilds == 0 && roles == 0 && channels == 0 {
+			preloadMsg += " (normal on first run or after expiration; Discord backfill comes next)"
+		}
+		log.ApplicationLogger().Info(preloadMsg)
 	}
 
 	// Step 2: Determine which guilds to warmup
@@ -110,7 +114,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		return nil
 	}
 
-	log.ApplicationLogger().Info(fmt.Sprintf("?? Warming up %d guilds...", len(guildIDs)))
+	log.ApplicationLogger().Info(fmt.Sprintf("🔄 Backfilling cache for %d guild(s) from Discord...", len(guildIDs)))
 
 	// Step 3: Warmup each guild
 	var totalMembers, totalRoles, totalChannels, totalGuilds int
@@ -156,7 +160,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 	}
 
 	elapsed := time.Since(startTime)
-	log.ApplicationLogger().Info(fmt.Sprintf("? Warmup completed in %v: %d guilds, %d members, %d roles, %d channels",
+	log.ApplicationLogger().Info(fmt.Sprintf("✅ Warmup completed in %v: %d guilds, %d members, %d roles, %d channels",
 		elapsed, totalGuilds, totalMembers, totalRoles, totalChannels))
 
 	return nil
@@ -326,7 +330,7 @@ func RefreshMemberData(session *discordgo.Session, cache *UnifiedCache, store *s
 		return nil
 	}
 
-	log.ApplicationLogger().Info(fmt.Sprintf("?? Refreshing %d members in guild %s", len(userIDs), guildID))
+	log.ApplicationLogger().Info(fmt.Sprintf("🔄 Refreshing %d members in guild %s", len(userIDs), guildID))
 
 	for _, userID := range userIDs {
 		member, err := session.GuildMember(guildID, userID)
