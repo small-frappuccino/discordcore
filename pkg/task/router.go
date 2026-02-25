@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -124,6 +125,11 @@ type TaskRouter struct {
 	// Simple cron scheduler
 	cronMu   sync.Mutex
 	cronJobs []*cronJob
+
+	// Cron dispatch counters
+	cronDispatchAttempts int64
+	cronDispatchSuccess  int64
+	cronDispatchFailures int64
 }
 
 type groupWorker struct {
@@ -266,20 +272,26 @@ func (tr *TaskRouter) Close() {
 
 // Stats provides a snapshot with counts useful for debugging/monitoring.
 type Stats struct {
-	GroupsCount     int
-	InflightCount   int
-	RouterClosed    bool
-	RegisteredTypes int
+	GroupsCount          int
+	InflightCount        int
+	RouterClosed         bool
+	RegisteredTypes      int
+	CronDispatchAttempts int64
+	CronDispatchSuccess  int64
+	CronDispatchFailures int64
 }
 
 func (tr *TaskRouter) Stats() Stats {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 	return Stats{
-		GroupsCount:     len(tr.groups),
-		InflightCount:   len(tr.inflight),
-		RouterClosed:    tr.closed,
-		RegisteredTypes: len(tr.handlers),
+		GroupsCount:          len(tr.groups),
+		InflightCount:        len(tr.inflight),
+		RouterClosed:         tr.closed,
+		RegisteredTypes:      len(tr.handlers),
+		CronDispatchAttempts: atomic.LoadInt64(&tr.cronDispatchAttempts),
+		CronDispatchSuccess:  atomic.LoadInt64(&tr.cronDispatchSuccess),
+		CronDispatchFailures: atomic.LoadInt64(&tr.cronDispatchFailures),
 	}
 }
 
@@ -626,7 +638,21 @@ func (tr *TaskRouter) runCronOnce() {
 			continue
 		}
 		if job.lastRun.IsZero() || now.Sub(job.lastRun) >= job.Interval {
-			_ = tr.Dispatch(context.Background(), job.Task)
+			atomic.AddInt64(&tr.cronDispatchAttempts, 1)
+			if err := tr.Dispatch(context.Background(), job.Task); err != nil {
+				atomic.AddInt64(&tr.cronDispatchFailures, 1)
+				log.ErrorLoggerRaw().Error(
+					"Cron task dispatch failed",
+					"operation", "task.router.cron.dispatch",
+					"taskType", job.Task.Type,
+					"interval", job.Interval.String(),
+					"group", job.Task.Options.GroupKey,
+					"idempotencyKey", job.Task.Options.IdempotencyKey,
+					"err", err,
+				)
+			} else {
+				atomic.AddInt64(&tr.cronDispatchSuccess, 1)
+			}
 			job.lastRun = now
 		}
 	}

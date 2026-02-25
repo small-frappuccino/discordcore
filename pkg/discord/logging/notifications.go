@@ -155,7 +155,13 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 
 	var fields []*discordgo.MessageEmbedField
 
-	if serverTime > 0 {
+	if serverTime < 0 {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Time on Server",
+			Value:  "N/A",
+			Inline: true,
+		})
+	} else if serverTime > 0 {
 		// Build human-readable server time with fallback when formatting yields empty (e.g., <1s)
 		serverTimeText := formatDurationSmart(serverTime)
 		if serverTimeText == "" {

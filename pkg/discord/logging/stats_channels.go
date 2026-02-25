@@ -123,18 +123,6 @@ type statsTarget struct {
 	count int
 }
 
-func memberHasRole(member *discordgo.Member, roleID string) bool {
-	if member == nil || roleID == "" {
-		return false
-	}
-	for _, rid := range member.Roles {
-		if rid == roleID {
-			return true
-		}
-	}
-	return false
-}
-
 func memberTypeMatches(memberType string, isBot bool) bool {
 	switch normalizeMemberType(memberType) {
 	case "bots":

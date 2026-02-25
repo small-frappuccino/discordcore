@@ -13,6 +13,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordcore/pkg/util"
@@ -268,23 +269,55 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	}
 
 	// 2) Historical total of members who have ever joined (based on member_joins)
-	totalHistoricJoins := querySum(ctxTimeout, db, "SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?", ctx.GuildID)
+	totalHistoricJoins, totalHistoricJoinsErr := querySum(
+		ctxTimeout,
+		db,
+		"SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?",
+		ctx.GuildID,
+	)
+	hasHistoricJoins := totalHistoricJoinsErr == nil
 
 	// 3) How many of those historically recorded members are still in the server
-	stillPresentCount := 0
-	if totalHistoricJoins > 0 {
+	stillPresentCount := int64(0)
+	hasStillPresent := hasHistoricJoins
+	if hasHistoricJoins && totalHistoricJoins > 0 {
 		// Fetch all user_ids that have ever joined
 		rows, err := db.QueryContext(ctxTimeout, "SELECT DISTINCT user_id FROM member_joins WHERE guild_id=?", ctx.GuildID)
-		if err == nil {
+		if err != nil {
+			hasStillPresent = false
+			log.ErrorLoggerRaw().Error(
+				"Metrics health retention query failed",
+				"operation", "metrics.serverstats.health.retention_query",
+				"guildID", ctx.GuildID,
+				"err", err,
+			)
+		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var userID string
-				if err := rows.Scan(&userID); err == nil {
-					// Check if the user is present in the bot state cache
-					if _, err := s.State.Member(ctx.GuildID, userID); err == nil {
-						stillPresentCount++
-					}
+				if err := rows.Scan(&userID); err != nil {
+					hasStillPresent = false
+					log.ErrorLoggerRaw().Error(
+						"Metrics health retention scan failed",
+						"operation", "metrics.serverstats.health.retention_scan",
+						"guildID", ctx.GuildID,
+						"err", err,
+					)
+					continue
 				}
+				// Check if the user is present in the bot state cache.
+				if _, err := s.State.Member(ctx.GuildID, userID); err == nil {
+					stillPresentCount++
+				}
+			}
+			if err := rows.Err(); err != nil {
+				hasStillPresent = false
+				log.ErrorLoggerRaw().Error(
+					"Metrics health retention rows iteration failed",
+					"operation", "metrics.serverstats.health.retention_rows",
+					"guildID", ctx.GuildID,
+					"err", err,
+				)
 			}
 		}
 	}
@@ -297,12 +330,12 @@ func handleServerStatsHealth(ctx *core.Context) error {
 		},
 		{
 			Name:   "📥 Join History",
-			Value:  fmt.Sprintf("`%d` unique users recorded in the database since tracking began.", totalHistoricJoins),
+			Value:  fmt.Sprintf("`%s` unique users recorded in the database since tracking began.", formatMaybe(totalHistoricJoins, hasHistoricJoins)),
 			Inline: false,
 		},
 		{
 			Name:   "✅ Retention",
-			Value:  fmt.Sprintf("`%d` of historically recorded users are still in the server.", stillPresentCount),
+			Value:  fmt.Sprintf("`%s` of historically recorded users are still in the server.", formatMaybe(stillPresentCount, hasStillPresent)),
 			Inline: false,
 		},
 	}
@@ -346,23 +379,37 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 
 	cutoff, label := cutoffForRange(rangeVal)
 
-	joins := querySum(ctxTimeout, db, "SELECT SUM(count) FROM daily_member_joins WHERE guild_id=? AND day >= ?", ctx.GuildID, cutoff)
-	leaves := querySum(ctxTimeout, db, "SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=? AND day >= ?", ctx.GuildID, cutoff)
+	joins, joinsErr := querySum(
+		ctxTimeout,
+		db,
+		"SELECT SUM(count) FROM daily_member_joins WHERE guild_id=? AND day >= ?",
+		ctx.GuildID,
+		cutoff,
+	)
+	leaves, leavesErr := querySum(
+		ctxTimeout,
+		db,
+		"SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=? AND day >= ?",
+		ctx.GuildID,
+		cutoff,
+	)
+	hasJoins := joinsErr == nil
+	hasLeaves := leavesErr == nil
 
 	fields := []*discordgo.MessageEmbedField{
 		{
 			Name:   "📥 Members Joined",
-			Value:  fmt.Sprintf("`%d` joins in the last %s.", joins, label),
+			Value:  fmt.Sprintf("`%s` joins in the last %s.", formatMaybe(joins, hasJoins), label),
 			Inline: true,
 		},
 		{
 			Name:   "📤 Members Left",
-			Value:  fmt.Sprintf("`%d` leaves in the last %s.", leaves, label),
+			Value:  fmt.Sprintf("`%s` leaves in the last %s.", formatMaybe(leaves, hasLeaves), label),
 			Inline: true,
 		},
 		{
 			Name:   "📈 Net Growth",
-			Value:  fmt.Sprintf("`%+d` members.", joins-leaves),
+			Value:  fmt.Sprintf("`%s` members.", formatMaybeNet(joins, hasJoins, leaves, hasLeaves)),
 			Inline: true,
 		},
 	}
@@ -569,13 +616,22 @@ func userMention(id string) string {
 	return "<@" + id + ">"
 }
 
-func querySum(ctx context.Context, db *sql.DB, sqlText string, args ...any) int64 {
+func querySum(ctx context.Context, db *sql.DB, sqlText string, args ...any) (int64, error) {
 	var v sql.NullInt64
-	_ = db.QueryRowContext(ctx, sqlText, args...).Scan(&v)
-	if v.Valid {
-		return v.Int64
+	if err := db.QueryRowContext(ctx, sqlText, args...).Scan(&v); err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Metrics sum query failed",
+			"operation", "metrics.query_sum",
+			"sql", sqlText,
+			"args", fmt.Sprintf("%v", args),
+			"err", err,
+		)
+		return 0, fmt.Errorf("query sum: %w", err)
 	}
-	return 0
+	if v.Valid {
+		return v.Int64, nil
+	}
+	return 0, nil
 }
 
 func tableExists(ctx context.Context, db *sql.DB, tableName string) bool {
@@ -594,11 +650,11 @@ func formatMaybe(v int64, ok bool) string {
 	return fmt.Sprintf("%d", v)
 }
 
-func formatMaybeNet(enters, leaves int64, hasLeaves bool) string {
-	if !hasLeaves {
-		return fmt.Sprintf("%d (without leaves)", enters)
+func formatMaybeNet(enters int64, hasEnters bool, leaves int64, hasLeaves bool) string {
+	if !hasEnters || !hasLeaves {
+		return "N/A"
 	}
-	return fmt.Sprintf("%d", enters-leaves)
+	return fmt.Sprintf("%+d", enters-leaves)
 }
 
 func newBackfillRunCommand() core.SubCommand {

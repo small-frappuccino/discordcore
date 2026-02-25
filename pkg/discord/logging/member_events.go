@@ -17,6 +17,7 @@ import (
 )
 
 // Hardcoded IDs for automatic role assignment
+const unknownServerTimeSentinel time.Duration = -1
 
 // MemberEventService manages member join/leave events
 type MemberEventService struct {
@@ -280,16 +281,15 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 	logChannelID := emit.ChannelID
 
 	// Calculate how long they were in the server
-	var serverTime time.Duration
-	var t time.Time
-	var ok bool
-	mes.joinMu.RLock()
-	t, ok = mes.joinTimes[m.GuildID+":"+m.User.ID]
-	mes.joinMu.RUnlock()
-	if ok && !t.IsZero() {
-		serverTime = time.Since(t)
+	serverTime, hasServerTime, serverTimeErr := mes.calculateServerTime(m.GuildID, m.User.ID)
+	serverTimeForNotification := serverTime
+	serverTimeForLog := "N/A"
+	if serverTimeErr != nil {
+		serverTimeForNotification = unknownServerTimeSentinel
+	} else if hasServerTime {
+		serverTimeForLog = serverTime.String()
 	} else {
-		serverTime = mes.calculateServerTime(m.GuildID, m.User.ID)
+		serverTimeForLog = "unknown"
 	}
 
 	botTime := mes.getBotTimeOnServer(m.GuildID)
@@ -301,29 +301,19 @@ func (mes *MemberEventService) handleGuildMemberRemove(s *discordgo.Session, m *
 		}
 	}
 
-	slog.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTime.String(), botTime.String()))
+	slog.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTimeForLog, botTime.String()))
 
 	if mes.adapters != nil {
-		if err := mes.adapters.EnqueueMemberLeave(logChannelID, m, serverTime, botTime); err != nil {
+		if err := mes.adapters.EnqueueMemberLeave(logChannelID, m, serverTimeForNotification, botTime); err != nil {
 			slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
 			slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
-	} else if err := mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTime, botTime); err != nil {
+	} else if err := mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTimeForNotification, botTime); err != nil {
 		slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 	} else {
 		slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 	}
-}
-
-// Utility function to check if the user has a specific role
-func hasRoleID(roles []string, roleID string) bool {
-	for _, r := range roles {
-		if r == roleID {
-			return true
-		}
-	}
-	return false
 }
 
 // handleGuildMemberUpdate maintains the role relationship:
@@ -405,22 +395,27 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 
 // calculateServerTime tries to estimate how long the user was on the server
 // Now uses multiple sources in order: memory -> SQLite
-func (mes *MemberEventService) calculateServerTime(guildID, userID string) time.Duration {
+func (mes *MemberEventService) calculateServerTime(guildID, userID string) (time.Duration, bool, error) {
 	// 1) memory (most precise during runtime)
 	mes.joinMu.RLock()
 	t, ok := mes.joinTimes[guildID+":"+userID]
 	mes.joinMu.RUnlock()
 	if ok && !t.IsZero() {
-		return time.Since(t)
+		return time.Since(t), true, nil
 	}
 
 	// 3) SQLite (new repository)
 	if mes.store != nil {
-		if t, ok, err := mes.store.GetMemberJoin(guildID, userID); err == nil && ok && !t.IsZero() {
-			return time.Since(t)
+		t, ok, err := mes.store.GetMemberJoin(guildID, userID)
+		if err != nil {
+			slog.Warn("Failed to read member join timestamp from store; time on server unavailable", "guildID", guildID, "userID", userID, "error", err)
+			return 0, false, fmt.Errorf("get member join from store: %w", err)
+		}
+		if ok && !t.IsZero() {
+			return time.Since(t), true, nil
 		}
 	}
-	return 0
+	return 0, false, nil
 }
 
 // cleanupLoop periodically removes old entries from joinTimes map

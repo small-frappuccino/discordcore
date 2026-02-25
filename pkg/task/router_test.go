@@ -219,4 +219,64 @@ func TestRunCronOnce_UpdatesLastRunEvenWhenDispatchFails(t *testing.T) {
 	if job.lastRun.IsZero() {
 		t.Fatalf("expected cron job lastRun to be updated even when dispatch fails")
 	}
+
+	stats := router.Stats()
+	if stats.CronDispatchAttempts != 1 {
+		t.Fatalf("expected one cron dispatch attempt, got %d", stats.CronDispatchAttempts)
+	}
+	if stats.CronDispatchSuccess != 0 {
+		t.Fatalf("expected zero successful cron dispatches, got %d", stats.CronDispatchSuccess)
+	}
+	if stats.CronDispatchFailures != 1 {
+		t.Fatalf("expected one failed cron dispatch, got %d", stats.CronDispatchFailures)
+	}
+}
+
+func TestRunCronOnce_TracksDispatchSuccessMetrics(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.CleanupInterval = time.Hour
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	var calls int32
+	done := make(chan struct{}, 1)
+	router.RegisterHandler("cron-ok", func(ctx context.Context, payload any) error {
+		atomic.AddInt32(&calls, 1)
+		done <- struct{}{}
+		return nil
+	})
+
+	job := &cronJob{
+		Interval: time.Millisecond,
+		Task: Task{
+			Type: "cron-ok",
+		},
+	}
+
+	router.cronMu.Lock()
+	router.cronJobs = append(router.cronJobs, job)
+	router.cronMu.Unlock()
+
+	router.runCronOnce()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected cron handler to run once")
+	}
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("expected cron handler call count to be one, got %d", got)
+	}
+
+	stats := router.Stats()
+	if stats.CronDispatchAttempts != 1 {
+		t.Fatalf("expected one cron dispatch attempt, got %d", stats.CronDispatchAttempts)
+	}
+	if stats.CronDispatchSuccess != 1 {
+		t.Fatalf("expected one successful cron dispatch, got %d", stats.CronDispatchSuccess)
+	}
+	if stats.CronDispatchFailures != 0 {
+		t.Fatalf("expected zero failed cron dispatches, got %d", stats.CronDispatchFailures)
+	}
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -109,5 +110,112 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&shutdownCalls); got != 1 {
 		t.Fatalf("expected one shutdown command call, got %d", got)
+	}
+}
+
+func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
+	const (
+		appName  = "alicebot-run-shutdown-error-test"
+		tokenEnv = "ALICE_TEST_TOKEN"
+	)
+
+	appDataDir, err := os.MkdirTemp("", "alicebot-run-shutdown-error-test-*")
+	if err != nil {
+		t.Fatalf("create APPDATA temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(appDataDir)
+	})
+	t.Setenv("APPDATA", appDataDir)
+	t.Setenv(tokenEnv, "test-token")
+
+	util.SetAppName(appName)
+	settingsPath := util.GetSettingsFilePath()
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("create settings directory: %v", err)
+	}
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring:    boolPtr(false),
+				Automod:       boolPtr(false),
+				Commands:      boolPtr(false),
+				AdminCommands: boolPtr(false),
+			},
+			Maintenance: files.FeatureMaintenanceToggles{
+				DBCleanup: boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{},
+	}
+	rawCfg, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal settings config: %v", err)
+	}
+	if err := os.WriteFile(settingsPath, rawCfg, 0o644); err != nil {
+		t.Fatalf("write settings config: %v", err)
+	}
+
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("create fake discord session: %v", err)
+	}
+	session.State.User = &discordgo.User{
+		ID:            "bot-id",
+		Username:      "alice-test",
+		Discriminator: "0001",
+		Bot:           true,
+	}
+
+	origNewDiscordSession := newDiscordSession
+	origWaitForInterrupt := waitForInterrupt
+	origShutdownDelay := shutdownDelay
+	origCloseStore := closeStore
+	origCloseDiscordSession := closeDiscordSession
+	t.Cleanup(func() {
+		newDiscordSession = origNewDiscordSession
+		waitForInterrupt = origWaitForInterrupt
+		shutdownDelay = origShutdownDelay
+		closeStore = origCloseStore
+		closeDiscordSession = origCloseDiscordSession
+	})
+
+	newDiscordSession = func(string) (*discordgo.Session, error) {
+		return session, nil
+	}
+	waitForInterrupt = func() {}
+	shutdownDelay = func(time.Duration) {}
+
+	storeCloseErr := errors.New("store close failure")
+	discordCloseErr := errors.New("discord close failure")
+
+	var storeCloseCalls int32
+	var discordCloseCalls int32
+	closeStore = func(interface{ Close() error }) error {
+		atomic.AddInt32(&storeCloseCalls, 1)
+		return storeCloseErr
+	}
+	closeDiscordSession = func(interface{ Close() error }) error {
+		atomic.AddInt32(&discordCloseCalls, 1)
+		return discordCloseErr
+	}
+
+	err = Run(appName, tokenEnv)
+	if err == nil {
+		t.Fatalf("expected shutdown error, got nil")
+	}
+	if !errors.Is(err, storeCloseErr) {
+		t.Fatalf("expected shutdown error to wrap store close failure, got: %v", err)
+	}
+	if !errors.Is(err, discordCloseErr) {
+		t.Fatalf("expected shutdown error to wrap discord close failure, got: %v", err)
+	}
+	if got := atomic.LoadInt32(&storeCloseCalls); got != 1 {
+		t.Fatalf("expected one store close call, got %d", got)
+	}
+	if got := atomic.LoadInt32(&discordCloseCalls); got != 1 {
+		t.Fatalf("expected one discord close call, got %d", got)
 	}
 }

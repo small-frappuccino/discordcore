@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -23,6 +24,22 @@ import (
 )
 
 var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
+
+func stopMonitoringSubService(operation, serviceName string, stopFn func() error) error {
+	if stopFn == nil {
+		return nil
+	}
+	if err := stopFn(); err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Monitoring sub-service stop failed",
+			"operation", operation,
+			"service", serviceName,
+			"err", err,
+		)
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	return nil
+}
 
 // parseEntryExitBackfillMessage extracts (eventType, userID) from messages in a welcome/entry-leave channel.
 // It supports:
@@ -320,9 +337,19 @@ func (ms *MonitoringService) Start() error {
 	} else {
 		if err := ms.messageEventService.Start(); err != nil {
 			ms.isRunning = false
+			startErrs := []error{err}
 			// Stop the member event service if start failed
 			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-				_ = ms.memberEventService.Stop()
+				if stopErr := stopMonitoringSubService(
+					"monitoring.start.cleanup.stop_member_after_message_start_failure",
+					"member_event_service",
+					ms.memberEventService.Stop,
+				); stopErr != nil {
+					startErrs = append(startErrs, stopErr)
+				}
+			}
+			if len(startErrs) > 1 {
+				return fmt.Errorf("failed to start message event service: %w", errors.Join(startErrs...))
 			}
 			return fmt.Errorf("failed to start message event service: %w", err)
 		}
@@ -338,12 +365,28 @@ func (ms *MonitoringService) Start() error {
 		}
 		if err := ms.reactionEventService.Start(); err != nil {
 			ms.isRunning = false
+			startErrs := []error{err}
 			// Stop previously started services on failure
 			if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
-				_ = ms.messageEventService.Stop()
+				if stopErr := stopMonitoringSubService(
+					"monitoring.start.cleanup.stop_message_after_reaction_start_failure",
+					"message_event_service",
+					ms.messageEventService.Stop,
+				); stopErr != nil {
+					startErrs = append(startErrs, stopErr)
+				}
 			}
 			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-				_ = ms.memberEventService.Stop()
+				if stopErr := stopMonitoringSubService(
+					"monitoring.start.cleanup.stop_member_after_reaction_start_failure",
+					"member_event_service",
+					ms.memberEventService.Stop,
+				); stopErr != nil {
+					startErrs = append(startErrs, stopErr)
+				}
+			}
+			if len(startErrs) > 1 {
+				return fmt.Errorf("failed to start reaction event service: %w", errors.Join(startErrs...))
 			}
 			return fmt.Errorf("failed to start reaction event service: %w", err)
 		}
@@ -788,7 +831,16 @@ func (ms *MonitoringService) Start() error {
 		if len(targets) == 0 {
 			log.ApplicationLogger().Debug("No target channels for backfill check")
 		} else {
-			lastEvent, hasLastEvent, _ := ms.store.GetLastEvent()
+			lastEvent, hasLastEvent, err := ms.store.GetLastEvent()
+			if err != nil {
+				lastEvent = time.Time{}
+				hasLastEvent = false
+				log.ErrorLoggerRaw().Error(
+					"Failed to read last event for backfill recovery; downtime recovery disabled for this startup",
+					"operation", "monitoring.start.backfill.get_last_event",
+					"err", err,
+				)
+			}
 			now := time.Now().UTC()
 
 			for _, target := range targets {
@@ -821,7 +873,16 @@ func (ms *MonitoringService) Start() error {
 				}
 
 				// Check progress for this channel
-				_, hasProgress, _ := ms.store.GetMetadata("backfill_progress:" + cid)
+				_, hasProgress, err := ms.store.GetMetadata("backfill_progress:" + cid)
+				if err != nil {
+					log.ErrorLoggerRaw().Error(
+						"Failed to read backfill progress; skipping backfill dispatch for channel",
+						"operation", "monitoring.start.backfill.get_progress",
+						"channelID", cid,
+						"err", err,
+					)
+					continue
+				}
 
 				if !hasProgress {
 					// Use initialDate to calculate start date
@@ -1020,7 +1081,15 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	}
 
 	// Set bot join time if missing
-	if _, ok, _ := ms.store.GetBotSince(guildID); !ok {
+	_, hasBotSince, err := ms.store.GetBotSince(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Failed to read bot join timestamp during cache initialization",
+			"operation", "monitoring.initialize_guild_cache.get_bot_since",
+			"guildID", guildID,
+			"err", err,
+		)
+	} else if !hasBotSince {
 		botID := ms.session.State.User.ID
 		var botMember *discordgo.Member
 		// Prefer state cache to avoid a REST call
@@ -1069,7 +1138,18 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 
 		// Backfill missing member join date using Discord data
 		if ms.store != nil && !member.JoinedAt.IsZero() {
-			if _, ok, _ := ms.store.GetMemberJoin(guildID, member.User.ID); !ok {
+			_, hasJoinRecord, err := ms.store.GetMemberJoin(guildID, member.User.ID)
+			if err != nil {
+				log.ErrorLoggerRaw().Error(
+					"Failed to read member join timestamp during cache initialization",
+					"operation", "monitoring.initialize_guild_cache.get_member_join",
+					"guildID", guildID,
+					"userID", member.User.ID,
+					"err", err,
+				)
+				continue
+			}
+			if !hasJoinRecord {
 				if err := ms.store.UpsertMemberJoin(guildID, member.User.ID, member.JoinedAt); err != nil {
 					log.ApplicationLogger().Warn("Failed to backfill member join timestamp", "guildID", guildID, "userID", member.User.ID, "joinedAt", member.JoinedAt, "err", err)
 				}
@@ -1102,11 +1182,18 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	if ms.configManager != nil && ms.configManager.Config() != nil {
 		features = ms.configManager.Config().ResolveFeatures("")
 	}
+	var stopErrs []error
 
 	// Entry/Exit logs and auto-role assignment -> MemberEventService
 	if !ms.shouldRunMemberEventService(rc) {
 		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-			_ = ms.memberEventService.Stop()
+			if err := stopMonitoringSubService(
+				"monitoring.apply_runtime_toggles.stop_member",
+				"member_event_service",
+				ms.memberEventService.Stop,
+			); err != nil {
+				stopErrs = append(stopErrs, err)
+			}
 		}
 	} else {
 		if ms.memberEventService != nil && !ms.memberEventService.IsRunning() {
@@ -1119,7 +1206,13 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	// Message logs -> MessageEventService
 	if rc.DisableMessageLogs || !(features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete) {
 		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
-			_ = ms.messageEventService.Stop()
+			if err := stopMonitoringSubService(
+				"monitoring.apply_runtime_toggles.stop_message",
+				"message_event_service",
+				ms.messageEventService.Stop,
+			); err != nil {
+				stopErrs = append(stopErrs, err)
+			}
 		}
 	} else {
 		if ms.messageEventService != nil && !ms.messageEventService.IsRunning() {
@@ -1132,7 +1225,13 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	// Reaction logs -> ReactionEventService
 	if rc.DisableReactionLogs || !features.Logging.ReactionMetric {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
-			_ = ms.reactionEventService.Stop()
+			if err := stopMonitoringSubService(
+				"monitoring.apply_runtime_toggles.stop_reaction",
+				"reaction_event_service",
+				ms.reactionEventService.Stop,
+			); err != nil {
+				stopErrs = append(stopErrs, err)
+			}
 		}
 	} else {
 		if ms.reactionEventService == nil {
@@ -1148,6 +1247,10 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	// User logs -> re-register handlers (presence/member/user updates)
 	ms.removeEventHandlers()
 	ms.setupEventHandlersFromRuntimeConfig(rc)
+
+	if len(stopErrs) > 0 {
+		return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
+	}
 
 	_ = ctx
 	return nil
@@ -1283,10 +1386,26 @@ func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordg
 	defer done()
 
 	if ms.store != nil {
-		if prev, ok, _ := ms.store.GetGuildOwnerID(e.Guild.ID); ok && prev != e.Guild.OwnerID {
+		prev, ok, err := ms.store.GetGuildOwnerID(e.Guild.ID)
+		if err != nil {
+			log.ErrorLoggerRaw().Error(
+				"Failed to read guild owner cache during guild update",
+				"operation", "monitoring.handle_guild_update.get_owner",
+				"guildID", e.Guild.ID,
+				"err", err,
+			)
+		} else if ok && prev != e.Guild.OwnerID {
 			log.ApplicationLogger().Info("Guild owner changed", "guildID", e.Guild.ID, "from", prev, "to", e.Guild.OwnerID)
 		}
-		_ = ms.store.SetGuildOwnerID(e.Guild.ID, e.Guild.OwnerID)
+		if err := ms.store.SetGuildOwnerID(e.Guild.ID, e.Guild.OwnerID); err != nil {
+			log.ErrorLoggerRaw().Error(
+				"Failed to persist guild owner cache during guild update",
+				"operation", "monitoring.handle_guild_update.set_owner",
+				"guildID", e.Guild.ID,
+				"ownerID", e.Guild.OwnerID,
+				"err", err,
+			)
+		}
 	}
 }
 
@@ -2491,7 +2610,16 @@ func (ms *MonitoringService) performPeriodicCheck() {
 		for _, member := range members {
 			// Backfill missing member join date using Discord data
 			if ms.store != nil && !member.JoinedAt.IsZero() {
-				if _, ok, _ := ms.store.GetMemberJoin(gcfg.GuildID, member.User.ID); !ok {
+				_, hasJoinRecord, err := ms.store.GetMemberJoin(gcfg.GuildID, member.User.ID)
+				if err != nil {
+					log.ErrorLoggerRaw().Error(
+						"Periodic check: failed to read member join timestamp",
+						"operation", "monitoring.periodic_check.get_member_join",
+						"guildID", gcfg.GuildID,
+						"userID", member.User.ID,
+						"err", err,
+					)
+				} else if !hasJoinRecord {
 					if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
 						log.ApplicationLogger().Warn("Periodic check: failed to backfill member join timestamp", "guildID", gcfg.GuildID, "userID", member.User.ID, "joinedAt", member.JoinedAt, "err", err)
 					}
@@ -2570,56 +2698,48 @@ func (ms *MonitoringService) botPermMirrorActorRoleID(guildID string) string {
 	return defaultBotPermMirrorActorRoleID
 }
 
-func (ms *MonitoringService) isBotManagedRole(guildID, roleID string) bool {
-	if guildID == "" || roleID == "" || ms.session == nil {
-		return false
+func (ms *MonitoringService) findGuildRole(guildID string, match func(*discordgo.Role) bool) (*discordgo.Role, bool) {
+	if guildID == "" || ms.session == nil || match == nil {
+		return nil, false
 	}
 	roles, err := ms.session.GuildRoles(guildID)
 	if err != nil {
-		return false
+		return nil, false
 	}
-	for _, r := range roles {
-		if r == nil || r.ID != roleID {
+	for _, role := range roles {
+		if role == nil {
 			continue
 		}
-		return r.Managed
+		if match(role) {
+			return role, true
+		}
 	}
-	return false
+	return nil, false
+}
+
+func (ms *MonitoringService) isBotManagedRole(guildID, roleID string) bool {
+	if roleID == "" {
+		return false
+	}
+	role, ok := ms.findGuildRole(guildID, func(r *discordgo.Role) bool {
+		return r.ID == roleID
+	})
+	return ok && role.Managed
 }
 
 func (ms *MonitoringService) getRoleByID(guildID, roleID string) (*discordgo.Role, bool) {
-	if guildID == "" || roleID == "" || ms.session == nil {
+	if roleID == "" {
 		return nil, false
 	}
-	roles, err := ms.session.GuildRoles(guildID)
-	if err != nil {
-		return nil, false
-	}
-	for _, r := range roles {
-		if r != nil && r.ID == roleID {
-			return r, true
-		}
-	}
-	return nil, false
+	return ms.findGuildRole(guildID, func(r *discordgo.Role) bool {
+		return r.ID == roleID
+	})
 }
 
 func (ms *MonitoringService) findBotManagedRole(guildID string) (*discordgo.Role, bool) {
-	if guildID == "" || ms.session == nil {
-		return nil, false
-	}
-	roles, err := ms.session.GuildRoles(guildID)
-	if err != nil {
-		return nil, false
-	}
-	for _, r := range roles {
-		if r == nil {
-			continue
-		}
-		if r.Managed {
-			return r, true
-		}
-	}
-	return nil, false
+	return ms.findGuildRole(guildID, func(r *discordgo.Role) bool {
+		return r.Managed
+	})
 }
 
 func (ms *MonitoringService) saveBotRolePermSnapshot(guildID, roleID string, prevPerm int64, actorUserID string) {

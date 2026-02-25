@@ -10,6 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
@@ -148,73 +149,6 @@ func (pc *PermissionChecker) SetCache(unifiedCache *cache.UnifiedCache) {
 	pc.cache = unifiedCache
 }
 
-// getOwnerID resolves the guild owner ID using cache -> state -> store -> REST (with write-backs)
-func (pc *PermissionChecker) getOwnerID(guildID string) (string, bool) {
-	// cache
-	if pc.cache != nil {
-		if g, ok := pc.cache.GetGuild(guildID); ok {
-			return g.OwnerID, true
-		}
-	}
-	// state
-	if pc.session != nil && pc.session.State != nil {
-		if g, _ := pc.session.State.Guild(guildID); g != nil {
-			if pc.cache != nil {
-				pc.cache.SetGuild(guildID, g)
-			}
-			return g.OwnerID, true
-		}
-	}
-	// store
-	if pc.store != nil {
-		if oid, ok, _ := pc.store.GetGuildOwnerID(guildID); ok {
-			return oid, true
-		}
-	}
-	// REST
-	if pc.session != nil {
-		if g, err := pc.session.Guild(guildID); err == nil && g != nil {
-			if pc.cache != nil {
-				pc.cache.SetGuild(guildID, g)
-			}
-			if pc.store != nil && g.OwnerID != "" {
-				_ = pc.store.SetGuildOwnerID(guildID, g.OwnerID)
-			}
-			return g.OwnerID, true
-		}
-	}
-	return "", false
-}
-
-// getMember resolves a guild member using cache -> state -> REST (with write-backs)
-func (pc *PermissionChecker) getMember(guildID, userID string) (*discordgo.Member, bool) {
-	// cache
-	if pc.cache != nil {
-		if m, ok := pc.cache.GetMember(guildID, userID); ok {
-			return m, true
-		}
-	}
-	// state
-	if pc.session != nil && pc.session.State != nil {
-		if m, _ := pc.session.State.Member(guildID, userID); m != nil {
-			if pc.cache != nil {
-				pc.cache.SetMember(guildID, userID, m)
-			}
-			return m, true
-		}
-	}
-	// REST
-	if pc.session != nil {
-		if m, err := pc.session.GuildMember(guildID, userID); err == nil && m != nil {
-			if pc.cache != nil {
-				pc.cache.SetMember(guildID, userID, m)
-			}
-			return m, true
-		}
-	}
-	return nil, false
-}
-
 // HasPermission checks whether the user has permission to use commands
 func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	if guildID == "" {
@@ -222,8 +156,17 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	}
 	guildConfig := pc.config.GuildConfig(guildID)
 
-	ownerID, ok := pc.getOwnerID(guildID)
-	isOwner := ok && ownerID == userID
+	ownerID, ownerFound, err := pc.ResolveOwnerID(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild owner",
+			"operation", "commands.permission.has_permission.resolve_owner",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+	}
+	isOwner := err == nil && ownerFound && ownerID == userID
 
 	if guildConfig == nil || len(guildConfig.Roles.Allowed) == 0 {
 		return isOwner
@@ -232,8 +175,18 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 		return true
 	}
 
-	member, ok := pc.getMember(guildID, userID)
-	if !ok || member == nil {
+	member, memberFound, err := pc.ResolveMember(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild member",
+			"operation", "commands.permission.has_permission.resolve_member",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	if !memberFound || member == nil {
 		return false
 	}
 
@@ -247,7 +200,18 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 
 // HasRole checks whether the user has a specific role
 func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
-	member, ok := pc.getMember(guildID, userID)
+	member, ok, err := pc.ResolveMember(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild member for role check",
+			"operation", "commands.permission.has_role.resolve_member",
+			"guildID", guildID,
+			"userID", userID,
+			"roleID", roleID,
+			"err", err,
+		)
+		return false
+	}
 	if !ok || member == nil {
 		return false
 	}
@@ -259,7 +223,17 @@ func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
 	if guildID == "" {
 		return false
 	}
-	ownerID, ok := pc.getOwnerID(guildID)
+	ownerID, ok, err := pc.ResolveOwnerID(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild owner for owner check",
+			"operation", "commands.permission.is_owner.resolve_owner",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
 	if !ok {
 		return false
 	}

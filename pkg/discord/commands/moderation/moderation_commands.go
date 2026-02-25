@@ -260,7 +260,7 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), true)
 	}
 
-	targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, userID)
+	targetUsername := resolveUserDisplayName(ctx, userID)
 
 	if err := ctx.Session.GuildBanCreateWithReason(ctx.GuildID, userID, reason, 0); err != nil {
 		return core.NewCommandError(fmt.Sprintf("Failed to ban user %s: %v", userID, err), true)
@@ -337,7 +337,7 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 	var failed []string
 	var skipped []string
 	for _, memberID := range memberIDs {
-		targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, memberID)
+		targetUsername := resolveUserDisplayName(ctx, memberID)
 		logPayload := moderationLogPayload{
 			Action:      "member_ban_add",
 			TargetID:    memberID,
@@ -428,7 +428,7 @@ func (c *unbanCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, userID)
+	targetUsername := resolveUserDisplayName(ctx, userID)
 	if err := ctx.Session.GuildBanDelete(ctx.GuildID, userID, discordgo.WithAuditLogReason(reason)); err != nil {
 		return core.NewCommandError(fmt.Sprintf("Failed to unban user %s: %v", userID, err), true)
 	}
@@ -502,7 +502,7 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Cannot kick `%s`: %s.", userID, reasonText), true)
 	}
 
-	targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, userID)
+	targetUsername := resolveUserDisplayName(ctx, userID)
 	if err := ctx.Session.GuildMemberDeleteWithReason(ctx.GuildID, userID, reason); err != nil {
 		return core.NewCommandError(fmt.Sprintf("Failed to kick user %s: %v", userID, err), true)
 	}
@@ -592,7 +592,7 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Cannot timeout `%s`: %s.", userID, reasonText), true)
 	}
 
-	targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, userID)
+	targetUsername := resolveUserDisplayName(ctx, userID)
 	until := time.Now().UTC().Add(time.Duration(minutes) * time.Minute)
 	if err := ctx.Session.GuildMemberTimeout(ctx.GuildID, userID, &until, discordgo.WithAuditLogReason(reason)); err != nil {
 		return core.NewCommandError(fmt.Sprintf("Failed to timeout user %s: %v", userID, err), true)
@@ -667,7 +667,7 @@ func (c *untimeoutCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Cannot remove timeout from `%s`: %s.", userID, reasonText), true)
 	}
 
-	targetUsername := resolveUserDisplayName(ctx.Session, ctx.GuildID, userID)
+	targetUsername := resolveUserDisplayName(ctx, userID)
 	if err := ctx.Session.GuildMemberTimeout(ctx.GuildID, userID, nil, discordgo.WithAuditLogReason(reason)); err != nil {
 		return core.NewCommandError(fmt.Sprintf("Failed to remove timeout from user %s: %v", userID, err), true)
 	}
@@ -969,51 +969,33 @@ func resolveCleanUserOption(ctx *core.Context) (string, string, error) {
 	return "", "", nil
 }
 
-func ensureManageMessagesPermission(ctx *core.Context) error {
-	if ctx == nil || ctx.Session == nil {
-		return core.NewCommandError("Session not ready. Try again shortly.", true)
+func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
+	if ctx == nil {
+		return nil
 	}
-
-	roles, err := getGuildRoles(ctx.Session, ctx.GuildID)
-	if err != nil {
-		return core.NewCommandError("Failed to resolve server roles.", true)
-	}
-	rolesByID := buildRoleIndex(roles)
-
-	ownerID, _ := getGuildOwnerID(ctx.Session, ctx.GuildID)
-
-	botID := ""
-	if ctx.Session.State != nil && ctx.Session.State.User != nil {
-		botID = ctx.Session.State.User.ID
-	}
-	if botID == "" {
-		return core.NewCommandError("Bot identity not available.", true)
-	}
-
-	actorMember := ctx.Interaction.Member
-	if actorMember == nil || actorMember.User == nil {
-		var ok bool
-		actorMember, ok = getMember(ctx.Session, ctx.GuildID, ctx.UserID)
-		if !ok || actorMember == nil {
-			return core.NewCommandError("Unable to resolve your member record.", true)
+	if router := ctx.Router(); router != nil {
+		if checker := router.GetPermissionChecker(); checker != nil {
+			return checker
 		}
+
+		checker := core.NewPermissionChecker(ctx.Session, ctx.Config)
+		if store := router.GetStore(); store != nil {
+			checker.SetStore(store)
+		}
+		return checker
 	}
 
-	botMember, ok := getMember(ctx.Session, ctx.GuildID, botID)
-	if !ok || botMember == nil {
-		return core.NewCommandError("Unable to resolve the bot member record.", true)
-	}
+	return core.NewPermissionChecker(ctx.Session, ctx.Config)
+}
 
-	actorIsOwner := ctx.IsOwner || (ownerID != "" && ctx.UserID == ownerID)
-	botIsOwner := ownerID != "" && botID == ownerID
-
-	if !actorIsOwner && !memberHasPermission(actorMember, rolesByID, ctx.GuildID, ownerID, discordgo.PermissionManageMessages) {
-		return core.NewCommandError("You need the Manage Messages permission to use this command.", true)
-	}
-	if !botIsOwner && !memberHasPermission(botMember, rolesByID, ctx.GuildID, ownerID, discordgo.PermissionManageMessages) {
-		return core.NewCommandError("I need the Manage Messages permission to delete messages.", true)
-	}
-	return nil
+func ensureManageMessagesPermission(ctx *core.Context) error {
+	_, err := prepareModerationContext(
+		ctx,
+		discordgo.PermissionManageMessages,
+		"You need the Manage Messages permission to use this command.",
+		"I need the Manage Messages permission to delete messages.",
+	)
+	return err
 }
 
 func fetchMessagesForClean(session *discordgo.Session, channelID string, target int, userID string) ([]*discordgo.Message, error) {
@@ -1154,13 +1136,38 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 		return nil, core.NewCommandError("Session not ready. Try again shortly.", true)
 	}
 
-	roles, err := getGuildRoles(ctx.Session, ctx.GuildID)
+	checker := permissionCheckerForContext(ctx)
+	if checker == nil {
+		return nil, core.NewCommandError("Permission resolver not available.", true)
+	}
+
+	roles, err := checker.ResolveRoles(ctx.GuildID)
 	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Moderation context failed to resolve guild roles",
+			"operation", "commands.moderation.prepare_context.resolve_roles",
+			"guildID", ctx.GuildID,
+			"userID", ctx.UserID,
+			"err", err,
+		)
 		return nil, core.NewCommandError("Failed to resolve server roles.", true)
 	}
 	rolesByID := buildRoleIndex(roles)
 
-	ownerID, _ := getGuildOwnerID(ctx.Session, ctx.GuildID)
+	ownerID, ownerFound, err := checker.ResolveOwnerID(ctx.GuildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Moderation context failed to resolve guild owner",
+			"operation", "commands.moderation.prepare_context.resolve_owner",
+			"guildID", ctx.GuildID,
+			"userID", ctx.UserID,
+			"err", err,
+		)
+		return nil, core.NewCommandError("Failed to resolve server owner.", true)
+	}
+	if !ownerFound {
+		ownerID = ""
+	}
 
 	botID := ""
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
@@ -1170,16 +1177,39 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 		return nil, core.NewCommandError("Bot identity not available.", true)
 	}
 
-	actorMember := ctx.Interaction.Member
+	var actorMember *discordgo.Member
+	if ctx.Interaction != nil {
+		actorMember = ctx.Interaction.Member
+	}
 	if actorMember == nil || actorMember.User == nil {
 		var ok bool
-		actorMember, ok = getMember(ctx.Session, ctx.GuildID, ctx.UserID)
+		actorMember, ok, err = checker.ResolveMember(ctx.GuildID, ctx.UserID)
+		if err != nil {
+			log.ErrorLoggerRaw().Error(
+				"Moderation context failed to resolve actor member",
+				"operation", "commands.moderation.prepare_context.resolve_actor_member",
+				"guildID", ctx.GuildID,
+				"userID", ctx.UserID,
+				"err", err,
+			)
+			return nil, core.NewCommandError("Unable to resolve your member record.", true)
+		}
 		if !ok || actorMember == nil {
 			return nil, core.NewCommandError("Unable to resolve your member record.", true)
 		}
 	}
 
-	botMember, ok := getMember(ctx.Session, ctx.GuildID, botID)
+	botMember, ok, err := checker.ResolveMember(ctx.GuildID, botID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Moderation context failed to resolve bot member",
+			"operation", "commands.moderation.prepare_context.resolve_bot_member",
+			"guildID", ctx.GuildID,
+			"botID", botID,
+			"err", err,
+		)
+		return nil, core.NewCommandError("Unable to resolve the bot member record.", true)
+	}
 	if !ok || botMember == nil {
 		return nil, core.NewCommandError("Unable to resolve the bot member record.", true)
 	}
@@ -1234,7 +1264,29 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 		return false, "cannot " + actionVerb + " the server owner"
 	}
 
-	targetMember, ok := getMember(ctx.Session, ctx.GuildID, targetID)
+	checker := permissionCheckerForContext(ctx)
+	if checker == nil {
+		if requireMember {
+			return false, "target member could not be resolved right now"
+		}
+		return true, ""
+	}
+
+	targetMember, ok, err := checker.ResolveMember(ctx.GuildID, targetID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Moderation target validation failed to resolve target member",
+			"operation", "commands.moderation.can_moderate_target.resolve_target_member",
+			"guildID", ctx.GuildID,
+			"targetID", targetID,
+			"action", actionVerb,
+			"err", err,
+		)
+		if requireMember {
+			return false, "target member could not be resolved right now"
+		}
+		return true, ""
+	}
 	if !ok || targetMember == nil {
 		if requireMember {
 			return false, "target is not a member of this server"
@@ -1263,65 +1315,36 @@ func buildRoleIndex(roles []*discordgo.Role) map[string]*discordgo.Role {
 	return byID
 }
 
-func getGuildRoles(session *discordgo.Session, guildID string) ([]*discordgo.Role, error) {
-	if session == nil {
-		return nil, fmt.Errorf("session not ready")
-	}
-	if session.State != nil {
-		if g, _ := session.State.Guild(guildID); g != nil && len(g.Roles) > 0 {
-			return g.Roles, nil
-		}
-	}
-	return session.GuildRoles(guildID)
-}
-
-func getGuildOwnerID(session *discordgo.Session, guildID string) (string, bool) {
-	if session == nil || guildID == "" {
-		return "", false
-	}
-	if session.State != nil {
-		if g, _ := session.State.Guild(guildID); g != nil && g.OwnerID != "" {
-			return g.OwnerID, true
-		}
-	}
-	guild, err := session.Guild(guildID)
-	if err != nil || guild == nil || guild.OwnerID == "" {
-		return "", false
-	}
-	return guild.OwnerID, true
-}
-
-func getMember(session *discordgo.Session, guildID, userID string) (*discordgo.Member, bool) {
-	if session == nil || guildID == "" || userID == "" {
-		return nil, false
-	}
-	if session.State != nil {
-		if m, _ := session.State.Member(guildID, userID); m != nil {
-			return m, true
-		}
-	}
-	member, err := session.GuildMember(guildID, userID)
-	if err != nil || member == nil {
-		return nil, false
-	}
-	return member, true
-}
-
-func resolveUserDisplayName(session *discordgo.Session, guildID, userID string) string {
-	if session == nil || userID == "" {
+func resolveUserDisplayName(ctx *core.Context, userID string) string {
+	if ctx == nil || ctx.Session == nil || userID == "" {
 		return userID
 	}
-	if member, ok := getMember(session, guildID, userID); ok && member != nil && member.User != nil {
-		if username := strings.TrimSpace(member.User.Username); username != "" {
-			return username
+
+	checker := permissionCheckerForContext(ctx)
+	if checker != nil {
+		member, ok, err := checker.ResolveMember(ctx.GuildID, userID)
+		if err != nil {
+			log.ErrorLoggerRaw().Error(
+				"Moderation failed to resolve display name member",
+				"operation", "commands.moderation.resolve_display_name.resolve_member",
+				"guildID", ctx.GuildID,
+				"userID", userID,
+				"err", err,
+			)
+		} else if ok && member != nil && member.User != nil {
+			if username := strings.TrimSpace(member.User.Username); username != "" {
+				return username
+			}
 		}
 	}
-	user, err := session.User(userID)
+
+	user, err := ctx.Session.User(userID)
 	if err == nil && user != nil {
 		if username := strings.TrimSpace(user.Username); username != "" {
 			return username
 		}
 	}
+
 	return userID
 }
 

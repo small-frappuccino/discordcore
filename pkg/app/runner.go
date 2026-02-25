@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	stdErrors "errors"
 	"fmt"
 	"strings"
 	"time"
@@ -31,6 +32,8 @@ var (
 	newCommandHandler      = commands.NewCommandHandler
 	setupCommandHandler    = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
 	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
+	closeStore             = func(c interface{ Close() error }) error { return c.Close() }
+	closeDiscordSession    = func(c interface{ Close() error }) error { return c.Close() }
 	waitForInterrupt       = util.WaitForInterrupt
 	shutdownDelay          = time.Sleep
 )
@@ -448,14 +451,17 @@ func Run(appName, tokenEnv string) error {
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeoutCause(context.Background(), 30*time.Second, fmt.Errorf("application shutdown"))
 	defer shutdownCancel()
+	var shutdownErrs []error
 
 	if err := serviceManager.StopAll(); err != nil {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some services failed to stop cleanly: %v", err))
+		shutdownErrs = append(shutdownErrs, fmt.Errorf("stop services: %w", err))
 	}
 
 	if commandHandler != nil {
 		if err := shutdownCommandHandler(commandHandler); err != nil {
 			log.ErrorLoggerRaw().Error("Command handler shutdown failed", "err", err)
+			shutdownErrs = append(shutdownErrs, fmt.Errorf("shutdown command handler: %w", err))
 		}
 	}
 
@@ -463,14 +469,23 @@ func Run(appName, tokenEnv string) error {
 	shutdownDelay(100 * time.Millisecond)
 
 	if store != nil {
-		_ = store.Close()
+		if err := closeStore(store); err != nil {
+			log.ErrorLoggerRaw().Error("Store close failed during shutdown", "err", err)
+			shutdownErrs = append(shutdownErrs, fmt.Errorf("close store: %w", err))
+		}
 	}
 
 	if discordSession != nil {
-		_ = discordSession.Close()
+		if err := closeDiscordSession(discordSession); err != nil {
+			log.ErrorLoggerRaw().Error("Discord session close failed during shutdown", "err", err)
+			shutdownErrs = append(shutdownErrs, fmt.Errorf("close discord session: %w", err))
+		}
 	}
 
 	_ = shutdownCtx
+	if len(shutdownErrs) > 0 {
+		return fmt.Errorf("shutdown: %w", stdErrors.Join(shutdownErrs...))
+	}
 	return nil
 }
 
