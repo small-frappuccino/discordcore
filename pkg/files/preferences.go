@@ -61,13 +61,18 @@ func (mgr *ConfigManager) LoadConfig() error {
 	if err != nil {
 		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.configFilePath)
 	}
+	orderMigrated := normalizeAutoAssignmentRoleOrder(mgr.config)
+	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
+		mgr.mu.Unlock()
+		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
+	}
 	mgr.mu.Unlock()
 
-	if dupCount > 0 {
+	if dupCount > 0 || orderMigrated {
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
-			return fmt.Errorf("save config after dedupe: %w", saveErr)
+			return fmt.Errorf("save config after normalization: %w", saveErr)
 		}
-		log.ApplicationLogger().Info("Saved config after dedupe", "path", mgr.configFilePath, "duplicates", dupCount)
+		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.configFilePath, "duplicates", dupCount, "autoRoleOrderMigrated", orderMigrated)
 	}
 	return nil
 }
@@ -83,6 +88,9 @@ func (mgr *ConfigManager) SaveConfig() error {
 func (mgr *ConfigManager) saveConfigLocked() error {
 	if mgr.config == nil {
 		return errors.New(ErrCannotSaveNilConfig)
+	}
+	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
+		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
 	}
 
 	err := mgr.jsonManager.Save(mgr.config)
@@ -692,6 +700,10 @@ func LoadSettingsFile() (*BotConfig, error) {
 		}
 		return nil, fmt.Errorf("failed to load settings from %s: %w", settingsPath, err)
 	}
+	_ = normalizeAutoAssignmentRoleOrder(config)
+	if validationErr := validateBotConfig(config); validationErr != nil {
+		return nil, fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
+	}
 
 	return config, nil
 }
@@ -700,6 +712,10 @@ func LoadSettingsFile() (*BotConfig, error) {
 func SaveSettingsFile(config *BotConfig) error {
 	if config == nil {
 		return fmt.Errorf("cannot save nil config")
+	}
+	_ = normalizeAutoAssignmentRoleOrder(config)
+	if validationErr := validateBotConfig(config); validationErr != nil {
+		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
 	}
 
 	settingsPath := util.GetSettingsFilePath()

@@ -159,11 +159,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
 		required := guildConfig.Roles.AutoAssignment.RequiredRoles
 		if targetRoleID != "" && len(required) >= 2 {
-			roleA := required[0]
-			roleB := required[1]
 			if member != nil {
 				roles := member.Roles
-				if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
+				if evaluateAutoRoleDecision(roles, targetRoleID, required) == autoRoleAddTarget {
 					if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
 						slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 					} else {
@@ -175,7 +173,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(s *discordgo.Session, m *dis
 				if mm, err := mes.session.GuildMember(m.GuildID, m.User.ID); err == nil && mm != nil {
 					member = mm
 					roles := mm.Roles
-					if hasRoleID(roles, roleA) && hasRoleID(roles, roleB) && !hasRoleID(roles, targetRoleID) {
+					if evaluateAutoRoleDecision(roles, targetRoleID, required) == autoRoleAddTarget {
 						if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
 							slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 						} else {
@@ -348,24 +346,15 @@ func (mes *MemberEventService) handleGuildMemberUpdate(s *discordgo.Session, m *
 	if targetRoleID == "" || len(required) < 2 {
 		return
 	}
-	roleA := required[0]
-	roleB := required[1]
-	hasTarget := hasRoleID(m.Roles, targetRoleID)
-	hasA := hasRoleID(m.Roles, roleA)
-	hasB := hasRoleID(m.Roles, roleB)
-
-	// If role A was lost and the target role is still present, remove the target role
-	if hasTarget && !hasA {
+	switch evaluateAutoRoleDecision(m.Roles, targetRoleID, required) {
+	case autoRoleRemoveTarget:
 		if err := mes.session.GuildMemberRoleRemove(m.GuildID, m.User.ID, targetRoleID); err != nil {
 			slog.Error(fmt.Sprintf("Failed to remove target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 		} else {
 			slog.Info(fmt.Sprintf("Removed target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
 		}
 		return
-	}
-
-	// If the user has both prerequisite roles and doesn't have the target role, grant the target role
-	if !hasTarget && hasA && hasB {
+	case autoRoleAddTarget:
 		if err := mes.session.GuildMemberRoleAdd(m.GuildID, m.User.ID, targetRoleID); err != nil {
 			slog.Error(fmt.Sprintf("Failed to grant target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 		} else {

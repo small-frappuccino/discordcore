@@ -26,7 +26,7 @@ func init() {
 		MemberLeave:      0xEB6123, // Pumpkin
 		MessageEdit:      0xEB6123, // Pumpkin
 		MessageDelete:    0xF28B82, // Pastel red
-		AutomodAction:    0xF28B82, // Pastel red
+		AutomodAction:    0xDFA3B7, // Soft rose
 		MemberRoleUpdate: 0xEB6123, // Pumpkin
 	})
 }

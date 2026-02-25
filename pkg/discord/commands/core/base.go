@@ -33,8 +33,14 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 	}
 
 	isOwner := false
-	if guildID != "" {
-		isOwner = cb.isGuildOwner(guildID, userID)
+	if guildID != "" && userID != "" {
+		checker := cb.checker
+		if checker == nil && cb.session != nil && cb.configManager != nil {
+			checker = NewPermissionChecker(cb.session, cb.configManager)
+		}
+		if checker != nil {
+			isOwner = checker.IsOwner(guildID, userID)
+		}
 	}
 
 	logger := log.GlobalLogger
@@ -51,44 +57,6 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 	}
 
 	return ctx
-}
-
-// isGuildOwner checks if the user is the server owner
-func (cb *ContextBuilder) isGuildOwner(guildID, userID string) bool {
-	if guildID == "" || userID == "" {
-		return false
-	}
-
-	if cb.checker != nil {
-		ownerID, ok, err := cb.checker.ResolveOwnerID(guildID)
-		if err != nil {
-			log.ErrorLoggerRaw().Error(
-				"Context builder failed to resolve guild owner",
-				"operation", "commands.context_builder.is_guild_owner.resolve_owner",
-				"guildID", guildID,
-				"userID", userID,
-				"err", err,
-			)
-			return false
-		}
-		return ok && ownerID == userID
-	}
-
-	// Prefer state cache to avoid REST calls when possible
-	if cb.session != nil && cb.session.State != nil {
-		if g, _ := cb.session.State.Guild(guildID); g != nil {
-			return g.OwnerID == userID
-		}
-	}
-	// Fallback to REST only if necessary
-	if cb.session == nil {
-		return false
-	}
-	guild, err := cb.session.Guild(guildID)
-	if err != nil || guild == nil {
-		return false
-	}
-	return guild.OwnerID == userID
 }
 
 // extractUserID extracts the user ID from the interaction

@@ -406,23 +406,25 @@ func (ms *MonitoringService) Start() error {
 		}
 		start := time.Now()
 		totalUpdates := 0
+		botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
 		for _, gcfg := range cfg.Guilds {
 			members, err := ms.fetchAllGuildMembers(gcfg.GuildID)
 			if err != nil {
 				log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
 				continue
 			}
+			botUsers := make(map[string]struct{})
 			for _, member := range members {
 				if member == nil || member.User == nil {
 					continue
+				}
+				if member.User.Bot {
+					botUsers[member.User.ID] = struct{}{}
 				}
 				if !member.JoinedAt.IsZero() {
 					if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
 						log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
 					}
-				}
-				if len(member.Roles) == 0 {
-					continue
 				}
 				if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
 					log.ApplicationLogger().Warn("Failed to upsert roles for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
@@ -431,6 +433,7 @@ func (ms *MonitoringService) Start() error {
 				ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
 				totalUpdates++
 			}
+			botUsersByGuild[gcfg.GuildID] = botUsers
 		}
 		// Reconcile target role based on local DB data after the refresh
 		reconciledAdds := 0
@@ -442,36 +445,28 @@ func (ms *MonitoringService) Start() error {
 				if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
 					continue
 				}
-				roleA := gcfg.Roles.AutoAssignment.RequiredRoles[0]
-				roleB := gcfg.Roles.AutoAssignment.RequiredRoles[1]
+				targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID
+				requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
 				memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
 				if err != nil {
 					log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
 					continue
 				}
+				botUsers := botUsersByGuild[gcfg.GuildID]
 				for userID, roles := range memberRoles {
-					hasA, hasB, hasTarget := false, false, false
-					for _, r := range roles {
-						if r == roleA {
-							hasA = true
-						} else if r == roleB {
-							hasB = true
-						} else if r == gcfg.Roles.AutoAssignment.TargetRoleID {
-							hasTarget = true
-						}
+					if _, isBot := botUsers[userID]; isBot {
+						continue
 					}
-					// Grant target role if both prerequisites are present and target is missing
-					if hasA && hasB && !hasTarget {
-						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, gcfg.Roles.AutoAssignment.TargetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.Roles.AutoAssignment.TargetRoleID, "err", err)
+					switch evaluateAutoRoleDecision(roles, targetRoleID, requiredRoles) {
+					case autoRoleAddTarget:
+						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
 						} else {
 							reconciledAdds++
 						}
-					}
-					// Remove target role if prerequisite A is missing
-					if hasTarget && !hasA {
-						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, gcfg.Roles.AutoAssignment.TargetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", gcfg.Roles.AutoAssignment.TargetRoleID, "err", err)
+					case autoRoleRemoveTarget:
+						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
+							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
 						} else {
 							reconciledRemoves++
 						}
@@ -1128,8 +1123,9 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		if _, _, err := ms.store.UpsertAvatar(guildID, member.User.ID, avatarHash, time.Now()); err != nil {
 			log.ApplicationLogger().Warn("Failed to persist member avatar snapshot", "guildID", guildID, "userID", member.User.ID, "err", err)
 		}
-		// Persist roles snapshot for the member to enable efficient role diffing later
-		if ms.store != nil && len(member.Roles) > 0 {
+		// Persist roles snapshot for the member to enable efficient role diffing later.
+		// Empty role slices are also persisted so stale snapshots are cleared.
+		if ms.store != nil {
 			if err := ms.store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now()); err != nil {
 				log.ApplicationLogger().Warn("Failed to persist member roles snapshot", "guildID", guildID, "userID", member.User.ID, "err", err)
 			}
@@ -2259,7 +2255,12 @@ func (ms *MonitoringService) cleanupRolesCache() {
 }
 
 func (ms *MonitoringService) cacheRolesSet(guildID, userID string, roles []string) {
+	key := guildID + ":" + userID
 	if len(roles) == 0 {
+		// Empty snapshot means "no tracked roles"; drop any stale cache entry.
+		ms.rolesCacheMu.Lock()
+		delete(ms.rolesCache, key)
+		ms.rolesCacheMu.Unlock()
 		return
 	}
 	// TTL: prefer guild-configured value, fallback to service default (5m)
@@ -2274,7 +2275,6 @@ func (ms *MonitoringService) cacheRolesSet(guildID, userID string, roles []strin
 	if ttl <= 0 {
 		ttl = 5 * time.Minute
 	}
-	key := guildID + ":" + userID
 	ms.rolesCacheMu.Lock()
 	ms.rolesCache[key] = cachedRoles{
 		roles:     append([]string(nil), roles...),

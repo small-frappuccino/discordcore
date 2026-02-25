@@ -118,7 +118,7 @@ func (t *Theme) ensureDefaults() {
 		t.MessageDelete = 0xF7768E
 	}
 	if t.AutomodAction == 0 {
-		t.AutomodAction = 0xF7768E
+		t.AutomodAction = 0xDFA3B7
 	}
 	if t.MemberRoleUpdate == 0 {
 		t.MemberRoleUpdate = 0x7AA2F7
@@ -153,7 +153,7 @@ func defaultTheme() *Theme {
 		MemberLeave:      0xF7768E,
 		MessageEdit:      0xE0AF68,
 		MessageDelete:    0xF7768E,
-		AutomodAction:    0xF7768E,
+		AutomodAction:    0xDFA3B7,
 		MemberRoleUpdate: 0x7AA2F7,
 	}
 	th.ensureDefaults()
