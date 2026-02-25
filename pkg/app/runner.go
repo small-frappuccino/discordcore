@@ -38,6 +38,15 @@ var (
 	shutdownDelay          = time.Sleep
 )
 
+const (
+	controlAddrEnv                                = "ALICE_CONTROL_ADDR"
+	controlBearerTokenEnv                         = "ALICE_CONTROL_BEARER_TOKEN"
+	controlDiscordOAuthClientIDEnv                = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID"
+	controlDiscordOAuthClientSecretEnv            = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
+	controlDiscordOAuthRedirectURIEnv             = "ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI"
+	controlDiscordOAuthIncludeGuildMembersReadEnv = "ALICE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ"
+)
+
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
 // appName affects config/cache/log paths; tokenEnv is the environment variable containing the bot token.
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
@@ -240,20 +249,36 @@ func Run(appName, tokenEnv string) error {
 
 	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerAutoSyncCoordinator)
 
-	controlAddr := strings.TrimSpace(util.EnvString("ALICE_CONTROL_ADDR", ""))
-	controlBearerToken := strings.TrimSpace(util.EnvString("ALICE_CONTROL_BEARER_TOKEN", ""))
+	controlAddr := strings.TrimSpace(util.EnvString(controlAddrEnv, ""))
+	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
 	var controlServer *control.Server
 	if controlAddr != "" {
-		if controlBearerToken == "" {
-			return fmt.Errorf("ALICE_CONTROL_BEARER_TOKEN is required when ALICE_CONTROL_ADDR is set")
+		oauthConfig, err := loadControlDiscordOAuthConfigFromEnv()
+		if err != nil {
+			return fmt.Errorf("load control discord oauth config: %w", err)
 		}
+		if controlBearerToken == "" && oauthConfig == nil {
+			return fmt.Errorf("%s is required when %s is set and discord oauth is not configured", controlBearerTokenEnv, controlAddrEnv)
+		}
+
 		controlServer = control.NewServer(controlAddr, configManager, runtimeApplier)
 		if controlServer == nil {
 			log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
 		} else {
-			controlServer.SetBearerToken(controlBearerToken)
+			if controlBearerToken != "" {
+				controlServer.SetBearerToken(controlBearerToken)
+			}
 			controlServer.SetPartnerBoardService(partnerBoardAppService)
 			controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
+			if oauthConfig != nil {
+				if err := controlServer.SetDiscordOAuthConfig(*oauthConfig); err != nil {
+					return fmt.Errorf("configure control discord oauth: %w", err)
+				}
+				log.ApplicationLogger().Info(
+					"Control server Discord OAuth enabled",
+					"scopes", strings.Join(control.DiscordOAuthScopes(oauthConfig.IncludeGuildsMembersRead), " "),
+				)
+			}
 			if err := controlServer.Start(); err != nil {
 				return fmt.Errorf("start control server: %w", err)
 			}
@@ -487,6 +512,47 @@ func Run(appName, tokenEnv string) error {
 		return fmt.Errorf("shutdown: %w", stdErrors.Join(shutdownErrs...))
 	}
 	return nil
+}
+
+func loadControlDiscordOAuthConfigFromEnv() (*control.DiscordOAuthConfig, error) {
+	clientID := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientIDEnv, ""))
+	clientSecret := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientSecretEnv, ""))
+	redirectURI := strings.TrimSpace(util.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
+	includeGuildMembersRead := util.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
+
+	if clientID == "" && clientSecret == "" && redirectURI == "" {
+		if includeGuildMembersRead {
+			return nil, fmt.Errorf(
+				"%s=true requires %s, %s, and %s",
+				controlDiscordOAuthIncludeGuildMembersReadEnv,
+				controlDiscordOAuthClientIDEnv,
+				controlDiscordOAuthClientSecretEnv,
+				controlDiscordOAuthRedirectURIEnv,
+			)
+		}
+		return nil, nil
+	}
+
+	missing := make([]string, 0, 3)
+	if clientID == "" {
+		missing = append(missing, controlDiscordOAuthClientIDEnv)
+	}
+	if clientSecret == "" {
+		missing = append(missing, controlDiscordOAuthClientSecretEnv)
+	}
+	if redirectURI == "" {
+		missing = append(missing, controlDiscordOAuthRedirectURIEnv)
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("incomplete Discord OAuth configuration: missing %s", strings.Join(missing, ", "))
+	}
+
+	return &control.DiscordOAuthConfig{
+		ClientID:                 clientID,
+		ClientSecret:             clientSecret,
+		RedirectURI:              redirectURI,
+		IncludeGuildsMembersRead: includeGuildMembersRead,
+	}, nil
 }
 
 // formatStartupMessage builds the startup log line.

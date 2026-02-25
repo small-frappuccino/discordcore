@@ -190,17 +190,36 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 ## Control API (Bearer auth)
 
-Control API is optional and starts only when both env vars are set:
+Control API is optional and starts when `ALICE_CONTROL_ADDR` is set and at least one auth mode is configured:
 
 - `ALICE_CONTROL_ADDR` (example: `127.0.0.1:8080`)
-- `ALICE_CONTROL_BEARER_TOKEN` (required when `ALICE_CONTROL_ADDR` is set)
+- `ALICE_CONTROL_BEARER_TOKEN` (required only when Discord OAuth is not configured)
 
-Authentication contract:
+Authentication contract for `/v1/*` routes:
 
-- Header must be `Authorization: Bearer <token>`
-- Missing/invalid scheme/token returns `401`
-- Wrong token returns `403`
-- Requests without configured server token are denied (`Start()` fails)
+- Supports `Authorization: Bearer <token>` or Discord OAuth session cookie.
+- Bearer: missing/invalid scheme/token returns `401`, wrong token returns `403`.
+- Session: created by OAuth callback and read from HttpOnly cookie.
+- Requests without any valid auth return `401`.
+
+Discord OAuth2 endpoints (optional, same control server):
+
+- `GET /auth/discord/login` redirects to Discord OAuth authorize URL and emits anti-CSRF `state` cookie.
+- `GET /auth/discord/callback` validates `state`, exchanges `code` at Discord token endpoint, resolves `/users/@me`, creates server-side session, and sets session cookie.
+- `GET /auth/me` returns current authenticated session user.
+- `POST /auth/logout` invalidates current session and clears session cookie.
+- Token exchange request uses `Content-Type: application/x-www-form-urlencoded`.
+
+Enable OAuth routes by setting all vars below:
+
+- `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID`
+- `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
+- `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI`
+
+Scopes:
+
+- default/minimum: `identify guilds`
+- optional member scope: set `ALICE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ=true` to include `guilds.members.read`
 
 Partner board endpoints (all under `/v1/guilds/{guild_id}`):
 

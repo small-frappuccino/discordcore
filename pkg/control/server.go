@@ -31,6 +31,7 @@ type Server struct {
 	configManager       *files.ConfigManager
 	partnerBoardService partners.BoardService
 	partnerBoardSyncer  partners.GuildSyncExecutor
+	discordOAuth        *discordOAuthProvider
 	runtimeApplier      *runtimeapply.Manager
 	httpServer          *http.Server
 	listener            net.Listener
@@ -56,6 +57,10 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	mux.HandleFunc("/auth/discord/login", s.handleDiscordOAuthLogin)
+	mux.HandleFunc("/auth/discord/callback", s.handleDiscordOAuthCallback)
+	mux.HandleFunc("/auth/me", s.handleDiscordOAuthMe)
+	mux.HandleFunc("/auth/logout", s.handleDiscordOAuthLogout)
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
 	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
 
@@ -91,8 +96,8 @@ func (s *Server) Start() error {
 	if s == nil {
 		return nil
 	}
-	if strings.TrimSpace(s.authBearerToken) == "" {
-		return fmt.Errorf("start control server: bearer token is required")
+	if strings.TrimSpace(s.authBearerToken) == "" && s.discordOAuth == nil {
+		return fmt.Errorf("start control server: bearer token is required when discord oauth is not configured")
 	}
 
 	ln, err := net.Listen("tcp", s.httpServer.Addr)
@@ -667,30 +672,42 @@ func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	token := strings.TrimSpace(s.authBearerToken)
-	if token == "" {
+	oauthConfigured := s.discordOAuth != nil
+	if token == "" && !oauthConfigured {
 		http.Error(w, "control authentication is not configured", http.StatusServiceUnavailable)
 		return false
 	}
 
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
-	if authz == "" {
-		http.Error(w, "missing authorization header", http.StatusUnauthorized)
-		return false
+	if authz != "" {
+		if !strings.HasPrefix(authz, "Bearer ") {
+			http.Error(w, "invalid authorization scheme", http.StatusUnauthorized)
+			return false
+		}
+		provided := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
+		if provided == "" {
+			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			return false
+		}
+		if token == "" {
+			http.Error(w, "control bearer authentication is not configured", http.StatusServiceUnavailable)
+			return false
+		}
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return false
+		}
+		return true
 	}
-	if !strings.HasPrefix(authz, "Bearer ") {
-		http.Error(w, "invalid authorization scheme", http.StatusUnauthorized)
-		return false
+
+	if oauthConfigured {
+		if _, err := s.discordOAuth.sessionFromRequest(r); err == nil {
+			return true
+		}
 	}
-	provided := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-	if provided == "" {
-		http.Error(w, "missing bearer token", http.StatusUnauthorized)
-		return false
-	}
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return false
-	}
-	return true
+
+	http.Error(w, "missing authorization", http.StatusUnauthorized)
+	return false
 }
 
 func splitGuildRoute(path string) (string, []string, bool) {
