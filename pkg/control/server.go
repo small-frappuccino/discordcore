@@ -20,17 +20,36 @@ import (
 )
 
 const (
-	defaultMaxBodyBytes = 64 * 1024
-	defaultSyncTimeout  = 20 * time.Second
+	defaultMaxBodyBytes          = 64 * 1024
+	defaultSyncTimeout           = 20 * time.Second
+	defaultManageableGuildsQuery = 20 * time.Second
 )
+
+type botGuildIDsProvider func(context.Context) ([]string, error)
+
+type requestAuthMode string
+
+const (
+	requestAuthModeUnknown             requestAuthMode = ""
+	requestAuthModeBearer              requestAuthMode = "bearer"
+	requestAuthModeDiscordOAuthSession requestAuthMode = "discord_oauth_session"
+)
+
+type requestAuthorization struct {
+	mode         requestAuthMode
+	oauthSession discordOAuthSession
+}
 
 // Server exposes operational controls for a running Discordcore instance.
 type Server struct {
 	addr                string
 	authBearerToken     string
+	tlsCertFile         string
+	tlsKeyFile          string
 	configManager       *files.ConfigManager
 	partnerBoardService partners.BoardService
 	partnerBoardSyncer  partners.GuildSyncExecutor
+	botGuildIDsProvider botGuildIDsProvider
 	discordOAuth        *discordOAuthProvider
 	runtimeApplier      *runtimeapply.Manager
 	httpServer          *http.Server
@@ -61,6 +80,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/auth/discord/callback", s.handleDiscordOAuthCallback)
 	mux.HandleFunc("/auth/me", s.handleDiscordOAuthMe)
 	mux.HandleFunc("/auth/logout", s.handleDiscordOAuthLogout)
+	mux.HandleFunc("/auth/guilds/manageable", s.handleDiscordOAuthManageableGuilds)
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
 	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
 
@@ -91,6 +111,36 @@ func (s *Server) SetBearerToken(token string) {
 	s.authBearerToken = strings.TrimSpace(token)
 }
 
+// SetTLSCertificates configures optional TLS for control server listeners.
+func (s *Server) SetTLSCertificates(certFile, keyFile string) error {
+	if s == nil {
+		return nil
+	}
+
+	certFile = strings.TrimSpace(certFile)
+	keyFile = strings.TrimSpace(keyFile)
+	if certFile == "" && keyFile == "" {
+		s.tlsCertFile = ""
+		s.tlsKeyFile = ""
+		return nil
+	}
+	if certFile == "" || keyFile == "" {
+		return fmt.Errorf("configure control tls: both cert and key files are required")
+	}
+
+	s.tlsCertFile = certFile
+	s.tlsKeyFile = keyFile
+	return nil
+}
+
+// SetBotGuildIDsProvider sets a provider used by OAuth manageable-guild endpoints.
+func (s *Server) SetBotGuildIDsProvider(provider func(context.Context) ([]string, error)) {
+	if s == nil || provider == nil {
+		return
+	}
+	s.botGuildIDsProvider = provider
+}
+
 // Start opens the control server listening socket.
 func (s *Server) Start() error {
 	if s == nil {
@@ -99,6 +149,10 @@ func (s *Server) Start() error {
 	if strings.TrimSpace(s.authBearerToken) == "" && s.discordOAuth == nil {
 		return fmt.Errorf("start control server: bearer token is required when discord oauth is not configured")
 	}
+	if (s.tlsCertFile == "") != (s.tlsKeyFile == "") {
+		return fmt.Errorf("start control server: both TLS cert and key files are required")
+	}
+	tlsEnabled := s.tlsCertFile != "" && s.tlsKeyFile != ""
 
 	ln, err := net.Listen("tcp", s.httpServer.Addr)
 	if err != nil {
@@ -106,10 +160,16 @@ func (s *Server) Start() error {
 	}
 	s.listener = ln
 
-	log.ApplicationLogger().Info("Control server listening", "addr", s.httpServer.Addr)
+	log.ApplicationLogger().Info("Control server listening", "addr", s.httpServer.Addr, "tls", tlsEnabled)
 
 	go func() {
-		if err := s.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		var err error
+		if tlsEnabled {
+			err = s.httpServer.ServeTLS(ln, s.tlsCertFile, s.tlsKeyFile)
+		} else {
+			err = s.httpServer.Serve(ln)
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.ApplicationLogger().Error("Control server stopped unexpectedly", "err", err)
 		}
 	}()
@@ -138,7 +198,7 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
-	if !s.authorizeRequest(w, r) {
+	if _, ok := s.authorizeRequest(w, r); !ok {
 		return
 	}
 
@@ -347,7 +407,8 @@ func boolPtr(v bool) *bool {
 }
 
 func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request) {
-	if !s.authorizeRequest(w, r) {
+	auth, ok := s.authorizeRequest(w, r)
+	if !ok {
 		return
 	}
 
@@ -367,6 +428,9 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 	}
 	if guildID == "" {
 		http.Error(w, "guild_id is required", http.StatusBadRequest)
+		return
+	}
+	if !s.authorizeGuildAccess(w, r, auth, guildID) {
 		return
 	}
 
@@ -665,49 +729,60 @@ func partnerBoardErrorStatus(err error) int {
 	}
 }
 
-func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) bool {
+func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) (requestAuthorization, bool) {
 	if s == nil {
 		http.Error(w, "control server unavailable", http.StatusInternalServerError)
-		return false
+		return requestAuthorization{}, false
 	}
 
 	token := strings.TrimSpace(s.authBearerToken)
 	oauthConfigured := s.discordOAuth != nil
 	if token == "" && !oauthConfigured {
 		http.Error(w, "control authentication is not configured", http.StatusServiceUnavailable)
-		return false
+		return requestAuthorization{}, false
 	}
 
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authz != "" {
 		if !strings.HasPrefix(authz, "Bearer ") {
 			http.Error(w, "invalid authorization scheme", http.StatusUnauthorized)
-			return false
+			return requestAuthorization{}, false
 		}
 		provided := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
 		if provided == "" {
 			http.Error(w, "missing bearer token", http.StatusUnauthorized)
-			return false
+			return requestAuthorization{}, false
 		}
 		if token == "" {
 			http.Error(w, "control bearer authentication is not configured", http.StatusServiceUnavailable)
-			return false
+			return requestAuthorization{}, false
+		}
+		if strings.TrimSpace(r.Header.Get("Origin")) != "" {
+			http.Error(w, "bearer authentication is restricted to internal automation", http.StatusForbidden)
+			return requestAuthorization{}, false
 		}
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
 			http.Error(w, "forbidden", http.StatusForbidden)
-			return false
+			return requestAuthorization{}, false
 		}
-		return true
+		return requestAuthorization{mode: requestAuthModeBearer}, true
 	}
 
 	if oauthConfigured {
-		if _, err := s.discordOAuth.sessionFromRequest(r); err == nil {
-			return true
+		if session, err := s.discordOAuth.sessionFromRequest(r); err == nil {
+			if err := s.discordOAuth.validateSessionCSRFToken(r, session); err != nil {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return requestAuthorization{}, false
+			}
+			return requestAuthorization{
+				mode:         requestAuthModeDiscordOAuthSession,
+				oauthSession: session,
+			}, true
 		}
 	}
 
 	http.Error(w, "missing authorization", http.StatusUnauthorized)
-	return false
+	return requestAuthorization{}, false
 }
 
 func splitGuildRoute(path string) (string, []string, bool) {

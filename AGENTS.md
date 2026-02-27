@@ -1,4 +1,4 @@
-# AGENTS.md — AI Code Maintainer Instructions (Go + Wails + Discord Bot)
+# AGENTS.md — AI Code Maintainer Instructions (Go + Discord Bot)
 
 This document defines the conventions, expectations, and operating rules for an AI agent maintaining this workspace.
 
@@ -22,10 +22,10 @@ Avoid cosmetic or stylistic refactors unless they deliver clear technical value.
 This workspace consists of two sibling directories:
 
 - `../discordcore` → **Primary codebase (source of truth)**  
-  Contains the core Discord logic, APIs, domain rules, and infrastructure.
+  Contains the core Discord logic, APIs, domain rules, infrastructure, and the repository-root web dashboard assets.
 
 - `../alicebot` → **Wrapper / host application**  
-  Contains the Discord bot binary, Wails desktop app, configuration, and integration glue.  
+  Contains the Discord bot binary, configuration, and integration glue.  
   In essence, `alicebot` is a thin shell around `discordcore`.
 
 ### Rules
@@ -35,8 +35,9 @@ This workspace consists of two sibling directories:
 - `../alicebot` should contain **only**:
   - application bootstrap
   - wiring / dependency injection
-  - Wails UI integration
   - configuration and deployment concerns
+- The current web dashboard assets live in **`../discordcore`** at repository root.
+- That frontend must remain a thin Control API client with no business logic.
 - If a feature requires changes in both repos:
   - implement the `discordcore` side first
   - then wire it in `alicebot`
@@ -51,9 +52,9 @@ This workspace consists of two sibling directories:
 - `go test ./...` and `go vet ./...` must pass in every modified repository.
 - Builds must fail fast with **clear, actionable errors** when prerequisites are missing.
 
-### Wails
+### Frontend assets
 
-Wails depends on frontend assets (typically `frontend/dist`).
+Frontend assets currently live in `../discordcore` at repository root.
 
 If `//go:embed` is used:
 - **The Go build must not break** when frontend assets are missing (CI, headless builds, or backend-only workflows).
@@ -64,7 +65,7 @@ If `//go:embed` is used:
 
 Any change involving assets must be validated in:
 - backend-only build
-- full UI build
+- full frontend build
 - runtime execution
 
 ### Discord
@@ -140,7 +141,7 @@ Critical flows must emit logs:
 - Discord connection lifecycle
 - command execution
 - moderation actions
-- Wails initialization
+- frontend/control server initialization
 
 Errors must include:
 - operation
@@ -180,11 +181,11 @@ Avoid tests that require a real Discord connection.
 
 ---
 
-## 9) Wails and UI integration
+## 9) UI integration
 
 - The UI must never contain business logic.
 - All rules, validations, and side-effects live in **`discordcore`**.
-- Wails should only call exported services with clear contracts.
+- Frontend code should only call exported services with clear contracts.
 
 QoL features in the UI must map to real backend services — never UI-only state.
 
@@ -211,6 +212,9 @@ If something is:
 
 It belongs in **`alicebot`**.
 
+Exception:
+The current repository-root Control API dashboard scaffold is intentionally kept in **`discordcore`** by project choice. Keep it thin and API-only.
+
 Duplication across the two must be eliminated in favor of `discordcore`.
 
 ---
@@ -222,7 +226,7 @@ Duplication across the two must be eliminated in favor of `discordcore`.
 - [ ] No new tight coupling or circular dependencies
 - [ ] Errors are contextual and logged
 - [ ] Concurrency is safe and cancellable
-- [ ] Wails embeds do not break backend builds
+- [ ] Frontend assets do not break backend builds
 - [ ] Config or behavior changes are documented
 
 ---

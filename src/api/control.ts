@@ -69,18 +69,36 @@ export interface SyncResponse {
   synced: boolean;
 }
 
+export interface ManageableGuild {
+  id: string;
+  name: string;
+  icon?: string;
+  owner: boolean;
+  permissions: number;
+}
+
+export interface ManageableGuildsResponse {
+  status: string;
+  count: number;
+  guilds: ManageableGuild[];
+}
+
+export interface AuthSessionResponse {
+  status: string;
+  csrf_token: string;
+}
+
 export interface ControlApiClientConfig {
   baseUrl: string;
-  bearerToken: string;
 }
 
 export class ControlApiClient {
   private readonly baseUrl: string;
-  private readonly bearerToken: string;
+  private csrfToken = "";
+  private csrfLoadPromise: Promise<string> | null = null;
 
   constructor(config: ControlApiClientConfig) {
     this.baseUrl = normalizeBaseUrl(config.baseUrl);
-    this.bearerToken = config.bearerToken.trim();
   }
 
   async getPartnerBoard(guildId: string): Promise<PartnerBoardResponse> {
@@ -159,27 +177,45 @@ export class ControlApiClient {
     );
   }
 
+  async listManageableGuilds(): Promise<ManageableGuildsResponse> {
+    return this.request<ManageableGuildsResponse>(
+      "GET",
+      "/auth/guilds/manageable",
+    );
+  }
+
   private async request<T>(
     method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
+    retryOnCSRF = true,
   ): Promise<T> {
-    if (this.bearerToken === "") {
-      throw new Error("Control API bearer token is required");
-    }
     const url = this.baseUrl === "" ? path : `${this.baseUrl}${path}`;
 
     const headers = new Headers();
-    headers.set("Authorization", `Bearer ${this.bearerToken}`);
     if (body !== undefined) {
       headers.set("Content-Type", "application/json");
+    }
+    if (requiresCSRFHeader(method)) {
+      const csrfToken = await this.getCSRFToken();
+      headers.set("X-CSRF-Token", csrfToken);
     }
 
     const response = await fetch(url, {
       method,
       headers,
+      credentials: "include",
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+
+    if (
+      response.status === 403 &&
+      retryOnCSRF &&
+      requiresCSRFHeader(method)
+    ) {
+      this.clearCSRFToken();
+      return this.request<T>(method, path, body, false);
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -193,8 +229,55 @@ export class ControlApiClient {
     }
     return (await response.json()) as T;
   }
+
+  private async getCSRFToken(): Promise<string> {
+    if (this.csrfToken !== "") {
+      return this.csrfToken;
+    }
+    if (this.csrfLoadPromise !== null) {
+      return this.csrfLoadPromise;
+    }
+
+    this.csrfLoadPromise = (async () => {
+      const url = this.baseUrl === "" ? "/auth/me" : `${this.baseUrl}/auth/me`;
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `Control API GET /auth/me failed: ${response.status} ${response.statusText} - ${text}`.trim(),
+        );
+      }
+
+      const payload = (await response.json()) as AuthSessionResponse;
+      const csrfToken = payload.csrf_token?.trim() ?? "";
+      if (csrfToken === "") {
+        throw new Error("Control API /auth/me response missing csrf_token");
+      }
+
+      this.csrfToken = csrfToken;
+      return csrfToken;
+    })();
+
+    try {
+      return await this.csrfLoadPromise;
+    } finally {
+      this.csrfLoadPromise = null;
+    }
+  }
+
+  private clearCSRFToken() {
+    this.csrfToken = "";
+    this.csrfLoadPromise = null;
+  }
 }
 
 function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, "");
+}
+
+function requiresCSRFHeader(method: "GET" | "POST" | "PUT" | "DELETE"): boolean {
+  return method === "POST" || method === "PUT" || method === "DELETE";
 }

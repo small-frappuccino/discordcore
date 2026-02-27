@@ -4,9 +4,11 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
@@ -45,6 +47,9 @@ const (
 	controlDiscordOAuthClientSecretEnv            = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
 	controlDiscordOAuthRedirectURIEnv             = "ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI"
 	controlDiscordOAuthIncludeGuildMembersReadEnv = "ALICE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ"
+	controlDiscordOAuthSessionStorePathEnv        = "ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH"
+	controlTLSCertFileEnv                         = "ALICE_CONTROL_TLS_CERT_FILE"
+	controlTLSKeyFileEnv                          = "ALICE_CONTROL_TLS_KEY_FILE"
 )
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
@@ -257,6 +262,10 @@ func Run(appName, tokenEnv string) error {
 		if err != nil {
 			return fmt.Errorf("load control discord oauth config: %w", err)
 		}
+		controlTLSCertFile, controlTLSKeyFile, err := loadControlTLSFilesFromEnv()
+		if err != nil {
+			return fmt.Errorf("load control tls config: %w", err)
+		}
 		if controlBearerToken == "" && oauthConfig == nil {
 			return fmt.Errorf("%s is required when %s is set and discord oauth is not configured", controlBearerTokenEnv, controlAddrEnv)
 		}
@@ -270,6 +279,14 @@ func Run(appName, tokenEnv string) error {
 			}
 			controlServer.SetPartnerBoardService(partnerBoardAppService)
 			controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
+			controlServer.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+				return listBotGuildIDsFromSessionState(discordSession)
+			})
+			if controlTLSCertFile != "" || controlTLSKeyFile != "" {
+				if err := controlServer.SetTLSCertificates(controlTLSCertFile, controlTLSKeyFile); err != nil {
+					return fmt.Errorf("configure control tls certificates: %w", err)
+				}
+			}
 			if oauthConfig != nil {
 				if err := controlServer.SetDiscordOAuthConfig(*oauthConfig); err != nil {
 					return fmt.Errorf("configure control discord oauth: %w", err)
@@ -278,6 +295,9 @@ func Run(appName, tokenEnv string) error {
 					"Control server Discord OAuth enabled",
 					"scopes", strings.Join(control.DiscordOAuthScopes(oauthConfig.IncludeGuildsMembersRead), " "),
 				)
+				if controlTLSCertFile == "" || controlTLSKeyFile == "" {
+					log.ApplicationLogger().Warn("Discord OAuth is enabled but control TLS certificate/key are not configured; ensure HTTPS termination in front of control server so Secure cookies persist")
+				}
 			}
 			if err := controlServer.Start(); err != nil {
 				return fmt.Errorf("start control server: %w", err)
@@ -519,6 +539,7 @@ func loadControlDiscordOAuthConfigFromEnv() (*control.DiscordOAuthConfig, error)
 	clientSecret := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientSecretEnv, ""))
 	redirectURI := strings.TrimSpace(util.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
 	includeGuildMembersRead := util.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
+	sessionStorePath := strings.TrimSpace(util.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
 
 	if clientID == "" && clientSecret == "" && redirectURI == "" {
 		if includeGuildMembersRead {
@@ -546,13 +567,63 @@ func loadControlDiscordOAuthConfigFromEnv() (*control.DiscordOAuthConfig, error)
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("incomplete Discord OAuth configuration: missing %s", strings.Join(missing, ", "))
 	}
+	if sessionStorePath == "" {
+		sessionStorePath = filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
+	}
 
 	return &control.DiscordOAuthConfig{
 		ClientID:                 clientID,
 		ClientSecret:             clientSecret,
 		RedirectURI:              redirectURI,
 		IncludeGuildsMembersRead: includeGuildMembersRead,
+		SessionStorePath:         sessionStorePath,
 	}, nil
+}
+
+func loadControlTLSFilesFromEnv() (certFile string, keyFile string, err error) {
+	certFile = strings.TrimSpace(util.EnvString(controlTLSCertFileEnv, ""))
+	keyFile = strings.TrimSpace(util.EnvString(controlTLSKeyFileEnv, ""))
+	if certFile == "" && keyFile == "" {
+		return "", "", nil
+	}
+
+	missing := make([]string, 0, 2)
+	if certFile == "" {
+		missing = append(missing, controlTLSCertFileEnv)
+	}
+	if keyFile == "" {
+		missing = append(missing, controlTLSKeyFileEnv)
+	}
+	if len(missing) > 0 {
+		return "", "", fmt.Errorf("incomplete control TLS configuration: missing %s", strings.Join(missing, ", "))
+	}
+
+	return certFile, keyFile, nil
+}
+
+func listBotGuildIDsFromSessionState(session *discordgo.Session) ([]string, error) {
+	if session == nil || session.State == nil {
+		return nil, fmt.Errorf("discord session state is unavailable")
+	}
+
+	seen := make(map[string]struct{}, len(session.State.Guilds))
+	ids := make([]string, 0, len(session.State.Guilds))
+	for _, guild := range session.State.Guilds {
+		if guild == nil {
+			continue
+		}
+		guildID := strings.TrimSpace(guild.ID)
+		if guildID == "" {
+			continue
+		}
+		if _, ok := seen[guildID]; ok {
+			continue
+		}
+		seen[guildID] = struct{}{}
+		ids = append(ids, guildID)
+	}
+
+	return ids, nil
 }
 
 // formatStartupMessage builds the startup log line.

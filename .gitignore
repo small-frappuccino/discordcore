@@ -14,6 +14,7 @@ vendor/
 tmp/
 .tmp/
 
-# Web tooling (discordcore/web)
-web/node_modules/
-web/dist/
+# Frontend tooling
+node_modules/
+dist/
+.vite/

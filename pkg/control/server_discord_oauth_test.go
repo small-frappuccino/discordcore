@@ -1,15 +1,21 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestDiscordOAuthRoutesRequireConfig(t *testing.T) {
@@ -40,11 +46,11 @@ func TestDiscordOAuthLoginRedirect(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetDiscordOAuthConfig(DiscordOAuthConfig{
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
 		ClientID:     "1234567890",
 		ClientSecret: "super-secret",
 		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
@@ -62,6 +68,15 @@ func TestDiscordOAuthLoginRedirect(t *testing.T) {
 	}
 	if stateCookie.Value != state {
 		t.Fatalf("expected cookie state to match query state, cookie=%q state=%q", stateCookie.Value, state)
+	}
+	if !stateCookie.HttpOnly {
+		t.Fatalf("expected oauth state cookie to be HttpOnly, got %+v", stateCookie)
+	}
+	if stateCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected oauth state cookie SameSite=Lax, got %v", stateCookie.SameSite)
+	}
+	if !stateCookie.Secure {
+		t.Fatalf("expected oauth state cookie Secure=true, got %+v", stateCookie)
 	}
 
 	query := redirect.Query()
@@ -88,12 +103,12 @@ func TestDiscordOAuthLoginRedirectIncludesGuildMembersScope(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetDiscordOAuthConfig(DiscordOAuthConfig{
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
 		ClientID:                 "1234567890",
 		ClientSecret:             "super-secret",
 		RedirectURI:              "http://127.0.0.1:8080/auth/discord/callback",
 		IncludeGuildsMembersRead: true,
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
@@ -135,6 +150,9 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 			userCapture <- strings.TrimSpace(r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice","avatar":"abc123","discriminator":"0001"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -142,14 +160,18 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	defer discordAPI.Close()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetDiscordOAuthConfig(DiscordOAuthConfig{
-		ClientID:     "1234567890",
-		ClientSecret: "super-secret",
-		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
-		TokenURL:     discordAPI.URL + "/token",
-		UserInfoURL:  discordAPI.URL + "/users/@me",
-		HTTPClient:   discordAPI.Client(),
-	}); err != nil {
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
@@ -173,6 +195,7 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 		Status    string           `json:"status"`
 		User      discordOAuthUser `json:"user"`
 		Scopes    []string         `json:"scopes"`
+		CSRFToken string           `json:"csrf_token"`
 		ExpiresAt string           `json:"expires_at"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
@@ -187,6 +210,9 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	if len(response.Scopes) == 0 {
 		t.Fatalf("expected scopes in callback payload, got %+v", response)
 	}
+	if strings.TrimSpace(response.CSRFToken) == "" {
+		t.Fatalf("expected csrf_token in callback payload, got %+v", response)
+	}
 	if strings.TrimSpace(response.ExpiresAt) == "" {
 		t.Fatalf("expected expires_at in callback payload, got %+v", response)
 	}
@@ -197,6 +223,15 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	}
 	if strings.TrimSpace(sessionCookie.Value) == "" {
 		t.Fatalf("expected non-empty %q cookie value", defaultDiscordOAuthSessionCookie)
+	}
+	if !sessionCookie.HttpOnly {
+		t.Fatalf("expected oauth session cookie to be HttpOnly, got %+v", sessionCookie)
+	}
+	if sessionCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected oauth session cookie SameSite=Lax, got %v", sessionCookie.SameSite)
+	}
+	if !sessionCookie.Secure {
+		t.Fatalf("expected oauth session cookie Secure=true, got %+v", sessionCookie)
 	}
 
 	// Callback response must not expose oauth_token payload.
@@ -252,6 +287,19 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	if meRec.Code != http.StatusOK {
 		t.Fatalf("expected /auth/me to succeed with session cookie, got %d body=%q", meRec.Code, meRec.Body.String())
 	}
+	var meResponse struct {
+		Status    string `json:"status"`
+		CSRFToken string `json:"csrf_token"`
+	}
+	if err := json.NewDecoder(meRec.Body).Decode(&meResponse); err != nil {
+		t.Fatalf("decode /auth/me response: %v body=%q", err, meRec.Body.String())
+	}
+	if strings.TrimSpace(meResponse.CSRFToken) == "" {
+		t.Fatalf("expected csrf_token in /auth/me response, got %+v", meResponse)
+	}
+	if response.CSRFToken != meResponse.CSRFToken {
+		t.Fatalf("expected same csrf token from callback and /auth/me, callback=%q me=%q", response.CSRFToken, meResponse.CSRFToken)
+	}
 
 	// Session auth also unlocks control routes without bearer.
 	controlReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/partner-board", nil)
@@ -266,11 +314,22 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	logoutReq.AddCookie(sessionCookie)
 	logoutRec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(logoutRec, logoutReq)
-	if logoutRec.Code != http.StatusOK {
-		t.Fatalf("expected /auth/logout to succeed, got %d body=%q", logoutRec.Code, logoutRec.Body.String())
+	if logoutRec.Code != http.StatusForbidden {
+		t.Fatalf("expected /auth/logout without csrf token to fail, got %d body=%q", logoutRec.Code, logoutRec.Body.String())
 	}
-	if deleted := findCookie(logoutRec.Result().Cookies(), defaultDiscordOAuthSessionCookie); deleted == nil || deleted.MaxAge >= 0 {
+
+	logoutWithCSRFReq := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	logoutWithCSRFReq.AddCookie(sessionCookie)
+	logoutWithCSRFReq.Header.Set(discordOAuthCSRFHeaderName, meResponse.CSRFToken)
+	logoutWithCSRFRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(logoutWithCSRFRec, logoutWithCSRFReq)
+	if logoutWithCSRFRec.Code != http.StatusOK {
+		t.Fatalf("expected /auth/logout to succeed, got %d body=%q", logoutWithCSRFRec.Code, logoutWithCSRFRec.Body.String())
+	}
+	if deleted := findCookie(logoutWithCSRFRec.Result().Cookies(), defaultDiscordOAuthSessionCookie); deleted == nil || deleted.MaxAge >= 0 {
 		t.Fatalf("expected /auth/logout to clear session cookie, got %+v", deleted)
+	} else if !deleted.Secure {
+		t.Fatalf("expected cleared session cookie Secure=true, got %+v", deleted)
 	}
 
 	meAfterLogoutReq := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
@@ -279,6 +338,678 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	srv.httpServer.Handler.ServeHTTP(meAfterLogoutRec, meAfterLogoutReq)
 	if meAfterLogoutRec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected /auth/me to fail after logout, got %d body=%q", meAfterLogoutRec.Code, meAfterLogoutRec.Body.String())
+	}
+}
+
+func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	var callbackResp struct {
+		CSRFToken string `json:"csrf_token"`
+	}
+	if err := json.NewDecoder(callbackRec.Body).Decode(&callbackResp); err != nil {
+		t.Fatalf("decode callback response: %v body=%q", err, callbackRec.Body.String())
+	}
+	if strings.TrimSpace(callbackResp.CSRFToken) == "" {
+		t.Fatalf("expected csrf_token in callback response, got %+v", callbackResp)
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	targetPayload := strings.NewReader(`{"type":"channel_message","message_id":"123456789012345678","channel_id":"223456789012345678"}`)
+
+	noCSRFReq := httptest.NewRequest(http.MethodPut, "/v1/guilds/g1/partner-board/target", targetPayload)
+	noCSRFReq.AddCookie(sessionCookie)
+	noCSRFReq.Header.Set("Content-Type", "application/json")
+	noCSRFRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(noCSRFRec, noCSRFReq)
+	if noCSRFRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without csrf token on mutable guild route, got %d body=%q", noCSRFRec.Code, noCSRFRec.Body.String())
+	}
+
+	withCSRFReq := httptest.NewRequest(http.MethodPut, "/v1/guilds/g1/partner-board/target", strings.NewReader(`{"type":"channel_message","message_id":"123456789012345678","channel_id":"223456789012345678"}`))
+	withCSRFReq.AddCookie(sessionCookie)
+	withCSRFReq.Header.Set("Content-Type", "application/json")
+	withCSRFReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
+	withCSRFRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(withCSRFRec, withCSRFReq)
+	if withCSRFRec.Code != http.StatusOK {
+		t.Fatalf("expected mutable guild route with csrf token to succeed, got %d body=%q", withCSRFRec.Code, withCSRFRec.Body.String())
+	}
+}
+
+func TestRuntimeConfigRouteRequiresCSRFForOAuthSessionMutations(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	var callbackResp struct {
+		CSRFToken string `json:"csrf_token"`
+	}
+	if err := json.NewDecoder(callbackRec.Body).Decode(&callbackResp); err != nil {
+		t.Fatalf("decode callback response: %v body=%q", err, callbackRec.Body.String())
+	}
+	if strings.TrimSpace(callbackResp.CSRFToken) == "" {
+		t.Fatalf("expected csrf_token in callback response, got %+v", callbackResp)
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	noCSRFReq := httptest.NewRequest(http.MethodPost, "/v1/runtime-config", strings.NewReader(`{"bot_theme":"default"}`))
+	noCSRFReq.AddCookie(sessionCookie)
+	noCSRFReq.Header.Set("Content-Type", "application/json")
+	noCSRFRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(noCSRFRec, noCSRFReq)
+	if noCSRFRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without csrf token on runtime-config mutation, got %d body=%q", noCSRFRec.Code, noCSRFRec.Body.String())
+	}
+
+	withCSRFReq := httptest.NewRequest(http.MethodPost, "/v1/runtime-config", strings.NewReader(`{"bot_theme":"default"}`))
+	withCSRFReq.AddCookie(sessionCookie)
+	withCSRFReq.Header.Set("Content-Type", "application/json")
+	withCSRFReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
+	withCSRFRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(withCSRFRec, withCSRFReq)
+	if withCSRFRec.Code != http.StatusOK {
+		t.Fatalf("expected runtime-config mutation with csrf token to succeed, got %d body=%q", withCSRFRec.Code, withCSRFRec.Body.String())
+	}
+}
+
+func TestGuildRoutesDenyOAuthSessionWithoutGuildAuthorization(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	guildReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/partner-board", nil)
+	guildReq.AddCookie(sessionCookie)
+	guildRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(guildRec, guildReq)
+	if guildRec.Code != http.StatusForbidden {
+		t.Fatalf("expected guild route to reject oauth session without guild authorization, got %d body=%q", guildRec.Code, guildRec.Body.String())
+	}
+}
+
+func TestDiscordOAuthManageableGuildsEndpoint(t *testing.T) {
+	t.Parallel()
+
+	var (
+		guildsQueryMu sync.Mutex
+		guildsQueries []string
+	)
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			limit := strings.TrimSpace(r.URL.Query().Get("limit"))
+			after := strings.TrimSpace(r.URL.Query().Get("after"))
+
+			guildsQueryMu.Lock()
+			guildsQueries = append(guildsQueries, fmt.Sprintf("limit=%s after=%s", limit, after))
+			guildsQueryMu.Unlock()
+
+			if limit != "200" {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			switch after {
+			case "":
+				page := make([]discordOAuthGuild, 0, 200)
+				for i := 0; i < 200; i++ {
+					guild := discordOAuthGuild{
+						ID:   fmt.Sprintf("p%03d", i),
+						Name: fmt.Sprintf("Page One %03d", i),
+					}
+					if i == 10 {
+						guild.ID = "g-owner"
+						guild.Name = "Owner Guild"
+						guild.Owner = true
+					}
+					if i == 20 {
+						guild.ID = "g-admin"
+						guild.Name = "Admin Guild"
+						guild.Permissions = discordgo.PermissionAdministrator
+					}
+					page = append(page, guild)
+				}
+				if err := json.NewEncoder(w).Encode(page); err != nil {
+					t.Fatalf("encode first guilds page: %v", err)
+				}
+			case "p199":
+				page := []discordOAuthGuild{
+					{ID: "g-manage", Name: "Manage Guild", Permissions: discordgo.PermissionManageGuild},
+					{ID: "g-read", Name: "Read Only", Permissions: 0},
+					{ID: "g-other", Name: "Other Guild", Owner: true},
+				}
+				if err := json.NewEncoder(w).Encode(page); err != nil {
+					t.Fatalf("encode second guilds page: %v", err)
+				}
+			default:
+				http.Error(w, "unexpected after cursor", http.StatusBadRequest)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g-owner", "g-admin", "g-manage"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	manageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
+	manageableReq.AddCookie(sessionCookie)
+	manageableRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(manageableRec, manageableReq)
+	if manageableRec.Code != http.StatusOK {
+		t.Fatalf("expected manageable guilds endpoint to succeed, got %d body=%q", manageableRec.Code, manageableRec.Body.String())
+	}
+
+	var response struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []manageableGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(manageableRec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode manageable guilds response: %v body=%q", err, manageableRec.Body.String())
+	}
+	if response.Status != "ok" {
+		t.Fatalf("unexpected response status: %+v", response)
+	}
+	if response.Count != 3 || len(response.Guilds) != 3 {
+		t.Fatalf("expected 3 manageable guilds, got count=%d guilds=%+v", response.Count, response.Guilds)
+	}
+
+	gotIDs := []string{response.Guilds[0].ID, response.Guilds[1].ID, response.Guilds[2].ID}
+	wantIDs := []string{"g-admin", "g-manage", "g-owner"}
+	if strings.Join(gotIDs, ",") != strings.Join(wantIDs, ",") {
+		t.Fatalf("unexpected manageable guild IDs: got=%v want=%v", gotIDs, wantIDs)
+	}
+
+	guildsQueryMu.Lock()
+	defer guildsQueryMu.Unlock()
+	if len(guildsQueries) != 2 {
+		t.Fatalf("expected exactly two /users/@me/guilds calls, got %d (%v)", len(guildsQueries), guildsQueries)
+	}
+	if guildsQueries[0] != "limit=200 after=" {
+		t.Fatalf("unexpected first guild query: %q", guildsQueries[0])
+	}
+	if guildsQueries[1] != "limit=200 after=p199" {
+		t.Fatalf("unexpected second guild query: %q", guildsQueries[1])
+	}
+}
+
+func TestDiscordOAuthManageableGuildsEndpointRequiresBotGuildProvider(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	manageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
+	manageableReq.AddCookie(sessionCookie)
+	manageableRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(manageableRec, manageableReq)
+	if manageableRec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected manageable guilds endpoint to fail without bot guild provider, got %d body=%q", manageableRec.Code, manageableRec.Body.String())
+	}
+}
+
+func TestDiscordOAuthSessionPersistsAcrossServerRestart(t *testing.T) {
+	t.Parallel()
+
+	sessionStorePath := filepath.Join(t.TempDir(), "oauth_sessions.json")
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	oauthCfg := DiscordOAuthConfig{
+		ClientID:         "1234567890",
+		ClientSecret:     "super-secret",
+		RedirectURI:      "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:         discordAPI.URL + "/token",
+		UserInfoURL:      discordAPI.URL + "/users/@me",
+		SessionStorePath: sessionStorePath,
+		HTTPClient:       discordAPI.Client(),
+	}
+
+	firstServer, _ := newControlTestServer(t)
+	if err := firstServer.SetDiscordOAuthConfig(oauthCfg); err != nil {
+		t.Fatalf("configure oauth on first server: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, firstServer.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	firstServer.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	secondServer, _ := newControlTestServer(t)
+	if err := secondServer.SetDiscordOAuthConfig(oauthCfg); err != nil {
+		t.Fatalf("configure oauth on second server: %v", err)
+	}
+
+	meReq := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	meReq.AddCookie(sessionCookie)
+	meRec := httptest.NewRecorder()
+	secondServer.httpServer.Handler.ServeHTTP(meRec, meReq)
+	if meRec.Code != http.StatusOK {
+		t.Fatalf("expected /auth/me to succeed after server restart, got %d body=%q", meRec.Code, meRec.Body.String())
+	}
+
+	var meResp struct {
+		Status string           `json:"status"`
+		User   discordOAuthUser `json:"user"`
+	}
+	if err := json.NewDecoder(meRec.Body).Decode(&meResp); err != nil {
+		t.Fatalf("decode /auth/me response: %v body=%q", err, meRec.Body.String())
+	}
+	if meResp.Status != "ok" || meResp.User.ID != "u1" {
+		t.Fatalf("unexpected /auth/me response after restart: %+v", meResp)
+	}
+}
+
+func TestDiscordOAuthManageableGuildsRefreshesAccessTokenWithRotation(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	refreshTokenInputs := make([]string, 0, 2)
+	guildAuthHeaders := make([]string, 0, 2)
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			body, _ := io.ReadAll(r.Body)
+			form, _ := url.ParseQuery(string(body))
+			switch form.Get("grant_type") {
+			case "authorization_code":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"access-initial","refresh_token":"refresh-1","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			case "refresh_token":
+				mu.Lock()
+				refreshTokenInputs = append(refreshTokenInputs, form.Get("refresh_token"))
+				mu.Unlock()
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"access_token":"access-refreshed","refresh_token":"refresh-2","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			default:
+				http.Error(w, "unsupported grant type", http.StatusBadRequest)
+			}
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			mu.Lock()
+			guildAuthHeaders = append(guildAuthHeaders, strings.TrimSpace(r.Header.Get("Authorization")))
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	sessionReq.AddCookie(sessionCookie)
+	session, err := srv.discordOAuth.sessionFromRequest(sessionReq)
+	if err != nil {
+		t.Fatalf("load oauth session: %v", err)
+	}
+	session.AccessToken = "access-expired"
+	session.AccessTokenExpiresAt = time.Now().Add(-time.Minute).UTC()
+	session.RefreshToken = "refresh-1"
+	if err := srv.discordOAuth.sessions.Save(session); err != nil {
+		t.Fatalf("save expired oauth session: %v", err)
+	}
+
+	manageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
+	manageableReq.AddCookie(sessionCookie)
+	manageableRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(manageableRec, manageableReq)
+	if manageableRec.Code != http.StatusOK {
+		t.Fatalf("expected manageable guilds endpoint to succeed after refresh, got %d body=%q", manageableRec.Code, manageableRec.Body.String())
+	}
+
+	refreshed, ok, err := srv.discordOAuth.sessions.Get(session.ID, time.Now())
+	if err != nil {
+		t.Fatalf("reload refreshed oauth session: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected refreshed oauth session to remain stored")
+	}
+	if refreshed.AccessToken != "access-refreshed" {
+		t.Fatalf("expected refreshed access token to be persisted, got %q", refreshed.AccessToken)
+	}
+	if refreshed.RefreshToken != "refresh-2" {
+		t.Fatalf("expected rotated refresh token to be persisted, got %q", refreshed.RefreshToken)
+	}
+	if !refreshed.AccessTokenExpiresAt.After(time.Now().UTC()) {
+		t.Fatalf("expected refreshed access token expiry in the future, got %s", refreshed.AccessTokenExpiresAt.UTC().Format(time.RFC3339))
+	}
+
+	mu.Lock()
+	if len(refreshTokenInputs) != 1 {
+		mu.Unlock()
+		t.Fatalf("expected one refresh token exchange, got %d (%v)", len(refreshTokenInputs), refreshTokenInputs)
+	}
+	if refreshTokenInputs[0] != "refresh-1" {
+		mu.Unlock()
+		t.Fatalf("expected refresh exchange to use previous refresh token, got %v", refreshTokenInputs)
+	}
+	if len(guildAuthHeaders) == 0 {
+		mu.Unlock()
+		t.Fatal("expected at least one /users/@me/guilds call")
+	}
+	lastAuthHeader := guildAuthHeaders[len(guildAuthHeaders)-1]
+	mu.Unlock()
+	if lastAuthHeader != "Bearer access-refreshed" {
+		t.Fatalf("expected /users/@me/guilds to use refreshed access token, got %q", lastAuthHeader)
+	}
+
+	secondManageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
+	secondManageableReq.AddCookie(sessionCookie)
+	secondManageableRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(secondManageableRec, secondManageableReq)
+	if secondManageableRec.Code != http.StatusOK {
+		t.Fatalf("expected second manageable guilds call to succeed, got %d body=%q", secondManageableRec.Code, secondManageableRec.Body.String())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(refreshTokenInputs) != 1 {
+		t.Fatalf("expected no additional refresh exchange while access token is fresh, got %d (%v)", len(refreshTokenInputs), refreshTokenInputs)
 	}
 }
 
@@ -294,14 +1025,14 @@ func TestDiscordOAuthCallbackRejectsInvalidState(t *testing.T) {
 	defer discordAPI.Close()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetDiscordOAuthConfig(DiscordOAuthConfig{
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
 		ClientID:     "1234567890",
 		ClientSecret: "super-secret",
 		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
 		TokenURL:     discordAPI.URL + "/token",
 		UserInfoURL:  discordAPI.URL + "/users/@me",
 		HTTPClient:   discordAPI.Client(),
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
@@ -328,6 +1059,13 @@ func TestSetDiscordOAuthConfigValidatesRequiredFields(t *testing.T) {
 	if err := srv.SetDiscordOAuthConfig(DiscordOAuthConfig{}); err == nil {
 		t.Fatal("expected oauth config validation error for empty config")
 	}
+	if err := srv.SetDiscordOAuthConfig(DiscordOAuthConfig{
+		ClientID:     "1234567890",
+		ClientSecret: "super-secret",
+		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
+	}); err == nil {
+		t.Fatal("expected oauth config validation error when session store path is missing")
+	}
 }
 
 func parseOAuthLoginRedirect(t *testing.T, rec *httptest.ResponseRecorder) (string, *http.Cookie, *url.URL) {
@@ -353,6 +1091,14 @@ func parseOAuthLoginRedirect(t *testing.T, rec *httptest.ResponseRecorder) (stri
 	}
 
 	return state, stateCookie, redirect
+}
+
+func withTestOAuthSessionStorePath(t *testing.T, cfg DiscordOAuthConfig) DiscordOAuthConfig {
+	t.Helper()
+	if strings.TrimSpace(cfg.SessionStorePath) == "" {
+		cfg.SessionStorePath = filepath.Join(t.TempDir(), "oauth_sessions.json")
+	}
+	return cfg
 }
 
 func findCookie(cookies []*http.Cookie, name string) *http.Cookie {

@@ -434,6 +434,15 @@ func TestControlAuthEnforcement(t *testing.T) {
 		t.Fatalf("expected 403 with wrong token, got %d body=%q", wrongAuth.Code, wrongAuth.Body.String())
 	}
 
+	browserBearerReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/partner-board", nil)
+	browserBearerReq.Header.Set("Authorization", "Bearer "+controlTestAuthToken)
+	browserBearerReq.Header.Set("Origin", "https://dashboard.example")
+	browserBearerRec := httptest.NewRecorder()
+	handler.ServeHTTP(browserBearerRec, browserBearerReq)
+	if browserBearerRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for bearer auth with browser origin, got %d body=%q", browserBearerRec.Code, browserBearerRec.Body.String())
+	}
+
 	okAuth := performHandlerJSONRequest(
 		t,
 		handler,

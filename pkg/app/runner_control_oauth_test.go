@@ -1,6 +1,11 @@
 package app
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/small-frappuccino/discordcore/pkg/util"
+)
 
 func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
@@ -8,6 +13,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
 		cfg, err := loadControlDiscordOAuthConfigFromEnv()
 		if err != nil {
@@ -23,6 +29,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
 		cfg, err := loadControlDiscordOAuthConfigFromEnv()
 		if err == nil {
@@ -35,6 +42,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "true")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
 		cfg, err := loadControlDiscordOAuthConfigFromEnv()
 		if err == nil {
@@ -47,6 +55,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "http://127.0.0.1:8080/auth/discord/callback")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "true")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
 		cfg, err := loadControlDiscordOAuthConfigFromEnv()
 		if err != nil {
@@ -63,6 +72,29 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		}
 		if !cfg.IncludeGuildsMembersRead {
 			t.Fatalf("expected IncludeGuildsMembersRead=true, got %+v", cfg)
+		}
+		wantStorePath := filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
+		if cfg.SessionStorePath != wantStorePath {
+			t.Fatalf("unexpected default oauth session store path: got=%q want=%q", cfg.SessionStorePath, wantStorePath)
+		}
+	})
+
+	t.Run("explicit session store path", func(t *testing.T) {
+		t.Setenv(controlDiscordOAuthClientIDEnv, "client-id")
+		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
+		t.Setenv(controlDiscordOAuthRedirectURIEnv, "http://127.0.0.1:8080/auth/discord/callback")
+		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "/tmp/oauth-sessions.json")
+
+		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		if err != nil {
+			t.Fatalf("expected complete oauth config to parse, got %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("expected non-nil oauth config")
+		}
+		if cfg.SessionStorePath != "/tmp/oauth-sessions.json" {
+			t.Fatalf("unexpected oauth session store path: %+v", cfg)
 		}
 	})
 }

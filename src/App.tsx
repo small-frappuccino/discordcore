@@ -71,12 +71,10 @@ const initialPartnerUpdateForm: PartnerUpdateFormState = {
 
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
-const defaultBearerToken = import.meta.env.VITE_CONTROL_API_BEARER_TOKEN ?? "";
 const defaultGuildID = import.meta.env.VITE_CONTROL_API_GUILD_ID ?? "";
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
-  const [bearerToken, setBearerToken] = useState(defaultBearerToken);
   const [guildID, setGuildID] = useState(defaultGuildID);
   const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
   const [targetForm, setTargetForm] = useState(initialTargetForm);
@@ -96,9 +94,8 @@ export default function App() {
     () =>
       new ControlApiClient({
         baseUrl,
-        bearerToken,
       }),
-    [baseUrl, bearerToken],
+    [baseUrl],
   );
 
   async function refreshBoard() {
@@ -346,6 +343,7 @@ export default function App() {
           <h2>Connection</h2>
           <p className="muted">
             Use current origin to leverage Vite proxy for `/v1` requests.
+            Authentication uses the server-side OAuth session cookie.
           </p>
           <div className="grid two">
             <label>
@@ -365,15 +363,6 @@ export default function App() {
               />
             </label>
           </div>
-          <label>
-            Bearer token
-            <input
-              value={bearerToken}
-              onChange={(event) => setBearerToken(event.target.value)}
-              placeholder="ALICE_CONTROL_BEARER_TOKEN"
-              type="password"
-            />
-          </label>
           <div className="actions">
             <button disabled={loading} onClick={() => void refreshBoard()}>
               Load Board

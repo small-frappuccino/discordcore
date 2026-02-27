@@ -23,8 +23,9 @@ pkg/partners/         # Partner board rendering services (template + list -> emb
 pkg/storage/          # SQLite store
 pkg/task/             # Task router and scheduler
 pkg/util/             # Shared utilities
-web/                  # Bun + Vite + React + TS/TSX frontend scaffold
 ```
+
+The repository root also contains the Control API dashboard scaffold (`package.json`, `vite.config.ts`, `src/`, and related frontend files).
 
 ## Quick start (example)
 
@@ -188,33 +189,47 @@ Partner CRUD commands:
 
 Note: `/addpartner` is not registered. Use `/partner add`.
 
-## Control API (Bearer auth)
+## Control API (Bearer + OAuth session)
 
 Control API is optional and starts when `ALICE_CONTROL_ADDR` is set and at least one auth mode is configured:
 
 - `ALICE_CONTROL_ADDR` (example: `127.0.0.1:8080`)
 - `ALICE_CONTROL_BEARER_TOKEN` (required only when Discord OAuth is not configured)
+- optional TLS listener:
+  - `ALICE_CONTROL_TLS_CERT_FILE`
+  - `ALICE_CONTROL_TLS_KEY_FILE`
 
 Authentication contract for `/v1/*` routes:
 
-- Supports `Authorization: Bearer <token>` or Discord OAuth session cookie.
+- Supports `Authorization: Bearer <token>` (internal automation) or Discord OAuth session cookie (dashboard).
 - Bearer: missing/invalid scheme/token returns `401`, wrong token returns `403`.
+- Bearer is rejected when an `Origin` header is present (browser context).
 - Session: created by OAuth callback and read from HttpOnly cookie.
+- OAuth cookies are always issued with `HttpOnly`, `SameSite=Lax`, and `Secure`.
+- For OAuth session requests, mutable routes (`POST`/`PUT`/`DELETE`) require `X-CSRF-Token` matching the server-issued token.
 - Requests without any valid auth return `401`.
+- Guild routes under `/v1/guilds/{guild_id}/*` require guild-level authorization for OAuth sessions (`owner` or `ADMINISTRATOR`/`MANAGE_GUILD`, intersected with guilds where the bot is present).
 
 Discord OAuth2 endpoints (optional, same control server):
 
 - `GET /auth/discord/login` redirects to Discord OAuth authorize URL and emits anti-CSRF `state` cookie.
 - `GET /auth/discord/callback` validates `state`, exchanges `code` at Discord token endpoint, resolves `/users/@me`, creates server-side session, and sets session cookie.
 - `GET /auth/me` returns current authenticated session user.
+- `GET /auth/me` also returns `csrf_token` for explicit CSRF header usage.
 - `POST /auth/logout` invalidates current session and clears session cookie.
+- `GET /auth/guilds/manageable` lists guilds from `/users/@me/guilds` (Discord OAuth user token, paginated at `limit=200`), filtered to `owner` or `ADMINISTRATOR`/`MANAGE_GUILD`, then intersected with guild IDs where the bot is present.
+- OAuth sessions are persisted on disk (not only in memory), so authenticated sessions survive process restart until session expiry/logout.
+- Discord access tokens are refreshed server-side via `refresh_token`; when Discord rotates the refresh token, the session store is updated atomically.
 - Token exchange request uses `Content-Type: application/x-www-form-urlencoded`.
+- OAuth cookie-based auth requires HTTPS transport because cookies are always `Secure`.
 
 Enable OAuth routes by setting all vars below:
 
 - `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID`
 - `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
 - `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI`
+- `ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
+- use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or terminate TLS at a reverse proxy in front of the control listener.
 
 Scopes:
 
@@ -278,30 +293,29 @@ Rules enforced by CRUD:
 - deduplication by normalized partner name and invite link
 - deterministic ordering by fandom, then name, then link
 
-## Web development scaffold
+## Dashboard scaffold
 
-`web/` is a frontend foundation inspired by the Homeimmob stack, ready for future admin panels:
+The repository root contains a Bun + Vite + React + TypeScript dashboard scaffold for the Control API:
 
-- Bun package scripts
-- Vite + React + TypeScript (TS/TSX)
-- baseline ESLint setup
-- typed Control API client (`web/src/api/control.ts`)
-- partner board admin wiring (`web/src/App.tsx`) for target/template/partners/sync
+- typed Control API client (`src/api/control.ts`)
+- partner board admin wiring (`src/App.tsx`)
+- baseline ESLint and TypeScript configuration
 
 Local dev contract:
 
 - The Vite dev server proxies `/v1/*` to `VITE_CONTROL_API_PROXY_TARGET` (default: `http://127.0.0.1:8080`)
 - `VITE_CONTROL_API_BASE_URL` defaults to current origin
-- `VITE_CONTROL_API_BEARER_TOKEN` should match `ALICE_CONTROL_BEARER_TOKEN`
+- Dashboard requests use OAuth session cookie auth (`credentials: include`); bearer tokens are not stored in browser code.
 - `VITE_CONTROL_API_GUILD_ID` can prefill the guild selector
 
 Quick start:
 
 ```bash
-cd web
 bun install
 bun run dev
 ```
+
+`discordcore` continues to own the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend.
 
 Policy precedence for logging/event emission:
 
@@ -345,10 +359,9 @@ Slow gateway handlers are logged by default.
 ## Testing
 
 ```bash
-
 go test ./...
-
 go vet ./...
+bun run build
 ```
 
 ## License
