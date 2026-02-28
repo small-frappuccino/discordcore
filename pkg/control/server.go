@@ -83,6 +83,10 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/auth/guilds/manageable", s.handleDiscordOAuthManageableGuilds)
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
 	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
+	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, dashboardRoutePrefix, http.StatusMovedPermanently)
+	})
+	mux.Handle(dashboardRoutePrefix, newEmbeddedDashboardHandler())
 
 	return s
 }
