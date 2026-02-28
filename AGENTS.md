@@ -1,4 +1,4 @@
-# AGENTS.md — AI Code Maintainer Instructions (Go + Discord Bot)
+# AGENTS.md — AI Code Maintainer Instructions (Go + Embedded UI + Discord Bot)
 
 This document defines the conventions, expectations, and operating rules for an AI agent maintaining this workspace.
 
@@ -22,22 +22,24 @@ Avoid cosmetic or stylistic refactors unless they deliver clear technical value.
 This workspace consists of two sibling directories:
 
 - `../discordcore` → **Primary codebase (source of truth)**  
-  Contains the core Discord logic, APIs, domain rules, infrastructure, and the repository-root web dashboard assets.
+  Contains the core Discord logic, APIs, domain rules, infrastructure, and the embedded dashboard source in `ui/`.
 
 - `../alicebot` → **Wrapper / host application**  
-  Contains the Discord bot binary, configuration, and integration glue.  
+  Contains the final Discord bot binary, configuration, and integration glue.  
   In essence, `alicebot` is a thin shell around `discordcore`.
 
 ### Rules
 
 - Every change must clearly state **which repository it affects** (`../discordcore` or `../alicebot`).
 - Core logic, business rules, and reusable systems must live in **`../discordcore`**.
+- The approved location for frontend source is **`../discordcore/ui`**.
+- `../discordcore/ui/dist` is the only directory that may be embedded with `//go:embed`.
 - `../alicebot` should contain **only**:
   - application bootstrap
   - wiring / dependency injection
   - configuration and deployment concerns
-- The current web dashboard assets live in **`../discordcore`** at repository root.
-- That frontend must remain a thin Control API client with no business logic.
+- The frontend must remain a thin Control API client with no business logic.
+- `alicebot` remains the **only** final bot/runtime binary; `discordcore` provides libraries and embedded assets consumed by that binary.
 - If a feature requires changes in both repos:
   - implement the `discordcore` side first
   - then wire it in `alicebot`
@@ -54,14 +56,18 @@ This workspace consists of two sibling directories:
 
 ### Frontend assets
 
-Frontend assets currently live in `../discordcore` at repository root.
+Frontend assets live in `../discordcore/ui`.
 
 If `//go:embed` is used:
-- **The Go build must not break** when frontend assets are missing (CI, headless builds, or backend-only workflows).
+- **The Go build must not break** in CI, headless builds, or backend-only workflows.
 - Acceptable patterns:
-  - placeholder assets
+  - versioned placeholder assets in `ui/dist`
   - startup-time validation with clear error messages
   - conditional build tags
+- Required pattern for this workspace:
+  - `ui/dist/index.html` must be versioned as a minimal placeholder so `//go:embed` always has material to embed
+  - production frontend builds overwrite the placeholder contents
+  - embedded dashboard assets are served from `/dashboard/`, not `/`
 
 Any change involving assets must be validated in:
 - backend-only build
@@ -141,7 +147,8 @@ Critical flows must emit logs:
 - Discord connection lifecycle
 - command execution
 - moderation actions
-- frontend/control server initialization
+- control server initialization
+- embedded dashboard initialization or asset fallback behavior
 
 Errors must include:
 - operation
@@ -186,6 +193,9 @@ Avoid tests that require a real Discord connection.
 - The UI must never contain business logic.
 - All rules, validations, and side-effects live in **`discordcore`**.
 - Frontend code should only call exported services with clear contracts.
+- The embedded dashboard should be mounted under **`/dashboard/`**.
+- API and auth routes keep their own namespaces (`/v1/*`, `/auth/*`) and must not be shadowed by SPA routing.
+- SPA fallback behavior must apply only to dashboard routes.
 
 QoL features in the UI must map to real backend services — never UI-only state.
 
@@ -213,7 +223,7 @@ If something is:
 It belongs in **`alicebot`**.
 
 Exception:
-The current repository-root Control API dashboard scaffold is intentionally kept in **`discordcore`** by project choice. Keep it thin and API-only.
+The embedded Control API dashboard scaffold is intentionally kept in **`discordcore/ui`** by project choice so `//go:embed` can package `ui/dist` into the final `alicebot` binary. Keep it thin and API-only.
 
 Duplication across the two must be eliminated in favor of `discordcore`.
 
@@ -227,6 +237,8 @@ Duplication across the two must be eliminated in favor of `discordcore`.
 - [ ] Errors are contextual and logged
 - [ ] Concurrency is safe and cancellable
 - [ ] Frontend assets do not break backend builds
+- [ ] `ui/dist/index.html` placeholder remains present for backend-only builds
+- [ ] Embedded dashboard is served from `/dashboard/`
 - [ ] Config or behavior changes are documented
 
 ---
