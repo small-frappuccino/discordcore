@@ -342,7 +342,8 @@ export default function App() {
         <section className="card">
           <h2>Connection</h2>
           <p className="muted">
-            Use current origin to leverage Vite proxy for `/v1` requests.
+            Use current origin to leverage Vite proxy for `/auth` and `/v1`
+            requests.
             Authentication uses the server-side OAuth session cookie.
           </p>
           <div className="grid two">

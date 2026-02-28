@@ -88,8 +88,11 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	if dashboardRec.Code != http.StatusOK {
 		t.Fatalf("expected /dashboard/ to serve embedded index, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
 	}
-	if body := dashboardRec.Body.String(); !strings.Contains(body, "Dashboard assets not built") {
-		t.Fatalf("expected embedded placeholder index, got %q", body)
+	if contentType := dashboardRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("expected /dashboard/ to serve html, got content-type %q", contentType)
+	}
+	if body := strings.ToLower(dashboardRec.Body.String()); !strings.Contains(body, "<!doctype html") {
+		t.Fatalf("expected embedded index html, got %q", dashboardRec.Body.String())
 	}
 
 	apiRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/runtime-config", nil)
@@ -100,6 +103,31 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	authRec := performHandlerJSONRequestWithAuth(t, handler, http.MethodGet, "/auth/me", nil, "")
 	if authRec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected /auth/me to remain bound to auth handler, got %d body=%q", authRec.Code, authRec.Body.String())
+	}
+}
+
+func TestDashboardEndpointInteraction(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start control server: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = srv.Stop(nil)
+	})
+
+	resp, err := http.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
+	if err != nil {
+		t.Fatalf("GET /dashboard/: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected /dashboard/ over live server to return 200, got %d", resp.StatusCode)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("expected live dashboard response to be html, got %q", contentType)
 	}
 }
 

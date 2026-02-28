@@ -23,9 +23,8 @@ pkg/partners/         # Partner board rendering services (template + list -> emb
 pkg/storage/          # SQLite store
 pkg/task/             # Task router and scheduler
 pkg/util/             # Shared utilities
+ui/                   # Embedded dashboard source, build output, and //go:embed helper
 ```
-
-The repository root also contains the Control API dashboard scaffold (`package.json`, `vite.config.ts`, `src/`, and related frontend files).
 
 ## Quick start (example)
 
@@ -295,27 +294,40 @@ Rules enforced by CRUD:
 
 ## Dashboard scaffold
 
-The repository root contains a Bun + Vite + React + TypeScript dashboard scaffold for the Control API:
+`ui/` contains the Bun + Vite + React + TypeScript dashboard scaffold for the Control API:
 
-- typed Control API client (`src/api/control.ts`)
-- partner board admin wiring (`src/App.tsx`)
+- typed Control API client (`ui/src/api/control.ts`)
+- partner board admin wiring (`ui/src/App.tsx`)
 - baseline ESLint and TypeScript configuration
+- `ui/embed.go` embeds `ui/dist` into the final bot binary
+- `ui/dist/index.html` is versioned as a placeholder so backend-only Go builds still work before a real frontend build
 
 Local dev contract:
 
-- The Vite dev server proxies `/v1/*` to `VITE_CONTROL_API_PROXY_TARGET` (default: `http://127.0.0.1:8080`)
+- The Vite dev server proxies `/auth/*` and `/v1/*` to `VITE_CONTROL_API_PROXY_TARGET` (default: `http://127.0.0.1:8080`)
 - `VITE_CONTROL_API_BASE_URL` defaults to current origin
 - Dashboard requests use OAuth session cookie auth (`credentials: include`); bearer tokens are not stored in browser code.
 - `VITE_CONTROL_API_GUILD_ID` can prefill the guild selector
+- Production builds use Vite `base: "/dashboard/"`, and the embedded dashboard is served by the control server under `/dashboard/`
 
 Quick start:
 
 ```bash
+cd ui
 bun install
 bun run dev
 ```
 
-`discordcore` continues to own the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend.
+Embedded dashboard build flow:
+
+```bash
+cd ui
+bun run build
+cd ../../alicebot
+go build -o alicebot ./cmd/alicebot
+```
+
+`discordcore` owns the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend. The final executable remains the `alicebot` binary, which embeds the assets produced in `discordcore/ui/dist`.
 
 Policy precedence for logging/event emission:
 
@@ -361,6 +373,7 @@ Slow gateway handlers are logged by default.
 ```bash
 go test ./...
 go vet ./...
+cd ui
 bun run build
 ```
 

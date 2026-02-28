@@ -68,6 +68,7 @@ If `//go:embed` is used:
   - `ui/dist/index.html` must be versioned as a minimal placeholder so `//go:embed` always has material to embed
   - production frontend builds overwrite the placeholder contents
   - embedded dashboard assets are served from `/dashboard/`, not `/`
+  - frontend build commands run from `../discordcore/ui`
 
 Any change involving assets must be validated in:
 - backend-only build
@@ -196,6 +197,7 @@ Avoid tests that require a real Discord connection.
 - The embedded dashboard should be mounted under **`/dashboard/`**.
 - API and auth routes keep their own namespaces (`/v1/*`, `/auth/*`) and must not be shadowed by SPA routing.
 - SPA fallback behavior must apply only to dashboard routes.
+- Production frontend builds must target the `/dashboard/` base path.
 
 QoL features in the UI must map to real backend services — never UI-only state.
 
@@ -239,6 +241,7 @@ Duplication across the two must be eliminated in favor of `discordcore`.
 - [ ] Frontend assets do not break backend builds
 - [ ] `ui/dist/index.html` placeholder remains present for backend-only builds
 - [ ] Embedded dashboard is served from `/dashboard/`
+- [ ] Frontend production build uses `/dashboard/` as its asset base
 - [ ] Config or behavior changes are documented
 
 ---
