@@ -16,5 +16,4 @@ tmp/
 
 # Frontend tooling
 ui/node_modules/
-ui/dist/
 ui/.vite/
