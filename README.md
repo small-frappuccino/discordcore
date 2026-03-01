@@ -300,7 +300,8 @@ Rules enforced by CRUD:
 - partner board admin wiring (`ui/src/App.tsx`)
 - baseline ESLint and TypeScript configuration
 - `ui/embed.go` embeds `ui/dist` into the final bot binary
-- `ui/dist/index.html` is versioned as a placeholder so backend-only Go builds still work before a real frontend build
+- `ui/dist/index.html` is a versioned embed shell that never points at hashed build artifacts directly
+- `bun run build` writes ignored hashed bundles plus `.vite/manifest.json`, then restores the tracked embed shell so backend-only Go builds remain safe
 
 Local dev contract:
 
@@ -326,6 +327,12 @@ bun run build
 cd ../../alicebot
 go build -o alicebot ./cmd/alicebot
 ```
+
+Build behavior:
+
+- `ui/dist/index.html` remains the tracked shell used by `//go:embed`
+- when `.vite/manifest.json` and hashed assets are present, the shell loads the built React entrypoint from `/dashboard/`
+- when frontend assets are absent, the shell stays in placeholder mode with a clear message instead of embedding broken hashed paths
 
 `discordcore` owns the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend. The final executable remains the `alicebot` binary, which embeds the assets produced in `discordcore/ui/dist`.
 
