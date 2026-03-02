@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -232,7 +233,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		}
 	})
 
-	ms.startHeartbeat()
+	ms.startHeartbeat(context.Background())
 
 	firstDeadline := time.Now().Add(100 * time.Millisecond)
 	var first time.Time

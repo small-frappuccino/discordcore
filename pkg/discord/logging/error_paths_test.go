@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -64,7 +65,7 @@ func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 		stopChan: make(chan struct{}),
 	}
 
-	ms.startHeartbeat()
+	ms.startHeartbeat(context.Background())
 	if ms.heartbeatTicker == nil {
 		t.Fatalf("expected heartbeat ticker to be initialized")
 	}

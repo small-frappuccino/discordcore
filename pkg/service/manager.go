@@ -353,17 +353,16 @@ func (sm *ServiceManager) StopService(name string) error {
 		)
 		info.LastError = serviceErr
 		info.ErrorCount++
+		sm.updateServiceState(info, StateError)
+		sm.mu.Unlock()
+		log.ErrorLoggerRaw().Error("Service stop failed", "service", name, "err", err)
+		return err
 	}
 
 	now := time.Now()
 	info.StopTime = &now
 	sm.updateServiceState(info, StateStopped)
 	sm.mu.Unlock()
-
-	if err != nil {
-		log.ErrorLoggerRaw().Error("Service stopped with errors", "service", name, "err", err)
-		return err
-	}
 
 	slog.Info("Service stopped successfully", "service", name)
 	return nil

@@ -147,8 +147,9 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 				err,
 			)
 			bs.lastError = serviceErr
+			bs.state = StateError
 			slog.Error("Service stop failed", "service", bs.name, "err", err)
-			// Continue with shutdown even if hook fails
+			return serviceErr
 		}
 	}
 
@@ -317,8 +318,8 @@ func (bs *BaseService) getUptime() time.Duration {
 // ServiceWrapper can be used to wrap existing services that don't implement the Service interface
 type ServiceWrapper struct {
 	*BaseService
-	wrappedStart func() error
-	wrappedStop  func() error
+	wrappedStart func(context.Context) error
+	wrappedStop  func(context.Context) error
 	wrappedCheck func() bool
 }
 
@@ -328,8 +329,8 @@ func NewServiceWrapper(
 	serviceType ServiceType,
 	priority ServicePriority,
 	dependencies []string,
-	startFunc func() error,
-	stopFunc func() error,
+	startFunc func(context.Context) error,
+	stopFunc func(context.Context) error,
 	checkFunc func() bool,
 ) *ServiceWrapper {
 	wrapper := &ServiceWrapper{
@@ -342,14 +343,14 @@ func NewServiceWrapper(
 	// Set up hooks to call the wrapped functions
 	wrapper.SetStartHook(func(ctx context.Context) error {
 		if wrapper.wrappedStart != nil {
-			return wrapper.wrappedStart()
+			return wrapper.wrappedStart(ctx)
 		}
 		return nil
 	})
 
 	wrapper.SetStopHook(func(ctx context.Context) error {
 		if wrapper.wrappedStop != nil {
-			return wrapper.wrappedStop()
+			return wrapper.wrappedStop(ctx)
 		}
 		return nil
 	})

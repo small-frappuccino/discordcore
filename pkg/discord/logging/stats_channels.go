@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,16 +13,19 @@ import (
 
 const defaultStatsInterval = 30 * time.Minute
 
-func (ms *MonitoringService) updateStatsChannels() {
+func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 	if ms.session == nil || ms.configManager == nil {
-		return
+		return nil
 	}
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		return
+		return nil
 	}
 
 	for _, gcfg := range cfg.Guilds {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		features := cfg.ResolveFeatures(gcfg.GuildID)
 		if !features.StatsChannels {
 			continue
@@ -33,10 +37,11 @@ func (ms *MonitoringService) updateStatsChannels() {
 		if !ms.shouldRunStatsUpdate(gcfg.GuildID, interval) {
 			continue
 		}
-		if err := ms.updateStatsForGuild(gcfg); err != nil {
+		if err := ms.updateStatsForGuild(ctx, gcfg); err != nil {
 			log.ErrorLoggerRaw().Error("Failed to update stats channels", "guildID", gcfg.GuildID, "err", err)
 		}
 	}
+	return nil
 }
 
 func statsEnabled(cfg files.StatsConfig) bool {
@@ -71,7 +76,7 @@ func (ms *MonitoringService) shouldRunStatsUpdate(guildID string, interval time.
 	return true
 }
 
-func (ms *MonitoringService) updateStatsForGuild(gcfg files.GuildConfig) error {
+func (ms *MonitoringService) updateStatsForGuild(ctx context.Context, gcfg files.GuildConfig) error {
 	if gcfg.GuildID == "" {
 		return fmt.Errorf("guild id is empty")
 	}
@@ -79,7 +84,7 @@ func (ms *MonitoringService) updateStatsForGuild(gcfg files.GuildConfig) error {
 		return nil
 	}
 
-	members, err := ms.fetchAllGuildMembers(gcfg.GuildID)
+	members, err := ms.fetchAllGuildMembersContext(ctx, gcfg.GuildID)
 	if err != nil {
 		return fmt.Errorf("fetch guild members: %w", err)
 	}
@@ -90,6 +95,9 @@ func (ms *MonitoringService) updateStatsForGuild(gcfg files.GuildConfig) error {
 	}
 
 	for _, member := range members {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if member == nil || member.User == nil {
 			continue
 		}
@@ -110,7 +118,7 @@ func (ms *MonitoringService) updateStatsForGuild(gcfg files.GuildConfig) error {
 	}
 
 	for _, t := range targets {
-		if err := ms.updateStatsChannelName(gcfg.GuildID, t.cfg, t.count); err != nil {
+		if err := ms.updateStatsChannelName(ctx, gcfg.GuildID, t.cfg, t.count); err != nil {
 			log.ErrorLoggerRaw().Error("Failed to update stats channel name", "guildID", gcfg.GuildID, "channelID", t.cfg.ChannelID, "err", err)
 		}
 	}
@@ -145,13 +153,13 @@ func normalizeMemberType(raw string) string {
 	}
 }
 
-func (ms *MonitoringService) updateStatsChannelName(guildID string, cfg files.StatsChannelConfig, count int) error {
+func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID string, cfg files.StatsChannelConfig, count int) error {
 	channelID := strings.TrimSpace(cfg.ChannelID)
 	if channelID == "" {
 		return nil
 	}
 
-	channel, err := ms.resolveChannel(channelID)
+	channel, err := ms.resolveChannel(ctx, channelID)
 	if err != nil {
 		return fmt.Errorf("resolve channel: %w", err)
 	}
@@ -177,14 +185,16 @@ func (ms *MonitoringService) updateStatsChannelName(guildID string, cfg files.St
 		return nil
 	}
 
-	if _, err := ms.session.ChannelEdit(channelID, &discordgo.ChannelEdit{Name: newName}); err != nil {
+	if _, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
+		return ms.session.ChannelEdit(channelID, &discordgo.ChannelEdit{Name: newName})
+	}); err != nil {
 		return fmt.Errorf("channel edit: %w", err)
 	}
 	log.ApplicationLogger().Info("Updated stats channel name", "guildID", guildID, "channelID", channelID, "count", count, "name", newName)
 	return nil
 }
 
-func (ms *MonitoringService) resolveChannel(channelID string) (*discordgo.Channel, error) {
+func (ms *MonitoringService) resolveChannel(ctx context.Context, channelID string) (*discordgo.Channel, error) {
 	if ms.session == nil || channelID == "" {
 		return nil, fmt.Errorf("session not available or channel id empty")
 	}
@@ -193,7 +203,9 @@ func (ms *MonitoringService) resolveChannel(channelID string) (*discordgo.Channe
 			return ch, nil
 		}
 	}
-	return ms.session.Channel(channelID)
+	return monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
+		return ms.session.Channel(channelID)
+	})
 }
 
 func renderStatsChannelName(label, template string, count int) string {

@@ -340,18 +340,8 @@ func Run(appName, tokenEnv string) error {
 		}
 	}()
 
-	// Wrap monitoring
-	var monitoringWrapper *service.ServiceWrapper
+	// Monitoring service
 	if monitoringEnabled {
-		monitoringWrapper = service.NewServiceWrapper(
-			"monitoring",
-			service.TypeMonitoring,
-			service.PriorityHigh,
-			[]string{},
-			func() error { return monitoringService.Start() },
-			func() error { return monitoringService.Stop() },
-			func() bool { return true },
-		)
 	} else {
 		log.ApplicationLogger().Info("🛑 Monitoring service disabled by features.services.monitoring")
 	}
@@ -380,15 +370,15 @@ func Run(appName, tokenEnv string) error {
 			service.TypeAutomod,
 			service.PriorityNormal,
 			[]string{},
-			func() error { automodService.Start(); return nil },
-			func() error { automodService.Stop(); return nil },
+			func(context.Context) error { automodService.Start(); return nil },
+			func(context.Context) error { automodService.Stop(); return nil },
 			func() bool { return true },
 		)
 	}
 
 	// Register services
-	if monitoringWrapper != nil {
-		if err := serviceManager.Register(monitoringWrapper); err != nil {
+	if monitoringEnabled {
+		if err := serviceManager.Register(monitoringService); err != nil {
 			return fmt.Errorf("register monitoring service: %w", err)
 		}
 	}
@@ -422,8 +412,8 @@ func Run(appName, tokenEnv string) error {
 				service.TypeMonitoring,
 				service.PriorityNormal,
 				[]string{"monitoring"},
-				func() error { userPruneService.Start(); return nil },
-				func() error { userPruneService.Stop(); return nil },
+				func(context.Context) error { userPruneService.Start(); return nil },
+				func(context.Context) error { userPruneService.Stop(); return nil },
 				func() bool { return userPruneService.IsRunning() },
 			)
 			if err := serviceManager.Register(userPruneWrapper); err != nil {

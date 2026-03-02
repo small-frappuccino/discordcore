@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -25,11 +26,11 @@ import (
 
 var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
 
-func stopMonitoringSubService(operation, serviceName string, stopFn func() error) error {
+func stopMonitoringSubService(ctx context.Context, operation, serviceName string, stopFn func() error) error {
 	if stopFn == nil {
 		return nil
 	}
-	if err := stopFn(); err != nil {
+	if err := monitoringRunErrWithTimeout(ctx, monitoringDependencyTimeout, stopFn); err != nil {
 		log.ErrorLoggerRaw().Error(
 			"Monitoring sub-service stop failed",
 			"operation", operation,
@@ -37,6 +38,16 @@ func stopMonitoringSubService(operation, serviceName string, stopFn func() error
 			"err", err,
 		)
 		return fmt.Errorf("%s: %w", operation, err)
+	}
+	return nil
+}
+
+func startMonitoringSubService(ctx context.Context, operation, serviceName string, startFn func() error) error {
+	if startFn == nil {
+		return nil
+	}
+	if err := monitoringRunErrWithTimeout(ctx, monitoringDependencyTimeout, startFn); err != nil {
+		return fmt.Errorf("%s (%s): %w", operation, serviceName, err)
 	}
 	return nil
 }
@@ -125,6 +136,11 @@ func parseEntryExitBackfillMessage(m *discordgo.Message, botID string) (string, 
 const (
 	heartbeatInterval = 5 * time.Minute
 	downtimeThreshold = 30 * time.Minute
+
+	monitoringDependencyTimeout    = 15 * time.Second
+	monitoringPersistenceTimeout   = 10 * time.Second
+	monitoringRouterCloseTimeout   = 10 * time.Second
+	monitoringStartupDispatchLimit = 5 * time.Second
 )
 
 var heartbeatTickInterval = heartbeatInterval
@@ -180,9 +196,17 @@ type MonitoringService struct {
 	messageEventService  *MessageEventService  // Service for message events
 	reactionEventService *ReactionEventService // Service for reaction metrics
 	isRunning            bool
+	startTime            *time.Time
+	stopTime             *time.Time
+	restartCount         int
+	errorCount           int
+	lastErrorAt          *time.Time
 	stopChan             chan struct{}
 	stopOnce             sync.Once
-	runMu                sync.Mutex
+	runMu                sync.RWMutex
+	runCtx               context.Context
+	cancelRun            context.CancelFunc
+	runWG                sync.WaitGroup
 	recentChanges        map[string]time.Time // Debounce to avoid duplicates
 	changesMutex         sync.RWMutex
 	cronCancel           func()
@@ -221,6 +245,154 @@ type MonitoringService struct {
 	cacheRolesStoreHits  uint64
 }
 
+func (ms *MonitoringService) Name() string {
+	return "monitoring"
+}
+
+func (ms *MonitoringService) Type() svc.ServiceType {
+	return svc.TypeMonitoring
+}
+
+func (ms *MonitoringService) Priority() svc.ServicePriority {
+	return svc.PriorityHigh
+}
+
+func (ms *MonitoringService) Dependencies() []string {
+	return nil
+}
+
+func (ms *MonitoringService) IsRunning() bool {
+	ms.runMu.RLock()
+	defer ms.runMu.RUnlock()
+	return ms.isRunning
+}
+
+func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
+	ms.runMu.RLock()
+	isRunning := ms.isRunning
+	runCtx := ms.runCtx
+	ms.runMu.RUnlock()
+
+	message := "Monitoring service is stopped"
+	if isRunning {
+		message = "Monitoring service is running"
+	}
+	if runCtx != nil && runCtx.Err() != nil {
+		message = fmt.Sprintf("Monitoring service lifecycle canceled: %v", runCtx.Err())
+	}
+
+	return svc.HealthStatus{
+		Healthy:   isRunning && runCtx != nil && runCtx.Err() == nil,
+		Message:   message,
+		LastCheck: time.Now(),
+		Details: map[string]interface{}{
+			"router_ready": ms.TaskRouter() != nil,
+		},
+	}
+}
+
+func (ms *MonitoringService) Stats() svc.ServiceStats {
+	ms.runMu.RLock()
+	startTime := ms.startTime
+	stopTime := ms.stopTime
+	restartCount := ms.restartCount
+	errorCount := ms.errorCount
+	lastErrorAt := ms.lastErrorAt
+	ms.runMu.RUnlock()
+
+	stats := svc.ServiceStats{
+		RestartCount:  restartCount,
+		ErrorCount:    errorCount,
+		CustomMetrics: ms.GetCacheStats(),
+	}
+	if startTime != nil {
+		stats.StartTime = *startTime
+		if stopTime != nil {
+			stats.Uptime = stopTime.Sub(*startTime)
+		} else {
+			stats.Uptime = time.Since(*startTime)
+		}
+	}
+	if lastErrorAt != nil {
+		errAt := *lastErrorAt
+		stats.LastError = &errAt
+	}
+	return stats
+}
+
+func (ms *MonitoringService) startLifecycle(ctx context.Context) (context.Context, context.CancelFunc) {
+	base := context.Background()
+	if ctx != nil {
+		base = context.WithoutCancel(ctx)
+	}
+	return context.WithCancel(base)
+}
+
+func (ms *MonitoringService) startOwnedWorker(ctx context.Context, fn func(context.Context)) {
+	ms.runWG.Add(1)
+	go func() {
+		defer ms.runWG.Done()
+		fn(ctx)
+	}()
+}
+
+func (ms *MonitoringService) waitForOwnedWorkers(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ms.runWG.Wait()
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (ms *MonitoringService) recordLifecycleErrorLocked() {
+	now := time.Now()
+	ms.errorCount++
+	ms.lastErrorAt = &now
+}
+
+func monitoringRunWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func() (T, error)) (T, error) {
+	var zero T
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	type result struct {
+		value T
+		err   error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		value, err := fn()
+		resultCh <- result{value: value, err: err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.value, res.err
+	case <-ctx.Done():
+		return zero, ctx.Err()
+	}
+}
+
+func monitoringRunErrWithTimeout(ctx context.Context, timeout time.Duration, fn func() error) error {
+	_, err := monitoringRunWithTimeout(ctx, timeout, func() (struct{}, error) {
+		return struct{}{}, fn()
+	})
+	return err
+}
+
 type cachedRoles struct {
 	roles     []string
 	expiresAt time.Time
@@ -243,8 +415,6 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		return nil, fmt.Errorf("store is nil")
 	}
 	n := NewNotificationSender(session)
-	router := task.NewRouter(task.Defaults())
-	adapters := task.NewNotificationAdapters(router, session, configManager, store, n)
 
 	// Create unified cache with persistence enabled
 	cacheConfig := cache.DefaultCacheConfig()
@@ -261,8 +431,6 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		userWatcher:         NewUserWatcher(session, configManager, store, n, unifiedCache),
 		memberEventService:  NewMemberEventService(session, configManager, n, store),
 		messageEventService: NewMessageEventService(session, configManager, n, store),
-		adapters:            adapters,
-		router:              router,
 		stopChan:            make(chan struct{}),
 		recentChanges:       make(map[string]time.Time),
 		rolesCache:          make(map[string]cachedRoles),
@@ -272,38 +440,69 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 		presenceWatch:       make(map[string]presenceSnapshot),
 		statsLastRun:        make(map[string]time.Time),
 	}
-	// Wire task adapters into sub-services
-	ms.memberEventService.SetAdapters(adapters)
-	ms.messageEventService.SetAdapters(adapters)
-	ms.messageEventService.SetTaskRouter(router)
-	ms.adapters.SetAvatarProcessor(ms.userWatcher)
+	ms.rebuildTaskPipeline()
 	return ms, nil
 }
 
+func (ms *MonitoringService) rebuildTaskPipeline() {
+	if ms.router != nil {
+		ms.router.Close()
+	}
+
+	router := task.NewRouter(task.Defaults())
+	adapters := task.NewNotificationAdapters(router, ms.session, ms.configManager, ms.store, ms.notifier)
+	if ms.userWatcher != nil {
+		adapters.SetAvatarProcessor(ms.userWatcher)
+	}
+
+	ms.router = router
+	ms.adapters = adapters
+
+	if ms.memberEventService != nil {
+		ms.memberEventService.SetAdapters(adapters)
+	}
+	if ms.messageEventService != nil {
+		ms.messageEventService.SetAdapters(adapters)
+		ms.messageEventService.SetTaskRouter(router)
+	}
+}
+
 // Start starts the monitoring service. Returns error if already running.
-func (ms *MonitoringService) Start() error {
+func (ms *MonitoringService) Start(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	ms.runMu.Lock()
 	defer ms.runMu.Unlock()
 	if ms.isRunning {
 		log.ErrorLoggerRaw().Error("Monitoring service is already running")
 		return fmt.Errorf("monitoring service is already running")
 	}
-	ms.isRunning = true
-	// Recreate stopChan and reset stopOnce for restart
+
+	lifecycleCtx, cancelLifecycle := ms.startLifecycle(ctx)
 	ms.stopChan = make(chan struct{})
 	ms.stopOnce = sync.Once{}
+	ms.rolesCacheCleanup = make(chan struct{})
+	if ms.router == nil {
+		ms.rebuildTaskPipeline()
+	}
 
 	// Unified cache warmup is performed in app runner; skipping here to prevent duplicate work
-
-	ms.ensureGuildsListed()
-	// Detect downtime and refresh avatars silently before wiring handlers (no notifications)
-	ms.handleStartupDowntimeAndMaybeRefresh()
+	if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
+		ms.ensureGuildsListed()
+		return nil
+	}); err != nil {
+		cancelLifecycle()
+		ms.recordLifecycleErrorLocked()
+		return fmt.Errorf("ensure guilds listed: %w", err)
+	}
+	if err := ms.handleStartupDowntimeAndMaybeRefresh(ctx); err != nil {
+		cancelLifecycle()
+		ms.recordLifecycleErrorLocked()
+		return fmt.Errorf("handle startup downtime: %w", err)
+	}
 	ms.setupEventHandlers()
-	// Start periodic heartbeat tracker (persisted)
-	ms.startHeartbeat()
-	// Start periodic roles cache cleanup
-	ms.rolesCacheCleanup = make(chan struct{})
-	go ms.rolesCacheCleanupLoop()
 
 	// Global check for services
 	globalRC := files.RuntimeConfig{}
@@ -321,8 +520,10 @@ func (ms *MonitoringService) Start() error {
 	if !ms.shouldRunMemberEventService(globalRC) {
 		log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
 	} else {
-		if err := ms.memberEventService.Start(); err != nil {
-			ms.isRunning = false
+		if err := startMonitoringSubService(ctx, "monitoring.start.member", "member_event_service", ms.memberEventService.Start); err != nil {
+			cancelLifecycle()
+			ms.removeEventHandlers()
+			ms.recordLifecycleErrorLocked()
 			return fmt.Errorf("failed to start member event service: %w", err)
 		}
 	}
@@ -335,12 +536,12 @@ func (ms *MonitoringService) Start() error {
 	if globalRC.DisableMessageLogs || !(globalFeatures.Logging.MessageProcess || globalFeatures.Logging.MessageEdit || globalFeatures.Logging.MessageDelete) {
 		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
 	} else {
-		if err := ms.messageEventService.Start(); err != nil {
-			ms.isRunning = false
+		if err := startMonitoringSubService(ctx, "monitoring.start.message", "message_event_service", ms.messageEventService.Start); err != nil {
 			startErrs := []error{err}
 			// Stop the member event service if start failed
 			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 				if stopErr := stopMonitoringSubService(
+					ctx,
 					"monitoring.start.cleanup.stop_member_after_message_start_failure",
 					"member_event_service",
 					ms.memberEventService.Stop,
@@ -348,6 +549,9 @@ func (ms *MonitoringService) Start() error {
 					startErrs = append(startErrs, stopErr)
 				}
 			}
+			cancelLifecycle()
+			ms.removeEventHandlers()
+			ms.recordLifecycleErrorLocked()
 			if len(startErrs) > 1 {
 				return fmt.Errorf("failed to start message event service: %w", errors.Join(startErrs...))
 			}
@@ -363,12 +567,12 @@ func (ms *MonitoringService) Start() error {
 		if ms.reactionEventService == nil {
 			ms.reactionEventService = NewReactionEventService(ms.session, ms.configManager, ms.store)
 		}
-		if err := ms.reactionEventService.Start(); err != nil {
-			ms.isRunning = false
+		if err := startMonitoringSubService(ctx, "monitoring.start.reaction", "reaction_event_service", ms.reactionEventService.Start); err != nil {
 			startErrs := []error{err}
 			// Stop previously started services on failure
 			if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 				if stopErr := stopMonitoringSubService(
+					ctx,
 					"monitoring.start.cleanup.stop_message_after_reaction_start_failure",
 					"message_event_service",
 					ms.messageEventService.Stop,
@@ -378,6 +582,7 @@ func (ms *MonitoringService) Start() error {
 			}
 			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 				if stopErr := stopMonitoringSubService(
+					ctx,
 					"monitoring.start.cleanup.stop_member_after_reaction_start_failure",
 					"member_event_service",
 					ms.memberEventService.Stop,
@@ -385,6 +590,9 @@ func (ms *MonitoringService) Start() error {
 					startErrs = append(startErrs, stopErr)
 				}
 			}
+			cancelLifecycle()
+			ms.removeEventHandlers()
+			ms.recordLifecycleErrorLocked()
 			if len(startErrs) > 1 {
 				return fmt.Errorf("failed to start reaction event service: %w", errors.Join(startErrs...))
 			}
@@ -392,14 +600,20 @@ func (ms *MonitoringService) Start() error {
 		}
 	}
 
+	ms.startHeartbeat(lifecycleCtx)
+	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
+	serviceCtx := lifecycleCtx
+
 	// Schedule periodic avatar scan via router cron instead of local goroutine
 	ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
-		ms.performPeriodicCheck()
-		return nil
+		return ms.performPeriodicCheck(serviceCtx)
 	})
 
 	// Register a daily roles DB refresh task and run once at startup
 	ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
+		if err := serviceCtx.Err(); err != nil {
+			return err
+		}
 		cfg := ms.configManager.Config()
 		if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
 			return nil
@@ -408,7 +622,10 @@ func (ms *MonitoringService) Start() error {
 		totalUpdates := 0
 		botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
 		for _, gcfg := range cfg.Guilds {
-			members, err := ms.fetchAllGuildMembers(gcfg.GuildID)
+			if err := serviceCtx.Err(); err != nil {
+				return err
+			}
+			members, err := ms.fetchAllGuildMembersContext(serviceCtx, gcfg.GuildID)
 			if err != nil {
 				log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
 				continue
@@ -479,8 +696,7 @@ func (ms *MonitoringService) Start() error {
 	})
 
 	ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
-		ms.updateStatsChannels()
-		return nil
+		return ms.updateStatsChannels(serviceCtx)
 	})
 
 	// Using TaskRouter scheduler helpers for daily scheduling
@@ -491,17 +707,22 @@ func (ms *MonitoringService) Start() error {
 	ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
 
 	// Trigger one-time roles refresh on startup (non-blocking)
-	go func() {
-		if err := ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.refresh_roles"}); err != nil {
+	startupRouter := ms.router
+	ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
+		dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
+		defer cancel()
+		if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.refresh_roles"}); err != nil {
 			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.refresh_roles", "err", err)
 		}
-	}()
+	})
 
-	go func() {
-		if err := ms.router.Dispatch(context.Background(), task.Task{Type: "monitor.update_stats_channels"}); err != nil {
+	ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
+		dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
+		defer cancel()
+		if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.update_stats_channels"}); err != nil {
 			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.update_stats_channels", "err", err)
 		}
-	}()
+	})
 
 	// Register one-shot entry/exit backfill handler (Option A)
 	ms.router.RegisterHandler("monitor.backfill_entry_exit_day", func(ctx context.Context, payload any) error {
@@ -556,7 +777,12 @@ func (ms *MonitoringService) Start() error {
 		startTime := time.Now()
 
 		for {
-			msgs, err := ms.session.ChannelMessages(channelID, 100, before, "", "")
+			if err := serviceCtx.Err(); err != nil {
+				return err
+			}
+			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
+				return ms.session.ChannelMessages(channelID, 100, before, "", "")
+			})
 			if err != nil {
 				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "channelID", channelID, "err", err)
 				break
@@ -568,6 +794,9 @@ func (ms *MonitoringService) Start() error {
 			// Messages come newest -> oldest
 			stop := false
 			for _, m := range msgs {
+				if err := serviceCtx.Err(); err != nil {
+					return err
+				}
 				t := m.Timestamp.UTC()
 				// Stop if we've paged past the target day
 				if t.Before(start) {
@@ -590,7 +819,9 @@ func (ms *MonitoringService) Start() error {
 							// If name was not in message, check if still in server via code
 							stillInServer := false
 							if ms.session != nil {
-								mem, err := ms.session.GuildMember(guildID, userID)
+								mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+									return ms.session.GuildMember(guildID, userID)
+								})
 								if err == nil && mem != nil {
 									stillInServer = true
 								}
@@ -713,7 +944,12 @@ func (ms *MonitoringService) Start() error {
 		startTime := time.Now()
 
 		for {
-			msgs, err := ms.session.ChannelMessages(channelID, 100, before, "", "")
+			if err := serviceCtx.Err(); err != nil {
+				return err
+			}
+			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
+				return ms.session.ChannelMessages(channelID, 100, before, "", "")
+			})
 			if err != nil {
 				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill range", "channelID", channelID, "err", err)
 				break
@@ -725,6 +961,9 @@ func (ms *MonitoringService) Start() error {
 			// Messages come newest -> oldest
 			stop := false
 			for _, m := range msgs {
+				if err := serviceCtx.Err(); err != nil {
+					return err
+				}
 				t := m.Timestamp.UTC()
 				// Stop if we've paged past the target window
 				if t.Before(start) {
@@ -747,7 +986,9 @@ func (ms *MonitoringService) Start() error {
 							// If name was not in message, check if still in server via code
 							stillInServer := false
 							if ms.session != nil {
-								mem, err := ms.session.GuildMember(guildID, userID)
+								mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+									return ms.session.GuildMember(guildID, userID)
+								})
 								if err == nil && mem != nil {
 									stillInServer = true
 								}
@@ -849,11 +1090,14 @@ func (ms *MonitoringService) Start() error {
 				initialDate := strings.TrimSpace(rc.BackfillInitialDate)
 
 				if day != "" {
-					if err := ms.router.Dispatch(context.Background(), task.Task{
+					dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
+					err := ms.router.Dispatch(dispatchCtx, task.Task{
 						Type:    "monitor.backfill_entry_exit_day",
 						Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: day},
 						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					}); err != nil {
+					})
+					cancel()
+					if err != nil {
 						log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
 					} else {
 						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
@@ -888,11 +1132,14 @@ func (ms *MonitoringService) Start() error {
 					}
 					start := parsedDate.Format(time.RFC3339)
 					end := now.Format(time.RFC3339)
-					if err := ms.router.Dispatch(context.Background(), task.Task{
+					dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
+					err = ms.router.Dispatch(dispatchCtx, task.Task{
 						Type:    "monitor.backfill_entry_exit_range",
 						Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
 						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					}); err != nil {
+					})
+					cancel()
+					if err != nil {
 						log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
 					} else {
 						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
@@ -906,11 +1153,14 @@ func (ms *MonitoringService) Start() error {
 					if downtime > downtimeThreshold {
 						start := lastEvent.UTC().Format(time.RFC3339)
 						end := now.Format(time.RFC3339)
-						if err := ms.router.Dispatch(context.Background(), task.Task{
+						dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
+						err := ms.router.Dispatch(dispatchCtx, task.Task{
 							Type:    "monitor.backfill_entry_exit_range",
 							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
 							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-						}); err != nil {
+						})
+						cancel()
+						if err != nil {
 							log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
 						} else {
 							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
@@ -926,6 +1176,16 @@ func (ms *MonitoringService) Start() error {
 	} else {
 		log.ApplicationLogger().Info("Backfill skip: config manager or config is nil")
 	}
+
+	now := time.Now()
+	if ms.startTime != nil {
+		ms.restartCount++
+	}
+	ms.runCtx = serviceCtx
+	ms.cancelRun = cancelLifecycle
+	ms.isRunning = true
+	ms.startTime = &now
+	ms.stopTime = nil
 
 	log.ApplicationLogger().Info("All monitoring services started successfully")
 	return nil
@@ -964,25 +1224,77 @@ func (ms *MonitoringService) shouldRunMemberEventService(globalRC files.RuntimeC
 }
 
 // Stop stops the monitoring service. Returns error if not running.
-func (ms *MonitoringService) Stop() error {
+func (ms *MonitoringService) Stop(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	ms.runMu.Lock()
-	defer ms.runMu.Unlock()
 	if !ms.isRunning {
+		ms.runMu.Unlock()
 		log.ErrorLoggerRaw().Error("Monitoring service is not running")
 		return fmt.Errorf("monitoring service is not running")
 	}
+
+	cancelLifecycle := ms.cancelRun
+	ms.cancelRun = nil
+	ms.runCtx = nil
 	ms.isRunning = false
-	// Use sync.Once to prevent double-closing stopChan
 	ms.stopOnce.Do(func() {
 		close(ms.stopChan)
 	})
-	ms.stopHeartbeat()
+	if ms.rolesCacheCleanup != nil {
+		close(ms.rolesCacheCleanup)
+		ms.rolesCacheCleanup = nil
+	}
+	cronCancel := ms.cronCancel
+	ms.cronCancel = nil
+	statsCronCancel := ms.statsCronCancel
+	ms.statsCronCancel = nil
+	router := ms.router
+	ms.router = nil
+	ms.adapters = nil
+	ms.runMu.Unlock()
 
-	// Persist cache before shutdown
+	if cancelLifecycle != nil {
+		cancelLifecycle()
+	}
+	ms.stopHeartbeat()
+	if cronCancel != nil {
+		cronCancel()
+	}
+	if statsCronCancel != nil {
+		statsCronCancel()
+	}
+
+	ms.removeEventHandlers()
+
+	var stopErrs []error
+	if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
+		if err := stopMonitoringSubService(ctx, "monitoring.stop.member", "member_event_service", ms.memberEventService.Stop); err != nil {
+			stopErrs = append(stopErrs, err)
+		}
+	}
+	if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
+		if err := stopMonitoringSubService(ctx, "monitoring.stop.message", "message_event_service", ms.messageEventService.Stop); err != nil {
+			stopErrs = append(stopErrs, err)
+		}
+	}
+	if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
+		if err := stopMonitoringSubService(ctx, "monitoring.stop.reaction", "reaction_event_service", ms.reactionEventService.Stop); err != nil {
+			stopErrs = append(stopErrs, err)
+		}
+	}
+
+	if err := ms.waitForOwnedWorkers(ctx); err != nil {
+		stopErrs = append(stopErrs, fmt.Errorf("wait for monitoring workers: %w", err))
+	}
+
 	if ms.unifiedCache != nil {
 		log.ApplicationLogger().Info("💾 Persisting cache to storage...")
-		if err := ms.unifiedCache.Persist(); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to persist cache (continuing)", "err", err)
+		if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, ms.unifiedCache.Persist); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to persist cache", "err", err)
+			stopErrs = append(stopErrs, fmt.Errorf("persist unified cache: %w", err))
 		} else {
 			members, _, _, _ := ms.unifiedCache.MemberMetrics()
 			guilds, _, _, _ := ms.unifiedCache.GuildMetrics()
@@ -991,47 +1303,35 @@ func (ms *MonitoringService) Stop() error {
 			total := members + guilds + roles + channels
 			log.ApplicationLogger().Info("✅ Cache persisted", "entries_saved", total)
 		}
-		// Stop cache cleanup goroutine
 		ms.unifiedCache.Stop()
 	}
 
-	// Stop roles cache cleanup
-	if ms.rolesCacheCleanup != nil {
-		close(ms.rolesCacheCleanup)
-		ms.rolesCacheCleanup = nil
-	}
-
-	// Remove event handlers
-	ms.removeEventHandlers()
-
-	// Stop services
-	if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-		if err := ms.memberEventService.Stop(); err != nil {
-			log.ErrorLoggerRaw().Error("Error stopping member event service", "err", err)
+	if router != nil {
+		if err := monitoringRunErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
+			router.Close()
+			return nil
+		}); err != nil {
+			stopErrs = append(stopErrs, fmt.Errorf("close task router: %w", err))
 		}
 	}
-	if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
-		if err := ms.messageEventService.Stop(); err != nil {
-			log.ErrorLoggerRaw().Error("Error stopping message event service", "err", err)
-		}
+	if ms.messageEventService != nil {
+		ms.messageEventService.SetTaskRouter(nil)
+		ms.messageEventService.SetAdapters(nil)
 	}
-	if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
-		if err := ms.reactionEventService.Stop(); err != nil {
-			log.ErrorLoggerRaw().Error("Error stopping reaction event service", "err", err)
-		}
+	if ms.memberEventService != nil {
+		ms.memberEventService.SetAdapters(nil)
 	}
 
-	// Cancel cron before closing router
-	if ms.cronCancel != nil {
-		ms.cronCancel()
+	ms.runMu.Lock()
+	now := time.Now()
+	ms.stopTime = &now
+	if len(stopErrs) > 0 {
+		ms.recordLifecycleErrorLocked()
+		ms.runMu.Unlock()
+		return errors.Join(stopErrs...)
 	}
-	if ms.statsCronCancel != nil {
-		ms.statsCronCancel()
-	}
+	ms.runMu.Unlock()
 
-	if ms.router != nil {
-		ms.router.Close()
-	}
 	log.ApplicationLogger().Info("Monitoring service stopped")
 	return nil
 }
@@ -1050,7 +1350,7 @@ func (ms *MonitoringService) initializeCache() {
 		wg.Add(1)
 		go func(guildID string) {
 			defer wg.Done()
-			ms.initializeGuildCache(guildID)
+			_ = ms.initializeGuildCacheContext(context.Background(), guildID)
 		}(gid)
 	}
 	wg.Wait()
@@ -1059,16 +1359,20 @@ func (ms *MonitoringService) initializeCache() {
 
 // initializeGuildCache initializes the current avatars of members in a specific guild.
 func (ms *MonitoringService) initializeGuildCache(guildID string) {
+	_ = ms.initializeGuildCacheContext(context.Background(), guildID)
+}
+
+func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, guildID string) error {
 	if ms.store == nil {
 		log.ApplicationLogger().Warn("Store is nil; skipping cache initialization for guild", "guildID", guildID)
-		return
+		return nil
 	}
 
 	// Use unified cache for guild fetch
-	guild, err := ms.getGuild(guildID)
+	guild, err := ms.getGuildContext(ctx, guildID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Error getting guild", "guildID", guildID, "err", err)
-		return
+		return err
 	}
 	log.ApplicationLogger().Info("Initializing cache for guild", "guildName", guild.Name, "guildID", guild.ID)
 	if err := ms.store.SetGuildOwnerID(guildID, guild.OwnerID); err != nil {
@@ -1095,7 +1399,7 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 		}
 		// Fallback to REST only if necessary
 		if botMember == nil {
-			if m, err := ms.getGuildMember(guildID, botID); err == nil {
+			if m, err := ms.getGuildMemberContext(ctx, guildID, botID); err == nil {
 				botMember = m
 			}
 		}
@@ -1110,12 +1414,15 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 			}
 		}
 	}
-	members, err := ms.fetchAllGuildMembers(guildID)
+	members, err := ms.fetchAllGuildMembersContext(ctx, guildID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", guildID, "err", err)
-		return
+		return err
 	}
 	for _, member := range members {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		avatarHash := member.User.Avatar
 		if avatarHash == "" {
 			avatarHash = "default"
@@ -1152,6 +1459,7 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 			}
 		}
 	}
+	return nil
 }
 
 // ApplyRuntimeToggles hot-applies a subset of runtime_config toggles without restarting the process.
@@ -1184,6 +1492,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	if !ms.shouldRunMemberEventService(rc) {
 		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 			if err := stopMonitoringSubService(
+				ctx,
 				"monitoring.apply_runtime_toggles.stop_member",
 				"member_event_service",
 				ms.memberEventService.Stop,
@@ -1193,7 +1502,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		}
 	} else {
 		if ms.memberEventService != nil && !ms.memberEventService.IsRunning() {
-			if err := ms.memberEventService.Start(); err != nil {
+			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_member", "member_event_service", ms.memberEventService.Start); err != nil {
 				return fmt.Errorf("start MemberEventService: %w", err)
 			}
 		}
@@ -1203,6 +1512,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	if rc.DisableMessageLogs || !(features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete) {
 		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 			if err := stopMonitoringSubService(
+				ctx,
 				"monitoring.apply_runtime_toggles.stop_message",
 				"message_event_service",
 				ms.messageEventService.Stop,
@@ -1212,7 +1522,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		}
 	} else {
 		if ms.messageEventService != nil && !ms.messageEventService.IsRunning() {
-			if err := ms.messageEventService.Start(); err != nil {
+			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_message", "message_event_service", ms.messageEventService.Start); err != nil {
 				return fmt.Errorf("start MessageEventService: %w", err)
 			}
 		}
@@ -1222,6 +1532,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	if rc.DisableReactionLogs || !features.Logging.ReactionMetric {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
 			if err := stopMonitoringSubService(
+				ctx,
 				"monitoring.apply_runtime_toggles.stop_reaction",
 				"reaction_event_service",
 				ms.reactionEventService.Stop,
@@ -1234,7 +1545,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 			ms.reactionEventService = NewReactionEventService(ms.session, ms.configManager, ms.store)
 		}
 		if !ms.reactionEventService.IsRunning() {
-			if err := ms.reactionEventService.Start(); err != nil {
+			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_reaction", "reaction_event_service", ms.reactionEventService.Start); err != nil {
 				return fmt.Errorf("start ReactionEventService: %w", err)
 			}
 		}
@@ -1247,8 +1558,6 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	if len(stopErrs) > 0 {
 		return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
 	}
-
-	_ = ctx
 	return nil
 }
 
@@ -2181,28 +2490,37 @@ func (ms *MonitoringService) markEvent() {
 	}
 }
 
-func (ms *MonitoringService) startHeartbeat() {
+func (ms *MonitoringService) startHeartbeat(ctx context.Context) {
 	if ms.store == nil || ms.heartbeatTicker != nil {
 		return
 	}
-	ms.heartbeatTicker = time.NewTicker(heartbeatTickInterval)
-	ms.heartbeatStop = make(chan struct{})
+	ticker := time.NewTicker(heartbeatTickInterval)
+	heartbeatStop := make(chan struct{})
+	stopChan := ms.stopChan
+	ms.heartbeatTicker = ticker
+	ms.heartbeatStop = heartbeatStop
 	// Set immediately on startup
-	if err := ms.store.SetHeartbeat(time.Now()); err != nil {
+	if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
+		return ms.store.SetHeartbeat(time.Now())
+	}); err != nil {
 		log.ApplicationLogger().Warn("Failed to persist startup heartbeat", "err", err)
 	}
-	go func() {
+	ms.startOwnedWorker(ctx, func(ctx context.Context) {
 		for {
 			select {
-			case <-ms.heartbeatTicker.C:
-				_ = ms.store.SetHeartbeat(time.Now())
-			case <-ms.heartbeatStop:
+			case <-ticker.C:
+				_ = monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
+					return ms.store.SetHeartbeat(time.Now())
+				})
+			case <-ctx.Done():
 				return
-			case <-ms.stopChan:
+			case <-heartbeatStop:
+				return
+			case <-stopChan:
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (ms *MonitoringService) stopHeartbeat() {
@@ -2217,7 +2535,7 @@ func (ms *MonitoringService) stopHeartbeat() {
 }
 
 // rolesCacheCleanupLoop periodically removes expired entries from rolesCache
-func (ms *MonitoringService) rolesCacheCleanupLoop() {
+func (ms *MonitoringService) rolesCacheCleanupLoop(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -2225,6 +2543,8 @@ func (ms *MonitoringService) rolesCacheCleanupLoop() {
 		select {
 		case <-ticker.C:
 			ms.cleanupRolesCache()
+		case <-ctx.Done():
+			return
 		case <-ms.rolesCacheCleanup:
 			return
 		}
@@ -2305,9 +2625,10 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 	size := len(ms.rolesCache)
 	ms.rolesCacheMu.RUnlock()
 	ttl := ms.rolesTTL
+	isRunning := ms.IsRunning()
 
 	stats := map[string]interface{}{
-		"isRunning":            ms.isRunning,
+		"isRunning":            isRunning,
 		"rolesCacheSize":       size,
 		"rolesCacheTTLSeconds": int(ttl.Seconds()),
 		"apiAuditLogCalls":     atomic.LoadUint64(&ms.apiAuditLogCalls),
@@ -2534,11 +2855,20 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 
 	return stats
 }
-func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
+func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Context) error {
 	if ms.store == nil {
-		return
+		return nil
 	}
-	lastHB, okHB, err := ms.store.GetHeartbeat()
+	type heartbeatState struct {
+		at time.Time
+		ok bool
+	}
+	hb, err := monitoringRunWithTimeout(ctx, monitoringPersistenceTimeout, func() (heartbeatState, error) {
+		at, ok, err := ms.store.GetHeartbeat()
+		return heartbeatState{at: at, ok: ok}, err
+	})
+	lastHB := hb.at
+	okHB := hb.ok
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Failed to read last heartbeat; skipping downtime check", "err", err)
 	} else {
@@ -2551,32 +2881,51 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh() {
 			cfg := ms.configManager.Config()
 			if cfg == nil || len(cfg.Guilds) == 0 {
 				log.ApplicationLogger().Info("No configured guilds for startup silent refresh")
-				return
+				return nil
 			}
 			startTime := time.Now()
 			var wg sync.WaitGroup
+			errCh := make(chan error, len(cfg.Guilds))
 			for _, gcfg := range cfg.Guilds {
 				gid := gcfg.GuildID
 				wg.Add(1)
 				go func(guildID string) {
 					defer wg.Done()
-					ms.initializeGuildCache(guildID) // Upserts avatars without sending notifications
+					if err := ms.initializeGuildCacheContext(ctx, guildID); err != nil {
+						errCh <- err
+					}
 				}(gid)
 			}
 			wg.Wait()
+			close(errCh)
+			for err := range errCh {
+				if err != nil {
+					return err
+				}
+			}
 			log.ApplicationLogger().Info("✅ Silent avatar refresh completed", "duration", time.Since(startTime).Round(time.Millisecond))
-			return
+			return nil
 		}
 	}
 	log.ApplicationLogger().Info("No significant downtime detected; skipping heavy avatar refresh")
+	return nil
 }
 
 // fetchAllGuildMembers paginates through all guild members in batches up to 1000 until exhaustion.
 func (ms *MonitoringService) fetchAllGuildMembers(guildID string) ([]*discordgo.Member, error) {
+	return ms.fetchAllGuildMembersContext(context.Background(), guildID)
+}
+
+func (ms *MonitoringService) fetchAllGuildMembersContext(ctx context.Context, guildID string) ([]*discordgo.Member, error) {
 	var all []*discordgo.Member
 	after := ""
 	for {
-		members, err := ms.session.GuildMembers(guildID, after, 1000)
+		if err := ctx.Err(); err != nil {
+			return all, err
+		}
+		members, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
+			return ms.session.GuildMembers(guildID, after, 1000)
+		})
 		if err != nil {
 			log.ErrorLoggerRaw().Error("Failed to paginate guild members", "guildID", guildID, "after", after, "fetched_so_far", len(all), "err", err)
 			return all, err
@@ -2594,20 +2943,26 @@ func (ms *MonitoringService) fetchAllGuildMembers(guildID string) ([]*discordgo.
 	return all, nil
 }
 
-func (ms *MonitoringService) performPeriodicCheck() {
+func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 	log.ApplicationLogger().Info("Running periodic avatar check...")
 	cfg := ms.configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		log.ApplicationLogger().Info("No configured guilds for periodic check")
-		return
+		return nil
 	}
 	for _, gcfg := range cfg.Guilds {
-		members, err := ms.fetchAllGuildMembers(gcfg.GuildID)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		members, err := ms.fetchAllGuildMembersContext(ctx, gcfg.GuildID)
 		if err != nil {
 			log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
 			continue
 		}
 		for _, member := range members {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			// Backfill missing member join date using Discord data
 			if ms.store != nil && !member.JoinedAt.IsZero() {
 				_, hasJoinRecord, err := ms.store.GetMemberJoin(gcfg.GuildID, member.User.ID)
@@ -2633,6 +2988,7 @@ func (ms *MonitoringService) performPeriodicCheck() {
 			ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
 		}
 	}
+	return nil
 }
 
 // MemberEvents exposes the member event sub-service.
@@ -2951,6 +3307,10 @@ func (ms *MonitoringService) handleRoleUpdateForBotPermMirroring(s *discordgo.Se
 
 // getGuildMember retrieves a member using unified cache -> state -> API fallback
 func (ms *MonitoringService) getGuildMember(guildID, userID string) (*discordgo.Member, error) {
+	return ms.getGuildMemberContext(context.Background(), guildID, userID)
+}
+
+func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID, userID string) (*discordgo.Member, error) {
 	// Try unified cache first
 	if ms.unifiedCache != nil {
 		if member, ok := ms.unifiedCache.GetMember(guildID, userID); ok {
@@ -2971,7 +3331,9 @@ func (ms *MonitoringService) getGuildMember(guildID, userID string) (*discordgo.
 
 	// Fallback to API
 	atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
-	member, err := ms.session.GuildMember(guildID, userID)
+	member, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+		return ms.session.GuildMember(guildID, userID)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -2984,6 +3346,10 @@ func (ms *MonitoringService) getGuildMember(guildID, userID string) (*discordgo.
 
 // getGuild retrieves a guild using unified cache -> state -> API fallback
 func (ms *MonitoringService) getGuild(guildID string) (*discordgo.Guild, error) {
+	return ms.getGuildContext(context.Background(), guildID)
+}
+
+func (ms *MonitoringService) getGuildContext(ctx context.Context, guildID string) (*discordgo.Guild, error) {
 	// Try unified cache first
 	if ms.unifiedCache != nil {
 		if guild, ok := ms.unifiedCache.GetGuild(guildID); ok {
@@ -3002,7 +3368,9 @@ func (ms *MonitoringService) getGuild(guildID string) (*discordgo.Guild, error) 
 	}
 
 	// Fallback to API
-	guild, err := ms.session.Guild(guildID)
+	guild, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Guild, error) {
+		return ms.session.Guild(guildID)
+	})
 	if err != nil {
 		return nil, err
 	}
