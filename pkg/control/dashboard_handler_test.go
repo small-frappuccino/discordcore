@@ -1,12 +1,14 @@
 package control
 
 import (
+	"context"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 func TestDashboardHandlerServesStaticAsset(t *testing.T) {
@@ -114,7 +116,9 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 		t.Fatalf("start control server: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = srv.Stop(nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Stop(ctx)
 	})
 
 	resp, err := http.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
