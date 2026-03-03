@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -12,7 +13,7 @@ func TestCalculateServerTime_ReturnsErrorWhenStoreReadFails(t *testing.T) {
 		store: storage.NewStore(filepath.Join(t.TempDir(), "not-initialized.db")),
 	}
 
-	got, ok, err := service.calculateServerTime("g1", "u1")
+	got, ok, err := service.calculateServerTime(context.Background(), "g1", "u1")
 	if err == nil {
 		t.Fatalf("expected store read error, got nil")
 	}

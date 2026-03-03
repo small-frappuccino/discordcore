@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -50,7 +51,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session), store)
 
-	if err := service.Start(); err != nil {
+	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("start member event service: %v", err)
 	}
 	if got := len(service.handlerCancels); got != 3 {
@@ -71,7 +72,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected one notification after first dispatch, got %d", got)
 	}
 
-	if err := service.Stop(); err != nil {
+	if err := service.Stop(context.Background()); err != nil {
 		t.Fatalf("stop member event service: %v", err)
 	}
 	if got := len(service.handlerCancels); got != 0 {
@@ -92,7 +93,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected no event processing while service is stopped, got %d notification sends", got)
 	}
 
-	if err := service.Start(); err != nil {
+	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("restart member event service: %v", err)
 	}
 	if got := len(service.handlerCancels); got != 3 {
@@ -121,7 +122,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected second user to be counted once, got %d", got)
 	}
 
-	if err := service.Stop(); err != nil {
+	if err := service.Stop(context.Background()); err != nil {
 		t.Fatalf("final stop member event service: %v", err)
 	}
 }
@@ -140,7 +141,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 	session.Identify.Intents = discordgo.IntentsGuildMessages
 	service := NewMessageEventService(session, cfgMgr, nil, store)
 
-	if err := service.Start(); err != nil {
+	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("start message event service: %v", err)
 	}
 	if got := len(service.handlerCancels); got != 4 {
@@ -163,7 +164,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected one processed message after first dispatch, got %d", got)
 	}
 
-	if err := service.Stop(); err != nil {
+	if err := service.Stop(context.Background()); err != nil {
 		t.Fatalf("stop message event service: %v", err)
 	}
 	if got := len(service.handlerCancels); got != 0 {
@@ -186,7 +187,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected no extra processing while stopped, daily metric=%d", got)
 	}
 
-	if err := service.Start(); err != nil {
+	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("restart message event service: %v", err)
 	}
 	if got := len(service.handlerCancels); got != 4 {
@@ -210,7 +211,88 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected one processed message per dispatch after restart, got daily metric=%d", got)
 	}
 
-	if err := service.Stop(); err != nil {
+	if err := service.Stop(context.Background()); err != nil {
 		t.Fatalf("final stop message event service: %v", err)
+	}
+}
+
+func TestReactionEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
+	const (
+		guildID   = "g-lifecycle-reaction"
+		channelID = "c-lifecycle-reaction"
+		userID    = "lifecycle-user"
+	)
+
+	store, dbPath := newLoggingStore(t, "lifecycle-reaction.db")
+	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{})
+
+	session := newLoggingLifecycleSession(t)
+	service := NewReactionEventService(session, cfgMgr, store)
+
+	if err := service.Start(context.Background()); err != nil {
+		t.Fatalf("start reaction event service: %v", err)
+	}
+	if got := len(service.handlerCancels); got != 1 {
+		t.Fatalf("expected 1 registered handler after start, got %d", got)
+	}
+
+	dispatchDiscordEvent(session, "MESSAGE_REACTION_ADD", &discordgo.MessageReactionAdd{
+		MessageReaction: &discordgo.MessageReaction{
+			GuildID:   guildID,
+			ChannelID: channelID,
+			UserID:    userID,
+			Emoji: discordgo.Emoji{
+				Name: "thumbsup",
+			},
+		},
+	})
+	if got := dailyReactionMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 1 {
+		t.Fatalf("expected one reaction metric after first dispatch, got %d", got)
+	}
+
+	if err := service.Stop(context.Background()); err != nil {
+		t.Fatalf("stop reaction event service: %v", err)
+	}
+	if got := len(service.handlerCancels); got != 0 {
+		t.Fatalf("expected 0 registered handlers after stop, got %d", got)
+	}
+
+	dispatchDiscordEvent(session, "MESSAGE_REACTION_ADD", &discordgo.MessageReactionAdd{
+		MessageReaction: &discordgo.MessageReaction{
+			GuildID:   guildID,
+			ChannelID: channelID,
+			UserID:    userID,
+			Emoji: discordgo.Emoji{
+				Name: "thumbsup",
+			},
+		},
+	})
+	if got := dailyReactionMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 1 {
+		t.Fatalf("expected no extra processing while stopped, reaction metric=%d", got)
+	}
+
+	if err := service.Start(context.Background()); err != nil {
+		t.Fatalf("restart reaction event service: %v", err)
+	}
+	if got := len(service.handlerCancels); got != 1 {
+		t.Fatalf("expected 1 registered handler after restart, got %d", got)
+	}
+
+	dispatchDiscordEvent(session, "MESSAGE_REACTION_ADD", &discordgo.MessageReactionAdd{
+		MessageReaction: &discordgo.MessageReaction{
+			GuildID:   guildID,
+			ChannelID: channelID,
+			UserID:    userID,
+			Emoji: discordgo.Emoji{
+				Name: "thumbsup",
+			},
+		},
+	})
+	if got := dailyReactionMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 2 {
+		t.Fatalf("expected one processed reaction per dispatch after restart, got metric=%d", got)
+	}
+
+	if err := service.Stop(context.Background()); err != nil {
+		t.Fatalf("final stop reaction event service: %v", err)
 	}
 }

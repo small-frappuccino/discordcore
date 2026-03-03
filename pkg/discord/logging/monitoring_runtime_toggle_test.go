@@ -60,13 +60,13 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		eventHandlers:        make([]interface{}, 0),
 	}
 
-	if err := ms.memberEventService.Start(); err != nil {
+	if err := ms.memberEventService.Start(context.Background()); err != nil {
 		t.Fatalf("start member service: %v", err)
 	}
-	if err := ms.messageEventService.Start(); err != nil {
+	if err := ms.messageEventService.Start(context.Background()); err != nil {
 		t.Fatalf("start message service: %v", err)
 	}
-	if err := ms.reactionEventService.Start(); err != nil {
+	if err := ms.reactionEventService.Start(context.Background()); err != nil {
 		t.Fatalf("start reaction service: %v", err)
 	}
 
@@ -112,12 +112,12 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 
 	ms.removeEventHandlers()
 	if ms.memberEventService.IsRunning() {
-		_ = ms.memberEventService.Stop()
+		_ = ms.memberEventService.Stop(context.Background())
 	}
 	if ms.messageEventService.IsRunning() {
-		_ = ms.messageEventService.Stop()
+		_ = ms.messageEventService.Stop(context.Background())
 	}
 	if ms.reactionEventService.IsRunning() {
-		_ = ms.reactionEventService.Stop()
+		_ = ms.reactionEventService.Stop(context.Background())
 	}
 }

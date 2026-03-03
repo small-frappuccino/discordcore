@@ -45,9 +45,8 @@ type MessageEventService struct {
 	notifier       *NotificationSender
 	adapters       *task.NotificationAdapters
 	store          *storage.Store
-	isRunning      bool
-	verifyStop     chan struct{}
-	verifyWG       sync.WaitGroup
+	activity       *runtimeActivity
+	lifecycle      serviceLifecycle
 	handlerCancels []func()
 
 	// Message cache configuration (populated from settings.json runtime_config)
@@ -100,26 +99,33 @@ type messageDeleteTaskPayload struct {
 // NewMessageEventService creates a new instance of the message events service
 func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MessageEventService {
 	return &MessageEventService{
-		session:        session,
-		configManager:  configManager,
-		notifier:       notifier,
-		store:          store,
-		isRunning:      false,
+		session:       session,
+		configManager: configManager,
+		notifier:      notifier,
+		store:         store,
+		activity: newRuntimeActivity(store, runtimeActivityOptions{
+			RunErr:       runErrWithTimeout,
+			EventTimeout: loggingDependencyTimeout,
+			Warn:         slog.Warn,
+		}),
+		lifecycle:      newServiceLifecycle("message event service"),
 		auditCache:     make(map[string]auditCacheEntry),
 		auditCacheTTL:  2 * time.Second,
 		auditEntryMax:  15 * time.Second,
-		verifyStop:     make(chan struct{}),
 		verifyPending:  make(map[string]time.Time),
 		handlerCancels: make([]func(), 0, 4),
 	}
 }
 
 // Start registers message event handlers
-func (mes *MessageEventService) Start() error {
-	if mes.isRunning {
-		return fmt.Errorf("message event service is already running")
+func (mes *MessageEventService) Start(ctx context.Context) error {
+	if mes.session == nil {
+		return fmt.Errorf("message event service discord session is nil")
 	}
-	mes.isRunning = true
+
+	if _, err := mes.lifecycle.Start(ctx); err != nil {
+		return err
+	}
 
 	// Load message cache configuration from settings.json runtime_config,
 	// but keep cache + versioning hardcoded enabled.
@@ -156,11 +162,44 @@ func (mes *MessageEventService) Start() error {
 		}
 	}
 
+	mes.handlerCancels = mes.handlerCancels[:0]
 	mes.handlerCancels = append(mes.handlerCancels,
-		mes.session.AddHandler(mes.handleMessageCreate),
-		mes.session.AddHandler(mes.handleMessageUpdate),
-		mes.session.AddHandler(mes.handleMessageDelete),
-		mes.session.AddHandler(mes.handleGuildMemberUpdate),
+		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+			runCtx, done, ok := mes.lifecycle.Begin()
+			if !ok {
+				return
+			}
+			defer done()
+
+			mes.handleMessageCreate(runCtx, s, m)
+		}),
+		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) {
+			runCtx, done, ok := mes.lifecycle.Begin()
+			if !ok {
+				return
+			}
+			defer done()
+
+			mes.handleMessageUpdate(runCtx, s, m)
+		}),
+		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
+			runCtx, done, ok := mes.lifecycle.Begin()
+			if !ok {
+				return
+			}
+			defer done()
+
+			mes.handleMessageDelete(runCtx, s, m)
+		}),
+		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
+			runCtx, done, ok := mes.lifecycle.Begin()
+			if !ok {
+				return
+			}
+			defer done()
+
+			mes.handleGuildMemberUpdate(runCtx, s, m)
+		}),
 	)
 
 	if mes.taskRouter != nil {
@@ -168,12 +207,21 @@ func (mes *MessageEventService) Start() error {
 		mes.taskRouter.RegisterHandler(taskTypeMessageDeleteProcess, mes.handleMessageDeleteTask)
 	}
 
-	if mes.verifyStop == nil {
-		mes.verifyStop = make(chan struct{})
+	cleanupCtx, done, ok := mes.lifecycle.Begin()
+	if !ok {
+		for _, cancel := range mes.handlerCancels {
+			if cancel != nil {
+				cancel()
+			}
+		}
+		mes.handlerCancels = nil
+		_ = mes.lifecycle.Cancel()
+		return fmt.Errorf("message event service cleanup worker failed to start")
 	}
-	verifyStop := mes.verifyStop
-	mes.verifyWG.Add(1)
-	go mes.verificationCleanupLoop(verifyStop)
+	go func() {
+		defer done()
+		mes.verificationCleanupLoop(cleanupCtx)
+	}()
 
 	// TTL cache handles cleanup internally
 
@@ -182,11 +230,10 @@ func (mes *MessageEventService) Start() error {
 }
 
 // Stop stops the service
-func (mes *MessageEventService) Stop() error {
-	if !mes.isRunning {
-		return fmt.Errorf("message event service is not running")
+func (mes *MessageEventService) Stop(ctx context.Context) error {
+	if err := mes.lifecycle.Cancel(); err != nil {
+		return err
 	}
-	mes.isRunning = false
 
 	for _, cancel := range mes.handlerCancels {
 		if cancel != nil {
@@ -195,11 +242,9 @@ func (mes *MessageEventService) Stop() error {
 	}
 	mes.handlerCancels = nil
 
-	if mes.verifyStop != nil {
-		close(mes.verifyStop)
-		mes.verifyStop = nil
+	if err := mes.lifecycle.Wait(ctx); err != nil {
+		return err
 	}
-	mes.verifyWG.Wait()
 
 	slog.Info("Message event service stopped")
 	return nil
@@ -207,11 +252,11 @@ func (mes *MessageEventService) Stop() error {
 
 // IsRunning returns whether the service is running
 func (mes *MessageEventService) IsRunning() bool {
-	return mes.isRunning
+	return mes.lifecycle.IsRunning()
 }
 
 // handleMessageCreate stores messages for future comparisons
-func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m == nil {
 		slog.Debug("MessageCreate: nil event")
 		return
@@ -222,6 +267,9 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 	}
 	if m.Author.Bot {
 		slog.Debug("MessageCreate: ignoring bot message", "channelID", m.ChannelID, "userID", m.Author.ID)
+		return
+	}
+	if err := ctx.Err(); err != nil {
 		return
 	}
 
@@ -289,7 +337,7 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 		mes.markVerificationPendingIfNonverified(s, guildConfig, m)
 	}
 
-	mes.markEvent()
+	mes.markEvent(ctx)
 
 	// Persist to SQLite (write-through; best effort)
 	if mes.cacheEnabled && mes.store != nil && m.Author != nil {
@@ -337,13 +385,16 @@ func (mes *MessageEventService) handleMessageCreate(s *discordgo.Session, m *dis
 }
 
 // handleMessageUpdate processes message edits
-func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
+func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageUpdate) {
 	if m == nil {
 		slog.Debug("MessageUpdate: nil event")
 		return
 	}
 	if m.Author != nil && m.Author.Bot {
 		slog.Debug("MessageUpdate: ignoring bot edit", "messageID", m.ID, "userID", m.Author.ID, "channelID", m.ChannelID)
+		return
+	}
+	if err := ctx.Err(); err != nil {
 		return
 	}
 	done := perf.StartGatewayEvent(
@@ -376,8 +427,11 @@ func (mes *MessageEventService) handleMessageUpdate(s *discordgo.Session, m *dis
 }
 
 // handleMessageDelete processes message deletions
-func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
+func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *discordgo.Session, m *discordgo.MessageDelete) {
 	if m == nil {
+		return
+	}
+	if err := ctx.Err(); err != nil {
 		return
 	}
 
@@ -408,12 +462,11 @@ func (mes *MessageEventService) handleMessageDelete(s *discordgo.Session, m *dis
 // Persistent storage (SQLite) handles expiration and cleanup
 
 // markEvent stores the last event timestamp (best effort)
-func (mes *MessageEventService) markEvent() {
-	if mes.store != nil {
-		if err := mes.store.SetLastEvent(time.Now()); err != nil {
-			slog.Warn("MessageEventService: failed to persist last event timestamp", "error", err)
-		}
+func (mes *MessageEventService) markEvent(ctx context.Context) {
+	if mes.activity == nil {
+		return
 	}
+	mes.activity.MarkEvent(ctx, "message_event_service")
 }
 
 func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
@@ -432,7 +485,7 @@ func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
 
 func (mes *MessageEventService) GetCacheStats() map[string]any {
 	return map[string]any{
-		"isRunning": mes.isRunning,
+		"isRunning": mes.IsRunning(),
 		"backend":   "sqlite",
 	}
 }
@@ -527,7 +580,7 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 		return nil
 	}
 
-	mes.markEvent()
+	mes.markEvent(nil)
 
 	// Consult persistence (SQLite) to get the original message (with guild/channel fallback)
 	guildID := m.GuildID
@@ -671,7 +724,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 		return nil
 	}
 
-	mes.markEvent()
+	mes.markEvent(nil)
 
 	guildID := m.GuildID
 	if guildID == "" && s != nil && s.State != nil {
@@ -852,9 +905,7 @@ func (mes *MessageEventService) summarizeMessageContent(msg *discordgo.Message, 
 	return base + "\n" + strings.TrimSpace(extra)
 }
 
-func (mes *MessageEventService) verificationCleanupLoop(stop <-chan struct{}) {
-	defer mes.verifyWG.Done()
-
+func (mes *MessageEventService) verificationCleanupLoop(ctx context.Context) {
 	if verificationCleanupInterval <= 0 {
 		return
 	}
@@ -866,7 +917,7 @@ func (mes *MessageEventService) verificationCleanupLoop(stop <-chan struct{}) {
 		select {
 		case <-ticker.C:
 			mes.cleanupVerificationChannels()
-		case <-stop:
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -1042,8 +1093,11 @@ func (mes *MessageEventService) markVerificationPendingIfNonverified(s *discordg
 	mes.verifyMu.Unlock()
 }
 
-func (mes *MessageEventService) handleGuildMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
+func (mes *MessageEventService) handleGuildMemberUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m == nil || m.User == nil || m.User.Bot {
+		return
+	}
+	if err := ctx.Err(); err != nil {
 		return
 	}
 	cfg := mes.configManager.Config()

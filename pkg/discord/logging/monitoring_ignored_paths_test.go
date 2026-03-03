@@ -217,6 +217,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	ms := &MonitoringService{
 		store:    store,
 		stopChan: make(chan struct{}),
+		activity: newMonitoringRuntimeActivity(store),
 	}
 
 	origInterval := heartbeatTickInterval
@@ -225,11 +226,8 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		heartbeatTickInterval = origInterval
 		close(ms.stopChan)
 		time.Sleep(10 * time.Millisecond)
-		if ms.heartbeatTicker != nil {
-			ms.heartbeatTicker.Stop()
-		}
-		if ms.heartbeatStop != nil {
-			close(ms.heartbeatStop)
+		if err := ms.stopHeartbeat(context.Background()); err != nil {
+			t.Fatalf("stop heartbeat cleanup: %v", err)
 		}
 	})
 

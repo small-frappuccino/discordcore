@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -20,7 +21,8 @@ type ReactionEventService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
 	store         *storage.Store
-	isRunning     bool
+	activity      *runtimeActivity
+	lifecycle     serviceLifecycle
 
 	// handlerCancels keeps unsubscribe functions for all registered handlers
 	handlerCancels []func()
@@ -29,23 +31,41 @@ type ReactionEventService struct {
 // NewReactionEventService creates a new ReactionEventService.
 func NewReactionEventService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *ReactionEventService {
 	return &ReactionEventService{
-		session:        session,
-		configManager:  configManager,
-		store:          store,
+		session:       session,
+		configManager: configManager,
+		store:         store,
+		activity: newRuntimeActivity(store, runtimeActivityOptions{
+			RunErr:       runErrWithTimeout,
+			EventTimeout: loggingDependencyTimeout,
+			Warn:         slog.Warn,
+		}),
+		lifecycle:      newServiceLifecycle("reaction event service"),
 		handlerCancels: make([]func(), 0, 2),
 	}
 }
 
 // Start registers Discord event handlers for reaction metrics.
-func (rs *ReactionEventService) Start() error {
-	if rs.isRunning {
-		return fmt.Errorf("reaction event service is already running")
+func (rs *ReactionEventService) Start(ctx context.Context) error {
+	if rs.session == nil {
+		return fmt.Errorf("reaction event service discord session is nil")
 	}
-	rs.isRunning = true
+	if _, err := rs.lifecycle.Start(ctx); err != nil {
+		return err
+	}
+
+	rs.handlerCancels = rs.handlerCancels[:0]
 
 	// Register only the add handler for now (count "reactions added").
 	// If you want to also track removals, add another counter/table or logic accordingly.
-	unsubAdd := rs.session.AddHandler(rs.handleReactionAdd)
+	unsubAdd := rs.session.AddHandler(func(s *discordgo.Session, e *discordgo.MessageReactionAdd) {
+		runCtx, done, ok := rs.lifecycle.Begin()
+		if !ok {
+			return
+		}
+		defer done()
+
+		rs.handleReactionAdd(runCtx, s, e)
+	})
 	rs.handlerCancels = append(rs.handlerCancels, unsubAdd)
 
 	slog.Info("Reaction event service started")
@@ -53,9 +73,9 @@ func (rs *ReactionEventService) Start() error {
 }
 
 // Stop unregisters handlers and stops the service.
-func (rs *ReactionEventService) Stop() error {
-	if !rs.isRunning {
-		return fmt.Errorf("reaction event service is not running")
+func (rs *ReactionEventService) Stop(ctx context.Context) error {
+	if err := rs.lifecycle.Cancel(); err != nil {
+		return err
 	}
 	for _, cancel := range rs.handlerCancels {
 		if cancel != nil {
@@ -63,19 +83,26 @@ func (rs *ReactionEventService) Stop() error {
 		}
 	}
 	rs.handlerCancels = nil
-	rs.isRunning = false
+
+	if err := rs.lifecycle.Wait(ctx); err != nil {
+		return err
+	}
+
 	slog.Info("Reaction event service stopped")
 	return nil
 }
 
 // IsRunning indicates whether the service is active.
 func (rs *ReactionEventService) IsRunning() bool {
-	return rs.isRunning
+	return rs.lifecycle.IsRunning()
 }
 
 // handleReactionAdd processes MessageReactionAdd events and increments daily metrics.
-func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *discordgo.MessageReactionAdd) {
+func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discordgo.Session, e *discordgo.MessageReactionAdd) {
 	if e == nil {
+		return
+	}
+	if err := ctx.Err(); err != nil {
 		return
 	}
 
@@ -110,7 +137,7 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 	}
 
 	// Mark that we processed an event (best effort).
-	rs.markEvent()
+	rs.markEvent(ctx)
 
 	emit := ShouldEmitLogEvent(rs.session, rs.configManager, LogEventReactionMetric, guildID)
 	if !emit.Enabled {
@@ -119,7 +146,9 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 	}
 
 	// Increment per-day reaction count for the reactor.
-	if err := rs.store.IncrementDailyReactionCount(guildID, e.ChannelID, e.UserID, time.Now().UTC()); err != nil {
+	if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
+		return rs.store.IncrementDailyReactionCount(guildID, e.ChannelID, e.UserID, time.Now().UTC())
+	}); err != nil {
 		slog.Error("Failed to increment daily reaction count", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "err", err)
 		return
 	}
@@ -128,10 +157,11 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 }
 
 // markEvent stores a heartbeat-like "last event" timestamp (best effort).
-func (rs *ReactionEventService) markEvent() {
-	if rs.store != nil {
-		_ = rs.store.SetLastEvent(time.Now())
+func (rs *ReactionEventService) markEvent(ctx context.Context) {
+	if rs.activity == nil {
+		return
 	}
+	rs.activity.MarkEvent(ctx, "reaction_event_service")
 }
 
 // emojiName provides a compact string for logs.

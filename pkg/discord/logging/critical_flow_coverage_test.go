@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -53,7 +54,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session), store)
 
 	joinedAt := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
-	service.handleGuildMemberAdd(session, &discordgo.GuildMemberAdd{
+	service.handleGuildMemberAdd(context.Background(), session, &discordgo.GuildMemberAdd{
 		Member: &discordgo.Member{
 			GuildID: guildID,
 			User: &discordgo.User{
@@ -78,7 +79,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 		t.Fatalf("expected one daily join metric, got %d", got)
 	}
 
-	service.handleGuildMemberRemove(session, &discordgo.GuildMemberRemove{
+	service.handleGuildMemberRemove(context.Background(), session, &discordgo.GuildMemberRemove{
 		Member: &discordgo.Member{
 			GuildID: guildID,
 			User: &discordgo.User{
@@ -133,7 +134,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 	service.versioningEnabled = true
 	service.cacheTTL = 24 * time.Hour
 
-	service.handleMessageCreate(session, &discordgo.MessageCreate{
+	service.handleMessageCreate(context.Background(), session, &discordgo.MessageCreate{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,

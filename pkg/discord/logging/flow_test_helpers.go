@@ -89,6 +89,19 @@ func dailyMemberMetricCount(t *testing.T, dbPath, tableName, guildID, userID str
 	)
 }
 
+func dailyReactionMetricCount(t *testing.T, dbPath, guildID, channelID, userID string, at time.Time) int {
+	t.Helper()
+	return queryIntFromStoreDB(
+		t,
+		dbPath,
+		`SELECT count FROM daily_reaction_metrics WHERE guild_id=? AND channel_id=? AND user_id=? AND day=?`,
+		guildID,
+		channelID,
+		userID,
+		utcDay(at),
+	)
+}
+
 func messageHistoryCount(t *testing.T, dbPath, guildID, messageID, eventType string) int {
 	t.Helper()
 	return queryIntFromStoreDB(

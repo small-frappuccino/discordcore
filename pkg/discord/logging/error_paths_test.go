@@ -51,11 +51,14 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 
 	memberService := NewMemberEventService(nil, nil, nil, failingStore)
 	messageService := NewMessageEventService(nil, nil, nil, failingStore)
-	monitoringService := &MonitoringService{store: failingStore}
+	monitoringService := &MonitoringService{
+		store:    failingStore,
+		activity: newMonitoringRuntimeActivity(failingStore),
+	}
 
-	memberService.markEvent()
-	messageService.markEvent()
-	monitoringService.markEvent()
+	memberService.markEvent(context.Background())
+	messageService.markEvent(nil)
+	monitoringService.markEvent(nil)
 }
 
 func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
@@ -63,21 +66,22 @@ func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 	ms := &MonitoringService{
 		store:    failingStore,
 		stopChan: make(chan struct{}),
+		activity: newMonitoringRuntimeActivity(failingStore),
 	}
 
 	ms.startHeartbeat(context.Background())
-	if ms.heartbeatTicker == nil {
-		t.Fatalf("expected heartbeat ticker to be initialized")
+	if ms.activity == nil {
+		t.Fatalf("expected runtime activity to be initialized")
 	}
-	if ms.heartbeatStop == nil {
-		t.Fatalf("expected heartbeat stop channel to be initialized")
+	if ms.activity.hbCancel == nil {
+		t.Fatalf("expected heartbeat cancel function to be initialized")
+	}
+	if ms.activity.hbDone == nil {
+		t.Fatalf("expected heartbeat done channel to be initialized")
 	}
 	close(ms.stopChan)
-	if ms.heartbeatTicker != nil {
-		ms.heartbeatTicker.Stop()
-	}
-	if ms.heartbeatStop != nil {
-		close(ms.heartbeatStop)
+	if err := ms.stopHeartbeat(context.Background()); err != nil {
+		t.Fatalf("stop heartbeat: %v", err)
 	}
 }
 
