@@ -8,7 +8,7 @@ import (
 
 // rawDist keeps the dashboard assets available for embedding into the final host binary.
 //
-//go:embed dist
+//go:embed all:dist
 var rawDist embed.FS
 
 // DistFS exposes the embedded dashboard build output as a file system rooted at dist/.
