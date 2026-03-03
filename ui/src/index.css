@@ -70,6 +70,42 @@ main.shell {
   font-size: 1.05rem;
 }
 
+.session-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(12, 24, 39, 0.8);
+  border: 1px solid rgba(128, 176, 255, 0.16);
+}
+
+.session-label {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8abfe8;
+}
+
+.session-details,
+.session-user {
+  margin: 0;
+}
+
+.session-user {
+  font-weight: 600;
+  color: #eef6ff;
+}
+
+.helper {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #94a8c6;
+}
+
 label {
   display: grid;
   gap: 6px;

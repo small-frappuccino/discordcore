@@ -41,7 +41,7 @@ var (
 )
 
 const (
-	controlAddrEnv                                = "ALICE_CONTROL_ADDR"
+	defaultControlAddr                            = "127.0.0.1:8376"
 	controlBearerTokenEnv                         = "ALICE_CONTROL_BEARER_TOKEN"
 	controlDiscordOAuthClientIDEnv                = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID"
 	controlDiscordOAuthClientSecretEnv            = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
@@ -254,54 +254,64 @@ func Run(appName, tokenEnv string) error {
 
 	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerAutoSyncCoordinator)
 
-	controlAddr := strings.TrimSpace(util.EnvString(controlAddrEnv, ""))
 	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
 	var controlServer *control.Server
-	if controlAddr != "" {
-		oauthConfig, err := loadControlDiscordOAuthConfigFromEnv()
-		if err != nil {
-			return fmt.Errorf("load control discord oauth config: %w", err)
-		}
-		controlTLSCertFile, controlTLSKeyFile, err := loadControlTLSFilesFromEnv()
-		if err != nil {
-			return fmt.Errorf("load control tls config: %w", err)
-		}
-		if controlBearerToken == "" && oauthConfig == nil {
-			return fmt.Errorf("%s is required when %s is set and discord oauth is not configured", controlBearerTokenEnv, controlAddrEnv)
-		}
+	oauthConfig, err := loadControlDiscordOAuthConfigFromEnv()
+	if err != nil {
+		return fmt.Errorf("load control discord oauth config: %w", err)
+	}
+	controlTLSCertFile, controlTLSKeyFile, err := loadControlTLSFilesFromEnv()
+	if err != nil {
+		return fmt.Errorf("load control tls config: %w", err)
+	}
 
-		controlServer = control.NewServer(controlAddr, configManager, runtimeApplier)
-		if controlServer == nil {
-			log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
-		} else {
-			if controlBearerToken != "" {
-				controlServer.SetBearerToken(controlBearerToken)
+	controlServer = control.NewServer(defaultControlAddr, configManager, runtimeApplier)
+	if controlServer == nil {
+		log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
+	} else {
+		if controlBearerToken == "" && oauthConfig == nil {
+			log.ApplicationLogger().Info(
+				"Control server authentication is not configured",
+				"addr", defaultControlAddr,
+				"dashboard_only", true,
+			)
+		}
+		if controlBearerToken != "" {
+			controlServer.SetBearerToken(controlBearerToken)
+		}
+		controlServer.SetPartnerBoardService(partnerBoardAppService)
+		controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
+		controlServer.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+			return listBotGuildIDsFromSessionState(discordSession)
+		})
+		if controlTLSCertFile != "" || controlTLSKeyFile != "" {
+			if err := controlServer.SetTLSCertificates(controlTLSCertFile, controlTLSKeyFile); err != nil {
+				return fmt.Errorf("configure control tls certificates: %w", err)
 			}
-			controlServer.SetPartnerBoardService(partnerBoardAppService)
-			controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
-			controlServer.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
-				return listBotGuildIDsFromSessionState(discordSession)
-			})
-			if controlTLSCertFile != "" || controlTLSKeyFile != "" {
-				if err := controlServer.SetTLSCertificates(controlTLSCertFile, controlTLSKeyFile); err != nil {
-					return fmt.Errorf("configure control tls certificates: %w", err)
-				}
+		}
+		if oauthConfig != nil {
+			if err := controlServer.SetDiscordOAuthConfig(*oauthConfig); err != nil {
+				return fmt.Errorf("configure control discord oauth: %w", err)
 			}
-			if oauthConfig != nil {
-				if err := controlServer.SetDiscordOAuthConfig(*oauthConfig); err != nil {
-					return fmt.Errorf("configure control discord oauth: %w", err)
-				}
-				log.ApplicationLogger().Info(
-					"Control server Discord OAuth enabled",
-					"scopes", strings.Join(control.DiscordOAuthScopes(oauthConfig.IncludeGuildsMembersRead), " "),
+			log.ApplicationLogger().Info(
+				"Control server Discord OAuth enabled",
+				"scopes", strings.Join(control.DiscordOAuthScopes(oauthConfig.IncludeGuildsMembersRead), " "),
+			)
+			if controlTLSCertFile == "" || controlTLSKeyFile == "" {
+				log.ApplicationLogger().Warn("Discord OAuth is enabled but control TLS certificate/key are not configured; ensure HTTPS termination in front of control server so Secure cookies persist")
+			}
+		}
+		if err := controlServer.Start(); err != nil {
+			if stdErrors.Is(err, control.ErrControlServerBind) {
+				log.ApplicationLogger().Warn(
+					"Control server unavailable; continuing without dashboard listener",
+					"addr", defaultControlAddr,
+					"err", err,
 				)
-				if controlTLSCertFile == "" || controlTLSKeyFile == "" {
-					log.ApplicationLogger().Warn("Discord OAuth is enabled but control TLS certificate/key are not configured; ensure HTTPS termination in front of control server so Secure cookies persist")
-				}
-			}
-			if err := controlServer.Start(); err != nil {
+			} else {
 				return fmt.Errorf("start control server: %w", err)
 			}
+		} else {
 			defer func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()

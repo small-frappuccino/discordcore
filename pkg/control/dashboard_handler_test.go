@@ -5,10 +5,13 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func TestDashboardHandlerServesStaticAsset(t *testing.T) {
@@ -132,6 +135,44 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 	}
 	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(contentType, "text/html") {
 		t.Fatalf("expected live dashboard response to be html, got %q", contentType)
+	}
+}
+
+func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
+	t.Parallel()
+
+	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	srv := NewServer("127.0.0.1:0", cm, nil)
+	if srv == nil {
+		t.Fatal("expected non-nil control server")
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start control server without auth: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Stop(ctx)
+	})
+
+	resp, err := http.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
+	if err != nil {
+		t.Fatalf("GET /dashboard/: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected /dashboard/ over live server to return 200, got %d", resp.StatusCode)
+	}
+
+	apiResp, err := http.Get("http://" + srv.listener.Addr().String() + "/v1/runtime-config")
+	if err != nil {
+		t.Fatalf("GET /v1/runtime-config: %v", err)
+	}
+	defer apiResp.Body.Close()
+
+	if apiResp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected unauthenticated runtime-config to return 503 when auth is not configured, got %d", apiResp.StatusCode)
 	}
 }
 

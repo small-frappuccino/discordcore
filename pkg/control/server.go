@@ -25,6 +25,8 @@ const (
 	defaultManageableGuildsQuery = 20 * time.Second
 )
 
+var ErrControlServerBind = errors.New("control server bind failed")
+
 type botGuildIDsProvider func(context.Context) ([]string, error)
 
 type requestAuthMode string
@@ -150,9 +152,6 @@ func (s *Server) Start() error {
 	if s == nil {
 		return nil
 	}
-	if strings.TrimSpace(s.authBearerToken) == "" && s.discordOAuth == nil {
-		return fmt.Errorf("start control server: bearer token is required when discord oauth is not configured")
-	}
 	if (s.tlsCertFile == "") != (s.tlsKeyFile == "") {
 		return fmt.Errorf("start control server: both TLS cert and key files are required")
 	}
@@ -160,7 +159,7 @@ func (s *Server) Start() error {
 
 	ln, err := net.Listen("tcp", s.httpServer.Addr)
 	if err != nil {
-		return fmt.Errorf("bind control server: %w", err)
+		return fmt.Errorf("%w: %w", ErrControlServerBind, err)
 	}
 	s.listener = ln
 

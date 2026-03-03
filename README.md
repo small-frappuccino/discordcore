@@ -190,13 +190,19 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 ## Control API (Bearer + OAuth session)
 
-Control API is optional and starts when `ALICE_CONTROL_ADDR` is set and at least one auth mode is configured:
+Control API starts on the fixed listener `127.0.0.1:8376`. The dashboard shell remains available even when no auth mode is configured, so bot startup is not blocked by missing Discord OAuth setup.
 
-- `ALICE_CONTROL_ADDR` (example: `127.0.0.1:8080`)
-- `ALICE_CONTROL_BEARER_TOKEN` (required only when Discord OAuth is not configured)
+- `ALICE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
 - optional TLS listener:
   - `ALICE_CONTROL_TLS_CERT_FILE`
   - `ALICE_CONTROL_TLS_KEY_FILE`
+
+Behavior summary:
+
+- `/dashboard/` is always served when the control listener starts.
+- Guild-specific web configuration uses Discord OAuth session auth and is limited to guilds returned by `/auth/guilds/manageable`.
+- When neither bearer nor OAuth is configured, control API routes stay unavailable and return auth/configuration errors, but the bot itself still starts normally.
+- If the fixed listener `127.0.0.1:8376` cannot be bound, startup continues without the control server and the failure is logged as degraded control-plane availability.
 
 Authentication contract for `/v1/*` routes:
 
@@ -213,6 +219,7 @@ Discord OAuth2 endpoints (optional, same control server):
 
 - `GET /auth/discord/login` redirects to Discord OAuth authorize URL and emits anti-CSRF `state` cookie.
 - `GET /auth/discord/callback` validates `state`, exchanges `code` at Discord token endpoint, resolves `/users/@me`, creates server-side session, and sets session cookie.
+- `GET /auth/discord/login?next=/dashboard/` stores the post-login dashboard redirect, and the callback redirects back to `/dashboard/` after the session cookie is issued.
 - `GET /auth/me` returns current authenticated session user.
 - `GET /auth/me` also returns `csrf_token` for explicit CSRF header usage.
 - `POST /auth/logout` invalidates current session and clears session cookie.

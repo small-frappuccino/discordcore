@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -455,7 +456,7 @@ func TestControlAuthEnforcement(t *testing.T) {
 	}
 }
 
-func TestControlServerStartRequiresBearerToken(t *testing.T) {
+func TestControlServerStartWithoutConfiguredAuth(t *testing.T) {
 	t.Parallel()
 
 	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
@@ -468,11 +469,13 @@ func TestControlServerStartRequiresBearerToken(t *testing.T) {
 		t.Fatal("expected non-nil server")
 	}
 
-	err := srv.Start()
-	if err == nil {
-		t.Fatal("expected start to fail without bearer token")
+	if err := srv.Start(); err != nil {
+		t.Fatalf("expected server start without configured auth to succeed, got: %v", err)
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "bearer token is required") {
-		t.Fatalf("unexpected start error: %v", err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := srv.Stop(ctx); err != nil {
+		t.Fatalf("stop server: %v", err)
 	}
 }

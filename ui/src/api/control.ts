@@ -83,10 +83,26 @@ export interface ManageableGuildsResponse {
   guilds: ManageableGuild[];
 }
 
+export interface DiscordOAuthUser {
+  id: string;
+  username: string;
+  discriminator?: string;
+  global_name?: string;
+  avatar?: string;
+}
+
 export interface AuthSessionResponse {
   status: string;
+  user: DiscordOAuthUser;
+  scopes: string[];
   csrf_token: string;
+  expires_at: string;
 }
+
+export type ControlAuthProbe =
+  | { status: "authenticated"; session: AuthSessionResponse }
+  | { status: "unauthorized" }
+  | { status: "oauth_unavailable" };
 
 export interface ControlApiClientConfig {
   baseUrl: string;
@@ -184,6 +200,49 @@ export class ControlApiClient {
     );
   }
 
+  async getSessionStatus(): Promise<ControlAuthProbe> {
+    const url = this.baseUrl === "" ? "/auth/me" : `${this.baseUrl}/auth/me`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (response.status === 401) {
+      return { status: "unauthorized" };
+    }
+    if (response.status === 503) {
+      return { status: "oauth_unavailable" };
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Control API GET /auth/me failed: ${response.status} ${response.statusText} - ${text}`.trim(),
+      );
+    }
+
+    const payload = (await response.json()) as AuthSessionResponse;
+    const csrfToken = payload.csrf_token?.trim() ?? "";
+    if (csrfToken === "") {
+      throw new Error("Control API /auth/me response missing csrf_token");
+    }
+
+    this.csrfToken = csrfToken;
+    return { status: "authenticated", session: payload };
+  }
+
+  async logout(): Promise<void> {
+    await this.request<Record<string, unknown>>("POST", "/auth/logout");
+    this.clearCSRFToken();
+  }
+
+  buildDiscordLoginURL(nextPath = "/dashboard/"): string {
+    const next = normalizeDashboardNextPath(nextPath);
+    const suffix = next === "" ? "" : `?next=${encodeURIComponent(next)}`;
+    return this.baseUrl === ""
+      ? `/auth/discord/login${suffix}`
+      : `${this.baseUrl}/auth/discord/login${suffix}`;
+  }
+
   private async request<T>(
     method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
@@ -239,26 +298,14 @@ export class ControlApiClient {
     }
 
     this.csrfLoadPromise = (async () => {
-      const url = this.baseUrl === "" ? "/auth/me" : `${this.baseUrl}/auth/me`;
-      const response = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(
-          `Control API GET /auth/me failed: ${response.status} ${response.statusText} - ${text}`.trim(),
-        );
+      const probe = await this.getSessionStatus();
+      if (probe.status !== "authenticated") {
+        if (probe.status === "oauth_unavailable") {
+          throw new Error("Discord OAuth is not configured on this control server.");
+        }
+        throw new Error("Unauthorized. Sign in with Discord before changing dashboard settings.");
       }
-
-      const payload = (await response.json()) as AuthSessionResponse;
-      const csrfToken = payload.csrf_token?.trim() ?? "";
-      if (csrfToken === "") {
-        throw new Error("Control API /auth/me response missing csrf_token");
-      }
-
-      this.csrfToken = csrfToken;
-      return csrfToken;
+      return probe.session.csrf_token.trim();
     })();
 
     try {
@@ -276,6 +323,14 @@ export class ControlApiClient {
 
 function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, "");
+}
+
+function normalizeDashboardNextPath(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed === "" || !trimmed.startsWith("/dashboard/")) {
+    return "/dashboard/";
+  }
+  return trimmed;
 }
 
 function requiresCSRFHeader(method: "GET" | "POST" | "PUT" | "DELETE"): boolean {

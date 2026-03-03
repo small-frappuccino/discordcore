@@ -1,12 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  type AuthSessionResponse,
   type EmbedUpdateTargetConfig,
+  type ManageableGuild,
   type PartnerBoardConfig,
   type PartnerBoardTemplateConfig,
   ControlApiClient,
 } from "./api/control";
 
 type StatusKind = "idle" | "success" | "error" | "info";
+type DashboardAuthState =
+  | "checking"
+  | "signed_out"
+  | "signed_in"
+  | "oauth_unavailable";
 
 interface StatusState {
   kind: StatusKind;
@@ -71,11 +78,11 @@ const initialPartnerUpdateForm: PartnerUpdateFormState = {
 
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
-const defaultGuildID = import.meta.env.VITE_CONTROL_API_GUILD_ID ?? "";
+const preferredGuildID = import.meta.env.VITE_CONTROL_API_GUILD_ID ?? "";
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
-  const [guildID, setGuildID] = useState(defaultGuildID);
+  const [guildID, setGuildID] = useState(preferredGuildID);
   const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
   const [targetForm, setTargetForm] = useState(initialTargetForm);
   const [templateForm, setTemplateForm] = useState(initialTemplateForm);
@@ -89,6 +96,11 @@ export default function App() {
     message: "Ready",
   });
   const [loading, setLoading] = useState(false);
+  const [authState, setAuthState] = useState<DashboardAuthState>("checking");
+  const [session, setSession] = useState<AuthSessionResponse | null>(null);
+  const [manageableGuilds, setManageableGuilds] = useState<ManageableGuild[]>(
+    [],
+  );
 
   const client = useMemo(
     () =>
@@ -98,13 +110,109 @@ export default function App() {
     [baseUrl],
   );
 
+  useEffect(() => {
+    void refreshSession();
+  }, [client]);
+
+  const partners = board?.partners ?? [];
+  const canManageGuild =
+    authState === "signed_in" && guildID.trim() !== "" && !loading;
+
+  async function refreshSession() {
+    setLoading(true);
+    try {
+      const probe = await client.getSessionStatus();
+      if (probe.status === "oauth_unavailable") {
+        setAuthState("oauth_unavailable");
+        setSession(null);
+        setManageableGuilds([]);
+        resetLoadedBoard();
+        setStatus({
+          kind: "info",
+          message:
+            "Discord OAuth is not configured on this control server. The dashboard can load, but web configuration is unavailable until OAuth is enabled.",
+        });
+        return;
+      }
+
+      if (probe.status === "unauthorized") {
+        setAuthState("signed_out");
+        setSession(null);
+        setManageableGuilds([]);
+        resetLoadedBoard();
+        setStatus({
+          kind: "info",
+          message:
+            "Sign in with Discord to configure a guild through the dashboard.",
+        });
+        return;
+      }
+
+      setAuthState("signed_in");
+      setSession(probe.session);
+
+      const guildsResponse = await client.listManageableGuilds();
+      setManageableGuilds(guildsResponse.guilds);
+      setGuildID((current: string) =>
+        resolveGuildSelection(current, preferredGuildID, guildsResponse.guilds),
+      );
+
+      if (guildsResponse.guilds.length === 0) {
+        resetLoadedBoard();
+        setStatus({
+          kind: "info",
+          message:
+            "Signed in, but there are no guilds you can manage with this bot.",
+        });
+        return;
+      }
+
+      setStatus({
+        kind: "success",
+        message: `Signed in as ${formatUserLabel(probe.session)}.`,
+      });
+    } catch (error) {
+      setAuthState("signed_out");
+      setSession(null);
+      setManageableGuilds([]);
+      resetLoadedBoard();
+      setStatus({
+        kind: "error",
+        message: formatError(error),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function logout() {
+    setLoading(true);
+    try {
+      await client.logout();
+      setAuthState("signed_out");
+      setSession(null);
+      setManageableGuilds([]);
+      resetLoadedBoard();
+      setStatus({
+        kind: "info",
+        message: "Signed out. Sign in again to continue editing guild settings.",
+      });
+    } catch (error) {
+      setStatus({
+        kind: "error",
+        message: formatError(error),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function refreshBoard() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
+    const trimmedGuild = guildID.trim();
     setLoading(true);
     try {
       const response = await client.getPartnerBoard(trimmedGuild);
@@ -125,12 +233,11 @@ export default function App() {
   }
 
   async function refreshPartnersOnly() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
+    const trimmedGuild = guildID.trim();
     setLoading(true);
     try {
       const response = await client.listPartners(trimmedGuild);
@@ -153,16 +260,14 @@ export default function App() {
   }
 
   async function saveTarget() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
     const payload = buildTargetPayload(targetForm);
     setLoading(true);
     try {
-      await client.setPartnerBoardTarget(trimmedGuild, payload);
+      await client.setPartnerBoardTarget(guildID.trim(), payload);
       await refreshBoard();
       setStatus({
         kind: "success",
@@ -179,9 +284,7 @@ export default function App() {
   }
 
   async function saveTemplate() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
@@ -196,7 +299,7 @@ export default function App() {
 
     setLoading(true);
     try {
-      await client.setPartnerBoardTemplate(trimmedGuild, payload);
+      await client.setPartnerBoardTemplate(guildID.trim(), payload);
       await refreshBoard();
       setStatus({
         kind: "success",
@@ -213,15 +316,13 @@ export default function App() {
   }
 
   async function addPartner() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
     setLoading(true);
     try {
-      await client.createPartner(trimmedGuild, {
+      await client.createPartner(guildID.trim(), {
         fandom: partnerForm.fandom,
         name: partnerForm.name,
         link: partnerForm.link,
@@ -243,15 +344,13 @@ export default function App() {
   }
 
   async function updatePartner() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
     setLoading(true);
     try {
-      await client.updatePartner(trimmedGuild, partnerUpdateForm.currentName, {
+      await client.updatePartner(guildID.trim(), partnerUpdateForm.currentName, {
         fandom: partnerUpdateForm.fandom,
         name: partnerUpdateForm.name,
         link: partnerUpdateForm.link,
@@ -273,19 +372,20 @@ export default function App() {
   }
 
   async function deletePartner() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
     if (partnerDeleteName.trim() === "") {
-      setStatus({ kind: "error", message: "Partner name to delete is required." });
+      setStatus({
+        kind: "error",
+        message: "Partner name to delete is required.",
+      });
       return;
     }
 
     setLoading(true);
     try {
-      await client.deletePartner(trimmedGuild, partnerDeleteName);
+      await client.deletePartner(guildID.trim(), partnerDeleteName);
       setPartnerDeleteName("");
       await refreshBoard();
       setStatus({
@@ -303,15 +403,13 @@ export default function App() {
   }
 
   async function syncBoard() {
-    const trimmedGuild = guildID.trim();
-    if (trimmedGuild === "") {
-      setStatus({ kind: "error", message: "guild_id is required." });
+    if (!ensureGuildSelected()) {
       return;
     }
 
     setLoading(true);
     try {
-      await client.syncPartnerBoard(trimmedGuild);
+      await client.syncPartnerBoard(guildID.trim());
       setStatus({
         kind: "success",
         message: "Partner board sync requested successfully.",
@@ -326,7 +424,61 @@ export default function App() {
     }
   }
 
-  const partners = board?.partners ?? [];
+  function ensureGuildSelected(): boolean {
+    if (authState !== "signed_in") {
+      setStatus({
+        kind: "error",
+        message: "Sign in with Discord before editing guild settings.",
+      });
+      return false;
+    }
+    if (guildID.trim() === "") {
+      setStatus({
+        kind: "error",
+        message: "Select a guild you can manage first.",
+      });
+      return false;
+    }
+    return true;
+  }
+
+  function resetLoadedBoard() {
+    setGuildID("");
+    setBoard(null);
+    setTargetForm(initialTargetForm);
+    setTemplateForm(initialTemplateForm);
+    setPartnerForm(initialPartnerForm);
+    setPartnerUpdateForm(initialPartnerUpdateForm);
+    setPartnerDeleteName("");
+  }
+
+  function applyBoardToForms(nextBoard: PartnerBoardConfig) {
+    const target = nextBoard.target;
+    if (target) {
+      setTargetForm({
+        type:
+          target.type === "webhook_message" ? "webhook_message" : "channel_message",
+        messageID: target.message_id ?? "",
+        webhookURL: target.webhook_url ?? "",
+        channelID: target.channel_id ?? "",
+      });
+    } else {
+      setTargetForm(initialTargetForm);
+    }
+
+    const template = nextBoard.template;
+    if (template) {
+      setTemplateForm({
+        title: template.title ?? "",
+        intro: template.intro ?? "",
+        sectionHeaderTemplate: template.section_header_template ?? "",
+        lineTemplate: template.line_template ?? "",
+        emptyStateText: template.empty_state_text ?? "",
+      });
+    } else {
+      setTemplateForm(initialTemplateForm);
+    }
+  }
 
   return (
     <main className="shell">
@@ -335,43 +487,113 @@ export default function App() {
           <p className="eyebrow">Discordcore</p>
           <h1>Partner Board Admin</h1>
           <p className="muted">
-            Control API wiring for partner board target/template/partners and sync.
+            The dashboard stays available on the local control server, but guild
+            configuration through the web UI requires a Discord OAuth session.
           </p>
         </header>
 
         <section className="card">
           <h2>Connection</h2>
-          <p className="muted">
-            Use current origin to leverage Vite proxy for `/auth` and `/v1`
-            requests.
-            Authentication uses the server-side OAuth session cookie.
-          </p>
           <div className="grid two">
             <label>
               Base URL
               <input
                 value={baseUrl}
                 onChange={(event) => setBaseUrl(event.target.value)}
-                placeholder="http://127.0.0.1:8080"
+                placeholder="http://127.0.0.1:8376"
               />
             </label>
             <label>
-              Guild ID
-              <input
+              Guild
+              <select
                 value={guildID}
-                onChange={(event) => setGuildID(event.target.value)}
-                placeholder="123456789012345678"
-              />
+                onChange={(event) => {
+                  setGuildID(event.target.value);
+                  setBoard(null);
+                }}
+                disabled={authState !== "signed_in" || manageableGuilds.length === 0}
+              >
+                <option value="">
+                  {authState !== "signed_in"
+                    ? "Sign in to load guilds"
+                    : "Select a guild"}
+                </option>
+                {manageableGuilds.map((guild) => (
+                  <option key={guild.id} value={guild.id}>
+                    {guild.name} ({guild.id})
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
+
+          <div className="session-card">
+            <div>
+              <p className="session-label">Auth status</p>
+              {authState === "checking" ? (
+                <p className="muted">Checking current dashboard session...</p>
+              ) : null}
+              {authState === "oauth_unavailable" ? (
+                <p className="muted">
+                  OAuth is not configured on the server. The dashboard shell is
+                  available, but web-based guild editing is disabled.
+                </p>
+              ) : null}
+              {authState === "signed_out" ? (
+                <p className="muted">
+                  Sign in with Discord to access only the guilds you can manage.
+                </p>
+              ) : null}
+              {authState === "signed_in" && session !== null ? (
+                <div className="session-details">
+                  <p className="session-user">{formatUserLabel(session)}</p>
+                  <p className="muted">
+                    {manageableGuilds.length} manageable guild
+                    {manageableGuilds.length === 1 ? "" : "s"} available.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="actions">
+              {authState === "signed_out" ? (
+                <button
+                  disabled={loading}
+                  onClick={() => {
+                    window.location.assign(client.buildDiscordLoginURL("/dashboard/"));
+                  }}
+                >
+                  Sign In with Discord
+                </button>
+              ) : null}
+              {authState === "signed_in" ? (
+                <button disabled={loading} onClick={() => void logout()}>
+                  Sign Out
+                </button>
+              ) : null}
+              <button disabled={loading} onClick={() => void refreshSession()}>
+                Refresh Session
+              </button>
+            </div>
+          </div>
+
+          <p className="helper">
+            Guild selection is limited to servers returned by
+            `/auth/guilds/manageable`, intersected with the guilds where the bot is
+            present.
+          </p>
+
           <div className="actions">
-            <button disabled={loading} onClick={() => void refreshBoard()}>
+            <button disabled={!canManageGuild} onClick={() => void refreshBoard()}>
               Load Board
             </button>
-            <button disabled={loading} onClick={() => void refreshPartnersOnly()}>
+            <button
+              disabled={!canManageGuild}
+              onClick={() => void refreshPartnersOnly()}
+            >
               Refresh Partners
             </button>
-            <button disabled={loading} onClick={() => void syncBoard()}>
+            <button disabled={!canManageGuild} onClick={() => void syncBoard()}>
               Sync Board
             </button>
           </div>
@@ -390,6 +612,7 @@ export default function App() {
                     type: event.target.value as "webhook_message" | "channel_message",
                   }))
                 }
+                disabled={authState !== "signed_in"}
               >
                 <option value="channel_message">channel_message</option>
                 <option value="webhook_message">webhook_message</option>
@@ -402,6 +625,7 @@ export default function App() {
                 onChange={(event) =>
                   setTargetForm((prev) => ({ ...prev, messageID: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -411,6 +635,7 @@ export default function App() {
                 onChange={(event) =>
                   setTargetForm((prev) => ({ ...prev, channelID: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -420,11 +645,12 @@ export default function App() {
                 onChange={(event) =>
                   setTargetForm((prev) => ({ ...prev, webhookURL: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
           </div>
           <div className="actions">
-            <button disabled={loading} onClick={() => void saveTarget()}>
+            <button disabled={!canManageGuild} onClick={() => void saveTarget()}>
               Save Target
             </button>
           </div>
@@ -440,6 +666,7 @@ export default function App() {
                 onChange={(event) =>
                   setTemplateForm((prev) => ({ ...prev, title: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -452,6 +679,7 @@ export default function App() {
                     sectionHeaderTemplate: event.target.value,
                   }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -461,6 +689,7 @@ export default function App() {
                 onChange={(event) =>
                   setTemplateForm((prev) => ({ ...prev, lineTemplate: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -473,6 +702,7 @@ export default function App() {
                     emptyStateText: event.target.value,
                   }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
           </div>
@@ -484,10 +714,11 @@ export default function App() {
               onChange={(event) =>
                 setTemplateForm((prev) => ({ ...prev, intro: event.target.value }))
               }
+              disabled={authState !== "signed_in"}
             />
           </label>
           <div className="actions">
-            <button disabled={loading} onClick={() => void saveTemplate()}>
+            <button disabled={!canManageGuild} onClick={() => void saveTemplate()}>
               Save Template
             </button>
           </div>
@@ -534,6 +765,7 @@ export default function App() {
                 onChange={(event) =>
                   setPartnerForm((prev) => ({ ...prev, fandom: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -543,6 +775,7 @@ export default function App() {
                 onChange={(event) =>
                   setPartnerForm((prev) => ({ ...prev, name: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -552,11 +785,12 @@ export default function App() {
                 onChange={(event) =>
                   setPartnerForm((prev) => ({ ...prev, link: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
           </div>
           <div className="actions">
-            <button disabled={loading} onClick={() => void addPartner()}>
+            <button disabled={!canManageGuild} onClick={() => void addPartner()}>
               Add Partner
             </button>
           </div>
@@ -575,6 +809,7 @@ export default function App() {
                     currentName: event.target.value,
                   }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -584,6 +819,7 @@ export default function App() {
                 onChange={(event) =>
                   setPartnerUpdateForm((prev) => ({ ...prev, fandom: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -593,6 +829,7 @@ export default function App() {
                 onChange={(event) =>
                   setPartnerUpdateForm((prev) => ({ ...prev, name: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
             <label>
@@ -602,11 +839,12 @@ export default function App() {
                 onChange={(event) =>
                   setPartnerUpdateForm((prev) => ({ ...prev, link: event.target.value }))
                 }
+                disabled={authState !== "signed_in"}
               />
             </label>
           </div>
           <div className="actions">
-            <button disabled={loading} onClick={() => void updatePartner()}>
+            <button disabled={!canManageGuild} onClick={() => void updatePartner()}>
               Update Partner
             </button>
           </div>
@@ -620,11 +858,12 @@ export default function App() {
               <input
                 value={partnerDeleteName}
                 onChange={(event) => setPartnerDeleteName(event.target.value)}
+                disabled={authState !== "signed_in"}
               />
             </label>
           </div>
           <div className="actions">
-            <button disabled={loading} onClick={() => void deletePartner()}>
+            <button disabled={!canManageGuild} onClick={() => void deletePartner()}>
               Delete Partner
             </button>
           </div>
@@ -634,34 +873,6 @@ export default function App() {
       </section>
     </main>
   );
-
-  function applyBoardToForms(nextBoard: PartnerBoardConfig) {
-    const target = nextBoard.target;
-    if (target) {
-      setTargetForm({
-        type:
-          target.type === "webhook_message" ? "webhook_message" : "channel_message",
-        messageID: target.message_id ?? "",
-        webhookURL: target.webhook_url ?? "",
-        channelID: target.channel_id ?? "",
-      });
-    } else {
-      setTargetForm(initialTargetForm);
-    }
-
-    const template = nextBoard.template;
-    if (template) {
-      setTemplateForm({
-        title: template.title ?? "",
-        intro: template.intro ?? "",
-        sectionHeaderTemplate: template.section_header_template ?? "",
-        lineTemplate: template.line_template ?? "",
-        emptyStateText: template.empty_state_text ?? "",
-      });
-    } else {
-      setTemplateForm(initialTemplateForm);
-    }
-  }
 }
 
 function formatError(error: unknown): string {
@@ -669,6 +880,33 @@ function formatError(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function formatUserLabel(session: AuthSessionResponse): string {
+  const displayName =
+    session.user.global_name?.trim() || session.user.username.trim() || session.user.id;
+  return `${displayName} (${session.user.id})`;
+}
+
+function resolveGuildSelection(
+  currentGuildID: string,
+  preferredGuildIDValue: string,
+  guilds: ManageableGuild[],
+): string {
+  const availableGuildIDs = new Set(guilds.map((guild) => guild.id));
+  if (currentGuildID.trim() !== "" && availableGuildIDs.has(currentGuildID.trim())) {
+    return currentGuildID.trim();
+  }
+  if (
+    preferredGuildIDValue.trim() !== "" &&
+    availableGuildIDs.has(preferredGuildIDValue.trim())
+  ) {
+    return preferredGuildIDValue.trim();
+  }
+  if (guilds.length > 0) {
+    return guilds[0].id;
+  }
+  return "";
 }
 
 function buildTargetPayload(form: TargetFormState): EmbedUpdateTargetConfig {

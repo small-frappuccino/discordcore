@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -217,5 +218,89 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&discordCloseCalls); got != 1 {
 		t.Fatalf("expected one discord close call, got %d", got)
+	}
+}
+
+func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
+	const (
+		appName  = "alicebot-run-bind-warning-test"
+		tokenEnv = "ALICE_TEST_TOKEN"
+	)
+
+	appDataDir, err := os.MkdirTemp("", "alicebot-run-bind-warning-test-*")
+	if err != nil {
+		t.Fatalf("create APPDATA temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(appDataDir)
+	})
+	t.Setenv("APPDATA", appDataDir)
+	t.Setenv(tokenEnv, "test-token")
+
+	util.SetAppName(appName)
+	settingsPath := util.GetSettingsFilePath()
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("create settings directory: %v", err)
+	}
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring:    boolPtr(false),
+				Automod:       boolPtr(false),
+				Commands:      boolPtr(false),
+				AdminCommands: boolPtr(false),
+			},
+			Maintenance: files.FeatureMaintenanceToggles{
+				DBCleanup: boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{},
+	}
+	rawCfg, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal settings config: %v", err)
+	}
+	if err := os.WriteFile(settingsPath, rawCfg, 0o644); err != nil {
+		t.Fatalf("write settings config: %v", err)
+	}
+
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("create fake discord session: %v", err)
+	}
+	session.State.User = &discordgo.User{
+		ID:            "bot-id",
+		Username:      "alice-test",
+		Discriminator: "0001",
+		Bot:           true,
+	}
+
+	occupiedListener, err := net.Listen("tcp", defaultControlAddr)
+	if err != nil {
+		t.Fatalf("listen on fixed control address: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = occupiedListener.Close()
+	})
+
+	origNewDiscordSession := newDiscordSession
+	origWaitForInterrupt := waitForInterrupt
+	origShutdownDelay := shutdownDelay
+	t.Cleanup(func() {
+		newDiscordSession = origNewDiscordSession
+		waitForInterrupt = origWaitForInterrupt
+		shutdownDelay = origShutdownDelay
+	})
+
+	newDiscordSession = func(string) (*discordgo.Session, error) {
+		return session, nil
+	}
+	waitForInterrupt = func() {}
+	shutdownDelay = func(time.Duration) {}
+
+	if err := Run(appName, tokenEnv); err != nil {
+		t.Fatalf("run returned error despite control bind conflict: %v", err)
 	}
 }

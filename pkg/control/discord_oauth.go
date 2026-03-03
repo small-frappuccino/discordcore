@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -28,6 +29,7 @@ const (
 	defaultDiscordOAuthUserGuildsURL    = "https://discord.com/api/users/@me/guilds"
 	discordOAuthCSRFHeaderName          = "X-CSRF-Token"
 	defaultDiscordOAuthStateCookieName  = "alice_discord_oauth_state"
+	defaultDiscordOAuthNextCookieName   = "alice_discord_oauth_next"
 	defaultDiscordOAuthSessionCookie    = "alice_control_session"
 	defaultDiscordOAuthStateTTL         = 10 * time.Minute
 	defaultDiscordOAuthSessionTTL       = 12 * time.Hour
@@ -266,6 +268,11 @@ func (s *Server) handleDiscordOAuthLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	oauth.setStateCookie(w, r, state)
+	if next := sanitizeDashboardRedirectTarget(r.URL.Query().Get("next")); next != "" {
+		oauth.setNextCookie(w, r, next)
+	} else {
+		oauth.clearNextCookie(w, r)
+	}
 
 	redirectURL, err := oauth.buildAuthorizationURL(state)
 	if err != nil {
@@ -288,6 +295,7 @@ func (s *Server) handleDiscordOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer oauth.clearStateCookie(w, r)
+	defer oauth.clearNextCookie(w, r)
 
 	if oauthErr := strings.TrimSpace(r.URL.Query().Get("error")); oauthErr != "" {
 		desc := strings.TrimSpace(r.URL.Query().Get("error_description"))
@@ -365,6 +373,10 @@ func (s *Server) handleDiscordOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	oauth.setSessionCookie(w, r, session.ID, session.ExpiresAt)
+	if next := oauth.nextFromRequest(r); next != "" {
+		http.Redirect(w, r, next, http.StatusFound)
+		return
+	}
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
@@ -496,6 +508,18 @@ func (o *discordOAuthProvider) setStateCookie(w http.ResponseWriter, _ *http.Req
 	})
 }
 
+func (o *discordOAuthProvider) setNextCookie(w http.ResponseWriter, _ *http.Request, next string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     defaultDiscordOAuthNextCookieName,
+		Value:    next,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		MaxAge:   int(o.stateTTL.Seconds()),
+	})
+}
+
 func (o *discordOAuthProvider) clearStateCookie(w http.ResponseWriter, _ *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     o.stateCookieName,
@@ -506,6 +530,18 @@ func (o *discordOAuthProvider) clearStateCookie(w http.ResponseWriter, _ *http.R
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
+	})
+}
+
+func (o *discordOAuthProvider) clearNextCookie(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     defaultDiscordOAuthNextCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		MaxAge:   -1,
 	})
 }
 
@@ -528,6 +564,17 @@ func (o *discordOAuthProvider) setSessionCookie(w http.ResponseWriter, _ *http.R
 	})
 }
 
+func (o *discordOAuthProvider) nextFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	cookie, err := r.Cookie(defaultDiscordOAuthNextCookieName)
+	if err != nil {
+		return ""
+	}
+	return sanitizeDashboardRedirectTarget(cookie.Value)
+}
+
 func (o *discordOAuthProvider) clearSessionCookie(w http.ResponseWriter, _ *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     o.sessionCookieName,
@@ -539,6 +586,31 @@ func (o *discordOAuthProvider) clearSessionCookie(w http.ResponseWriter, _ *http
 		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
 	})
+}
+
+func sanitizeDashboardRedirectTarget(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	target, err := url.Parse(trimmed)
+	if err != nil || target.IsAbs() || target.Host != "" {
+		return ""
+	}
+
+	cleanPath := path.Clean("/" + strings.TrimSpace(target.Path))
+	if cleanPath == "/" || cleanPath == "/dashboard" {
+		cleanPath = dashboardRoutePrefix
+	}
+	if !strings.HasPrefix(cleanPath, dashboardRoutePrefix) {
+		return ""
+	}
+
+	if target.RawQuery != "" {
+		return cleanPath + "?" + target.RawQuery
+	}
+	return cleanPath
 }
 
 func (o *discordOAuthProvider) validateState(r *http.Request, provided string) error {
