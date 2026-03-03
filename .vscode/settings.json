@@ -1,0 +1,26 @@
+{
+  "gopls": {
+    "directoryFilters": [
+      "-ui/node_modules",
+      "-ui/dist",
+      "-ui/.vite",
+      "-.git",
+      "-bin",
+      "-tmp",
+      "-out"
+    ]
+  },
+  "files.watcherExclude": {
+    "**/.git/**": true,
+    "**/ui/node_modules/**": true,
+    "**/ui/dist/**": true,
+    "**/ui/.vite/**": true,
+    "**/bin/**": true,
+    "**/tmp/**": true,
+    "**/out/**": true
+  },
+  "search.exclude": {
+    "**/ui/node_modules/**": true,
+    "**/ui/dist/**": true
+  }
+}

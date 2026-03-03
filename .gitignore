@@ -1,19 +1,16 @@
-# IDE files
-.vscode/
+# Editor and repository tooling
 .github/
 .idea/
+.vscode/*
+!.vscode/settings.json
 
 # Environment files
 .env
-.venv
+.venv/
 
-# Vendor folder
+# Dependencies
 vendor/
 
 # Temporary files
-tmp/
 .tmp/
-
-# Frontend tooling
-ui/node_modules/
-ui/.vite/
+tmp/

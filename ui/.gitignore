@@ -1,6 +1,26 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/*
 !dist/index.html
+
+# Tooling caches
+.cache/
+.eslintcache
+.turbo/
+.vite/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
 .DS_Store
+
+# Editor files
 .idea/
 .vscode/
