@@ -164,7 +164,11 @@ func (s *Server) Start() error {
 	}
 	s.listener = ln
 
-	log.ApplicationLogger().Info("Control server listening", "addr", s.httpServer.Addr, "tls", tlsEnabled)
+	listenAddr, dashboardURL := controlServerListenAddrAndDashboardURL(ln.Addr(), tlsEnabled)
+	log.ApplicationLogger().Info("Control server listening", "addr", listenAddr, "tls", tlsEnabled)
+	if dashboardURL != "" {
+		log.ApplicationLogger().Info("Control dashboard available", "url", dashboardURL)
+	}
 
 	go func() {
 		var err error
@@ -179,6 +183,49 @@ func (s *Server) Start() error {
 	}()
 
 	return nil
+}
+
+func controlServerListenAddrAndDashboardURL(addr net.Addr, tlsEnabled bool) (string, string) {
+	if addr == nil {
+		return "", ""
+	}
+
+	listenAddr := strings.TrimSpace(addr.String())
+	if listenAddr == "" {
+		return "", ""
+	}
+
+	host, port, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return listenAddr, ""
+	}
+
+	scheme := "http"
+	if tlsEnabled {
+		scheme = "https"
+	}
+
+	return listenAddr, fmt.Sprintf("%s://%s%s", scheme, net.JoinHostPort(controlServerBrowserHost(host), port), dashboardRoutePrefix)
+}
+
+func controlServerBrowserHost(host string) string {
+	trimmedHost := strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(host, "]"), "["))
+	if trimmedHost == "" {
+		return "127.0.0.1"
+	}
+
+	ip := net.ParseIP(trimmedHost)
+	if ip == nil {
+		return trimmedHost
+	}
+	if ip.IsUnspecified() {
+		if ip.To4() != nil {
+			return "127.0.0.1"
+		}
+		return "::1"
+	}
+
+	return trimmedHost
 }
 
 // Stop shuts down the control server.
