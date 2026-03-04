@@ -67,7 +67,7 @@ func TestPermissionCheckerGetOwnerID_StoreWriteFailureKeepsRESTFallbackAndCache(
 	checker := NewPermissionChecker(session, cfg)
 
 	// Intentionally uninitialized store to force Get/SetGuildOwnerID errors.
-	checker.SetStore(storage.NewStore(filepath.Join(t.TempDir(), "owner-cache.db")))
+	checker.SetStore(storage.NewStore(nil))
 
 	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
 	t.Cleanup(unifiedCache.Stop)

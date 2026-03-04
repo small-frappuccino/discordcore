@@ -8,7 +8,7 @@ Discordcore is the core Discord bot library and service layer used by Alicebot. 
 - Native AutoMod action logging
 - Moderation and audit logging helpers
 - Slash command framework with runtime configuration panel
-- SQLite-backed persistence for metrics and message history
+- Postgres-backed persistence for metrics and message history
 - Unified cache with TTL and persistence
 - Task router for backfill and scheduled jobs
 - Gateway handler performance warnings (slow-path logging)
@@ -19,8 +19,9 @@ Discordcore is the core Discord bot library and service layer used by Alicebot. 
 cmd/discordcore/      # Example runner
 pkg/discord/          # Discord services, logging, commands, cache
 pkg/files/            # settings.json configuration
+pkg/persistence/      # DB connection, health, migrator
 pkg/partners/         # Partner board rendering services (template + list -> embeds)
-pkg/storage/          # SQLite store
+pkg/storage/          # Bot domain persistence store (Postgres)
 pkg/task/             # Task router and scheduler
 pkg/util/             # Shared utilities
 ui/                   # Embedded dashboard source, build output, and //go:embed helper
@@ -32,18 +33,24 @@ ui/                   # Embedded dashboard source, build output, and //go:embed 
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 func main() {
 	cfg := files.NewConfigManager()
+	if err := cfg.LoadConfig(); err != nil {
+		log.Fatal(err)
+	}
+
 	token, err := util.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
 	if err != nil {
 		log.Fatal(err)
@@ -54,7 +61,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	store := storage.NewStore(util.GetMessageDBPath())
+	botCfg := cfg.Config()
+	if botCfg == nil {
+		log.Fatal("settings.json not loaded")
+	}
+	rc := botCfg.ResolveRuntimeConfig("")
+	db, err := persistence.Open(context.Background(), persistence.Config{
+		Driver:      rc.Database.Driver,
+		DatabaseURL: rc.Database.DatabaseURL,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := persistence.NewPostgresMigrator(db).Up(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+
+	store := storage.NewStore(db)
 	if err := store.Init(); err != nil {
 		log.Fatal(err)
 	}
@@ -132,6 +155,15 @@ A minimal example:
     }
   ],
   "runtime_config": {
+    "database": {
+      "driver": "postgres",
+      "database_url": "postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable",
+      "max_open_conns": 20,
+      "max_idle_conns": 10,
+      "conn_max_lifetime_secs": 1800,
+      "conn_max_idle_time_secs": 300,
+      "ping_timeout_ms": 5000
+    },
     "moderation_logging": true,
     "webhook_embed_updates": [
       {
@@ -385,6 +417,7 @@ Slow gateway handlers are logged by default.
 ## Testing
 
 ```bash
+set DISCORDCORE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
 go test ./...
 go vet ./...
 cd ui

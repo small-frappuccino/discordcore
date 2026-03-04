@@ -17,7 +17,7 @@ import (
 )
 
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
-// and optional SQLite persistence.
+// and optional Postgres-backed persistence.
 type UnifiedCache struct {
 	// Member cache segment: guildID:userID -> *discordgo.Member
 	members *segment[*discordgo.Member]
@@ -51,7 +51,7 @@ type UnifiedCache struct {
 
 	// Metrics are tracked per-segment
 
-	// SQLite persistence (optional)
+	// Persistent store (optional)
 	store          *storage.Store
 	persistEnabled bool
 
@@ -104,7 +104,7 @@ func stripPersistKey(cacheType, key string) string {
 
 // Cached value types
 
-// Persistent cache entry for SQLite
+// Persistent cache entry for the persistent store
 type persistentCacheEntry struct {
 	Key       string    `json:"key"`
 	Type      string    `json:"type"` // "member", "guild", "roles", "channel"
@@ -126,7 +126,7 @@ type CacheConfig struct {
 	MaxRolesSize   int
 	MaxChannelSize int
 
-	// SQLite persistence
+	// Persistent store
 	Store          *storage.Store
 	PersistEnabled bool
 }
@@ -658,7 +658,7 @@ func (uc *UnifiedCache) cleanupExpired() {
 	uc.lastCleanup = now
 }
 
-// Persist saves current cache state to SQLite (if enabled)
+// Persist saves current cache state to the persistent store (if enabled)
 // Persist writes all non-expired in-memory entries to the persistent store.
 //
 // Notes:
@@ -762,7 +762,7 @@ func (uc *UnifiedCache) Persist() error {
 	return nil
 }
 
-// Warmup pre-populates the cache from SQLite (if enabled)
+// Warmup pre-populates the cache from persistent storage (if enabled)
 //
 // Behavior and guarantees:
 // - No-op if persistence is disabled or the store is nil.

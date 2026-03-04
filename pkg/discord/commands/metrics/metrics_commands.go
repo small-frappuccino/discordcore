@@ -2,21 +2,16 @@ package metrics
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"os"
-	"sort"
 	"strings"
 	"time"
-
-	_ "modernc.org/sqlite"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // RegisterMetricsCommands registers slash commands under the /metrics group.
@@ -120,35 +115,19 @@ func handleActivity(ctx *core.Context) error {
 
 	cutoff, label := cutoffForRange(rangeOpt)
 
-	// Open metrics DB (read-only usage)
-	dbPath := util.GetMessageDBPath()
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return respondError(s, i, fmt.Sprintf("Failed to open metrics database: %v", err))
+	store := ctx.Router().GetStore()
+	if store == nil {
+		return respondError(s, i, "Metrics storage is not configured.")
 	}
-	defer db.Close()
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	// Collect activity
-	msgTotalsByChannel, _ := queryTotals(ctxTimeout, db,
-		"SELECT channel_id, SUM(count) FROM daily_message_metrics WHERE guild_id=? AND day>=? "+whereChannel(channelID)+" GROUP BY channel_id",
-		argsFor(ctx.GuildID, cutoff, channelID)...,
-	)
-	msgTotalsByUser, _ := queryTotals(ctxTimeout, db,
-		"SELECT user_id, SUM(count) FROM daily_message_metrics WHERE guild_id=? AND day>=? "+whereChannel(channelID)+" GROUP BY user_id",
-		argsFor(ctx.GuildID, cutoff, channelID)...,
-	)
-
-	reactTotalsByChannel, _ := queryTotals(ctxTimeout, db,
-		"SELECT channel_id, SUM(count) FROM daily_reaction_metrics WHERE guild_id=? AND day>=? "+whereChannel(channelID)+" GROUP BY channel_id",
-		argsFor(ctx.GuildID, cutoff, channelID)...,
-	)
-	reactTotalsByUser, _ := queryTotals(ctxTimeout, db,
-		"SELECT user_id, SUM(count) FROM daily_reaction_metrics WHERE guild_id=? AND day>=? "+whereChannel(channelID)+" GROUP BY user_id",
-		argsFor(ctx.GuildID, cutoff, channelID)...,
-	)
+	msgTotalsByChannel, _ := store.MessageTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	msgTotalsByUser, _ := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	reactTotalsByChannel, _ := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	reactTotalsByUser, _ := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
 
 	// Build embed
 	chFilterStr := ""
@@ -245,13 +224,10 @@ func handleServerStatsHealth(ctx *core.Context) error {
 		return respondError(s, i, "This command must be used in a server.")
 	}
 
-	// Open database
-	dbPath := util.GetMessageDBPath()
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return respondError(s, i, fmt.Sprintf("Failed to open database: %v", err))
+	store := ctx.Router().GetStore()
+	if store == nil {
+		return respondError(s, i, "Metrics storage is not configured.")
 	}
-	defer db.Close()
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -269,20 +245,14 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	}
 
 	// 2) Historical total of members who have ever joined (based on member_joins)
-	totalHistoricJoins, totalHistoricJoinsErr := querySum(
-		ctxTimeout,
-		db,
-		"SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?",
-		ctx.GuildID,
-	)
+	totalHistoricJoins, totalHistoricJoinsErr := store.CountDistinctMemberJoins(ctxTimeout, ctx.GuildID)
 	hasHistoricJoins := totalHistoricJoinsErr == nil
 
 	// 3) How many of those historically recorded members are still in the server
 	stillPresentCount := int64(0)
 	hasStillPresent := hasHistoricJoins
 	if hasHistoricJoins && totalHistoricJoins > 0 {
-		// Fetch all user_ids that have ever joined
-		rows, err := db.QueryContext(ctxTimeout, "SELECT DISTINCT user_id FROM member_joins WHERE guild_id=?", ctx.GuildID)
+		joinedUserIDs, err := store.ListDistinctMemberJoinUserIDs(ctxTimeout, ctx.GuildID)
 		if err != nil {
 			hasStillPresent = false
 			log.ErrorLoggerRaw().Error(
@@ -292,32 +262,11 @@ func handleServerStatsHealth(ctx *core.Context) error {
 				"err", err,
 			)
 		} else {
-			defer rows.Close()
-			for rows.Next() {
-				var userID string
-				if err := rows.Scan(&userID); err != nil {
-					hasStillPresent = false
-					log.ErrorLoggerRaw().Error(
-						"Metrics health retention scan failed",
-						"operation", "metrics.serverstats.health.retention_scan",
-						"guildID", ctx.GuildID,
-						"err", err,
-					)
-					continue
-				}
+			for _, userID := range joinedUserIDs {
 				// Check if the user is present in the bot state cache.
 				if _, err := s.State.Member(ctx.GuildID, userID); err == nil {
 					stillPresentCount++
 				}
-			}
-			if err := rows.Err(); err != nil {
-				hasStillPresent = false
-				log.ErrorLoggerRaw().Error(
-					"Metrics health retention rows iteration failed",
-					"operation", "metrics.serverstats.health.retention_rows",
-					"guildID", ctx.GuildID,
-					"err", err,
-				)
 			}
 		}
 	}
@@ -341,15 +290,15 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	}
 
 	// Database health
-	var dbSize int64
-	if info, err := os.Stat(dbPath); err == nil {
-		dbSize = info.Size()
+	dbSizeLabel := "N/A"
+	if size, err := store.DatabaseSizeBytes(ctxTimeout); err == nil {
+		dbSizeLabel = formatBytes(size)
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "📊 Server Health Stats",
 		Color:       theme.Info(),
-		Description: fmt.Sprintf("Data extracted from the database and bot state.\nDatabase size: `%s`", formatBytes(dbSize)),
+		Description: fmt.Sprintf("Data extracted from the database and bot state.\nDatabase size: `%s`", dbSizeLabel),
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
@@ -367,32 +316,18 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 		return respondError(s, i, "This command must be used in a server.")
 	}
 
-	dbPath := util.GetMessageDBPath()
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return respondError(s, i, fmt.Sprintf("Failed to open database: %v", err))
+	store := ctx.Router().GetStore()
+	if store == nil {
+		return respondError(s, i, "Metrics storage is not configured.")
 	}
-	defer db.Close()
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	cutoff, label := cutoffForRange(rangeVal)
 
-	joins, joinsErr := querySum(
-		ctxTimeout,
-		db,
-		"SELECT SUM(count) FROM daily_member_joins WHERE guild_id=? AND day >= ?",
-		ctx.GuildID,
-		cutoff,
-	)
-	leaves, leavesErr := querySum(
-		ctxTimeout,
-		db,
-		"SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=? AND day >= ?",
-		ctx.GuildID,
-		cutoff,
-	)
+	joins, joinsErr := store.SumDailyMemberJoinsSince(ctxTimeout, ctx.GuildID, cutoff)
+	leaves, leavesErr := store.SumDailyMemberLeavesSince(ctxTimeout, ctx.GuildID, cutoff)
 	hasJoins := joinsErr == nil
 	hasLeaves := leavesErr == nil
 
@@ -546,48 +481,7 @@ func clampInt(v, min, max int) int {
 	return v
 }
 
-func whereChannel(channelID string) string {
-	if channelID == "" {
-		return ""
-	}
-	return " AND channel_id=? "
-}
-
-func argsFor(guildID, cutoff, channelID string) []any {
-	if channelID == "" {
-		return []any{guildID, cutoff}
-	}
-	return []any{guildID, cutoff, channelID}
-}
-
-type kv struct {
-	Key   string
-	Total int64
-}
-
-func queryTotals(ctx context.Context, db *sql.DB, sqlText string, args ...any) ([]kv, error) {
-	rows, err := db.QueryContext(ctx, sqlText, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []kv
-	for rows.Next() {
-		var k string
-		var t sql.NullInt64
-		if err := rows.Scan(&k, &t); err != nil {
-			return nil, err
-		}
-		if t.Valid {
-			out = append(out, kv{Key: k, Total: t.Int64})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Total > out[j].Total })
-	return out, nil
-}
-
-func renderTop(items []kv, n int, display func(id string) string) string {
+func renderTop(items []storage.MetricTotal, n int, display func(id string) string) string {
 	if len(items) == 0 {
 		return "_no data_"
 	}
@@ -614,33 +508,6 @@ func userMention(id string) string {
 		return "`unknown-user`"
 	}
 	return "<@" + id + ">"
-}
-
-func querySum(ctx context.Context, db *sql.DB, sqlText string, args ...any) (int64, error) {
-	var v sql.NullInt64
-	if err := db.QueryRowContext(ctx, sqlText, args...).Scan(&v); err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Metrics sum query failed",
-			"operation", "metrics.query_sum",
-			"sql", sqlText,
-			"args", fmt.Sprintf("%v", args),
-			"err", err,
-		)
-		return 0, fmt.Errorf("query sum: %w", err)
-	}
-	if v.Valid {
-		return v.Int64, nil
-	}
-	return 0, nil
-}
-
-func tableExists(ctx context.Context, db *sql.DB, tableName string) bool {
-	var name string
-	err := db.QueryRowContext(ctx,
-		"SELECT name FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
-		tableName,
-	).Scan(&name)
-	return err == nil && name == tableName
 }
 
 func formatMaybe(v int64, ok bool) string {

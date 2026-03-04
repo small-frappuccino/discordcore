@@ -22,6 +22,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
+	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -188,12 +189,53 @@ func Run(appName, tokenEnv string) error {
 		}
 	}
 
-	// SQLite store (hardcoded path; no runtime_config override)
-	dbPath := util.GetMessageDBPath()
-	store := storage.NewStore(dbPath)
-	if err := store.Init(); err != nil {
-		return fmt.Errorf("initialize SQLite store: %w", err)
+	// PostgreSQL store from runtime config.
+	runtimeConfig := files.RuntimeConfig{}
+	if cfg := configManager.Config(); cfg != nil {
+		runtimeConfig = cfg.ResolveRuntimeConfig("")
 	}
+	dbCfg := runtimeConfig.Database
+	dbc := persistence.Config{
+		Driver:              dbCfg.Driver,
+		DatabaseURL:         dbCfg.DatabaseURL,
+		MaxOpenConns:        dbCfg.MaxOpenConns,
+		MaxIdleConns:        dbCfg.MaxIdleConns,
+		ConnMaxLifetimeSecs: dbCfg.ConnMaxLifetimeSecs,
+		ConnMaxIdleTimeSecs: dbCfg.ConnMaxIdleTimeSecs,
+		PingTimeoutMS:       dbCfg.PingTimeoutMS,
+	}
+
+	openCtx, openCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer openCancel()
+	db, err := persistence.Open(openCtx, dbc)
+	if err != nil {
+		return fmt.Errorf("open postgres database: %w", err)
+	}
+	log.ApplicationLogger().Info("Database connection opened", "operation", "startup.database.open", "driver", "postgres")
+
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer pingCancel()
+	if err := persistence.Ping(pingCtx, db); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("postgres readiness check failed: %w", err)
+	}
+	log.ApplicationLogger().Info("Database readiness check passed", "operation", "startup.database.ping", "driver", "postgres")
+
+	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer migrateCancel()
+	migrator := persistence.NewPostgresMigrator(db)
+	if err := migrator.Up(migrateCtx); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("apply postgres migrations: %w", err)
+	}
+	log.ApplicationLogger().Info("Database migrations applied", "operation", "startup.database.migrate", "driver", "postgres")
+
+	store := storage.NewStore(db)
+	if err := store.Init(); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("initialize postgres store: %w", err)
+	}
+	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
 
 	// Log configured guilds
 	if err := files.LogConfiguredGuilds(configManager, discordSession); err != nil {

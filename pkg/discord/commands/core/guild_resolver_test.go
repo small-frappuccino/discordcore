@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 func newPermissionCheckerWithCache(t *testing.T, session *discordgo.Session) (*PermissionChecker, *cache.UnifiedCache) {
@@ -22,6 +24,31 @@ func newPermissionCheckerWithCache(t *testing.T, session *discordgo.Session) (*P
 	t.Cleanup(unifiedCache.Stop)
 	checker.SetCache(unifiedCache)
 	return checker, unifiedCache
+}
+
+func newPermissionCheckerStore(t *testing.T) *storage.Store {
+	t.Helper()
+
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	store := storage.NewStore(db)
+	if err := store.Init(); err != nil {
+		t.Fatalf("store init: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	return store
 }
 
 func TestPermissionCheckerResolveOwnerID_UsesCacheBeforeStateStoreAndREST(t *testing.T) {
@@ -40,11 +67,7 @@ func TestPermissionCheckerResolveOwnerID_UsesCacheBeforeStateStoreAndREST(t *tes
 
 	checker, unifiedCache := newPermissionCheckerWithCache(t, session)
 
-	store := storage.NewStore(filepath.Join(t.TempDir(), "owner-cache.db"))
-	if err := store.Init(); err != nil {
-		t.Fatalf("store init: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := newPermissionCheckerStore(t)
 	checker.SetStore(store)
 	if err := store.SetGuildOwnerID("g1", "owner-store"); err != nil {
 		t.Fatalf("seed owner cache: %v", err)
@@ -80,11 +103,7 @@ func TestPermissionCheckerResolveOwnerID_UsesStateBeforeStoreAndREST(t *testing.
 
 	checker, _ := newPermissionCheckerWithCache(t, session)
 
-	store := storage.NewStore(filepath.Join(t.TempDir(), "owner-cache.db"))
-	if err := store.Init(); err != nil {
-		t.Fatalf("store init: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := newPermissionCheckerStore(t)
 	checker.SetStore(store)
 	if err := store.SetGuildOwnerID("g1", "owner-store"); err != nil {
 		t.Fatalf("seed owner cache: %v", err)
@@ -125,7 +144,7 @@ func TestPermissionCheckerResolveOwnerID_StateHitWithStoreWriteFailureStillSucce
 	}
 
 	checker, _ := newPermissionCheckerWithCache(t, session)
-	checker.SetStore(storage.NewStore(filepath.Join(t.TempDir(), "owner-cache.db"))) // intentionally not initialized
+	checker.SetStore(storage.NewStore(nil)) // intentionally not initialized
 
 	ownerID, ok, err := checker.ResolveOwnerID("g1")
 	if err != nil {

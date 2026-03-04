@@ -1,28 +1,44 @@
 package logging
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	_ "modernc.org/sqlite"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
-func newLoggingStore(t *testing.T, filename string) (*storage.Store, string) {
+func newLoggingStore(t *testing.T, _ string) (*storage.Store, *sql.DB) {
 	t.Helper()
 
-	dbPath := filepath.Join(t.TempDir(), filename)
-	store := storage.NewStore(dbPath)
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	store := storage.NewStore(db)
 	if err := store.Init(); err != nil {
-		t.Fatalf("init sqlite store: %v", err)
+		t.Fatalf("init store: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = store.Close()
 	})
-	return store, dbPath
+	return store, db
 }
 
 func newLoggingConfigManager(t *testing.T, guildID string, channels files.ChannelsConfig) *files.ConfigManager {
@@ -38,17 +54,11 @@ func newLoggingConfigManager(t *testing.T, guildID string, channels files.Channe
 	return mgr
 }
 
-func queryIntFromStoreDB(t *testing.T, dbPath, query string, args ...interface{}) int {
+func queryIntFromStoreDB(t *testing.T, db *sql.DB, query string, args ...interface{}) int {
 	t.Helper()
 
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open sqlite db for assertion: %v", err)
-	}
-	defer db.Close()
-
 	var value int
-	if err := db.QueryRow(query, args...).Scan(&value); err != nil {
+	if err := db.QueryRow(rebindQuestionPlaceholders(query), args...).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return 0
 		}
@@ -64,11 +74,11 @@ func utcDay(at time.Time) string {
 	return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 }
 
-func dailyMessageMetricCount(t *testing.T, dbPath, guildID, channelID, userID string, at time.Time) int {
+func dailyMessageMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userID string, at time.Time) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
-		dbPath,
+		db,
 		`SELECT count FROM daily_message_metrics WHERE guild_id=? AND channel_id=? AND user_id=? AND day=?`,
 		guildID,
 		channelID,
@@ -77,11 +87,11 @@ func dailyMessageMetricCount(t *testing.T, dbPath, guildID, channelID, userID st
 	)
 }
 
-func dailyMemberMetricCount(t *testing.T, dbPath, tableName, guildID, userID string, at time.Time) int {
+func dailyMemberMetricCount(t *testing.T, db *sql.DB, tableName, guildID, userID string, at time.Time) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
-		dbPath,
+		db,
 		`SELECT count FROM `+tableName+` WHERE guild_id=? AND user_id=? AND day=?`,
 		guildID,
 		userID,
@@ -89,11 +99,11 @@ func dailyMemberMetricCount(t *testing.T, dbPath, tableName, guildID, userID str
 	)
 }
 
-func dailyReactionMetricCount(t *testing.T, dbPath, guildID, channelID, userID string, at time.Time) int {
+func dailyReactionMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userID string, at time.Time) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
-		dbPath,
+		db,
 		`SELECT count FROM daily_reaction_metrics WHERE guild_id=? AND channel_id=? AND user_id=? AND day=?`,
 		guildID,
 		channelID,
@@ -102,11 +112,11 @@ func dailyReactionMetricCount(t *testing.T, dbPath, guildID, channelID, userID s
 	)
 }
 
-func messageHistoryCount(t *testing.T, dbPath, guildID, messageID, eventType string) int {
+func messageHistoryCount(t *testing.T, db *sql.DB, guildID, messageID, eventType string) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
-		dbPath,
+		db,
 		`SELECT COUNT(*) FROM messages_history WHERE guild_id=? AND message_id=? AND event_type=?`,
 		guildID,
 		messageID,
@@ -134,4 +144,23 @@ func sameStringSet(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func rebindQuestionPlaceholders(query string) string {
+	if query == "" {
+		return query
+	}
+	var b strings.Builder
+	b.Grow(len(query) + 8)
+	i := 1
+	for idx := 0; idx < len(query); idx++ {
+		if query[idx] == '?' {
+			b.WriteString("$")
+			b.WriteString(strconv.Itoa(i))
+			i++
+			continue
+		}
+		b.WriteByte(query[idx])
+	}
+	return b.String()
 }

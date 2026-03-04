@@ -1,17 +1,18 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 type memberResponse struct {
@@ -55,8 +56,21 @@ func setupMemberServer(t *testing.T, handler func(guildID, userID string) (membe
 
 func newTestStore(t *testing.T) *storage.Store {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	store := storage.NewStore(dbPath)
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	store := storage.NewStore(db)
 	if err := store.Init(); err != nil {
 		t.Fatalf("store init: %v", err)
 	}

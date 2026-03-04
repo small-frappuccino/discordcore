@@ -84,7 +84,7 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 
 	ws := newWarmupSession(session)
 
-	// Step 1: Load persisted cache entries from SQLite
+	// Step 1: Load persisted cache entries from the persistent store
 	if err := cache.Warmup(); err != nil {
 		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup from persistent cache: %v", err))
 	} else {

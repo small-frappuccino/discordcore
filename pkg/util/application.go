@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.238.0"
+const DiscordCoreVersion = "v0.239.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string
@@ -162,12 +162,6 @@ func LegacyMigrationCacheFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
 }
 
-// GetMessageDBPath returns the SQLite DB path for message persistence.
-// Layout: <CachesBase>/messages/messages.db
-func GetMessageDBPath() string {
-	return filepath.Join(ApplicationCachesPath, "messages", "messages.db")
-}
-
 // GetSettingsFilePath returns the path for the primary settings JSON.
 // Layout: <ConfigBase>/preferences/settings.json
 func GetSettingsFilePath() string {
@@ -197,7 +191,7 @@ func GetLogFilePath() string {
 // Safe to call multiple times.
 func EnsureCacheDirs() error {
 	dirs := []string{
-		filepath.Dir(GetMessageDBPath()),
+		filepath.Join(ApplicationCachesPath, "avatar"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -261,8 +255,7 @@ func sanitizeName(s string) string {
 // It is safe to call multiple times.
 func EnsureCacheInitialized() error {
 	dirs := []string{
-		filepath.Dir(GetMessageDBPath()),               // messages db directory
-		filepath.Join(ApplicationCachesPath, "avatar"), // avatar cache (even if now migrated to sqlite; kept for future artifacts)
+		filepath.Join(ApplicationCachesPath, "avatar"), // avatar cache (kept for additional runtime artifacts)
 	}
 
 	for _, d := range dirs {

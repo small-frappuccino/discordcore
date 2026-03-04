@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,6 +16,20 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
+
+func runtimeDatabaseConfigForRunnerTests() files.DatabaseRuntimeConfig {
+	dsn := strings.TrimSpace(os.Getenv("DISCORDCORE_TEST_DATABASE_URL"))
+	if dsn == "" {
+		dsn = "postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable"
+	}
+	return files.DatabaseRuntimeConfig{
+		Driver:        "postgres",
+		DatabaseURL:   dsn,
+		MaxOpenConns:  5,
+		MaxIdleConns:  5,
+		PingTimeoutMS: 5000,
+	}
+}
 
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	const (
@@ -40,6 +55,9 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 
 	boolPtr := func(v bool) *bool { return &v }
 	cfg := files.BotConfig{
+		RuntimeConfig: files.RuntimeConfig{
+			Database: runtimeDatabaseConfigForRunnerTests(),
+		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring:    boolPtr(false),
@@ -138,6 +156,9 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 
 	boolPtr := func(v bool) *bool { return &v }
 	cfg := files.BotConfig{
+		RuntimeConfig: files.RuntimeConfig{
+			Database: runtimeDatabaseConfigForRunnerTests(),
+		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring:    boolPtr(false),
@@ -245,6 +266,9 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 
 	boolPtr := func(v bool) *bool { return &v }
 	cfg := files.BotConfig{
+		RuntimeConfig: files.RuntimeConfig{
+			Database: runtimeDatabaseConfigForRunnerTests(),
+		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring:    boolPtr(false),

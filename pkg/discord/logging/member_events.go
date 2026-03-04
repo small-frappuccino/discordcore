@@ -35,7 +35,7 @@ type MemberEventService struct {
 	joinTimes map[string]time.Time // key: guildID:userID
 	joinMu    sync.RWMutex
 
-	// Complementary persistence (SQLite)
+	// Complementary persistence (Postgres)
 	store *storage.Store
 }
 
@@ -78,7 +78,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 	// Store should be injected and already initialized
 	if mes.store != nil {
 		if err := runErrWithTimeout(runCtx, loggingDependencyTimeout, mes.store.Init); err != nil {
-			slog.Warn(fmt.Sprintf("Member event service: failed to initialize SQLite store (continuing): %v", err))
+			slog.Warn(fmt.Sprintf("Member event service: failed to initialize store (continuing): %v", err))
 		}
 	}
 
@@ -255,7 +255,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 		}
 	}
 
-	// Persist absolute join time to SQLite (best effort)
+	// Persist absolute join time to Postgres store (best effort)
 	if mes.store != nil && !joinedAt.IsZero() {
 		if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
 			return mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, joinedAt)
@@ -460,7 +460,7 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 		return time.Since(t), true, nil
 	}
 
-	// 3) SQLite (new repository)
+	// 3) Persistent store (Postgres)
 	if mes.store != nil {
 		type joinLookup struct {
 			at time.Time

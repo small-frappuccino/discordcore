@@ -1365,7 +1365,7 @@ func (ms *MonitoringService) initializeCache() {
 		}(gid)
 	}
 	wg.Wait()
-	// No-op: avatars are persisted per change in the SQLite store
+	// No-op: avatars are persisted per change in the Postgres store
 }
 
 // initializeGuildCache initializes the current avatars of members in a specific guild.
@@ -1691,7 +1691,7 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 		}
 		log.ApplicationLogger().Info("🆕 New guild listed in config for guild", "guildID", guildID)
 		ms.initializeGuildCache(guildID)
-		// No-op: avatars persisted per change in SQLite store
+		// No-op: avatars persisted per change in Postgres store
 	}
 }
 
@@ -1972,7 +1972,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	// Fetch role update audit log using constant with a short retry
 	actionType := int(discordgo.AuditLogActionMemberRoleUpdate)
 
-	// Helper to compute a verified diff between the local snapshot (memory/SQLite) and the current Discord state.
+	// Helper to compute a verified diff between the local snapshot (memory/persistent store) and the current Discord state.
 	// Also returns the current roles considered for snapshot update.
 	computeVerifiedDiff := func(guildID, userID string, proposed []string) (cur []string, added []string, removed []string) {
 		// 1) determine current state from the proposed (event) or from Discord
@@ -1986,7 +1986,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			return cur, nil, nil
 		}
 
-		// 2) get previous state (prefer in-memory TTL cache; fallback SQLite)
+		// 2) get previous state (prefer in-memory TTL cache; fallback persistent store)
 		var prev []string
 		if p, ok := ms.cacheRolesGet(guildID, userID); ok {
 			atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)

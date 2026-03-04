@@ -2,65 +2,83 @@ package metrics
 
 import (
 	"context"
-	"database/sql"
 	"testing"
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
-func newTestMetricsDB(t *testing.T) *sql.DB {
+func newMetricsTestStore(t *testing.T) *storage.Store {
 	t.Helper()
 
-	db, err := sql.Open("sqlite", ":memory:")
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
 	if err != nil {
-		t.Fatalf("open sqlite memory db: %v", err)
+		t.Fatalf("resolve test database dsn: %v", err)
 	}
-
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
 	t.Cleanup(func() {
-		_ = db.Close()
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
 	})
-	return db
+
+	store := storage.NewStore(db)
+	if err := store.Init(); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	return store
 }
 
-func TestQuerySum_ReturnsAggregateValue(t *testing.T) {
-	db := newTestMetricsDB(t)
-	if _, err := db.Exec(`CREATE TABLE metric_values (value INTEGER)`); err != nil {
-		t.Fatalf("create table: %v", err)
+func TestServerStatsAggregationsUsePostgresStore(t *testing.T) {
+	store := newMetricsTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	guildID := "g1"
+	userID := "u1"
+
+	for range 3 {
+		if err := store.IncrementDailyMemberJoin(guildID, userID, now); err != nil {
+			t.Fatalf("increment join: %v", err)
+		}
 	}
-	if _, err := db.Exec(`INSERT INTO metric_values(value) VALUES (2), (3), (5)`); err != nil {
-		t.Fatalf("insert rows: %v", err)
+	for range 2 {
+		if err := store.IncrementDailyMemberLeave(guildID, userID, now); err != nil {
+			t.Fatalf("increment leave: %v", err)
+		}
 	}
 
-	got, err := querySum(context.Background(), db, `SELECT SUM(value) FROM metric_values`)
+	cutoff := dayString(now.AddDate(0, 0, -1))
+	joins, err := store.SumDailyMemberJoinsSince(ctx, guildID, cutoff)
 	if err != nil {
-		t.Fatalf("querySum returned unexpected error: %v", err)
+		t.Fatalf("sum joins: %v", err)
 	}
-	if got != 10 {
-		t.Fatalf("expected sum=10, got %d", got)
-	}
-}
-
-func TestQuerySum_ReturnsZeroWhenAggregateIsNull(t *testing.T) {
-	db := newTestMetricsDB(t)
-	if _, err := db.Exec(`CREATE TABLE metric_values (value INTEGER)`); err != nil {
-		t.Fatalf("create table: %v", err)
+	if joins != 3 {
+		t.Fatalf("expected joins=3, got %d", joins)
 	}
 
-	got, err := querySum(context.Background(), db, `SELECT SUM(value) FROM metric_values`)
+	leaves, err := store.SumDailyMemberLeavesSince(ctx, guildID, cutoff)
 	if err != nil {
-		t.Fatalf("querySum returned unexpected error: %v", err)
+		t.Fatalf("sum leaves: %v", err)
 	}
-	if got != 0 {
-		t.Fatalf("expected sum=0 for NULL aggregate, got %d", got)
+	if leaves != 2 {
+		t.Fatalf("expected leaves=2, got %d", leaves)
 	}
 }
 
-func TestQuerySum_ReturnsErrorForInvalidSQL(t *testing.T) {
-	db := newTestMetricsDB(t)
+func TestRenderTopWithMetricsTotals(t *testing.T) {
+	got := renderTop([]storage.MetricTotal{
+		{Key: "c1", Total: 10},
+		{Key: "c2", Total: 3},
+	}, 2, func(id string) string { return "#" + id })
 
-	got, err := querySum(context.Background(), db, `SELECT SUM(value) FROM missing_table`)
-	if err == nil {
-		t.Fatalf("expected SQL error, got nil (value=%d)", got)
-	}
-	if got != 0 {
-		t.Fatalf("expected fallback value=0 on SQL error, got %d", got)
+	want := "1) #c1 — **10**\n2) #c2 — **3**\n"
+	if got != want {
+		t.Fatalf("unexpected renderTop output:\nwant:\n%s\ngot:\n%s", want, got)
 	}
 }

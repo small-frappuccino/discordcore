@@ -20,6 +20,8 @@ import (
 //
 // Keep names in CAPS to mirror the previous env var names and make auditing easy.
 type RuntimeConfig struct {
+	Database DatabaseRuntimeConfig `json:"database,omitempty"`
+
 	// THEME
 	BotTheme string `json:"bot_theme,omitempty"`
 
@@ -67,6 +69,18 @@ type RuntimeConfig struct {
 	WebhookEmbedUpdate WebhookEmbedUpdateConfig `json:"webhook_embed_update,omitempty"`
 	// Remote validation behavior for webhook embed targets used by CRUD commands.
 	WebhookEmbedValidation WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+}
+
+// DatabaseRuntimeConfig defines runtime database configuration.
+// The only supported driver is postgres.
+type DatabaseRuntimeConfig struct {
+	Driver              string `json:"driver,omitempty"`
+	DatabaseURL         string `json:"database_url,omitempty"`
+	MaxOpenConns        int    `json:"max_open_conns,omitempty"`
+	MaxIdleConns        int    `json:"max_idle_conns,omitempty"`
+	ConnMaxLifetimeSecs int    `json:"conn_max_lifetime_secs,omitempty"`
+	ConnMaxIdleTimeSecs int    `json:"conn_max_idle_time_secs,omitempty"`
+	PingTimeoutMS       int    `json:"ping_timeout_ms,omitempty"`
 }
 
 // WebhookEmbedUpdateConfig defines how to patch an existing webhook message embed.
@@ -529,6 +543,28 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	// Manual merging logic. Fields that are zero-value in guildRC will use global values.
 	// This is better than a generic library for such a small struct and specific rules.
 	resolved := global
+
+	if guildRC.Database.Driver != "" {
+		resolved.Database.Driver = guildRC.Database.Driver
+	}
+	if guildRC.Database.DatabaseURL != "" {
+		resolved.Database.DatabaseURL = guildRC.Database.DatabaseURL
+	}
+	if guildRC.Database.MaxOpenConns != 0 {
+		resolved.Database.MaxOpenConns = guildRC.Database.MaxOpenConns
+	}
+	if guildRC.Database.MaxIdleConns != 0 {
+		resolved.Database.MaxIdleConns = guildRC.Database.MaxIdleConns
+	}
+	if guildRC.Database.ConnMaxLifetimeSecs != 0 {
+		resolved.Database.ConnMaxLifetimeSecs = guildRC.Database.ConnMaxLifetimeSecs
+	}
+	if guildRC.Database.ConnMaxIdleTimeSecs != 0 {
+		resolved.Database.ConnMaxIdleTimeSecs = guildRC.Database.ConnMaxIdleTimeSecs
+	}
+	if guildRC.Database.PingTimeoutMS != 0 {
+		resolved.Database.PingTimeoutMS = guildRC.Database.PingTimeoutMS
+	}
 
 	if guildRC.BotTheme != "" {
 		resolved.BotTheme = guildRC.BotTheme

@@ -1,17 +1,31 @@
 package maintenance
 
 import (
-	"path/filepath"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 func newPurgeTestStore(t *testing.T) *storage.Store {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "purge_test.sqlite")
-	s := storage.NewStore(dbPath)
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	s := storage.NewStore(db)
 	if err := s.Init(); err != nil {
 		t.Fatalf("init store: %v", err)
 	}

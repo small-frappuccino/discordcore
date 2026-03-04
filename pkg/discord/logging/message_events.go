@@ -339,7 +339,7 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 
 	mes.markEvent(ctx)
 
-	// Persist to SQLite (write-through; best effort)
+	// Persist to Postgres store (write-through; best effort)
 	if mes.cacheEnabled && mes.store != nil && m.Author != nil {
 		if err := mes.store.UpsertMessage(storage.MessageRecord{
 			GuildID:        guildID,
@@ -459,7 +459,7 @@ func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *disc
 	}
 }
 
-// Persistent storage (SQLite) handles expiration and cleanup
+// Persistent storage (Postgres) handles expiration and cleanup
 
 // markEvent stores the last event timestamp (best effort)
 func (mes *MessageEventService) markEvent(ctx context.Context) {
@@ -486,7 +486,7 @@ func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
 func (mes *MessageEventService) GetCacheStats() map[string]any {
 	return map[string]any{
 		"isRunning": mes.IsRunning(),
-		"backend":   "sqlite",
+		"backend":   "postgres",
 	}
 }
 
@@ -582,7 +582,7 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 
 	mes.markEvent(nil)
 
-	// Consult persistence (SQLite) to get the original message (with guild/channel fallback)
+	// Consult persistence (Postgres store) to get the original message (with guild/channel fallback)
 	guildID := m.GuildID
 	if guildID == "" && s != nil && s.State != nil {
 		if ch, _ := s.State.Channel(m.ChannelID); ch != nil {

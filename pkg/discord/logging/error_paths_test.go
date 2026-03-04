@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 func newDiscordSessionWithAPI(t *testing.T, handler http.HandlerFunc) *discordgo.Session {
@@ -47,7 +47,7 @@ func newDiscordSessionWithAPI(t *testing.T, handler http.HandlerFunc) *discordgo
 }
 
 func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
-	failingStore := storage.NewStore(filepath.Join(t.TempDir(), "not-initialized.db"))
+	failingStore := storage.NewStore(nil)
 
 	memberService := NewMemberEventService(nil, nil, nil, failingStore)
 	messageService := NewMessageEventService(nil, nil, nil, failingStore)
@@ -62,7 +62,7 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 }
 
 func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
-	failingStore := storage.NewStore(filepath.Join(t.TempDir(), "heartbeat-not-initialized.db"))
+	failingStore := storage.NewStore(nil)
 	ms := &MonitoringService{
 		store:    failingStore,
 		stopChan: make(chan struct{}),
@@ -122,9 +122,23 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 		}
 	})
 
-	store := storage.NewStore(filepath.Join(t.TempDir(), "monitoring.db"))
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	store := storage.NewStore(db)
 	if err := store.Init(); err != nil {
-		t.Fatalf("init sqlite store: %v", err)
+		t.Fatalf("init store: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = store.Close()

@@ -1,72 +1,73 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 	"time"
-
-	_ "modernc.org/sqlite"
 )
 
-// Store wraps an embedded SQLite database for durable caching of messages,
+// Store wraps a PostgreSQL database for durable caching of messages,
 // avatar hashes (current and history), guild metadata (e.g., bot_since) and member joins.
-// It uses modernc.org/sqlite for CGO-less builds.
 type Store struct {
-	dbPath string
-	db     *sql.DB
+	db *sql.DB
 }
 
-// NewStore creates a new Store pointing to dbPath. Call Init() before using it.
-func NewStore(dbPath string) *Store {
-	return &Store{dbPath: dbPath}
+// NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
+func NewStore(db *sql.DB) *Store {
+	return &Store{db: db}
 }
 
-// Init opens the SQLite database, configures pragmas, and ensures the schema exists.
+// Init validates the database handle and ensures the schema exists.
 func (s *Store) Init() error {
-	if s.db != nil {
-		return nil
+	if s == nil || s.db == nil {
+		return fmt.Errorf("store database handle is nil")
 	}
-	if s.dbPath == "" {
-		return fmt.Errorf("db path is empty")
+	if err := ensureSchema(s.db); err != nil {
+		return fmt.Errorf("ensure schema: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(s.dbPath), 0o755); err != nil {
-		return fmt.Errorf("failed to create db directory: %w", err)
-	}
-
-	db, err := sql.Open("sqlite", s.dbPath)
-	if err != nil {
-		return fmt.Errorf("open sqlite: %w", err)
-	}
-
-	// Pragmas for durability and concurrency
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("set WAL: %w", err)
-	}
-	if _, err := db.Exec(`PRAGMA foreign_keys=ON;`); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("enable FKs: %w", err)
-	}
-	if _, err := db.Exec(`PRAGMA busy_timeout=5000;`); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("set busy_timeout: %w", err)
-	}
-	if _, err := db.Exec(`PRAGMA synchronous=NORMAL;`); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("set synchronous: %w", err)
-	}
-
-	// Schema creation
-	if err := ensureSchema(db); err != nil {
-		_ = db.Close()
-		return err
-	}
-
-	s.db = db
 	return nil
+}
+
+func (s *Store) exec(query string, args ...any) (sql.Result, error) {
+	return s.db.Exec(rebind(query), args...)
+}
+
+func (s *Store) query(query string, args ...any) (*sql.Rows, error) {
+	return s.db.Query(rebind(query), args...)
+}
+
+func (s *Store) queryRow(query string, args ...any) *sql.Row {
+	return s.db.QueryRow(rebind(query), args...)
+}
+
+func txExec(tx *sql.Tx, query string, args ...any) (sql.Result, error) {
+	return tx.Exec(rebind(query), args...)
+}
+
+func txQueryRow(tx *sql.Tx, query string, args ...any) *sql.Row {
+	return tx.QueryRow(rebind(query), args...)
+}
+
+// rebind converts question-mark placeholders to PostgreSQL-style numbered placeholders.
+func rebind(query string) string {
+	if query == "" {
+		return query
+	}
+	var b strings.Builder
+	b.Grow(len(query) + 8)
+	index := 1
+	for i := 0; i < len(query); i++ {
+		if query[i] == '?' {
+			b.WriteString(fmt.Sprintf("$%d", index))
+			index++
+			continue
+		}
+		b.WriteByte(query[i])
+	}
+	return b.String()
 }
 
 // Close closes the underlying database.
@@ -103,7 +104,7 @@ func (s *Store) UpsertMessage(m MessageRecord) error {
 	} else {
 		expires = nil
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO messages (guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(guild_id, message_id) DO UPDATE SET
@@ -125,7 +126,7 @@ func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
 		return nil, fmt.Errorf("store not initialized")
 	}
 
-	row := s.db.QueryRow(
+	row := s.queryRow(
 		`SELECT guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at
          FROM messages
          WHERE guild_id=? AND message_id=? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
@@ -162,7 +163,7 @@ func (s *Store) DeleteMessage(guildID, messageID string) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
-	_, err := s.db.Exec(`DELETE FROM messages WHERE guild_id=? AND message_id=?`, guildID, messageID)
+	_, err := s.exec(`DELETE FROM messages WHERE guild_id=? AND message_id=?`, guildID, messageID)
 	return err
 }
 
@@ -171,7 +172,7 @@ func (s *Store) CleanupExpiredMessages() error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
-	_, err := s.db.Exec(`DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP`)
+	_, err := s.exec(`DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP`)
 	return err
 }
 
@@ -199,7 +200,7 @@ func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
 		retentionDays = 30 // default: keep 30 days of role history
 	}
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	result, err := s.db.Exec(`DELETE FROM roles_current WHERE updated_at < ?`, cutoff)
+	result, err := s.exec(`DELETE FROM roles_current WHERE updated_at < ?`, cutoff)
 	if err != nil {
 		return 0, err
 	}
@@ -215,7 +216,7 @@ func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
 		retentionDays = 180 // default: keep 6 months of avatar history
 	}
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	result, err := s.db.Exec(`DELETE FROM avatars_history WHERE changed_at < ?`, cutoff)
+	result, err := s.exec(`DELETE FROM avatars_history WHERE changed_at < ?`, cutoff)
 	if err != nil {
 		return 0, err
 	}
@@ -264,7 +265,7 @@ func (s *Store) UpsertMemberJoin(guildID, userID string, joinedAt time.Time) err
 	if guildID == "" || userID == "" || joinedAt.IsZero() {
 		return nil
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO member_joins (guild_id, user_id, joined_at)
          VALUES (?, ?, ?)
          ON CONFLICT(guild_id, user_id) DO UPDATE SET
@@ -282,7 +283,7 @@ func (s *Store) GetMemberJoin(guildID, userID string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(`SELECT joined_at FROM member_joins WHERE guild_id=? AND user_id=?`, guildID, userID)
+	row := s.queryRow(`SELECT joined_at FROM member_joins WHERE guild_id=? AND user_id=?`, guildID, userID)
 	var jt time.Time
 	if err := row.Scan(&jt); err != nil {
 		if err == sql.ErrNoRows {
@@ -318,7 +319,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 	// Read current
 	var curHash string
 	var hasCur bool
-	if err := tx.QueryRow(
+	if err := txQueryRow(tx,
 		`SELECT avatar_hash FROM avatars_current WHERE guild_id=? AND user_id=?`,
 		guildID, userID,
 	).Scan(&curHash); err != nil {
@@ -332,7 +333,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 	changed := !hasCur || curHash != newHash
 	if changed && hasCur {
 		// Record history
-		if _, err := tx.Exec(
+		if _, err := txExec(tx,
 			`INSERT INTO avatars_history (guild_id, user_id, old_hash, new_hash, changed_at)
              VALUES (?, ?, ?, ?, ?)`,
 			guildID, userID, curHash, newHash, updatedAt,
@@ -342,7 +343,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 	}
 
 	// Upsert current
-	if _, err := tx.Exec(
+	if _, err := txExec(tx,
 		`INSERT INTO avatars_current (guild_id, user_id, avatar_hash, updated_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(guild_id, user_id) DO UPDATE SET
@@ -364,7 +365,7 @@ func (s *Store) GetAvatar(guildID, userID string) (hash string, updatedAt time.T
 	if s.db == nil {
 		return "", time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(
+	row := s.queryRow(
 		`SELECT avatar_hash, updated_at FROM avatars_current WHERE guild_id=? AND user_id=?`,
 		guildID, userID,
 	)
@@ -390,7 +391,7 @@ func (s *Store) SetBotSince(guildID string, t time.Time) error {
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO guild_meta (guild_id, bot_since)
          VALUES (?, ?)
          ON CONFLICT(guild_id) DO UPDATE SET
@@ -408,7 +409,7 @@ func (s *Store) GetBotSince(guildID string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(`SELECT bot_since FROM guild_meta WHERE guild_id=?`, guildID)
+	row := s.queryRow(`SELECT bot_since FROM guild_meta WHERE guild_id=?`, guildID)
 	var t sql.NullTime
 	if err := row.Scan(&t); err != nil {
 		if err == sql.ErrNoRows {
@@ -430,7 +431,7 @@ func (s *Store) SetHeartbeat(t time.Time) error {
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		"heartbeat", t.UTC(),
@@ -443,7 +444,7 @@ func (s *Store) GetHeartbeat() (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "heartbeat")
+	row := s.queryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "heartbeat")
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {
 		if err == sql.ErrNoRows {
@@ -462,7 +463,7 @@ func (s *Store) SetLastEvent(t time.Time) error {
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		"last_event", t.UTC(),
@@ -475,7 +476,7 @@ func (s *Store) GetLastEvent() (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "last_event")
+	row := s.queryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "last_event")
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {
 		if err == sql.ErrNoRows {
@@ -494,7 +495,7 @@ func (s *Store) SetMetadata(key string, t time.Time) error {
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		key, t.UTC(),
@@ -507,7 +508,7 @@ func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(`SELECT ts FROM runtime_meta WHERE key=?`, key)
+	row := s.queryRow(`SELECT ts FROM runtime_meta WHERE key=?`, key)
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {
 		if err == sql.ErrNoRows {
@@ -528,41 +529,15 @@ func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 		return 0, fmt.Errorf("guildID is empty")
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	if _, err := tx.Exec(
-		`INSERT INTO moderation_cases (guild_id, last_case_number)
-         VALUES (?, 0)
-         ON CONFLICT(guild_id) DO NOTHING`,
-		guildID,
-	); err != nil {
-		return 0, err
-	}
-
-	if _, err := tx.Exec(
-		`UPDATE moderation_cases
-         SET last_case_number = last_case_number + 1
-         WHERE guild_id = ?`,
-		guildID,
-	); err != nil {
-		return 0, err
-	}
-
 	var next int64
-	if err := tx.QueryRow(
-		`SELECT last_case_number FROM moderation_cases WHERE guild_id = ?`,
+	if err := s.queryRow(
+		`INSERT INTO moderation_cases (guild_id, last_case_number)
+         VALUES (?, 1)
+         ON CONFLICT(guild_id) DO UPDATE
+         SET last_case_number = moderation_cases.last_case_number + 1
+         RETURNING last_case_number`,
 		guildID,
 	).Scan(&next); err != nil {
-		return 0, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
 	return next, nil
@@ -576,7 +551,7 @@ func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 	if guildID == "" || ownerID == "" {
 		return nil
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO guild_meta (guild_id, owner_id)
          VALUES (?, ?)
          ON CONFLICT(guild_id) DO UPDATE SET
@@ -591,7 +566,7 @@ func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
 	if s.db == nil {
 		return "", false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=?`, guildID)
+	row := s.queryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=?`, guildID)
 	var owner sql.NullString
 	if err := row.Scan(&owner); err != nil {
 		if err == sql.ErrNoRows {
@@ -624,7 +599,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 	defer func() { _ = tx.Rollback() }()
 
 	// Clear existing roles for member
-	if _, err := tx.Exec(`DELETE FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID); err != nil {
+	if _, err := txExec(tx, `DELETE FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID); err != nil {
 		return err
 	}
 	// Insert new set
@@ -632,7 +607,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		if rid == "" {
 			continue
 		}
-		if _, err := tx.Exec(
+		if _, err := txExec(tx,
 			`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at) VALUES (?, ?, ?, ?)`,
 			guildID, userID, rid, updatedAt,
 		); err != nil {
@@ -647,7 +622,7 @@ func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	rows, err := s.db.Query(`SELECT role_id FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID)
+	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -699,167 +674,125 @@ func (s *Store) DiffMemberRoles(guildID, userID string, current []string) (added
 
 // ensureSchema creates required tables and indexes if they don't exist.
 func ensureSchema(db *sql.DB) error {
-	const createMessages = `
-CREATE TABLE IF NOT EXISTS messages (
-  guild_id        TEXT NOT NULL,
-  message_id      TEXT NOT NULL,
-  channel_id      TEXT NOT NULL,
-  author_id       TEXT NOT NULL,
-  author_username TEXT,
-  author_avatar   TEXT,
-  content         TEXT,
-  cached_at       TIMESTAMP NOT NULL,
-  expires_at      TIMESTAMP,
-  PRIMARY KEY (guild_id, message_id)
-);
-CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at);`
-
-	const createMemberJoins = `
-CREATE TABLE IF NOT EXISTS member_joins (
-  guild_id   TEXT NOT NULL,
-  user_id    TEXT NOT NULL,
-  joined_at  TIMESTAMP NOT NULL,
-  PRIMARY KEY (guild_id, user_id)
-);`
-
-	const createAvatarsCurrent = `
-CREATE TABLE IF NOT EXISTS avatars_current (
-  guild_id    TEXT NOT NULL,
-  user_id     TEXT NOT NULL,
-  avatar_hash TEXT NOT NULL,
-  updated_at  TIMESTAMP NOT NULL,
-  PRIMARY KEY (guild_id, user_id)
-);`
-
-	const createAvatarsHistory = `
-CREATE TABLE IF NOT EXISTS avatars_history (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  guild_id   TEXT NOT NULL,
-  user_id    TEXT NOT NULL,
-  old_hash   TEXT,
-  new_hash   TEXT,
-  changed_at TIMESTAMP NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_avatars_hist_gid_uid ON avatars_history(guild_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_avatars_hist_changed ON avatars_history(changed_at);`
-
-	const createMessagesHistory = `
-CREATE TABLE IF NOT EXISTS messages_history (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  guild_id      TEXT NOT NULL,
-  message_id    TEXT NOT NULL,
-  channel_id    TEXT NOT NULL,
-  author_id     TEXT NOT NULL,
-  version       INTEGER NOT NULL,
-  event_type    TEXT NOT NULL,               -- 'create' | 'edit' | 'delete'
-  content       TEXT,
-  attachments   INTEGER DEFAULT 0,
-  embeds_count  INTEGER DEFAULT 0,
-  stickers      INTEGER DEFAULT 0,
-  created_at    TIMESTAMP NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_msg_hist_gid_mid ON messages_history(guild_id, message_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_hist_gid_mid_ver ON messages_history(guild_id, message_id, version);`
-
-	const createGuildMeta = `
-CREATE TABLE IF NOT EXISTS guild_meta (
-  guild_id  TEXT PRIMARY KEY,
-  bot_since TIMESTAMP,
-  owner_id  TEXT
-);`
-
-	const createRuntimeMeta = `
-CREATE TABLE IF NOT EXISTS runtime_meta (
-  key TEXT PRIMARY KEY,
-  ts  TIMESTAMP NOT NULL
-);`
-
-	const createModerationCases = `
-CREATE TABLE IF NOT EXISTS moderation_cases (
-  guild_id         TEXT PRIMARY KEY,
-  last_case_number INTEGER NOT NULL DEFAULT 0
- );`
-
-	const createRolesCurrent = `
-CREATE TABLE IF NOT EXISTS roles_current (
-  guild_id   TEXT NOT NULL,
-  user_id    TEXT NOT NULL,
-  role_id    TEXT NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
-  PRIMARY KEY (guild_id, user_id, role_id)
-);
-CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, user_id);`
-
-	const createPersistentCache = `
-CREATE TABLE IF NOT EXISTS persistent_cache (
-  cache_key  TEXT PRIMARY KEY,
-  cache_type TEXT NOT NULL,
-  data       TEXT NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  cached_at  TIMESTAMP NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_persistent_cache_type ON persistent_cache(cache_type);
-CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expires_at);`
-
-	const createDailyMessageMetrics = `
-CREATE TABLE IF NOT EXISTS daily_message_metrics (
-  guild_id   TEXT NOT NULL,
-  channel_id TEXT NOT NULL,
-  user_id    TEXT NOT NULL,
-  day        DATE NOT NULL,
-  count      INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (guild_id, channel_id, user_id, day)
-);
-CREATE INDEX IF NOT EXISTS idx_daily_msg_by_guild_day ON daily_message_metrics(guild_id, day);
-CREATE INDEX IF NOT EXISTS idx_daily_msg_by_channel_day ON daily_message_metrics(channel_id, day);`
-
-	const createDailyReactionMetrics = `
-CREATE TABLE IF NOT EXISTS daily_reaction_metrics (
-  guild_id   TEXT NOT NULL,
-  channel_id TEXT NOT NULL,
-  user_id    TEXT NOT NULL,              -- reactor user id
-  day        DATE NOT NULL,
-  count      INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (guild_id, channel_id, user_id, day)
-);
-CREATE INDEX IF NOT EXISTS idx_daily_react_by_guild_day ON daily_reaction_metrics(guild_id, day);
-CREATE INDEX IF NOT EXISTS idx_daily_react_by_channel_day ON daily_reaction_metrics(channel_id, day);`
-
-	const createDailyMemberJoinsMetrics = `
-CREATE TABLE IF NOT EXISTS daily_member_joins (
-  guild_id TEXT NOT NULL,
-  user_id  TEXT NOT NULL,
-  day      DATE NOT NULL,
-  count    INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (guild_id, user_id, day)
-);
-CREATE INDEX IF NOT EXISTS idx_daily_joins_by_guild_day ON daily_member_joins(guild_id, day);`
-
-	const createDailyMemberLeavesMetrics = `
-CREATE TABLE IF NOT EXISTS daily_member_leaves (
-  guild_id TEXT NOT NULL,
-  user_id  TEXT NOT NULL,
-  day      DATE NOT NULL,
-  count    INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (guild_id, user_id, day)
-);
-CREATE INDEX IF NOT EXISTS idx_daily_leaves_by_guild_day ON daily_member_leaves(guild_id, day);`
-
 	stmts := []string{
-		createMessages,
-		createMessagesHistory,
-		createMemberJoins,
-		createAvatarsCurrent,
-		createAvatarsHistory,
-		createGuildMeta,
-		createRuntimeMeta,
-		createModerationCases,
-		createRolesCurrent,
-		createPersistentCache,
-		createDailyMessageMetrics,
-		createDailyReactionMetrics,
-		createDailyMemberJoinsMetrics,
-		createDailyMemberLeavesMetrics,
+		`CREATE TABLE IF NOT EXISTS messages (
+			guild_id        TEXT NOT NULL,
+			message_id      TEXT NOT NULL,
+			channel_id      TEXT NOT NULL,
+			author_id       TEXT NOT NULL,
+			author_username TEXT,
+			author_avatar   TEXT,
+			content         TEXT,
+			cached_at       TIMESTAMPTZ NOT NULL,
+			expires_at      TIMESTAMPTZ,
+			PRIMARY KEY (guild_id, message_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at)`,
+		`CREATE TABLE IF NOT EXISTS member_joins (
+			guild_id   TEXT NOT NULL,
+			user_id    TEXT NOT NULL,
+			joined_at  TIMESTAMPTZ NOT NULL,
+			PRIMARY KEY (guild_id, user_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS avatars_current (
+			guild_id    TEXT NOT NULL,
+			user_id     TEXT NOT NULL,
+			avatar_hash TEXT NOT NULL,
+			updated_at  TIMESTAMPTZ NOT NULL,
+			PRIMARY KEY (guild_id, user_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS avatars_history (
+			id         BIGSERIAL PRIMARY KEY,
+			guild_id   TEXT NOT NULL,
+			user_id    TEXT NOT NULL,
+			old_hash   TEXT,
+			new_hash   TEXT,
+			changed_at TIMESTAMPTZ NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_avatars_hist_gid_uid ON avatars_history(guild_id, user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_avatars_hist_changed ON avatars_history(changed_at)`,
+		`CREATE TABLE IF NOT EXISTS messages_history (
+			id            BIGSERIAL PRIMARY KEY,
+			guild_id      TEXT NOT NULL,
+			message_id    TEXT NOT NULL,
+			channel_id    TEXT NOT NULL,
+			author_id     TEXT NOT NULL,
+			version       INTEGER NOT NULL,
+			event_type    TEXT NOT NULL,
+			content       TEXT,
+			attachments   INTEGER NOT NULL DEFAULT 0,
+			embeds_count  INTEGER NOT NULL DEFAULT 0,
+			stickers      INTEGER NOT NULL DEFAULT 0,
+			created_at    TIMESTAMPTZ NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_msg_hist_gid_mid ON messages_history(guild_id, message_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_hist_gid_mid_ver ON messages_history(guild_id, message_id, version)`,
+		`CREATE TABLE IF NOT EXISTS guild_meta (
+			guild_id  TEXT PRIMARY KEY,
+			bot_since TIMESTAMPTZ,
+			owner_id  TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS runtime_meta (
+			key TEXT PRIMARY KEY,
+			ts  TIMESTAMPTZ NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS moderation_cases (
+			guild_id         TEXT PRIMARY KEY,
+			last_case_number BIGINT NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS roles_current (
+			guild_id   TEXT NOT NULL,
+			user_id    TEXT NOT NULL,
+			role_id    TEXT NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL,
+			PRIMARY KEY (guild_id, user_id, role_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, user_id)`,
+		`CREATE TABLE IF NOT EXISTS persistent_cache (
+			cache_key  TEXT PRIMARY KEY,
+			cache_type TEXT NOT NULL,
+			data       TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			cached_at  TIMESTAMPTZ NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_persistent_cache_type ON persistent_cache(cache_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expires_at)`,
+		`CREATE TABLE IF NOT EXISTS daily_message_metrics (
+			guild_id   TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			user_id    TEXT NOT NULL,
+			day        DATE NOT NULL,
+			count      BIGINT NOT NULL DEFAULT 0,
+			PRIMARY KEY (guild_id, channel_id, user_id, day)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_daily_msg_by_guild_day ON daily_message_metrics(guild_id, day)`,
+		`CREATE INDEX IF NOT EXISTS idx_daily_msg_by_channel_day ON daily_message_metrics(channel_id, day)`,
+		`CREATE TABLE IF NOT EXISTS daily_reaction_metrics (
+			guild_id   TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			user_id    TEXT NOT NULL,
+			day        DATE NOT NULL,
+			count      BIGINT NOT NULL DEFAULT 0,
+			PRIMARY KEY (guild_id, channel_id, user_id, day)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_daily_react_by_guild_day ON daily_reaction_metrics(guild_id, day)`,
+		`CREATE INDEX IF NOT EXISTS idx_daily_react_by_channel_day ON daily_reaction_metrics(channel_id, day)`,
+		`CREATE TABLE IF NOT EXISTS daily_member_joins (
+			guild_id TEXT NOT NULL,
+			user_id  TEXT NOT NULL,
+			day      DATE NOT NULL,
+			count    BIGINT NOT NULL DEFAULT 0,
+			PRIMARY KEY (guild_id, user_id, day)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_daily_joins_by_guild_day ON daily_member_joins(guild_id, day)`,
+		`CREATE TABLE IF NOT EXISTS daily_member_leaves (
+			guild_id TEXT NOT NULL,
+			user_id  TEXT NOT NULL,
+			day      DATE NOT NULL,
+			count    BIGINT NOT NULL DEFAULT 0,
+			PRIMARY KEY (guild_id, user_id, day)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_daily_leaves_by_guild_day ON daily_member_leaves(guild_id, day)`,
 	}
 	for _, sqlText := range stmts {
 		if _, err := db.Exec(sqlText); err != nil {
@@ -908,7 +841,7 @@ func (s *Store) InsertMessageVersion(v MessageVersion) error {
 	// Compute next version if not provided
 	if v.Version <= 0 {
 		var cur sql.NullInt64
-		if err := tx.QueryRow(
+		if err := txQueryRow(tx,
 			`SELECT COALESCE(MAX(version),0) FROM messages_history WHERE guild_id=? AND message_id=?`,
 			v.GuildID, v.MessageID,
 		).Scan(&cur); err != nil {
@@ -918,7 +851,7 @@ func (s *Store) InsertMessageVersion(v MessageVersion) error {
 	}
 
 	// Insert history row
-	if _, err := tx.Exec(
+	if _, err := txExec(tx,
 		`INSERT INTO messages_history
          (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -940,7 +873,7 @@ func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Tim
 	if key == "" || cacheType == "" || data == "" {
 		return nil
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
          VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(cache_key) DO UPDATE SET
@@ -957,7 +890,7 @@ func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt tim
 	if s.db == nil {
 		return "", "", time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.db.QueryRow(
+	row := s.queryRow(
 		`SELECT cache_type, data, expires_at FROM persistent_cache WHERE cache_key=?`,
 		key,
 	)
@@ -984,7 +917,7 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	rows, err := s.db.Query(
+	rows, err := s.query(
 		`SELECT cache_key, data, expires_at FROM persistent_cache
          WHERE cache_type=? AND expires_at > ?`,
 		cacheType, time.Now().UTC(),
@@ -1018,7 +951,7 @@ func (s *Store) DeleteCacheEntry(key string) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
-	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE cache_key=?`, key)
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key=?`, key)
 	return err
 }
 
@@ -1027,7 +960,7 @@ func (s *Store) CleanupExpiredCacheEntries() error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
-	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE expires_at <= ?`, time.Now().UTC())
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE expires_at <= ?`, time.Now().UTC())
 	return err
 }
 
@@ -1039,7 +972,7 @@ func (s *Store) DeleteCacheEntriesByPrefix(prefix string) error {
 	if prefix == "" {
 		return nil
 	}
-	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE cache_key LIKE ?`, prefix+"%")
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key LIKE ?`, prefix+"%")
 	return err
 }
 
@@ -1051,7 +984,7 @@ func (s *Store) DeleteCacheEntriesByTypeAndPrefix(cacheType, keyPrefix string) e
 	if cacheType == "" || keyPrefix == "" {
 		return nil
 	}
-	_, err := s.db.Exec(`DELETE FROM persistent_cache WHERE cache_type=? AND cache_key LIKE ?`, cacheType, keyPrefix+"%")
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_type=? AND cache_key LIKE ?`, cacheType, keyPrefix+"%")
 	return err
 }
 
@@ -1060,7 +993,7 @@ func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) 
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	rows, err := s.db.Query(`SELECT user_id, joined_at FROM member_joins WHERE guild_id=?`, guildID)
+	rows, err := s.query(`SELECT user_id, joined_at FROM member_joins WHERE guild_id=?`, guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -1083,7 +1016,7 @@ func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, err
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	rows, err := s.db.Query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=?`, guildID)
+	rows, err := s.query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=?`, guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -1108,7 +1041,7 @@ func (s *Store) TouchMemberJoin(guildID, userID string) error {
 	if guildID == "" || userID == "" {
 		return nil
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`UPDATE member_joins SET joined_at=? WHERE guild_id=? AND user_id=?`,
 		time.Now().UTC(), guildID, userID,
 	)
@@ -1123,7 +1056,7 @@ func (s *Store) TouchMemberRoles(guildID, userID string) error {
 	if guildID == "" || userID == "" {
 		return nil
 	}
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`UPDATE roles_current SET updated_at=? WHERE guild_id=? AND user_id=?`,
 		time.Now().UTC(), guildID, userID,
 	)
@@ -1135,7 +1068,7 @@ func (s *Store) GetCacheStats() (map[string]int, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	rows, err := s.db.Query(
+	rows, err := s.query(
 		`SELECT cache_type, COUNT(*) as count FROM persistent_cache
          WHERE expires_at > ? GROUP BY cache_type`,
 		time.Now().UTC(),
@@ -1169,11 +1102,11 @@ func (s *Store) IncrementDailyMessageCount(guildID, channelID, userID string, at
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count)
          VALUES (?, ?, ?, ?, 1)
          ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
-           count = count + 1`,
+           count = daily_message_metrics.count + 1`,
 		guildID, channelID, userID, day,
 	)
 	return err
@@ -1191,11 +1124,11 @@ func (s *Store) IncrementDailyReactionCount(guildID, channelID, userID string, a
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO daily_reaction_metrics (guild_id, channel_id, user_id, day, count)
          VALUES (?, ?, ?, ?, 1)
          ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
-           count = count + 1`,
+           count = daily_reaction_metrics.count + 1`,
 		guildID, channelID, userID, day,
 	)
 	return err
@@ -1213,11 +1146,11 @@ func (s *Store) IncrementDailyMemberJoin(guildID, userID string, at time.Time) e
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO daily_member_joins (guild_id, user_id, day, count)
          VALUES (?, ?, ?, 1)
          ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
-           count = count + 1`,
+           count = daily_member_joins.count + 1`,
 		guildID, userID, day,
 	)
 	return err
@@ -1235,12 +1168,172 @@ func (s *Store) IncrementDailyMemberLeave(guildID, userID string, at time.Time) 
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`INSERT INTO daily_member_leaves (guild_id, user_id, day, count)
          VALUES (?, ?, ?, 1)
          ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
-           count = count + 1`,
+           count = daily_member_leaves.count + 1`,
 		guildID, userID, day,
 	)
 	return err
+}
+
+// MetricTotal represents an aggregated metric value for a specific key.
+type MetricTotal struct {
+	Key   string
+	Total int64
+}
+
+func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimension, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || cutoffDay == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	baseSQL := fmt.Sprintf(
+		"SELECT %s, SUM(count) FROM %s WHERE guild_id=? AND day>=?",
+		dimension, tableName,
+	)
+	args := []any{guildID, cutoffDay}
+	if channelID != "" {
+		baseSQL += " AND channel_id=?"
+		args = append(args, channelID)
+	}
+	baseSQL += fmt.Sprintf(" GROUP BY %s", dimension)
+
+	rows, err := s.db.QueryContext(ctx, rebind(baseSQL), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]MetricTotal, 0, 16)
+	for rows.Next() {
+		var key string
+		var total sql.NullInt64
+		if err := rows.Scan(&key, &total); err != nil {
+			return nil, err
+		}
+		if total.Valid {
+			out = append(out, MetricTotal{Key: key, Total: total.Int64})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Total > out[j].Total })
+	return out, nil
+}
+
+func (s *Store) MessageTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
+	return s.metricTotalsByDimension(ctx, "daily_message_metrics", "channel_id", guildID, cutoffDay, channelID)
+}
+
+func (s *Store) MessageTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
+	return s.metricTotalsByDimension(ctx, "daily_message_metrics", "user_id", guildID, cutoffDay, channelID)
+}
+
+func (s *Store) ReactionTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
+	return s.metricTotalsByDimension(ctx, "daily_reaction_metrics", "channel_id", guildID, cutoffDay, channelID)
+}
+
+func (s *Store) ReactionTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
+	return s.metricTotalsByDimension(ctx, "daily_reaction_metrics", "user_id", guildID, cutoffDay, channelID)
+}
+
+func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	if guildID == "" {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var total sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, rebind(`SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?`), guildID).Scan(&total); err != nil {
+		return 0, err
+	}
+	if total.Valid {
+		return total.Int64, nil
+	}
+	return 0, nil
+}
+
+func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID string) ([]string, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	if guildID == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	rows, err := s.db.QueryContext(ctx, rebind(`SELECT DISTINCT user_id FROM member_joins WHERE guild_id=?`), guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]string, 0, 128)
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(userID) != "" {
+			out = append(out, userID)
+		}
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) SumDailyMemberJoinsSince(ctx context.Context, guildID, cutoffDay string) (int64, error) {
+	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_joins WHERE guild_id=? AND day>=?`, guildID, cutoffDay)
+}
+
+func (s *Store) SumDailyMemberLeavesSince(ctx context.Context, guildID, cutoffDay string) (int64, error) {
+	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=? AND day>=?`, guildID, cutoffDay)
+}
+
+func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay string) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	if guildID == "" || cutoffDay == "" {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var total sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, rebind(query), guildID, cutoffDay).Scan(&total); err != nil {
+		return 0, err
+	}
+	if total.Valid {
+		return total.Int64, nil
+	}
+	return 0, nil
+}
+
+func (s *Store) DatabaseSizeBytes(ctx context.Context) (int64, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var size sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
+		return 0, err
+	}
+	if size.Valid {
+		return size.Int64, nil
+	}
+	return 0, nil
 }

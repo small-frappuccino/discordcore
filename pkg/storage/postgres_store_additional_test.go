@@ -1,15 +1,30 @@
 package storage
 
 import (
-	"path/filepath"
+	"context"
 	"testing"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 func newTempStore(t *testing.T) *Store {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	store := NewStore(dbPath)
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	store := NewStore(db)
 	if err := store.Init(); err != nil {
 		t.Fatalf("init store: %v", err)
 	}
@@ -19,7 +34,7 @@ func newTempStore(t *testing.T) *Store {
 
 func TestSchemaInitialized(t *testing.T) {
 	store := newTempStore(t)
-	rows, err := store.db.Query(`SELECT name FROM sqlite_master WHERE type='table'`)
+	rows, err := store.db.Query(`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()`)
 	if err != nil {
 		t.Fatalf("query schema: %v", err)
 	}

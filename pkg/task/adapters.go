@@ -407,6 +407,6 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 }
 
 func (a *NotificationAdapters) handleFlushAvatarCache(ctx context.Context, payload any) error {
-	// No-op when using SQLite store
+	// No-op when using database-backed avatar persistence
 	return nil
 }

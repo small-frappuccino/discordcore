@@ -1,17 +1,31 @@
 package storage
 
 import (
-	"path/filepath"
+	"context"
 	"testing"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 func TestCleanupObsoleteMemberJoins_DoesNotDeleteHistoricalJoins(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.sqlite")
-	s := NewStore(dbPath)
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	defer func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	}()
+
+	s := NewStore(db)
 	if err := s.Init(); err != nil {
 		t.Fatalf("Init() failed: %v", err)
 	}

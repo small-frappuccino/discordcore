@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -10,7 +9,7 @@ import (
 
 func TestCalculateServerTime_ReturnsErrorWhenStoreReadFails(t *testing.T) {
 	service := &MemberEventService{
-		store: storage.NewStore(filepath.Join(t.TempDir(), "not-initialized.db")),
+		store: storage.NewStore(nil),
 	}
 
 	got, ok, err := service.calculateServerTime(context.Background(), "g1", "u1")
