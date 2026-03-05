@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type AuthSessionResponse,
   type EmbedUpdateTargetConfig,
@@ -14,6 +14,7 @@ type DashboardAuthState =
   | "signed_out"
   | "signed_in"
   | "oauth_unavailable";
+type DashboardTheme = "investigadora-paranormal" | "forum-spook-shack";
 
 interface StatusState {
   kind: StatusKind;
@@ -48,6 +49,12 @@ interface PartnerUpdateFormState {
   link: string;
 }
 
+interface ThemeOption {
+  id: DashboardTheme;
+  label: string;
+  helper: string;
+}
+
 const initialTargetForm: TargetFormState = {
   type: "channel_message",
   messageID: "",
@@ -79,9 +86,23 @@ const initialPartnerUpdateForm: PartnerUpdateFormState = {
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
 const preferredGuildID = import.meta.env.VITE_CONTROL_API_GUILD_ID ?? "";
+const themeStorageKey = "discordcore.dashboard.theme";
+const themeOptions: ThemeOption[] = [
+  {
+    id: "investigadora-paranormal",
+    label: "Investigadora Paranormal",
+    helper: "Equilibrada e moderna",
+  },
+  {
+    id: "forum-spook-shack",
+    label: "Forum Spook Shack",
+    helper: "Sombria e vibrante",
+  },
+];
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
+  const [theme, setTheme] = useState<DashboardTheme>(resolveInitialTheme);
   const [guildID, setGuildID] = useState(preferredGuildID);
   const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
   const [targetForm, setTargetForm] = useState(initialTargetForm);
@@ -110,15 +131,7 @@ export default function App() {
     [baseUrl],
   );
 
-  useEffect(() => {
-    void refreshSession();
-  }, [client]);
-
-  const partners = board?.partners ?? [];
-  const canManageGuild =
-    authState === "signed_in" && guildID.trim() !== "" && !loading;
-
-  async function refreshSession() {
+  const refreshSession = useCallback(async () => {
     setLoading(true);
     try {
       const probe = await client.getSessionStatus();
@@ -183,7 +196,20 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [client]);
+
+  useEffect(() => {
+    void refreshSession();
+  }, [refreshSession]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem(themeStorageKey, theme);
+  }, [theme]);
+
+  const partners = board?.partners ?? [];
+  const canManageGuild =
+    authState === "signed_in" && guildID.trim() !== "" && !loading;
 
   async function logout() {
     setLoading(true);
@@ -490,6 +516,21 @@ export default function App() {
             The dashboard stays available on the local control server, but guild
             configuration through the web UI requires a Discord OAuth session.
           </p>
+          <div className="theme-switcher" role="tablist" aria-label="Theme selector">
+            {themeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="tab"
+                aria-selected={theme === option.id}
+                className={`theme-option ${theme === option.id ? "is-active" : ""}`}
+                onClick={() => setTheme(option.id)}
+              >
+                <span>{option.label}</span>
+                <small>{option.helper}</small>
+              </button>
+            ))}
+          </div>
         </header>
 
         <section className="card">
@@ -558,6 +599,8 @@ export default function App() {
             <div className="actions">
               {authState === "signed_out" ? (
                 <button
+                  className="button-primary"
+                  type="button"
                   disabled={loading}
                   onClick={() => {
                     window.location.assign(client.buildDiscordLoginURL("/dashboard/"));
@@ -567,11 +610,21 @@ export default function App() {
                 </button>
               ) : null}
               {authState === "signed_in" ? (
-                <button disabled={loading} onClick={() => void logout()}>
+                <button
+                  className="button-ghost"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void logout()}
+                >
                   Sign Out
                 </button>
               ) : null}
-              <button disabled={loading} onClick={() => void refreshSession()}>
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={loading}
+                onClick={() => void refreshSession()}
+              >
                 Refresh Session
               </button>
             </div>
@@ -584,16 +637,27 @@ export default function App() {
           </p>
 
           <div className="actions">
-            <button disabled={!canManageGuild} onClick={() => void refreshBoard()}>
+            <button
+              className="button-primary"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void refreshBoard()}
+            >
               Load Board
             </button>
             <button
+              type="button"
               disabled={!canManageGuild}
               onClick={() => void refreshPartnersOnly()}
             >
               Refresh Partners
             </button>
-            <button disabled={!canManageGuild} onClick={() => void syncBoard()}>
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void syncBoard()}
+            >
               Sync Board
             </button>
           </div>
@@ -650,7 +714,12 @@ export default function App() {
             </label>
           </div>
           <div className="actions">
-            <button disabled={!canManageGuild} onClick={() => void saveTarget()}>
+            <button
+              className="button-primary"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void saveTarget()}
+            >
               Save Target
             </button>
           </div>
@@ -718,7 +787,12 @@ export default function App() {
             />
           </label>
           <div className="actions">
-            <button disabled={!canManageGuild} onClick={() => void saveTemplate()}>
+            <button
+              className="button-primary"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void saveTemplate()}
+            >
               Save Template
             </button>
           </div>
@@ -790,7 +864,12 @@ export default function App() {
             </label>
           </div>
           <div className="actions">
-            <button disabled={!canManageGuild} onClick={() => void addPartner()}>
+            <button
+              className="button-primary"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void addPartner()}
+            >
               Add Partner
             </button>
           </div>
@@ -844,7 +923,12 @@ export default function App() {
             </label>
           </div>
           <div className="actions">
-            <button disabled={!canManageGuild} onClick={() => void updatePartner()}>
+            <button
+              className="button-primary"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void updatePartner()}
+            >
               Update Partner
             </button>
           </div>
@@ -863,7 +947,12 @@ export default function App() {
             </label>
           </div>
           <div className="actions">
-            <button disabled={!canManageGuild} onClick={() => void deletePartner()}>
+            <button
+              className="button-danger"
+              type="button"
+              disabled={!canManageGuild}
+              onClick={() => void deletePartner()}
+            >
               Delete Partner
             </button>
           </div>
@@ -920,4 +1009,15 @@ function buildTargetPayload(form: TargetFormState): EmbedUpdateTargetConfig {
     payload.channel_id = form.channelID.trim();
   }
   return payload;
+}
+
+function resolveInitialTheme(): DashboardTheme {
+  const storedTheme = window.localStorage.getItem(themeStorageKey);
+  if (
+    storedTheme === "investigadora-paranormal" ||
+    storedTheme === "forum-spook-shack"
+  ) {
+    return storedTheme;
+  }
+  return themeOptions[0].id;
 }
