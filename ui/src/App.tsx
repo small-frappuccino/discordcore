@@ -14,7 +14,10 @@ type DashboardAuthState =
   | "signed_out"
   | "signed_in"
   | "oauth_unavailable";
-type DashboardTheme = "investigadora-paranormal" | "forum-spook-shack";
+type DashboardTheme =
+  | "investigadora-paranormal"
+  | "forum-spook-shack"
+  | "alice-gilded-night";
 
 interface StatusState {
   kind: StatusKind;
@@ -97,6 +100,11 @@ const themeOptions: ThemeOption[] = [
     id: "forum-spook-shack",
     label: "Forum Spook Shack",
     helper: "Sombria e vibrante",
+  },
+  {
+    id: "alice-gilded-night",
+    label: "Alice Gilded Night",
+    helper: "Dourado, coral e elegante",
   },
 ];
 
@@ -1013,11 +1021,16 @@ function buildTargetPayload(form: TargetFormState): EmbedUpdateTargetConfig {
 
 function resolveInitialTheme(): DashboardTheme {
   const storedTheme = window.localStorage.getItem(themeStorageKey);
-  if (
-    storedTheme === "investigadora-paranormal" ||
-    storedTheme === "forum-spook-shack"
-  ) {
+  if (isDashboardTheme(storedTheme)) {
     return storedTheme;
   }
   return themeOptions[0].id;
+}
+
+function isDashboardTheme(value: string | null): value is DashboardTheme {
+  return (
+    value === "investigadora-paranormal" ||
+    value === "forum-spook-shack" ||
+    value === "alice-gilded-night"
+  );
 }

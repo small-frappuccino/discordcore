@@ -49,6 +49,31 @@
   --status-info: #7c95ff;
 }
 
+:root[data-theme="alice-gilded-night"] {
+  --bg-main: #171821;
+  --bg-surface: #232531;
+  --bg-surface-soft: #2d3040;
+  --bg-elevated: #3a3f54;
+  --border-soft: rgba(212, 190, 152, 0.24);
+  --border-strong: rgba(255, 190, 95, 0.52);
+  --text-main: #f6f0e3;
+  --text-muted: #c1b49d;
+  --text-dim: #938a79;
+  --accent-primary: #ffbd5f;
+  --accent-secondary: #f07fa6;
+  --accent-status-ok: #3db16a;
+  --accent-danger: #e45a59;
+  --button-text-primary: #2f1a04;
+  --button-text-default: #fbf4e8;
+  --focus-ring: rgba(240, 127, 166, 0.28);
+  --shadow-color: rgba(6, 7, 12, 0.6);
+  --shadow-accent: rgba(255, 189, 95, 0.3);
+  --surface-glow-top: rgba(255, 189, 95, 0.24);
+  --surface-glow-bottom: rgba(240, 127, 166, 0.2);
+  --table-row-hover: rgba(255, 189, 95, 0.13);
+  --status-info: #ca9bff;
+}
+
 :root {
   --radius-shell: 26px;
   --radius-card: 18px;
@@ -139,7 +164,7 @@ main.shell {
 
 .theme-switcher {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 8px;
   margin-top: 4px;
 }
