@@ -14,10 +14,6 @@ type DashboardAuthState =
   | "signed_out"
   | "signed_in"
   | "oauth_unavailable";
-type DashboardTheme =
-  | "investigadora-paranormal"
-  | "forum-spook-shack"
-  | "alice-gilded-night";
 
 interface StatusState {
   kind: StatusKind;
@@ -52,12 +48,6 @@ interface PartnerUpdateFormState {
   link: string;
 }
 
-interface ThemeOption {
-  id: DashboardTheme;
-  label: string;
-  helper: string;
-}
-
 const initialTargetForm: TargetFormState = {
   type: "channel_message",
   messageID: "",
@@ -89,28 +79,14 @@ const initialPartnerUpdateForm: PartnerUpdateFormState = {
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
 const preferredGuildID = import.meta.env.VITE_CONTROL_API_GUILD_ID ?? "";
-const themeStorageKey = "discordcore.dashboard.theme";
-const themeOptions: ThemeOption[] = [
-  {
-    id: "investigadora-paranormal",
-    label: "Investigadora Paranormal",
-    helper: "Equilibrada e moderna",
-  },
-  {
-    id: "forum-spook-shack",
-    label: "Forum Spook Shack",
-    helper: "Sombria e vibrante",
-  },
-  {
-    id: "alice-gilded-night",
-    label: "Alice Gilded Night",
-    helper: "Dourado, coral e elegante",
-  },
-];
+const lockedTheme = {
+  id: "alice-gilded-night",
+  label: "Alice Gilded Night",
+  helper: "Tema unico ativo no momento",
+} as const;
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
-  const [theme, setTheme] = useState<DashboardTheme>(resolveInitialTheme);
   const [guildID, setGuildID] = useState(preferredGuildID);
   const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
   const [targetForm, setTargetForm] = useState(initialTargetForm);
@@ -211,9 +187,8 @@ export default function App() {
   }, [refreshSession]);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem(themeStorageKey, theme);
-  }, [theme]);
+    document.documentElement.setAttribute("data-theme", lockedTheme.id);
+  }, []);
 
   const partners = board?.partners ?? [];
   const canManageGuild =
@@ -525,19 +500,16 @@ export default function App() {
             configuration through the web UI requires a Discord OAuth session.
           </p>
           <div className="theme-switcher" role="tablist" aria-label="Theme selector">
-            {themeOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="tab"
-                aria-selected={theme === option.id}
-                className={`theme-option ${theme === option.id ? "is-active" : ""}`}
-                onClick={() => setTheme(option.id)}
-              >
-                <span>{option.label}</span>
-                <small>{option.helper}</small>
-              </button>
-            ))}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={true}
+              className="theme-option is-active"
+              disabled
+            >
+              <span>{lockedTheme.label}</span>
+              <small>{lockedTheme.helper}</small>
+            </button>
           </div>
         </header>
 
@@ -1017,20 +989,4 @@ function buildTargetPayload(form: TargetFormState): EmbedUpdateTargetConfig {
     payload.channel_id = form.channelID.trim();
   }
   return payload;
-}
-
-function resolveInitialTheme(): DashboardTheme {
-  const storedTheme = window.localStorage.getItem(themeStorageKey);
-  if (isDashboardTheme(storedTheme)) {
-    return storedTheme;
-  }
-  return themeOptions[0].id;
-}
-
-function isDashboardTheme(value: string | null): value is DashboardTheme {
-  return (
-    value === "investigadora-paranormal" ||
-    value === "forum-spook-shack" ||
-    value === "alice-gilded-night"
-  );
 }

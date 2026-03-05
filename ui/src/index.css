@@ -1,54 +1,4 @@
 :root,
-:root[data-theme="investigadora-paranormal"] {
-  --bg-main: #181c25;
-  --bg-surface: #242a36;
-  --bg-surface-soft: #2a313f;
-  --bg-elevated: #313a4a;
-  --border-soft: rgba(160, 170, 192, 0.26);
-  --border-strong: rgba(164, 112, 224, 0.52);
-  --text-main: #f4f5f8;
-  --text-muted: #8b94a5;
-  --text-dim: #6e7788;
-  --accent-primary: #ff9b05;
-  --accent-secondary: #a470e0;
-  --accent-status-ok: #10e56a;
-  --accent-danger: #d12a2a;
-  --button-text-primary: #1f1302;
-  --button-text-default: #e9edf6;
-  --focus-ring: rgba(164, 112, 224, 0.28);
-  --shadow-color: rgba(7, 9, 13, 0.46);
-  --shadow-accent: rgba(164, 112, 224, 0.25);
-  --surface-glow-top: rgba(164, 112, 224, 0.22);
-  --surface-glow-bottom: rgba(255, 155, 5, 0.17);
-  --table-row-hover: rgba(164, 112, 224, 0.12);
-  --status-info: #4e8dff;
-}
-
-:root[data-theme="forum-spook-shack"] {
-  --bg-main: #10131b;
-  --bg-surface: #1a2130;
-  --bg-surface-soft: #232c3f;
-  --bg-elevated: #2b354a;
-  --border-soft: rgba(170, 184, 212, 0.24);
-  --border-strong: rgba(255, 122, 24, 0.55);
-  --text-main: #f6f8fd;
-  --text-muted: #97a2ba;
-  --text-dim: #74809a;
-  --accent-primary: #ff7a18;
-  --accent-secondary: #c08aff;
-  --accent-status-ok: #34f28c;
-  --accent-danger: #ff5050;
-  --button-text-primary: #210e03;
-  --button-text-default: #edf2ff;
-  --focus-ring: rgba(255, 122, 24, 0.28);
-  --shadow-color: rgba(4, 6, 10, 0.58);
-  --shadow-accent: rgba(255, 122, 24, 0.28);
-  --surface-glow-top: rgba(192, 138, 255, 0.22);
-  --surface-glow-bottom: rgba(255, 122, 24, 0.2);
-  --table-row-hover: rgba(255, 122, 24, 0.12);
-  --status-info: #7c95ff;
-}
-
 :root[data-theme="alice-gilded-night"] {
   --bg-main: #171821;
   --bg-surface: #232531;
@@ -200,6 +150,13 @@ main.shell {
 .theme-option:hover {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--accent-secondary) 56%, transparent);
+}
+
+.theme-option:disabled,
+.theme-option:disabled:hover {
+  cursor: not-allowed;
+  transform: none;
+  border-color: var(--border-strong);
 }
 
 .theme-option.is-active {
