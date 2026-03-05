@@ -1,20 +1,20 @@
 :root {
-  --bg: #fff4f8;
-  --panel-bg: #fff0f6;
-  --panel-border: #f2cedf;
-  --card-bg: #fff8fc;
-  --card-border: #f4d8e6;
-  --section-bg: #fdeef5;
-  --text-main: #5f3d4f;
-  --text-muted: #7b5a6d;
-  --text-dim: #937287;
-  --accent: #f59ac0;
-  --accent-strong: #ef7dac;
-  --accent-soft: #ffe1ee;
-  --focus-ring: rgba(241, 130, 179, 0.25);
-  --success: #77be9f;
-  --error: #e98999;
-  --info: #b28bd1;
+  --bg: #f3edf1;
+  --panel-bg: #efe5eb;
+  --panel-border: #d9c5d1;
+  --card-bg: #f6eef3;
+  --card-border: #dccad4;
+  --section-bg: #ece0e7;
+  --text-main: #4f3f48;
+  --text-muted: #655562;
+  --text-dim: #7b6a78;
+  --accent: #c58aa9;
+  --accent-strong: #b77898;
+  --accent-soft: #e9d6e1;
+  --focus-ring: rgba(183, 120, 152, 0.24);
+  --success: #7da993;
+  --error: #c98a96;
+  --info: #9d89b3;
   font-family:
     "Segoe UI Variable Display",
     "Segoe UI Rounded",
@@ -37,7 +37,7 @@ body {
   min-height: 100vh;
   color: var(--text-main);
   background-color: var(--bg);
-  background-image: radial-gradient(rgba(245, 154, 192, 0.14) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(186, 136, 164, 0.11) 1px, transparent 1px);
   background-size: 16px 16px;
 }
 
@@ -53,7 +53,7 @@ main.shell {
   border-radius: 24px;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
-  box-shadow: 0 12px 30px rgba(211, 147, 177, 0.22);
+  box-shadow: 0 10px 24px rgba(126, 97, 116, 0.14);
   padding: 24px;
   display: grid;
   gap: 16px;
@@ -78,9 +78,9 @@ main.shell {
   text-transform: uppercase;
   font-size: 0.74rem;
   letter-spacing: 0.1em;
-  color: #a05074;
-  border: 1px solid #f1bfd5;
-  background: #fdeaf3;
+  color: #7b5270;
+  border: 1px solid #d9c0ce;
+  background: #eadce4;
 }
 
 .muted {
@@ -122,7 +122,7 @@ main.shell {
   padding: 12px 14px;
   border-radius: 14px;
   background: var(--section-bg);
-  border: 1px solid #f4d5e5;
+  border: 1px solid #dbc6d1;
 }
 
 .session-label {
@@ -130,7 +130,7 @@ main.shell {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #9b607f;
+  color: #835f75;
 }
 
 .session-details,
@@ -140,7 +140,7 @@ main.shell {
 
 .session-user {
   font-weight: 700;
-  color: #5a3248;
+  color: #4f3947;
 }
 
 .helper {
@@ -161,8 +161,8 @@ select,
 textarea {
   width: 100%;
   border-radius: 12px;
-  border: 1px solid #efc4d9;
-  background: #fff9fc;
+  border: 1px solid #dac6d1;
+  background: #f8f2f6;
   color: var(--text-main);
   padding: 9px 11px;
   font: inherit;
@@ -174,7 +174,7 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: #be8da4;
+  color: #9e8493;
 }
 
 textarea {
@@ -186,7 +186,7 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--accent-strong);
-  background: #fffdfd;
+  background: #fbf7f9;
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
@@ -214,9 +214,9 @@ textarea:focus {
 }
 
 button {
-  border: 1px solid #eba9c7;
-  background: #f8bdd7;
-  color: #5b3248;
+  border: 1px solid #cda3ba;
+  background: #dfc3d2;
+  color: #4f3a47;
   border-radius: 999px;
   font: inherit;
   font-weight: 700;
@@ -236,8 +236,8 @@ button:disabled {
 
 button:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: #f6b1cf;
-  border-color: #e595b8;
+  background: #d8b8c9;
+  border-color: #c595af;
 }
 
 button:active:not(:disabled) {
@@ -249,23 +249,23 @@ table {
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.92rem;
-  border: 1px solid #f0cde0;
+  border: 1px solid #dcc9d4;
   border-radius: 12px;
   overflow: hidden;
-  background: #fff8fc;
+  background: #f7f0f4;
 }
 
 th,
 td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid #f5deea;
+  border-bottom: 1px solid #e6d8e0;
 }
 
 th {
   font-weight: 700;
-  color: #6f445b;
-  background: #fdebf4;
+  color: #684c5d;
+  background: #ecdee6;
 }
 
 tbody tr:last-child td {
@@ -273,16 +273,16 @@ tbody tr:last-child td {
 }
 
 tbody tr:hover td {
-  background: #fff2f8;
+  background: #f0e4ea;
 }
 
 .status {
   position: relative;
   border-radius: 12px;
   padding: 11px 12px 11px 30px;
-  border: 1px solid #efcadc;
-  background: #fff5fa;
-  color: #70465e;
+  border: 1px solid #dbc7d2;
+  background: #f3e9ee;
+  color: #614a58;
 }
 
 .status::before {
@@ -298,8 +298,8 @@ tbody tr:hover td {
 }
 
 .status-success {
-  border-color: #badfcf;
-  background: #edf9f3;
+  border-color: #c5d8cc;
+  background: #ecf3ef;
 }
 
 .status-success::before {
@@ -307,8 +307,8 @@ tbody tr:hover td {
 }
 
 .status-error {
-  border-color: #efc1c8;
-  background: #fff1f3;
+  border-color: #ddc0c6;
+  background: #f4e9eb;
 }
 
 .status-error::before {
@@ -316,8 +316,8 @@ tbody tr:hover td {
 }
 
 .status-info {
-  border-color: #d8c6e8;
-  background: #f7f2fc;
+  border-color: #cec4d9;
+  background: #eeeaf3;
 }
 
 .status-info::before {
