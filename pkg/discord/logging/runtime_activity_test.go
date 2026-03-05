@@ -13,7 +13,7 @@ func TestRuntimeActivityMarkEventPersistsTimestamp(t *testing.T) {
 	expected := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:       runErrWithTimeout,
+		RunErr:       runErrWithTimeoutContext,
 		EventTimeout: time.Second,
 		Now: func() time.Time {
 			return expected
@@ -40,11 +40,11 @@ func TestRuntimeActivityMarkEventUsesBackgroundWhenContextNil(t *testing.T) {
 
 	var sawNilCtx atomic.Bool
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr: func(ctx context.Context, timeout time.Duration, fn func() error) error {
+		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
 			if ctx == nil {
 				sawNilCtx.Store(true)
 			}
-			return fn()
+			return fn(ctx)
 		},
 		Now: func() time.Time {
 			return expected
@@ -75,7 +75,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 	var calls atomic.Int32
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:           runErrWithTimeout,
+		RunErr:           runErrWithTimeoutContext,
 		HeartbeatTimeout: time.Second,
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Add(1)) * time.Second)
@@ -116,7 +116,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 func TestRuntimeActivityStartHeartbeatNoopsWhenAlreadyRunning(t *testing.T) {
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-noop.db")
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:           runErrWithTimeout,
+		RunErr:           runErrWithTimeoutContext,
 		HeartbeatTimeout: time.Second,
 	})
 
@@ -142,7 +142,7 @@ func TestRuntimeActivityStartHeartbeatNoopsWhenAlreadyRunning(t *testing.T) {
 func TestRuntimeActivityStopHeartbeatIsIdempotent(t *testing.T) {
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-stop.db")
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:           runErrWithTimeout,
+		RunErr:           runErrWithTimeoutContext,
 		HeartbeatTimeout: time.Second,
 	})
 
@@ -166,11 +166,11 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 	var calls atomic.Int32
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr: func(ctx context.Context, timeout time.Duration, fn func() error) error {
+		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
 			if calls.Add(1) == 1 {
 				return errors.New("startup heartbeat failed")
 			}
-			return fn()
+			return fn(ctx)
 		},
 		HeartbeatTimeout: time.Second,
 		Now: func() time.Time {

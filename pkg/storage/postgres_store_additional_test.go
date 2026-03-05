@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,9 @@ func newTempStore(t *testing.T) *Store {
 	t.Helper()
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
 	if err != nil {
+		if testdb.IsDatabaseURLNotConfigured(err) {
+			t.Skipf("skipping postgres integration test: %v", err)
+		}
 		t.Fatalf("resolve test database dsn: %v", err)
 	}
 	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
@@ -125,6 +130,71 @@ func TestHeartbeatMetadataRoundTrip(t *testing.T) {
 	got, ok, err := store.GetHeartbeat()
 	if err != nil || !ok || !got.Equal(ts) {
 		t.Fatalf("heartbeat mismatch: ts=%v ok=%v err=%v", got, ok, err)
+	}
+}
+
+func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
+	store := newTempStore(t)
+
+	const writers = 24
+	var wg sync.WaitGroup
+	errCh := make(chan error, writers)
+	start := make(chan struct{})
+
+	for i := 0; i < writers; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errCh <- store.InsertMessageVersion(MessageVersion{
+				GuildID:   "g",
+				MessageID: "m",
+				ChannelID: "c",
+				AuthorID:  "u",
+				EventType: "edit",
+				Content:   fmt.Sprintf("content-%d", i),
+				CreatedAt: time.Now().UTC(),
+			})
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("insert message version concurrently: %v", err)
+		}
+	}
+
+	rows, err := store.db.Query(`SELECT version FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	if err != nil {
+		t.Fatalf("query versions: %v", err)
+	}
+	defer rows.Close()
+
+	versions := make([]int, 0, writers)
+	for rows.Next() {
+		var version int
+		if err := rows.Scan(&version); err != nil {
+			t.Fatalf("scan version: %v", err)
+		}
+		versions = append(versions, version)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate versions: %v", err)
+	}
+
+	if len(versions) != writers {
+		t.Fatalf("expected %d versions, got %d (%v)", writers, len(versions), versions)
+	}
+	for i, version := range versions {
+		expected := i + 1
+		if version != expected {
+			t.Fatalf("expected contiguous versions starting at 1; got %v", versions)
+		}
 	}
 }
 

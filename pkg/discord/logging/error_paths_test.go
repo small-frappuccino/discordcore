@@ -124,6 +124,9 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
 	if err != nil {
+		if testdb.IsDatabaseURLNotConfigured(err) {
+			t.Skipf("skipping postgres integration test: %v", err)
+		}
 		t.Fatalf("resolve test database dsn: %v", err)
 	}
 	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)

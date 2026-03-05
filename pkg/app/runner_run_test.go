@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,14 +13,21 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
-func runtimeDatabaseConfigForRunnerTests() files.DatabaseRuntimeConfig {
-	dsn := strings.TrimSpace(os.Getenv("DISCORDCORE_TEST_DATABASE_URL"))
-	if dsn == "" {
-		dsn = "postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable"
+func runtimeDatabaseConfigForRunnerTests(t *testing.T) files.DatabaseRuntimeConfig {
+	t.Helper()
+
+	dsn, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		if testdb.IsDatabaseURLNotConfigured(err) {
+			t.Skipf("skipping postgres integration test: %v", err)
+		}
+		t.Fatalf("resolve test database dsn: %v", err)
 	}
+
 	return files.DatabaseRuntimeConfig{
 		Driver:        "postgres",
 		DatabaseURL:   dsn,
@@ -56,7 +62,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			Database: runtimeDatabaseConfigForRunnerTests(),
+			Database: runtimeDatabaseConfigForRunnerTests(t),
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -157,7 +163,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			Database: runtimeDatabaseConfigForRunnerTests(),
+			Database: runtimeDatabaseConfigForRunnerTests(t),
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -267,7 +273,7 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			Database: runtimeDatabaseConfigForRunnerTests(),
+			Database: runtimeDatabaseConfigForRunnerTests(t),
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{

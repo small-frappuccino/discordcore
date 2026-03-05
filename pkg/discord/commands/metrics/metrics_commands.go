@@ -124,10 +124,57 @@ func handleActivity(ctx *core.Context) error {
 	defer cancel()
 
 	// Collect activity
-	msgTotalsByChannel, _ := store.MessageTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	msgTotalsByUser, _ := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	reactTotalsByChannel, _ := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	reactTotalsByUser, _ := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	msgTotalsByChannel, err := store.MessageTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Metrics activity query failed",
+			"operation", "metrics.activity.query.message_totals_by_channel",
+			"guildID", ctx.GuildID,
+			"channelID", channelID,
+			"cutoffDay", cutoff,
+			"err", err,
+		)
+		return respondError(s, i, "Failed to query activity metrics from the database. Try again shortly.")
+	}
+
+	msgTotalsByUser, err := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Metrics activity query failed",
+			"operation", "metrics.activity.query.message_totals_by_user",
+			"guildID", ctx.GuildID,
+			"channelID", channelID,
+			"cutoffDay", cutoff,
+			"err", err,
+		)
+		return respondError(s, i, "Failed to query activity metrics from the database. Try again shortly.")
+	}
+
+	reactTotalsByChannel, err := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Metrics activity query failed",
+			"operation", "metrics.activity.query.reaction_totals_by_channel",
+			"guildID", ctx.GuildID,
+			"channelID", channelID,
+			"cutoffDay", cutoff,
+			"err", err,
+		)
+		return respondError(s, i, "Failed to query activity metrics from the database. Try again shortly.")
+	}
+
+	reactTotalsByUser, err := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Metrics activity query failed",
+			"operation", "metrics.activity.query.reaction_totals_by_user",
+			"guildID", ctx.GuildID,
+			"channelID", channelID,
+			"cutoffDay", cutoff,
+			"err", err,
+		)
+		return respondError(s, i, "Failed to query activity metrics from the database. Try again shortly.")
+	}
 
 	// Build embed
 	chFilterStr := ""

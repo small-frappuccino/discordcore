@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strings"
 	"time"
@@ -20,13 +21,15 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-// Init validates the database handle and ensures the schema exists.
+// Init validates the database handle and ensures the migrated schema is present.
 func (s *Store) Init() error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("store database handle is nil")
 	}
-	if err := ensureSchema(s.db); err != nil {
-		return fmt.Errorf("ensure schema: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := validateSchema(ctx, s.db); err != nil {
+		return fmt.Errorf("validate schema: %w", err)
 	}
 	return nil
 }
@@ -35,12 +38,33 @@ func (s *Store) exec(query string, args ...any) (sql.Result, error) {
 	return s.db.Exec(rebind(query), args...)
 }
 
+func (s *Store) execContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.db.ExecContext(ctx, rebind(query), args...)
+}
+
 func (s *Store) query(query string, args ...any) (*sql.Rows, error) {
 	return s.db.Query(rebind(query), args...)
 }
 
+func (s *Store) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.db.QueryContext(ctx, rebind(query), args...)
+}
+
 func (s *Store) queryRow(query string, args ...any) *sql.Row {
 	return s.db.QueryRow(rebind(query), args...)
+}
+
+func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.db.QueryRowContext(ctx, rebind(query), args...)
 }
 
 func txExec(tx *sql.Tx, query string, args ...any) (sql.Result, error) {
@@ -259,13 +283,19 @@ func (s *Store) CleanupAllObsoleteData() error {
 
 // UpsertMemberJoin records the earliest known join time for a member in a guild.
 func (s *Store) UpsertMemberJoin(guildID, userID string, joinedAt time.Time) error {
+	return s.UpsertMemberJoinContext(context.Background(), guildID, userID, joinedAt)
+}
+
+// UpsertMemberJoinContext records the earliest known join time for a member in a guild with context support.
+func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID string, joinedAt time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	if guildID == "" || userID == "" || joinedAt.IsZero() {
 		return nil
 	}
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO member_joins (guild_id, user_id, joined_at)
          VALUES (?, ?, ?)
          ON CONFLICT(guild_id, user_id) DO UPDATE SET
@@ -280,10 +310,15 @@ func (s *Store) UpsertMemberJoin(guildID, userID string, joinedAt time.Time) err
 
 // GetMemberJoin returns the stored join time for a member, if any.
 func (s *Store) GetMemberJoin(guildID, userID string) (time.Time, bool, error) {
+	return s.GetMemberJoinContext(context.Background(), guildID, userID)
+}
+
+// GetMemberJoinContext returns the stored join time for a member, if any, with context support.
+func (s *Store) GetMemberJoinContext(ctx context.Context, guildID, userID string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.queryRow(`SELECT joined_at FROM member_joins WHERE guild_id=? AND user_id=?`, guildID, userID)
+	row := s.queryRowContext(ctx, `SELECT joined_at FROM member_joins WHERE guild_id=? AND user_id=?`, guildID, userID)
 	var jt time.Time
 	if err := row.Scan(&jt); err != nil {
 		if err == sql.ErrNoRows {
@@ -425,13 +460,19 @@ func (s *Store) GetBotSince(guildID string) (time.Time, bool, error) {
 
 // SetHeartbeat records the last-known "bot is running" timestamp.
 func (s *Store) SetHeartbeat(t time.Time) error {
+	return s.SetHeartbeatContext(context.Background(), t)
+}
+
+// SetHeartbeatContext records the last-known "bot is running" timestamp with context support.
+func (s *Store) SetHeartbeatContext(ctx context.Context, t time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		"heartbeat", t.UTC(),
@@ -457,13 +498,19 @@ func (s *Store) GetHeartbeat() (time.Time, bool, error) {
 
 // SetLastEvent records the last time a relevant Discord event was processed.
 func (s *Store) SetLastEvent(t time.Time) error {
+	return s.SetLastEventContext(context.Background(), t)
+}
+
+// SetLastEventContext records the last time a relevant Discord event was processed with context support.
+func (s *Store) SetLastEventContext(ctx context.Context, t time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		"last_event", t.UTC(),
@@ -489,13 +536,19 @@ func (s *Store) GetLastEvent() (time.Time, bool, error) {
 
 // SetMetadata records a timestamp associated with a specific key.
 func (s *Store) SetMetadata(key string, t time.Time) error {
+	return s.SetMetadataContext(context.Background(), key, t)
+}
+
+// SetMetadataContext records a timestamp associated with a specific key with context support.
+func (s *Store) SetMetadataContext(ctx context.Context, key string, t time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		key, t.UTC(),
@@ -505,10 +558,15 @@ func (s *Store) SetMetadata(key string, t time.Time) error {
 
 // GetMetadata retrieves the timestamp for a specific key.
 func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
+	return s.GetMetadataContext(context.Background(), key)
+}
+
+// GetMetadataContext retrieves the timestamp for a specific key with context support.
+func (s *Store) GetMetadataContext(ctx context.Context, key string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
-	row := s.queryRow(`SELECT ts FROM runtime_meta WHERE key=?`, key)
+	row := s.queryRowContext(ctx, `SELECT ts FROM runtime_meta WHERE key=?`, key)
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {
 		if err == sql.ErrNoRows {
@@ -672,132 +730,43 @@ func (s *Store) DiffMemberRoles(guildID, userID string, current []string) (added
 	return added, removed, nil
 }
 
-// ensureSchema creates required tables and indexes if they don't exist.
-func ensureSchema(db *sql.DB) error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS messages (
-			guild_id        TEXT NOT NULL,
-			message_id      TEXT NOT NULL,
-			channel_id      TEXT NOT NULL,
-			author_id       TEXT NOT NULL,
-			author_username TEXT,
-			author_avatar   TEXT,
-			content         TEXT,
-			cached_at       TIMESTAMPTZ NOT NULL,
-			expires_at      TIMESTAMPTZ,
-			PRIMARY KEY (guild_id, message_id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at)`,
-		`CREATE TABLE IF NOT EXISTS member_joins (
-			guild_id   TEXT NOT NULL,
-			user_id    TEXT NOT NULL,
-			joined_at  TIMESTAMPTZ NOT NULL,
-			PRIMARY KEY (guild_id, user_id)
-		)`,
-		`CREATE TABLE IF NOT EXISTS avatars_current (
-			guild_id    TEXT NOT NULL,
-			user_id     TEXT NOT NULL,
-			avatar_hash TEXT NOT NULL,
-			updated_at  TIMESTAMPTZ NOT NULL,
-			PRIMARY KEY (guild_id, user_id)
-		)`,
-		`CREATE TABLE IF NOT EXISTS avatars_history (
-			id         BIGSERIAL PRIMARY KEY,
-			guild_id   TEXT NOT NULL,
-			user_id    TEXT NOT NULL,
-			old_hash   TEXT,
-			new_hash   TEXT,
-			changed_at TIMESTAMPTZ NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_avatars_hist_gid_uid ON avatars_history(guild_id, user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_avatars_hist_changed ON avatars_history(changed_at)`,
-		`CREATE TABLE IF NOT EXISTS messages_history (
-			id            BIGSERIAL PRIMARY KEY,
-			guild_id      TEXT NOT NULL,
-			message_id    TEXT NOT NULL,
-			channel_id    TEXT NOT NULL,
-			author_id     TEXT NOT NULL,
-			version       INTEGER NOT NULL,
-			event_type    TEXT NOT NULL,
-			content       TEXT,
-			attachments   INTEGER NOT NULL DEFAULT 0,
-			embeds_count  INTEGER NOT NULL DEFAULT 0,
-			stickers      INTEGER NOT NULL DEFAULT 0,
-			created_at    TIMESTAMPTZ NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_msg_hist_gid_mid ON messages_history(guild_id, message_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_hist_gid_mid_ver ON messages_history(guild_id, message_id, version)`,
-		`CREATE TABLE IF NOT EXISTS guild_meta (
-			guild_id  TEXT PRIMARY KEY,
-			bot_since TIMESTAMPTZ,
-			owner_id  TEXT
-		)`,
-		`CREATE TABLE IF NOT EXISTS runtime_meta (
-			key TEXT PRIMARY KEY,
-			ts  TIMESTAMPTZ NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS moderation_cases (
-			guild_id         TEXT PRIMARY KEY,
-			last_case_number BIGINT NOT NULL DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS roles_current (
-			guild_id   TEXT NOT NULL,
-			user_id    TEXT NOT NULL,
-			role_id    TEXT NOT NULL,
-			updated_at TIMESTAMPTZ NOT NULL,
-			PRIMARY KEY (guild_id, user_id, role_id)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_roles_current_member ON roles_current(guild_id, user_id)`,
-		`CREATE TABLE IF NOT EXISTS persistent_cache (
-			cache_key  TEXT PRIMARY KEY,
-			cache_type TEXT NOT NULL,
-			data       TEXT NOT NULL,
-			expires_at TIMESTAMPTZ NOT NULL,
-			cached_at  TIMESTAMPTZ NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_persistent_cache_type ON persistent_cache(cache_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_persistent_cache_expires ON persistent_cache(expires_at)`,
-		`CREATE TABLE IF NOT EXISTS daily_message_metrics (
-			guild_id   TEXT NOT NULL,
-			channel_id TEXT NOT NULL,
-			user_id    TEXT NOT NULL,
-			day        DATE NOT NULL,
-			count      BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id, channel_id, user_id, day)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_daily_msg_by_guild_day ON daily_message_metrics(guild_id, day)`,
-		`CREATE INDEX IF NOT EXISTS idx_daily_msg_by_channel_day ON daily_message_metrics(channel_id, day)`,
-		`CREATE TABLE IF NOT EXISTS daily_reaction_metrics (
-			guild_id   TEXT NOT NULL,
-			channel_id TEXT NOT NULL,
-			user_id    TEXT NOT NULL,
-			day        DATE NOT NULL,
-			count      BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id, channel_id, user_id, day)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_daily_react_by_guild_day ON daily_reaction_metrics(guild_id, day)`,
-		`CREATE INDEX IF NOT EXISTS idx_daily_react_by_channel_day ON daily_reaction_metrics(channel_id, day)`,
-		`CREATE TABLE IF NOT EXISTS daily_member_joins (
-			guild_id TEXT NOT NULL,
-			user_id  TEXT NOT NULL,
-			day      DATE NOT NULL,
-			count    BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id, user_id, day)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_daily_joins_by_guild_day ON daily_member_joins(guild_id, day)`,
-		`CREATE TABLE IF NOT EXISTS daily_member_leaves (
-			guild_id TEXT NOT NULL,
-			user_id  TEXT NOT NULL,
-			day      DATE NOT NULL,
-			count    BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id, user_id, day)
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_daily_leaves_by_guild_day ON daily_member_leaves(guild_id, day)`,
+var requiredSchemaTables = []string{
+	"messages",
+	"member_joins",
+	"avatars_current",
+	"avatars_history",
+	"messages_history",
+	"guild_meta",
+	"runtime_meta",
+	"moderation_cases",
+	"roles_current",
+	"persistent_cache",
+	"daily_message_metrics",
+	"daily_reaction_metrics",
+	"daily_member_joins",
+	"daily_member_leaves",
+}
+
+func validateSchema(ctx context.Context, db *sql.DB) error {
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
 	}
-	for _, sqlText := range stmts {
-		if _, err := db.Exec(sqlText); err != nil {
-			return fmt.Errorf("create schema: %w", err)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	missing := make([]string, 0)
+	for _, table := range requiredSchemaTables {
+		var regclass sql.NullString
+		if err := db.QueryRowContext(ctx, `SELECT to_regclass($1)`, table).Scan(&regclass); err != nil {
+			return fmt.Errorf("check table %s existence: %w", table, err)
 		}
+		if !regclass.Valid || strings.TrimSpace(regclass.String) == "" {
+			missing = append(missing, table)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing migrated tables (%s); apply postgres migrations before initializing store", strings.Join(missing, ", "))
 	}
 	return nil
 }
@@ -821,8 +790,17 @@ type MessageVersion struct {
 // InsertMessageVersion inserts a new version row for a message.
 // If Version <= 0, it will compute next version as (MAX(version)+1) within (guild_id, message_id).
 func (s *Store) InsertMessageVersion(v MessageVersion) error {
+	return s.InsertMessageVersionContext(context.Background(), v)
+}
+
+// InsertMessageVersionContext inserts a new version row for a message with context support.
+// If Version <= 0, it computes the next version atomically under an advisory transaction lock.
+func (s *Store) InsertMessageVersionContext(ctx context.Context, v MessageVersion) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	// basic validation
 	if v.GuildID == "" || v.MessageID == "" || v.ChannelID == "" || v.AuthorID == "" || v.EventType == "" {
@@ -832,35 +810,53 @@ func (s *Store) InsertMessageVersion(v MessageVersion) error {
 		v.CreatedAt = time.Now().UTC()
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("begin message version tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	lockKey := messageVersionAdvisoryLockKey(v.GuildID, v.MessageID)
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, lockKey); err != nil {
+		return fmt.Errorf("acquire message version advisory lock: %w", err)
+	}
 
 	// Compute next version if not provided
 	if v.Version <= 0 {
 		var cur sql.NullInt64
-		if err := txQueryRow(tx,
+		if err := tx.QueryRowContext(ctx, rebind(
 			`SELECT COALESCE(MAX(version),0) FROM messages_history WHERE guild_id=? AND message_id=?`,
+		),
 			v.GuildID, v.MessageID,
 		).Scan(&cur); err != nil {
-			return err
+			return fmt.Errorf("read max message version: %w", err)
 		}
 		v.Version = int(cur.Int64) + 1
 	}
 
 	// Insert history row
-	if _, err := txExec(tx,
+	if _, err := tx.ExecContext(ctx, rebind(
 		`INSERT INTO messages_history
          (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	),
 		v.GuildID, v.MessageID, v.ChannelID, v.AuthorID, v.Version, v.EventType, v.Content, v.Attachments, v.Embeds, v.Stickers, v.CreatedAt,
 	); err != nil {
-		return err
+		return fmt.Errorf("insert message version: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit message version tx: %w", err)
+	}
+	return nil
+}
+
+func messageVersionAdvisoryLockKey(guildID, messageID string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(guildID))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(messageID))
+	return int64(h.Sum64())
 }
 
 // Persistent Cache Methods
@@ -1092,6 +1088,11 @@ func (s *Store) GetCacheStats() (map[string]int, error) {
 
 // IncrementDailyMessageCount increments the per-day message count for a user in a channel.
 func (s *Store) IncrementDailyMessageCount(guildID, channelID, userID string, at time.Time) error {
+	return s.IncrementDailyMessageCountContext(context.Background(), guildID, channelID, userID, at)
+}
+
+// IncrementDailyMessageCountContext increments the per-day message count for a user in a channel with context support.
+func (s *Store) IncrementDailyMessageCountContext(ctx context.Context, guildID, channelID, userID string, at time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -1102,7 +1103,8 @@ func (s *Store) IncrementDailyMessageCount(guildID, channelID, userID string, at
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count)
          VALUES (?, ?, ?, ?, 1)
          ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
@@ -1114,6 +1116,11 @@ func (s *Store) IncrementDailyMessageCount(guildID, channelID, userID string, at
 
 // IncrementDailyReactionCount increments the per-day reaction count for a user in a channel.
 func (s *Store) IncrementDailyReactionCount(guildID, channelID, userID string, at time.Time) error {
+	return s.IncrementDailyReactionCountContext(context.Background(), guildID, channelID, userID, at)
+}
+
+// IncrementDailyReactionCountContext increments the per-day reaction count for a user in a channel with context support.
+func (s *Store) IncrementDailyReactionCountContext(ctx context.Context, guildID, channelID, userID string, at time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -1124,7 +1131,8 @@ func (s *Store) IncrementDailyReactionCount(guildID, channelID, userID string, a
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO daily_reaction_metrics (guild_id, channel_id, user_id, day, count)
          VALUES (?, ?, ?, ?, 1)
          ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
@@ -1136,6 +1144,11 @@ func (s *Store) IncrementDailyReactionCount(guildID, channelID, userID string, a
 
 // IncrementDailyMemberJoin increments the per-day member join counter (per user).
 func (s *Store) IncrementDailyMemberJoin(guildID, userID string, at time.Time) error {
+	return s.IncrementDailyMemberJoinContext(context.Background(), guildID, userID, at)
+}
+
+// IncrementDailyMemberJoinContext increments the per-day member join counter (per user) with context support.
+func (s *Store) IncrementDailyMemberJoinContext(ctx context.Context, guildID, userID string, at time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -1146,7 +1159,8 @@ func (s *Store) IncrementDailyMemberJoin(guildID, userID string, at time.Time) e
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO daily_member_joins (guild_id, user_id, day, count)
          VALUES (?, ?, ?, 1)
          ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
@@ -1158,6 +1172,11 @@ func (s *Store) IncrementDailyMemberJoin(guildID, userID string, at time.Time) e
 
 // IncrementDailyMemberLeave increments the per-day member leave counter (per user).
 func (s *Store) IncrementDailyMemberLeave(guildID, userID string, at time.Time) error {
+	return s.IncrementDailyMemberLeaveContext(context.Background(), guildID, userID, at)
+}
+
+// IncrementDailyMemberLeaveContext increments the per-day member leave counter (per user) with context support.
+func (s *Store) IncrementDailyMemberLeaveContext(ctx context.Context, guildID, userID string, at time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -1168,7 +1187,8 @@ func (s *Store) IncrementDailyMemberLeave(guildID, userID string, at time.Time) 
 		at = time.Now().UTC()
 	}
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.exec(
+	_, err := s.execContext(
+		ctx,
 		`INSERT INTO daily_member_leaves (guild_id, user_id, day, count)
          VALUES (?, ?, ?, 1)
          ON CONFLICT(guild_id, user_id, day) DO UPDATE SET

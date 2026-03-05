@@ -161,3 +161,29 @@ func runErrWithTimeout(ctx context.Context, timeout time.Duration, fn func() err
 	})
 	return err
 }
+
+func runWithTimeoutContext[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
+	var zero T
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	if fn == nil {
+		return zero, nil
+	}
+	return fn(ctx)
+}
+
+func runErrWithTimeoutContext(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
+	_, err := runWithTimeoutContext(ctx, timeout, func(runCtx context.Context) (struct{}, error) {
+		if fn == nil {
+			return struct{}{}, nil
+		}
+		return struct{}{}, fn(runCtx)
+	})
+	return err
+}

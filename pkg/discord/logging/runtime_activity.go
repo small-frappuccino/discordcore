@@ -9,7 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
-type runtimeActivityRunner func(ctx context.Context, timeout time.Duration, fn func() error) error
+type runtimeActivityRunner func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error
 
 type runtimeActivityOptions struct {
 	RunErr           runtimeActivityRunner
@@ -35,7 +35,7 @@ type runtimeActivity struct {
 func newRuntimeActivity(store *storage.Store, opts runtimeActivityOptions) *runtimeActivity {
 	runErr := opts.RunErr
 	if runErr == nil {
-		runErr = runErrWithTimeout
+		runErr = runErrWithTimeoutContext
 	}
 
 	now := opts.Now
@@ -55,7 +55,7 @@ func newRuntimeActivity(store *storage.Store, opts runtimeActivityOptions) *runt
 
 func newMonitoringRuntimeActivity(store *storage.Store) *runtimeActivity {
 	return newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:           monitoringRunErrWithTimeout,
+		RunErr:           monitoringRunErrWithTimeoutContext,
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
 		Warn:             log.ApplicationLogger().Warn,
@@ -70,8 +70,8 @@ func (ra *runtimeActivity) MarkEvent(ctx context.Context, source string) {
 		ctx = context.Background()
 	}
 
-	if err := ra.runErr(ctx, ra.eventTimeout, func() error {
-		return ra.store.SetLastEvent(ra.now())
+	if err := ra.runErr(ctx, ra.eventTimeout, func(runCtx context.Context) error {
+		return ra.store.SetLastEventContext(runCtx, ra.now())
 	}); err != nil && ra.warn != nil {
 		ra.warn("Failed to persist last event timestamp", "source", source, "error", err)
 	}
@@ -97,8 +97,8 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 	ra.hbDone = done
 	ra.mu.Unlock()
 
-	if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func() error {
-		return ra.store.SetHeartbeat(ra.now())
+	if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
+		return ra.store.SetHeartbeatContext(runCtx, ra.now())
 	}); err != nil && ra.warn != nil {
 		ra.warn("Failed to persist startup heartbeat", "error", err)
 	}
@@ -111,8 +111,8 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 		for {
 			select {
 			case <-ticker.C:
-				if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func() error {
-					return ra.store.SetHeartbeat(ra.now())
+				if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
+					return ra.store.SetHeartbeatContext(runCtx, ra.now())
 				}); err != nil && ra.warn != nil {
 					ra.warn("Failed to persist heartbeat", "error", err)
 				}

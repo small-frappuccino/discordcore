@@ -104,7 +104,7 @@ func NewMessageEventService(session *discordgo.Session, configManager *files.Con
 		notifier:      notifier,
 		store:         store,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
-			RunErr:       runErrWithTimeout,
+			RunErr:       runErrWithTimeoutContext,
 			EventTimeout: loggingDependencyTimeout,
 			Warn:         slog.Warn,
 		}),

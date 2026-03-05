@@ -35,7 +35,7 @@ func NewReactionEventService(session *discordgo.Session, configManager *files.Co
 		configManager: configManager,
 		store:         store,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
-			RunErr:       runErrWithTimeout,
+			RunErr:       runErrWithTimeoutContext,
 			EventTimeout: loggingDependencyTimeout,
 			Warn:         slog.Warn,
 		}),
@@ -146,8 +146,8 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 	}
 
 	// Increment per-day reaction count for the reactor.
-	if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
-		return rs.store.IncrementDailyReactionCount(guildID, e.ChannelID, e.UserID, time.Now().UTC())
+	if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
+		return rs.store.IncrementDailyReactionCountContext(runCtx, guildID, e.ChannelID, e.UserID, time.Now().UTC())
 	}); err != nil {
 		slog.Error("Failed to increment daily reaction count", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "err", err)
 		return

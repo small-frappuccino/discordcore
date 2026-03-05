@@ -112,6 +112,14 @@ func Run(appName, tokenEnv string) error {
 	if err != nil {
 		return fmt.Errorf("create discord session: %w", err)
 	}
+	closeDiscordSessionOnReturn := true
+	defer func() {
+		if closeDiscordSessionOnReturn && discordSession != nil {
+			if err := closeDiscordSession(discordSession); err != nil {
+				log.ErrorLoggerRaw().Error("Discord session close failed during startup cleanup", "err", err)
+			}
+		}
+	}()
 	if discordSession.State == nil || discordSession.State.User == nil {
 		return fmt.Errorf("discord session state not properly initialized")
 	}
@@ -235,6 +243,14 @@ func Run(appName, tokenEnv string) error {
 		_ = db.Close()
 		return fmt.Errorf("initialize postgres store: %w", err)
 	}
+	closeStoreOnReturn := true
+	defer func() {
+		if closeStoreOnReturn && store != nil {
+			if err := closeStore(store); err != nil {
+				log.ErrorLoggerRaw().Error("Store close failed during startup cleanup", "err", err)
+			}
+		}
+	}()
 	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
 
 	// Log configured guilds
@@ -555,6 +571,7 @@ func Run(appName, tokenEnv string) error {
 	// Allow services to finish final writes before closing store
 	shutdownDelay(100 * time.Millisecond)
 
+	closeStoreOnReturn = false
 	if store != nil {
 		if err := closeStore(store); err != nil {
 			log.ErrorLoggerRaw().Error("Store close failed during shutdown", "err", err)
@@ -562,6 +579,7 @@ func Run(appName, tokenEnv string) error {
 		}
 	}
 
+	closeDiscordSessionOnReturn = false
 	if discordSession != nil {
 		if err := closeDiscordSession(discordSession); err != nil {
 			log.ErrorLoggerRaw().Error("Discord session close failed during shutdown", "err", err)

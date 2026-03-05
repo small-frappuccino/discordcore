@@ -3,6 +3,7 @@ package testdb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,19 +13,25 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/small-frappuccino/discordcore/pkg/persistence"
 )
 
 const EnvDatabaseURL = "DISCORDCORE_TEST_DATABASE_URL"
 
 var dbNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,62}$`)
 var schemaCounter atomic.Uint64
+var ErrDatabaseURLNotConfigured = errors.New("postgres test database url not configured")
 
 func BaseDatabaseURLFromEnv() (string, error) {
 	dsn := strings.TrimSpace(os.Getenv(EnvDatabaseURL))
 	if dsn == "" {
-		return "", fmt.Errorf("%s is required for Postgres integration tests", EnvDatabaseURL)
+		return "", fmt.Errorf("%w: %s is required for Postgres integration tests", ErrDatabaseURLNotConfigured, EnvDatabaseURL)
 	}
 	return dsn, nil
+}
+
+func IsDatabaseURLNotConfigured(err error) bool {
+	return errors.Is(err, ErrDatabaseURLNotConfigured)
 }
 
 // OpenIsolatedDatabase creates a temporary schema and returns a DB handle scoped to it plus cleanup.
@@ -81,6 +88,14 @@ func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*sql.DB, func() 
 		_ = testDB.Close()
 		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, nil, fmt.Errorf("ping test database handle for schema %s: %w", schemaName, err)
+	}
+
+	migrateCtx, migrateCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer migrateCancel()
+	if err := persistence.NewPostgresMigrator(testDB).Up(migrateCtx); err != nil {
+		_ = testDB.Close()
+		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		return nil, nil, fmt.Errorf("apply postgres migrations for test schema %s: %w", schemaName, err)
 	}
 
 	cleanup := func() error {

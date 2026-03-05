@@ -47,7 +47,7 @@ func NewMemberEventService(session *discordgo.Session, configManager *files.Conf
 		notifier:      notifier,
 		store:         store,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
-			RunErr:       runErrWithTimeout,
+			RunErr:       runErrWithTimeoutContext,
 			EventTimeout: loggingDependencyTimeout,
 			Warn:         slog.Warn,
 		}),
@@ -77,7 +77,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 
 	// Store should be injected and already initialized
 	if mes.store != nil {
-		if err := runErrWithTimeout(runCtx, loggingDependencyTimeout, mes.store.Init); err != nil {
+		if err := runErrWithTimeoutContext(runCtx, loggingDependencyTimeout, func(context.Context) error { return mes.store.Init() }); err != nil {
 			slog.Warn(fmt.Sprintf("Member event service: failed to initialize store (continuing): %v", err))
 		}
 	}
@@ -257,13 +257,13 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 
 	// Persist absolute join time to Postgres store (best effort)
 	if mes.store != nil && !joinedAt.IsZero() {
-		if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
-			return mes.store.UpsertMemberJoin(m.GuildID, m.User.ID, joinedAt)
+		if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
+			return mes.store.UpsertMemberJoinContext(runCtx, m.GuildID, m.User.ID, joinedAt)
 		}); err != nil {
 			slog.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
-		if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
-			return mes.store.IncrementDailyMemberJoin(m.GuildID, m.User.ID, joinedAt)
+		if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
+			return mes.store.IncrementDailyMemberJoinContext(runCtx, m.GuildID, m.User.ID, joinedAt)
 		}); err != nil {
 			slog.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
@@ -350,8 +350,8 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, s *d
 
 	// Increment daily member leave metric
 	if mes.store != nil {
-		if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
-			return mes.store.IncrementDailyMemberLeave(m.GuildID, m.User.ID, time.Now().UTC())
+		if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
+			return mes.store.IncrementDailyMemberLeaveContext(runCtx, m.GuildID, m.User.ID, time.Now().UTC())
 		}); err != nil {
 			slog.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
 		}
@@ -466,8 +466,8 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 			at time.Time
 			ok bool
 		}
-		res, err := runWithTimeout(ctx, loggingDependencyTimeout, func() (joinLookup, error) {
-			at, ok, err := mes.store.GetMemberJoin(guildID, userID)
+		res, err := runWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) (joinLookup, error) {
+			at, ok, err := mes.store.GetMemberJoinContext(runCtx, guildID, userID)
 			return joinLookup{at: at, ok: ok}, err
 		})
 		if err != nil {

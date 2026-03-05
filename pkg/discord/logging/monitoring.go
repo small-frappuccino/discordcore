@@ -390,6 +390,32 @@ func monitoringRunErrWithTimeout(ctx context.Context, timeout time.Duration, fn 
 	return err
 }
 
+func monitoringRunWithTimeoutContext[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
+	var zero T
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	if fn == nil {
+		return zero, nil
+	}
+	return fn(ctx)
+}
+
+func monitoringRunErrWithTimeoutContext(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
+	_, err := monitoringRunWithTimeoutContext(ctx, timeout, func(runCtx context.Context) (struct{}, error) {
+		if fn == nil {
+			return struct{}{}, nil
+		}
+		return struct{}{}, fn(runCtx)
+	})
+	return err
+}
+
 type cachedRoles struct {
 	roles     []string
 	expiresAt time.Time
