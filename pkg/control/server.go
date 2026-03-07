@@ -85,6 +85,13 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/auth/guilds/manageable", s.handleDiscordOAuthManageableGuilds)
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
 	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, dashboardRoutePrefix, http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, dashboardRoutePrefix, http.StatusMovedPermanently)
 	})
@@ -204,7 +211,7 @@ func controlServerListenAddrAndDashboardURL(addr net.Addr, tlsEnabled bool) (str
 		scheme = "https"
 	}
 
-	return listenAddr, fmt.Sprintf("%s://%s%s", scheme, net.JoinHostPort(controlServerBrowserHost(host), port), dashboardRoutePrefix)
+	return listenAddr, fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(controlServerBrowserHost(host), port))
 }
 
 func controlServerBrowserHost(host string) string {

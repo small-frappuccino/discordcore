@@ -19,26 +19,26 @@ func TestControlServerListenAddrAndDashboardURL(t *testing.T) {
 			name:          "ipv4 loopback http",
 			addr:          &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8376},
 			wantListen:    "127.0.0.1:8376",
-			wantDashboard: "http://127.0.0.1:8376/dashboard/",
+			wantDashboard: "http://127.0.0.1:8376",
 		},
 		{
 			name:          "ipv4 wildcard rewrites to loopback",
 			addr:          &net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Port: 3030},
 			wantListen:    "0.0.0.0:3030",
-			wantDashboard: "http://127.0.0.1:3030/dashboard/",
+			wantDashboard: "http://127.0.0.1:3030",
 		},
 		{
 			name:          "ipv6 wildcard rewrites to loopback",
 			addr:          &net.TCPAddr{IP: net.ParseIP("::"), Port: 4040},
 			wantListen:    "[::]:4040",
-			wantDashboard: "http://[::1]:4040/dashboard/",
+			wantDashboard: "http://[::1]:4040",
 		},
 		{
 			name:          "tls uses https",
 			addr:          &net.TCPAddr{IP: net.ParseIP("192.168.1.50"), Port: 9443},
 			tlsEnabled:    true,
 			wantListen:    "192.168.1.50:9443",
-			wantDashboard: "https://192.168.1.50:9443/dashboard/",
+			wantDashboard: "https://192.168.1.50:9443",
 		},
 	}
 

@@ -87,6 +87,16 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 		t.Fatalf("expected redirect location %q, got %q", dashboardRoutePrefix, location)
 	}
 
+	rootReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	rootRec := httptest.NewRecorder()
+	handler.ServeHTTP(rootRec, rootReq)
+	if rootRec.Code != http.StatusMovedPermanently {
+		t.Fatalf("expected / redirect, got %d body=%q", rootRec.Code, rootRec.Body.String())
+	}
+	if location := strings.TrimSpace(rootRec.Header().Get("Location")); location != dashboardRoutePrefix {
+		t.Fatalf("expected / redirect location %q, got %q", dashboardRoutePrefix, location)
+	}
+
 	dashboardReq := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
 	dashboardRec := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardRec, dashboardReq)
