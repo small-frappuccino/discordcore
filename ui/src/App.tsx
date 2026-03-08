@@ -23,6 +23,7 @@ type DashboardAuthState =
   | "signed_out"
   | "signed_in"
   | "oauth_unavailable";
+type AppView = "landing" | "control-panel";
 
 interface StatusState {
   kind: StatusKind;
@@ -107,6 +108,36 @@ const lockedTheme = {
   label: "Control Atlas",
   helper: "Editorial dark theme tuned for focus and operational clarity",
 } as const;
+const dashboardHomePath = "/dashboard/";
+const controlPanelPath = "/dashboard/control-panel";
+const landingNavLinks = [
+  { id: "about", label: "About" },
+  { id: "features", label: "Features" },
+  { id: "status", label: "Status" },
+  { id: "invite", label: "Add to server" },
+  { id: "documentation", label: "Documentation" },
+  { id: "support", label: "Support" },
+  { id: "premium", label: "Premium" },
+] as const;
+const landingFeatureCards = [
+  {
+    title: "Clear moderation flows",
+    body: "Keep the public entry calm and readable while operational controls stay behind the authenticated workspace.",
+  },
+  {
+    title: "Discord-authenticated access",
+    body: "Guild editing remains gated by Discord OAuth so the landing page never mixes product marketing with configuration actions.",
+  },
+  {
+    title: "Responsive by default",
+    body: "The shell is built as a scalable front-end surface with reusable sections, accessible contrast, and mobile-safe spacing.",
+  },
+] as const;
+const landingTrustPoints = [
+  "Public landing page separated from guild management",
+  "Dashboard stays mounted under `/dashboard/`",
+  "Discord OAuth is the only path into configuration",
+] as const;
 const sectionLinks = [
   { id: "overview", label: "Overview" },
   { id: "delivery", label: "Delivery" },
@@ -140,6 +171,9 @@ export default function App() {
   const [session, setSession] = useState<AuthSessionResponse | null>(null);
   const [manageableGuilds, setManageableGuilds] = useState<ManageableGuild[]>(
     [],
+  );
+  const [appPath, setAppPath] = useState(() =>
+    normalizeDashboardAppPath(window.location.pathname),
   );
 
   const client = useMemo(
@@ -228,6 +262,8 @@ export default function App() {
     deferredPartnerSearch === ""
       ? `${partners.length} partner${partners.length === 1 ? "" : "s"}`
       : `${filteredPartners.length} of ${partners.length} partners`;
+  const appView = useMemo<AppView>(() => resolveAppView(appPath), [appPath]);
+  const signedInUserName = session !== null ? formatSessionTitle(session) : null;
 
   const withBusyState = useCallback(
     async (label: string, operation: () => Promise<void>) => {
@@ -334,6 +370,17 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", lockedTheme.id);
   }, []);
 
+  useEffect(() => {
+    const syncAppPath = () => {
+      setAppPath(normalizeDashboardAppPath(window.location.pathname));
+    };
+
+    window.addEventListener("popstate", syncAppPath);
+    return () => {
+      window.removeEventListener("popstate", syncAppPath);
+    };
+  }, []);
+
   async function logout() {
     await withBusyState("Signing out", async () => {
       try {
@@ -346,6 +393,7 @@ export default function App() {
           kind: "info",
           message: "Signed out. Sign in again to continue editing guild settings.",
         });
+        navigateToAppPath(dashboardHomePath);
       } catch (error) {
         setStatus({
           kind: "error",
@@ -587,8 +635,29 @@ export default function App() {
     });
   }
 
-  function beginLogin() {
-    window.location.assign(client.buildDiscordLoginURL("/dashboard/"));
+  function navigateToAppPath(nextPath: string) {
+    const normalized = normalizeDashboardAppPath(nextPath);
+    if (normalized !== window.location.pathname) {
+      window.history.pushState({}, "", normalized);
+    }
+    setAppPath(normalized);
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }
+
+  function openLandingSection(sectionId: string) {
+    if (appView !== "landing") {
+      navigateToAppPath(dashboardHomePath);
+      window.requestAnimationFrame(() => {
+        scrollToSection(sectionId);
+      });
+      return;
+    }
+
+    scrollToSection(sectionId);
+  }
+
+  function beginLogin(nextPath = appPath) {
+    window.location.assign(client.buildDiscordLoginURL(nextPath));
   }
 
   function applyBaseUrl() {
@@ -727,6 +796,247 @@ export default function App() {
     }
   }
 
+  if (appView === "landing") {
+    return (
+      <main className="shell">
+        <div className="app-frame landing-frame">
+          <header className="site-topbar">
+            <div className="site-brand" aria-label="Bot icon">
+              <BotIcon className="site-brand-icon" />
+            </div>
+
+            <nav className="site-nav" aria-label="Primary">
+              {landingNavLinks.map((link) => (
+                <button
+                  key={link.id}
+                  className={[
+                    "site-nav-link",
+                    link.id === "premium" ? "site-nav-link-accent" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  type="button"
+                  onClick={() => openLandingSection(link.id)}
+                >
+                  {link.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="site-actions">
+              {authState === "checking" ? (
+                <span className="inline-badge badge-muted">Checking session</span>
+              ) : null}
+              {authState === "oauth_unavailable" ? (
+                <button className="site-action site-action-secondary" type="button" disabled>
+                  OAuth unavailable
+                </button>
+              ) : null}
+              {authState === "signed_out" ? (
+                <button
+                  className="site-action site-action-primary"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => beginLogin(dashboardHomePath)}
+                >
+                  Login with Discord
+                </button>
+              ) : null}
+              {authState === "signed_in" ? (
+                <>
+                  <button
+                    className="site-action site-action-secondary"
+                    type="button"
+                    disabled={loading}
+                    onClick={() => navigateToAppPath(controlPanelPath)}
+                  >
+                    Control Panel
+                  </button>
+                  <button
+                    className="site-action site-action-secondary"
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void logout()}
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </header>
+
+          <section className="landing-hero">
+            <div className="landing-decor landing-decor-cross landing-decor-a" aria-hidden="true" />
+            <div className="landing-decor landing-decor-cross landing-decor-b" aria-hidden="true" />
+            <div className="landing-decor landing-decor-dot landing-decor-c" aria-hidden="true" />
+            <div className="landing-decor landing-decor-dot landing-decor-d" aria-hidden="true" />
+            <div className="landing-decor landing-decor-ring landing-decor-e" aria-hidden="true" />
+            <div className="landing-decor landing-decor-ring landing-decor-f" aria-hidden="true" />
+            <div className="landing-decor landing-decor-bar landing-decor-g" aria-hidden="true" />
+            <div className="landing-decor landing-decor-bar landing-decor-h" aria-hidden="true" />
+
+            <div className="landing-hero-copy">
+              <p className="eyebrow">Discord automation platform</p>
+              <h1>Keep the homepage public. Keep management in the control panel.</h1>
+              <p className="hero-text landing-hero-text">
+                This landing page stays intentionally free of guild selectors, sync actions,
+                and board editors. Authentication happens with Discord in the top bar, then
+                the dashboard opens only when the user explicitly enters the control panel.
+              </p>
+            </div>
+
+            <div className="landing-pill-grid" aria-label="Landing page highlights">
+              <article className="landing-pill-card">
+                <span className="metric-label">Session</span>
+                <strong>{signedInUserName ?? formatAuthStateLabel(authState)}</strong>
+                <small>
+                  {session !== null
+                    ? `${manageableGuilds.length} manageable guild${manageableGuilds.length === 1 ? "" : "s"} available.`
+                    : formatAuthSupportText(authState, manageableGuilds.length)}
+                </small>
+              </article>
+              <article className="landing-pill-card emphasis">
+                <span className="metric-label">Control panel access</span>
+                <strong>
+                  {authState === "signed_in"
+                    ? "Unlocked after sign-in"
+                    : authState === "oauth_unavailable"
+                      ? "Waiting on OAuth configuration"
+                      : "Discord OAuth gated"}
+                </strong>
+                <small>
+                  Dashboard actions stay off the homepage and open only after a deliberate
+                  route change into the control panel.
+                </small>
+              </article>
+            </div>
+          </section>
+
+          <section id="about" className="landing-panel">
+            <div className="landing-section-heading">
+              <p className="section-kicker">About</p>
+              <h2>A cleaner separation between public website content and guild operations.</h2>
+              <p className="section-text">
+                The homepage now behaves like a proper product front door: simple navigation,
+                stronger visual hierarchy, and no operational clutter fighting for attention.
+              </p>
+            </div>
+
+            <div className="landing-about-grid">
+              <article className="landing-story-card">
+                <strong>Landing first</strong>
+                <p>
+                  Visitors see a stable website shell with marketing content, trust cues,
+                  and public navigation instead of configuration forms.
+                </p>
+              </article>
+              <article className="landing-story-card">
+                <strong>Dashboard second</strong>
+                <p>
+                  Partner board configuration, delivery settings, and data management stay
+                  grouped under the control panel route.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section id="features" className="landing-panel">
+            <div className="landing-section-heading">
+              <p className="section-kicker">Features</p>
+              <h2>Production-minded UX choices for large-scale products.</h2>
+            </div>
+
+            <div className="landing-feature-grid">
+              {landingFeatureCards.map((card) => (
+                <article key={card.title} className="landing-feature-card">
+                  <h3>{card.title}</h3>
+                  <p>{card.body}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section id="status" className="landing-panel">
+            <div className="landing-section-heading">
+              <p className="section-kicker">Status</p>
+              <h2>Operational signals remain visible without exposing admin controls.</h2>
+            </div>
+
+            <div className="landing-status-grid">
+              <article className="landing-story-card">
+                <span className="summary-label">Auth state</span>
+                <strong>{formatAuthStateLabel(authState)}</strong>
+                <p>{formatAuthSupportText(authState, manageableGuilds.length)}</p>
+              </article>
+              <article className="landing-story-card">
+                <span className="summary-label">Serving path</span>
+                <strong>{dashboardHomePath}</strong>
+                <p>The landing and control-panel views stay inside the current embedded dashboard base path.</p>
+              </article>
+              <article className="landing-story-card">
+                <span className="summary-label">Trust rail</span>
+                <div className="landing-trust-list">
+                  {landingTrustPoints.map((point) => (
+                    <span key={point} className="fandom-chip">
+                      {point}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section id="invite" className="landing-panel">
+            <div className="landing-section-heading">
+              <p className="section-kicker">Public entry points</p>
+              <h2>Reserve the homepage for onboarding, docs, support, and premium paths.</h2>
+            </div>
+
+            <div className="landing-entry-grid">
+              <article className="landing-entry-card">
+                <span className="summary-label">Add to server</span>
+                <h3>Wire the invite flow here.</h3>
+                <p>Keep bot onboarding on the public page instead of inside the dashboard.</p>
+              </article>
+              <article id="documentation" className="landing-entry-card">
+                <span className="summary-label">Documentation</span>
+                <h3>Route users to docs and command references.</h3>
+                <p>Documentation belongs in the site navigation, not in the configuration workspace.</p>
+              </article>
+              <article id="support" className="landing-entry-card">
+                <span className="summary-label">Support</span>
+                <h3>Expose help without mixing it with admin tooling.</h3>
+                <p>Support calls-to-action stay predictable across desktop and mobile layouts.</p>
+              </article>
+              <article id="premium" className="landing-entry-card">
+                <span className="summary-label">Premium</span>
+                <h3>Keep monetization visible but separate.</h3>
+                <p>Pricing and upsell content can live here without leaking any dashboard semantics.</p>
+              </article>
+            </div>
+          </section>
+
+          <footer className={`status-banner status-${status.kind} landing-status-banner`} aria-live="polite">
+            <div className="status-copy">
+              <p className="status-kicker">{formatStatusLabel(status.kind)}</p>
+              <strong>{status.message}</strong>
+            </div>
+            <div className="status-meta">
+              {loading ? (
+                <span className="status-pill">{busyAction || "Working..."}</span>
+              ) : null}
+              <span className="status-secondary">
+                {session !== null
+                  ? `Signed in as ${formatUserLabel(session)}.`
+                  : "Public landing page loaded."}
+              </span>
+            </div>
+          </footer>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <div className="app-frame">
@@ -763,7 +1073,7 @@ export default function App() {
                 className="button-primary"
                 type="button"
                 disabled={loading}
-                onClick={beginLogin}
+                onClick={() => beginLogin(controlPanelPath)}
               >
                 Sign in with Discord
               </button>
@@ -834,7 +1144,7 @@ export default function App() {
                     className="button-primary"
                     type="button"
                     disabled={loading}
-                    onClick={beginLogin}
+                    onClick={() => beginLogin(controlPanelPath)}
                   >
                     Sign in with Discord
                   </button>
@@ -1959,6 +2269,36 @@ export default function App() {
   );
 }
 
+function BotIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 96 96"
+      role="img"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="bot-icon-shell" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ffd24c" />
+          <stop offset="100%" stopColor="#ff8c1a" />
+        </linearGradient>
+      </defs>
+      <circle cx="48" cy="48" r="45" fill="#07111d" stroke="#f7c94a" strokeWidth="3" />
+      <circle cx="48" cy="48" r="31" fill="url(#bot-icon-shell)" />
+      <rect x="27" y="29" width="42" height="38" rx="18" fill="#f7f3ec" />
+      <circle cx="39" cy="46" r="6" fill="#f08a6a" />
+      <circle cx="57" cy="46" r="6" fill="#f08a6a" />
+      <circle cx="39" cy="46" r="2.5" fill="#6f432a" />
+      <circle cx="57" cy="46" r="2.5" fill="#6f432a" />
+      <path d="M38 58c3.5 3 16.5 3 20 0" fill="none" stroke="#6f432a" strokeWidth="3" strokeLinecap="round" />
+      <rect x="42" y="18" width="12" height="10" rx="6" fill="#f7f3ec" />
+      <circle cx="48" cy="18" r="5" fill="#f08a6a" />
+      <circle cx="19" cy="49" r="7" fill="#f7f3ec" />
+      <circle cx="77" cy="49" r="7" fill="#f7f3ec" />
+    </svg>
+  );
+}
+
 function formatError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -2302,6 +2642,40 @@ function getInitials(value: string): string {
     return "?";
   }
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+}
+
+function resolveAppView(path: string): AppView {
+  return isControlPanelPath(path) ? "control-panel" : "landing";
+}
+
+function normalizeDashboardAppPath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed === "" || trimmed === "/dashboard") {
+    return dashboardHomePath;
+  }
+
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  if (
+    withoutTrailingSlash === controlPanelPath ||
+    withoutTrailingSlash.startsWith(`${controlPanelPath}/`)
+  ) {
+    return controlPanelPath;
+  }
+  if (
+    withoutTrailingSlash === dashboardHomePath.replace(/\/+$/, "") ||
+    withoutTrailingSlash.startsWith(`${dashboardHomePath}`)
+  ) {
+    return dashboardHomePath;
+  }
+  return dashboardHomePath;
+}
+
+function isControlPanelPath(path: string): boolean {
+  const normalized = path.trim().replace(/\/+$/, "");
+  return (
+    normalized === controlPanelPath ||
+    normalized.startsWith(`${controlPanelPath}/`)
+  );
 }
 
 
