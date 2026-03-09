@@ -80,34 +80,31 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	redirectReq := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
 	redirectRec := httptest.NewRecorder()
 	handler.ServeHTTP(redirectRec, redirectReq)
-	if redirectRec.Code != http.StatusMovedPermanently {
-		t.Fatalf("expected /dashboard redirect, got %d body=%q", redirectRec.Code, redirectRec.Body.String())
+	if redirectRec.Code != http.StatusFound {
+		t.Fatalf("expected /dashboard to redirect unauthenticated users, got %d body=%q", redirectRec.Code, redirectRec.Body.String())
 	}
-	if location := strings.TrimSpace(redirectRec.Header().Get("Location")); location != dashboardRoutePrefix {
-		t.Fatalf("expected redirect location %q, got %q", dashboardRoutePrefix, location)
+	if location := strings.TrimSpace(redirectRec.Header().Get("Location")); location != "/" {
+		t.Fatalf("expected redirect location %q, got %q", "/", location)
 	}
 
 	rootReq := httptest.NewRequest(http.MethodGet, "/", nil)
 	rootRec := httptest.NewRecorder()
 	handler.ServeHTTP(rootRec, rootReq)
-	if rootRec.Code != http.StatusMovedPermanently {
-		t.Fatalf("expected / redirect, got %d body=%q", rootRec.Code, rootRec.Body.String())
+	if rootRec.Code != http.StatusOK {
+		t.Fatalf("expected / to serve landing page, got %d body=%q", rootRec.Code, rootRec.Body.String())
 	}
-	if location := strings.TrimSpace(rootRec.Header().Get("Location")); location != dashboardRoutePrefix {
-		t.Fatalf("expected / redirect location %q, got %q", dashboardRoutePrefix, location)
+	if body := rootRec.Body.String(); !strings.Contains(body, "Login com Discord") {
+		t.Fatalf("expected landing page login button, got %q", body)
 	}
 
 	dashboardReq := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
 	dashboardRec := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardRec, dashboardReq)
-	if dashboardRec.Code != http.StatusOK {
-		t.Fatalf("expected /dashboard/ to serve embedded index, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
+	if dashboardRec.Code != http.StatusFound {
+		t.Fatalf("expected /dashboard/ to redirect unauthenticated users, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
 	}
-	if contentType := dashboardRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
-		t.Fatalf("expected /dashboard/ to serve html, got content-type %q", contentType)
-	}
-	if body := strings.ToLower(dashboardRec.Body.String()); !strings.Contains(body, "<!doctype html") {
-		t.Fatalf("expected embedded index html, got %q", dashboardRec.Body.String())
+	if location := strings.TrimSpace(dashboardRec.Header().Get("Location")); location != "/" {
+		t.Fatalf("expected unauthenticated /dashboard/ redirect to root, got %q", location)
 	}
 
 	apiRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/runtime-config", nil)
@@ -125,6 +122,7 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
+	sessionCookie := configureDashboardSession(t, srv)
 	if err := srv.Start(); err != nil {
 		t.Fatalf("start control server: %v", err)
 	}
@@ -134,7 +132,13 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 		_ = srv.Stop(ctx)
 	})
 
-	resp, err := http.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
+	req, err := http.NewRequest(http.MethodGet, "http://"+srv.listener.Addr().String()+"/dashboard/", nil)
+	if err != nil {
+		t.Fatalf("build GET /dashboard/ request: %v", err)
+	}
+	req.AddCookie(sessionCookie)
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET /dashboard/: %v", err)
 	}
@@ -165,14 +169,23 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 		_ = srv.Stop(ctx)
 	})
 
-	resp, err := http.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
 	if err != nil {
 		t.Fatalf("GET /dashboard/: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected /dashboard/ over live server to return 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected /dashboard/ over live server to redirect to root, got %d", resp.StatusCode)
+	}
+	if location := strings.TrimSpace(resp.Header.Get("Location")); location != "/" {
+		t.Fatalf("expected redirect to root, got %q", location)
 	}
 
 	apiResp, err := http.Get("http://" + srv.listener.Addr().String() + "/v1/runtime-config")
@@ -194,4 +207,35 @@ func mustNewDashboardTestHandler(t *testing.T, assets fs.FS) http.Handler {
 		t.Fatalf("newDashboardHandler() error = %v", err)
 	}
 	return handler
+}
+
+func configureDashboardSession(t *testing.T, srv *Server) *http.Cookie {
+	t.Helper()
+
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:     "1234567890",
+		ClientSecret: "super-secret",
+		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
+	})); err != nil {
+		t.Fatalf("configure dashboard oauth: %v", err)
+	}
+
+	session, err := srv.discordOAuth.sessions.Create(
+		discordOAuthUser{ID: "u1", Username: "alice"},
+		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		"access-token",
+		"refresh-token",
+		"Bearer",
+		time.Hour,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("create dashboard oauth session: %v", err)
+	}
+
+	return &http.Cookie{
+		Name:  defaultDiscordOAuthSessionCookie,
+		Value: session.ID,
+		Path:  "/",
+	}
 }

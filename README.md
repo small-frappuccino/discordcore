@@ -222,7 +222,7 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 ## Control API (Bearer + OAuth session)
 
-Control API starts on the fixed listener `127.0.0.1:8376`. The dashboard shell remains available even when no auth mode is configured, so bot startup is not blocked by missing Discord OAuth setup.
+Control API starts on the fixed listener `127.0.0.1:8376`. The control server now serves a minimal landing page at `/`, while the embedded dashboard remains mounted under `/dashboard/`.
 
 - `ALICE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
 - optional TLS listener:
@@ -231,9 +231,10 @@ Control API starts on the fixed listener `127.0.0.1:8376`. The dashboard shell r
 
 Behavior summary:
 
-- `/dashboard/` is always served when the control listener starts.
+- `/` serves the minimal control landing page with Discord login and dashboard entry actions.
+- `/dashboard/` requires a valid Discord OAuth session cookie; unauthenticated requests are redirected back to `/`.
 - Guild-specific web configuration uses Discord OAuth session auth and is limited to guilds returned by `/auth/guilds/manageable`.
-- When neither bearer nor OAuth is configured, control API routes stay unavailable and return auth/configuration errors, but the bot itself still starts normally.
+- When bearer auth is configured without Discord OAuth, the control API remains available for trusted automation, but the browser dashboard stays gated because no Discord session can be established.
 - If the fixed listener `127.0.0.1:8376` cannot be bound, startup continues without the control server and the failure is logged as degraded control-plane availability.
 
 Authentication contract for `/v1/*` routes:
@@ -251,7 +252,8 @@ Discord OAuth2 endpoints (optional, same control server):
 
 - `GET /auth/discord/login` redirects to Discord OAuth authorize URL and emits anti-CSRF `state` cookie.
 - `GET /auth/discord/callback` validates `state`, exchanges `code` at Discord token endpoint, resolves `/users/@me`, creates server-side session, and sets session cookie.
-- `GET /auth/discord/login?next=/dashboard/` stores the post-login dashboard redirect, and the callback redirects back to `/dashboard/` after the session cookie is issued.
+- `GET /auth/discord/login?next=/` stores the post-login landing redirect, and the callback redirects back to `/` after the session cookie is issued.
+- `GET /auth/discord/login?next=/dashboard/` remains valid for returning directly to the authenticated dashboard shell when needed.
 - `GET /auth/me` returns current authenticated session user.
 - `GET /auth/me` also returns `csrf_token` for explicit CSRF header usage.
 - `POST /auth/logout` invalidates current session and clears session cookie.
@@ -349,6 +351,7 @@ Local dev contract:
 - Dashboard requests use OAuth session cookie auth (`credentials: include`); bearer tokens are not stored in browser code.
 - `VITE_CONTROL_API_GUILD_ID` can prefill the guild selector
 - Production builds use Vite `base: "/dashboard/"`, and the embedded dashboard is served by the control server under `/dashboard/`
+- The public landing page is served by the Go control server at `/`; the React bundle remains dashboard-only.
 
 Quick start:
 

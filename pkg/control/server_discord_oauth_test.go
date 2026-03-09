@@ -185,6 +185,67 @@ func TestDiscordOAuthCallbackRedirectsToDashboardWhenRequested(t *testing.T) {
 	}
 }
 
+func TestDiscordOAuthCallbackRedirectsToRootWhenRequested(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice","avatar":"abc123","discriminator":"0001"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login?next=%2F", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+	nextCookie := findCookie(loginRec.Result().Cookies(), defaultDiscordOAuthNextCookieName)
+	if nextCookie == nil {
+		t.Fatalf("expected %q cookie from login redirect", defaultDiscordOAuthNextCookieName)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	req.AddCookie(stateCookie)
+	req.AddCookie(nextCookie)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 callback redirect, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "/" {
+		t.Fatalf("expected callback redirect to /, got %q", location)
+	}
+}
+
 func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	t.Parallel()
 

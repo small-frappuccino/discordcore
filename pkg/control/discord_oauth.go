@@ -268,7 +268,7 @@ func (s *Server) handleDiscordOAuthLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	oauth.setStateCookie(w, r, state)
-	if next := sanitizeDashboardRedirectTarget(r.URL.Query().Get("next")); next != "" {
+	if next := sanitizeControlRedirectTarget(r.URL.Query().Get("next")); next != "" {
 		oauth.setNextCookie(w, r, next)
 	} else {
 		oauth.clearNextCookie(w, r)
@@ -572,7 +572,7 @@ func (o *discordOAuthProvider) nextFromRequest(r *http.Request) string {
 	if err != nil {
 		return ""
 	}
-	return sanitizeDashboardRedirectTarget(cookie.Value)
+	return sanitizeControlRedirectTarget(cookie.Value)
 }
 
 func (o *discordOAuthProvider) clearSessionCookie(w http.ResponseWriter, _ *http.Request) {
@@ -588,7 +588,7 @@ func (o *discordOAuthProvider) clearSessionCookie(w http.ResponseWriter, _ *http
 	})
 }
 
-func sanitizeDashboardRedirectTarget(raw string) string {
+func sanitizeControlRedirectTarget(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return ""
@@ -600,7 +600,13 @@ func sanitizeDashboardRedirectTarget(raw string) string {
 	}
 
 	cleanPath := path.Clean("/" + strings.TrimSpace(target.Path))
-	if cleanPath == "/" || cleanPath == "/dashboard" {
+	if cleanPath == "/" {
+		if target.RawQuery != "" {
+			return cleanPath + "?" + target.RawQuery
+		}
+		return cleanPath
+	}
+	if cleanPath == "/dashboard" {
 		cleanPath = dashboardRoutePrefix
 	}
 	if !strings.HasPrefix(cleanPath, dashboardRoutePrefix) {
