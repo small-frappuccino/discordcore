@@ -42,6 +42,117 @@ func TestDiscordOAuthRoutesRequireConfig(t *testing.T) {
 	}
 }
 
+func TestDiscordOAuthStatusReportsUnavailableWithoutConfig(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	rec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/status?next=%2Fdashboard%2F", nil, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from oauth status without config, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Status          string `json:"status"`
+		OAuthConfigured bool   `json:"oauth_configured"`
+		Authenticated   bool   `json:"authenticated"`
+		DashboardURL    string `json:"dashboard_url"`
+		LoginURL        string `json:"login_url"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode oauth status response: %v body=%q", err, rec.Body.String())
+	}
+	if response.Status != "ok" {
+		t.Fatalf("unexpected oauth status payload: %+v", response)
+	}
+	if response.OAuthConfigured {
+		t.Fatalf("expected oauth_configured=false, got %+v", response)
+	}
+	if response.Authenticated {
+		t.Fatalf("expected authenticated=false, got %+v", response)
+	}
+	if response.DashboardURL != dashboardRoutePrefix {
+		t.Fatalf("expected dashboard_url=%q, got %+v", dashboardRoutePrefix, response)
+	}
+	if response.LoginURL != "" {
+		t.Fatalf("expected empty login_url without oauth config, got %+v", response)
+	}
+}
+
+func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:     "1234567890",
+		ClientSecret: "super-secret",
+		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	signedOutRec := performHandlerJSONRequestWithAuth(
+		t,
+		srv.httpServer.Handler,
+		http.MethodGet,
+		"/auth/discord/status?next=%2Fdashboard%2Fsettings%3Ftab%3Dmoderation",
+		nil,
+		"",
+	)
+	if signedOutRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from oauth status with config, got %d body=%q", signedOutRec.Code, signedOutRec.Body.String())
+	}
+
+	var signedOut struct {
+		OAuthConfigured bool   `json:"oauth_configured"`
+		Authenticated   bool   `json:"authenticated"`
+		LoginURL        string `json:"login_url"`
+	}
+	if err := json.NewDecoder(signedOutRec.Body).Decode(&signedOut); err != nil {
+		t.Fatalf("decode signed-out oauth status response: %v body=%q", err, signedOutRec.Body.String())
+	}
+	if !signedOut.OAuthConfigured {
+		t.Fatalf("expected oauth_configured=true, got %+v", signedOut)
+	}
+	if signedOut.Authenticated {
+		t.Fatalf("expected authenticated=false without session, got %+v", signedOut)
+	}
+	if signedOut.LoginURL != "/auth/discord/login?next=%2Fdashboard%2Fsettings%3Ftab%3Dmoderation" {
+		t.Fatalf("unexpected login_url for signed-out status: %+v", signedOut)
+	}
+
+	sessionCookie := configureDashboardSession(t, srv)
+	req := httptest.NewRequest(http.MethodGet, "/auth/discord/status?next=%2Fdashboard%2Fcontrol-panel", nil)
+	req.AddCookie(sessionCookie)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from oauth status with session, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var signedIn struct {
+		OAuthConfigured bool             `json:"oauth_configured"`
+		Authenticated   bool             `json:"authenticated"`
+		LoginURL        string           `json:"login_url"`
+		User            discordOAuthUser `json:"user"`
+		CSRFToken       string           `json:"csrf_token"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&signedIn); err != nil {
+		t.Fatalf("decode signed-in oauth status response: %v body=%q", err, rec.Body.String())
+	}
+	if !signedIn.OAuthConfigured || !signedIn.Authenticated {
+		t.Fatalf("expected authenticated oauth status, got %+v", signedIn)
+	}
+	if signedIn.User.ID != "u1" || signedIn.User.Username != "alice" {
+		t.Fatalf("unexpected oauth status user payload: %+v", signedIn.User)
+	}
+	if strings.TrimSpace(signedIn.CSRFToken) == "" {
+		t.Fatalf("expected csrf token in signed-in oauth status, got %+v", signedIn)
+	}
+	if signedIn.LoginURL != "/auth/discord/login?next=%2Fdashboard%2Fcontrol-panel" {
+		t.Fatalf("unexpected login_url for signed-in status: %+v", signedIn)
+	}
+}
+
 func TestDiscordOAuthLoginRedirect(t *testing.T) {
 	t.Parallel()
 

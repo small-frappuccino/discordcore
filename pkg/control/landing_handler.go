@@ -101,6 +101,23 @@ const controlLandingHTML = `<!doctype html>
         flex-wrap: wrap;
       }
 
+      .session-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 10px;
+        flex: 1;
+      }
+
+      .auth-note {
+        margin: 0;
+        max-width: 360px;
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        line-height: 1.45;
+        text-align: right;
+      }
+
       .button {
         appearance: none;
         min-width: 180px;
@@ -158,6 +175,11 @@ const controlLandingHTML = `<!doctype html>
           align-items: flex-start;
         }
 
+        .session-panel {
+          width: 100%;
+          align-items: flex-start;
+        }
+
         .actions {
           width: 100%;
           justify-content: flex-start;
@@ -165,6 +187,11 @@ const controlLandingHTML = `<!doctype html>
 
         .button {
           width: 100%;
+        }
+
+        .auth-note {
+          max-width: none;
+          text-align: left;
         }
       }
     </style>
@@ -191,16 +218,19 @@ const controlLandingHTML = `<!doctype html>
           </svg>
         </div>
 
-        <div class="actions">
-          <button id="login-button" class="button button-primary" type="button">
-            Login com Discord
-          </button>
-          <button id="dashboard-button" class="button button-secondary is-hidden" type="button">
-            Dashboard
-          </button>
-          <button id="logout-button" class="button button-ghost is-hidden" type="button">
-            Logout
-          </button>
+        <div class="session-panel">
+          <div class="actions">
+            <button id="login-button" class="button button-primary" type="button">
+              Login com Discord
+            </button>
+            <button id="dashboard-button" class="button button-secondary is-hidden" type="button">
+              Dashboard
+            </button>
+            <button id="logout-button" class="button button-ghost is-hidden" type="button">
+              Logout
+            </button>
+          </div>
+          <p id="auth-note" class="auth-note" aria-live="polite"></p>
         </div>
       </div>
     </header>
@@ -210,19 +240,31 @@ const controlLandingHTML = `<!doctype html>
         const loginButton = document.getElementById("login-button");
         const dashboardButton = document.getElementById("dashboard-button");
         const logoutButton = document.getElementById("logout-button");
+        const authNote = document.getElementById("auth-note");
         let csrfToken = "";
+        let loginURL = "/auth/discord/login?next=%2Fdashboard%2F";
 
         function hide(element, hidden) {
           element.classList.toggle("is-hidden", hidden);
         }
 
-        function showSignedOut(oauthAvailable) {
+        function setAuthNote(message) {
+          authNote.textContent = message;
+        }
+
+        function showSignedOut(oauthAvailable, nextLoginURL) {
           csrfToken = "";
+          loginURL = nextLoginURL || "/auth/discord/login?next=%2Fdashboard%2F";
           hide(loginButton, false);
           hide(dashboardButton, true);
           hide(logoutButton, true);
           loginButton.disabled = !oauthAvailable;
           loginButton.textContent = oauthAvailable ? "Login com Discord" : "Discord indisponível";
+          setAuthNote(
+            oauthAvailable
+              ? "Faça login com Discord para abrir o dashboard autenticado."
+              : "O OAuth do Discord não está configurado neste servidor de controle.",
+          );
         }
 
         function showSignedIn(token) {
@@ -232,35 +274,45 @@ const controlLandingHTML = `<!doctype html>
           hide(logoutButton, false);
           loginButton.disabled = false;
           loginButton.textContent = "Login com Discord";
+          setAuthNote("Sessão ativa. Abra o dashboard ou encerre a sessão atual.");
         }
 
         async function refreshSession() {
           try {
-            const response = await fetch("/auth/me", {
+            const response = await fetch("/auth/discord/status?next=%2Fdashboard%2F", {
               method: "GET",
               credentials: "include"
             });
-            if (response.status === 200) {
-              const payload = await response.json();
+            if (!response.ok) {
+              throw new Error("status probe failed");
+            }
+
+            const payload = await response.json();
+            const oauthAvailable = Boolean(payload.oauth_configured);
+            const authenticated = Boolean(payload.authenticated);
+            const nextLoginURL = String(payload.login_url || "").trim();
+
+            if (authenticated) {
               showSignedIn(String(payload.csrf_token || "").trim());
               return;
             }
-            if (response.status === 503) {
-              showSignedOut(false);
-              return;
-            }
-            showSignedOut(true);
+
+            showSignedOut(oauthAvailable, nextLoginURL);
           } catch {
-            showSignedOut(true);
+            showSignedOut(true, "");
+            setAuthNote("Nao foi possivel verificar a sessao do Discord. Voce ainda pode tentar entrar.");
           }
         }
 
         loginButton.addEventListener("click", () => {
-          window.location.assign("/auth/discord/login?next=%2F");
+          if (loginButton.disabled) {
+            return;
+          }
+          window.location.assign(loginURL);
         });
 
         dashboardButton.addEventListener("click", () => {
-          window.location.assign("/dashboard");
+          window.location.assign("/dashboard/");
         });
 
         logoutButton.addEventListener("click", async () => {
@@ -280,7 +332,8 @@ const controlLandingHTML = `<!doctype html>
               }
             });
           } finally {
-            showSignedOut(true);
+            showSignedOut(true, "");
+            setAuthNote("Sessao encerrada. Faca login com Discord para entrar novamente.");
           }
         });
 

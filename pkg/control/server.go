@@ -81,6 +81,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	}
 
 	mux.HandleFunc("/auth/discord/login", s.handleDiscordOAuthLogin)
+	mux.HandleFunc("/auth/discord/status", s.handleDiscordOAuthStatus)
 	mux.HandleFunc("/auth/discord/callback", s.handleDiscordOAuthCallback)
 	mux.HandleFunc("/auth/me", s.handleDiscordOAuthMe)
 	mux.HandleFunc("/auth/logout", s.handleDiscordOAuthLogout)
@@ -92,6 +93,10 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.Handle("/", newLandingHandler())
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		if !s.hasAuthenticatedDashboardSession(r) {
+			if s.discordOAuthConfigured() {
+				http.Redirect(w, r, buildDiscordOAuthLoginPath(dashboardRoutePrefix), http.StatusFound)
+				return
+			}
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}

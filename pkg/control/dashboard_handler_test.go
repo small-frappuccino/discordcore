@@ -118,6 +118,41 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	}
 }
 
+func TestDashboardRoutesRedirectToDiscordLoginWhenOAuthConfigured(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:     "1234567890",
+		ClientSecret: "super-secret",
+		RedirectURI:  "http://127.0.0.1:8080/auth/discord/callback",
+	})); err != nil {
+		t.Fatalf("configure dashboard oauth: %v", err)
+	}
+
+	handler := srv.httpServer.Handler
+
+	rootDashboardReq := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	rootDashboardRec := httptest.NewRecorder()
+	handler.ServeHTTP(rootDashboardRec, rootDashboardReq)
+	if rootDashboardRec.Code != http.StatusFound {
+		t.Fatalf("expected /dashboard to redirect to oauth login, got %d body=%q", rootDashboardRec.Code, rootDashboardRec.Body.String())
+	}
+	if location := strings.TrimSpace(rootDashboardRec.Header().Get("Location")); location != "/auth/discord/login?next=%2Fdashboard%2F" {
+		t.Fatalf("unexpected /dashboard redirect target: %q", location)
+	}
+
+	spaReq := httptest.NewRequest(http.MethodGet, "/dashboard/settings/guilds?tab=access", nil)
+	spaRec := httptest.NewRecorder()
+	handler.ServeHTTP(spaRec, spaReq)
+	if spaRec.Code != http.StatusFound {
+		t.Fatalf("expected dashboard SPA route to redirect to oauth login, got %d body=%q", spaRec.Code, spaRec.Body.String())
+	}
+	if location := strings.TrimSpace(spaRec.Header().Get("Location")); location != "/auth/discord/login?next=%2Fdashboard%2Fsettings%2Fguilds%3Ftab%3Daccess" {
+		t.Fatalf("unexpected dashboard SPA redirect target: %q", location)
+	}
+}
+
 func TestDashboardEndpointInteraction(t *testing.T) {
 	t.Parallel()
 

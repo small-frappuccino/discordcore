@@ -417,6 +417,42 @@ func (s *Server) handleDiscordOAuthMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleDiscordOAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	next := sanitizeControlRedirectTarget(r.URL.Query().Get("next"))
+	response := map[string]any{
+		"status":           "ok",
+		"oauth_configured": s.discordOAuthConfigured(),
+		"authenticated":    false,
+		"dashboard_url":    dashboardRoutePrefix,
+		"login_url":        "",
+	}
+	if !s.discordOAuthConfigured() {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
+		writeJSON(w, http.StatusOK, response)
+		return
+	}
+
+	response["login_url"] = buildDiscordOAuthLoginPath(next)
+	session, err := s.discordOAuth.sessionFromRequest(r)
+	if err == nil {
+		response["authenticated"] = true
+		response["user"] = session.User
+		response["scopes"] = session.Scopes
+		response["csrf_token"] = session.CSRFToken
+		response["expires_at"] = session.ExpiresAt.UTC().Format(time.RFC3339)
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s *Server) handleDiscordOAuthLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -468,6 +504,10 @@ func (s *Server) requireDiscordOAuth(w http.ResponseWriter) (*discordOAuthProvid
 		return nil, false
 	}
 	return s.discordOAuth, true
+}
+
+func (s *Server) discordOAuthConfigured() bool {
+	return s != nil && s.discordOAuth != nil
 }
 
 func (o *discordOAuthProvider) generateState() (string, error) {
@@ -617,6 +657,14 @@ func sanitizeControlRedirectTarget(raw string) string {
 		return cleanPath + "?" + target.RawQuery
 	}
 	return cleanPath
+}
+
+func buildDiscordOAuthLoginPath(next string) string {
+	target := sanitizeControlRedirectTarget(next)
+	if target == "" {
+		target = dashboardRoutePrefix
+	}
+	return "/auth/discord/login?next=" + url.QueryEscape(target)
 }
 
 func (o *discordOAuthProvider) validateState(r *http.Request, provided string) error {

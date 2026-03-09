@@ -2,6 +2,7 @@ package control
 
 import (
 	"net/http"
+	"strings"
 )
 
 type dashboardAccessHandler struct {
@@ -18,6 +19,10 @@ func newProtectedEmbeddedDashboardHandler(server *Server) http.Handler {
 
 func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !h.server.hasAuthenticatedDashboardSession(r) {
+		if h.server.discordOAuthConfigured() {
+			http.Redirect(w, r, buildDiscordOAuthLoginPath(dashboardRequestRedirectTarget(r)), http.StatusFound)
+			return
+		}
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
@@ -32,4 +37,16 @@ func (s *Server) hasAuthenticatedDashboardSession(r *http.Request) bool {
 
 	_, err := s.discordOAuth.sessionFromRequest(r)
 	return err == nil
+}
+
+func dashboardRequestRedirectTarget(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return dashboardRoutePrefix
+	}
+
+	target := r.URL.Path
+	if strings.TrimSpace(r.URL.RawQuery) != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	return target
 }
