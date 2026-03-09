@@ -342,6 +342,9 @@ func Run(appName, tokenEnv string) error {
 		controlServer.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 			return listBotGuildIDsFromSessionState(discordSession)
 		})
+		controlServer.SetGuildRegistrationFunc(func(_ context.Context, guildID string) error {
+			return configManager.RegisterGuild(discordSession, guildID)
+		})
 		if controlTLSCertFile != "" || controlTLSKeyFile != "" {
 			if err := controlServer.SetTLSCertificates(controlTLSCertFile, controlTLSKeyFile); err != nil {
 				return fmt.Errorf("configure control tls certificates: %w", err)

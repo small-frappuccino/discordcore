@@ -791,79 +791,101 @@ func (r Ruleset) StatusString() string {
 	return "Disabled"
 }
 
+func guildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, strings.TrimSpace(guildID))
+	}
+
+	target := strings.TrimSpace(guildID)
+	if target == "" {
+		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, target)
+	}
+
+	for idx := range cfg.Guilds {
+		if cfg.Guilds[idx].GuildID == target {
+			return &cfg.Guilds[idx], nil
+		}
+	}
+	return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, target)
+}
+
 // ## ConfigManager Methods
 
 // AddList adds a list to the LooseLists of a guild.
 func (mgr *ConfigManager) AddList(guildID string, list List) error {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig := mgr.GuildConfig(guildID)
-	if guildConfig == nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
-		return fmt.Errorf("guild not found")
-	}
-	guildConfig.LooseLists = append(guildConfig.LooseLists, Rule{
-		ID:      list.ID,
-		Name:    list.Name,
-		Lists:   []List{list},
-		Enabled: true,
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		guildConfig, err := guildConfigByID(cfg, guildID)
+		if err != nil {
+			log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
+			return err
+		}
+		guildConfig.LooseLists = append(guildConfig.LooseLists, Rule{
+			ID:      list.ID,
+			Name:    list.Name,
+			Lists:   []List{list},
+			Enabled: true,
+		})
+		return nil
 	})
+	if err != nil {
+		return err
+	}
 	log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully for guildID: %s", guildID))
-	return mgr.SaveConfig()
+	return nil
 }
 
 // AddRule adds a rule to the LooseLists of a guild.
 func (mgr *ConfigManager) AddRule(guildID string, rule Rule) error {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig := mgr.GuildConfig(guildID)
-	if guildConfig == nil {
-		return fmt.Errorf("guild not found")
-	}
-
-	guildConfig.LooseLists = append(guildConfig.LooseLists, rule)
-	return mgr.SaveConfig()
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		guildConfig, err := guildConfigByID(cfg, guildID)
+		if err != nil {
+			return err
+		}
+		guildConfig.LooseLists = append(guildConfig.LooseLists, rule)
+		return nil
+	})
+	return err
 }
 
 // AddRuleset adds a ruleset to a guild.
 func (mgr *ConfigManager) AddRuleset(guildID string, ruleset Ruleset) error {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig := mgr.GuildConfig(guildID)
-	if guildConfig == nil {
-		return fmt.Errorf("guild not found")
-	}
-
-	guildConfig.Rulesets = append(guildConfig.Rulesets, ruleset)
-	return mgr.SaveConfig()
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		guildConfig, err := guildConfigByID(cfg, guildID)
+		if err != nil {
+			return err
+		}
+		guildConfig.Rulesets = append(guildConfig.Rulesets, ruleset)
+		return nil
+	})
+	return err
 }
 
 // AddListToRule adds a list to a specific rule in a guild.
 func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List) error {
 	log.DatabaseLogger().Info(fmt.Sprintf("AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID))
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig := mgr.GuildConfig(guildID)
-	if guildConfig == nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
-		return fmt.Errorf("guild not found")
-	}
-
-	for i, rule := range guildConfig.LooseLists {
-		if rule.ID == ruleID {
-			log.DatabaseLogger().Info(fmt.Sprintf("Rule found for ruleID: %s, appending list", ruleID))
-			guildConfig.LooseLists[i].Lists = append(guildConfig.LooseLists[i].Lists, list)
-			log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully to ruleID: %s", ruleID))
-			return mgr.SaveConfig()
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		guildConfig, err := guildConfigByID(cfg, guildID)
+		if err != nil {
+			log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
+			return err
 		}
-	}
 
-	log.ErrorLoggerRaw().Error(fmt.Sprintf("Rule not found for ruleID: %s", ruleID))
-	return fmt.Errorf("rule not found")
+		for i, rule := range guildConfig.LooseLists {
+			if rule.ID == ruleID {
+				log.DatabaseLogger().Info(fmt.Sprintf("Rule found for ruleID: %s, appending list", ruleID))
+				guildConfig.LooseLists[i].Lists = append(guildConfig.LooseLists[i].Lists, list)
+				return nil
+			}
+		}
+
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("Rule not found for ruleID: %s", ruleID))
+		return fmt.Errorf("rule not found")
+	})
+	if err != nil {
+		return err
+	}
+	log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully to ruleID: %s", ruleID))
+	return nil
 }
 
 // ## GuildConfig Methods
@@ -931,15 +953,15 @@ func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 			return fmt.Errorf("invalid ttl: %w", err)
 		}
 	}
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	gcfg := mgr.GuildConfig(guildID)
-	if gcfg == nil {
-		return fmt.Errorf("guild not found")
-	}
-	gcfg.RolesCacheTTL = ttl
-	return mgr.SaveConfig()
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		gcfg, err := guildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("guild not found")
+		}
+		gcfg.RolesCacheTTL = ttl
+		return nil
+	})
+	return err
 }
 
 // GetRolesCacheTTL gets the configured roles cache TTL (original string, e.g., "5m").

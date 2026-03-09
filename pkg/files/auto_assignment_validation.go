@@ -42,6 +42,22 @@ func validateBotConfig(cfg *BotConfig) error {
 	}
 
 	for idx := range cfg.Guilds {
+		moderation, err := NormalizeGuildModerationConfig(
+			cfg.Guilds[idx].Rulesets,
+			cfg.Guilds[idx].LooseLists,
+			cfg.Guilds[idx].Blocklist,
+		)
+		if err != nil {
+			if validationErr, ok := err.(ValidationError); ok {
+				validationErr.Field = fmt.Sprintf("guilds[%d].%s", idx, validationErr.Field)
+				return validationErr
+			}
+			return err
+		}
+		cfg.Guilds[idx].Rulesets = moderation.Rulesets
+		cfg.Guilds[idx].LooseLists = moderation.LooseRules
+		cfg.Guilds[idx].Blocklist = moderation.Blocklist
+
 		if err := validateGuildAutoAssignmentOrder(&cfg.Guilds[idx], idx); err != nil {
 			return err
 		}

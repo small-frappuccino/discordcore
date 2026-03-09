@@ -79,8 +79,8 @@ func (mgr *ConfigManager) LoadConfig() error {
 
 // Save saves the current configuration to file.
 func (mgr *ConfigManager) SaveConfig() error {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	return mgr.saveConfigLocked()
 }
@@ -333,6 +333,9 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 
 // AddGuildToConfig adds a new guild to the configuration.
 func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID string) error {
+	if session == nil {
+		return fmt.Errorf("%w: discord session is unavailable", ErrGuildBootstrapDiscordFetch)
+	}
 	// ensure config exists
 	mgr.mu.RLock()
 	cfgNil := mgr.config == nil
@@ -356,11 +359,11 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	}
 	guild, err := session.Guild(guildID)
 	if err != nil {
-		return fmt.Errorf(ErrGuildInfoFetchMsg, guildID, err)
+		return fmt.Errorf("%w: "+ErrGuildInfoFetchMsg, ErrGuildBootstrapDiscordFetch, guildID, err)
 	}
 	channelID := FindSuitableChannel(session, guildID)
 	if channelID == "" {
-		return fmt.Errorf(ErrNoSuitableChannelMsg, guild.Name)
+		return fmt.Errorf("%w: "+ErrNoSuitableChannelMsg, ErrGuildBootstrapPrerequisite, guild.Name)
 	}
 	roles := FindAdminRoles(session, guildID, guild.OwnerID)
 	entryLeaveID := FindEntryLeaveChannel(session, guildID)
@@ -394,7 +397,10 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 		channelName = ch.Name
 	}
 	log.ApplicationLogger().Info(LogGuildAdded, "guildName", guild.Name, "guildID", guildID, "channel", channelName)
-	return mgr.SaveConfig()
+	if err := mgr.SaveConfig(); err != nil {
+		return fmt.Errorf("register guild: save config: %w", err)
+	}
+	return nil
 }
 
 // --- Utility & Logging ---

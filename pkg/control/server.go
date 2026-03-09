@@ -28,6 +28,7 @@ const (
 var ErrControlServerBind = errors.New("control server bind failed")
 
 type botGuildIDsProvider func(context.Context) ([]string, error)
+type guildRegistrationFunc func(context.Context, string) error
 
 type requestAuthMode string
 
@@ -52,6 +53,7 @@ type Server struct {
 	partnerBoardService partners.BoardService
 	partnerBoardSyncer  partners.GuildSyncExecutor
 	botGuildIDsProvider botGuildIDsProvider
+	guildRegistration   guildRegistrationFunc
 	discordOAuth        *discordOAuthProvider
 	runtimeApplier      *runtimeapply.Manager
 	httpServer          *http.Server
@@ -83,6 +85,8 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/auth/me", s.handleDiscordOAuthMe)
 	mux.HandleFunc("/auth/logout", s.handleDiscordOAuthLogout)
 	mux.HandleFunc("/auth/guilds/manageable", s.handleDiscordOAuthManageableGuilds)
+	mux.HandleFunc("/v1/settings", s.handleSettingsRoutes)
+	mux.HandleFunc("/v1/settings/", s.handleSettingsRoutes)
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
 	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
 	mux.Handle("/", newLandingHandler())
@@ -150,6 +154,15 @@ func (s *Server) SetBotGuildIDsProvider(provider func(context.Context) ([]string
 		return
 	}
 	s.botGuildIDsProvider = provider
+}
+
+// SetGuildRegistrationFunc configures Discord-aware guild bootstrap used by
+// the settings registry endpoints.
+func (s *Server) SetGuildRegistrationFunc(fn func(context.Context, string) error) {
+	if s == nil || fn == nil {
+		return
+	}
+	s.guildRegistration = fn
 }
 
 // Start opens the control server listening socket.
@@ -490,6 +503,18 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 	}
 
 	switch {
+	case len(tail) == 1 && tail[0] == "settings":
+		switch r.Method {
+		case http.MethodGet:
+			s.handleGuildSettingsGet(w, r, guildID)
+		case http.MethodPut:
+			s.handleGuildSettingsPut(w, r, guildID)
+		case http.MethodDelete:
+			s.handleGuildSettingsDelete(w, r, guildID)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
 	case len(tail) == 1 && tail[0] == "partner-board":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
