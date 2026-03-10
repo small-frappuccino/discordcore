@@ -25,8 +25,8 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 	})
 
 	t.Run("incomplete config fails", func(t *testing.T) {
-		t.Setenv(controlDiscordOAuthClientIDEnv, "client-id")
-		t.Setenv(controlDiscordOAuthClientSecretEnv, "")
+		t.Setenv(controlDiscordOAuthClientIDEnv, "")
+		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
@@ -50,8 +50,8 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("complete config", func(t *testing.T) {
-		t.Setenv(controlDiscordOAuthClientIDEnv, "client-id")
+	t.Run("complete config uses repo client id", func(t *testing.T) {
+		t.Setenv(controlDiscordOAuthClientIDEnv, "")
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "http://127.0.0.1:8080/auth/discord/callback")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "true")
@@ -64,7 +64,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		if cfg == nil {
 			t.Fatal("expected non-nil oauth config")
 		}
-		if cfg.ClientID != "client-id" || cfg.ClientSecret != "client-secret" {
+		if cfg.ClientID != defaultControlDiscordOAuthClientID || cfg.ClientSecret != "client-secret" {
 			t.Fatalf("unexpected client credentials in cfg: %+v", cfg)
 		}
 		if cfg.RedirectURI != "http://127.0.0.1:8080/auth/discord/callback" {
@@ -79,8 +79,27 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit client id overrides repo default", func(t *testing.T) {
+		t.Setenv(controlDiscordOAuthClientIDEnv, "override-client-id")
+		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
+		t.Setenv(controlDiscordOAuthRedirectURIEnv, "http://127.0.0.1:8080/auth/discord/callback")
+		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
+
+		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		if err != nil {
+			t.Fatalf("expected override client id config to parse, got %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("expected non-nil oauth config")
+		}
+		if cfg.ClientID != "override-client-id" {
+			t.Fatalf("expected env override client id, got %+v", cfg)
+		}
+	})
+
 	t.Run("explicit session store path", func(t *testing.T) {
-		t.Setenv(controlDiscordOAuthClientIDEnv, "client-id")
+		t.Setenv(controlDiscordOAuthClientIDEnv, "")
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "http://127.0.0.1:8080/auth/discord/callback")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")

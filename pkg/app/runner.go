@@ -43,6 +43,7 @@ var (
 
 const (
 	defaultControlAddr                            = "127.0.0.1:8376"
+	defaultControlDiscordOAuthClientID            = "1396606252506681395"
 	controlBearerTokenEnv                         = "ALICE_CONTROL_BEARER_TOKEN"
 	controlDiscordOAuthClientIDEnv                = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID"
 	controlDiscordOAuthClientSecretEnv            = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
@@ -598,18 +599,17 @@ func Run(appName, tokenEnv string) error {
 }
 
 func loadControlDiscordOAuthConfigFromEnv() (*control.DiscordOAuthConfig, error) {
-	clientID := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientIDEnv, ""))
+	clientID := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
 	clientSecret := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientSecretEnv, ""))
 	redirectURI := strings.TrimSpace(util.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
 	includeGuildMembersRead := util.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
 	sessionStorePath := strings.TrimSpace(util.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
 
-	if clientID == "" && clientSecret == "" && redirectURI == "" {
+	if clientSecret == "" && redirectURI == "" {
 		if includeGuildMembersRead {
 			return nil, fmt.Errorf(
-				"%s=true requires %s, %s, and %s",
+				"%s=true requires %s and %s",
 				controlDiscordOAuthIncludeGuildMembersReadEnv,
-				controlDiscordOAuthClientIDEnv,
 				controlDiscordOAuthClientSecretEnv,
 				controlDiscordOAuthRedirectURIEnv,
 			)
@@ -617,10 +617,7 @@ func loadControlDiscordOAuthConfigFromEnv() (*control.DiscordOAuthConfig, error)
 		return nil, nil
 	}
 
-	missing := make([]string, 0, 3)
-	if clientID == "" {
-		missing = append(missing, controlDiscordOAuthClientIDEnv)
-	}
+	missing := make([]string, 0, 2)
 	if clientSecret == "" {
 		missing = append(missing, controlDiscordOAuthClientSecretEnv)
 	}

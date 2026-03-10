@@ -263,13 +263,15 @@ Discord OAuth2 endpoints (optional, same control server):
 - Token exchange request uses `Content-Type: application/x-www-form-urlencoded`.
 - OAuth cookie-based auth requires HTTPS transport because cookies are always `Secure`.
 
-Enable OAuth routes by setting all vars below:
+Enable OAuth routes by setting these vars:
 
-- `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID`
 - `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
 - `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI`
 - `ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
 - use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or terminate TLS at a reverse proxy in front of the control listener.
+
+The product ships with a versioned default Discord OAuth client ID (`1396606252506681395`).
+Set `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID` only if you need to override that default with a different Discord application.
 
 Scopes:
 
