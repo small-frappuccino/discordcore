@@ -26,8 +26,8 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 
 	t.Run("incomplete config fails", func(t *testing.T) {
 		t.Setenv(controlDiscordOAuthClientIDEnv, "")
-		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
-		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
+		t.Setenv(controlDiscordOAuthClientSecretEnv, "")
+		t.Setenv(controlDiscordOAuthRedirectURIEnv, "https://example.invalid/auth/discord/callback")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
@@ -76,6 +76,25 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		wantStorePath := filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
 		if cfg.SessionStorePath != wantStorePath {
 			t.Fatalf("unexpected default oauth session store path: got=%q want=%q", cfg.SessionStorePath, wantStorePath)
+		}
+	})
+
+	t.Run("missing redirect uses repo local proxy default", func(t *testing.T) {
+		t.Setenv(controlDiscordOAuthClientIDEnv, "")
+		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
+		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
+		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
+
+		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		if err != nil {
+			t.Fatalf("expected missing redirect to use default, got %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("expected non-nil oauth config")
+		}
+		if cfg.RedirectURI != defaultControlDiscordOAuthRedirectURI {
+			t.Fatalf("unexpected default redirect URI: %+v", cfg)
 		}
 	})
 

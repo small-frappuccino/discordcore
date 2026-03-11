@@ -44,6 +44,7 @@ var (
 const (
 	defaultControlAddr                            = "127.0.0.1:8376"
 	defaultControlDiscordOAuthClientID            = "1396606252506681395"
+	defaultControlDiscordOAuthRedirectURI         = "https://alice.localhost:8443/auth/discord/callback"
 	controlBearerTokenEnv                         = "ALICE_CONTROL_BEARER_TOKEN"
 	controlDiscordOAuthClientIDEnv                = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID"
 	controlDiscordOAuthClientSecretEnv            = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
@@ -615,6 +616,9 @@ func loadControlDiscordOAuthConfigFromEnv() (*control.DiscordOAuthConfig, error)
 			)
 		}
 		return nil, nil
+	}
+	if clientSecret != "" && redirectURI == "" {
+		redirectURI = defaultControlDiscordOAuthRedirectURI
 	}
 
 	missing := make([]string, 0, 2)

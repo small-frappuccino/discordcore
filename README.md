@@ -266,12 +266,13 @@ Discord OAuth2 endpoints (optional, same control server):
 Enable OAuth routes by setting these vars:
 
 - `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
-- `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI`
+- `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` (optional only for the current local proxy default; otherwise set it explicitly)
 - `ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
 - use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or terminate TLS at a reverse proxy in front of the control listener.
 
 The product ships with a versioned default Discord OAuth client ID (`1396606252506681395`).
 Set `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID` only if you need to override that default with a different Discord application.
+When `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET` is set and `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` is unset, Discordcore currently defaults the redirect URI to `https://alice.localhost:8443/auth/discord/callback` for the local HTTPS proxy workflow.
 
 Scopes:
 
