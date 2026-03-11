@@ -1,10 +1,14 @@
 package app
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 func TestLoadControlTLSFilesFromEnv(t *testing.T) {
@@ -72,4 +76,74 @@ func TestListBotGuildIDsFromSessionState(t *testing.T) {
 			t.Fatalf("unexpected guild ids: got=%v want=%v", got, want)
 		}
 	})
+}
+
+func TestResolveControlRuntimeUsesManagedLocalHTTPS(t *testing.T) {
+	tempAppData := t.TempDir()
+	t.Setenv("APPDATA", tempAppData)
+	t.Setenv(controlTLSCertFileEnv, "")
+	t.Setenv(controlTLSKeyFileEnv, "")
+	t.Setenv(controlDiscordOAuthClientSecretEnv, "")
+	t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
+	util.SetAppName("alicebot-run-options-test")
+
+	runtime, err := resolveControlRuntime(context.Background(), RunOptions{
+		Control: ControlOptions{
+			BindAddr:     defaultLocalHTTPSControlAddr,
+			PublicOrigin: defaultLocalHTTPSPublicOrigin,
+			LocalHTTPS: ControlLocalHTTPSOptions{
+				Enabled:   true,
+				AutoTrust: false,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("resolve control runtime: %v", err)
+	}
+	if runtime.bindAddr != defaultLocalHTTPSControlAddr {
+		t.Fatalf("unexpected bind addr: %+v", runtime)
+	}
+	if runtime.publicOrigin != defaultLocalHTTPSPublicOrigin {
+		t.Fatalf("unexpected public origin: %+v", runtime)
+	}
+	if runtime.tlsCertFile == "" || runtime.tlsKeyFile == "" {
+		t.Fatalf("expected managed local tls files, got %+v", runtime)
+	}
+	if _, err := os.Stat(runtime.tlsCertFile); err != nil {
+		t.Fatalf("stat managed cert file: %v", err)
+	}
+	if _, err := os.Stat(runtime.tlsKeyFile); err != nil {
+		t.Fatalf("stat managed key file: %v", err)
+	}
+}
+
+func TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin(t *testing.T) {
+	t.Setenv(controlTLSCertFileEnv, "")
+	t.Setenv(controlTLSKeyFileEnv, "")
+	t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
+	t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
+	t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
+
+	tempAppData := t.TempDir()
+	t.Setenv("APPDATA", tempAppData)
+	util.SetAppName("alicebot-run-options-test")
+
+	runtime, err := resolveControlRuntime(context.Background(), RunOptions{
+		Control: ControlOptions{
+			PublicOrigin: "https://alice.localhost:8443",
+		},
+	})
+	if err != nil {
+		t.Fatalf("resolve control runtime: %v", err)
+	}
+	if runtime.oauthConfig == nil {
+		t.Fatal("expected oauth config")
+	}
+	if runtime.oauthConfig.RedirectURI != "https://alice.localhost:8443/auth/discord/callback" {
+		t.Fatalf("unexpected derived redirect uri: %+v", runtime.oauthConfig)
+	}
+	wantStorePath := filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
+	if runtime.oauthConfig.SessionStorePath != wantStorePath {
+		t.Fatalf("unexpected oauth session store path: got=%q want=%q", runtime.oauthConfig.SessionStorePath, wantStorePath)
+	}
 }

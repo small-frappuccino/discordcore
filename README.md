@@ -222,9 +222,10 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 ## Control API (Bearer + OAuth session)
 
-Control API starts on the fixed listener `127.0.0.1:8376`. The control server now serves a minimal landing page at `/`, while the embedded dashboard remains mounted under `/dashboard/`.
+When the shared runner is used via `Run`, the Control API starts on the default listener `127.0.0.1:8376`. Hosts can override the listener and public origin through `RunWithOptions`; `alicebot` uses that path to expose embedded local HTTPS on `127.0.0.1:8443` with canonical public origin `https://alice.localhost:8443`. The control server serves a minimal landing page at `/`, while the embedded dashboard remains mounted under `/dashboard/`.
 
 - `ALICE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
+- `ALICE_CONTROL_PUBLIC_ORIGIN` (optional; absolute canonical browser origin such as `https://alice.localhost:8443`)
 - optional TLS listener:
   - `ALICE_CONTROL_TLS_CERT_FILE`
   - `ALICE_CONTROL_TLS_KEY_FILE`
@@ -256,7 +257,7 @@ Discord OAuth2 endpoints (optional, same control server):
 - `GET /auth/discord/login?next=/dashboard/` remains valid for returning directly to the authenticated dashboard shell when needed.
 - `GET /auth/me` returns current authenticated session user.
 - `GET /auth/me` also returns `csrf_token` for explicit CSRF header usage.
-- OAuth status/login/dashboard URLs are emitted against the configured redirect origin when available, so browser flows do not start on one host and callback on another.
+- OAuth status/login/dashboard URLs are emitted against the configured public origin when available, so browser flows do not start on one host and callback on another.
 - `POST /auth/logout` invalidates current session and clears session cookie.
 - `GET /auth/guilds/manageable` lists guilds from `/users/@me/guilds` (Discord OAuth user token, paginated at `limit=200`), filtered to `owner` or `ADMINISTRATOR`/`MANAGE_GUILD`, then intersected with guild IDs where the bot is present.
 - OAuth sessions are persisted on disk (not only in memory), so authenticated sessions survive process restart until session expiry/logout.
@@ -267,13 +268,13 @@ Discord OAuth2 endpoints (optional, same control server):
 Enable OAuth routes by setting these vars:
 
 - `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
-- `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` (optional only for the current local proxy default; otherwise set it explicitly)
+- `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` (optional when `ALICE_CONTROL_PUBLIC_ORIGIN` or host `RunWithOptions` wiring can derive the callback)
 - `ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
-- use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or terminate TLS at a reverse proxy in front of the control listener.
+- use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or configure host-managed HTTPS such as Alicebot's embedded local TLS mode.
 
 The product ships with a versioned default Discord OAuth client ID (`1396606252506681395`).
 Set `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID` only if you need to override that default with a different Discord application.
-When `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET` is set and `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` is unset, Discordcore currently defaults the redirect URI to `https://alice.localhost:8443/auth/discord/callback` for the local HTTPS proxy workflow.
+When `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET` is set and `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` is unset, Discordcore derives the redirect URI from the configured public origin and the fixed callback path `/auth/discord/callback`.
 
 Scopes:
 

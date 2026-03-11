@@ -47,7 +47,7 @@ func TestControlServerListenAddrAndDashboardURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotListen, gotDashboard := controlServerListenAddrAndDashboardURL(tt.addr, tt.tlsEnabled)
+			gotListen, gotDashboard := controlServerListenAddrAndDashboardURL(tt.addr, tt.tlsEnabled, controlPublicOrigin{})
 			if gotListen != tt.wantListen {
 				t.Fatalf("listen addr = %q, want %q", gotListen, tt.wantListen)
 			}
@@ -55,5 +55,21 @@ func TestControlServerListenAddrAndDashboardURL(t *testing.T) {
 				t.Fatalf("dashboard url = %q, want %q", gotDashboard, tt.wantDashboard)
 			}
 		})
+	}
+}
+
+func TestControlServerListenAddrAndDashboardURLUsesPublicOrigin(t *testing.T) {
+	t.Parallel()
+
+	gotListen, gotDashboard := controlServerListenAddrAndDashboardURL(
+		&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8443},
+		true,
+		controlPublicOrigin{scheme: "https", host: "alice.localhost:8443"},
+	)
+	if gotListen != "127.0.0.1:8443" {
+		t.Fatalf("unexpected listen addr: %q", gotListen)
+	}
+	if gotDashboard != "https://alice.localhost:8443/" {
+		t.Fatalf("unexpected dashboard url: %q", gotDashboard)
 	}
 }

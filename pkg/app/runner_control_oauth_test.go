@@ -15,7 +15,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
 		if err != nil {
 			t.Fatalf("expected no error when oauth config is absent, got %v", err)
 		}
@@ -31,7 +31,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
 		if err == nil {
 			t.Fatalf("expected error for incomplete oauth config, got cfg=%+v", cfg)
 		}
@@ -44,7 +44,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "true")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
 		if err == nil {
 			t.Fatalf("expected error for include scope without oauth credentials, got cfg=%+v", cfg)
 		}
@@ -57,7 +57,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "true")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
 		if err != nil {
 			t.Fatalf("expected complete oauth config to parse, got %v", err)
 		}
@@ -79,22 +79,35 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("missing redirect uses repo local proxy default", func(t *testing.T) {
+	t.Run("missing redirect without public origin fails", func(t *testing.T) {
 		t.Setenv(controlDiscordOAuthClientIDEnv, "")
 		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
 		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
+		if err == nil {
+			t.Fatalf("expected missing redirect without public origin to fail, got cfg=%+v", cfg)
+		}
+	})
+
+	t.Run("missing redirect derives from public origin", func(t *testing.T) {
+		t.Setenv(controlDiscordOAuthClientIDEnv, "")
+		t.Setenv(controlDiscordOAuthClientSecretEnv, "client-secret")
+		t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
+		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
+		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
+
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("https://alice.localhost:8443")
 		if err != nil {
-			t.Fatalf("expected missing redirect to use default, got %v", err)
+			t.Fatalf("expected missing redirect to derive from public origin, got %v", err)
 		}
 		if cfg == nil {
 			t.Fatal("expected non-nil oauth config")
 		}
-		if cfg.RedirectURI != defaultControlDiscordOAuthRedirectURI {
-			t.Fatalf("unexpected default redirect URI: %+v", cfg)
+		if cfg.RedirectURI != "https://alice.localhost:8443/auth/discord/callback" {
+			t.Fatalf("unexpected derived redirect URI: %+v", cfg)
 		}
 	})
 
@@ -105,7 +118,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
 		if err != nil {
 			t.Fatalf("expected override client id config to parse, got %v", err)
 		}
@@ -124,7 +137,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "/tmp/oauth-sessions.json")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv()
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("")
 		if err != nil {
 			t.Fatalf("expected complete oauth config to parse, got %v", err)
 		}

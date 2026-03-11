@@ -161,6 +161,47 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	}
 }
 
+func TestDiscordOAuthStatusPrefersServerPublicOrigin(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetPublicOrigin("https://alice.localhost:8443"); err != nil {
+		t.Fatalf("set public origin: %v", err)
+	}
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:     "1234567890",
+		ClientSecret: "super-secret",
+		RedirectURI:  "https://alice.localhost:8443/auth/discord/callback",
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://alice.localhost:8443/auth/discord/status?next=%2Fdashboard%2Fcontrol-panel",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from oauth status, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		DashboardURL string `json:"dashboard_url"`
+		LoginURL     string `json:"login_url"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode oauth status payload: %v body=%q", err, rec.Body.String())
+	}
+	if payload.DashboardURL != "https://alice.localhost:8443/dashboard/" {
+		t.Fatalf("unexpected public dashboard url: %+v", payload)
+	}
+	if payload.LoginURL != "https://alice.localhost:8443/auth/discord/login?next=%2Fdashboard%2Fcontrol-panel" {
+		t.Fatalf("unexpected public login url: %+v", payload)
+	}
+}
+
 func TestDiscordOAuthLoginRedirect(t *testing.T) {
 	t.Parallel()
 

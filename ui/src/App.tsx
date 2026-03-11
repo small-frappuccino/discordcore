@@ -657,8 +657,25 @@ export default function App() {
     scrollToSection(sectionId);
   }
 
-  function beginLogin(nextPath = appPath) {
-    window.location.assign(client.buildDiscordLoginURL(nextPath));
+  async function beginLogin(nextPath = appPath) {
+    try {
+      const oauthStatus = await client.getDiscordOAuthStatus(nextPath);
+      const loginURL = oauthStatus.login_url?.trim() ?? "";
+      if (!oauthStatus.oauth_configured || loginURL === "") {
+        setStatus({
+          kind: "info",
+          message:
+            "Discord OAuth is not configured on this control server. The dashboard shell can load, but sign-in stays unavailable until OAuth is enabled.",
+        });
+        return;
+      }
+      window.location.assign(loginURL);
+    } catch (error) {
+      setStatus({
+        kind: "error",
+        message: formatError(error),
+      });
+    }
   }
 
   function applyBaseUrl() {
@@ -838,7 +855,7 @@ export default function App() {
                   className="site-action site-action-primary"
                   type="button"
                   disabled={loading}
-                  onClick={() => beginLogin(dashboardHomePath)}
+                  onClick={() => void beginLogin(dashboardHomePath)}
                 >
                   Login with Discord
                 </button>
@@ -1074,7 +1091,7 @@ export default function App() {
                 className="button-primary"
                 type="button"
                 disabled={loading}
-                onClick={() => beginLogin(controlPanelPath)}
+                onClick={() => void beginLogin(controlPanelPath)}
               >
                 Sign in with Discord
               </button>
@@ -1145,7 +1162,7 @@ export default function App() {
                     className="button-primary"
                     type="button"
                     disabled={loading}
-                    onClick={() => beginLogin(controlPanelPath)}
+                    onClick={() => void beginLogin(controlPanelPath)}
                   >
                     Sign in with Discord
                   </button>

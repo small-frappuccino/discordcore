@@ -55,6 +55,7 @@ type Server struct {
 	botGuildIDsProvider botGuildIDsProvider
 	guildRegistration   guildRegistrationFunc
 	discordOAuth        *discordOAuthProvider
+	publicOrigin       controlPublicOrigin
 	runtimeApplier      *runtimeapply.Manager
 	httpServer          *http.Server
 	listener            net.Listener
@@ -76,7 +77,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	}
 	s.httpServer = &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           s.wrapCanonicalPublicOrigin(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -186,7 +187,7 @@ func (s *Server) Start() error {
 	}
 	s.listener = ln
 
-	listenAddr, dashboardURL := controlServerListenAddrAndDashboardURL(ln.Addr(), tlsEnabled)
+	listenAddr, dashboardURL := controlServerListenAddrAndDashboardURL(ln.Addr(), tlsEnabled, s.publicControlOrigin())
 	log.ApplicationLogger().Info("Control server listening", "addr", listenAddr, "tls", tlsEnabled)
 	if dashboardURL != "" {
 		log.ApplicationLogger().Info("Control dashboard available", "url", dashboardURL)
@@ -207,7 +208,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
-func controlServerListenAddrAndDashboardURL(addr net.Addr, tlsEnabled bool) (string, string) {
+func controlServerListenAddrAndDashboardURL(addr net.Addr, tlsEnabled bool, publicOrigin controlPublicOrigin) (string, string) {
 	if addr == nil {
 		return "", ""
 	}
@@ -227,7 +228,23 @@ func controlServerListenAddrAndDashboardURL(addr net.Addr, tlsEnabled bool) (str
 		scheme = "https"
 	}
 
+	if publicOrigin.valid() {
+		return listenAddr, publicOrigin.resolve("/")
+	}
 	return listenAddr, fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(controlServerBrowserHost(host), port))
+}
+
+func (s *Server) wrapCanonicalPublicOrigin(next http.Handler) http.Handler {
+	if next == nil {
+		next = http.NotFoundHandler()
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if target, ok := s.canonicalPublicRedirectURL(r); ok {
+			http.Redirect(w, r, target, http.StatusFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func controlServerBrowserHost(host string) string {

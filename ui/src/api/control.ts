@@ -99,6 +99,18 @@ export interface AuthSessionResponse {
   expires_at: string;
 }
 
+export interface DiscordOAuthStatusResponse {
+  status: string;
+  oauth_configured: boolean;
+  authenticated: boolean;
+  dashboard_url: string;
+  login_url: string;
+  user?: DiscordOAuthUser;
+  scopes?: string[];
+  csrf_token?: string;
+  expires_at?: string;
+}
+
 export type ControlAuthProbe =
   | { status: "authenticated"; session: AuthSessionResponse }
   | { status: "unauthorized" }
@@ -235,12 +247,26 @@ export class ControlApiClient {
     this.clearCSRFToken();
   }
 
-  buildDiscordLoginURL(nextPath = "/dashboard/"): string {
+  async getDiscordOAuthStatus(
+    nextPath = "/dashboard/",
+  ): Promise<DiscordOAuthStatusResponse> {
     const next = normalizeDashboardNextPath(nextPath);
     const suffix = next === "" ? "" : `?next=${encodeURIComponent(next)}`;
-    return this.baseUrl === ""
-      ? `/auth/discord/login${suffix}`
-      : `${this.baseUrl}/auth/discord/login${suffix}`;
+    const url =
+      this.baseUrl === ""
+        ? `/auth/discord/status${suffix}`
+        : `${this.baseUrl}/auth/discord/status${suffix}`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Control API GET /auth/discord/status failed: ${response.status} ${response.statusText} - ${text}`.trim(),
+      );
+    }
+    return (await response.json()) as DiscordOAuthStatusResponse;
   }
 
   private async request<T>(

@@ -153,6 +153,53 @@ func TestDashboardRoutesRedirectToDiscordLoginWhenOAuthConfigured(t *testing.T) 
 	}
 }
 
+func TestControlServerCanonicalizesRootRequestsToPublicOrigin(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetPublicOrigin("https://alice.localhost:8443"); err != nil {
+		t.Fatalf("set public origin: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "https://127.0.0.1:8443/", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected canonical redirect, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "https://alice.localhost:8443/" {
+		t.Fatalf("unexpected canonical root redirect: %q", location)
+	}
+}
+
+func TestControlServerCanonicalizesDashboardRequestsToPublicOrigin(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetPublicOrigin("https://alice.localhost:8443"); err != nil {
+		t.Fatalf("set public origin: %v", err)
+	}
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:     "1234567890",
+		ClientSecret: "super-secret",
+		RedirectURI:  "https://alice.localhost:8443/auth/discord/callback",
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "https://localhost:8443/dashboard/settings/guilds?tab=access", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected canonical redirect, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "https://alice.localhost:8443/dashboard/settings/guilds?tab=access" {
+		t.Fatalf("unexpected canonical dashboard redirect: %q", location)
+	}
+}
+
 func TestDashboardEndpointInteraction(t *testing.T) {
 	t.Parallel()
 
