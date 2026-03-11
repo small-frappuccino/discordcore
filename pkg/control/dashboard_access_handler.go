@@ -27,7 +27,7 @@ func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	if !h.server.hasAuthenticatedDashboardSession(r) {
 		if h.server.discordOAuthConfigured() {
-			http.Redirect(w, r, buildDiscordOAuthLoginPath(dashboardRequestRedirectTarget(r)), http.StatusFound)
+			http.Redirect(w, r, h.server.publicDiscordOAuthLoginURL(dashboardRequestRedirectTarget(r)), http.StatusFound)
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusFound)

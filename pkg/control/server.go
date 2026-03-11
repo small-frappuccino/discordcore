@@ -94,13 +94,13 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		if !s.hasAuthenticatedDashboardSession(r) {
 			if s.discordOAuthConfigured() {
-				http.Redirect(w, r, buildDiscordOAuthLoginPath(dashboardRoutePrefix), http.StatusFound)
+				http.Redirect(w, r, s.publicDiscordOAuthLoginURL(dashboardRoutePrefix), http.StatusFound)
 				return
 			}
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
-		http.Redirect(w, r, dashboardRoutePrefix, http.StatusFound)
+		http.Redirect(w, r, s.publicDashboardURL(dashboardRoutePrefix), http.StatusFound)
 	})
 	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
 

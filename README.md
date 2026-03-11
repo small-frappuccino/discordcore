@@ -256,6 +256,7 @@ Discord OAuth2 endpoints (optional, same control server):
 - `GET /auth/discord/login?next=/dashboard/` remains valid for returning directly to the authenticated dashboard shell when needed.
 - `GET /auth/me` returns current authenticated session user.
 - `GET /auth/me` also returns `csrf_token` for explicit CSRF header usage.
+- OAuth status/login/dashboard URLs are emitted against the configured redirect origin when available, so browser flows do not start on one host and callback on another.
 - `POST /auth/logout` invalidates current session and clears session cookie.
 - `GET /auth/guilds/manageable` lists guilds from `/users/@me/guilds` (Discord OAuth user token, paginated at `limit=200`), filtered to `owner` or `ADMINISTRATOR`/`MANAGE_GUILD`, then intersected with guild IDs where the bot is present.
 - OAuth sessions are persisted on disk (not only in memory), so authenticated sessions survive process restart until session expiry/logout.

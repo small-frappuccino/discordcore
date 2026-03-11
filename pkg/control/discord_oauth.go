@@ -428,7 +428,7 @@ func (s *Server) handleDiscordOAuthStatus(w http.ResponseWriter, r *http.Request
 		"status":           "ok",
 		"oauth_configured": s.discordOAuthConfigured(),
 		"authenticated":    false,
-		"dashboard_url":    dashboardRoutePrefix,
+		"dashboard_url":    s.publicDashboardURL(dashboardRoutePrefix),
 		"login_url":        "",
 	}
 	if !s.discordOAuthConfigured() {
@@ -438,7 +438,7 @@ func (s *Server) handleDiscordOAuthStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	response["login_url"] = buildDiscordOAuthLoginPath(next)
+	response["login_url"] = s.publicDiscordOAuthLoginURL(next)
 	session, err := s.discordOAuth.sessionFromRequest(r)
 	if err == nil {
 		response["authenticated"] = true

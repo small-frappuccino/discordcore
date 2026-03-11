@@ -105,6 +105,7 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	var signedOut struct {
 		OAuthConfigured bool   `json:"oauth_configured"`
 		Authenticated   bool   `json:"authenticated"`
+		DashboardURL    string `json:"dashboard_url"`
 		LoginURL        string `json:"login_url"`
 	}
 	if err := json.NewDecoder(signedOutRec.Body).Decode(&signedOut); err != nil {
@@ -116,7 +117,10 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	if signedOut.Authenticated {
 		t.Fatalf("expected authenticated=false without session, got %+v", signedOut)
 	}
-	if signedOut.LoginURL != "/auth/discord/login?next=%2Fdashboard%2Fsettings%3Ftab%3Dmoderation" {
+	if signedOut.DashboardURL != "http://127.0.0.1:8080/dashboard/" {
+		t.Fatalf("unexpected dashboard_url for signed-out status: %+v", signedOut)
+	}
+	if signedOut.LoginURL != "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fsettings%3Ftab%3Dmoderation" {
 		t.Fatalf("unexpected login_url for signed-out status: %+v", signedOut)
 	}
 
@@ -132,6 +136,7 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	var signedIn struct {
 		OAuthConfigured bool             `json:"oauth_configured"`
 		Authenticated   bool             `json:"authenticated"`
+		DashboardURL    string           `json:"dashboard_url"`
 		LoginURL        string           `json:"login_url"`
 		User            discordOAuthUser `json:"user"`
 		CSRFToken       string           `json:"csrf_token"`
@@ -148,7 +153,10 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	if strings.TrimSpace(signedIn.CSRFToken) == "" {
 		t.Fatalf("expected csrf token in signed-in oauth status, got %+v", signedIn)
 	}
-	if signedIn.LoginURL != "/auth/discord/login?next=%2Fdashboard%2Fcontrol-panel" {
+	if signedIn.DashboardURL != "http://127.0.0.1:8080/dashboard/" {
+		t.Fatalf("unexpected dashboard_url for signed-in status: %+v", signedIn)
+	}
+	if signedIn.LoginURL != "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fcontrol-panel" {
 		t.Fatalf("unexpected login_url for signed-in status: %+v", signedIn)
 	}
 }

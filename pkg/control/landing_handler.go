@@ -221,14 +221,16 @@ const controlLandingHTML = `<!doctype html>
         const logoutButton = document.getElementById("logout-button");
         let csrfToken = "";
         let loginURL = "/auth/discord/login?next=%2Fdashboard%2F";
+        let dashboardURL = "/dashboard/";
 
         function hide(element, hidden) {
           element.classList.toggle("is-hidden", hidden);
         }
 
-        function showSignedOut(oauthAvailable, nextLoginURL) {
+        function showSignedOut(oauthAvailable, nextLoginURL, nextDashboardURL) {
           csrfToken = "";
           loginURL = nextLoginURL || "/auth/discord/login?next=%2Fdashboard%2F";
+          dashboardURL = nextDashboardURL || "/dashboard/";
           hide(loginButton, false);
           hide(dashboardButton, true);
           hide(logoutButton, true);
@@ -236,8 +238,9 @@ const controlLandingHTML = `<!doctype html>
           loginButton.textContent = oauthAvailable ? "Login com Discord" : "Discord indisponível";
         }
 
-        function showSignedIn(token) {
+        function showSignedIn(token, nextDashboardURL) {
           csrfToken = token;
+          dashboardURL = nextDashboardURL || "/dashboard/";
           hide(loginButton, true);
           hide(dashboardButton, false);
           hide(logoutButton, false);
@@ -259,15 +262,16 @@ const controlLandingHTML = `<!doctype html>
             const oauthAvailable = Boolean(payload.oauth_configured);
             const authenticated = Boolean(payload.authenticated);
             const nextLoginURL = String(payload.login_url || "").trim();
+            const nextDashboardURL = String(payload.dashboard_url || "").trim();
 
             if (authenticated) {
-              showSignedIn(String(payload.csrf_token || "").trim());
+              showSignedIn(String(payload.csrf_token || "").trim(), nextDashboardURL);
               return;
             }
 
-            showSignedOut(oauthAvailable, nextLoginURL);
+            showSignedOut(oauthAvailable, nextLoginURL, nextDashboardURL);
           } catch {
-            showSignedOut(true, "");
+            showSignedOut(true, "", "");
           }
         }
 
@@ -279,7 +283,7 @@ const controlLandingHTML = `<!doctype html>
         });
 
         dashboardButton.addEventListener("click", () => {
-          window.location.assign("/dashboard/");
+          window.location.assign(dashboardURL);
         });
 
         logoutButton.addEventListener("click", async () => {
