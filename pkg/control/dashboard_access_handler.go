@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const publicDashboardBrandAssetPath = "brand/alicebot.png"
+
 type dashboardAccessHandler struct {
 	server *Server
 	next   http.Handler
@@ -18,6 +20,11 @@ func newProtectedEmbeddedDashboardHandler(server *Server) http.Handler {
 }
 
 func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isPublicDashboardBrandAssetPath(r) {
+		h.next.ServeHTTP(w, r)
+		return
+	}
+
 	if !h.server.hasAuthenticatedDashboardSession(r) {
 		if h.server.discordOAuthConfigured() {
 			http.Redirect(w, r, buildDiscordOAuthLoginPath(dashboardRequestRedirectTarget(r)), http.StatusFound)
@@ -49,4 +56,13 @@ func dashboardRequestRedirectTarget(r *http.Request) string {
 		target += "?" + r.URL.RawQuery
 	}
 	return target
+}
+
+func isPublicDashboardBrandAssetPath(r *http.Request) bool {
+	if r == nil || r.URL == nil {
+		return false
+	}
+
+	assetPath, ok := normalizeDashboardAssetPath(r.URL.Path)
+	return ok && assetPath == publicDashboardBrandAssetPath
 }

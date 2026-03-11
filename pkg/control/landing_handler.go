@@ -15,16 +15,17 @@ const controlLandingHTML = `<!doctype html>
     <style>
       :root {
         color-scheme: dark;
-        --bg-canvas: #09111d;
-        --bg-canvas-alt: #0f1c2d;
-        --panel-base: rgba(12, 22, 37, 0.88);
-        --border-soft: rgba(143, 170, 196, 0.22);
-        --text-main: #f4f7fb;
-        --text-muted: #b3c2d5;
-        --accent-primary: #7bd8c7;
-        --accent-secondary: #f6bd74;
-        --accent-danger: #ff8a7c;
-        --shadow-strong: 0 32px 72px rgba(2, 8, 18, 0.45);
+        --bg-canvas: #171318;
+        --bg-canvas-alt: #211c22;
+        --panel-base: rgba(35, 29, 33, 0.88);
+        --border-soft: rgba(244, 231, 220, 0.14);
+        --text-main: #f7efe6;
+        --text-muted: #d8c8bb;
+        --accent-primary: #dbc7b2;
+        --accent-secondary: #e8ac98;
+        --accent-danger: #d98b89;
+        --accent-moss: #9caf8c;
+        --shadow-strong: 0 32px 72px rgba(11, 8, 11, 0.44);
         --radius-pill: 999px;
         --font-body:
           "Aptos",
@@ -44,10 +45,10 @@ const controlLandingHTML = `<!doctype html>
         color: var(--text-main);
         font-family: var(--font-body);
         background:
-          radial-gradient(circle at 14% 20%, rgba(123, 216, 199, 0.12), transparent 28%),
-          radial-gradient(circle at 82% 18%, rgba(246, 189, 116, 0.13), transparent 24%),
-          radial-gradient(circle at 72% 80%, rgba(255, 138, 124, 0.11), transparent 26%),
-          linear-gradient(180deg, #07101b 0%, var(--bg-canvas) 42%, var(--bg-canvas-alt) 100%);
+          radial-gradient(circle at 14% 20%, rgba(219, 199, 178, 0.14), transparent 28%),
+          radial-gradient(circle at 82% 18%, rgba(232, 172, 152, 0.16), transparent 24%),
+          radial-gradient(circle at 72% 80%, rgba(156, 175, 140, 0.11), transparent 26%),
+          linear-gradient(180deg, #110f13 0%, var(--bg-canvas) 42%, var(--bg-canvas-alt) 100%);
       }
 
       body::before {
@@ -56,8 +57,8 @@ const controlLandingHTML = `<!doctype html>
         inset: 0;
         pointer-events: none;
         background:
-          radial-gradient(circle at 22% 72%, rgba(123, 216, 199, 0.08), transparent 20%),
-          radial-gradient(circle at 78% 62%, rgba(246, 189, 116, 0.08), transparent 18%);
+          radial-gradient(circle at 22% 72%, rgba(219, 199, 178, 0.08), transparent 20%),
+          radial-gradient(circle at 78% 62%, rgba(232, 172, 152, 0.08), transparent 18%);
       }
 
       .shell {
@@ -84,13 +85,21 @@ const controlLandingHTML = `<!doctype html>
         height: 62px;
         display: grid;
         place-items: center;
+        padding: 7px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: rgba(11, 8, 11, 0.92);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
         flex-shrink: 0;
       }
 
-      .brand svg {
-        width: 62px;
-        height: 62px;
+      .brand img {
+        width: 100%;
+        height: 100%;
         display: block;
+        border-radius: 50%;
+        object-fit: cover;
+        object-position: center;
       }
 
       .actions {
@@ -123,7 +132,7 @@ const controlLandingHTML = `<!doctype html>
         min-width: 180px;
         padding: 12px 18px;
         border-radius: var(--radius-pill);
-        border: 1px solid rgba(246, 189, 116, 0.34);
+        border: 1px solid rgba(216, 200, 187, 0.26);
         background: rgba(255, 255, 255, 0.04);
         color: var(--text-main);
         font: inherit;
@@ -137,7 +146,7 @@ const controlLandingHTML = `<!doctype html>
 
       .button:hover:not(:disabled) {
         transform: translateY(-1px);
-        border-color: rgba(123, 216, 199, 0.42);
+        border-color: rgba(232, 172, 152, 0.42);
       }
 
       .button:disabled {
@@ -146,19 +155,19 @@ const controlLandingHTML = `<!doctype html>
       }
 
       .button-primary {
-        border-color: rgba(123, 216, 199, 0.32);
-        background: rgba(123, 216, 199, 0.12);
+        border-color: rgba(232, 172, 152, 0.34);
+        background: rgba(232, 172, 152, 0.14);
       }
 
       .button-secondary {
-        border-color: rgba(246, 189, 116, 0.34);
-        background: rgba(246, 189, 116, 0.1);
+        border-color: rgba(156, 175, 140, 0.34);
+        background: rgba(156, 175, 140, 0.12);
       }
 
       .button-ghost {
-        border-color: rgba(255, 138, 124, 0.34);
-        background: rgba(255, 138, 124, 0.08);
-        color: #ffe1db;
+        border-color: rgba(217, 139, 137, 0.34);
+        background: rgba(217, 139, 137, 0.08);
+        color: #fff0ee;
       }
 
       .is-hidden {
@@ -199,23 +208,8 @@ const controlLandingHTML = `<!doctype html>
   <body>
     <header class="shell">
       <div class="topbar">
-        <div class="brand" aria-label="Bot icon">
-          <svg viewBox="0 0 96 96" role="img" aria-hidden="true">
-            <defs>
-              <linearGradient id="landing-icon-shell" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#7bd8c7" />
-                <stop offset="100%" stop-color="#f6bd74" />
-              </linearGradient>
-            </defs>
-            <circle cx="48" cy="48" r="44" fill="#07111d" stroke="#f6bd74" stroke-width="3" />
-            <path d="M29 22c0-6 4-10 10-10 5 0 9 3 10 8 1-5 5-8 10-8 6 0 10 4 10 10v14H29V22Z" fill="url(#landing-icon-shell)" />
-            <rect x="24" y="30" width="48" height="40" rx="20" fill="#f7f3ec" />
-            <circle cx="38" cy="47" r="6" fill="#f08a6a" />
-            <circle cx="58" cy="47" r="6" fill="#f08a6a" />
-            <circle cx="38" cy="47" r="2.5" fill="#6f432a" />
-            <circle cx="58" cy="47" r="2.5" fill="#6f432a" />
-            <path d="M39 60c4 2.8 14 2.8 18 0" fill="none" stroke="#6f432a" stroke-width="3" stroke-linecap="round" />
-          </svg>
+        <div class="brand" aria-hidden="true">
+          <img src="/dashboard/brand/alicebot.png" alt="" />
         </div>
 
         <div class="session-panel">

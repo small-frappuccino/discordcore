@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/*
 !dist/index.html
+!dist/brand/
+!dist/brand/alicebot.png
 
 # Tooling caches
 .cache/

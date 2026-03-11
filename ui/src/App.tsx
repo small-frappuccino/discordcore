@@ -104,10 +104,11 @@ const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
 const preferredGuildID = import.meta.env.VITE_CONTROL_API_GUILD_ID ?? "";
 const lockedTheme = {
-  id: "control-atlas",
-  label: "Control Atlas",
-  helper: "Editorial dark theme tuned for focus and operational clarity",
+  id: "bnnuy-ledger",
+  label: "Bnnuy Ledger",
+  helper: "Warm oat, blush, and moss accents tuned for a softer control surface",
 } as const;
+const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.png`;
 const dashboardHomePath = "/dashboard/";
 const controlPanelPath = "/dashboard/control-panel";
 const landingNavLinks = [
@@ -801,8 +802,8 @@ export default function App() {
       <main className="shell">
         <div className="app-frame landing-frame">
           <header className="site-topbar">
-            <div className="site-brand" aria-label="Bot icon">
-              <BotIcon className="site-brand-icon" />
+            <div className="site-brand" aria-hidden="true">
+              <img className="site-brand-icon" src={siteBrandIconSrc} alt="" />
             </div>
 
             <nav className="site-nav" aria-label="Primary">
@@ -2269,36 +2270,6 @@ export default function App() {
   );
 }
 
-function BotIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 96 96"
-      role="img"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="bot-icon-shell" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#ffd24c" />
-          <stop offset="100%" stopColor="#ff8c1a" />
-        </linearGradient>
-      </defs>
-      <circle cx="48" cy="48" r="45" fill="#07111d" stroke="#f7c94a" strokeWidth="3" />
-      <circle cx="48" cy="48" r="31" fill="url(#bot-icon-shell)" />
-      <rect x="27" y="29" width="42" height="38" rx="18" fill="#f7f3ec" />
-      <circle cx="39" cy="46" r="6" fill="#f08a6a" />
-      <circle cx="57" cy="46" r="6" fill="#f08a6a" />
-      <circle cx="39" cy="46" r="2.5" fill="#6f432a" />
-      <circle cx="57" cy="46" r="2.5" fill="#6f432a" />
-      <path d="M38 58c3.5 3 16.5 3 20 0" fill="none" stroke="#6f432a" strokeWidth="3" strokeLinecap="round" />
-      <rect x="42" y="18" width="12" height="10" rx="6" fill="#f7f3ec" />
-      <circle cx="48" cy="18" r="5" fill="#f08a6a" />
-      <circle cx="19" cy="49" r="7" fill="#f7f3ec" />
-      <circle cx="77" cy="49" r="7" fill="#f7f3ec" />
-    </svg>
-  );
-}
-
 function formatError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -2677,8 +2648,6 @@ function isControlPanelPath(path: string): boolean {
     normalized.startsWith(`${controlPanelPath}/`)
   );
 }
-
-
 
 
 

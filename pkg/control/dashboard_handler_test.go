@@ -234,6 +234,30 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 	}
 }
 
+func TestDashboardBrandAssetAccessibleWithoutSession(t *testing.T) {
+	t.Parallel()
+
+	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	srv := NewServer("127.0.0.1:0", cm, nil)
+	if srv == nil {
+		t.Fatal("expected non-nil control server")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/brand/alicebot.png", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected public dashboard brand asset to succeed, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if contentType := rec.Header().Get("Content-Type"); !strings.Contains(contentType, "image/png") {
+		t.Fatalf("expected public dashboard brand asset content-type to include image/png, got %q", contentType)
+	}
+	if rec.Body.Len() == 0 {
+		t.Fatal("expected public dashboard brand asset body to be non-empty")
+	}
+}
+
 func mustNewDashboardTestHandler(t *testing.T, assets fs.FS) http.Handler {
 	t.Helper()
 
