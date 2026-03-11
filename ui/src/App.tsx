@@ -108,7 +108,7 @@ const lockedTheme = {
   label: "Bnnuy Ledger",
   helper: "Warm oat, blush, and moss accents tuned for a softer control surface",
 } as const;
-const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.png`;
+const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
 const dashboardHomePath = "/dashboard/";
 const controlPanelPath = "/dashboard/control-panel";
 const landingNavLinks = [
@@ -2648,6 +2648,3 @@ function isControlPanelPath(path: string): boolean {
     normalized.startsWith(`${controlPanelPath}/`)
   );
 }
-
-
-

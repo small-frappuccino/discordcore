@@ -243,18 +243,27 @@ func TestDashboardBrandAssetAccessibleWithoutSession(t *testing.T) {
 		t.Fatal("expected non-nil control server")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/brand/alicebot.png", nil)
-	rec := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(rec, req)
+	testCases := []struct {
+		path            string
+		expectedSubtype string
+	}{
+		{path: "/dashboard/brand/alicebot.webp", expectedSubtype: "image/webp"},
+	}
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected public dashboard brand asset to succeed, got %d body=%q", rec.Code, rec.Body.String())
-	}
-	if contentType := rec.Header().Get("Content-Type"); !strings.Contains(contentType, "image/png") {
-		t.Fatalf("expected public dashboard brand asset content-type to include image/png, got %q", contentType)
-	}
-	if rec.Body.Len() == 0 {
-		t.Fatal("expected public dashboard brand asset body to be non-empty")
+	for _, tc := range testCases {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		rec := httptest.NewRecorder()
+		srv.httpServer.Handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected public dashboard brand asset %q to succeed, got %d body=%q", tc.path, rec.Code, rec.Body.String())
+		}
+		if contentType := rec.Header().Get("Content-Type"); !strings.Contains(contentType, tc.expectedSubtype) {
+			t.Fatalf("expected public dashboard brand asset %q content-type to include %q, got %q", tc.path, tc.expectedSubtype, contentType)
+		}
+		if rec.Body.Len() == 0 {
+			t.Fatalf("expected public dashboard brand asset %q body to be non-empty", tc.path)
+		}
 	}
 }
 

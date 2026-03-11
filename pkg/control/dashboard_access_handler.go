@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const publicDashboardBrandAssetPath = "brand/alicebot.png"
+const publicDashboardBrandAssetPath = "brand/alicebot.webp"
 
 type dashboardAccessHandler struct {
 	server *Server

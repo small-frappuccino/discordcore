@@ -118,15 +118,6 @@ const controlLandingHTML = `<!doctype html>
         flex: 1;
       }
 
-      .auth-note {
-        margin: 0;
-        max-width: 360px;
-        color: var(--text-muted);
-        font-size: 0.92rem;
-        line-height: 1.45;
-        text-align: right;
-      }
-
       .button {
         appearance: none;
         min-width: 180px;
@@ -197,11 +188,6 @@ const controlLandingHTML = `<!doctype html>
         .button {
           width: 100%;
         }
-
-        .auth-note {
-          max-width: none;
-          text-align: left;
-        }
       }
     </style>
   </head>
@@ -209,7 +195,7 @@ const controlLandingHTML = `<!doctype html>
     <header class="shell">
       <div class="topbar">
         <div class="brand" aria-hidden="true">
-          <img src="/dashboard/brand/alicebot.png" alt="" />
+          <img src="/dashboard/brand/alicebot.webp" alt="" />
         </div>
 
         <div class="session-panel">
@@ -224,7 +210,6 @@ const controlLandingHTML = `<!doctype html>
               Logout
             </button>
           </div>
-          <p id="auth-note" class="auth-note" aria-live="polite"></p>
         </div>
       </div>
     </header>
@@ -234,16 +219,11 @@ const controlLandingHTML = `<!doctype html>
         const loginButton = document.getElementById("login-button");
         const dashboardButton = document.getElementById("dashboard-button");
         const logoutButton = document.getElementById("logout-button");
-        const authNote = document.getElementById("auth-note");
         let csrfToken = "";
         let loginURL = "/auth/discord/login?next=%2Fdashboard%2F";
 
         function hide(element, hidden) {
           element.classList.toggle("is-hidden", hidden);
-        }
-
-        function setAuthNote(message) {
-          authNote.textContent = message;
         }
 
         function showSignedOut(oauthAvailable, nextLoginURL) {
@@ -254,11 +234,6 @@ const controlLandingHTML = `<!doctype html>
           hide(logoutButton, true);
           loginButton.disabled = !oauthAvailable;
           loginButton.textContent = oauthAvailable ? "Login com Discord" : "Discord indisponível";
-          setAuthNote(
-            oauthAvailable
-              ? "Faça login com Discord para abrir o dashboard autenticado."
-              : "O OAuth do Discord não está configurado neste servidor de controle.",
-          );
         }
 
         function showSignedIn(token) {
@@ -268,7 +243,6 @@ const controlLandingHTML = `<!doctype html>
           hide(logoutButton, false);
           loginButton.disabled = false;
           loginButton.textContent = "Login com Discord";
-          setAuthNote("Sessão ativa. Abra o dashboard ou encerre a sessão atual.");
         }
 
         async function refreshSession() {
@@ -294,7 +268,6 @@ const controlLandingHTML = `<!doctype html>
             showSignedOut(oauthAvailable, nextLoginURL);
           } catch {
             showSignedOut(true, "");
-            setAuthNote("Nao foi possivel verificar a sessao do Discord. Voce ainda pode tentar entrar.");
           }
         }
 
@@ -327,7 +300,6 @@ const controlLandingHTML = `<!doctype html>
             });
           } finally {
             showSignedOut(true, "");
-            setAuthNote("Sessao encerrada. Faca login com Discord para entrar novamente.");
           }
         });
 
