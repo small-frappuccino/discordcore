@@ -43,15 +43,23 @@ func TestDashboardHandlerFallsBackToIndexForSPARoute(t *testing.T) {
 		"assets/app.js": &fstest.MapFile{Data: []byte("console.log('dashboard');")},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/settings/guilds", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected SPA fallback to succeed, got %d body=%q", rec.Code, rec.Body.String())
+	testCases := []string{
+		"/dashboard/settings/guilds",
+		"/dashboard/partner-board/entries",
+		"/dashboard/partner-board/delivery",
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "spa index") {
-		t.Fatalf("expected SPA fallback to serve index, got %q", body)
+
+	for _, route := range testCases {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected SPA fallback for %q to succeed, got %d body=%q", route, rec.Code, rec.Body.String())
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "spa index") {
+			t.Fatalf("expected SPA fallback for %q to serve index, got %q", route, body)
+		}
 	}
 }
 
@@ -142,14 +150,30 @@ func TestDashboardRoutesRedirectToDiscordLoginWhenOAuthConfigured(t *testing.T) 
 		t.Fatalf("unexpected /dashboard redirect target: %q", location)
 	}
 
-	spaReq := httptest.NewRequest(http.MethodGet, "/dashboard/settings/guilds?tab=access", nil)
-	spaRec := httptest.NewRecorder()
-	handler.ServeHTTP(spaRec, spaReq)
-	if spaRec.Code != http.StatusFound {
-		t.Fatalf("expected dashboard SPA route to redirect to oauth login, got %d body=%q", spaRec.Code, spaRec.Body.String())
+	testCases := []struct {
+		path     string
+		location string
+	}{
+		{
+			path:     "/dashboard/settings/guilds?tab=access",
+			location: "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fsettings%2Fguilds%3Ftab%3Daccess",
+		},
+		{
+			path:     "/dashboard/partner-board/entries?view=compact",
+			location: "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fpartner-board%2Fentries%3Fview%3Dcompact",
+		},
 	}
-	if location := strings.TrimSpace(spaRec.Header().Get("Location")); location != "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fsettings%2Fguilds%3Ftab%3Daccess" {
-		t.Fatalf("unexpected dashboard SPA redirect target: %q", location)
+
+	for _, tc := range testCases {
+		spaReq := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		spaRec := httptest.NewRecorder()
+		handler.ServeHTTP(spaRec, spaReq)
+		if spaRec.Code != http.StatusFound {
+			t.Fatalf("expected dashboard SPA route %q to redirect to oauth login, got %d body=%q", tc.path, spaRec.Code, spaRec.Body.String())
+		}
+		if location := strings.TrimSpace(spaRec.Header().Get("Location")); location != tc.location {
+			t.Fatalf("unexpected dashboard SPA redirect target for %q: %q", tc.path, location)
+		}
 	}
 }
 

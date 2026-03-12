@@ -31,5 +31,10 @@ export default defineConfig(({ mode, command }) => {
     build: {
       manifest: true,
     },
+    test: {
+      environment: "jsdom",
+      setupFiles: "./src/test/setup.ts",
+      css: true,
+    },
   };
 });

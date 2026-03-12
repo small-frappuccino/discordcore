@@ -201,6 +201,23 @@ Avoid tests that require a real Discord connection.
 
 QoL features in the UI must map to real backend services — never UI-only state.
 
+### Dashboard UX architecture
+
+- Use a persistent sidebar once the dashboard contains more than one product area.
+- Separate every dashboard screen into three layers:
+  - global navigation and app-level context
+  - feature workspace
+  - contextual or debug information
+- Authentication state and guild/server selection are app-level context. Do not re-implement them as feature-local forms unless the user is recovering from an error.
+- Default to task-oriented UI, not response-shape-oriented UI. Raw backend nouns, IDs, scopes, origins, and snapshots belong behind **Advanced** or **Troubleshooting**, not in the primary workspace.
+- Use progressive disclosure by default. Technical state, operator/debug cards, and internal metadata must not dominate the default view.
+- Tabs must represent real sub-areas. Do not render tab labels and then stack the same tab content in one long page.
+- For list entities, use a list/table plus row actions and a drawer or modal editor. Do not expose separate add/edit/delete forms as peer sections.
+- Use user-facing labels in the default UI. Map internal enums and storage terms into product language before rendering them.
+- Use stepper or checklist patterns only for first-run onboarding. Steady-state management pages must not keep a permanent setup flow as the main control model.
+- Prefer a primary vertical workflow. Use multi-column layouts only for secondary summary, preview, or supporting context.
+- Preserve a clear boundary between global navigation, feature workspace, and diagnostics so future product areas can be added without turning pages into single-screen control panels.
+
 ---
 
 ## 10) Boundary between `discordcore` and `alicebot`
@@ -242,6 +259,11 @@ Duplication across the two must be eliminated in favor of `discordcore`.
 - [ ] `ui/dist/index.html` placeholder remains present for backend-only builds
 - [ ] Embedded dashboard is served from `/dashboard/`
 - [ ] Frontend production build uses `/dashboard/` as its asset base
+- [ ] Global navigation, feature workspace, and debug information remain clearly separated
+- [ ] Default UI labels are user-facing rather than internal/system terminology
+- [ ] Technical details are hidden by default and exposed only through progressive disclosure
+- [ ] Sidebar navigation and page-local navigation are not conflated
+- [ ] Large feature screens are route-based, not single-page mega-forms
 - [ ] Config or behavior changes are documented
 
 ---
