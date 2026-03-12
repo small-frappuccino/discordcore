@@ -1,6 +1,7 @@
 package control
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -15,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -133,7 +135,69 @@ type discordOAuthGuild struct {
 	Name        string `json:"name"`
 	Icon        string `json:"icon,omitempty"`
 	Owner       bool   `json:"owner"`
-	Permissions int64  `json:"permissions,string"`
+	Permissions int64  `json:"permissions"`
+}
+
+func (g *discordOAuthGuild) UnmarshalJSON(data []byte) error {
+	type rawDiscordOAuthGuild struct {
+		ID          string          `json:"id"`
+		Name        string          `json:"name"`
+		Icon        string          `json:"icon,omitempty"`
+		Owner       bool            `json:"owner"`
+		Permissions json.RawMessage `json:"permissions"`
+	}
+
+	var raw rawDiscordOAuthGuild
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	permissions, err := parseDiscordOAuthPermissionBits(raw.Permissions)
+	if err != nil {
+		return fmt.Errorf("parse permissions: %w", err)
+	}
+
+	g.ID = raw.ID
+	g.Name = raw.Name
+	g.Icon = raw.Icon
+	g.Owner = raw.Owner
+	g.Permissions = permissions
+	return nil
+}
+
+func parseDiscordOAuthPermissionBits(raw json.RawMessage) (int64, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return 0, nil
+	}
+
+	if trimmed[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(trimmed, &encoded); err != nil {
+			return 0, fmt.Errorf("decode string value: %w", err)
+		}
+		encoded = strings.TrimSpace(encoded)
+		if encoded == "" {
+			return 0, nil
+		}
+
+		value, err := strconv.ParseInt(encoded, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse string value %q: %w", encoded, err)
+		}
+		return value, nil
+	}
+
+	var number json.Number
+	if err := json.Unmarshal(trimmed, &number); err != nil {
+		return 0, fmt.Errorf("decode numeric value: %w", err)
+	}
+
+	value, err := number.Int64()
+	if err != nil {
+		return 0, fmt.Errorf("parse numeric value %q: %w", number.String(), err)
+	}
+	return value, nil
 }
 
 // SetDiscordOAuthConfig enables /auth/discord/login and /auth/discord/callback routes.

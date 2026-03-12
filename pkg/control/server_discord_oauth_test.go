@@ -78,6 +78,42 @@ func TestDiscordOAuthStatusReportsUnavailableWithoutConfig(t *testing.T) {
 	}
 }
 
+func TestDiscordOAuthGuildPermissionsUnmarshalAcceptsStringOrNumber(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload string
+		want    int64
+	}{
+		{
+			name:    "string",
+			payload: `{"id":"g1","name":"Guild One","owner":false,"permissions":"32"}`,
+			want:    32,
+		},
+		{
+			name:    "number",
+			payload: `{"id":"g2","name":"Guild Two","owner":false,"permissions":8}`,
+			want:    8,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var guild discordOAuthGuild
+			if err := json.Unmarshal([]byte(tc.payload), &guild); err != nil {
+				t.Fatalf("unmarshal guild payload: %v", err)
+			}
+			if guild.Permissions != tc.want {
+				t.Fatalf("unexpected permissions: got=%d want=%d", guild.Permissions, tc.want)
+			}
+		})
+	}
+}
+
 func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	t.Parallel()
 
