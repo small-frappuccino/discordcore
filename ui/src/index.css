@@ -111,6 +111,332 @@ main.shell {
   gap: 24px;
 }
 
+.control-shell {
+  padding: 18px;
+}
+
+.control-shell .app-frame {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 18%),
+    rgba(18, 16, 20, 0.9);
+  box-shadow: 0 38px 80px rgba(5, 5, 8, 0.45);
+}
+
+.control-shell .topbar,
+.control-shell .hero,
+.control-shell .section-nav,
+.control-shell .status-banner {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  box-shadow: none;
+}
+
+.control-shell .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 14px 18px;
+  border-top: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 54%),
+    rgba(22, 19, 24, 0.96);
+}
+
+.control-shell .brand-mark {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 12px 24px rgba(6, 8, 12, 0.22);
+}
+
+.control-shell .brand-copy {
+  gap: 2px;
+}
+
+.control-shell .brand-copy h1 {
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
+.control-shell .topbar-note {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+}
+
+.control-shell .theme-chip {
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.control-shell .theme-chip span {
+  font-size: 0.92rem;
+}
+
+.control-shell .theme-chip small {
+  font-size: 0.75rem;
+}
+
+.control-shell .hero {
+  padding: 20px 18px 18px;
+  border-top: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 34%),
+    rgba(20, 18, 22, 0.92);
+}
+
+.control-shell .hero-orb {
+  display: none;
+}
+
+.control-shell .hero-grid {
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+}
+
+.control-shell .hero-copy,
+.control-shell .hero-panel,
+.control-shell .workflow-card {
+  gap: 14px;
+}
+
+.control-shell .hero h2 {
+  margin-top: 2px;
+  max-width: none;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+
+.control-shell .hero-text,
+.control-shell .hero-panel-copy p:last-child,
+.control-shell .topbar-note,
+.control-shell .workflow-copy p,
+.control-shell .section-text {
+  line-height: 1.35;
+}
+
+.control-shell .hero-text {
+  max-width: none;
+  font-size: 0.95rem;
+}
+
+.control-shell .metric-grid {
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.control-shell .metric-card,
+.control-shell .summary-tile,
+.control-shell .snapshot-stat,
+.control-shell .snapshot-block,
+.control-shell .mini-panel,
+.control-shell .identity-card,
+.control-shell .checklist-item {
+  min-height: 0;
+  padding: 14px;
+  border-radius: 16px;
+}
+
+.control-shell .metric-card strong {
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.control-shell .metric-card small {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.control-shell .hero-panel {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(33, 28, 34, 0.94);
+}
+
+.control-shell .hero-panel-meta {
+  gap: 8px;
+}
+
+.control-shell .meta-card {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.control-shell .workflow-list {
+  gap: 8px;
+}
+
+.control-shell .workflow-item {
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.control-shell .workflow-copy {
+  gap: 2px;
+}
+
+.control-shell .workflow-copy p,
+.control-shell .checklist-detail {
+  display: none;
+}
+
+.control-shell .section-nav {
+  top: 76px;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(18, 16, 20, 0.94);
+}
+
+.control-shell .nav-chip {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.84rem;
+}
+
+.control-shell .workspace-layout,
+.control-shell .partner-workspace {
+  gap: 14px;
+  padding: 16px;
+}
+
+.control-shell .workspace-layout {
+  grid-template-columns: minmax(0, 1.4fr) 300px;
+}
+
+.control-shell .partner-workspace {
+  grid-template-columns: minmax(0, 1.5fr) 420px;
+  padding-top: 0;
+}
+
+.control-shell .workspace-main,
+.control-shell .workspace-sidebar,
+.control-shell .partner-actions-grid {
+  gap: 14px;
+}
+
+.control-shell .card {
+  padding: 18px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 30%),
+    rgba(30, 26, 31, 0.94);
+}
+
+.control-shell .card-heading,
+.control-shell .editor-header {
+  gap: 10px;
+}
+
+.control-shell .section-kicker,
+.control-shell .summary-label,
+.control-shell .metric-label,
+.control-shell .status-kicker {
+  letter-spacing: 0.12em;
+}
+
+.control-shell .section-text {
+  margin-top: 0;
+  color: var(--text-dim);
+  font-size: 0.84rem;
+}
+
+.control-shell .form-grid,
+.control-shell .template-notes,
+.control-shell .snapshot-grid,
+.control-shell .checklist,
+.control-shell .context-list,
+.control-shell .editor-title {
+  gap: 10px;
+}
+
+.control-shell .overview-grid,
+.control-shell .summary-grid,
+.control-shell .snapshot-grid {
+  gap: 10px;
+}
+
+.control-shell label {
+  gap: 6px;
+}
+
+.control-shell .field-label {
+  font-size: 0.84rem;
+}
+
+.control-shell button {
+  padding: 9px 12px;
+  box-shadow: none;
+}
+
+.control-shell input,
+.control-shell select,
+.control-shell textarea {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(18, 16, 19, 0.88);
+}
+
+.control-shell textarea {
+  min-height: 100px;
+}
+
+.control-shell .inline-actions,
+.control-shell .actions,
+.control-shell .partner-toolbar,
+.control-shell .badge-row,
+.control-shell .chip-cloud {
+  gap: 8px;
+}
+
+.control-shell .table-shell {
+  border-radius: 16px;
+}
+
+.control-shell .partner-table th,
+.control-shell .partner-table td {
+  padding: 12px 14px;
+}
+
+.control-shell .partner-row-action {
+  padding: 7px 10px;
+}
+
+.control-shell .status-banner {
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  padding: 12px 16px;
+  border-bottom: 0;
+  background: rgba(20, 18, 22, 0.98);
+}
+
+.control-shell .status-copy {
+  gap: 8px;
+}
+
+.control-shell .status-kicker {
+  display: none;
+}
+
+.control-shell .status-copy strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.control-shell .status-secondary {
+  font-size: 0.82rem;
+}
+
 .site-topbar,
 .landing-hero,
 .landing-panel,

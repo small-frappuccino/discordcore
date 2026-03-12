@@ -308,8 +308,7 @@ export default function App() {
           resetLoadedBoard();
           setStatus({
             kind: "info",
-            message:
-              "Discord OAuth is not configured on this control server. The dashboard shell can load, but web configuration stays unavailable until OAuth is enabled.",
+            message: "OAuth unavailable.",
           });
           return;
         }
@@ -321,8 +320,7 @@ export default function App() {
           resetLoadedBoard();
           setStatus({
             kind: "info",
-            message:
-              "Sign in with Discord to configure a guild through the dashboard.",
+            message: "Sign in to continue.",
           });
           return;
         }
@@ -340,15 +338,14 @@ export default function App() {
           resetLoadedBoard();
           setStatus({
             kind: "info",
-            message:
-              "Signed in, but there are no guilds you can manage with this bot.",
+            message: "No manageable guilds.",
           });
           return;
         }
 
         setStatus({
           kind: "success",
-          message: `Signed in as ${formatUserLabel(probe.session)}.`,
+          message: `Signed in: ${formatUserLabel(probe.session)}.`,
         });
       } catch (error) {
         setAuthState("signed_out");
@@ -392,7 +389,7 @@ export default function App() {
         resetLoadedBoard();
         setStatus({
           kind: "info",
-          message: "Signed out. Sign in again to continue editing guild settings.",
+          message: "Signed out.",
         });
         navigateToAppPath(dashboardHomePath);
       } catch (error) {
@@ -415,7 +412,7 @@ export default function App() {
         await loadBoardData(trimmedGuild);
         setStatus({
           kind: "success",
-          message: `Loaded partner board for guild ${trimmedGuild}.`,
+          message: "Board loaded.",
         });
       } catch (error) {
         setStatus({
@@ -437,7 +434,7 @@ export default function App() {
         const count = await loadPartnersData(trimmedGuild);
         setStatus({
           kind: "success",
-          message: `Loaded ${count} partners for guild ${trimmedGuild}.`,
+          message: `${count} partners loaded.`,
         });
       } catch (error) {
         setStatus({
@@ -470,7 +467,7 @@ export default function App() {
         await loadBoardData(trimmedGuild);
         setStatus({
           kind: "success",
-          message: "Target updated and board reloaded.",
+          message: "Target saved.",
         });
       } catch (error) {
         setStatus({
@@ -494,7 +491,7 @@ export default function App() {
         await loadBoardData(trimmedGuild);
         setStatus({
           kind: "success",
-          message: "Template updated and board reloaded.",
+          message: "Template saved.",
         });
       } catch (error) {
         setStatus({
@@ -625,7 +622,7 @@ export default function App() {
         await client.syncPartnerBoard(trimmedGuild);
         setStatus({
           kind: "success",
-          message: "Partner board sync requested successfully.",
+          message: "Sync requested.",
         });
       } catch (error) {
         setStatus({
@@ -664,8 +661,7 @@ export default function App() {
       if (!oauthStatus.oauth_configured || loginURL === "") {
         setStatus({
           kind: "info",
-          message:
-            "Discord OAuth is not configured on this control server. The dashboard shell can load, but sign-in stays unavailable until OAuth is enabled.",
+          message: "OAuth unavailable.",
         });
         return;
       }
@@ -683,8 +679,7 @@ export default function App() {
     if (!isValidBaseUrl(normalized)) {
       setStatus({
         kind: "error",
-        message:
-          "Base URL must be empty for same-origin mode or a valid absolute URL such as https://control.example.com.",
+        message: "Enter a valid endpoint URL.",
       });
       return;
     }
@@ -703,9 +698,7 @@ export default function App() {
     setStatus({
       kind: "info",
       message:
-        normalized === ""
-          ? "Using same-origin control API endpoints."
-          : `Switched control API base URL to ${normalized}.`,
+        normalized === "" ? "Using same origin." : `Endpoint: ${normalized}`,
     });
   }
 
@@ -729,7 +722,7 @@ export default function App() {
     });
     setStatus({
       kind: "info",
-      message: `Loaded ${partner.name} into the update and delete forms.`,
+      message: `${partner.name} selected.`,
     });
     scrollToSection("partner-editor");
   }
@@ -743,14 +736,14 @@ export default function App() {
     if (authState !== "signed_in") {
       setStatus({
         kind: "error",
-        message: "Sign in with Discord before editing guild settings.",
+        message: "Sign in first.",
       });
       return false;
     }
     if (guildID.trim() === "") {
       setStatus({
         kind: "error",
-        message: "Select a guild you can manage first.",
+        message: "Select a guild.",
       });
       return false;
     }
@@ -1056,7 +1049,7 @@ export default function App() {
   }
 
   return (
-    <main className="shell">
+    <main className="shell control-shell">
       <div className="app-frame">
         <header className="topbar">
           <div className="brand-lockup">
@@ -1064,55 +1057,52 @@ export default function App() {
               <span>PB</span>
             </div>
             <div className="brand-copy">
-              <p className="eyebrow">Discordcore dashboard</p>
-              <h1>Partner Board Workspace</h1>
-              <p className="topbar-note">
-                Mounted under `/dashboard/` with Discord OAuth-gated guild
-                configuration.
-              </p>
+              <p className="eyebrow">Control panel</p>
+              <h1>Partner Board</h1>
+              <p className="topbar-note">{controlPanelPath}</p>
             </div>
           </div>
 
           <div className="topbar-actions">
             <div className="theme-chip">
-              <span>{lockedTheme.label}</span>
-              <small>{lockedTheme.helper}</small>
+              <span>{selectedGuild?.name ?? formatAuthStateLabel(authState)}</span>
+              <small>{activeOriginLabel}</small>
             </div>
             <button
-              className="button-secondary"
+              className="button-secondary button-compact"
               type="button"
               disabled={loading}
               onClick={() => void refreshSession()}
             >
-              Refresh session
+              Refresh
             </button>
             {authState === "signed_out" ? (
               <button
-                className="button-primary"
+                className="button-primary button-compact"
                 type="button"
                 disabled={loading}
                 onClick={() => void beginLogin(controlPanelPath)}
               >
-                Sign in with Discord
+                Login
               </button>
             ) : null}
             {authState === "signed_in" ? (
               <>
                 <button
-                  className="button-outline"
+                  className="button-outline button-compact"
                   type="button"
                   disabled={loading}
                   onClick={() => scrollToSection("overview")}
                 >
-                  Open workspace
+                  Focus
                 </button>
                 <button
-                  className="button-outline"
+                  className="button-outline button-compact"
                   type="button"
                   disabled={loading}
                   onClick={() => void logout()}
                 >
-                  Logout
+                  Sign out
                 </button>
               </>
             ) : null}
@@ -1127,81 +1117,74 @@ export default function App() {
           <div className="hero-grid">
             <div className="hero-copy">
               <div>
-                <p className="eyebrow">Control surface</p>
-                <h2>Operate the partner board with editorial clarity.</h2>
-                <p className="hero-text">
-                  A calmer, higher-signal workspace for delivery settings,
-                  template tuning, and partner curation. Draft progress stays
-                  visible while backend validation and Discord-side behavior
-                  remain the source of truth.
-                </p>
+                <p className="eyebrow">Workspace</p>
+                <h2>Delivery. Template. Partners.</h2>
+                <p className="hero-text">Compact editing for the live board.</p>
               </div>
 
               <div className="hero-actions">
                 {authState === "signed_in" ? (
                   <>
                     <button
-                      className="button-primary"
+                      className="button-primary button-compact"
                       type="button"
                       disabled={!canManageGuild}
                       onClick={() => void refreshBoard()}
                     >
-                      Load board
+                      Load
                     </button>
                     <button
-                      className="button-ghost"
+                      className="button-ghost button-compact"
                       type="button"
                       disabled={loading}
                       onClick={() => scrollToSection("partners")}
                     >
-                      Jump to partners
+                      Partners
                     </button>
                   </>
                 ) : (
                   <button
-                    className="button-primary"
+                    className="button-primary button-compact"
                     type="button"
                     disabled={loading}
                     onClick={() => void beginLogin(controlPanelPath)}
                   >
-                    Sign in with Discord
+                    Login
                   </button>
                 )}
               </div>
 
               <div className="metric-grid" aria-label="Workspace metrics">
                 <article className="metric-card emphasis">
-                  <span className="metric-label">Workspace readiness</span>
+                  <span className="metric-label">Ready</span>
                   <strong>{readinessScore}%</strong>
-                  <small>
-                    {completedSteps}/{workflowSteps.length} milestones complete
-                  </small>
+                  <small>{completedSteps}/{workflowSteps.length}</small>
                 </article>
                 <article className="metric-card">
-                  <span className="metric-label">Manageable guilds</span>
+                  <span className="metric-label">Guilds</span>
                   <strong>{manageableGuilds.length}</strong>
                   <small>
                     {selectedGuild === null
-                      ? "Select a guild to continue."
+                      ? "No selection"
                       : selectedGuild.name}
                   </small>
                 </article>
                 <article className="metric-card">
-                  <span className="metric-label">Partners in scope</span>
+                  <span className="metric-label">Partners</span>
                   <strong>{filteredPartners.length}</strong>
                   <small>
                     {deferredPartnerSearch === ""
-                      ? "Current board list."
-                      : "Matching the active filter."}
+                      ? "All"
+                      : "Filtered"}
                   </small>
                 </article>
                 <article className="metric-card">
-                  <span className="metric-label">Last loaded</span>
+                  <span className="metric-label">Loaded</span>
                   <strong>{formatLastLoadedAt(lastLoadedAt)}</strong>
                   <small>
                     {board === null
-                      ? "No board snapshot yet."
-                      : "From the latest dashboard fetch."}
+                      ? "Not yet"
+                      : "Snapshot"}
                   </small>
                 </article>
               </div>
@@ -1230,7 +1213,7 @@ export default function App() {
                     </h3>
                     <p>
                       {session !== null
-                        ? `User ID ${session.user.id}`
+                        ? session.user.id
                         : formatAuthSupportText(authState, manageableGuilds.length)}
                     </p>
                   </div>
@@ -1256,8 +1239,8 @@ export default function App() {
               <div className="workflow-card">
                 <div className="card-heading">
                   <div>
-                    <p className="section-kicker">Workflow</p>
-                    <h3>What needs attention</h3>
+                    <p className="section-kicker">Flow</p>
+                    <h3>Next</h3>
                   </div>
                   {nextStep !== null ? (
                     <button
@@ -1265,7 +1248,7 @@ export default function App() {
                       type="button"
                       onClick={() => scrollToSection(nextStep.sectionId)}
                     >
-                      Focus next step
+                      Open
                     </button>
                   ) : null}
                 </div>
@@ -1294,7 +1277,6 @@ export default function App() {
                                 : "Pending"}
                           </span>
                         </div>
-                        <p>{step.description}</p>
                       </div>
                     </li>
                   ))}
@@ -1322,13 +1304,8 @@ export default function App() {
             <section id="overview" className="card surface-card">
               <div className="card-heading">
                 <div>
-                  <p className="section-kicker">Connection</p>
-                  <h2>Connect this workspace</h2>
-                  <p className="section-text">
-                    Choose the control server and the guild you want to manage.
-                    Endpoint changes are applied explicitly so you can edit
-                    without accidental reloads while typing.
-                  </p>
+                  <p className="section-kicker">Workspace</p>
+                  <h2>Connection</h2>
                 </div>
                 <div className="badge-row">
                   <span
@@ -1352,31 +1329,25 @@ export default function App() {
               <div className="overview-grid">
                 <div className="form-stack">
                   <label>
-                    <span className="field-label">Control API base URL</span>
+                    <span className="field-label">Endpoint</span>
                     <input
                       value={baseUrlInput}
                       onChange={(event) => setBaseUrlInput(event.target.value)}
                       placeholder="Same origin or https://control.example.com"
                     />
-                    <span className="field-note">
-                      Leave empty to use the same origin that serves
-                      `/dashboard/`.
-                    </span>
                   </label>
 
                   <div className="inline-actions">
                     <button
-                      className="button-primary"
+                      className="button-primary button-compact"
                       type="button"
                       disabled={loading || !baseUrlDirty}
                       onClick={applyBaseUrl}
                     >
-                      Apply endpoint
+                      Apply
                     </button>
                     <p className="helper-text">
-                      {baseUrlDirty
-                        ? "Draft endpoint differs from the active origin."
-                        : `Active origin: ${activeOriginLabel}`}
+                      {baseUrlDirty ? "Draft" : activeOriginLabel}
                     </p>
                   </div>
 
@@ -1400,35 +1371,32 @@ export default function App() {
                         </option>
                       ))}
                     </select>
-                    <span className="field-note">
-                      Only guilds returned by `/auth/guilds/manageable` and
-                      already joined by the bot are shown here.
-                    </span>
                   </label>
 
                   <div className="actions">
                     <button
-                      className="button-primary"
+                      className="button-primary button-compact"
                       type="button"
                       disabled={!canManageGuild}
                       onClick={() => void refreshBoard()}
                     >
-                      Load board
+                      Load
                     </button>
                     <button
+                      className="button-secondary button-compact"
                       type="button"
                       disabled={!canManageGuild}
                       onClick={() => void refreshPartnersOnly()}
                     >
-                      Refresh partners
+                      Partners
                     </button>
                     <button
-                      className="button-secondary"
+                      className="button-secondary button-compact"
                       type="button"
                       disabled={!canManageGuild}
                       onClick={() => void syncBoard()}
                     >
-                      Sync board
+                      Sync
                     </button>
                   </div>
                 </div>
@@ -1502,8 +1470,8 @@ export default function App() {
                       </div>
                       <p>
                         {selectedGuild === null
-                          ? "Pick a manageable guild before loading or editing the board."
-                          : `${selectedGuild.owner ? "Server owner access" : "Manage Server access"} for guild ${selectedGuild.id}.`}
+                          ? "Pick a guild."
+                          : `${selectedGuild.owner ? "Owner" : "Manage Server"} · ${selectedGuild.id}`}
                       </p>
                     </article>
                   </div>
@@ -1515,18 +1483,13 @@ export default function App() {
               <div className="card-heading">
                 <div>
                   <p className="section-kicker">Delivery</p>
-                  <h2>Choose where the embed is published</h2>
-                  <p className="section-text">
-                    Keep the message target explicit. The dashboard highlights
-                    whether the current draft has enough information to publish
-                    safely.
-                  </p>
+                  <h2>Target</h2>
                 </div>
                 <div className="badge-row">
                   <span className="inline-badge badge-strong">
                     {targetForm.type === "webhook_message"
-                      ? "Webhook message"
-                      : "Channel message"}
+                      ? "Webhook"
+                      : "Channel"}
                   </span>
                   <span
                     className={[
@@ -1534,39 +1497,35 @@ export default function App() {
                       targetConfigured ? "badge-success" : "badge-muted",
                     ].join(" ")}
                   >
-                    {targetConfigured ? "Ready to save" : "Needs required fields"}
+                    {targetConfigured ? "Ready" : "Draft"}
                   </span>
                 </div>
               </div>
 
               <div className="summary-grid">
                 <article className="summary-tile">
-                  <span className="summary-label">Draft mode</span>
+                  <span className="summary-label">Mode</span>
                   <strong>
                     {targetForm.type === "webhook_message"
-                      ? "Webhook delivery"
-                      : "Channel delivery"}
+                      ? "Webhook"
+                      : "Channel"}
                   </strong>
-                  <small>
-                    {targetConfigured
-                      ? "Required delivery fields are present."
-                      : "Message ID and destination are still required."}
-                  </small>
+                  <small>{targetConfigured ? "Ready" : "Needs fields"}</small>
                 </article>
                 <article className="summary-tile">
                   <span className="summary-label">Message ID</span>
                   <strong>
-                    {targetDraft.message_id?.trim() || "Pending configuration"}
+                    {targetDraft.message_id?.trim() || "Unset"}
                   </strong>
-                  <small>Stored message that receives board updates.</small>
+                  <small>Board message</small>
                 </article>
                 <article className="summary-tile">
                   <span className="summary-label">Destination</span>
                   <strong>{summarizeTarget(targetDraft)}</strong>
                   <small>
                     {targetForm.type === "webhook_message"
-                      ? "Webhook URL is used when publishing."
-                      : "Channel ID is used when publishing."}
+                      ? "Webhook URL"
+                      : "Channel ID"}
                   </small>
                 </article>
               </div>
@@ -1616,7 +1575,7 @@ export default function App() {
                         channelID: event.target.value,
                       }))
                     }
-                    placeholder="Used for channel_message targets"
+                    placeholder="channel_message"
                     disabled={
                       authState !== "signed_in" ||
                       targetForm.type === "webhook_message"
@@ -1634,7 +1593,7 @@ export default function App() {
                         webhookURL: event.target.value,
                       }))
                     }
-                    placeholder="Used for webhook_message targets"
+                    placeholder="webhook_message"
                     disabled={
                       authState !== "signed_in" ||
                       targetForm.type === "channel_message"
@@ -1643,20 +1602,14 @@ export default function App() {
                 </label>
               </div>
 
-              <p className="helper">
-                Use a channel target when the bot owns the message directly.
-                Use a webhook target when another workflow owns the posting
-                endpoint.
-              </p>
-
               <div className="actions">
                 <button
-                  className="button-primary"
+                  className="button-primary button-compact"
                   type="button"
                   disabled={!canManageGuild}
                   onClick={() => void saveTarget()}
                 >
-                  Save target
+                  Save
                 </button>
               </div>
             </section>
@@ -1664,17 +1617,12 @@ export default function App() {
             <section id="template" className="card surface-card">
               <div className="card-heading">
                 <div>
-                  <p className="section-kicker">Presentation</p>
-                  <h2>Tune copy and rendering</h2>
-                  <p className="section-text">
-                    Adjust human-facing board copy here. Rendering rules and
-                    validation still live in the backend, so this layer stays
-                    UI-only and safe.
-                  </p>
+                  <p className="section-kicker">Template</p>
+                  <h2>Copy</h2>
                 </div>
                 <div className="badge-row">
                   <span className="inline-badge badge-strong">
-                    {templateCompletion}/{templateFieldCount} core fields filled
+                    {templateCompletion}/{templateFieldCount}
                   </span>
                   <span
                     className={[
@@ -1682,9 +1630,7 @@ export default function App() {
                       templateConfigured ? "badge-success" : "badge-muted",
                     ].join(" ")}
                   >
-                    {templateConfigured
-                      ? "Template draft looks healthy"
-                      : "Template still needs structure"}
+                    {templateConfigured ? "Ready" : "Draft"}
                   </span>
                 </div>
               </div>
@@ -1692,24 +1638,22 @@ export default function App() {
               <div className="summary-grid">
                 <article className="summary-tile">
                   <span className="summary-label">Board title</span>
-                  <strong>{templateDraft.title?.trim() || "Untitled board"}</strong>
-                  <small>Primary heading shown at the top of the board.</small>
+                  <strong>{templateDraft.title?.trim() || "Untitled"}</strong>
+                  <small>Header</small>
                 </article>
                 <article className="summary-tile">
-                  <span className="summary-label">Intro state</span>
+                  <span className="summary-label">Intro</span>
                   <strong>
                     {templateDraft.intro?.trim() !== ""
-                      ? "Intro copy present"
-                      : "No intro copy yet"}
+                      ? "Present"
+                      : "Empty"}
                   </strong>
-                  <small>
-                    Intro remains optional, but it helps frame the content.
-                  </small>
+                  <small>Optional</small>
                 </article>
                 <article className="summary-tile">
-                  <span className="summary-label">Render summary</span>
+                  <span className="summary-label">State</span>
                   <strong>{summarizeTemplate(templateDraft)}</strong>
-                  <small>High-level view of the current template draft.</small>
+                  <small>Live draft</small>
                 </article>
               </div>
 
@@ -1739,7 +1683,7 @@ export default function App() {
                         sectionHeaderTemplate: event.target.value,
                       }))
                     }
-                    placeholder="Format used for each fandom section"
+                    placeholder="Section header"
                     disabled={authState !== "signed_in"}
                   />
                 </label>
@@ -1754,7 +1698,7 @@ export default function App() {
                         lineTemplate: event.target.value,
                       }))
                     }
-                    placeholder="Format used for each partner entry"
+                    placeholder="Partner row"
                     disabled={authState !== "signed_in"}
                   />
                 </label>
@@ -1769,7 +1713,7 @@ export default function App() {
                         emptyStateText: event.target.value,
                       }))
                     }
-                    placeholder="Shown when there are no partners"
+                    placeholder="No partners"
                     disabled={authState !== "signed_in"}
                   />
                 </label>
@@ -1786,40 +1730,19 @@ export default function App() {
                       intro: event.target.value,
                     }))
                   }
-                  placeholder="Optional intro copy for the board"
+                  placeholder="Optional"
                   disabled={authState !== "signed_in"}
                 />
-                <span className="field-note">
-                  Use backend-supported template syntax only. The dashboard
-                  provides editing clarity, not template parsing.
-                </span>
               </label>
-
-              <div className="template-notes">
-                <article className="note-card">
-                  <strong>Title and intro set the frame.</strong>
-                  <span>
-                    Use them to tell users what the board is for before they
-                    scan into sections and partner links.
-                  </span>
-                </article>
-                <article className="note-card">
-                  <strong>Section and line templates shape repetition.</strong>
-                  <span>
-                    Keep them predictable so readers can parse long partner lists
-                    with less cognitive load.
-                  </span>
-                </article>
-              </div>
 
               <div className="actions">
                 <button
-                  className="button-primary"
+                  className="button-primary button-compact"
                   type="button"
                   disabled={!canManageGuild}
                   onClick={() => void saveTemplate()}
                 >
-                  Save template
+                  Save
                 </button>
               </div>
             </section>
@@ -1829,18 +1752,15 @@ export default function App() {
             <section className="card side-card">
               <div className="card-heading">
                 <div>
-                  <p className="section-kicker">Board snapshot</p>
-                  <h3>Current working state</h3>
+                  <p className="section-kicker">Snapshot</p>
+                  <h3>State</h3>
                 </div>
               </div>
 
               {board === null ? (
                 <div className="empty-panel">
-                  <strong>Load a board to see operational context.</strong>
-                  <p>
-                    Once loaded, this panel summarizes delivery mode, template
-                    health, partner count, and the dominant fandom groups.
-                  </p>
+                  <strong>No snapshot</strong>
+                  <p>Load the board.</p>
                 </div>
               ) : (
                 <>
@@ -1870,8 +1790,8 @@ export default function App() {
                     <strong>{summarizeTarget(targetDraft)}</strong>
                     <span>
                       {targetConfigured
-                        ? "Target draft contains the minimum data needed to publish."
-                        : "Message ID and destination still need to be completed."}
+                        ? "Ready"
+                        : "Needs fields"}
                     </span>
                   </div>
 
@@ -1899,8 +1819,8 @@ export default function App() {
             <section className="card side-card">
               <div className="card-heading">
                 <div>
-                  <p className="section-kicker">Quality rail</p>
-                  <h3>Jump to the next gap</h3>
+                  <p className="section-kicker">Flow</p>
+                  <h3>Checklist</h3>
                 </div>
               </div>
 
@@ -1917,13 +1837,12 @@ export default function App() {
                       .join(" ")}
                     type="button"
                     onClick={() => scrollToSection(step.sectionId)}
-                  >
-                    <span className="checklist-copy">
-                      <span className="checklist-label">{step.title}</span>
-                      <span className="checklist-detail">{step.description}</span>
-                    </span>
-                    <span className="workflow-state">
-                      {step.completed
+                    >
+                      <span className="checklist-copy">
+                        <span className="checklist-label">{step.title}</span>
+                      </span>
+                      <span className="workflow-state">
+                        {step.completed
                         ? "Done"
                         : step.current
                           ? "Current"
@@ -1938,7 +1857,7 @@ export default function App() {
               <div className="card-heading">
                 <div>
                   <p className="section-kicker">Context</p>
-                  <h3>Operational notes</h3>
+                  <h3>Scope</h3>
                 </div>
               </div>
 
@@ -1956,15 +1875,12 @@ export default function App() {
                   <dd>
                     {session !== null && session.scopes.length > 0
                       ? session.scopes.join(", ")
-                      : "Available after sign-in"}
+                      : "After sign-in"}
                   </dd>
                 </div>
                 <div>
                   <dt>Guild filtering</dt>
-                  <dd>
-                    Guilds must be manageable by the current user and already
-                    present for the bot before they appear in this UI.
-                  </dd>
+                  <dd>Manageable + bot joined</dd>
                 </div>
               </dl>
             </section>
@@ -1976,20 +1892,16 @@ export default function App() {
             <div className="card-heading partner-heading">
               <div>
                 <p className="section-kicker">Partners</p>
-                <h2>Curate the live partner list</h2>
-                <p className="section-text">
-                  Filter the current board list, inspect entries quickly, and
-                  send any row directly into the editing controls.
-                </p>
+                <h2>Directory</h2>
               </div>
 
               <div className="partner-toolbar">
                 <label className="search-field">
-                  <span className="field-label">Filter partners</span>
+                  <span className="field-label">Filter</span>
                   <input
                     value={partnerSearch}
                     onChange={(event) => setPartnerSearch(event.target.value)}
-                    placeholder="Search by fandom, name, or link"
+                    placeholder="Search"
                   />
                 </label>
                 <span className="inline-badge badge-strong">
@@ -2000,19 +1912,13 @@ export default function App() {
 
             {partners.length === 0 ? (
               <div className="empty-panel">
-                <strong>No partners configured yet.</strong>
-                <p>
-                  Add the first partner from the editor rail on the right. Once
-                  entries exist, they appear here for search and quick editing.
-                </p>
+                <strong>No partners</strong>
+                <p>Add the first row.</p>
               </div>
             ) : filteredPartners.length === 0 ? (
               <div className="empty-panel">
-                <strong>No partners match the current filter.</strong>
-                <p>
-                  Try a broader search term or clear the filter to return to the
-                  full board list.
-                </p>
+                <strong>No matches</strong>
+                <p>Clear the filter.</p>
               </div>
             ) : (
               <div className="table-shell">
@@ -2052,7 +1958,7 @@ export default function App() {
                             disabled={authState !== "signed_in"}
                             onClick={() => loadPartnerIntoEditor(partner)}
                           >
-                            Send to editor
+                            Edit
                           </button>
                         </td>
                       </tr>
@@ -2067,12 +1973,8 @@ export default function App() {
             <section className="card">
               <div className="editor-header">
                 <div className="editor-title">
-                  <p className="section-kicker">Create</p>
-                  <h3>Add partner</h3>
-                  <p className="section-text">
-                    Add a new entry with the exact name and invite link you want
-                    shown on the board.
-                  </p>
+                  <p className="section-kicker">Add</p>
+                  <h3>New</h3>
                 </div>
               </div>
 
@@ -2125,12 +2027,12 @@ export default function App() {
 
               <div className="actions">
                 <button
-                  className="button-primary"
+                  className="button-primary button-compact"
                   type="button"
                   disabled={!canManageGuild}
                   onClick={() => void addPartner()}
                 >
-                  Add partner
+                  Add
                 </button>
               </div>
             </section>
@@ -2138,17 +2040,11 @@ export default function App() {
             <section className="card">
               <div className="editor-header">
                 <div className="editor-title">
-                  <p className="section-kicker">Update</p>
-                  <h3>Edit existing partner</h3>
-                  <p className="section-text">
-                    Use "Send to editor" from the table for the fastest path, or
-                    type values manually if you already know the current name.
-                  </p>
+                  <p className="section-kicker">Edit</p>
+                  <h3>Existing</h3>
                 </div>
                 {selectedPartnerName !== "" ? (
-                  <span className="selected-tag">
-                    Selected: {selectedPartnerName}
-                  </span>
+                  <span className="selected-tag">{selectedPartnerName}</span>
                 ) : null}
               </div>
 
@@ -2216,12 +2112,12 @@ export default function App() {
 
               <div className="actions">
                 <button
-                  className="button-primary"
+                  className="button-primary button-compact"
                   type="button"
                   disabled={!canManageGuild}
                   onClick={() => void updatePartner()}
                 >
-                  Update partner
+                  Save
                 </button>
               </div>
             </section>
@@ -2230,11 +2126,7 @@ export default function App() {
               <div className="editor-header">
                 <div className="editor-title">
                   <p className="section-kicker">Delete</p>
-                  <h3>Remove partner</h3>
-                  <p className="section-text">
-                    This action removes the entry from the board configuration.
-                    Review the selected name carefully before confirming.
-                  </p>
+                  <h3>Remove</h3>
                 </div>
               </div>
 
@@ -2248,18 +2140,14 @@ export default function App() {
                 />
               </label>
 
-              <p className="danger-note">
-                Tip: selecting a partner from the table pre-fills this field.
-              </p>
-
               <div className="actions">
                 <button
-                  className="button-danger"
+                  className="button-danger button-compact"
                   type="button"
                   disabled={!canManageGuild}
                   onClick={() => void deletePartner()}
                 >
-                  Delete partner
+                  Delete
                 </button>
               </div>
             </section>
@@ -2327,15 +2215,15 @@ function formatAuthSupportText(
 ): string {
   switch (authState) {
     case "checking":
-      return "Checking the current dashboard session.";
+      return "Checking session.";
     case "signed_out":
-      return "Sign in with Discord to access only the guilds you can manage.";
+      return "Login required.";
     case "oauth_unavailable":
-      return "OAuth is not configured on this control server.";
+      return "OAuth unavailable.";
     case "signed_in":
-      return `${manageableGuildCount} manageable guild${manageableGuildCount === 1 ? "" : "s"} available.`;
+      return `${manageableGuildCount} guild${manageableGuildCount === 1 ? "" : "s"}.`;
     default:
-      return "Dashboard session state is unknown.";
+      return "Unknown session.";
   }
 }
 
@@ -2452,29 +2340,25 @@ function countFilledTemplateFields(template?: PartnerBoardTemplateConfig): numbe
 
 function summarizeTarget(target?: EmbedUpdateTargetConfig): string {
   if (target === undefined) {
-    return "Target pending configuration";
+    return "Unset";
   }
   if (!isTargetConfigured(target)) {
     return target.type === "webhook_message"
-      ? "Webhook target missing URL or message ID"
-      : "Channel target missing channel ID or message ID";
+      ? "Webhook draft"
+      : "Channel draft";
   }
-  return target.type === "webhook_message"
-    ? "Webhook message target"
-    : "Channel message target";
+  return target.type === "webhook_message" ? "Webhook" : "Channel";
 }
 
 function summarizeTemplate(template?: PartnerBoardTemplateConfig): string {
   if (template === undefined) {
-    return "Template pending configuration";
+    return "Unset";
   }
 
-  const introState =
-    template.intro?.trim() !== "" ? "intro present" : "intro optional";
-  const structureState = isTemplateConfigured(template)
-    ? "core fields ready"
-    : "core fields incomplete";
-  return `${structureState}, ${introState}`;
+  if (isTemplateConfigured(template)) {
+    return template.intro?.trim() !== "" ? "Ready + intro" : "Ready";
+  }
+  return template.intro?.trim() !== "" ? "Draft + intro" : "Draft";
 }
 
 function buildWorkflowSteps(
