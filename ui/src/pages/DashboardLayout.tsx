@@ -6,7 +6,7 @@ import {
   formatSessionTitle,
 } from "../app/utils";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { AlertBanner, IdentityAvatar } from "../components/ui";
+import { AlertBanner, IdentityAvatar, StatusBadge } from "../components/ui";
 
 const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
 
@@ -19,6 +19,7 @@ export function DashboardLayout() {
     busyLabel,
     manageableGuilds,
     notice,
+    selectedGuild,
     selectedGuildID,
     session,
     sessionAvatarURL,
@@ -32,7 +33,7 @@ export function DashboardLayout() {
     navigate(appRoutes.landing);
   }
 
-  const nextPath = `${location.pathname}${location.search}`;
+  const nextPath = `${location.pathname}${location.search}${location.hash}`;
 
   return (
     <main className="dashboard-shell">
@@ -44,16 +45,16 @@ export function DashboardLayout() {
           <span className="brand-copy">
             <span className="section-label">Dashboard</span>
             <strong>Discordcore</strong>
-            <small>Task-first control surface</small>
+            <small>Server-scoped bot management</small>
           </span>
         </Link>
 
-        <section className="sidebar-card">
+        <section className="sidebar-card sidebar-server">
           <div className="card-copy">
-            <p className="section-label">Current server</p>
-            <h2>Workspace context</h2>
+            <p className="section-label">Server</p>
+            <h2>{selectedGuild?.name ?? "Select a server"}</h2>
             <p className="section-description">
-              Server selection applies across the whole dashboard.
+              Switch the current server scope for every feature workspace.
             </p>
           </div>
 
@@ -114,9 +115,14 @@ export function DashboardLayout() {
                   ? formatSessionTitle(session)
                   : formatAuthStateLabel(authState)}
               </strong>
-              <small>
-                {formatAuthSupportText(authState, manageableGuilds.length)}
-              </small>
+              <div className="sidebar-status">
+                <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
+                  {formatAuthStateLabel(authState)}
+                </StatusBadge>
+                <small>
+                  {formatAuthSupportText(authState, manageableGuilds.length)}
+                </small>
+              </div>
             </div>
           </div>
 

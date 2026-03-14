@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
@@ -20,8 +21,8 @@ import {
   initialLayoutForm,
   isDeliveryConfigured,
   isLayoutConfigured,
-  postingMethodLabel,
   summarizePostingDestination,
+  validateDeliveryForm,
   type DeliveryFormState,
   type EntryFormState,
   type LayoutFormState,
@@ -505,22 +506,6 @@ export function usePartnerBoard() {
   return context;
 }
 
-function validateDeliveryForm(form: DeliveryFormState): string | null {
-  if (form.messageID.trim() === "") {
-    return "Board message ID is required before saving the posting destination.";
-  }
-
-  if (form.type === "webhook_message" && form.webhookURL.trim() === "") {
-    return "Webhook URL is required for webhook posting.";
-  }
-
-  if (form.type === "channel_message" && form.channelID.trim() === "") {
-    return "Channel ID is required for channel posting.";
-  }
-
-  return null;
-}
-
 function validateEntryForm(form: EntryFormState): string | null {
   if (form.name.trim() === "") {
     return "Partner name is required.";
@@ -532,5 +517,3 @@ function validateEntryForm(form: EntryFormState): string | null {
 
   return null;
 }
-
-export { postingMethodLabel };

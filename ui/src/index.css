@@ -221,7 +221,7 @@ textarea {
 
 .shell-sidebar {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   align-content: start;
 }
 
@@ -275,6 +275,7 @@ textarea {
 .brand-copy strong,
 .page-header h1,
 .card-copy h2,
+.card-copy h3,
 .empty-state-card h2,
 .summary-tile h3,
 .landing-card h2,
@@ -289,6 +290,7 @@ textarea {
 
 .brand-copy small,
 .identity-copy small,
+.roadmap-item p,
 .meta-note,
 .section-description,
 .empty-state-card p,
@@ -344,6 +346,15 @@ textarea {
   margin-top: auto;
 }
 
+.sidebar-server .card-copy h2 {
+  font-size: 1.35rem;
+}
+
+.sidebar-status {
+  display: grid;
+  gap: 8px;
+}
+
 .sidebar-actions,
 .card-actions,
 .drawer-actions,
@@ -368,12 +379,12 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding: 28px;
+  padding: 24px 26px;
   border-radius: var(--radius-shell);
   border: 1px solid var(--border-soft);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
-    linear-gradient(135deg, rgba(220, 198, 175, 0.08), rgba(228, 156, 135, 0.08)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+    linear-gradient(135deg, rgba(220, 198, 175, 0.05), rgba(228, 156, 135, 0.05)),
     var(--bg-panel-strong);
   box-shadow: var(--shadow-xl);
 }
@@ -392,8 +403,8 @@ textarea {
 }
 
 .page-header h1 {
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  line-height: 0.96;
+  font-size: clamp(2rem, 3.4vw, 2.8rem);
+  line-height: 0.98;
 }
 
 .page-description {
@@ -458,6 +469,19 @@ textarea {
   gap: 18px;
 }
 
+.overview-status-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-status-card,
+.feature-status-card,
+.roadmap-card {
+  display: grid;
+  gap: 18px;
+}
+
 .content-grid-single {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -471,6 +495,27 @@ textarea {
 .page-aside {
   display: grid;
   gap: 18px;
+}
+
+.status-strip {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-block: 18px;
+}
+
+.status-strip-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: var(--bg-panel-muted);
+  border: 1px solid var(--border-soft);
+}
+
+.status-strip-item strong {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
 }
 
 .summary-card,
@@ -553,6 +598,11 @@ textarea {
   font-size: 1.65rem;
 }
 
+.card-copy h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
 .card-copy p {
   margin: 0;
 }
@@ -624,6 +674,56 @@ textarea {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.surface-subsection {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.checklist {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-muted);
+}
+
+.checklist li.is-complete {
+  border-color: rgba(154, 183, 142, 0.24);
+}
+
+.checklist li.is-pending {
+  border-color: rgba(225, 172, 147, 0.24);
+}
+
+.checklist-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .table-wrap {
   overflow: auto;
   border-radius: 20px;
@@ -691,6 +791,9 @@ textarea {
 
 .details-panel summary {
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-weight: 700;
   list-style: none;
 }
@@ -707,6 +810,65 @@ textarea {
 
 .details-content p {
   margin: 0;
+}
+
+.section-nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+}
+
+.section-link:hover {
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.diagnostics-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.diagnostics-alert {
+  margin-top: 12px;
+}
+
+.diagnostics-content {
+  display: grid;
+  gap: 18px;
+}
+
+.diagnostics-editor {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 40%),
+    rgba(13, 12, 18, 0.76);
+}
+
+.roadmap-list {
+  display: grid;
+  gap: 12px;
+}
+
+.roadmap-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-muted);
+}
+
+.roadmap-item strong {
+  font-family: var(--font-display);
 }
 
 .drawer-backdrop {
@@ -820,11 +982,16 @@ textarea {
     grid-column: 1 / -1;
   }
 
+  .overview-status-grid,
   .content-grid-with-aside,
   .landing-hero,
   .landing-grid,
   .tile-grid {
     grid-template-columns: 1fr;
+  }
+
+  .status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -871,6 +1038,10 @@ textarea {
   }
 
   .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-strip {
     grid-template-columns: 1fr;
   }
 

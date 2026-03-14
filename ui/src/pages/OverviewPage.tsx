@@ -1,29 +1,90 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { appRoutes } from "../app/routes";
 import {
   formatAuthStateLabel,
   formatAuthSupportText,
-  formatSessionTitle,
+  formatTimestamp,
 } from "../app/utils";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { IdentityAvatar, PageHeader, StatusBadge } from "../components/ui";
+import { PageHeader, StatusBadge } from "../components/ui";
+import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoardSummary";
 
 export function OverviewPage() {
+  const location = useLocation();
   const {
     authState,
+    beginLogin,
     manageableGuilds,
     selectedGuild,
-    selectedGuildIconURL,
-    session,
-    sessionAvatarURL,
   } = useDashboardSession();
+  const {
+    deliveryConfigured,
+    lastLoadedAt,
+    layoutConfigured,
+    loading,
+    partnerCount,
+    postingMethodLabel,
+    refreshBoardSummary,
+    shellStatus,
+    summarizePostingDestination,
+  } = usePartnerBoardSummary();
+
+  const nextPath = `${location.pathname}${location.search}${location.hash}`;
+
+  function renderPrimaryAction() {
+    if (authState !== "signed_in") {
+      return (
+        <button
+          className="button-primary"
+          type="button"
+          onClick={() => void beginLogin(nextPath)}
+        >
+          Sign in with Discord
+        </button>
+      );
+    }
+
+    if (selectedGuild === null) {
+      return <span className="meta-note">Choose a server from the sidebar to continue.</span>;
+    }
+
+    if (!deliveryConfigured) {
+      return (
+        <Link className="button-primary" to={appRoutes.partnerBoardDelivery}>
+          Finish destination
+        </Link>
+      );
+    }
+
+    if (partnerCount === 0) {
+      return (
+        <Link className="button-primary" to={appRoutes.partnerBoardEntries}>
+          Add first partner
+        </Link>
+      );
+    }
+
+    if (!layoutConfigured) {
+      return (
+        <Link className="button-primary" to={appRoutes.partnerBoardLayout}>
+          Edit layout
+        </Link>
+      );
+    }
+
+    return (
+      <Link className="button-primary" to={appRoutes.partnerBoardEntries}>
+        Open Partner Board
+      </Link>
+    );
+  }
 
   return (
     <section className="page-shell">
       <PageHeader
         eyebrow="Overview"
-        title="Dashboard overview"
-        description="Use the sidebar for global navigation, then manage each product area inside its own workspace."
+        title="Overview"
+        description="Check access, server readiness, and Partner Board setup for the selected server."
         status={
           <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
             {formatAuthStateLabel(authState)}
@@ -32,96 +93,105 @@ export function OverviewPage() {
       />
 
       <div className="content-grid content-grid-single">
-        <section className="surface-card">
-          <div className="card-copy">
-            <p className="section-label">Account access</p>
-            <h2>Current session</h2>
+        <section className="overview-status-grid" aria-label="Server status">
+          <article className="surface-card overview-status-card">
+            <p className="section-label">Access</p>
+            <h2>{formatAuthStateLabel(authState)}</h2>
             <p className="section-description">
-              Authentication is app-level context. Features consume it instead of
-              re-implementing sign-in logic.
+              {formatAuthSupportText(authState, manageableGuilds.length)}
             </p>
+          </article>
+
+          <article className="surface-card overview-status-card">
+            <p className="section-label">Server</p>
+            <h2>{selectedGuild?.name ?? "No server selected"}</h2>
+            <p className="section-description">
+              {selectedGuild === null
+                ? "Select a server in the sidebar to load its feature workspace."
+                : "Every page in the dashboard now uses this server scope."}
+            </p>
+          </article>
+
+          <article className="surface-card overview-status-card">
+            <p className="section-label">Partner Board</p>
+            <h2>{shellStatus.label}</h2>
+            <p className="section-description">{shellStatus.description}</p>
+          </article>
+        </section>
+
+        <section className="surface-card feature-status-card">
+          <div className="card-header">
+            <div className="card-copy">
+              <p className="section-label">Feature status</p>
+              <h2>Partner Board</h2>
+              <p className="section-description">
+                Manage entries, layout, and publishing for the selected server.
+              </p>
+            </div>
+
+            <div className="card-actions">
+              {selectedGuild !== null && authState === "signed_in" ? (
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void refreshBoardSummary()}
+                >
+                  Refresh status
+                </button>
+              ) : null}
+              {renderPrimaryAction()}
+            </div>
           </div>
 
-          <div className="identity-row">
-            <IdentityAvatar
-              imageUrl={sessionAvatarURL}
-              label={
-                session !== null
-                  ? formatSessionTitle(session)
-                  : formatAuthStateLabel(authState)
-              }
-            />
-            <div className="identity-copy">
-              <strong>
-                {session !== null
-                  ? formatSessionTitle(session)
-                  : formatAuthStateLabel(authState)}
-              </strong>
-              <small>
-                {formatAuthSupportText(authState, manageableGuilds.length)}
-              </small>
+          <div className="summary-list">
+            <div className="summary-row">
+              <span>Setup state</span>
+              <strong>{shellStatus.label}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Posting destination</span>
+              <strong>{summarizePostingDestination}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Posting method</span>
+              <strong>{postingMethodLabel}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Partner entries</span>
+              <strong>{partnerCount}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Last checked</span>
+              <strong>{formatTimestamp(lastLoadedAt, "Not checked yet")}</strong>
             </div>
           </div>
         </section>
 
-        <section className="surface-card">
+        <section className="surface-card roadmap-card" id="roadmap">
           <div className="card-copy">
-            <p className="section-label">Server context</p>
-            <h2>Selected server</h2>
+            <p className="section-label">Roadmap</p>
+            <h2>Planned areas</h2>
             <p className="section-description">
-              Dashboard pages inherit the same server selection from the sidebar.
+              Future features stay off the main navigation until they become actionable.
             </p>
           </div>
 
-          <div className="identity-row">
-            <IdentityAvatar
-              imageUrl={selectedGuildIconURL}
-              label={selectedGuild?.name ?? "No server selected"}
-            />
-            <div className="identity-copy">
-              <strong>{selectedGuild?.name ?? "No server selected"}</strong>
-              <small>
-                {selectedGuild === null
-                  ? "Choose a server from the sidebar to load feature data."
-                  : "Partner Board and future features will use this server context."}
-              </small>
-            </div>
+          <div className="roadmap-list" aria-label="Planned feature roadmap">
+            <article className="roadmap-item">
+              <strong>Moderation</strong>
+              <p>Rules, reports, and enforcement workflows will arrive once the first real tools are ready.</p>
+            </article>
+            <article className="roadmap-item">
+              <strong>Automations</strong>
+              <p>Scheduled workflows stay hidden until the dashboard can run and inspect real automations.</p>
+            </article>
+            <article className="roadmap-item">
+              <strong>Global activity</strong>
+              <p>Cross-feature history returns only after feature-level events exist and can be filtered meaningfully.</p>
+            </article>
           </div>
         </section>
-
-        <section className="surface-card">
-          <div className="card-copy">
-            <p className="section-label">Engagement</p>
-            <h2>Partner Board</h2>
-            <p className="section-description">
-              Manage board entries, board copy, and posting destination in a dedicated feature workspace.
-            </p>
-          </div>
-
-          <div className="card-actions">
-            <Link className="button-primary" to={appRoutes.partnerBoardEntries}>
-              Open Partner Board
-            </Link>
-          </div>
-        </section>
-
-        <div className="tile-grid">
-          <article className="surface-card summary-tile">
-            <p className="section-label">Moderation</p>
-            <h3>Planned area</h3>
-            <p>Rules, actions, and reports will move into their own workspace.</p>
-          </article>
-          <article className="surface-card summary-tile">
-            <p className="section-label">Automations</p>
-            <h3>Planned area</h3>
-            <p>Scheduled workflows and future automations will live here.</p>
-          </article>
-          <article className="surface-card summary-tile">
-            <p className="section-label">Activity Log</p>
-            <h3>Planned area</h3>
-            <p>Cross-feature history arrives after feature-level events are exposed.</p>
-          </article>
-        </div>
       </div>
     </section>
   );

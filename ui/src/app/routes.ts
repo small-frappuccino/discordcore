@@ -31,18 +31,6 @@ export const sidebarItems: SidebarItem[] = [
     matchPrefix: appRoutes.partnerBoardBase,
   },
   {
-    label: "Moderation",
-    path: appRoutes.moderation,
-  },
-  {
-    label: "Automations",
-    path: appRoutes.automations,
-  },
-  {
-    label: "Activity Log",
-    path: appRoutes.activity,
-  },
-  {
     label: "Settings",
     path: appRoutes.settings,
   },
@@ -51,6 +39,5 @@ export const sidebarItems: SidebarItem[] = [
 export const partnerBoardTabs = [
   { label: "Entries", path: appRoutes.partnerBoardEntries },
   { label: "Layout", path: appRoutes.partnerBoardLayout },
-  { label: "Posting destination", path: appRoutes.partnerBoardDelivery },
-  { label: "Activity", path: appRoutes.partnerBoardActivity },
+  { label: "Destination", path: appRoutes.partnerBoardDelivery },
 ] as const;

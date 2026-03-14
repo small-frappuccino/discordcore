@@ -32,6 +32,11 @@ export interface PartnerBoardShellStatus {
   tone: "neutral" | "info" | "success" | "error";
 }
 
+export interface DeliveryChecklistItem {
+  complete: boolean;
+  label: string;
+}
+
 export const initialDeliveryForm: DeliveryFormState = {
   type: "channel_message",
   messageID: "",
@@ -158,6 +163,43 @@ export function validateDeliveryForm(form: DeliveryFormState): string | null {
   }
 
   return null;
+}
+
+export function getDeliveryChecklist(
+  form: DeliveryFormState,
+): DeliveryChecklistItem[] {
+  const usesWebhook = form.type === "webhook_message";
+
+  return [
+    {
+      complete: form.messageID.trim() !== "",
+      label: "Board message target is saved",
+    },
+    usesWebhook
+      ? {
+          complete: form.webhookURL.trim() !== "",
+          label: "Webhook connection is set",
+        }
+      : {
+          complete: form.channelID.trim() !== "",
+          label: "Channel is selected",
+        },
+  ];
+}
+
+export function getDeliveryGuidance(
+  form: DeliveryFormState,
+  configured: boolean,
+): string {
+  if (configured) {
+    return form.type === "webhook_message"
+      ? "This board is ready to publish through a webhook destination."
+      : "This board is ready to publish to a Discord channel.";
+  }
+
+  return form.type === "webhook_message"
+    ? "Finish the webhook connection in Diagnostics before relying on this board."
+    : "Finish the channel destination in Diagnostics before relying on this board.";
 }
 
 export function validateEntryForm(form: EntryFormState): string | null {
