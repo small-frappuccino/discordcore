@@ -6,7 +6,13 @@ import {
   formatTimestamp,
 } from "../app/utils";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, StatusBadge } from "../components/ui";
+import {
+  KeyValueList,
+  MetricCard,
+  PageHeader,
+  StatusBadge,
+  SurfaceCard,
+} from "../components/ui";
 import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoardSummary";
 
 export function OverviewPage() {
@@ -30,6 +36,34 @@ export function OverviewPage() {
   } = usePartnerBoardSummary();
 
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
+  const lastCheckedLabel = formatTimestamp(lastLoadedAt, "Not checked yet");
+  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
+
+  let nextActionTitle = "Connect your dashboard session";
+  let nextActionDescription =
+    "Sign in with Discord before loading any server-scoped dashboard workspace.";
+
+  if (authState === "signed_in" && selectedGuild === null) {
+    nextActionTitle = "Choose the active server";
+    nextActionDescription =
+      "Server scope is global in the dashboard. Select one server to load the operational workspace.";
+  } else if (authState === "signed_in" && !deliveryConfigured) {
+    nextActionTitle = "Finish the posting destination";
+    nextActionDescription =
+      "Define where the board publishes before relying on the workspace for steady-state management.";
+  } else if (authState === "signed_in" && partnerCount === 0) {
+    nextActionTitle = "Add the first partner entry";
+    nextActionDescription =
+      "The board shell is ready. Seed at least one partner so layout and publishing can be verified with real data.";
+  } else if (authState === "signed_in" && !layoutConfigured) {
+    nextActionTitle = "Finalize the board layout";
+    nextActionDescription =
+      "Fill the core copy fields so the board is publishable without exposing advanced formatting in the default flow.";
+  } else if (authState === "signed_in" && selectedGuild !== null) {
+    nextActionTitle = "Partner Board is ready to manage";
+    nextActionDescription =
+      "Entries, layout, and delivery are configured enough for day-to-day operations from the feature workspace.";
+  }
 
   function renderPrimaryAction() {
     if (authState !== "signed_in") {
@@ -79,6 +113,131 @@ export function OverviewPage() {
     );
   }
 
+  function renderSecondaryAction() {
+    if (authState !== "signed_in" || selectedGuild === null) {
+      return null;
+    }
+
+    return (
+      <button
+        className="button-secondary"
+        type="button"
+        disabled={loading}
+        onClick={() => void refreshBoardSummary()}
+      >
+        Refresh status
+      </button>
+    );
+  }
+
+  function renderNextStepAction() {
+    if (authState !== "signed_in") {
+      return (
+        <button
+          className="button-secondary"
+          type="button"
+          onClick={() => void beginLogin(nextPath)}
+        >
+          Connect session
+        </button>
+      );
+    }
+
+    if (selectedGuild === null) {
+      return (
+        <span className="meta-note">
+          Choose a server from the sidebar to continue.
+        </span>
+      );
+    }
+
+    if (!deliveryConfigured) {
+      return (
+        <Link className="button-secondary" to={appRoutes.partnerBoardDelivery}>
+          Open destination setup
+        </Link>
+      );
+    }
+
+    if (partnerCount === 0) {
+      return (
+        <Link className="button-secondary" to={appRoutes.partnerBoardEntries}>
+          Open entry manager
+        </Link>
+      );
+    }
+
+    if (!layoutConfigured) {
+      return (
+        <Link className="button-secondary" to={appRoutes.partnerBoardLayout}>
+          Open layout editor
+        </Link>
+      );
+    }
+
+    return (
+      <Link className="button-secondary" to={appRoutes.partnerBoardEntries}>
+        Open workspace
+      </Link>
+    );
+  }
+
+  const summaryItems = [
+    {
+      label: "Access",
+      value: formatAuthStateLabel(authState),
+      description: formatAuthSupportText(authState, manageableGuilds.length),
+      tone: authState === "signed_in" ? "success" : "info",
+    },
+    {
+      label: "Server scope",
+      value: selectedServerLabel,
+      description:
+        selectedGuild === null
+          ? "Select a server in the sidebar to load its workspace."
+          : "The current scope applies across dashboard pages.",
+      tone: selectedGuild === null ? "info" : "neutral",
+    },
+    {
+      label: "Partner Board",
+      value: shellStatus.label,
+      description: shellStatus.description,
+      tone: shellStatus.tone,
+    },
+    {
+      label: "Entries",
+      value: String(partnerCount),
+      description:
+        selectedGuild === null
+          ? "Counts appear after a server is selected."
+          : `${postingMethodLabel} • ${summarizePostingDestination}`,
+      tone: partnerCount > 0 ? "success" : "neutral",
+    },
+  ] as const;
+
+  const overviewStatusItems = [
+    {
+      label: "Setup state",
+      value: <StatusBadge tone={shellStatus.tone}>{shellStatus.label}</StatusBadge>,
+    },
+    {
+      label: "Posting destination",
+      value: summarizePostingDestination,
+    },
+    {
+      label: "Posting method",
+      value: postingMethodLabel,
+    },
+    {
+      label: "Partner entries",
+      value: String(partnerCount),
+    },
+    {
+      label: "Last checked",
+      value: lastCheckedLabel,
+    },
+  ];
+
   return (
     <section className="page-shell">
       <PageHeader
@@ -90,37 +249,35 @@ export function OverviewPage() {
             {formatAuthStateLabel(authState)}
           </StatusBadge>
         }
+        meta={
+          <>
+            <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
+            <span className="meta-pill subtle-pill">Last checked {lastCheckedLabel}</span>
+          </>
+        }
+        actions={
+          <>
+            {renderSecondaryAction()}
+            {renderPrimaryAction()}
+          </>
+        }
       />
 
-      <div className="content-grid content-grid-single">
-        <section className="overview-status-grid" aria-label="Server status">
-          <article className="surface-card overview-status-card">
-            <p className="section-label">Access</p>
-            <h2>{formatAuthStateLabel(authState)}</h2>
-            <p className="section-description">
-              {formatAuthSupportText(authState, manageableGuilds.length)}
-            </p>
-          </article>
+      <section className="overview-summary-strip" aria-label="Server status">
+        {summaryItems.map((item) => (
+          <MetricCard
+            key={item.label}
+            label={item.label}
+            value={item.value}
+            description={item.description}
+            tone={item.tone}
+          />
+        ))}
+      </section>
 
-          <article className="surface-card overview-status-card">
-            <p className="section-label">Server</p>
-            <h2>{selectedGuild?.name ?? "No server selected"}</h2>
-            <p className="section-description">
-              {selectedGuild === null
-                ? "Select a server in the sidebar to load its feature workspace."
-                : "Every page in the dashboard now uses this server scope."}
-            </p>
-          </article>
-
-          <article className="surface-card overview-status-card">
-            <p className="section-label">Partner Board</p>
-            <h2>{shellStatus.label}</h2>
-            <p className="section-description">{shellStatus.description}</p>
-          </article>
-        </section>
-
-        <section className="surface-card feature-status-card">
-          <div className="card-header">
+      <div className="overview-main-grid">
+        <SurfaceCard className="feature-status-card overview-primary-card">
+          <div className="overview-card-header">
             <div className="card-copy">
               <p className="section-label">Feature status</p>
               <h2>Partner Board</h2>
@@ -128,56 +285,31 @@ export function OverviewPage() {
                 Manage entries, layout, and publishing for the selected server.
               </p>
             </div>
-
-            <div className="card-actions">
-              {selectedGuild !== null && authState === "signed_in" ? (
-                <button
-                  className="button-secondary"
-                  type="button"
-                  disabled={loading}
-                  onClick={() => void refreshBoardSummary()}
-                >
-                  Refresh status
-                </button>
-              ) : null}
-              {renderPrimaryAction()}
-            </div>
+            <StatusBadge tone={shellStatus.tone}>{shellStatus.label}</StatusBadge>
           </div>
 
-          <div className="summary-list">
-            <div className="summary-row">
-              <span>Setup state</span>
-              <strong>{shellStatus.label}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Posting destination</span>
-              <strong>{summarizePostingDestination}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Posting method</span>
-              <strong>{postingMethodLabel}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Partner entries</span>
-              <strong>{partnerCount}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Last checked</span>
-              <strong>{formatTimestamp(lastLoadedAt, "Not checked yet")}</strong>
-            </div>
-          </div>
-        </section>
+          <KeyValueList className="overview-status-list" items={overviewStatusItems} />
 
-        <section className="surface-card roadmap-card" id="roadmap">
+          <section className="overview-next-step">
+            <div className="overview-next-step-copy">
+              <p className="section-label">Next step</p>
+              <strong>{nextActionTitle}</strong>
+              <p className="section-description">{nextActionDescription}</p>
+            </div>
+            <div className="overview-next-step-actions">{renderNextStepAction()}</div>
+          </section>
+        </SurfaceCard>
+
+        <SurfaceCard className="roadmap-card roadmap-card-muted" id="roadmap">
           <div className="card-copy">
             <p className="section-label">Roadmap</p>
             <h2>Planned areas</h2>
             <p className="section-description">
-              Future features stay off the main navigation until they become actionable.
+              Future areas stay visible for planning, but remain secondary until they become operational workspaces.
             </p>
           </div>
 
-          <div className="roadmap-list" aria-label="Planned feature roadmap">
+          <div className="roadmap-list overview-roadmap-list" aria-label="Planned feature roadmap">
             <article className="roadmap-item">
               <strong>Moderation</strong>
               <p>Rules, reports, and enforcement workflows will arrive once the first real tools are ready.</p>
@@ -191,7 +323,7 @@ export function OverviewPage() {
               <p>Cross-feature history returns only after feature-level events exist and can be filtered meaningfully.</p>
             </article>
           </div>
-        </section>
+        </SurfaceCard>
       </div>
     </section>
   );

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/messageupdate"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -54,8 +55,9 @@ type Server struct {
 	partnerBoardSyncer  partners.GuildSyncExecutor
 	botGuildIDsProvider botGuildIDsProvider
 	guildRegistration   guildRegistrationFunc
+	discordSession      func() *discordgo.Session
 	discordOAuth        *discordOAuthProvider
-	publicOrigin       controlPublicOrigin
+	publicOrigin        controlPublicOrigin
 	runtimeApplier      *runtimeapply.Manager
 	httpServer          *http.Server
 	listener            net.Listener
@@ -87,6 +89,8 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/auth/me", s.handleDiscordOAuthMe)
 	mux.HandleFunc("/auth/logout", s.handleDiscordOAuthLogout)
 	mux.HandleFunc("/auth/guilds/manageable", s.handleDiscordOAuthManageableGuilds)
+	mux.HandleFunc("/v1/features", s.handleFeatureRoutes)
+	mux.HandleFunc("/v1/features/", s.handleFeatureRoutes)
 	mux.HandleFunc("/v1/settings", s.handleSettingsRoutes)
 	mux.HandleFunc("/v1/settings/", s.handleSettingsRoutes)
 	mux.HandleFunc("/v1/runtime-config", s.handleRuntimeConfig)
@@ -160,6 +164,14 @@ func (s *Server) SetBotGuildIDsProvider(provider func(context.Context) ([]string
 		return
 	}
 	s.botGuildIDsProvider = provider
+}
+
+// SetDiscordSessionProvider exposes the live Discord session for readiness inspection.
+func (s *Server) SetDiscordSessionProvider(provider func() *discordgo.Session) {
+	if s == nil || provider == nil {
+		return
+	}
+	s.discordSession = provider
 }
 
 // SetGuildRegistrationFunc configures Discord-aware guild bootstrap used by
@@ -506,10 +518,6 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "config manager unavailable", http.StatusInternalServerError)
 		return
 	}
-	if s.partnerBoardService == nil {
-		http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
-		return
-	}
 
 	guildID, tail, ok := splitGuildRoute(r.URL.Path)
 	if !ok {
@@ -537,7 +545,28 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
+	case len(tail) == 1 && tail[0] == "features":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleGuildFeaturesList(w, guildID)
+		return
+	case len(tail) == 2 && tail[0] == "features":
+		switch r.Method {
+		case http.MethodGet:
+			s.handleGuildFeatureGet(w, guildID, tail[1])
+		case http.MethodPatch:
+			s.handleGuildFeaturePatch(w, r, guildID, tail[1])
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
 	case len(tail) == 1 && tail[0] == "partner-board":
+		if s.partnerBoardService == nil {
+			http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+			return
+		}
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -545,6 +574,10 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		s.handlePartnerBoardGet(w, r, guildID)
 		return
 	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "target":
+		if s.partnerBoardService == nil {
+			http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			s.handlePartnerBoardTargetGet(w, r, guildID)
@@ -555,6 +588,10 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "template":
+		if s.partnerBoardService == nil {
+			http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			s.handlePartnerBoardTemplateGet(w, r, guildID)
@@ -565,6 +602,10 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "partners":
+		if s.partnerBoardService == nil {
+			http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			s.handlePartnerBoardPartnersList(w, r, guildID)
@@ -579,6 +620,10 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	case len(tail) == 2 && tail[0] == "partner-board" && tail[1] == "sync":
+		if s.partnerBoardService == nil {
+			http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+			return
+		}
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

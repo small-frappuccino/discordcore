@@ -140,4 +140,17 @@ var postgresMigrations = []migration{
 			`DROP TABLE IF EXISTS messages`,
 		},
 	},
+	{
+		Version: 2,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS bot_config_state (
+				config_key TEXT PRIMARY KEY,
+				config_json JSONB NOT NULL,
+				updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+		},
+		DownSQL: []string{
+			`DROP TABLE IF EXISTS bot_config_state`,
+		},
+	},
 }

@@ -1,11 +1,11 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,6 +37,32 @@ func runtimeDatabaseConfigForRunnerTests(t *testing.T) files.DatabaseRuntimeConf
 	}
 }
 
+func setRunnerDatabaseBootstrapEnv(t *testing.T, cfg files.DatabaseRuntimeConfig) {
+	t.Helper()
+
+	t.Setenv(databaseDriverEnv, cfg.Driver)
+	t.Setenv(databaseURLEnv, cfg.DatabaseURL)
+	t.Setenv(databaseMaxOpenConnsEnv, strconv.Itoa(cfg.MaxOpenConns))
+	t.Setenv(databaseMaxIdleConnsEnv, strconv.Itoa(cfg.MaxIdleConns))
+	t.Setenv(databaseConnMaxLifetimeSecsEnv, strconv.Itoa(cfg.ConnMaxLifetimeSecs))
+	t.Setenv(databaseConnMaxIdleTimeSecsEnv, strconv.Itoa(cfg.ConnMaxIdleTimeSecs))
+	t.Setenv(databasePingTimeoutMSEnv, strconv.Itoa(cfg.PingTimeoutMS))
+}
+
+func writeRunnerLegacyConfig(t *testing.T, appName string, cfg files.BotConfig) string {
+	t.Helper()
+
+	util.SetAppName(appName)
+	settingsPath := util.GetSettingsFilePath()
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("create settings directory: %v", err)
+	}
+	if err := files.SaveSettingsFileWithPath(settingsPath, &cfg); err != nil {
+		t.Fatalf("write settings config: %v", err)
+	}
+	return settingsPath
+}
+
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	const (
 		appName  = "alicebot-run-test"
@@ -53,16 +79,12 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	t.Setenv("APPDATA", appDataDir)
 	t.Setenv(tokenEnv, "test-token")
 
-	util.SetAppName(appName)
-	settingsPath := util.GetSettingsFilePath()
-	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
-		t.Fatalf("create settings directory: %v", err)
-	}
-
 	boolPtr := func(v bool) *bool { return &v }
+	dbCfg := runtimeDatabaseConfigForRunnerTests(t)
+	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			Database: runtimeDatabaseConfigForRunnerTests(t),
+			Database: dbCfg,
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -77,13 +99,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{},
 	}
-	rawCfg, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal settings config: %v", err)
-	}
-	if err := os.WriteFile(settingsPath, rawCfg, 0o644); err != nil {
-		t.Fatalf("write settings config: %v", err)
-	}
+	settingsPath := writeRunnerLegacyConfig(t, appName, cfg)
 
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {
@@ -136,6 +152,12 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	if got := atomic.LoadInt32(&shutdownCalls); got != 1 {
 		t.Fatalf("expected one shutdown command call, got %d", got)
 	}
+	if _, err := os.Stat(settingsPath); !os.IsNotExist(err) {
+		t.Fatalf("expected migrated settings file to be removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(settingsPath)); !os.IsNotExist(err) {
+		t.Fatalf("expected migrated settings directory to be removed, stat err=%v", err)
+	}
 }
 
 func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
@@ -154,16 +176,12 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	t.Setenv("APPDATA", appDataDir)
 	t.Setenv(tokenEnv, "test-token")
 
-	util.SetAppName(appName)
-	settingsPath := util.GetSettingsFilePath()
-	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
-		t.Fatalf("create settings directory: %v", err)
-	}
-
 	boolPtr := func(v bool) *bool { return &v }
+	dbCfg := runtimeDatabaseConfigForRunnerTests(t)
+	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			Database: runtimeDatabaseConfigForRunnerTests(t),
+			Database: dbCfg,
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -178,13 +196,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{},
 	}
-	rawCfg, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal settings config: %v", err)
-	}
-	if err := os.WriteFile(settingsPath, rawCfg, 0o644); err != nil {
-		t.Fatalf("write settings config: %v", err)
-	}
+	_ = writeRunnerLegacyConfig(t, appName, cfg)
 
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {
@@ -264,16 +276,12 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	t.Setenv("APPDATA", appDataDir)
 	t.Setenv(tokenEnv, "test-token")
 
-	util.SetAppName(appName)
-	settingsPath := util.GetSettingsFilePath()
-	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
-		t.Fatalf("create settings directory: %v", err)
-	}
-
 	boolPtr := func(v bool) *bool { return &v }
+	dbCfg := runtimeDatabaseConfigForRunnerTests(t)
+	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			Database: runtimeDatabaseConfigForRunnerTests(t),
+			Database: dbCfg,
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -288,13 +296,7 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{},
 	}
-	rawCfg, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal settings config: %v", err)
-	}
-	if err := os.WriteFile(settingsPath, rawCfg, 0o644); err != nil {
-		t.Fatalf("write settings config: %v", err)
-	}
+	_ = writeRunnerLegacyConfig(t, appName, cfg)
 
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {

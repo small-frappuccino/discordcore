@@ -1,283 +1,782 @@
 # AGENTS.md — AI Code Maintainer Instructions (Go + Embedded UI + Discord Bot)
 
+Version: **v2 — strict UI architecture edition**
+
 This document defines the conventions, expectations, and operating rules for an AI agent maintaining this workspace.
 
 ---
 
-## 1) Agent mission
+# 1) Agent mission
 
-You are a **code maintainer and engineer**. Your primary objectives are:
+You are a **code maintainer and engineer**.
 
-- **Correctness and stability** (builds and runtime)
-- **Operational reliability** (logging, observability, graceful failure)
-- **Long-term maintainability** (coherent architecture, low accidental complexity)
-- **Testability** (unit and integration coverage where appropriate)
+Your priorities are:
 
-Avoid cosmetic or stylistic refactors unless they deliver clear technical value.
+1. **Correctness**
+2. **Operational reliability**
+3. **Maintainability**
+4. **Observability**
+5. **Predictable UI behavior**
+
+Avoid cosmetic refactors unless they produce measurable improvements in:
+
+* usability
+* architectural clarity
+* maintainability
 
 ---
 
-## 2) Workspace layout (must be respected)
+# 2) Workspace layout (must be respected)
 
-This workspace consists of two sibling directories:
+Two sibling repositories exist:
 
-- `../discordcore` → **Primary codebase (source of truth)**  
-  Contains the core Discord logic, APIs, domain rules, infrastructure, and the embedded dashboard source in `ui/`.
-
-- `../alicebot` → **Wrapper / host application**  
-  Contains the final Discord bot binary, configuration, and integration glue.  
-  In essence, `alicebot` is a thin shell around `discordcore`.
+```
+../discordcore   → core system and embedded dashboard source
+../alicebot      → runtime host application
+```
 
 ### Rules
 
-- Every change must clearly state **which repository it affects** (`../discordcore` or `../alicebot`).
-- Core logic, business rules, and reusable systems must live in **`../discordcore`**.
-- The approved location for frontend source is **`../discordcore/ui`**.
-- `../discordcore/ui/dist` is the only directory that may be embedded with `//go:embed`.
-- `../alicebot` should contain **only**:
-  - application bootstrap
-  - wiring / dependency injection
-  - configuration and deployment concerns
-- The frontend must remain a thin Control API client with no business logic.
-- `alicebot` remains the **only** final bot/runtime binary; `discordcore` provides libraries and embedded assets consumed by that binary.
-- If a feature requires changes in both repos:
-  - implement the `discordcore` side first
-  - then wire it in `alicebot`
-  - describe the dependency chain explicitly
+All reusable logic belongs in:
+
+```
+../discordcore
+```
+
+The dashboard source lives in:
+
+```
+../discordcore/ui
+```
+
+Only this directory may contain frontend code.
+
+Embedded assets:
+
+```
+../discordcore/ui/dist
+```
+
+This directory is embedded via:
+
+```go
+//go:embed
+```
+
+`../alicebot` contains:
+
+* runtime bootstrap
+* configuration
+* environment wiring
+* final bot binary
+
+Never duplicate business logic across the two repositories.
 
 ---
 
-## 3) Environment and build expectations
+# 3) Build expectations
 
-### Go
+### Go builds
 
-- `go test ./...` and `go vet ./...` must pass in every modified repository.
-- Builds must fail fast with **clear, actionable errors** when prerequisites are missing.
+The following must pass:
 
-### Frontend assets
+```
+go test ./...
+go vet ./...
+```
 
-Frontend assets live in `../discordcore/ui`.
-
-If `//go:embed` is used:
-- **The Go build must not break** in CI, headless builds, or backend-only workflows.
-- Acceptable patterns:
-  - versioned placeholder assets in `ui/dist`
-  - startup-time validation with clear error messages
-  - conditional build tags
-- Required pattern for this workspace:
-  - `ui/dist/index.html` must be versioned as a minimal placeholder so `//go:embed` always has material to embed
-  - production frontend builds overwrite the placeholder contents
-  - embedded dashboard assets are served from `/dashboard/`, not `/`
-  - frontend build commands run from `../discordcore/ui`
-
-Any change involving assets must be validated in:
-- backend-only build
-- full frontend build
-- runtime execution
-
-### Discord
-
-All Discord API interactions must include:
-- explicit error handling
-- safe retry logic only when appropriate
-- structured or context-rich logs (guild, channel, user, action)
+Build failures must produce **clear errors**.
 
 ---
 
-## 4) Change discipline
+### Embedded frontend
 
-### Risk-based priority
+The frontend build must **never break backend builds**.
 
-Always address issues in this order:
+Rules:
 
-1. Build failures and startup crashes
-2. Unsafe concurrency (goroutine leaks, deadlocks, races)
-3. Silent failures and missing logs
-4. Permission and moderation correctness
-5. Architectural drift and technical debt
+```
+ui/dist/index.html must always exist
+```
 
-### No behavioral ambiguity
+It must be versioned as a placeholder.
 
-When changing behavior:
-- describe the **previous** behavior
-- describe the **new** behavior
-- provide a deterministic way to validate the change
+Production builds overwrite the placeholder.
 
-### Compatibility
+Dashboard base path:
 
-If you change:
-- configs
-- commands
-- events
-- persistence formats
+```
+/dashboard/
+```
 
-Then you must provide:
-- automatic migration or backward compatibility
-- documentation or release notes when applicable
+The SPA must never intercept:
+
+```
+/v1/*
+/auth/*
+```
 
 ---
 
-## 5) Go engineering standards
+# 4) Change discipline
 
-- Prefer small, explicit interfaces.
-- Prefer composition over inheritance.
-- Avoid `panic` in normal execution paths.
-- Always wrap errors with context: `fmt.Errorf("operation: %w", err)`.
+Prioritize fixes in this order:
 
-### Logging
+1. build failures
+2. crashes
+3. concurrency risks
+4. silent failures
+5. permission correctness
+6. architectural drift
 
-- Use structured logging if present.
-- Otherwise, standardize prefixes and include:
-  - operation
-  - entity IDs (guild, channel, user, message)
-  - failure reason
+Behavior changes must always document:
 
-### Concurrency
-
-- Use `context.Context` for cancellation.
-- Every goroutine must have a clear owner and lifecycle.
-- Avoid fire-and-forget background tasks.
+```
+previous behavior
+new behavior
+validation method
+```
 
 ---
 
-## 6) Observability
+# 5) Go engineering standards
 
-Critical flows must emit logs:
+Prefer:
 
-- startup
-- Discord connection lifecycle
-- command execution
-- moderation actions
-- control server initialization
-- embedded dashboard initialization or asset fallback behavior
+* small explicit interfaces
+* composition
+* contextual error wrapping
 
-Errors must include:
-- operation
-- root cause
-- relevant IDs
+Never use panic for expected runtime behavior.
 
-Never log secrets, tokens, or private message contents.
+Example:
+
+```go
+fmt.Errorf("fetch partners: %w", err)
+```
 
 ---
 
-## 7) Security and permissions
+# 6) Logging
 
-- Never store or print:
-  - bot tokens
-  - API keys
-  - secrets
-- Validate all external input.
-- Always check permissions before performing moderation actions.
-- Permission failures must be surfaced clearly to admins or users.
+Logs must include:
 
----
+```
+operation
+guild ID
+channel ID
+user ID
+failure reason
+```
 
-## 8) Testing expectations
+Never log:
 
-For any non-trivial change:
-
-- Add or update tests in **`../discordcore`** when possible.
-- Focus on:
-  - command routing
-  - permission logic
-  - data transformation
-  - message / embed generation
-
-Avoid tests that require a real Discord connection.
-
-`go test ./...` must pass in all touched modules.
+```
+tokens
+secrets
+private message content
+```
 
 ---
 
-## 9) UI integration
+# 7) Observability
 
-- The UI must never contain business logic.
-- All rules, validations, and side-effects live in **`discordcore`**.
-- Frontend code should only call exported services with clear contracts.
-- The embedded dashboard should be mounted under **`/dashboard/`**.
-- API and auth routes keep their own namespaces (`/v1/*`, `/auth/*`) and must not be shadowed by SPA routing.
-- SPA fallback behavior must apply only to dashboard routes.
-- Production frontend builds must target the `/dashboard/` base path.
+Critical flows must log:
 
-QoL features in the UI must map to real backend services — never UI-only state.
-
-### Dashboard UX architecture
-
-- Use a persistent sidebar once the dashboard contains more than one product area.
-- Separate every dashboard screen into three layers:
-  - global navigation and app-level context
-  - feature workspace
-  - contextual or debug information
-- Authentication state and guild/server selection are app-level context. Do not re-implement them as feature-local forms unless the user is recovering from an error.
-- Default to task-oriented UI, not response-shape-oriented UI. Raw backend nouns, IDs, scopes, origins, and snapshots belong behind **Advanced** or **Troubleshooting**, not in the primary workspace.
-- Use progressive disclosure by default. Technical state, operator/debug cards, and internal metadata must not dominate the default view.
-- Tabs must represent real sub-areas. Do not render tab labels and then stack the same tab content in one long page.
-- For list entities, use a list/table plus row actions and a drawer or modal editor. Do not expose separate add/edit/delete forms as peer sections.
-- Use user-facing labels in the default UI. Map internal enums and storage terms into product language before rendering them.
-- Use stepper or checklist patterns only for first-run onboarding. Steady-state management pages must not keep a permanent setup flow as the main control model.
-- Prefer a primary vertical workflow. Use multi-column layouts only for secondary summary, preview, or supporting context.
-- Preserve a clear boundary between global navigation, feature workspace, and diagnostics so future product areas can be added without turning pages into single-screen control panels.
+* startup
+* Discord connection lifecycle
+* moderation actions
+* control server initialization
+* dashboard asset loading
 
 ---
 
-## 10) Boundary between `discordcore` and `alicebot`
+# 8) Testing expectations
 
-`discordcore` is the **product**.  
-`alicebot` is the **host**.
+Non-trivial changes require tests.
 
-If something is:
-- reusable
-- stateful
-- rule-driven
-- related to Discord semantics
+Focus tests on:
 
-It belongs in **`discordcore`**.
+* command routing
+* permission logic
+* embed generation
+* data transformation
 
-If something is:
-- UI
-- configuration
-- process startup
-- environment-specific
-
-It belongs in **`alicebot`**.
-
-Exception:
-The embedded Control API dashboard scaffold is intentionally kept in **`discordcore/ui`** by project choice so `//go:embed` can package `ui/dist` into the final `alicebot` binary. Keep it thin and API-only.
-
-Duplication across the two must be eliminated in favor of `discordcore`.
+Tests must **not require real Discord connections**.
 
 ---
 
-## 11) Pre-merge checklist
+# 9) Dashboard architecture
 
-- [ ] Change is in the correct repository
-- [ ] `go test ./...` passes
-- [ ] No new tight coupling or circular dependencies
-- [ ] Errors are contextual and logged
-- [ ] Concurrency is safe and cancellable
-- [ ] Frontend assets do not break backend builds
-- [ ] `ui/dist/index.html` placeholder remains present for backend-only builds
-- [ ] Embedded dashboard is served from `/dashboard/`
-- [ ] Frontend production build uses `/dashboard/` as its asset base
-- [ ] Global navigation, feature workspace, and debug information remain clearly separated
-- [ ] Default UI labels are user-facing rather than internal/system terminology
-- [ ] Technical details are hidden by default and exposed only through progressive disclosure
-- [ ] Sidebar navigation and page-local navigation are not conflated
-- [ ] Large feature screens are route-based, not single-page mega-forms
-- [ ] Config or behavior changes are documented
+The dashboard is a **control panel for the system**, not a marketing UI.
+
+Design goals:
+
+```
+clarity
+predictability
+information density
+operational focus
+```
+
+The UI should resemble:
+
+```
+GitHub
+Vercel
+Linear
+Stripe Dashboard
+```
+
+Avoid consumer SaaS aesthetics.
 
 ---
 
-## 12) How to report work
+# 10) UI design tokens (strict system)
+
+All UI must use these tokens.
+
+---
+
+## Typography
+
+```
+PageTitle     40px  weight 600
+SectionTitle  28px  weight 600
+CardTitle     18px  weight 600
+Body          15px  weight 400
+Secondary     13px  weight 400
+Meta          11px  weight 500
+```
+
+Rules:
+
+* Only one **PageTitle** per page
+* Avoid large paragraph headers
+
+---
+
+## Spacing scale
+
+Only use values from this scale:
+
+```
+4
+8
+12
+16
+24
+32
+48
+```
+
+Never invent new spacing values.
+
+---
+
+## Border radius
+
+```
+Cards      12px
+Inputs      8px
+Buttons     8px
+Badges      6px
+Dialogs    16px
+```
+
+Avoid pill-shaped UI unless semantically required.
+
+---
+
+## Surface layers
+
+Dark theme layers:
+
+```
+background       #0f1115
+surface          #161a20
+card             #1c2128
+elevated         #232a33
+```
+
+Each layer must be visually distinguishable.
+
+---
+
+## Accent color
+
+Accent color is reserved for:
+
+```
+primary actions
+selected navigation
+critical states
+```
+
+Never use accent colors for decoration.
+
+---
+
+# 11) Layout constraints
+
+Every page must follow this structure:
+
+```
+Sidebar
+Header
+Workspace
+Secondary context
+```
+
+---
+
+## Sidebar
+
+Contains:
+
+```
+product identity
+navigation
+server selection
+account controls
+```
+
+Rules:
+
+* sidebar width: **220–240px**
+* navigation represents **product areas**
+* never actions
+
+Example:
+
+```
+Overview
+Partner Board
+Moderation
+Automations
+Settings
+```
+
+---
+
+## Page header
+
+Must contain:
+
+```
+page title
+status indicator (optional)
+primary action
+```
+
+Header height must remain compact.
+
+Never place long descriptions here.
+
+---
+
+## Workspace
+
+Contains the **primary task interface**.
+
+Examples:
+
+```
+entity tables
+management controls
+editors
+configuration panels
+```
+
+The workspace must answer:
+
+> What did the user come here to do?
+
+---
+
+## Secondary context
+
+Contains:
+
+```
+diagnostics
+activity feeds
+summaries
+debug information
+```
+
+Must not dominate the page.
+
+---
+
+# 12) Component rules
+
+---
+
+## Entity management
+
+All entities must follow this pattern:
+
+```
+List/Table
+Row actions
+Drawer or modal editor
+```
+
+Never use:
+
+```
+separate add/edit/delete forms
+```
+
+---
+
+## Tables
+
+Tables must include:
+
+```
+primary column
+secondary info
+status indicator
+row actions
+```
+
+Rows must remain compact.
+
+---
+
+## Tabs
+
+Tabs must represent **real sub-areas**.
+
+Correct:
+
+```
+Entries
+Layout
+Destination
+```
+
+Incorrect:
+
+tabs used as visual separators.
+
+Tabs must change:
+
+```
+route
+data scope
+workspace content
+```
+
+---
+
+## Buttons
+
+Button hierarchy:
+
+```
+Primary
+Secondary
+Danger
+Ghost
+```
+
+Only one **primary button** per section.
+
+---
+
+## Forms
+
+Forms must:
+
+```
+group related fields
+validate through backend
+avoid mega-forms
+```
+
+Large features must use **multiple screens**, not giant forms.
+
+---
+
+# 13) Progressive disclosure
+
+Technical information must not dominate default UI.
+
+Default UI shows:
+
+```
+task controls
+primary data
+user-facing labels
+```
+
+Advanced UI contains:
+
+```
+IDs
+internal metadata
+debug state
+storage fields
+```
+
+Expose through:
+
+```
+Advanced sections
+Drawers
+Diagnostics panels
+```
+
+---
+
+# 14) Terminology rules
+
+The UI must not expose internal terminology.
+
+Forbidden terms:
+
+```
+origin
+scope
+snapshot
+internal enum values
+storage identifiers
+```
+
+Preferred terms:
+
+```
+Server
+Destination
+Posting channel
+Partner group
+```
+
+---
+
+# 15) Density rules
+
+Avoid:
+
+```
+large empty hero sections
+oversized cards
+excessive vertical whitespace
+```
+
+Cards should exist only when representing distinct surfaces.
+
+Do not wrap everything in cards.
+
+---
+
+# 16) Empty states
+
+Empty states must be compact.
+
+Structure:
+
+```
+title
+short explanation
+primary action
+```
+
+Avoid large empty containers.
+
+---
+
+# 17) UI anti-pattern detection
+
+Agents must detect and prevent the following:
+
+---
+
+## Anti-pattern: Mega-form pages
+
+Bad:
+
+```
+entire feature implemented as one giant form
+```
+
+Fix:
+
+```
+use sections or multi-page flow
+```
+
+---
+
+## Anti-pattern: Navigation representing actions
+
+Bad:
+
+```
+Add Partner
+Create Rule
+Run Sync
+```
+
+Navigation must represent **product areas**, not actions.
+
+---
+
+## Anti-pattern: Diagnostic-first UI
+
+Bad:
+
+pages dominated by:
+
+```
+IDs
+raw JSON
+backend fields
+debug panels
+```
+
+Fix:
+
+Move these behind **Advanced / Diagnostics**.
+
+---
+
+## Anti-pattern: Card explosion
+
+Bad:
+
+every UI block wrapped in a card.
+
+Fix:
+
+use cards only when surfaces must be separated.
+
+---
+
+## Anti-pattern: UI business logic
+
+The frontend must not:
+
+```
+compute permissions
+implement domain rules
+derive backend state
+```
+
+All rules belong in `discordcore`.
+
+---
+
+# 18) UI change discipline
+
+When modifying UI, the agent must report:
+
+```
+previous UI behavior
+new UI behavior
+reason for change
+```
+
+UI changes must not break established patterns.
+
+---
+
+# 19) Boundary between repositories
+
+`discordcore` is the **product**.
+
+`alicebot` is the **host runtime**.
+
+If code is:
+
+```
+reusable
+rule-driven
+stateful
+domain-related
+```
+
+It belongs in:
+
+```
+discordcore
+```
+
+If code is:
+
+```
+runtime wiring
+config
+process startup
+environment integration
+```
+
+It belongs in:
+
+```
+alicebot
+```
+
+---
+
+# 20) Pre-merge checklist
+
+Before merging changes:
+
+```
+[ ] correct repository used
+[ ] go test ./... passes
+[ ] no circular dependencies
+[ ] errors logged with context
+[ ] concurrency safe
+[ ] embedded assets intact
+[ ] dashboard served from /dashboard/
+[ ] UI tokens respected
+[ ] layout constraints respected
+[ ] no UI business logic added
+[ ] navigation hierarchy preserved
+[ ] internal terminology hidden
+[ ] anti-patterns avoided
+```
+
+---
+
+# 21) Work reporting
 
 Every change set must include:
 
-- problem summary and risk
-- list of modified files
-- before/after behavior
-- how to validate
-- remaining risks and follow-ups
+```
+problem summary
+files modified
+before behavior
+after behavior
+validation steps
+remaining risks
+```
 
 ---
 
-If these rules conflict with existing project conventions, follow the project’s established patterns and document the deviation with justification.
+# Final rule
+
+When UI decisions are ambiguous:
+
+Prefer:
+
+```
+clarity
+predictability
+density
+developer-tool aesthetics
+```
+
+Avoid:
+
+```
+visual novelty
+decorative UI
+large empty layouts
+debug-first design
+```

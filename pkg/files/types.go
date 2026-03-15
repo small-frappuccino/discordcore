@@ -11,12 +11,11 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // RuntimeConfig centralizes operational toggles/parameters that were previously
 // controlled via environment variables. These values are meant to be edited
-// from Discord via an interactive embed and persisted in settings.json.
+// from Discord via an interactive embed and persisted in the active config store.
 //
 // Keep names in CAPS to mirror the previous env var names and make auditing easy.
 type RuntimeConfig struct {
@@ -457,7 +456,7 @@ type BotConfig struct {
 	// This intentionally replaces the previous "env var toggles" for operational
 	// behavior (except for token), so settings can be managed in-app.
 	//
-	// NOTE: These are NOT environment variables. They are persisted in settings.json.
+	// NOTE: These are NOT environment variables. They are persisted in the active config store.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
@@ -724,13 +723,13 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 type ConfigManager struct {
 	configFilePath  string
 	logsDirPath     string
+	store           ConfigStore
 	config          *BotConfig
 	guildIndex      map[string]int
 	indexRebuilds   atomic.Uint64
 	indexMisses     atomic.Uint64
 	indexDuplicates atomic.Uint64
 	mu              sync.RWMutex
-	jsonManager     *util.JSONManager
 }
 
 // GuildIndexStats exposes counters for the guild config index.

@@ -85,14 +85,13 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// Ensure logs are flushed on exit
 	defer log.GlobalLogger.Sync()
 
-	// Theme configuration (now from settings.json runtime_config)
-
-	// IMPORTANT: configManager is created later (after config files are ensured).
+	// Theme configuration now comes from persisted runtime_config.
+	// IMPORTANT: configManager is created later (after the config store is ready).
 	// We cannot read runtime_config here without risking an undefined variable / nil config.
-	// Theme will be applied right after loading settings.json (see below).
+	// Theme will be applied right after loading the config store (see below).
 
 	// Runtime hot-apply manager (theme + ALICE_DISABLE_* toggles)
-	// NOTE: The /config runtime panel triggers Apply() after persisting settings.json.
+	// NOTE: The /config runtime panel triggers Apply() after persisting config changes.
 	var runtimeApplier *runtimeapply.Manager
 
 	// Global error handler
@@ -110,6 +109,16 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	if token == "" {
 		return fmt.Errorf("%s not set in environment or .env file", tokenEnv)
 	}
+
+	databaseBootstrap, err := resolveDatabaseBootstrap()
+	if err != nil {
+		return err
+	}
+	log.ApplicationLogger().Info(
+		"Resolved postgres bootstrap configuration",
+		"operation", "startup.database.bootstrap",
+		"source", databaseBootstrap.Source,
+	)
 
 	// Discord session
 	log.DiscordLogger().Info("🔑 Attempting to authenticate with Discord API...")
@@ -138,77 +147,9 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	if err := util.EnsureCacheDirs(); err != nil {
 		return fmt.Errorf("create cache directories: %w", err)
 	}
-	if err := files.EnsureConfigFiles(); err != nil {
-		return fmt.Errorf("ensure config files: %w", err)
-	}
-
-	// Config manager
-	configManager := files.NewConfigManager()
-	if err := configManager.LoadConfig(); err != nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to load settings file: %v", err))
-	}
-	if cfg := configManager.Config(); cfg != nil {
-		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
-			operation := fmt.Sprintf(
-				"runtime_config.webhook_embed_updates[%s:%d]",
-				item.scope,
-				item.index,
-			)
-			if err := webhook.PatchMessageEmbed(discordSession, webhook.MessageEmbedPatch{
-				MessageID:  item.update.MessageID,
-				WebhookURL: item.update.WebhookURL,
-				Embed:      item.update.Embed,
-			}); err != nil {
-				log.ApplicationLogger().Warn(
-					"Webhook embed patch failed",
-					"operation", operation,
-					"scope", item.scope,
-					"messageID", strings.TrimSpace(item.update.MessageID),
-					"error", err,
-				)
-			} else {
-				log.ApplicationLogger().Info(
-					"Webhook embed patch applied",
-					"operation", operation,
-					"scope", item.scope,
-					"messageID", strings.TrimSpace(item.update.MessageID),
-				)
-			}
-		}
-	}
-
-	features := (&files.BotConfig{}).ResolveFeatures("")
-	if cfg := configManager.Config(); cfg != nil {
-		features = cfg.ResolveFeatures("")
-	}
-	monitoringEnabled := features.Services.Monitoring
-
-	// Theme configuration (from settings.json runtime_config)
-	{
-		cfg := configManager.Config()
-		themeName := ""
-		if cfg != nil {
-			themeName = cfg.RuntimeConfig.BotTheme
-		}
-
-		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
-		}
-		if themeName == "" {
-			if err := util.SetTheme(""); err != nil {
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
-			} else {
-				log.ApplicationLogger().Info("🌈 Default theme applied")
-			}
-		}
-	}
-
-	// PostgreSQL store from runtime config.
-	runtimeConfig := files.RuntimeConfig{}
-	if cfg := configManager.Config(); cfg != nil {
-		runtimeConfig = cfg.ResolveRuntimeConfig("")
-	}
-	dbCfg := runtimeConfig.Database
+	// PostgreSQL bootstrap comes from environment variables. The resolved value is
+	// mirrored into runtime_config after the config store is loaded.
+	dbCfg := databaseBootstrap.Config
 	dbc := persistence.Config{
 		Driver:              dbCfg.Driver,
 		DatabaseURL:         dbCfg.DatabaseURL,
@@ -258,6 +199,85 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}()
 	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
+
+	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
+	migrationResult, err := files.MigrateLegacyJSONConfigToStore(databaseBootstrap.LegacySettingsPath, configStore)
+	if err != nil {
+		return fmt.Errorf("migrate legacy settings.json to postgres: %w", err)
+	}
+	if migrationResult.Migrated {
+		log.ApplicationLogger().Info(
+			"Migrated legacy settings.json into postgres config store",
+			"operation", "startup.config.migrate_legacy_json",
+			"store", configStore.Describe(),
+			"path", databaseBootstrap.LegacySettingsPath,
+			"removedFile", migrationResult.RemovedFile,
+			"removedParentDir", migrationResult.RemovedParentDir,
+		)
+	}
+
+	configManager := files.NewConfigManagerWithStore(configStore)
+	if err := configManager.LoadConfig(); err != nil {
+		return fmt.Errorf("load config from postgres: %w", err)
+	}
+	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
+		return fmt.Errorf("sync runtime database bootstrap config: %w", err)
+	}
+	if cfg := configManager.Config(); cfg != nil {
+		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
+			operation := fmt.Sprintf(
+				"runtime_config.webhook_embed_updates[%s:%d]",
+				item.scope,
+				item.index,
+			)
+			if err := webhook.PatchMessageEmbed(discordSession, webhook.MessageEmbedPatch{
+				MessageID:  item.update.MessageID,
+				WebhookURL: item.update.WebhookURL,
+				Embed:      item.update.Embed,
+			}); err != nil {
+				log.ApplicationLogger().Warn(
+					"Webhook embed patch failed",
+					"operation", operation,
+					"scope", item.scope,
+					"messageID", strings.TrimSpace(item.update.MessageID),
+					"error", err,
+				)
+			} else {
+				log.ApplicationLogger().Info(
+					"Webhook embed patch applied",
+					"operation", operation,
+					"scope", item.scope,
+					"messageID", strings.TrimSpace(item.update.MessageID),
+				)
+			}
+		}
+	}
+
+	features := (&files.BotConfig{}).ResolveFeatures("")
+	if cfg := configManager.Config(); cfg != nil {
+		features = cfg.ResolveFeatures("")
+	}
+	monitoringEnabled := features.Services.Monitoring
+
+	// Theme configuration (from persisted runtime_config)
+	{
+		cfg := configManager.Config()
+		themeName := ""
+		if cfg != nil {
+			themeName = cfg.RuntimeConfig.BotTheme
+		}
+
+		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
+		}
+		if themeName == "" {
+			if err := util.SetTheme(""); err != nil {
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
+			} else {
+				log.ApplicationLogger().Info("🌈 Default theme applied")
+			}
+		}
+	}
 
 	// Log configured guilds
 	if err := files.LogConfiguredGuilds(configManager, discordSession); err != nil {
@@ -347,6 +367,9 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 		controlServer.SetPartnerBoardService(partnerBoardAppService)
 		controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
+		controlServer.SetDiscordSessionProvider(func() *discordgo.Session {
+			return discordSession
+		})
 		controlServer.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 			return listBotGuildIDsFromSessionState(discordSession)
 		})

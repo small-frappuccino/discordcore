@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
@@ -21,8 +20,7 @@ func NewConfigManager() *ConfigManager {
 	configFilePath := util.GetSettingsFilePath()
 	return &ConfigManager{
 		configFilePath: configFilePath,
-
-		jsonManager: util.NewJSONManager(configFilePath),
+		store:          NewJSONConfigStore(configFilePath),
 	}
 }
 
@@ -30,7 +28,20 @@ func NewConfigManager() *ConfigManager {
 func NewConfigManagerWithPath(configPath string) *ConfigManager {
 	return &ConfigManager{
 		configFilePath: configPath,
-		jsonManager:    util.NewJSONManager(configPath),
+		store:          NewJSONConfigStore(configPath),
+	}
+}
+
+// NewConfigManagerWithStore creates a new configuration manager backed by the
+// provided persistence store.
+func NewConfigManagerWithStore(store ConfigStore) *ConfigManager {
+	description := ""
+	if store != nil {
+		description = store.Describe()
+	}
+	return &ConfigManager{
+		configFilePath: description,
+		store:          store,
 	}
 }
 
@@ -42,24 +53,24 @@ func (mgr *ConfigManager) LoadConfig() error {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
 	}
 
-	err := mgr.jsonManager.Load(mgr.config)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigFileNotFound, mgr.configFilePath))
-			mgr.mu.Unlock()
-			return nil
-		}
+	if mgr.store == nil {
 		mgr.mu.Unlock()
-		return errutil.HandleConfigError("read", mgr.configFilePath, func() error { return err })
+		return fmt.Errorf("config store is not configured")
 	}
+	cfg, err := mgr.store.Load()
+	if err != nil {
+		mgr.mu.Unlock()
+		return fmt.Errorf("load config from %s: %w", mgr.ConfigPath(), err)
+	}
+	mgr.config = cfg
 
 	if len(mgr.config.Guilds) == 0 {
-		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigNoGuilds, mgr.configFilePath))
+		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigNoGuilds, mgr.ConfigPath()))
 	}
 
 	dupCount, err := mgr.rebuildGuildIndexLocked("load")
 	if err != nil {
-		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.configFilePath)
+		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.ConfigPath())
 	}
 	orderMigrated := normalizeAutoAssignmentRoleOrder(mgr.config)
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
@@ -72,7 +83,9 @@ func (mgr *ConfigManager) LoadConfig() error {
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
 			return fmt.Errorf("save config after normalization: %w", saveErr)
 		}
-		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.configFilePath, "duplicates", dupCount, "autoRoleOrderMigrated", orderMigrated)
+		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.ConfigPath(), "duplicates", dupCount, "autoRoleOrderMigrated", orderMigrated)
+	} else if exists, err := mgr.store.Exists(); err == nil && !exists {
+		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigFileNotFound, mgr.ConfigPath()))
 	}
 	return nil
 }
@@ -89,16 +102,18 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 	if mgr.config == nil {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
+	if mgr.store == nil {
+		return fmt.Errorf("config store is not configured")
+	}
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
 		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
 	}
 
-	err := mgr.jsonManager.Save(mgr.config)
-	if err != nil {
-		return errutil.HandleConfigError("write", mgr.configFilePath, func() error { return err })
+	if err := mgr.store.Save(mgr.config); err != nil {
+		return fmt.Errorf("save config to %s: %w", mgr.ConfigPath(), err)
 	}
 
-	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.configFilePath))
+	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.ConfigPath()))
 	return nil
 }
 
@@ -126,8 +141,19 @@ func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (Ru
 
 // --- Getters ---
 
-// GetConfigPath returns the config file path.
-func (mgr *ConfigManager) ConfigPath() string { return mgr.configFilePath }
+// ConfigPath returns a human-readable description of the active config backend.
+func (mgr *ConfigManager) ConfigPath() string {
+	if mgr == nil {
+		return ""
+	}
+	if strings.TrimSpace(mgr.configFilePath) != "" {
+		return mgr.configFilePath
+	}
+	if mgr.store != nil {
+		return mgr.store.Describe()
+	}
+	return ""
+}
 
 // GetConfig returns the current configuration.
 func (mgr *ConfigManager) Config() *BotConfig {
@@ -693,17 +719,16 @@ func SettingsFileStatus() (exists bool, valid bool, path string, err error) {
 //   err = SaveSettingsFile(config)
 //   if err != nil { /* handle error */ }
 
-// LoadSettingsFile loads settings from the standardized settings.json file
+// LoadSettingsFile loads the legacy settings.json file from the default path.
 func LoadSettingsFile() (*BotConfig, error) {
-	settingsPath := util.GetSettingsFilePath()
-	jsonManager := util.NewJSONManager(settingsPath)
+	return LoadSettingsFileWithPath(util.GetSettingsFilePath())
+}
 
-	config := &BotConfig{Guilds: []GuildConfig{}}
-	err := jsonManager.Load(config)
+// LoadSettingsFileWithPath loads the legacy settings.json file from an explicit path.
+func LoadSettingsFileWithPath(settingsPath string) (*BotConfig, error) {
+	store := NewJSONConfigStore(settingsPath)
+	config, err := store.Load()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return config, nil // Return empty config if file doesn't exist
-		}
 		return nil, fmt.Errorf("failed to load settings from %s: %w", settingsPath, err)
 	}
 	_ = normalizeAutoAssignmentRoleOrder(config)
@@ -714,8 +739,13 @@ func LoadSettingsFile() (*BotConfig, error) {
 	return config, nil
 }
 
-// SaveSettingsFile saves settings to the standardized settings.json file
+// SaveSettingsFile saves the legacy settings.json file to the default path.
 func SaveSettingsFile(config *BotConfig) error {
+	return SaveSettingsFileWithPath(util.GetSettingsFilePath(), config)
+}
+
+// SaveSettingsFileWithPath saves the legacy settings.json file to an explicit path.
+func SaveSettingsFileWithPath(settingsPath string, config *BotConfig) error {
 	if config == nil {
 		return fmt.Errorf("cannot save nil config")
 	}
@@ -724,10 +754,7 @@ func SaveSettingsFile(config *BotConfig) error {
 		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
 	}
 
-	settingsPath := util.GetSettingsFilePath()
-	jsonManager := util.NewJSONManager(settingsPath)
-
-	if err := jsonManager.Save(config); err != nil {
+	if err := NewJSONConfigStore(settingsPath).Save(config); err != nil {
 		return fmt.Errorf("failed to save settings to %s: %w", settingsPath, err)
 	}
 
