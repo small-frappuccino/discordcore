@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { appRoutes } from "../../app/routes";
 import type { SettingsNavigationState } from "../../app/types";
+import { KeyValueList, StatusBadge } from "../../components/ui";
 import { buildDeliveryPayload, formsFromBoard, getDeliveryChecklist, getDeliveryGuidance, isDeliveryConfigured, postingMethodLabel, type DeliveryFormState } from "./model";
 import { PartnerBoardWorkspaceState } from "./PartnerBoardWorkspaceState";
 import { usePartnerBoard } from "./PartnerBoardContext";
@@ -29,6 +30,7 @@ export function PartnerBoardDeliveryPage() {
     type: desiredMethod,
   };
   const currentMethodLabel = postingMethodLabel(currentDelivery.type);
+  const currentDestinationReady = isDeliveryConfigured(buildDeliveryPayload(currentDelivery));
   const nextMethodLabel = postingMethodLabel(desiredMethod);
   const destinationReady = isDeliveryConfigured(buildDeliveryPayload(nextDelivery));
   const checklist = getDeliveryChecklist(nextDelivery);
@@ -39,8 +41,8 @@ export function PartnerBoardDeliveryPage() {
   };
 
   return (
-    <section className="surface-card">
-      <div className="card-header">
+    <section className="workspace-view">
+      <div className="workspace-view-header">
         <div className="card-copy">
           <p className="section-label">Destination</p>
           <h2>Set where the board is published</h2>
@@ -48,43 +50,79 @@ export function PartnerBoardDeliveryPage() {
             Choose the publishing method here, then finish the advanced connection details in Settings.
           </p>
         </div>
-        <StatusPill ready={destinationReady}>
-          {destinationReady ? "Destination ready" : "Needs destination setup"}
-        </StatusPill>
-      </div>
-
-      <div className="summary-list">
-        <div className="summary-row">
-          <span>Current publishing method</span>
-          <strong>{currentMethodLabel}</strong>
-        </div>
-        <div className="summary-row">
-          <span>Current setup</span>
-          <strong>{getDeliveryGuidance(currentDelivery, isDeliveryConfigured(buildDeliveryPayload(currentDelivery)))}</strong>
+        <div className="workspace-view-meta">
+          <StatusBadge tone={destinationReady ? "success" : "info"}>
+            {destinationReady ? "Destination ready" : "Needs destination setup"}
+          </StatusBadge>
         </div>
       </div>
 
-      <label className="field-stack">
-        <span className="field-label">Preferred posting method</span>
-        <select
-          aria-label="Preferred posting method"
-          value={desiredMethod}
-          onChange={(event) =>
-            setDesiredMethod(event.target.value as DeliveryFormState["type"])
-          }
-        >
-          <option value="channel_message">Channel message</option>
-          <option value="webhook_message">Webhook message</option>
-        </select>
-      </label>
+      <KeyValueList
+        className="workspace-status-list"
+        items={[
+          {
+            label: "Current publishing method",
+            value: currentMethodLabel,
+          },
+          {
+            label: "Current setup",
+            value: getDeliveryGuidance(currentDelivery, currentDestinationReady),
+          },
+          {
+            label: "Selected workflow",
+            value:
+              desiredMethod === currentDelivery.type
+                ? "Using the saved method"
+                : `Switch to ${nextMethodLabel} in Diagnostics`,
+          },
+        ]}
+      />
 
-      <section className="surface-subsection">
+      <section className="workspace-callout">
+        <div className="card-copy">
+          <p className="section-label">Delivery workflow</p>
+          <h3>{nextMethodLabel}</h3>
+          <p className="section-description">
+            Pick the delivery style here, then finish the raw destination identifiers in Settings Diagnostics.
+          </p>
+        </div>
+        <div className="workspace-callout-copy">
+          <label className="field-stack field-stack-compact">
+            <span className="field-label">Preferred posting method</span>
+            <select
+              aria-label="Preferred posting method"
+              value={desiredMethod}
+              onChange={(event) =>
+                setDesiredMethod(event.target.value as DeliveryFormState["type"])
+              }
+            >
+              <option value="channel_message">Channel message</option>
+              <option value="webhook_message">Webhook message</option>
+            </select>
+          </label>
+          <div className="workspace-toolbar-actions">
+            <Link
+              className="button-primary"
+              to={`${appRoutes.settings}#diagnostics`}
+              state={settingsState}
+            >
+              Finish destination in Settings
+            </Link>
+          </div>
+          <p className="meta-note">
+            Raw Discord identifiers stay inside Diagnostics so the feature workspace stays task-focused.
+          </p>
+        </div>
+      </section>
+
+      <section className="workspace-checklist-panel">
         <div className="card-copy">
           <p className="section-label">Setup checklist</p>
           <h3>{nextMethodLabel}</h3>
-          <p className="section-description">{getDeliveryGuidance(nextDelivery, destinationReady)}</p>
+          <p className="section-description">
+            {getDeliveryGuidance(nextDelivery, destinationReady)}
+          </p>
         </div>
-
         <ul className="checklist">
           {checklist.map((item) => (
             <li key={item.label} className={item.complete ? "is-complete" : "is-pending"}>
@@ -96,33 +134,6 @@ export function PartnerBoardDeliveryPage() {
           ))}
         </ul>
       </section>
-
-      <div className="card-actions">
-        <Link
-          className="button-primary"
-          to={`${appRoutes.settings}#diagnostics`}
-          state={settingsState}
-        >
-          Finish destination in Settings
-        </Link>
-        <span className="meta-note">
-          Raw Discord identifiers stay inside Diagnostics so the feature workspace stays task-focused.
-        </span>
-      </div>
     </section>
-  );
-}
-
-function StatusPill({
-  children,
-  ready,
-}: {
-  children: string;
-  ready: boolean;
-}) {
-  return (
-    <span className={`meta-pill ${ready ? "status-success" : "status-info"}`}>
-      {children}
-    </span>
   );
 }

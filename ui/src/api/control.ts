@@ -99,6 +99,82 @@ export interface AuthSessionResponse {
   expires_at: string;
 }
 
+export interface FeatureCatalogEntry {
+  id: string;
+  category: string;
+  label: string;
+  description: string;
+  supports_guild_override: boolean;
+  global_editable_fields?: string[];
+  guild_editable_fields?: string[];
+}
+
+export interface FeatureBlocker {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export interface FeatureRecord {
+  id: string;
+  category: string;
+  label: string;
+  description: string;
+  scope: string;
+  supports_guild_override: boolean;
+  override_state: string;
+  effective_enabled: boolean;
+  effective_source: string;
+  readiness: string;
+  blockers?: FeatureBlocker[];
+  details?: Record<string, unknown>;
+  editable_fields?: string[];
+}
+
+export interface FeatureWorkspace {
+  scope: string;
+  guild_id?: string;
+  features: FeatureRecord[];
+}
+
+export interface FeatureCatalogResponse {
+  status: string;
+  catalog: FeatureCatalogEntry[];
+}
+
+export interface FeatureWorkspaceResponse {
+  status: string;
+  workspace: FeatureWorkspace;
+}
+
+export interface FeatureResponse {
+  status: string;
+  guild_id?: string;
+  feature: FeatureRecord;
+}
+
+export interface FeaturePatchPayload {
+  enabled?: boolean | null;
+  channel_id?: string;
+  allowed_role_ids?: string[];
+  watch_bot?: boolean;
+  user_id?: string;
+  actor_role_id?: string;
+  start_day?: string;
+  initial_date?: string;
+  config_enabled?: boolean;
+  update_interval_mins?: number;
+  target_role_id?: string;
+  required_role_ids?: string[];
+  grace_days?: number;
+  scan_interval_mins?: number;
+  initial_delay_secs?: number;
+  kicks_per_second?: number;
+  max_kicks_per_run?: number;
+  exempt_role_ids?: string[];
+  dry_run?: boolean;
+}
+
 export interface DiscordOAuthStatusResponse {
   status: string;
   oauth_configured: boolean;
@@ -212,6 +288,61 @@ export class ControlApiClient {
     );
   }
 
+  async getFeatureCatalog(): Promise<FeatureCatalogResponse> {
+    return this.request<FeatureCatalogResponse>("GET", "/v1/features/catalog");
+  }
+
+  async listGlobalFeatures(): Promise<FeatureWorkspaceResponse> {
+    return this.request<FeatureWorkspaceResponse>("GET", "/v1/features");
+  }
+
+  async getGlobalFeature(featureId: string): Promise<FeatureResponse> {
+    return this.request<FeatureResponse>(
+      "GET",
+      `/v1/features/${encodeURIComponent(featureId)}`,
+    );
+  }
+
+  async patchGlobalFeature(
+    featureId: string,
+    payload: FeaturePatchPayload,
+  ): Promise<FeatureResponse> {
+    return this.request<FeatureResponse>(
+      "PATCH",
+      `/v1/features/${encodeURIComponent(featureId)}`,
+      payload,
+    );
+  }
+
+  async listGuildFeatures(guildId: string): Promise<FeatureWorkspaceResponse> {
+    return this.request<FeatureWorkspaceResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/features`,
+    );
+  }
+
+  async getGuildFeature(
+    guildId: string,
+    featureId: string,
+  ): Promise<FeatureResponse> {
+    return this.request<FeatureResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/features/${encodeURIComponent(featureId)}`,
+    );
+  }
+
+  async patchGuildFeature(
+    guildId: string,
+    featureId: string,
+    payload: FeaturePatchPayload,
+  ): Promise<FeatureResponse> {
+    return this.request<FeatureResponse>(
+      "PATCH",
+      `/v1/guilds/${encodeURIComponent(guildId)}/features/${encodeURIComponent(featureId)}`,
+      payload,
+    );
+  }
+
   async getSessionStatus(): Promise<ControlAuthProbe> {
     const url = this.baseUrl === "" ? "/auth/me" : `${this.baseUrl}/auth/me`;
     const response = await fetch(url, {
@@ -270,7 +401,7 @@ export class ControlApiClient {
   }
 
   private async request<T>(
-    method: "GET" | "POST" | "PUT" | "DELETE",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
     retryOnCSRF = true,
@@ -359,6 +490,13 @@ function normalizeDashboardNextPath(raw: string): string {
   return trimmed;
 }
 
-function requiresCSRFHeader(method: "GET" | "POST" | "PUT" | "DELETE"): boolean {
-  return method === "POST" || method === "PUT" || method === "DELETE";
+function requiresCSRFHeader(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+): boolean {
+  return (
+    method === "POST" ||
+    method === "PUT" ||
+    method === "PATCH" ||
+    method === "DELETE"
+  );
 }

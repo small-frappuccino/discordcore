@@ -16,8 +16,8 @@ export function PartnerBoardLayoutPage() {
   }
 
   return (
-    <section className="surface-card">
-      <div className="card-header">
+    <section className="workspace-view">
+      <div className="workspace-view-header">
         <div className="card-copy">
           <p className="section-label">Layout</p>
           <h2>Board text</h2>
@@ -25,10 +25,12 @@ export function PartnerBoardLayoutPage() {
             Focus the default workspace on the core copy fields people actually manage.
           </p>
         </div>
-        <span className="meta-pill subtle-pill">{layoutFieldCount}/5 fields filled</span>
+        <div className="workspace-view-meta">
+          <span className="meta-pill subtle-pill">{layoutFieldCount}/5 fields filled</span>
+        </div>
       </div>
 
-      <div className="field-grid">
+      <div className="workspace-form-grid">
         <label className="field-stack">
           <span className="field-label">Board title</span>
           <input
@@ -82,7 +84,7 @@ export function PartnerBoardLayoutPage() {
         />
       </label>
 
-      <div className="card-actions">
+      <div className="workspace-footer">
         <button
           className="button-primary"
           type="button"

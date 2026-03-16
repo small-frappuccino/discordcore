@@ -55,7 +55,7 @@ export function DashboardLayout() {
     <main className="dashboard-shell">
       <aside className="shell-sidebar">
         <div className="sidebar-frame">
-          <Link className="brand-card sidebar-brand" to={appRoutes.dashboardOverview}>
+          <Link className="brand-card sidebar-brand" to={appRoutes.dashboardHome}>
             <span className="brand-mark" aria-hidden="true">
               <img src={siteBrandIconSrc} alt="" />
             </span>
@@ -97,16 +97,19 @@ export function DashboardLayout() {
 
           <nav className="sidebar-nav" aria-label="Dashboard navigation">
             {sidebarItems.map((item) => {
-              const isActive =
-                location.pathname === item.path ||
-                (item.matchPrefix !== undefined &&
-                  location.pathname.startsWith(item.matchPrefix));
+              const isActive = isSidebarItemActive(
+                location.pathname,
+                location.hash,
+                item.path,
+                item.hashes,
+                item.matchPrefix,
+              );
 
               return (
                 <Link
                   key={item.label}
                   className={`sidebar-link${isActive ? " is-active" : ""}`}
-                  to={item.path}
+                  to={item.to}
                 >
                   <span>{item.label}</span>
                 </Link>
@@ -167,4 +170,18 @@ export function DashboardLayout() {
       </section>
     </main>
   );
+}
+
+function isSidebarItemActive(
+  pathname: string,
+  hash: string,
+  path: string,
+  hashes?: string[],
+  matchPrefix?: string,
+) {
+  if (hashes !== undefined) {
+    return pathname === path && hashes.includes(hash);
+  }
+
+  return pathname === path || (matchPrefix !== undefined && pathname.startsWith(matchPrefix));
 }

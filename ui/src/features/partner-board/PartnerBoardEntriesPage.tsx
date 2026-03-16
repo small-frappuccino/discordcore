@@ -1,4 +1,3 @@
-import { EmptyState } from "../../components/ui";
 import { usePartnerBoard } from "./PartnerBoardContext";
 import { PartnerBoardWorkspaceState } from "./PartnerBoardWorkspaceState";
 
@@ -29,8 +28,8 @@ export function PartnerBoardEntriesPage() {
 
   return (
     <>
-      <section className="surface-card">
-        <div className="card-header">
+      <section className="workspace-view">
+        <div className="workspace-view-header">
           <div className="card-copy">
             <p className="section-label">Partner entries</p>
             <h2>Manage entries</h2>
@@ -39,16 +38,23 @@ export function PartnerBoardEntriesPage() {
               juggling separate CRUD forms.
             </p>
           </div>
+          <div className="workspace-view-meta">
+            <span className="meta-pill subtle-pill">
+              {partners.length === 1 ? "1 partner" : `${partners.length} partners`}
+            </span>
+          </div>
+        </div>
 
-          <div className="card-actions">
-            <label className="search-field">
-              <span className="field-label">Search</span>
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search by group, name, or invite link"
-              />
-            </label>
+        <div className="workspace-toolbar">
+          <label className="field-stack search-field workspace-search">
+            <span className="field-label">Search</span>
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by group, name, or invite link"
+            />
+          </label>
+          <div className="workspace-toolbar-actions">
             <button
               className="button-primary"
               type="button"
@@ -60,10 +66,15 @@ export function PartnerBoardEntriesPage() {
         </div>
 
         {partners.length === 0 ? (
-          <EmptyState
-            title="No partner entries yet"
-            description="Add the first partner to start building the board."
-            action={
+          <div className="table-empty-state">
+            <div className="card-copy">
+              <p className="section-label">Workspace</p>
+              <h3>No partner entries yet</h3>
+              <p className="section-description">
+                Add the first partner to start building the board.
+              </p>
+            </div>
+            <div className="workspace-state-actions">
               <button
                 className="button-primary"
                 type="button"
@@ -71,13 +82,20 @@ export function PartnerBoardEntriesPage() {
               >
                 Add first partner
               </button>
-            }
-          />
+            </div>
+          </div>
         ) : filteredPartners.length === 0 ? (
-          <EmptyState
-            title="No matching entries"
-            description="Clear the search to see the full partner list again."
-          />
+          <div className="table-wrap">
+            <div className="table-empty-state table-empty-state-compact">
+              <div className="card-copy">
+                <p className="section-label">Search results</p>
+                <h3>No matching entries</h3>
+                <p className="section-description">
+                  Clear the search to see the full partner list again.
+                </p>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="table-wrap">
             <table className="data-table">

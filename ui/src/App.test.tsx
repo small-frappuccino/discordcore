@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import type { PartnerBoardConfig } from "./api/control";
+import type { FeatureRecord, PartnerBoardConfig } from "./api/control";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -15,6 +15,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 function createFetchMock() {
   const boardCalls: string[] = [];
+  const featureCalls: string[] = [];
   const targetUpdates: Array<{
     guildID: string;
     payload: Record<string, unknown>;
@@ -63,6 +64,156 @@ function createFetchMock() {
       ],
     },
   };
+  const featuresByGuild: Record<string, FeatureRecord[]> = {
+    "guild-1": [
+      {
+        id: "services.monitoring",
+        category: "services",
+        label: "Monitoring",
+        description: "Core monitoring",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+      },
+      {
+        id: "services.commands",
+        category: "services",
+        label: "Commands",
+        description: "Commands",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+      },
+      {
+        id: "services.admin_commands",
+        category: "services",
+        label: "Admin commands",
+        description: "Admin commands",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+      },
+      {
+        id: "services.automod",
+        category: "services",
+        label: "Automod service",
+        description: "Automod service",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "missing_rules",
+            message: "Automod needs rules before it can be relied on.",
+          },
+        ],
+      },
+      {
+        id: "logging.avatar_logging",
+        category: "logging",
+        label: "Avatar logging",
+        description: "Avatar changes",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+      },
+      {
+        id: "logging.member_join",
+        category: "logging",
+        label: "Member join logging",
+        description: "Member joins",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "missing_channel",
+            message: "Choose a channel for member join logs.",
+          },
+        ],
+      },
+      {
+        id: "presence_watch.user",
+        category: "presence_watch",
+        label: "Presence watch (user)",
+        description: "Presence watch",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "disabled",
+        effective_enabled: false,
+        effective_source: "guild",
+        readiness: "disabled",
+      },
+      {
+        id: "auto_role_assignment",
+        category: "roles",
+        label: "Auto role assignment",
+        description: "Auto role",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "disabled",
+        effective_enabled: false,
+        effective_source: "guild",
+        readiness: "disabled",
+      },
+      {
+        id: "maintenance.db_cleanup",
+        category: "maintenance",
+        label: "Database cleanup",
+        description: "Cleanup",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+      },
+      {
+        id: "stats_channels",
+        category: "stats",
+        label: "Stats channels",
+        description: "Stats",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "disabled",
+        effective_enabled: false,
+        effective_source: "guild",
+        readiness: "disabled",
+      },
+    ],
+    "guild-2": [
+      {
+        id: "services.monitoring",
+        category: "services",
+        label: "Monitoring",
+        description: "Core monitoring",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+      },
+    ],
+  };
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
@@ -100,6 +251,22 @@ function createFetchMock() {
           },
         ],
       });
+    }
+
+    if (url.includes("/features") && !url.includes("/catalog")) {
+      const match = url.match(/\/v1\/guilds\/([^/]+)\/features$/);
+      if (match) {
+        const guildID = decodeURIComponent(match[1] ?? "");
+        featureCalls.push(guildID);
+        return jsonResponse({
+          status: "ok",
+          workspace: {
+            scope: "guild",
+            guild_id: guildID,
+            features: featuresByGuild[guildID] ?? [],
+          },
+        });
+      }
     }
 
     if (url.includes("/partner-board/target") && init?.method === "PUT") {
@@ -155,6 +322,7 @@ function createFetchMock() {
 
   return {
     boardCalls,
+    featureCalls,
     fetchMock,
     targetUpdates,
   };
@@ -178,17 +346,20 @@ describe("dashboard routing and workspace", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Partner Board", level: 1 });
-    expect(screen.getByRole("link", { name: "Overview" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Partner Board" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Commands" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Moderation" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Logging" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Roles & Members" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Maintenance" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Stats" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Moderation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Automations" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Activity Log" })).not.toBeInTheDocument();
-    expect(
-      await screen.findByRole("heading", { name: "Manage entries" }),
-    ).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/dashboard/partner-board/entries");
+    expect(await screen.findByRole("heading", { name: "Commands", level: 2 })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/dashboard/home");
   });
 
   it("auto-loads Partner Board data again when the selected server changes", async () => {
@@ -218,21 +389,25 @@ describe("dashboard routing and workspace", () => {
     "/dashboard/moderation",
     "/dashboard/automations",
     "/dashboard/activity",
-  ])("redirects %s to the overview roadmap instead of a placeholder page", async (path) => {
+  ])("redirects %s to a real Home section instead of a placeholder page", async (path) => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", path);
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
-    expect(window.location.pathname).toBe("/dashboard/overview");
-    expect(window.location.hash).toBe("#roadmap");
-    expect(screen.getByText("Planned areas")).toBeInTheDocument();
-    expect(screen.getByText("Moderation")).toBeInTheDocument();
-    expect(screen.getByText("Automations")).toBeInTheDocument();
-    expect(screen.getByText("Global activity")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Moderation" })).not.toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+
+    if (path === "/dashboard/moderation") {
+      expect(window.location.pathname).toBe("/dashboard/home");
+      expect(window.location.hash).toBe("#moderation");
+      expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
+      return;
+    }
+
+    expect(window.location.pathname).toBe("/dashboard/home");
+    expect(window.location.hash).toBe("#planned");
+    expect(screen.getByText("Tickets")).toBeInTheDocument();
   });
 
   it("keeps Entries, Layout, and Destination on separate routes and removes the placeholder Activity tab", async () => {
@@ -277,20 +452,20 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByRole("button", { name: "Confirm" })).toBeVisible();
   });
 
-  it("shows a real Overview feature card and keeps roadmap items informational only", async () => {
+  it("shows Home as the operational landing page with area blocks and planned modules", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", "/dashboard/overview");
+    window.history.replaceState({}, "", "/dashboard/home");
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
+    await screen.findByRole("heading", { name: "Home", level: 1 });
     expect(screen.getByRole("heading", { name: "Partner Board", level: 2 })).toBeInTheDocument();
-    expect(screen.getByText("Feature status")).toBeInTheDocument();
-    expect(screen.getByText("Partner entries")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Finish destination" })).toBeInTheDocument();
-    expect(screen.getByText("Planned areas")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Global activity" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Commands", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Settings", level: 2 })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open Partner Board" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Tickets")).toBeInTheDocument();
   });
 
   it("hands off destination setup to Settings diagnostics with the requested posting method preselected", async () => {
