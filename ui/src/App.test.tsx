@@ -16,6 +16,11 @@ function jsonResponse(body: unknown, status = 200) {
 function createFetchMock() {
   const boardCalls: string[] = [];
   const featureCalls: string[] = [];
+  const featureUpdates: Array<{
+    guildID: string;
+    featureID: string;
+    payload: Record<string, unknown>;
+  }> = [];
   const targetUpdates: Array<{
     guildID: string;
     payload: Record<string, unknown>;
@@ -131,6 +136,13 @@ function createFetchMock() {
         effective_enabled: true,
         effective_source: "guild",
         readiness: "ready",
+        details: {
+          requires_channel: true,
+          channel_id: "user-log-channel",
+          validate_channel_permissions: true,
+          runtime_toggle_path: "disable_user_logs",
+        },
+        editable_fields: ["enabled", "channel_id"],
       },
       {
         id: "logging.member_join",
@@ -149,6 +161,12 @@ function createFetchMock() {
             message: "Choose a channel for member join logs.",
           },
         ],
+        details: {
+          requires_channel: true,
+          validate_channel_permissions: true,
+          runtime_toggle_path: "disable_entry_exit_logs",
+        },
+        editable_fields: ["enabled", "channel_id"],
       },
       {
         id: "presence_watch.user",
@@ -215,6 +233,51 @@ function createFetchMock() {
     ],
   };
 
+  function evaluateFeatureState(feature: FeatureRecord) {
+    const requiresChannel =
+      feature.details !== undefined &&
+      feature.details !== null &&
+      feature.details.requires_channel === true;
+    const channelId =
+      feature.details !== undefined &&
+      feature.details !== null &&
+      typeof feature.details.channel_id === "string"
+        ? feature.details.channel_id.trim()
+        : "";
+
+    if (!feature.effective_enabled) {
+      feature.readiness = "disabled";
+      feature.blockers = [];
+      return;
+    }
+
+    if (requiresChannel && channelId === "") {
+      feature.readiness = "blocked";
+      feature.blockers = [
+        {
+          code: "missing_channel",
+          message: "Choose a channel for this log route.",
+          field: "channel_id",
+        },
+      ];
+      return;
+    }
+
+    if (feature.id === "services.automod") {
+      feature.readiness = "blocked";
+      feature.blockers = [
+        {
+          code: "missing_rules",
+          message: "Automod needs rules before it can be relied on.",
+        },
+      ];
+      return;
+    }
+
+    feature.readiness = "ready";
+    feature.blockers = [];
+  }
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
 
@@ -251,6 +314,58 @@ function createFetchMock() {
           },
         ],
       });
+    }
+
+    if (url.includes("/features/") && init?.method === "PATCH") {
+      const match = url.match(/\/v1\/guilds\/([^/]+)\/features\/([^/?]+)/);
+      if (match) {
+        const guildID = decodeURIComponent(match[1] ?? "");
+        const featureID = decodeURIComponent(match[2] ?? "");
+        const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        featureUpdates.push({
+          guildID,
+          featureID,
+          payload,
+        });
+
+        const feature = featuresByGuild[guildID]?.find(
+          (item) => item.id === featureID,
+        );
+        if (feature === undefined) {
+          return new Response("not found", { status: 404 });
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "enabled")) {
+          const enabled = payload.enabled;
+          if (enabled === null) {
+            feature.override_state = "inherit";
+            feature.effective_enabled = false;
+            feature.effective_source = "global";
+          } else {
+            const nextEnabled = Boolean(enabled);
+            feature.override_state = nextEnabled ? "enabled" : "disabled";
+            feature.effective_enabled = nextEnabled;
+            feature.effective_source = "guild";
+          }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "channel_id")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            channel_id: String(payload.channel_id ?? ""),
+          };
+        }
+
+        evaluateFeatureState(feature);
+
+        return jsonResponse({
+          status: "ok",
+          guild_id: guildID,
+          feature: {
+            ...feature,
+          },
+        });
+      }
     }
 
     if (url.includes("/features") && !url.includes("/catalog")) {
@@ -324,6 +439,7 @@ function createFetchMock() {
     boardCalls,
     featureCalls,
     fetchMock,
+    featureUpdates,
     targetUpdates,
   };
 }
@@ -385,11 +501,25 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("cell", { name: "Server Two" });
   });
 
+  it("opens Moderation as a real category workspace instead of redirecting to Home", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/moderation");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Moderation", level: 1 });
+    expect(window.location.pathname).toBe("/dashboard/moderation");
+    expect(window.location.hash).toBe("");
+    expect(
+      await screen.findByRole("button", { name: "Disable Automod service" }),
+    ).toBeInTheDocument();
+  });
+
   it.each([
-    "/dashboard/moderation",
     "/dashboard/automations",
     "/dashboard/activity",
-  ])("redirects %s to a real Home section instead of a placeholder page", async (path) => {
+  ])("redirects %s to the planned Home section instead of a placeholder page", async (path) => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", path);
@@ -397,14 +527,6 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
-
-    if (path === "/dashboard/moderation") {
-      expect(window.location.pathname).toBe("/dashboard/home");
-      expect(window.location.hash).toBe("#moderation");
-      expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
-      return;
-    }
-
     expect(window.location.pathname).toBe("/dashboard/home");
     expect(window.location.hash).toBe("#planned");
     expect(screen.getByText("Tickets")).toBeInTheDocument();
@@ -465,7 +587,100 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Settings", level: 2 })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Open Partner Board" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Open Commands" })).toBeInTheDocument();
     expect(screen.getByText("Tickets")).toBeInTheDocument();
+  });
+
+  it("opens a generic category workspace from the sidebar and updates feature state inline", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/home");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    await userEvent.click(screen.getByRole("link", { name: "Commands" }));
+
+    await screen.findByRole("heading", { name: "Commands", level: 1 });
+    expect(window.location.pathname).toBe("/dashboard/commands");
+    expect(screen.getByText("Monitoring")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disable Commands" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Disable Commands" }));
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "services.commands",
+          payload: {
+            enabled: false,
+          },
+        },
+      ]);
+    });
+
+    await screen.findByRole("button", { name: "Enable Commands" });
+  });
+
+  it("opens the dedicated logging workspace and saves a destination through the drawer", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/logging");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Logging", level: 1 });
+    expect(await screen.findByText("user-log-channel")).toBeInTheDocument();
+    expect(await screen.findByText("Not configured")).toBeInTheDocument();
+
+    const configureButtons = await screen.findAllByRole("button", {
+      name: "Configure",
+    });
+    await userEvent.click(
+      configureButtons[0]!,
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure Avatar logging" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Destination channel")).toHaveValue(
+      "user-log-channel",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Configure" })[1]!,
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Configure Member join logging" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Destination channel")).toHaveValue("");
+
+    await userEvent.type(
+      screen.getByLabelText("Destination channel"),
+      "join-channel",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save destination" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "logging.member_join",
+          payload: {
+            channel_id: "join-channel",
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure Member join logging" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("join-channel")).toBeInTheDocument();
   });
 
   it("hands off destination setup to Settings diagnostics with the requested posting method preselected", async () => {

@@ -765,6 +765,74 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.feature-category-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.feature-table-copy,
+.feature-status-cell,
+.feature-table-meta {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.feature-table-copy strong,
+.feature-table-meta strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.feature-table-copy p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.feature-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.feature-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.feature-guidance-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.feature-guidance-list li {
+  line-height: 20px;
+}
+
+.logging-table td:nth-child(2),
+.logging-table td:nth-child(4) {
+  min-width: 220px;
+}
+
+.logging-drawer {
+  gap: var(--space-5);
+}
+
+.logging-drawer-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 .workspace-panel {
   padding: 0;
   overflow: hidden;
@@ -1495,6 +1563,7 @@ textarea:focus {
   .overview-card-header,
   .overview-next-step,
   .home-area-card-header,
+  .logging-drawer-title-row,
   .workspace-view-header,
   .workspace-toolbar,
   .workspace-footer {

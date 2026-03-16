@@ -111,12 +111,18 @@ export const plannedModules: PlannedModuleDefinition[] = [
   },
 ];
 
+export function getFeatureAreaDefinition(
+  areaID: FeatureAreaID,
+): FeatureAreaDefinition | null {
+  return featureAreaDefinitions.find((area) => area.id === areaID) ?? null;
+}
+
 export function getFeatureAreaRecords(
   features: FeatureRecord[],
   areaID: FeatureAreaID,
 ): FeatureRecord[] {
-  const definition = featureAreaDefinitions.find((area) => area.id === areaID);
-  if (definition === undefined) {
+  const definition = getFeatureAreaDefinition(areaID);
+  if (definition === null) {
     return [];
   }
 

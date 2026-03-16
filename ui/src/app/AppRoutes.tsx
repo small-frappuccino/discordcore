@@ -1,8 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { appRoutes } from "./routes";
 import { DashboardLayout } from "../pages/DashboardLayout";
+import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
+import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { PartnerBoardProvider } from "../features/partner-board/PartnerBoardContext";
 import { PartnerBoardLayout } from "../features/partner-board/PartnerBoardLayout";
@@ -43,8 +45,28 @@ export function AppRoutes() {
           />
         </Route>
         <Route
+          path="commands"
+          element={<FeatureCategoryPage areaId="commands" />}
+        />
+        <Route
           path="moderation"
-          element={<Navigate replace to={appRoutes.dashboardHomeModeration} />}
+          element={<FeatureCategoryPage areaId="moderation" />}
+        />
+        <Route
+          path="logging"
+          element={<LoggingCategoryPage />}
+        />
+        <Route
+          path="roles-members"
+          element={<FeatureCategoryPage areaId="roles-members" />}
+        />
+        <Route
+          path="maintenance"
+          element={<FeatureCategoryPage areaId="maintenance" />}
+        />
+        <Route
+          path="stats"
+          element={<FeatureCategoryPage areaId="stats" />}
         />
         <Route
           path="automations"

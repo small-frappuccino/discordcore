@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { appRoutes } from "../app/routes";
+import { appRoutes, getFeatureAreaRoute } from "../app/routes";
 import {
   formatAuthStateLabel,
   formatAuthSupportText,
@@ -294,9 +294,12 @@ export function HomePage() {
               </ul>
 
               <div className="home-area-footer">
-                <span className="meta-note">
-                  Category workspaces arrive next. Use this block as the entry summary for now.
-                </span>
+                <Link
+                  className="button-secondary"
+                  to={getFeatureAreaRoute(area.id)}
+                >
+                  Open {area.label}
+                </Link>
               </div>
             </SurfaceCard>
           );

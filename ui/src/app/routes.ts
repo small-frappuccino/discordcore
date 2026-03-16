@@ -1,14 +1,19 @@
+import type { FeatureAreaID } from "../features/features/areas";
+
+export const featureAreaRoutes = {
+  commands: "/dashboard/commands",
+  moderation: "/dashboard/moderation",
+  logging: "/dashboard/logging",
+  "roles-members": "/dashboard/roles-members",
+  maintenance: "/dashboard/maintenance",
+  stats: "/dashboard/stats",
+} as const satisfies Record<FeatureAreaID, string>;
+
 export const appRoutes = {
   landing: "/",
   dashboard: "/dashboard",
   dashboardHome: "/dashboard/home",
   dashboardOverview: "/dashboard/overview",
-  dashboardHomeCommands: "/dashboard/home#commands",
-  dashboardHomeModeration: "/dashboard/home#moderation",
-  dashboardHomeLogging: "/dashboard/home#logging",
-  dashboardHomeRolesMembers: "/dashboard/home#roles-members",
-  dashboardHomeMaintenance: "/dashboard/home#maintenance",
-  dashboardHomeStats: "/dashboard/home#stats",
   dashboardHomePlanned: "/dashboard/home#planned",
   legacyControlPanel: "/dashboard/control-panel",
   partnerBoardBase: "/dashboard/partner-board",
@@ -16,7 +21,12 @@ export const appRoutes = {
   partnerBoardLayout: "/dashboard/partner-board/layout",
   partnerBoardDelivery: "/dashboard/partner-board/delivery",
   partnerBoardActivity: "/dashboard/partner-board/activity",
-  moderation: "/dashboard/moderation",
+  commands: featureAreaRoutes.commands,
+  moderation: featureAreaRoutes.moderation,
+  logging: featureAreaRoutes.logging,
+  rolesMembers: featureAreaRoutes["roles-members"],
+  maintenance: featureAreaRoutes.maintenance,
+  stats: featureAreaRoutes.stats,
   automations: "/dashboard/automations",
   activity: "/dashboard/activity",
   settings: "/dashboard/settings",
@@ -35,7 +45,6 @@ export const sidebarItems: SidebarItem[] = [
     label: "Home",
     to: appRoutes.dashboardHome,
     path: appRoutes.dashboardHome,
-    hashes: ["", appRoutes.dashboardHomePlanned.replace(appRoutes.dashboardHome, "")],
   },
   {
     label: "Partner Board",
@@ -45,39 +54,33 @@ export const sidebarItems: SidebarItem[] = [
   },
   {
     label: "Commands",
-    to: appRoutes.dashboardHomeCommands,
-    path: appRoutes.dashboardHome,
-    hashes: ["#commands"],
+    to: appRoutes.commands,
+    path: appRoutes.commands,
   },
   {
     label: "Moderation",
-    to: appRoutes.dashboardHomeModeration,
-    path: appRoutes.dashboardHome,
-    hashes: ["#moderation"],
+    to: appRoutes.moderation,
+    path: appRoutes.moderation,
   },
   {
     label: "Logging",
-    to: appRoutes.dashboardHomeLogging,
-    path: appRoutes.dashboardHome,
-    hashes: ["#logging"],
+    to: appRoutes.logging,
+    path: appRoutes.logging,
   },
   {
     label: "Roles & Members",
-    to: appRoutes.dashboardHomeRolesMembers,
-    path: appRoutes.dashboardHome,
-    hashes: ["#roles-members"],
+    to: appRoutes.rolesMembers,
+    path: appRoutes.rolesMembers,
   },
   {
     label: "Maintenance",
-    to: appRoutes.dashboardHomeMaintenance,
-    path: appRoutes.dashboardHome,
-    hashes: ["#maintenance"],
+    to: appRoutes.maintenance,
+    path: appRoutes.maintenance,
   },
   {
     label: "Stats",
-    to: appRoutes.dashboardHomeStats,
-    path: appRoutes.dashboardHome,
-    hashes: ["#stats"],
+    to: appRoutes.stats,
+    path: appRoutes.stats,
   },
   {
     label: "Settings",
@@ -91,3 +94,7 @@ export const partnerBoardTabs = [
   { label: "Layout", path: appRoutes.partnerBoardLayout },
   { label: "Destination", path: appRoutes.partnerBoardDelivery },
 ] as const;
+
+export function getFeatureAreaRoute(areaId: FeatureAreaID): string {
+  return featureAreaRoutes[areaId];
+}
