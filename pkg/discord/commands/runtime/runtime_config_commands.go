@@ -548,27 +548,24 @@ func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope st
 		return fmt.Errorf("config manager is nil")
 	}
 	_ = cm.LoadConfig() // best effort
-	cfg := cm.Config()
-	if cfg == nil {
-		return fmt.Errorf("settings.json not loaded (config is nil)")
-	}
 	if scope == "" || scope == "global" {
-		cfg.RuntimeConfig = rc
-	} else {
-		// Per-guild. Need to update it in the slice.
-		found := false
-		for i, g := range cfg.Guilds {
-			if g.GuildID == scope {
+		_, err := cm.UpdateRuntimeConfig(func(current *files.RuntimeConfig) error {
+			*current = rc
+			return nil
+		})
+		return err
+	}
+
+	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		for i := range cfg.Guilds {
+			if cfg.Guilds[i].GuildID == scope {
 				cfg.Guilds[i].RuntimeConfig = rc
-				found = true
-				break
+				return nil
 			}
 		}
-		if !found {
-			return fmt.Errorf("guild config for %s not found in memory during save", scope)
-		}
-	}
-	return cm.SaveConfig()
+		return fmt.Errorf("guild config for %s not found in memory during save", scope)
+	})
+	return err
 }
 
 // --- RuntimeConfig mapping (get/set/reset) ---

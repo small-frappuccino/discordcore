@@ -168,3 +168,61 @@ func TestRefreshMemberDataSkipsFailures(t *testing.T) {
 		t.Fatalf("expected good member cached, got %v %v", got, ok)
 	}
 }
+
+func TestWarmupGuildMembersPreservesHistoricalJoin(t *testing.T) {
+	store := newTestStore(t)
+	cache := newTestCache(t)
+
+	historicalJoin := time.Date(2024, 6, 12, 15, 0, 0, 0, time.UTC)
+	if err := store.UpsertMemberJoin("g1", "u1", historicalJoin); err != nil {
+		t.Fatalf("seed historical join: %v", err)
+	}
+
+	session := &funcWarmupSession{
+		membersFunc: func(string, string, int, ...discordgo.RequestOption) ([]*discordgo.Member, error) {
+			return []*discordgo.Member{
+				{
+					User:     &discordgo.User{ID: "u1"},
+					JoinedAt: historicalJoin.Add(48 * time.Hour),
+				},
+			}, nil
+		},
+	}
+
+	gotCount, err := warmupGuildMembers(session, cache, store, "g1", 1)
+	if err != nil {
+		t.Fatalf("warmupGuildMembers error: %v", err)
+	}
+	if gotCount != 1 {
+		t.Fatalf("expected 1 cached member, got %d", gotCount)
+	}
+
+	gotJoin, ok, err := store.GetMemberJoin("g1", "u1")
+	if err != nil {
+		t.Fatalf("GetMemberJoin error: %v", err)
+	}
+	if !ok || !gotJoin.Equal(historicalJoin) {
+		t.Fatalf("expected historical join %v, got %v (ok=%v)", historicalJoin, gotJoin, ok)
+	}
+}
+
+func TestKeepMemberDataFreshPreservesHistoricalJoin(t *testing.T) {
+	store := newTestStore(t)
+
+	historicalJoin := time.Date(2023, 10, 3, 11, 0, 0, 0, time.UTC)
+	if err := store.UpsertMemberJoin("g1", "u1", historicalJoin); err != nil {
+		t.Fatalf("seed historical join: %v", err)
+	}
+
+	if err := KeepMemberDataFresh(store, "g1", []string{"u1"}); err != nil {
+		t.Fatalf("KeepMemberDataFresh error: %v", err)
+	}
+
+	gotJoin, ok, err := store.GetMemberJoin("g1", "u1")
+	if err != nil {
+		t.Fatalf("GetMemberJoin error: %v", err)
+	}
+	if !ok || !gotJoin.Equal(historicalJoin) {
+		t.Fatalf("expected historical join %v, got %v (ok=%v)", historicalJoin, gotJoin, ok)
+	}
+}

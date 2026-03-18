@@ -1,14 +1,20 @@
 package files
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // SnapshotConfig returns a deep copy of the current bot config for read-only use
 // outside the ConfigManager lock.
 func (mgr *ConfigManager) SnapshotConfig() BotConfig {
+	if mgr == nil {
+		return BotConfig{Guilds: []GuildConfig{}}
+	}
 	mgr.mu.RLock()
 	defer mgr.mu.RUnlock()
 
-	if mgr == nil || mgr.config == nil {
+	if mgr.config == nil {
 		return BotConfig{Guilds: []GuildConfig{}}
 	}
 
@@ -22,6 +28,9 @@ func (mgr *ConfigManager) SnapshotConfig() BotConfig {
 // UpdateConfig applies a full-config mutation transactionally and persists the
 // result. On error, in-memory state is restored to the previous snapshot.
 func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, error) {
+	if mgr == nil {
+		return BotConfig{}, fmt.Errorf("config manager is nil")
+	}
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
@@ -57,6 +66,14 @@ func cloneBotConfigPtr(in *BotConfig) *BotConfig {
 		return nil
 	}
 	out := cloneBotConfig(*in)
+	return &out
+}
+
+func cloneGuildConfigPtr(in *GuildConfig) *GuildConfig {
+	if in == nil {
+		return nil
+	}
+	out := cloneGuildConfig(*in)
 	return &out
 }
 

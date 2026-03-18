@@ -594,7 +594,6 @@ func (uc *UnifiedCache) Stop() {
 	uc.cleanupOnce.Do(func() {
 		if uc.stopCleanup != nil {
 			close(uc.stopCleanup)
-			uc.stopCleanup = nil
 		}
 	})
 }

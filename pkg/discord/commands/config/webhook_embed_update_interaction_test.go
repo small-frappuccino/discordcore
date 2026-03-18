@@ -524,10 +524,12 @@ func TestWebhookEmbedCreateStrictValidationFailureBlocksPersist(t *testing.T) {
 
 	session, rec := newConfigCommandTestSessionWithWebhookValidationStatus(t, http.StatusOK, http.StatusNotFound)
 	router, cm := newConfigCommandTestRouter(t, session, guildID, ownerID)
-	cm.Config().RuntimeConfig.WebhookEmbedValidation = files.WebhookEmbedValidationConfig{
-		Mode:      files.WebhookEmbedValidationModeStrict,
-		TimeoutMS: 1000,
-	}
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.RuntimeConfig.WebhookEmbedValidation = files.WebhookEmbedValidationConfig{
+			Mode:      files.WebhookEmbedValidationModeStrict,
+			TimeoutMS: 1000,
+		}
+	})
 
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, "webhook_embed_create", []*discordgo.ApplicationCommandInteractionDataOption{
 		stringOpt(optionMessageID, "m-strict"),
@@ -559,10 +561,12 @@ func TestWebhookEmbedCreateSoftValidationFailurePersistsWithWarning(t *testing.T
 
 	session, rec := newConfigCommandTestSessionWithWebhookValidationStatus(t, http.StatusOK, http.StatusNotFound)
 	router, cm := newConfigCommandTestRouter(t, session, guildID, ownerID)
-	cm.Config().RuntimeConfig.WebhookEmbedValidation = files.WebhookEmbedValidationConfig{
-		Mode:      files.WebhookEmbedValidationModeSoft,
-		TimeoutMS: 1000,
-	}
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.RuntimeConfig.WebhookEmbedValidation = files.WebhookEmbedValidationConfig{
+			Mode:      files.WebhookEmbedValidationModeSoft,
+			TimeoutMS: 1000,
+		}
+	})
 
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, "webhook_embed_create", []*discordgo.ApplicationCommandInteractionDataOption{
 		stringOpt(optionMessageID, "m-soft"),
@@ -594,10 +598,12 @@ func TestWebhookEmbedUpdateStrictValidationFailureBlocksPersist(t *testing.T) {
 
 	session, rec := newConfigCommandTestSessionWithWebhookValidationStatus(t, http.StatusOK, http.StatusNotFound)
 	router, cm := newConfigCommandTestRouter(t, session, guildID, ownerID)
-	cm.Config().RuntimeConfig.WebhookEmbedValidation = files.WebhookEmbedValidationConfig{
-		Mode:      files.WebhookEmbedValidationModeStrict,
-		TimeoutMS: 1000,
-	}
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.RuntimeConfig.WebhookEmbedValidation = files.WebhookEmbedValidationConfig{
+			Mode:      files.WebhookEmbedValidationModeStrict,
+			TimeoutMS: 1000,
+		}
+	})
 
 	if err := cm.CreateWebhookEmbedUpdate(guildID, files.WebhookEmbedUpdateConfig{
 		MessageID:  "m-old-strict",

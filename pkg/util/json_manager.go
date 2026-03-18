@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,22 +60,62 @@ func (m *JSONManager) Save(data any) error {
 		return fmt.Errorf("failed to marshal json: %w", err)
 	}
 
-	dir := filepath.Dir(m.filePath)
+	targetPath := m.filePath
 	if m.projectRoot != "" {
-		safeDir, err := safeJoin(m.projectRoot, dir)
+		safePath, err := safeJoin(m.projectRoot, m.filePath)
 		if err != nil {
-			return fmt.Errorf("failed to resolve safe directory: %w", err)
+			return fmt.Errorf("failed to resolve safe file path: %w", err)
 		}
-		dir = safeDir
+		targetPath = safePath
 	}
+	dir := filepath.Dir(targetPath)
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(m.filePath, fileData, 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
+	fileMode := os.FileMode(0o644)
+	if info, err := os.Stat(targetPath); err == nil {
+		fileMode = info.Mode().Perm()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat target file: %w", err)
 	}
+
+	tmpFile, err := os.CreateTemp(dir, filepath.Base(targetPath)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	cleanupTmp := true
+	defer func() {
+		if cleanupTmp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmpFile.Chmod(fileMode); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to set temp file permissions: %w", err)
+	}
+	if _, err := tmpFile.Write(fileData); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	if err := replaceFile(tmpPath, targetPath); err != nil {
+		return fmt.Errorf("failed to replace file atomically: %w", err)
+	}
+	if err := syncDir(dir); err != nil {
+		return fmt.Errorf("failed to sync parent directory: %w", err)
+	}
+	cleanupTmp = false
 
 	return nil
 }

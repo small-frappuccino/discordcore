@@ -13,7 +13,7 @@ func TestResolveModerationLogChannelShared(t *testing.T) {
 	guildID := "g1"
 	channelID := "c1"
 
-	cm := files.NewConfigManagerWithPath("test-settings.json")
+	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
@@ -37,7 +37,7 @@ func TestResolveModerationLogChannelValid(t *testing.T) {
 	botID := "bot"
 	perms := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
 
-	cm := files.NewConfigManagerWithPath("test-settings.json")
+	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{

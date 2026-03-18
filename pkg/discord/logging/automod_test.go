@@ -15,7 +15,7 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 	botID := "bot"
 	perms := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
 
-	cm := files.NewConfigManagerWithPath("test-settings.json")
+	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
@@ -33,30 +33,35 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 		t.Fatalf("expected automod logging enabled by default, got reason=%s", decision.Reason)
 	}
 
-	cfg := cm.Config()
-	if cfg == nil {
+	if cm.Config() == nil {
 		t.Fatal("config is nil")
 	}
 
 	disabled := false
-	cfg.Guilds[0].Features.Logging.AutomodAction = &disabled
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.Guilds[0].Features.Logging.AutomodAction = &disabled
+	})
 	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
 	if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingAutomodDisabled {
 		t.Fatalf("expected automod disabled by feature toggle, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 
 	enabled := true
-	cfg.Guilds[0].Features.Logging.AutomodAction = &enabled
-	cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = true
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.Guilds[0].Features.Logging.AutomodAction = &enabled
+		cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = true
+	})
 	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
 	if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableAutomodLogs {
 		t.Fatalf("expected automod disabled by runtime config, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 
 	// Moderation logging toggle must not gate automod-native events.
-	cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = false
 	disabledModeration := false
-	cfg.RuntimeConfig.ModerationLogging = &disabledModeration
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = false
+		cfg.RuntimeConfig.ModerationLogging = &disabledModeration
+	})
 	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
 	if !decision.Enabled {
 		t.Fatalf("expected automod logging independent from moderation_logging, got reason=%s", decision.Reason)
@@ -73,7 +78,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 		guildID := "g-automod-pref"
 		automodChannelID := "c-auto"
 
-		cm := files.NewConfigManagerWithPath("test-settings.json")
+		cm := newTestConfigManager(t)
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
 			Channels: files.ChannelsConfig{
@@ -97,7 +102,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 	t.Run("requires dedicated automod channel", func(t *testing.T) {
 		guildID := "g-automod-fallback"
 
-		cm := files.NewConfigManagerWithPath("test-settings.json")
+		cm := newTestConfigManager(t)
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
 		}); err != nil {

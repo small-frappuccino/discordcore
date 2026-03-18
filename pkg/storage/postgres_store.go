@@ -207,7 +207,7 @@ func (s *Store) CleanupExpiredMessages() error {
 //
 // For now, this is a no-op.
 // If storage growth becomes a concern later, implement a cleanup policy based on an explicit
-// "left_at" / "last_seen" signal rather than `joined_at`.
+// "left_at" / "last_seen_at" signal rather than `joined_at`.
 func (s *Store) CleanupObsoleteMemberJoins(_ int) (int64, error) {
 	if s.db == nil {
 		return 0, fmt.Errorf("store not initialized")
@@ -294,16 +294,22 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
 	if guildID == "" || userID == "" || joinedAt.IsZero() {
 		return nil
 	}
+	joinedAt = joinedAt.UTC()
+	seenAt := time.Now().UTC()
 	_, err := s.execContext(
 		ctx,
-		`INSERT INTO member_joins (guild_id, user_id, joined_at)
-         VALUES (?, ?, ?)
+		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at)
+         VALUES (?, ?, ?, ?)
          ON CONFLICT(guild_id, user_id) DO UPDATE SET
            joined_at = CASE
              WHEN excluded.joined_at < member_joins.joined_at THEN excluded.joined_at
              ELSE member_joins.joined_at
+           END,
+           last_seen_at = CASE
+             WHEN member_joins.last_seen_at IS NULL OR excluded.last_seen_at > member_joins.last_seen_at THEN excluded.last_seen_at
+             ELSE member_joins.last_seen_at
            END`,
-		guildID, userID, joinedAt.UTC(),
+		guildID, userID, joinedAt, seenAt,
 	)
 	return err
 }
@@ -458,89 +464,7 @@ func (s *Store) GetBotSince(guildID string) (time.Time, bool, error) {
 	return t.Time, true, nil
 }
 
-// SetHeartbeat records the last-known "bot is running" timestamp.
-func (s *Store) SetHeartbeat(t time.Time) error {
-	return s.SetHeartbeatContext(context.Background(), t)
-}
-
-// SetHeartbeatContext records the last-known "bot is running" timestamp with context support.
-func (s *Store) SetHeartbeatContext(ctx context.Context, t time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if t.IsZero() {
-		t = time.Now().UTC()
-	}
-	_, err := s.execContext(
-		ctx,
-		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
-         ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
-		"heartbeat", t.UTC(),
-	)
-	return err
-}
-
-// GetHeartbeat returns the last recorded heartbeat timestamp, if any.
-func (s *Store) GetHeartbeat() (time.Time, bool, error) {
-	if s.db == nil {
-		return time.Time{}, false, fmt.Errorf("store not initialized")
-	}
-	row := s.queryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "heartbeat")
-	var ts time.Time
-	if err := row.Scan(&ts); err != nil {
-		if err == sql.ErrNoRows {
-			return time.Time{}, false, nil
-		}
-		return time.Time{}, false, err
-	}
-	return ts, true, nil
-}
-
-// SetLastEvent records the last time a relevant Discord event was processed.
-func (s *Store) SetLastEvent(t time.Time) error {
-	return s.SetLastEventContext(context.Background(), t)
-}
-
-// SetLastEventContext records the last time a relevant Discord event was processed with context support.
-func (s *Store) SetLastEventContext(ctx context.Context, t time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if t.IsZero() {
-		t = time.Now().UTC()
-	}
-	_, err := s.execContext(
-		ctx,
-		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
-         ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
-		"last_event", t.UTC(),
-	)
-	return err
-}
-
-// GetLastEvent returns the last recorded event timestamp, if any.
-func (s *Store) GetLastEvent() (time.Time, bool, error) {
-	if s.db == nil {
-		return time.Time{}, false, fmt.Errorf("store not initialized")
-	}
-	row := s.queryRow(`SELECT ts FROM runtime_meta WHERE key=?`, "last_event")
-	var ts time.Time
-	if err := row.Scan(&ts); err != nil {
-		if err == sql.ErrNoRows {
-			return time.Time{}, false, nil
-		}
-		return time.Time{}, false, err
-	}
-	return ts, true, nil
-}
-
-// SetMetadata records a timestamp associated with a specific key.
-func (s *Store) SetMetadata(key string, t time.Time) error {
-	return s.SetMetadataContext(context.Background(), key, t)
-}
-
-// SetMetadataContext records a timestamp associated with a specific key with context support.
-func (s *Store) SetMetadataContext(ctx context.Context, key string, t time.Time) error {
+func (s *Store) setRuntimeTimestamp(ctx context.Context, key string, t time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -556,13 +480,7 @@ func (s *Store) SetMetadataContext(ctx context.Context, key string, t time.Time)
 	return err
 }
 
-// GetMetadata retrieves the timestamp for a specific key.
-func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
-	return s.GetMetadataContext(context.Background(), key)
-}
-
-// GetMetadataContext retrieves the timestamp for a specific key with context support.
-func (s *Store) GetMetadataContext(ctx context.Context, key string) (time.Time, bool, error) {
+func (s *Store) getRuntimeTimestamp(ctx context.Context, key string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
 	}
@@ -575,6 +493,56 @@ func (s *Store) GetMetadataContext(ctx context.Context, key string) (time.Time, 
 		return time.Time{}, false, err
 	}
 	return ts, true, nil
+}
+
+// SetHeartbeat records the last-known "bot is running" timestamp.
+func (s *Store) SetHeartbeat(t time.Time) error {
+	return s.SetHeartbeatContext(context.Background(), t)
+}
+
+// SetHeartbeatContext records the last-known "bot is running" timestamp with context support.
+func (s *Store) SetHeartbeatContext(ctx context.Context, t time.Time) error {
+	return s.setRuntimeTimestamp(ctx, "heartbeat", t)
+}
+
+// GetHeartbeat returns the last recorded heartbeat timestamp, if any.
+func (s *Store) GetHeartbeat() (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(context.Background(), "heartbeat")
+}
+
+// SetLastEvent records the last time a relevant Discord event was processed.
+func (s *Store) SetLastEvent(t time.Time) error {
+	return s.SetLastEventContext(context.Background(), t)
+}
+
+// SetLastEventContext records the last time a relevant Discord event was processed with context support.
+func (s *Store) SetLastEventContext(ctx context.Context, t time.Time) error {
+	return s.setRuntimeTimestamp(ctx, "last_event", t)
+}
+
+// GetLastEvent returns the last recorded event timestamp, if any.
+func (s *Store) GetLastEvent() (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(context.Background(), "last_event")
+}
+
+// SetMetadata records a timestamp associated with a specific key.
+func (s *Store) SetMetadata(key string, t time.Time) error {
+	return s.SetMetadataContext(context.Background(), key, t)
+}
+
+// SetMetadataContext records a timestamp associated with a specific key with context support.
+func (s *Store) SetMetadataContext(ctx context.Context, key string, t time.Time) error {
+	return s.setRuntimeTimestamp(ctx, key, t)
+}
+
+// GetMetadata retrieves the timestamp for a specific key.
+func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
+	return s.GetMetadataContext(context.Background(), key)
+}
+
+// GetMetadataContext retrieves the timestamp for a specific key with context support.
+func (s *Store) GetMetadataContext(ctx context.Context, key string) (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(ctx, key)
 }
 
 // NextModerationCaseNumber atomically increments and returns the next moderation case number for a guild.
@@ -747,6 +715,10 @@ var requiredSchemaTables = []string{
 	"daily_member_leaves",
 }
 
+var requiredSchemaColumns = map[string][]string{
+	"member_joins": []string{"last_seen_at"},
+}
+
 func validateSchema(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return fmt.Errorf("database handle is nil")
@@ -767,6 +739,33 @@ func validateSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing migrated tables (%s); apply postgres migrations before initializing store", strings.Join(missing, ", "))
+	}
+
+	missingColumns := make([]string, 0)
+	for table, columns := range requiredSchemaColumns {
+		for _, column := range columns {
+			var exists bool
+			if err := db.QueryRowContext(
+				ctx,
+				`SELECT EXISTS (
+					SELECT 1
+					FROM information_schema.columns
+					WHERE table_schema = current_schema()
+					  AND table_name = $1
+					  AND column_name = $2
+				)`,
+				table,
+				column,
+			).Scan(&exists); err != nil {
+				return fmt.Errorf("check column %s.%s existence: %w", table, column, err)
+			}
+			if !exists {
+				missingColumns = append(missingColumns, table+"."+column)
+			}
+		}
+	}
+	if len(missingColumns) > 0 {
+		return fmt.Errorf("missing migrated columns (%s); apply postgres migrations before initializing store", strings.Join(missingColumns, ", "))
 	}
 	return nil
 }
@@ -1029,7 +1028,11 @@ func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, err
 	return memberRoles, rows.Err()
 }
 
-// TouchMemberJoin updates the joined_at timestamp for a member (keeps it fresh)
+// TouchMemberJoin refreshes member presence freshness without mutating joined_at.
+//
+// Historical member joins remain immutable because downstream features use joined_at
+// as the canonical "first seen in guild" timestamp. Callers with an authoritative
+// join time should use UpsertMemberJoin, which preserves the earliest known value.
 func (s *Store) TouchMemberJoin(guildID, userID string) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
@@ -1037,9 +1040,15 @@ func (s *Store) TouchMemberJoin(guildID, userID string) error {
 	if guildID == "" || userID == "" {
 		return nil
 	}
+	seenAt := time.Now().UTC()
 	_, err := s.exec(
-		`UPDATE member_joins SET joined_at=? WHERE guild_id=? AND user_id=?`,
-		time.Now().UTC(), guildID, userID,
+		`UPDATE member_joins
+         SET last_seen_at = CASE
+           WHEN last_seen_at IS NULL OR ? > last_seen_at THEN ?
+           ELSE last_seen_at
+         END
+         WHERE guild_id=? AND user_id=?`,
+		seenAt, seenAt, guildID, userID,
 	)
 	return err
 }
@@ -1091,27 +1100,53 @@ func (s *Store) IncrementDailyMessageCount(guildID, channelID, userID string, at
 	return s.IncrementDailyMessageCountContext(context.Background(), guildID, channelID, userID, at)
 }
 
-// IncrementDailyMessageCountContext increments the per-day message count for a user in a channel with context support.
-func (s *Store) IncrementDailyMessageCountContext(ctx context.Context, guildID, channelID, userID string, at time.Time) error {
+func dailyMetricDay(at time.Time) string {
+	if at.IsZero() {
+		at = time.Now().UTC()
+	} else {
+		at = at.UTC()
+	}
+	return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+}
+
+func (s *Store) incrementDailyMetricByChannelAndUser(ctx context.Context, tableName, guildID, channelID, userID string, at time.Time) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
+	query := fmt.Sprintf(
+		`INSERT INTO %s (guild_id, channel_id, user_id, day, count)
+         VALUES (?, ?, ?, ?, 1)
+         ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
+           count = %s.count + 1`,
+		tableName,
+		tableName,
+	)
+	_, err := s.execContext(ctx, query, guildID, channelID, userID, dailyMetricDay(at))
+	return err
+}
+
+func (s *Store) incrementDailyMetricByUser(ctx context.Context, tableName, guildID, userID string, at time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	query := fmt.Sprintf(
+		`INSERT INTO %s (guild_id, user_id, day, count)
+         VALUES (?, ?, ?, 1)
+         ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
+           count = %s.count + 1`,
+		tableName,
+		tableName,
+	)
+	_, err := s.execContext(ctx, query, guildID, userID, dailyMetricDay(at))
+	return err
+}
+
+// IncrementDailyMessageCountContext increments the per-day message count for a user in a channel with context support.
+func (s *Store) IncrementDailyMessageCountContext(ctx context.Context, guildID, channelID, userID string, at time.Time) error {
 	if guildID == "" || channelID == "" || userID == "" {
 		return nil
 	}
-	if at.IsZero() {
-		at = time.Now().UTC()
-	}
-	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.execContext(
-		ctx,
-		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count)
-         VALUES (?, ?, ?, ?, 1)
-         ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
-           count = daily_message_metrics.count + 1`,
-		guildID, channelID, userID, day,
-	)
-	return err
+	return s.incrementDailyMetricByChannelAndUser(ctx, "daily_message_metrics", guildID, channelID, userID, at)
 }
 
 // IncrementDailyReactionCount increments the per-day reaction count for a user in a channel.
@@ -1121,25 +1156,10 @@ func (s *Store) IncrementDailyReactionCount(guildID, channelID, userID string, a
 
 // IncrementDailyReactionCountContext increments the per-day reaction count for a user in a channel with context support.
 func (s *Store) IncrementDailyReactionCountContext(ctx context.Context, guildID, channelID, userID string, at time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || channelID == "" || userID == "" {
 		return nil
 	}
-	if at.IsZero() {
-		at = time.Now().UTC()
-	}
-	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.execContext(
-		ctx,
-		`INSERT INTO daily_reaction_metrics (guild_id, channel_id, user_id, day, count)
-         VALUES (?, ?, ?, ?, 1)
-         ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
-           count = daily_reaction_metrics.count + 1`,
-		guildID, channelID, userID, day,
-	)
-	return err
+	return s.incrementDailyMetricByChannelAndUser(ctx, "daily_reaction_metrics", guildID, channelID, userID, at)
 }
 
 // IncrementDailyMemberJoin increments the per-day member join counter (per user).
@@ -1149,25 +1169,10 @@ func (s *Store) IncrementDailyMemberJoin(guildID, userID string, at time.Time) e
 
 // IncrementDailyMemberJoinContext increments the per-day member join counter (per user) with context support.
 func (s *Store) IncrementDailyMemberJoinContext(ctx context.Context, guildID, userID string, at time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" {
 		return nil
 	}
-	if at.IsZero() {
-		at = time.Now().UTC()
-	}
-	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.execContext(
-		ctx,
-		`INSERT INTO daily_member_joins (guild_id, user_id, day, count)
-         VALUES (?, ?, ?, 1)
-         ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
-           count = daily_member_joins.count + 1`,
-		guildID, userID, day,
-	)
-	return err
+	return s.incrementDailyMetricByUser(ctx, "daily_member_joins", guildID, userID, at)
 }
 
 // IncrementDailyMemberLeave increments the per-day member leave counter (per user).
@@ -1177,25 +1182,10 @@ func (s *Store) IncrementDailyMemberLeave(guildID, userID string, at time.Time) 
 
 // IncrementDailyMemberLeaveContext increments the per-day member leave counter (per user) with context support.
 func (s *Store) IncrementDailyMemberLeaveContext(ctx context.Context, guildID, userID string, at time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" {
 		return nil
 	}
-	if at.IsZero() {
-		at = time.Now().UTC()
-	}
-	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-	_, err := s.execContext(
-		ctx,
-		`INSERT INTO daily_member_leaves (guild_id, user_id, day, count)
-         VALUES (?, ?, ?, 1)
-         ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
-           count = daily_member_leaves.count + 1`,
-		guildID, userID, day,
-	)
-	return err
+	return s.incrementDailyMetricByUser(ctx, "daily_member_leaves", guildID, userID, at)
 }
 
 // MetricTotal represents an aggregated metric value for a specific key.

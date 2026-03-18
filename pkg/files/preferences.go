@@ -119,24 +119,16 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 
 // UpdateRuntimeConfig mutates runtime_config and persists the change.
 func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (RuntimeConfig, error) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	if mgr.config == nil {
-		mgr.config = &BotConfig{}
-	}
-
-	if fn != nil {
-		if err := fn(&mgr.config.RuntimeConfig); err != nil {
-			return RuntimeConfig{}, err
+	snapshot, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		if fn == nil {
+			return nil
 		}
-	}
-
-	if err := mgr.saveConfigLocked(); err != nil {
+		return fn(&cfg.RuntimeConfig)
+	})
+	if err != nil {
 		return RuntimeConfig{}, err
 	}
-
-	return mgr.config.RuntimeConfig, nil
+	return snapshot.RuntimeConfig, nil
 }
 
 // --- Getters ---
@@ -155,11 +147,14 @@ func (mgr *ConfigManager) ConfigPath() string {
 	return ""
 }
 
-// GetConfig returns the current configuration.
+// Config returns a deep-copied snapshot of the current configuration.
 func (mgr *ConfigManager) Config() *BotConfig {
+	if mgr == nil {
+		return nil
+	}
 	mgr.mu.RLock()
 	defer mgr.mu.RUnlock()
-	return mgr.config
+	return cloneBotConfigPtr(mgr.config)
 }
 
 // HasGuilds checks if there are configured guilds.
@@ -171,9 +166,9 @@ func (mgr *ConfigManager) HasAnyGuilds() bool {
 
 // --- Guild Config Management ---
 
-// GuildConfig returns the configuration for a specific guild.
+// GuildConfig returns a deep-copied snapshot of the configuration for a specific guild.
 func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
-	if guildID == "" {
+	if mgr == nil || guildID == "" {
 		return nil
 	}
 	mgr.mu.RLock()
@@ -184,7 +179,7 @@ func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
 	if mgr.guildIndex != nil {
 		if idx, ok := mgr.guildIndex[guildID]; ok {
 			if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == guildID {
-				gc := &mgr.config.Guilds[idx]
+				gc := cloneGuildConfigPtr(&mgr.config.Guilds[idx])
 				mgr.mu.RUnlock()
 				return gc
 			}
@@ -197,6 +192,9 @@ func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
 }
 
 func (mgr *ConfigManager) guildConfigWithRebuild(guildID string) *GuildConfig {
+	if mgr == nil {
+		return nil
+	}
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.config == nil || guildID == "" {
@@ -207,7 +205,7 @@ func (mgr *ConfigManager) guildConfigWithRebuild(guildID string) *GuildConfig {
 	}
 	if idx, ok := mgr.guildIndex[guildID]; ok {
 		if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == guildID {
-			return &mgr.config.Guilds[idx]
+			return cloneGuildConfigPtr(&mgr.config.Guilds[idx])
 		}
 	}
 	log.ApplicationLogger().Info("Guild config not found", "guildID", guildID)

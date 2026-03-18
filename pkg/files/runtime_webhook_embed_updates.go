@@ -73,25 +73,17 @@ func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update Webhoo
 	if err != nil {
 		return fmt.Errorf("create webhook embed update: %w", err)
 	}
+	if err := mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
+		updates := rc.NormalizedWebhookEmbedUpdates()
+		if findWebhookEmbedUpdateIndexByMessageID(updates, normalized.MessageID) >= 0 {
+			return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateAlreadyExists, normalized.MessageID)
+		}
 
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	rc, err := mgr.runtimeConfigForScopeLockedMutable(scope)
-	if err != nil {
-		return err
-	}
-
-	updates := rc.NormalizedWebhookEmbedUpdates()
-	if findWebhookEmbedUpdateIndexByMessageID(updates, normalized.MessageID) >= 0 {
-		return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateAlreadyExists, normalized.MessageID)
-	}
-
-	updates = append(updates, normalized)
-	setWebhookEmbedUpdatesCanonical(rc, updates)
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("create webhook embed update: save config: %w", err)
+		updates = append(updates, normalized)
+		setWebhookEmbedUpdatesCanonical(rc, updates)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("create webhook embed update: %w", err)
 	}
 	return nil
 }
@@ -108,33 +100,25 @@ func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, up
 	if err != nil {
 		return fmt.Errorf("update webhook embed update: %w", err)
 	}
-
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	rc, err := mgr.runtimeConfigForScopeLockedMutable(scope)
-	if err != nil {
-		return err
-	}
-
-	updates := rc.NormalizedWebhookEmbedUpdates()
-	idx := findWebhookEmbedUpdateIndexByMessageID(updates, targetID)
-	if idx < 0 {
-		return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateNotFound, targetID)
-	}
-
-	if normalized.MessageID != targetID {
-		dupIdx := findWebhookEmbedUpdateIndexByMessageID(updates, normalized.MessageID)
-		if dupIdx >= 0 && dupIdx != idx {
-			return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateAlreadyExists, normalized.MessageID)
+	if err := mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
+		updates := rc.NormalizedWebhookEmbedUpdates()
+		idx := findWebhookEmbedUpdateIndexByMessageID(updates, targetID)
+		if idx < 0 {
+			return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateNotFound, targetID)
 		}
-	}
 
-	updates[idx] = normalized
-	setWebhookEmbedUpdatesCanonical(rc, updates)
+		if normalized.MessageID != targetID {
+			dupIdx := findWebhookEmbedUpdateIndexByMessageID(updates, normalized.MessageID)
+			if dupIdx >= 0 && dupIdx != idx {
+				return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateAlreadyExists, normalized.MessageID)
+			}
+		}
 
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("update webhook embed update: save config: %w", err)
+		updates[idx] = normalized
+		setWebhookEmbedUpdatesCanonical(rc, updates)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("update webhook embed update: %w", err)
 	}
 	return nil
 }
@@ -147,25 +131,18 @@ func (mgr *ConfigManager) DeleteWebhookEmbedUpdate(guildID, messageID string) er
 		return fmt.Errorf("delete webhook embed update: message_id is required")
 	}
 
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+	if err := mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
+		updates := rc.NormalizedWebhookEmbedUpdates()
+		idx := findWebhookEmbedUpdateIndexByMessageID(updates, targetID)
+		if idx < 0 {
+			return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateNotFound, targetID)
+		}
 
-	rc, err := mgr.runtimeConfigForScopeLockedMutable(scope)
-	if err != nil {
-		return err
-	}
-
-	updates := rc.NormalizedWebhookEmbedUpdates()
-	idx := findWebhookEmbedUpdateIndexByMessageID(updates, targetID)
-	if idx < 0 {
-		return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateNotFound, targetID)
-	}
-
-	updates = slices.Delete(updates, idx, idx+1)
-	setWebhookEmbedUpdatesCanonical(rc, updates)
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("delete webhook embed update: save config: %w", err)
+		updates = slices.Delete(updates, idx, idx+1)
+		setWebhookEmbedUpdatesCanonical(rc, updates)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("delete webhook embed update: %w", err)
 	}
 	return nil
 }
@@ -179,19 +156,10 @@ func normalizeWebhookScope(guildID string) string {
 }
 
 func (mgr *ConfigManager) runtimeConfigForScopeLocked(scopeGuildID string) (*RuntimeConfig, error) {
-	if mgr == nil || mgr.config == nil {
+	if mgr == nil {
 		return nil, nil
 	}
-	if scopeGuildID == "" {
-		return &mgr.config.RuntimeConfig, nil
-	}
-
-	for i := range mgr.config.Guilds {
-		if mgr.config.Guilds[i].GuildID == scopeGuildID {
-			return &mgr.config.Guilds[i].RuntimeConfig, nil
-		}
-	}
-	return nil, fmt.Errorf("guild config not found for %s", scopeGuildID)
+	return runtimeConfigForScope(mgr.config, scopeGuildID)
 }
 
 func (mgr *ConfigManager) runtimeConfigForScopeLockedMutable(scopeGuildID string) (*RuntimeConfig, error) {
@@ -201,17 +169,7 @@ func (mgr *ConfigManager) runtimeConfigForScopeLockedMutable(scopeGuildID string
 	if mgr.config == nil {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
 	}
-
-	if scopeGuildID == "" {
-		return &mgr.config.RuntimeConfig, nil
-	}
-
-	for i := range mgr.config.Guilds {
-		if mgr.config.Guilds[i].GuildID == scopeGuildID {
-			return &mgr.config.Guilds[i].RuntimeConfig, nil
-		}
-	}
-	return nil, fmt.Errorf("guild config not found for %s", scopeGuildID)
+	return runtimeConfigForScope(mgr.config, scopeGuildID)
 }
 
 func normalizeWebhookEmbedUpdateConfig(in WebhookEmbedUpdateConfig) (WebhookEmbedUpdateConfig, error) {

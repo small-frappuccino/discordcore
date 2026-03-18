@@ -153,4 +153,16 @@ var postgresMigrations = []migration{
 			`DROP TABLE IF EXISTS bot_config_state`,
 		},
 	},
+	{
+		Version: 3,
+		UpSQL: []string{
+			`ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`,
+			`UPDATE member_joins
+			 SET last_seen_at = COALESCE(last_seen_at, joined_at)
+			 WHERE last_seen_at IS NULL`,
+		},
+		DownSQL: []string{
+			`ALTER TABLE member_joins DROP COLUMN IF EXISTS last_seen_at`,
+		},
+	},
 }

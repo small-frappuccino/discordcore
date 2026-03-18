@@ -64,6 +64,61 @@ func TestGuildConfigIndexUpdate(t *testing.T) {
 	}
 }
 
+func TestConfigReturnsDefensiveCopy(t *testing.T) {
+	mgr := newTestConfigManager([]GuildConfig{
+		{
+			GuildID: "g1",
+			Channels: ChannelsConfig{
+				MessageDelete: "c1",
+			},
+		},
+	})
+
+	cfg := mgr.Config()
+	if cfg == nil {
+		t.Fatal("expected config snapshot")
+	}
+
+	cfg.Guilds[0].Channels.MessageDelete = "mutated"
+
+	fresh := mgr.Config()
+	if fresh == nil {
+		t.Fatal("expected fresh config snapshot")
+	}
+	if got := fresh.Guilds[0].Channels.MessageDelete; got != "c1" {
+		t.Fatalf("expected original channel to remain unchanged, got %q", got)
+	}
+}
+
+func TestGuildConfigReturnsDefensiveCopy(t *testing.T) {
+	mgr := newTestConfigManager([]GuildConfig{
+		{
+			GuildID: "g1",
+			Channels: ChannelsConfig{
+				MessageDelete: "c1",
+			},
+		},
+	})
+	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
+		t.Fatalf("rebuild index: %v", err)
+	}
+
+	cfg := mgr.GuildConfig("g1")
+	if cfg == nil {
+		t.Fatal("expected guild config snapshot")
+	}
+
+	cfg.Channels.MessageDelete = "mutated"
+
+	fresh := mgr.GuildConfig("g1")
+	if fresh == nil {
+		t.Fatal("expected fresh guild config snapshot")
+	}
+	if got := fresh.Channels.MessageDelete; got != "c1" {
+		t.Fatalf("expected original guild channel to remain unchanged, got %q", got)
+	}
+}
+
 func TestGuildConfigIndexDuplicateFix(t *testing.T) {
 	mgr := newTestConfigManager([]GuildConfig{
 		{GuildID: "g1"},

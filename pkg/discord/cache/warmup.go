@@ -231,16 +231,6 @@ func warmupGuildChannels(session warmupSession, cache *UnifiedCache, guildID str
 
 // warmupGuildMembers fetches members if missing from storage and caches them
 func warmupGuildMembers(session warmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
-	// Get existing members from storage
-	storedMembers := make(map[string]time.Time)
-	if store != nil {
-		var err error
-		storedMembers, err = store.GetAllMemberJoins(guildID)
-		if err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to get stored members for guild %s: %v", guildID, err))
-		}
-	}
-
 	// Fetch members from Discord
 	// Use chunking for large guilds
 	after := ""
@@ -272,41 +262,27 @@ func warmupGuildMembers(session warmupSession, cache *UnifiedCache, store *stora
 		for _, member := range members {
 			fetchedCount++
 
-			// Check if member is already in storage
-			_, existsInStorage := storedMembers[member.User.ID]
-
 			// Cache the member
 			if _, ok := cache.GetMember(guildID, member.User.ID); !ok {
 				cache.SetMember(guildID, member.User.ID, member)
 				cachedCount++
 			}
 
-			// Store member join time if not exists
-			if store != nil && !existsInStorage {
+			if store != nil {
 				joinedAt := time.Now().UTC()
 				if !member.JoinedAt.IsZero() {
 					joinedAt = member.JoinedAt
 				}
+
+				// Preserve historical joins while still repairing rows that were
+				// previously rewritten to newer values.
 				if err := store.UpsertMemberJoin(guildID, member.User.ID, joinedAt); err != nil {
 					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member join: %v", err))
 				}
-			}
 
-			// Store member roles if not exists
-			if store != nil && len(member.Roles) > 0 {
-				if err := store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now().UTC()); err != nil {
-					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member roles: %v", err))
-				}
-			}
-
-			// Touch existing members to keep them fresh
-			if store != nil && existsInStorage {
-				if err := store.TouchMemberJoin(guildID, member.User.ID); err != nil {
-					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member join: %v", err))
-				}
 				if len(member.Roles) > 0 {
-					if err := store.TouchMemberRoles(guildID, member.User.ID); err != nil {
-						log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member roles: %v", err))
+					if err := store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now().UTC()); err != nil {
+						log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member roles: %v", err))
 					}
 				}
 			}
@@ -399,12 +375,9 @@ func KeepMemberDataFresh(store *storage.Store, guildID string, userIDs []string)
 	}
 
 	for _, userID := range userIDs {
-		// Touch member join to keep it fresh
 		if err := store.TouchMemberJoin(guildID, userID); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member join for %s: %v", userID, err))
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member join freshness for %s: %v", userID, err))
 		}
-
-		// Touch member roles to keep them fresh
 		if err := store.TouchMemberRoles(guildID, userID); err != nil {
 			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member roles for %s: %v", userID, err))
 		}

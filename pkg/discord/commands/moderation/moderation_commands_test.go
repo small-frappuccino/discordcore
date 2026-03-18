@@ -45,7 +45,7 @@ func TestSendModerationLogNoChannel(t *testing.T) {
 	guildID := "g1"
 	botID := "bot"
 
-	cm := files.NewConfigManagerWithPath("test-settings.json")
+	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
@@ -53,7 +53,9 @@ func TestSendModerationLogNoChannel(t *testing.T) {
 		t.Fatal("config is nil")
 	}
 	enabled := true
-	cm.Config().RuntimeConfig.ModerationLogging = &enabled
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.RuntimeConfig.ModerationLogging = &enabled
+	})
 
 	session := &discordgo.Session{State: discordgo.NewState()}
 	session.State.User = &discordgo.User{ID: botID}
@@ -191,7 +193,7 @@ func TestShouldSendCleanUsageMessageDeleteEmbed(t *testing.T) {
 	t.Parallel()
 
 	guildID := "g1"
-	cm := files.NewConfigManagerWithPath("test-settings.json")
+	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
@@ -201,14 +203,18 @@ func TestShouldSendCleanUsageMessageDeleteEmbed(t *testing.T) {
 		t.Fatal("expected clean usage delete embed enabled by default")
 	}
 
-	cm.Config().RuntimeConfig.DisableMessageLogs = true
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.RuntimeConfig.DisableMessageLogs = true
+	})
 	if shouldSendCleanUsageMessageDeleteEmbed(ctx) {
 		t.Fatal("expected disabled when runtime disable_message_logs is true")
 	}
 
-	cm.Config().RuntimeConfig.DisableMessageLogs = false
 	disableMessage := false
-	cm.Config().Features.Logging.MessageDelete = &disableMessage
+	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
+		cfg.RuntimeConfig.DisableMessageLogs = false
+		cfg.Features.Logging.MessageDelete = &disableMessage
+	})
 	if shouldSendCleanUsageMessageDeleteEmbed(ctx) {
 		t.Fatal("expected disabled when features.logging.message_delete is false")
 	}

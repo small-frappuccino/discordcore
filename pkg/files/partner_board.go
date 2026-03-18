@@ -53,19 +53,11 @@ func (mgr *ConfigManager) SetPartnerBoardTarget(guildID string, target EmbedUpda
 	if err != nil {
 		return fmt.Errorf("set partner board target: %w", err)
 	}
-
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig, err := mgr.guildConfigByIDLockedMutable(scope)
-	if err != nil {
-		return err
-	}
-
-	guildConfig.PartnerBoard.Target = normalized
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("set partner board target: save config: %w", err)
+	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+		guildConfig.PartnerBoard.Target = normalized
+		return nil
+	}); err != nil {
+		return fmt.Errorf("set partner board target: %w", err)
 	}
 	return nil
 }
@@ -95,18 +87,11 @@ func (mgr *ConfigManager) SetPartnerBoardTemplate(guildID string, template Partn
 	}
 
 	normalized := normalizePartnerBoardTemplate(template)
-
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	guildConfig, err := mgr.guildConfigByIDLockedMutable(scope)
-	if err != nil {
-		return err
-	}
-	guildConfig.PartnerBoard.Template = normalized
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("set partner board template: save config: %w", err)
+	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+		guildConfig.PartnerBoard.Template = normalized
+		return nil
+	}); err != nil {
+		return fmt.Errorf("set partner board template: %w", err)
 	}
 	return nil
 }
@@ -207,35 +192,27 @@ func (mgr *ConfigManager) CreatePartner(guildID string, partner PartnerEntryConf
 	if err != nil {
 		return fmt.Errorf("create partner: %w", err)
 	}
+	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+		current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
+		if err != nil {
+			return err
+		}
 
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+		nameKey := normalizeNameKey(normalized.Name)
+		if findPartnerIndexByNameKey(current, nameKey) >= 0 {
+			return fmt.Errorf("%w: name=%s", ErrPartnerAlreadyExists, normalized.Name)
+		}
+		linkKey := normalizeLinkKey(normalized.Link)
+		if findPartnerIndexByLinkKey(current, linkKey) >= 0 {
+			return fmt.Errorf("%w: link=%s", ErrPartnerAlreadyExists, normalized.Link)
+		}
 
-	guildConfig, err := mgr.guildConfigByIDLockedMutable(scope)
-	if err != nil {
-		return err
-	}
-
-	current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
-	if err != nil {
+		current = append(current, normalized)
+		sortPartnersDeterministically(current)
+		guildConfig.PartnerBoard.Partners = current
+		return nil
+	}); err != nil {
 		return fmt.Errorf("create partner: %w", err)
-	}
-
-	nameKey := normalizeNameKey(normalized.Name)
-	if findPartnerIndexByNameKey(current, nameKey) >= 0 {
-		return fmt.Errorf("%w: name=%s", ErrPartnerAlreadyExists, normalized.Name)
-	}
-	linkKey := normalizeLinkKey(normalized.Link)
-	if findPartnerIndexByLinkKey(current, linkKey) >= 0 {
-		return fmt.Errorf("%w: link=%s", ErrPartnerAlreadyExists, normalized.Link)
-	}
-
-	current = append(current, normalized)
-	sortPartnersDeterministically(current)
-	guildConfig.PartnerBoard.Partners = current
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("create partner: save config: %w", err)
 	}
 	return nil
 }
@@ -256,40 +233,32 @@ func (mgr *ConfigManager) UpdatePartner(guildID, currentName string, partner Par
 	if err != nil {
 		return fmt.Errorf("update partner: %w", err)
 	}
+	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+		current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
+		if err != nil {
+			return err
+		}
 
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+		idx := findPartnerIndexByNameKey(current, targetNameKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: name=%s", ErrPartnerNotFound, strings.TrimSpace(currentName))
+		}
 
-	guildConfig, err := mgr.guildConfigByIDLockedMutable(scope)
-	if err != nil {
-		return err
-	}
+		newNameKey := normalizeNameKey(normalized.Name)
+		if dup := findPartnerIndexByNameKey(current, newNameKey); dup >= 0 && dup != idx {
+			return fmt.Errorf("%w: name=%s", ErrPartnerAlreadyExists, normalized.Name)
+		}
+		newLinkKey := normalizeLinkKey(normalized.Link)
+		if dup := findPartnerIndexByLinkKey(current, newLinkKey); dup >= 0 && dup != idx {
+			return fmt.Errorf("%w: link=%s", ErrPartnerAlreadyExists, normalized.Link)
+		}
 
-	current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
-	if err != nil {
+		current[idx] = normalized
+		sortPartnersDeterministically(current)
+		guildConfig.PartnerBoard.Partners = current
+		return nil
+	}); err != nil {
 		return fmt.Errorf("update partner: %w", err)
-	}
-
-	idx := findPartnerIndexByNameKey(current, targetNameKey)
-	if idx < 0 {
-		return fmt.Errorf("%w: name=%s", ErrPartnerNotFound, strings.TrimSpace(currentName))
-	}
-
-	newNameKey := normalizeNameKey(normalized.Name)
-	if dup := findPartnerIndexByNameKey(current, newNameKey); dup >= 0 && dup != idx {
-		return fmt.Errorf("%w: name=%s", ErrPartnerAlreadyExists, normalized.Name)
-	}
-	newLinkKey := normalizeLinkKey(normalized.Link)
-	if dup := findPartnerIndexByLinkKey(current, newLinkKey); dup >= 0 && dup != idx {
-		return fmt.Errorf("%w: link=%s", ErrPartnerAlreadyExists, normalized.Link)
-	}
-
-	current[idx] = normalized
-	sortPartnersDeterministically(current)
-	guildConfig.PartnerBoard.Partners = current
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("update partner: save config: %w", err)
 	}
 	return nil
 }
@@ -306,30 +275,23 @@ func (mgr *ConfigManager) DeletePartner(guildID, name string) error {
 		return fmt.Errorf("delete partner: %w", invalidPartnerBoardInput("name is required"))
 	}
 
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+		current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
+		if err != nil {
+			return err
+		}
 
-	guildConfig, err := mgr.guildConfigByIDLockedMutable(scope)
-	if err != nil {
-		return err
-	}
+		idx := findPartnerIndexByNameKey(current, targetNameKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: name=%s", ErrPartnerNotFound, strings.TrimSpace(name))
+		}
 
-	current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
-	if err != nil {
+		current = slices.Delete(current, idx, idx+1)
+		sortPartnersDeterministically(current)
+		guildConfig.PartnerBoard.Partners = current
+		return nil
+	}); err != nil {
 		return fmt.Errorf("delete partner: %w", err)
-	}
-
-	idx := findPartnerIndexByNameKey(current, targetNameKey)
-	if idx < 0 {
-		return fmt.Errorf("%w: name=%s", ErrPartnerNotFound, strings.TrimSpace(name))
-	}
-
-	current = slices.Delete(current, idx, idx+1)
-	sortPartnersDeterministically(current)
-	guildConfig.PartnerBoard.Partners = current
-
-	if err := mgr.saveConfigLocked(); err != nil {
-		return fmt.Errorf("delete partner: save config: %w", err)
 	}
 	return nil
 }
