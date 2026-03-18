@@ -64,7 +64,7 @@ func TestGuildConfigIndexUpdate(t *testing.T) {
 	}
 }
 
-func TestConfigReturnsDefensiveCopy(t *testing.T) {
+func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 	mgr := newTestConfigManager([]GuildConfig{
 		{
 			GuildID: "g1",
@@ -74,15 +74,15 @@ func TestConfigReturnsDefensiveCopy(t *testing.T) {
 		},
 	})
 
-	cfg := mgr.Config()
-	if cfg == nil {
+	cfg := mgr.SnapshotConfig()
+	if len(cfg.Guilds) == 0 {
 		t.Fatal("expected config snapshot")
 	}
 
 	cfg.Guilds[0].Channels.MessageDelete = "mutated"
 
-	fresh := mgr.Config()
-	if fresh == nil {
+	fresh := mgr.SnapshotConfig()
+	if len(fresh.Guilds) == 0 {
 		t.Fatal("expected fresh config snapshot")
 	}
 	if got := fresh.Guilds[0].Channels.MessageDelete; got != "c1" {
@@ -90,7 +90,7 @@ func TestConfigReturnsDefensiveCopy(t *testing.T) {
 	}
 }
 
-func TestGuildConfigReturnsDefensiveCopy(t *testing.T) {
+func TestPublishedConfigReadsReuseSnapshot(t *testing.T) {
 	mgr := newTestConfigManager([]GuildConfig{
 		{
 			GuildID: "g1",
@@ -103,19 +103,30 @@ func TestGuildConfigReturnsDefensiveCopy(t *testing.T) {
 		t.Fatalf("rebuild index: %v", err)
 	}
 
-	cfg := mgr.GuildConfig("g1")
-	if cfg == nil {
-		t.Fatal("expected guild config snapshot")
+	firstCfg := mgr.Config()
+	secondCfg := mgr.Config()
+	if firstCfg == nil || secondCfg == nil {
+		t.Fatal("expected published config snapshot")
+	}
+	if firstCfg != secondCfg {
+		t.Fatal("expected Config() to reuse the published snapshot")
 	}
 
-	cfg.Channels.MessageDelete = "mutated"
-
-	fresh := mgr.GuildConfig("g1")
-	if fresh == nil {
-		t.Fatal("expected fresh guild config snapshot")
+	firstGuild := mgr.GuildConfig("g1")
+	secondGuild := mgr.GuildConfig("g1")
+	if firstGuild == nil || secondGuild == nil {
+		t.Fatal("expected published guild config snapshot")
 	}
-	if got := fresh.Channels.MessageDelete; got != "c1" {
-		t.Fatalf("expected original guild channel to remain unchanged, got %q", got)
+	if firstGuild != secondGuild {
+		t.Fatal("expected GuildConfig() to reuse the published snapshot")
+	}
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		_ = mgr.Config()
+		_ = mgr.GuildConfig("g1")
+	})
+	if allocs != 0 {
+		t.Fatalf("expected zero allocations for published config reads, got %f", allocs)
 	}
 }
 

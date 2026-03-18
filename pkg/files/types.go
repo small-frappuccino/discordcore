@@ -726,10 +726,16 @@ type ConfigManager struct {
 	store           ConfigStore
 	config          *BotConfig
 	guildIndex      map[string]int
+	published       atomic.Pointer[publishedConfigSnapshot]
 	indexRebuilds   atomic.Uint64
 	indexMisses     atomic.Uint64
 	indexDuplicates atomic.Uint64
 	mu              sync.RWMutex
+}
+
+type publishedConfigSnapshot struct {
+	config     *BotConfig
+	guildIndex map[string]int
 }
 
 // GuildIndexStats exposes counters for the guild config index.

@@ -28,6 +28,9 @@ func (s *Store) Init() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := s.ensureMemberJoinLastSeenColumn(ctx); err != nil {
+		return fmt.Errorf("ensure member join freshness column: %w", err)
+	}
 	if err := validateSchema(ctx, s.db); err != nil {
 		return fmt.Errorf("validate schema: %w", err)
 	}
@@ -717,6 +720,55 @@ var requiredSchemaTables = []string{
 
 var requiredSchemaColumns = map[string][]string{
 	"member_joins": []string{"last_seen_at"},
+}
+
+func (s *Store) ensureMemberJoinLastSeenColumn(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var exists bool
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = $1
+			  AND column_name = $2
+		)`,
+		"member_joins",
+		"last_seen_at",
+	).Scan(&exists); err != nil {
+		return fmt.Errorf("check member_joins.last_seen_at existence: %w", err)
+	}
+	if exists {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin member_joins.last_seen_at bootstrap tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`); err != nil {
+		return fmt.Errorf("add member_joins.last_seen_at column: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE member_joins
+		   SET last_seen_at = COALESCE(last_seen_at, joined_at)
+		 WHERE last_seen_at IS NULL
+	`); err != nil {
+		return fmt.Errorf("backfill member_joins.last_seen_at: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit member_joins.last_seen_at bootstrap: %w", err)
+	}
+	return nil
 }
 
 func validateSchema(ctx context.Context, db *sql.DB) error {

@@ -77,6 +77,7 @@ func (mgr *ConfigManager) LoadConfig() error {
 		mgr.mu.Unlock()
 		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
 	}
+	mgr.publishSnapshotLocked()
 	mgr.mu.Unlock()
 
 	if dupCount > 0 || orderMigrated {
@@ -95,7 +96,11 @@ func (mgr *ConfigManager) SaveConfig() error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
-	return mgr.saveConfigLocked()
+	if err := mgr.saveConfigLocked(); err != nil {
+		return err
+	}
+	mgr.publishSnapshotLocked()
+	return nil
 }
 
 func (mgr *ConfigManager) saveConfigLocked() error {
@@ -147,51 +152,45 @@ func (mgr *ConfigManager) ConfigPath() string {
 	return ""
 }
 
-// Config returns a deep-copied snapshot of the current configuration.
+// Config returns the current published read-only configuration snapshot.
+// Callers must treat the returned value as immutable. Use SnapshotConfig when a
+// defensive copy is required for mutation.
 func (mgr *ConfigManager) Config() *BotConfig {
-	if mgr == nil {
+	snap := mgr.currentPublishedSnapshot()
+	if snap == nil {
 		return nil
 	}
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-	return cloneBotConfigPtr(mgr.config)
+	return snap.config
 }
 
 // HasGuilds checks if there are configured guilds.
 func (mgr *ConfigManager) HasAnyGuilds() bool {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-	return mgr.config != nil && len(mgr.config.Guilds) > 0
+	snap := mgr.currentPublishedSnapshot()
+	return snap != nil && snap.config != nil && len(snap.config.Guilds) > 0
 }
 
 // --- Guild Config Management ---
 
-// GuildConfig returns a deep-copied snapshot of the configuration for a specific guild.
+// GuildConfig returns the current published read-only snapshot for a specific guild.
+// Callers must treat the returned value as immutable.
 func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
 	if mgr == nil || guildID == "" {
 		return nil
 	}
-	mgr.mu.RLock()
-	if mgr.config == nil {
-		mgr.mu.RUnlock()
-		return nil
-	}
-	if mgr.guildIndex != nil {
-		if idx, ok := mgr.guildIndex[guildID]; ok {
-			if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == guildID {
-				gc := cloneGuildConfigPtr(&mgr.config.Guilds[idx])
-				mgr.mu.RUnlock()
-				return gc
+	snap := mgr.currentPublishedSnapshot()
+	if snap != nil && snap.config != nil && snap.guildIndex != nil {
+		if idx, ok := snap.guildIndex[guildID]; ok {
+			if idx >= 0 && idx < len(snap.config.Guilds) && snap.config.Guilds[idx].GuildID == guildID {
+				return &snap.config.Guilds[idx]
 			}
 		}
+		return nil
 	}
-	mgr.mu.RUnlock()
 	mgr.indexMisses.Add(1)
-	// Fallback: rebuild index and try once more under write lock.
-	return mgr.guildConfigWithRebuild(guildID)
+	return mgr.guildConfigWithPublish(guildID)
 }
 
-func (mgr *ConfigManager) guildConfigWithRebuild(guildID string) *GuildConfig {
+func (mgr *ConfigManager) guildConfigWithPublish(guildID string) *GuildConfig {
 	if mgr == nil {
 		return nil
 	}
@@ -200,12 +199,21 @@ func (mgr *ConfigManager) guildConfigWithRebuild(guildID string) *GuildConfig {
 	if mgr.config == nil || guildID == "" {
 		return nil
 	}
+	if snap := mgr.publishSnapshotLocked(); snap != nil && snap.config != nil && snap.guildIndex != nil {
+		if idx, ok := snap.guildIndex[guildID]; ok {
+			if idx >= 0 && idx < len(snap.config.Guilds) && snap.config.Guilds[idx].GuildID == guildID {
+				return &snap.config.Guilds[idx]
+			}
+		}
+	}
 	if _, err := mgr.rebuildGuildIndexLocked("lookup_miss"); err != nil {
 		log.ApplicationLogger().Warn("Guild config index rebuild warning", "guildID", guildID, "error", err)
 	}
-	if idx, ok := mgr.guildIndex[guildID]; ok {
-		if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == guildID {
-			return cloneGuildConfigPtr(&mgr.config.Guilds[idx])
+	if snap := mgr.publishSnapshotLocked(); snap != nil && snap.config != nil && snap.guildIndex != nil {
+		if idx, ok := snap.guildIndex[guildID]; ok {
+			if idx >= 0 && idx < len(snap.config.Guilds) && snap.config.Guilds[idx].GuildID == guildID {
+				return &snap.config.Guilds[idx]
+			}
 		}
 	}
 	log.ApplicationLogger().Info("Guild config not found", "guildID", guildID)
@@ -267,16 +275,19 @@ func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	if mgr.config == nil {
-		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
+	next := cloneBotConfigPtr(mgr.config)
+	if next == nil {
+		next = &BotConfig{Guilds: []GuildConfig{}}
 	}
 	// Remove any existing entry with the same GuildID, then append the new config.
-	mgr.config.Guilds = append(slices.DeleteFunc(mgr.config.Guilds, func(g GuildConfig) bool {
+	next.Guilds = append(slices.DeleteFunc(next.Guilds, func(g GuildConfig) bool {
 		return g.GuildID == guildCfg.GuildID
 	}), guildCfg)
+	mgr.config = next
 	if _, err := mgr.rebuildGuildIndexLocked("add"); err != nil {
 		return fmt.Errorf("add guild config: %w", err)
 	}
+	mgr.publishSnapshotLocked()
 	return nil
 }
 
@@ -287,24 +298,22 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 	if mgr.config == nil {
 		return
 	}
-	mgr.config.Guilds = slices.DeleteFunc(mgr.config.Guilds, func(g GuildConfig) bool {
+	next := cloneBotConfigPtr(mgr.config)
+	next.Guilds = slices.DeleteFunc(next.Guilds, func(g GuildConfig) bool {
 		return g.GuildID == guildID
 	})
+	mgr.config = next
 	if _, err := mgr.rebuildGuildIndexLocked("remove"); err != nil {
 		log.ApplicationLogger().Warn("Guild config index rebuild warning", "guildID", guildID, "error", err)
 	}
+	mgr.publishSnapshotLocked()
 }
 
 // --- Guild Detection & Addition ---
 
 // AutoDetectGuilds automatically detects guilds where the bot is present.
 func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
-	mgr.mu.Lock()
-	if mgr.config == nil {
-		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
-	}
-	mgr.config.Guilds = make([]GuildConfig, 0, len(session.State.Guilds))
-	mgr.mu.Unlock()
+	detected := make([]GuildConfig, 0, len(session.State.Guilds))
 
 	for _, g := range session.State.Guilds {
 		fullGuild, err := session.Guild(g.ID)
@@ -342,17 +351,15 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 				Allowed: roles,
 			},
 		}
-		mgr.mu.Lock()
-		mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
-		mgr.mu.Unlock()
+		detected = append(detected, guildCfg)
 		log.ApplicationLogger().Info("Guild added", "guildName", fullGuild.Name, "guildID", g.ID, "channelID", channelID)
 	}
-	mgr.mu.Lock()
-	if _, err := mgr.rebuildGuildIndexLocked("detect"); err != nil {
-		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err)
-	}
-	mgr.mu.Unlock()
-	return mgr.SaveConfig()
+
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		cfg.Guilds = detected
+		return nil
+	})
+	return err
 }
 
 // AddGuildToConfig adds a new guild to the configuration.
@@ -360,26 +367,9 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	if session == nil {
 		return fmt.Errorf("%w: discord session is unavailable", ErrGuildBootstrapDiscordFetch)
 	}
-	// ensure config exists
-	mgr.mu.RLock()
-	cfgNil := mgr.config == nil
-	mgr.mu.RUnlock()
-	if cfgNil {
-		mgr.mu.Lock()
-		if mgr.config == nil {
-			mgr.config = &BotConfig{Guilds: []GuildConfig{}}
-		}
-		mgr.mu.Unlock()
-	} else {
-		mgr.mu.RLock()
-		for _, g := range mgr.config.Guilds {
-			if g.GuildID == guildID {
-				mgr.mu.RUnlock()
-				log.ApplicationLogger().Info("Guild already configured, skipping", "guildID", guildID)
-				return nil
-			}
-		}
-		mgr.mu.RUnlock()
+	if mgr.GuildConfig(guildID) != nil {
+		log.ApplicationLogger().Info("Guild already configured, skipping", "guildID", guildID)
+		return nil
 	}
 	guild, err := session.Guild(guildID)
 	if err != nil {
@@ -410,20 +400,19 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 			Allowed: roles,
 		},
 	}
-	mgr.mu.Lock()
-	mgr.config.Guilds = append(mgr.config.Guilds, guildCfg)
-	if _, err := mgr.rebuildGuildIndexLocked("register"); err != nil {
-		log.ApplicationLogger().Warn("Guild config index rebuild warning", "guildID", guildID, "error", err)
+
+	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		cfg.Guilds = append(cfg.Guilds, guildCfg)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("register guild: save config: %w", err)
 	}
-	mgr.mu.Unlock()
+
 	channelName := channelID
 	if ch, err := session.Channel(channelID); err == nil {
 		channelName = ch.Name
 	}
 	log.ApplicationLogger().Info(LogGuildAdded, "guildName", guild.Name, "guildID", guildID, "channel", channelName)
-	if err := mgr.SaveConfig(); err != nil {
-		return fmt.Errorf("register guild: save config: %w", err)
-	}
 	return nil
 }
 

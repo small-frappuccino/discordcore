@@ -5,20 +5,76 @@ import (
 	"fmt"
 )
 
+func (mgr *ConfigManager) currentPublishedSnapshot() *publishedConfigSnapshot {
+	if mgr == nil {
+		return nil
+	}
+	if snap := mgr.published.Load(); snap != nil {
+		return snap
+	}
+
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	return mgr.publishSnapshotLocked()
+}
+
+func (mgr *ConfigManager) publishSnapshotLocked() *publishedConfigSnapshot {
+	if mgr == nil || mgr.config == nil {
+		if mgr != nil {
+			mgr.published.Store(nil)
+		}
+		return nil
+	}
+
+	snap := &publishedConfigSnapshot{
+		config:     cloneBotConfigPtr(mgr.config),
+		guildIndex: cloneGuildIndex(mgr.guildIndex),
+	}
+	if snap.guildIndex == nil {
+		snap.guildIndex = buildReadonlyGuildIndex(snap.config)
+	}
+	mgr.published.Store(snap)
+	return snap
+}
+
+func cloneGuildIndex(in map[string]int) map[string]int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(in))
+	for guildID, idx := range in {
+		out[guildID] = idx
+	}
+	return out
+}
+
+func buildReadonlyGuildIndex(cfg *BotConfig) map[string]int {
+	if cfg == nil || len(cfg.Guilds) == 0 {
+		return nil
+	}
+	index := make(map[string]int, len(cfg.Guilds))
+	for i := range cfg.Guilds {
+		guildID := cfg.Guilds[i].GuildID
+		if guildID == "" {
+			continue
+		}
+		if _, exists := index[guildID]; exists {
+			continue
+		}
+		index[guildID] = i
+	}
+	return index
+}
+
 // SnapshotConfig returns a deep copy of the current bot config for read-only use
 // outside the ConfigManager lock.
 func (mgr *ConfigManager) SnapshotConfig() BotConfig {
-	if mgr == nil {
-		return BotConfig{Guilds: []GuildConfig{}}
-	}
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	if mgr.config == nil {
+	snap := mgr.currentPublishedSnapshot()
+	if snap == nil || snap.config == nil {
 		return BotConfig{Guilds: []GuildConfig{}}
 	}
 
-	out := cloneBotConfig(*mgr.config)
+	out := cloneBotConfig(*snap.config)
 	if out.Guilds == nil {
 		out.Guilds = []GuildConfig{}
 	}
@@ -38,15 +94,17 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
 	}
 
-	previous := cloneBotConfigPtr(mgr.config)
+	previous := mgr.config
+	previousIndex := cloneGuildIndex(mgr.guildIndex)
+	next := cloneBotConfigPtr(mgr.config)
 
 	if fn != nil {
-		if err := fn(mgr.config); err != nil {
-			mgr.config = previous
+		if err := fn(next); err != nil {
 			return BotConfig{}, err
 		}
 	}
 
+	mgr.config = next
 	if _, err := mgr.rebuildGuildIndexLocked("update"); err != nil {
 		// rebuildGuildIndexLocked already normalizes duplicate guild IDs in memory
 		// and emits context-rich logs. The updated config remains canonical.
@@ -54,11 +112,16 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 
 	if err := mgr.saveConfigLocked(); err != nil {
 		mgr.config = previous
-		_, _ = mgr.rebuildGuildIndexLocked("rollback")
+		mgr.guildIndex = previousIndex
+		mgr.publishSnapshotLocked()
 		return BotConfig{}, err
 	}
 
-	return cloneBotConfig(*mgr.config), nil
+	snapshot := mgr.publishSnapshotLocked()
+	if snapshot == nil || snapshot.config == nil {
+		return BotConfig{Guilds: []GuildConfig{}}, nil
+	}
+	return cloneBotConfig(*snapshot.config), nil
 }
 
 func cloneBotConfigPtr(in *BotConfig) *BotConfig {
