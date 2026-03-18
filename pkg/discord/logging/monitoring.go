@@ -652,129 +652,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
 	serviceCtx := lifecycleCtx
 
-	if workload.avatarScan {
-		// Schedule periodic avatar scan via router cron instead of local goroutine.
-		ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
-			return ms.performPeriodicCheck(serviceCtx)
-		})
-	}
-
-	if workload.rolesRefresh {
-		// Register a daily roles DB refresh task and run once at startup.
-		ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
-			if err := serviceCtx.Err(); err != nil {
-				return err
-			}
-			cfg := ms.scopedConfig()
-			if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
-				return nil
-			}
-			start := time.Now()
-			totalUpdates := 0
-			botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
-			for _, gcfg := range cfg.Guilds {
-				if err := serviceCtx.Err(); err != nil {
-					return err
-				}
-				members, err := ms.fetchAllGuildMembersContext(serviceCtx, gcfg.GuildID)
-				if err != nil {
-					log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
-					continue
-				}
-				botUsers := make(map[string]struct{})
-				for _, member := range members {
-					if member == nil || member.User == nil {
-						continue
-					}
-					if member.User.Bot {
-						botUsers[member.User.ID] = struct{}{}
-					}
-					if !member.JoinedAt.IsZero() {
-						if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
-							log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
-						}
-					}
-					if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
-						log.ApplicationLogger().Warn("Failed to upsert roles for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
-						continue
-					}
-					ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
-					totalUpdates++
-				}
-				botUsersByGuild[gcfg.GuildID] = botUsers
-			}
-			reconciledAdds := 0
-			reconciledRemoves := 0
-			if ms.store != nil && ms.session != nil {
-				for _, gcfg := range cfg.Guilds {
-					features := cfg.ResolveFeatures(gcfg.GuildID)
-					if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
-						continue
-					}
-					targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID
-					requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
-					memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
-					if err != nil {
-						log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
-						continue
-					}
-					botUsers := botUsersByGuild[gcfg.GuildID]
-					for userID, roles := range memberRoles {
-						if _, isBot := botUsers[userID]; isBot {
-							continue
-						}
-						switch evaluateAutoRoleDecision(roles, targetRoleID, requiredRoles) {
-						case autoRoleAddTarget:
-							if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
-								log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
-							} else {
-								reconciledAdds++
-							}
-						case autoRoleRemoveTarget:
-							if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
-								log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
-							} else {
-								reconciledRemoves++
-							}
-						}
-					}
-				}
-			}
-			log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
-			return nil
-		})
-	}
-
-	if workload.statsUpdates {
-		ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
-			return ms.updateStatsChannels(serviceCtx)
-		})
-	}
-
-	startupRouter := ms.router
-	if workload.avatarScan {
-		ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars"})
-	}
-	if workload.statsUpdates {
-		ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels"})
-		ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
-			dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
-			defer cancel()
-			if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.update_stats_channels"}); err != nil {
-				log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.update_stats_channels", "err", err)
-			}
-		})
-	}
-	if workload.rolesRefresh {
-		ms.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
-		ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
-			dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
-			defer cancel()
-			if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.refresh_roles"}); err != nil {
-				log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.refresh_roles", "err", err)
-			}
-		})
-	}
+	ms.syncSchedulesLocked(serviceCtx, workload)
 
 	if workload.backfill {
 		// Register one-shot entry/exit backfill handler (Option A).
@@ -1766,11 +1644,183 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	// User logs -> re-register handlers (presence/member/user updates)
 	ms.removeEventHandlers()
 	ms.setupEventHandlersFromRuntimeConfig(rc)
-	ms.syncDisabledSchedulesLocked(workload)
+	ms.syncSchedulesLocked(ms.runCtx, workload)
 
 	if len(stopErrs) > 0 {
 		return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
 	}
+	return nil
+}
+
+func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state monitoringWorkloadState) {
+	if !state.avatarScan && ms.cronCancel != nil {
+		ms.cronCancel()
+		ms.cronCancel = nil
+	}
+	if !state.statsUpdates && ms.statsCronCancel != nil {
+		ms.statsCronCancel()
+		ms.statsCronCancel = nil
+	}
+	if !state.rolesRefresh && ms.rolesRefreshCronCancel != nil {
+		ms.rolesRefreshCronCancel()
+		ms.rolesRefreshCronCancel = nil
+	}
+
+	if ms.router == nil || runCtx == nil {
+		return
+	}
+
+	if state.avatarScan {
+		ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
+			return ms.runAvatarScanTask(runCtx)
+		})
+		if ms.cronCancel == nil {
+			ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars"})
+		}
+	}
+
+	if state.statsUpdates {
+		ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
+			return ms.runStatsUpdateTask(runCtx)
+		})
+		if ms.statsCronCancel == nil {
+			ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels"})
+			ms.dispatchMonitorTaskLocked(runCtx, "monitor.update_stats_channels")
+		}
+	}
+
+	if state.rolesRefresh {
+		ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
+			return ms.runRolesRefreshTask(runCtx)
+		})
+		if ms.rolesRefreshCronCancel == nil {
+			ms.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
+			ms.dispatchMonitorTaskLocked(runCtx, "monitor.refresh_roles")
+		}
+	}
+}
+
+func (ms *MonitoringService) dispatchMonitorTaskLocked(runCtx context.Context, taskType string) {
+	if ms.router == nil || runCtx == nil || strings.TrimSpace(taskType) == "" {
+		return
+	}
+
+	router := ms.router
+	ms.startOwnedWorker(runCtx, func(workerCtx context.Context) {
+		dispatchCtx, cancel := context.WithTimeout(workerCtx, monitoringStartupDispatchLimit)
+		defer cancel()
+		if err := router.Dispatch(dispatchCtx, task.Task{Type: taskType}); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", taskType, "err", err)
+		}
+	})
+}
+
+func (ms *MonitoringService) runAvatarScanTask(runCtx context.Context) error {
+	if runCtx == nil {
+		return nil
+	}
+	if err := runCtx.Err(); err != nil {
+		return err
+	}
+	return ms.performPeriodicCheck(runCtx)
+}
+
+func (ms *MonitoringService) runStatsUpdateTask(runCtx context.Context) error {
+	if runCtx == nil {
+		return nil
+	}
+	if err := runCtx.Err(); err != nil {
+		return err
+	}
+	return ms.updateStatsChannels(runCtx)
+}
+
+func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
+	if runCtx == nil {
+		return nil
+	}
+	if err := runCtx.Err(); err != nil {
+		return err
+	}
+	cfg := ms.scopedConfig()
+	if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
+		return nil
+	}
+
+	start := time.Now()
+	totalUpdates := 0
+	botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
+	for _, gcfg := range cfg.Guilds {
+		if err := runCtx.Err(); err != nil {
+			return err
+		}
+		members, err := ms.fetchAllGuildMembersContext(runCtx, gcfg.GuildID)
+		if err != nil {
+			log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
+			continue
+		}
+		botUsers := make(map[string]struct{})
+		for _, member := range members {
+			if member == nil || member.User == nil {
+				continue
+			}
+			if member.User.Bot {
+				botUsers[member.User.ID] = struct{}{}
+			}
+			if !member.JoinedAt.IsZero() {
+				if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
+					log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
+				}
+			}
+			if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
+				log.ApplicationLogger().Warn("Failed to upsert roles for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
+				continue
+			}
+			ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
+			totalUpdates++
+		}
+		botUsersByGuild[gcfg.GuildID] = botUsers
+	}
+
+	reconciledAdds := 0
+	reconciledRemoves := 0
+	if ms.session != nil {
+		for _, gcfg := range cfg.Guilds {
+			features := cfg.ResolveFeatures(gcfg.GuildID)
+			if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
+				continue
+			}
+			targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID
+			requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
+			memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
+			if err != nil {
+				log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
+				continue
+			}
+			botUsers := botUsersByGuild[gcfg.GuildID]
+			for userID, roles := range memberRoles {
+				if _, isBot := botUsers[userID]; isBot {
+					continue
+				}
+				switch evaluateAutoRoleDecision(roles, targetRoleID, requiredRoles) {
+				case autoRoleAddTarget:
+					if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
+						log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+					} else {
+						reconciledAdds++
+					}
+				case autoRoleRemoveTarget:
+					if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
+						log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+					} else {
+						reconciledRemoves++
+					}
+				}
+			}
+		}
+	}
+
+	log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
 	return nil
 }
 
@@ -1810,21 +1860,6 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 			ms.session.AddHandler(ms.handleRoleUpdateForBotPermMirroring),
 			ms.session.AddHandler(ms.handleRoleCreateForBotPermMirroring),
 		)
-	}
-}
-
-func (ms *MonitoringService) syncDisabledSchedulesLocked(state monitoringWorkloadState) {
-	if !state.avatarScan && ms.cronCancel != nil {
-		ms.cronCancel()
-		ms.cronCancel = nil
-	}
-	if !state.statsUpdates && ms.statsCronCancel != nil {
-		ms.statsCronCancel()
-		ms.statsCronCancel = nil
-	}
-	if !state.rolesRefresh && ms.rolesRefreshCronCancel != nil {
-		ms.rolesRefreshCronCancel()
-		ms.rolesRefreshCronCancel = nil
 	}
 }
 
