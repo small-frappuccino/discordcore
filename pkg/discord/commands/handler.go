@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
@@ -21,6 +22,8 @@ import (
 type CommandHandler struct {
 	session              *discordgo.Session
 	configManager        *files.ConfigManager
+	botInstanceID        string
+	defaultBotInstanceID string
 	commandManager       *core.CommandManager
 	runtimeHandlerCancel func()
 	partnerBoardService  partners.BoardService
@@ -32,9 +35,21 @@ func NewCommandHandler(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 ) *CommandHandler {
+	return NewCommandHandlerForBot(session, configManager, "", "")
+}
+
+// NewCommandHandlerForBot creates a command handler scoped to a bot-instance guild assignment.
+func NewCommandHandlerForBot(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	botInstanceID string,
+	defaultBotInstanceID string,
+) *CommandHandler {
 	return &CommandHandler{
-		session:       session,
-		configManager: configManager,
+		session:              session,
+		configManager:        configManager,
+		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
 	}
 }
 
@@ -52,6 +67,9 @@ func (ch *CommandHandler) SetupCommands() error {
 
 	// Create the command manager
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
+	if router := ch.commandManager.GetRouter(); router != nil {
+		router.SetGuildFilter(ch.handlesGuild)
+	}
 
 	// Register configuration commands
 	if err := ch.registerConfigCommands(); err != nil {
@@ -70,7 +88,13 @@ func (ch *CommandHandler) SetupCommands() error {
 			applier = router.GetRuntimeApplier()
 		}
 	}
-	ch.runtimeHandlerCancel = ch.session.AddHandler(runtime.HandleRuntimeConfigInteractions(ch.configManager, applier))
+	runtimeHandler := runtime.HandleRuntimeConfigInteractions(ch.configManager, applier)
+	ch.runtimeHandlerCancel = ch.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if i == nil || !ch.handlesGuild(i.GuildID) {
+			return
+		}
+		runtimeHandler(s, i)
+	})
 
 	// Configure commands on Discord
 	if err := ch.commandManager.SetupCommands(); err != nil {
@@ -158,4 +182,29 @@ func (ch *CommandHandler) Shutdown() error {
 // GetConfigManager returns the configuration manager
 func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {
 	return ch.configManager
+}
+
+func (ch *CommandHandler) handlesGuild(guildID string) bool {
+	if ch == nil {
+		return false
+	}
+	if ch.botInstanceID == "" && ch.defaultBotInstanceID == "" {
+		return true
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" || ch.configManager == nil {
+		return false
+	}
+	guild := ch.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return false
+	}
+	if guild.EffectiveBotInstanceID(ch.defaultBotInstanceID) != files.NormalizeBotInstanceID(ch.botInstanceID) {
+		return false
+	}
+	cfg := ch.configManager.Config()
+	if cfg == nil {
+		return false
+	}
+	return cfg.ResolveFeatures(guildID).Services.Commands
 }

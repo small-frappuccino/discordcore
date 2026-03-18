@@ -42,6 +42,8 @@ type auditCacheValue struct {
 type MessageEventService struct {
 	session        *discordgo.Session
 	configManager  *files.ConfigManager
+	botInstanceID  string
+	defaultBotID   string
 	notifier       *NotificationSender
 	adapters       *task.NotificationAdapters
 	store          *storage.Store
@@ -98,15 +100,31 @@ type messageDeleteTaskPayload struct {
 
 // NewMessageEventService creates a new instance of the message events service
 func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MessageEventService {
+	return NewMessageEventServiceForBot(session, configManager, notifier, store, "", "")
+}
+
+// NewMessageEventServiceForBot creates a message event service scoped to a bot
+// instance assignment.
+func NewMessageEventServiceForBot(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	notifier *NotificationSender,
+	store *storage.Store,
+	botInstanceID string,
+	defaultBotInstanceID string,
+) *MessageEventService {
 	return &MessageEventService{
 		session:       session,
 		configManager: configManager,
+		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		notifier:      notifier,
 		store:         store,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
-			RunErr:       runErrWithTimeoutContext,
-			EventTimeout: loggingDependencyTimeout,
-			Warn:         slog.Warn,
+			RunErr:        runErrWithTimeoutContext,
+			EventTimeout:  loggingDependencyTimeout,
+			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+			Warn:          slog.Warn,
 		}),
 		lifecycle:      newServiceLifecycle("message event service"),
 		auditCache:     make(map[string]auditCacheEntry),
@@ -317,6 +335,9 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 	}
 	if guildID == "" {
 		slog.Debug("MessageCreate: DM detected; skipping cache", "channelID", m.ChannelID)
+		return
+	}
+	if !mes.handlesGuild(guildID) {
 		return
 	}
 
@@ -594,6 +615,9 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 			guildID = ch.GuildID
 		}
 	}
+	if guildID != "" && !mes.handlesGuild(guildID) {
+		return nil
+	}
 
 	cached := mes.lookupCachedMessage(guildID, m.ID, allowWait)
 	if cached == nil {
@@ -736,6 +760,9 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 		if ch, _ := s.Channel(m.ChannelID); ch != nil {
 			guildID = ch.GuildID
 		}
+	}
+	if guildID != "" && !mes.handlesGuild(guildID) {
+		return nil
 	}
 
 	cached := mes.lookupCachedMessage(guildID, m.ID, allowWait)
@@ -927,18 +954,47 @@ func (mes *MessageEventService) cleanupVerificationChannels() {
 	if mes.session == nil || mes.configManager == nil {
 		return
 	}
-	cfg := mes.configManager.Config()
-	if cfg == nil || len(cfg.Guilds) == 0 {
+	guilds := mes.configuredGuilds()
+	if len(guilds) == 0 {
 		return
 	}
 
-	for _, gcfg := range cfg.Guilds {
+	for _, gcfg := range guilds {
 		channelID := gcfg.Channels.VerificationCleanupChannelID()
 		if channelID == "" {
 			continue
 		}
 		mes.cleanupIdleVerificationChannel(gcfg.GuildID, channelID)
 	}
+}
+
+func (mes *MessageEventService) configuredGuilds() []files.GuildConfig {
+	if mes == nil || mes.configManager == nil {
+		return nil
+	}
+	cfg := mes.configManager.Config()
+	if cfg == nil {
+		return nil
+	}
+	return cfg.GuildsForBotInstance(mes.botInstanceID, mes.defaultBotID)
+}
+
+func (mes *MessageEventService) handlesGuild(guildID string) bool {
+	if mes == nil || mes.configManager == nil {
+		return false
+	}
+	if files.NormalizeBotInstanceID(mes.botInstanceID) == "" && files.NormalizeBotInstanceID(mes.defaultBotID) == "" {
+		return true
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return false
+	}
+	guild := mes.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return false
+	}
+	return guild.EffectiveBotInstanceID(mes.defaultBotID) == files.NormalizeBotInstanceID(mes.botInstanceID)
 }
 
 func (mes *MessageEventService) cleanupIdleVerificationChannel(guildID, channelID string) {
@@ -1098,6 +1154,9 @@ func (mes *MessageEventService) handleGuildMemberUpdate(ctx context.Context, s *
 		return
 	}
 	if err := ctx.Err(); err != nil {
+		return
+	}
+	if !mes.handlesGuild(m.GuildID) {
 		return
 	}
 	cfg := mes.configManager.Config()

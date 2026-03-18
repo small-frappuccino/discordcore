@@ -187,6 +187,8 @@ func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManag
 type MonitoringService struct {
 	session              *discordgo.Session
 	configManager        *files.ConfigManager
+	botInstanceID        string
+	defaultBotInstanceID string
 	store                *storage.Store
 	activity             *runtimeActivity
 	notifier             *NotificationSender
@@ -229,9 +231,10 @@ type MonitoringService struct {
 	presenceWatch   map[string]presenceSnapshot
 
 	// Stats channel updates
-	statsCronCancel func()
-	statsLastRun    map[string]time.Time
-	statsMu         sync.Mutex
+	statsCronCancel        func()
+	rolesRefreshCronCancel func()
+	statsLastRun           map[string]time.Time
+	statsMu                sync.Mutex
 
 	// Metrics counters
 	apiAuditLogCalls     uint64
@@ -428,6 +431,18 @@ type presenceSnapshot struct {
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
 func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) (*MonitoringService, error) {
+	return NewMonitoringServiceForBot(session, configManager, store, "", "")
+}
+
+// NewMonitoringServiceForBot creates a monitoring service scoped to the guilds
+// assigned to a specific bot instance.
+func NewMonitoringServiceForBot(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	store *storage.Store,
+	botInstanceID string,
+	defaultBotInstanceID string,
+) (*MonitoringService, error) {
 	if session == nil {
 		return nil, fmt.Errorf("discord session is nil")
 	}
@@ -446,23 +461,25 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	unifiedCache := cache.NewUnifiedCache(cacheConfig)
 
 	ms := &MonitoringService{
-		session:             session,
-		configManager:       configManager,
-		store:               store,
-		activity:            newMonitoringRuntimeActivity(store),
-		notifier:            n,
-		unifiedCache:        unifiedCache,
-		userWatcher:         NewUserWatcher(session, configManager, store, n, unifiedCache),
-		memberEventService:  NewMemberEventService(session, configManager, n, store),
-		messageEventService: NewMessageEventService(session, configManager, n, store),
-		stopChan:            make(chan struct{}),
-		recentChanges:       make(map[string]time.Time),
-		rolesCache:          make(map[string]cachedRoles),
-		rolesTTL:            5 * time.Minute,
-		rolesCacheCleanup:   make(chan struct{}),
-		eventHandlers:       make([]interface{}, 0),
-		presenceWatch:       make(map[string]presenceSnapshot),
-		statsLastRun:        make(map[string]time.Time),
+		session:              session,
+		configManager:        configManager,
+		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
+		store:                store,
+		activity:             newMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
+		notifier:             n,
+		unifiedCache:         unifiedCache,
+		userWatcher:          NewUserWatcher(session, configManager, store, n, unifiedCache),
+		memberEventService:   NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
+		messageEventService:  NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
+		stopChan:             make(chan struct{}),
+		recentChanges:        make(map[string]time.Time),
+		rolesCache:           make(map[string]cachedRoles),
+		rolesTTL:             5 * time.Minute,
+		rolesCacheCleanup:    make(chan struct{}),
+		eventHandlers:        make([]interface{}, 0),
+		presenceWatch:        make(map[string]presenceSnapshot),
+		statsLastRun:         make(map[string]time.Time),
 	}
 	ms.rebuildTaskPipeline()
 	return ms, nil
@@ -530,18 +547,19 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 
 	// Global check for services
 	globalRC := files.RuntimeConfig{}
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		globalRC = ms.configManager.Config().RuntimeConfig
+	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+		globalRC = scopedCfg.RuntimeConfig
 	}
 	globalFeatures := (&files.BotConfig{}).ResolveFeatures("")
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		globalFeatures = ms.configManager.Config().ResolveFeatures("")
+	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+		globalFeatures = scopedCfg.ResolveFeatures("")
 	}
+	workload := ms.workloadState(globalRC)
 
 	// Start member/message services (member events are needed for entry/exit logs and auto-role assignment).
 	// Note: these services are currently global, so we use global config for startup.
 	// Per-guild toggles would need these services to be guild-aware or filtered.
-	if !ms.shouldRunMemberEventService(globalRC) {
+	if !workload.memberEventService {
 		log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
 	} else {
 		if err := startMonitoringSubService(ctx, "monitoring.start.member", "member_event_service", func() error {
@@ -559,7 +577,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	}
 
 	// Gate message logging behind runtime config
-	if globalRC.DisableMessageLogs || !(globalFeatures.Logging.MessageProcess || globalFeatures.Logging.MessageEdit || globalFeatures.Logging.MessageDelete) {
+	if !workload.messageEventService {
 		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
 	} else {
 		if err := startMonitoringSubService(ctx, "monitoring.start.message", "message_event_service", func() error {
@@ -588,12 +606,12 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	}
 
 	// Gate reaction logging behind runtime config
-	if globalRC.DisableReactionLogs || !globalFeatures.Logging.ReactionMetric {
+	if !workload.reactionEventService {
 		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config/features; ReactionEventService will not start")
 	} else {
 		// Lazily initialize service if not yet created
 		if ms.reactionEventService == nil {
-			ms.reactionEventService = NewReactionEventService(ms.session, ms.configManager, ms.store)
+			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID)
 		}
 		if err := startMonitoringSubService(ctx, "monitoring.start.reaction", "reaction_event_service", func() error {
 			return ms.reactionEventService.Start(ctx)
@@ -634,577 +652,583 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
 	serviceCtx := lifecycleCtx
 
-	// Schedule periodic avatar scan via router cron instead of local goroutine
-	ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
-		return ms.performPeriodicCheck(serviceCtx)
-	})
+	if workload.avatarScan {
+		// Schedule periodic avatar scan via router cron instead of local goroutine.
+		ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
+			return ms.performPeriodicCheck(serviceCtx)
+		})
+	}
 
-	// Register a daily roles DB refresh task and run once at startup
-	ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
-		if err := serviceCtx.Err(); err != nil {
-			return err
-		}
-		cfg := ms.configManager.Config()
-		if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
-			return nil
-		}
-		start := time.Now()
-		totalUpdates := 0
-		botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
-		for _, gcfg := range cfg.Guilds {
+	if workload.rolesRefresh {
+		// Register a daily roles DB refresh task and run once at startup.
+		ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
 			if err := serviceCtx.Err(); err != nil {
 				return err
 			}
-			members, err := ms.fetchAllGuildMembersContext(serviceCtx, gcfg.GuildID)
-			if err != nil {
-				log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
-				continue
+			cfg := ms.scopedConfig()
+			if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
+				return nil
 			}
-			botUsers := make(map[string]struct{})
-			for _, member := range members {
-				if member == nil || member.User == nil {
-					continue
-				}
-				if member.User.Bot {
-					botUsers[member.User.ID] = struct{}{}
-				}
-				if !member.JoinedAt.IsZero() {
-					if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
-						log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
-					}
-				}
-				if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
-					log.ApplicationLogger().Warn("Failed to upsert roles for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
-					continue
-				}
-				ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
-				totalUpdates++
-			}
-			botUsersByGuild[gcfg.GuildID] = botUsers
-		}
-		// Reconcile target role based on local DB data after the refresh
-		reconciledAdds := 0
-		reconciledRemoves := 0
-		if ms.store != nil && ms.session != nil {
+			start := time.Now()
+			totalUpdates := 0
+			botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
 			for _, gcfg := range cfg.Guilds {
-				features := cfg.ResolveFeatures(gcfg.GuildID)
-				// Skip guilds without auto-role assignment enabled or missing config
-				if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
-					continue
+				if err := serviceCtx.Err(); err != nil {
+					return err
 				}
-				targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID
-				requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
-				memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
+				members, err := ms.fetchAllGuildMembersContext(serviceCtx, gcfg.GuildID)
 				if err != nil {
-					log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
+					log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
 					continue
 				}
-				botUsers := botUsersByGuild[gcfg.GuildID]
-				for userID, roles := range memberRoles {
-					if _, isBot := botUsers[userID]; isBot {
+				botUsers := make(map[string]struct{})
+				for _, member := range members {
+					if member == nil || member.User == nil {
 						continue
 					}
-					switch evaluateAutoRoleDecision(roles, targetRoleID, requiredRoles) {
-					case autoRoleAddTarget:
-						if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
-						} else {
-							reconciledAdds++
+					if member.User.Bot {
+						botUsers[member.User.ID] = struct{}{}
+					}
+					if !member.JoinedAt.IsZero() {
+						if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
+							log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
 						}
-					case autoRoleRemoveTarget:
-						if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
-							log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
-						} else {
-							reconciledRemoves++
+					}
+					if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
+						log.ApplicationLogger().Warn("Failed to upsert roles for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
+						continue
+					}
+					ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
+					totalUpdates++
+				}
+				botUsersByGuild[gcfg.GuildID] = botUsers
+			}
+			reconciledAdds := 0
+			reconciledRemoves := 0
+			if ms.store != nil && ms.session != nil {
+				for _, gcfg := range cfg.Guilds {
+					features := cfg.ResolveFeatures(gcfg.GuildID)
+					if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
+						continue
+					}
+					targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID
+					requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
+					memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
+					if err != nil {
+						log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
+						continue
+					}
+					botUsers := botUsersByGuild[gcfg.GuildID]
+					for userID, roles := range memberRoles {
+						if _, isBot := botUsers[userID]; isBot {
+							continue
+						}
+						switch evaluateAutoRoleDecision(roles, targetRoleID, requiredRoles) {
+						case autoRoleAddTarget:
+							if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
+								log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+							} else {
+								reconciledAdds++
+							}
+						case autoRoleRemoveTarget:
+							if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
+								log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+							} else {
+								reconciledRemoves++
+							}
 						}
 					}
 				}
 			}
-		}
-		log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
-		return nil
-	})
-
-	ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
-		return ms.updateStatsChannels(serviceCtx)
-	})
-
-	// Using TaskRouter scheduler helpers for daily scheduling
-	// Schedule periodic jobs
-	ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars"})
-	ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels"})
-	// Schedule daily roles refresh at 03:00 UTC
-	ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
-
-	// Trigger one-time roles refresh on startup (non-blocking)
-	startupRouter := ms.router
-	ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
-		dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
-		defer cancel()
-		if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.refresh_roles"}); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.refresh_roles", "err", err)
-		}
-	})
-
-	ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
-		dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
-		defer cancel()
-		if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.update_stats_channels"}); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.update_stats_channels", "err", err)
-		}
-	})
-
-	// Register one-shot entry/exit backfill handler (Option A)
-	ms.router.RegisterHandler("monitor.backfill_entry_exit_day", func(ctx context.Context, payload any) error {
-		// Payload is expected to be: struct{ ChannelID, Day string }
-		// Day format: YYYY-MM-DD (UTC)
-		type pld struct {
-			ChannelID string
-			Day       string
-		}
-		p, _ := payload.(pld)
-		channelID := strings.TrimSpace(p.ChannelID)
-		day := strings.TrimSpace(p.Day)
-		if channelID == "" {
+			log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
 			return nil
-		}
-		if day == "" {
-			day = time.Now().UTC().Format("2006-01-02")
-		}
-
-		start, err := time.Parse("2006-01-02", day)
-		if err != nil {
-			return nil
-		}
-		end := start.Add(24 * time.Hour)
-
-		// Resolve guild ID from channel
-		var guildID string
-		if ms.session != nil && ms.session.State != nil {
-			if ch, _ := ms.session.State.Channel(channelID); ch != nil {
-				guildID = ch.GuildID
-			}
-		}
-		if guildID == "" && ms.session != nil {
-			if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
-				guildID = ch.GuildID
-			}
-		}
-		if guildID == "" {
-			return nil
-		}
-
-		log.ApplicationLogger().Info("📥 Starting entry/exit backfill (day)", "channelID", channelID, "guildID", guildID, "day", day)
-
-		botID := ""
-		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
-			botID = ms.session.State.User.ID
-		}
-
-		var before string
-		processedCount := 0
-		eventsFound := 0
-		startTime := time.Now()
-
-		for {
-			if err := serviceCtx.Err(); err != nil {
-				return err
-			}
-			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
-				return ms.session.ChannelMessages(channelID, 100, before, "", "")
-			})
-			if err != nil {
-				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "channelID", channelID, "err", err)
-				break
-			}
-			if len(msgs) == 0 {
-				break
-			}
-
-			// Messages come newest -> oldest
-			stop := false
-			for _, m := range msgs {
-				if err := serviceCtx.Err(); err != nil {
-					return err
-				}
-				t := m.Timestamp.UTC()
-				// Stop if we've paged past the target day
-				if t.Before(start) {
-					stop = true
-					break
-				}
-				// Only consider messages within the day
-				if t.Before(end) && !t.Before(start) {
-					evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
-					if ok && ms.store != nil {
-						eventsFound++
-						if evt == "join" {
-							if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(day): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-							if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-						} else if evt == "leave" {
-							// If name was not in message, check if still in server via code
-							stillInServer := false
-							if ms.session != nil {
-								mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
-									return ms.session.GuildMember(guildID, userID)
-								})
-								if err == nil && mem != nil {
-									stillInServer = true
-								}
-							}
-
-							if !stillInServer {
-								if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
-									log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-								}
-							}
-						}
-						// Record the oldest processed timestamp for this channel
-						if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
-							log.ApplicationLogger().Warn("Backfill(day): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
-						}
-					}
-				}
-				processedCount++
-			}
-
-			if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
-				log.ApplicationLogger().Info("⏳ Backfill in progress (day)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
-			}
-
-			// Prepare next page or stop
-			before = msgs[len(msgs)-1].ID
-			if stop {
-				break
-			}
-		}
-
-		log.ApplicationLogger().Info("✅ Backfill completed (day)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
-		return nil
-	})
-
-	// Register range-based entry/exit backfill handler (used for downtime recovery and historical scans)
-	ms.router.RegisterHandler("monitor.backfill_entry_exit_range", func(ctx context.Context, payload any) error {
-		p, ok := payload.(struct {
-			ChannelID string
-			Start     string
-			End       string
 		})
-		if !ok {
-			// Try to handle map[string]interface{} as well, which is common if coming from JSON or some routers
-			if m, ok := payload.(map[string]any); ok {
-				p.ChannelID, _ = m["ChannelID"].(string)
-				p.Start, _ = m["Start"].(string)
-				p.End, _ = m["End"].(string)
-			} else {
-				// Try the other struct type just in case
-				type pld struct {
-					ChannelID string
-					Start     string
-					End       string
-				}
-				p2, ok2 := payload.(pld)
-				if ok2 {
-					p.ChannelID = p2.ChannelID
-					p.Start = p2.Start
-					p.End = p2.End
-				} else {
-					log.ErrorLoggerRaw().Error("Invalid payload type for monitor.backfill_entry_exit_range", "type", fmt.Sprintf("%T", payload))
-					return nil
-				}
+	}
+
+	if workload.statsUpdates {
+		ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
+			return ms.updateStatsChannels(serviceCtx)
+		})
+	}
+
+	startupRouter := ms.router
+	if workload.avatarScan {
+		ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars"})
+	}
+	if workload.statsUpdates {
+		ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels"})
+		ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
+			dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
+			defer cancel()
+			if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.update_stats_channels"}); err != nil {
+				log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.update_stats_channels", "err", err)
 			}
-		}
-
-		channelID := strings.TrimSpace(p.ChannelID)
-		startRaw := strings.TrimSpace(p.Start)
-		endRaw := strings.TrimSpace(p.End)
-		if channelID == "" || startRaw == "" || endRaw == "" {
-			log.ErrorLoggerRaw().Warn("Missing required fields for backfill range", "channelID", channelID, "start", startRaw, "end", endRaw)
-			return nil
-		}
-
-		start, err := time.Parse(time.RFC3339, startRaw)
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to parse start date for backfill range", "err", err, "start", startRaw)
-			return nil
-		}
-		end, err := time.Parse(time.RFC3339, endRaw)
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to parse end date for backfill range", "err", err, "end", endRaw)
-			return nil
-		}
-		start = start.UTC()
-		end = end.UTC()
-		if !end.After(start) {
-			log.ErrorLoggerRaw().Warn("End date must be after start date for backfill range", "start", start, "end", end)
-			return nil
-		}
-
-		// Resolve guild ID from channel
-		var guildID string
-		if ms.session != nil && ms.session.State != nil {
-			if ch, _ := ms.session.State.Channel(channelID); ch != nil {
-				guildID = ch.GuildID
+		})
+	}
+	if workload.rolesRefresh {
+		ms.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
+		ms.startOwnedWorker(serviceCtx, func(runCtx context.Context) {
+			dispatchCtx, cancel := context.WithTimeout(runCtx, monitoringStartupDispatchLimit)
+			defer cancel()
+			if err := startupRouter.Dispatch(dispatchCtx, task.Task{Type: "monitor.refresh_roles"}); err != nil {
+				log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", "monitor.refresh_roles", "err", err)
 			}
-		}
-		if guildID == "" && ms.session != nil {
-			if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
-				guildID = ch.GuildID
+		})
+	}
+
+	if workload.backfill {
+		// Register one-shot entry/exit backfill handler (Option A).
+		ms.router.RegisterHandler("monitor.backfill_entry_exit_day", func(ctx context.Context, payload any) error {
+			// Payload is expected to be: struct{ ChannelID, Day string }
+			// Day format: YYYY-MM-DD (UTC)
+			type pld struct {
+				ChannelID string
+				Day       string
 			}
-		}
-		if guildID == "" {
-			log.ErrorLoggerRaw().Warn("Could not resolve guild ID for channel during backfill", "channelID", channelID)
-			return nil
-		}
-
-		log.ApplicationLogger().Info("📥 Starting entry/exit backfill (range)", "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
-
-		botID := ""
-		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
-			botID = ms.session.State.User.ID
-		}
-
-		var before string
-		processedCount := 0
-		eventsFound := 0
-		startTime := time.Now()
-
-		for {
-			if err := serviceCtx.Err(); err != nil {
-				return err
+			p, _ := payload.(pld)
+			channelID := strings.TrimSpace(p.ChannelID)
+			day := strings.TrimSpace(p.Day)
+			if channelID == "" {
+				return nil
 			}
-			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
-				return ms.session.ChannelMessages(channelID, 100, before, "", "")
-			})
+			if day == "" {
+				day = time.Now().UTC().Format("2006-01-02")
+			}
+
+			start, err := time.Parse("2006-01-02", day)
 			if err != nil {
-				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill range", "channelID", channelID, "err", err)
-				break
+				return nil
 			}
-			if len(msgs) == 0 {
-				break
+			end := start.Add(24 * time.Hour)
+
+			// Resolve guild ID from channel
+			var guildID string
+			if ms.session != nil && ms.session.State != nil {
+				if ch, _ := ms.session.State.Channel(channelID); ch != nil {
+					guildID = ch.GuildID
+				}
+			}
+			if guildID == "" && ms.session != nil {
+				if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
+					guildID = ch.GuildID
+				}
+			}
+			if guildID == "" {
+				return nil
 			}
 
-			// Messages come newest -> oldest
-			stop := false
-			for _, m := range msgs {
+			log.ApplicationLogger().Info("📥 Starting entry/exit backfill (day)", "channelID", channelID, "guildID", guildID, "day", day)
+
+			botID := ""
+			if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
+				botID = ms.session.State.User.ID
+			}
+
+			var before string
+			processedCount := 0
+			eventsFound := 0
+			startTime := time.Now()
+
+			for {
 				if err := serviceCtx.Err(); err != nil {
 					return err
 				}
-				t := m.Timestamp.UTC()
-				// Stop if we've paged past the target window
-				if t.Before(start) {
-					stop = true
+				msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
+					return ms.session.ChannelMessages(channelID, 100, before, "", "")
+				})
+				if err != nil {
+					log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "channelID", channelID, "err", err)
 					break
 				}
-				// Only consider messages within the window
-				if t.Before(end) && !t.Before(start) {
-					evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
-					if ok && ms.store != nil {
-						eventsFound++
-						if evt == "join" {
-							if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(range): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-							if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-						} else if evt == "leave" {
-							// If name was not in message, check if still in server via code
-							stillInServer := false
-							if ms.session != nil {
-								mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
-									return ms.session.GuildMember(guildID, userID)
-								})
-								if err == nil && mem != nil {
-									stillInServer = true
-								}
-							}
+				if len(msgs) == 0 {
+					break
+				}
 
-							if !stillInServer {
-								if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
-									log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+				// Messages come newest -> oldest
+				stop := false
+				for _, m := range msgs {
+					if err := serviceCtx.Err(); err != nil {
+						return err
+					}
+					t := m.Timestamp.UTC()
+					// Stop if we've paged past the target day
+					if t.Before(start) {
+						stop = true
+						break
+					}
+					// Only consider messages within the day
+					if t.Before(end) && !t.Before(start) {
+						evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
+						if ok && ms.store != nil {
+							eventsFound++
+							if evt == "join" {
+								if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
+									log.ApplicationLogger().Warn("Backfill(day): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+								}
+								if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
+									log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+								}
+							} else if evt == "leave" {
+								// If name was not in message, check if still in server via code
+								stillInServer := false
+								if ms.session != nil {
+									mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+										return ms.session.GuildMember(guildID, userID)
+									})
+									if err == nil && mem != nil {
+										stillInServer = true
+									}
+								}
+
+								if !stillInServer {
+									if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
+										log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+									}
 								}
 							}
-						}
-						// Record the oldest processed timestamp for this channel
-						if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
-							log.ApplicationLogger().Warn("Backfill(range): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+							// Record the oldest processed timestamp for this channel
+							if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
+								log.ApplicationLogger().Warn("Backfill(day): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+							}
 						}
 					}
+					processedCount++
 				}
-				processedCount++
+
+				if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
+					log.ApplicationLogger().Info("⏳ Backfill in progress (day)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
+				}
+
+				// Prepare next page or stop
+				before = msgs[len(msgs)-1].ID
+				if stop {
+					break
+				}
 			}
 
-			if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
-				log.ApplicationLogger().Info("⏳ Backfill in progress (range)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
-			}
+			log.ApplicationLogger().Info("✅ Backfill completed (day)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
+			return nil
+		})
 
-			before = msgs[len(msgs)-1].ID
-			if stop {
-				break
-			}
-		}
-
-		log.ApplicationLogger().Info("✅ Backfill completed (range)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
-		return nil
-	})
-
-	// Optionally auto-dispatch backfill tasks right after startup based on runtime config.
-	//
-	// Behavior:
-	// - If `BackfillStartDay` is set: run day-based scan.
-	// - Otherwise: if downtime is detected via `store.GetLastEvent()` and exceeds threshold, run a range scan to recover.
-	//
-	// New Condition: Backfill only runs if a channel is configured AND an initial start date is provided in config.
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		cfg := ms.configManager.Config()
-		globalRC := cfg.RuntimeConfig
-
-		// Get all potential channels and their resolved configs
-		type backfillTarget struct {
-			ChannelID      string
-			RC             files.RuntimeConfig
-			FeatureEnabled bool
-		}
-		targets := make([]backfillTarget, 0)
-
-		// Global target if configured
-		if globalRC.BackfillChannelID != "" {
-			targets = append(targets, backfillTarget{
-				ChannelID:      strings.TrimSpace(globalRC.BackfillChannelID),
-				RC:             globalRC,
-				FeatureEnabled: cfg.ResolveFeatures("").Backfill.Enabled,
+		// Register range-based entry/exit backfill handler (used for downtime recovery and historical scans)
+		ms.router.RegisterHandler("monitor.backfill_entry_exit_range", func(ctx context.Context, payload any) error {
+			p, ok := payload.(struct {
+				ChannelID string
+				Start     string
+				End       string
 			})
-		}
+			if !ok {
+				// Try to handle map[string]interface{} as well, which is common if coming from JSON or some routers
+				if m, ok := payload.(map[string]any); ok {
+					p.ChannelID, _ = m["ChannelID"].(string)
+					p.Start, _ = m["Start"].(string)
+					p.End, _ = m["End"].(string)
+				} else {
+					// Try the other struct type just in case
+					type pld struct {
+						ChannelID string
+						Start     string
+						End       string
+					}
+					p2, ok2 := payload.(pld)
+					if ok2 {
+						p.ChannelID = p2.ChannelID
+						p.Start = p2.Start
+						p.End = p2.End
+					} else {
+						log.ErrorLoggerRaw().Error("Invalid payload type for monitor.backfill_entry_exit_range", "type", fmt.Sprintf("%T", payload))
+						return nil
+					}
+				}
+			}
 
-		// Guild targets
-		for _, g := range cfg.Guilds {
-			cid := g.Channels.BackfillChannelID()
-			if cid != "" {
-				featureEnabled := cfg.ResolveFeatures(g.GuildID).Backfill.Enabled
+			channelID := strings.TrimSpace(p.ChannelID)
+			startRaw := strings.TrimSpace(p.Start)
+			endRaw := strings.TrimSpace(p.End)
+			if channelID == "" || startRaw == "" || endRaw == "" {
+				log.ErrorLoggerRaw().Warn("Missing required fields for backfill range", "channelID", channelID, "start", startRaw, "end", endRaw)
+				return nil
+			}
+
+			start, err := time.Parse(time.RFC3339, startRaw)
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Failed to parse start date for backfill range", "err", err, "start", startRaw)
+				return nil
+			}
+			end, err := time.Parse(time.RFC3339, endRaw)
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Failed to parse end date for backfill range", "err", err, "end", endRaw)
+				return nil
+			}
+			start = start.UTC()
+			end = end.UTC()
+			if !end.After(start) {
+				log.ErrorLoggerRaw().Warn("End date must be after start date for backfill range", "start", start, "end", end)
+				return nil
+			}
+
+			// Resolve guild ID from channel
+			var guildID string
+			if ms.session != nil && ms.session.State != nil {
+				if ch, _ := ms.session.State.Channel(channelID); ch != nil {
+					guildID = ch.GuildID
+				}
+			}
+			if guildID == "" && ms.session != nil {
+				if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
+					guildID = ch.GuildID
+				}
+			}
+			if guildID == "" {
+				log.ErrorLoggerRaw().Warn("Could not resolve guild ID for channel during backfill", "channelID", channelID)
+				return nil
+			}
+
+			log.ApplicationLogger().Info("📥 Starting entry/exit backfill (range)", "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
+
+			botID := ""
+			if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
+				botID = ms.session.State.User.ID
+			}
+
+			var before string
+			processedCount := 0
+			eventsFound := 0
+			startTime := time.Now()
+
+			for {
+				if err := serviceCtx.Err(); err != nil {
+					return err
+				}
+				msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
+					return ms.session.ChannelMessages(channelID, 100, before, "", "")
+				})
+				if err != nil {
+					log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill range", "channelID", channelID, "err", err)
+					break
+				}
+				if len(msgs) == 0 {
+					break
+				}
+
+				// Messages come newest -> oldest
+				stop := false
+				for _, m := range msgs {
+					if err := serviceCtx.Err(); err != nil {
+						return err
+					}
+					t := m.Timestamp.UTC()
+					// Stop if we've paged past the target window
+					if t.Before(start) {
+						stop = true
+						break
+					}
+					// Only consider messages within the window
+					if t.Before(end) && !t.Before(start) {
+						evt, userID, ok := parseEntryExitBackfillMessage(m, botID)
+						if ok && ms.store != nil {
+							eventsFound++
+							if evt == "join" {
+								if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
+									log.ApplicationLogger().Warn("Backfill(range): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+								}
+								if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
+									log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+								}
+							} else if evt == "leave" {
+								// If name was not in message, check if still in server via code
+								stillInServer := false
+								if ms.session != nil {
+									mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+										return ms.session.GuildMember(guildID, userID)
+									})
+									if err == nil && mem != nil {
+										stillInServer = true
+									}
+								}
+
+								if !stillInServer {
+									if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
+										log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+									}
+								}
+							}
+							// Record the oldest processed timestamp for this channel
+							if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
+								log.ApplicationLogger().Warn("Backfill(range): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+							}
+						}
+					}
+					processedCount++
+				}
+
+				if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
+					log.ApplicationLogger().Info("⏳ Backfill in progress (range)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
+				}
+
+				before = msgs[len(msgs)-1].ID
+				if stop {
+					break
+				}
+			}
+
+			log.ApplicationLogger().Info("✅ Backfill completed (range)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
+			return nil
+		})
+
+		// Optionally auto-dispatch backfill tasks right after startup based on runtime config.
+		//
+		// Behavior:
+		// - If `BackfillStartDay` is set: run day-based scan.
+		// - Otherwise: if downtime is detected via `store.GetLastEvent()` and exceeds threshold, run a range scan to recover.
+		//
+		// New Condition: Backfill only runs if a channel is configured AND an initial start date is provided in config.
+		if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+			cfg := scopedCfg
+			globalRC := cfg.RuntimeConfig
+
+			// Get all potential channels and their resolved configs
+			type backfillTarget struct {
+				ChannelID      string
+				RC             files.RuntimeConfig
+				FeatureEnabled bool
+			}
+			targets := make([]backfillTarget, 0)
+
+			// Global target if configured
+			if globalRC.BackfillChannelID != "" {
 				targets = append(targets, backfillTarget{
-					ChannelID:      cid,
-					RC:             cfg.ResolveRuntimeConfig(g.GuildID),
-					FeatureEnabled: featureEnabled,
+					ChannelID:      strings.TrimSpace(globalRC.BackfillChannelID),
+					RC:             globalRC,
+					FeatureEnabled: cfg.ResolveFeatures("").Backfill.Enabled,
 				})
 			}
-		}
 
-		if len(targets) == 0 {
-			log.ApplicationLogger().Debug("No target channels for backfill check")
-		} else {
-			lastEvent, hasLastEvent, err := ms.store.GetLastEvent()
-			if err != nil {
-				lastEvent = time.Time{}
-				hasLastEvent = false
-				log.ErrorLoggerRaw().Error(
-					"Failed to read last event for backfill recovery; downtime recovery disabled for this startup",
-					"operation", "monitoring.start.backfill.get_last_event",
-					"err", err,
-				)
-			}
-			now := time.Now().UTC()
-
-			for _, target := range targets {
-				cid := target.ChannelID
-				rc := target.RC
-				if !target.FeatureEnabled {
-					log.ApplicationLogger().Debug("Backfill disabled by features.backfill.enabled", "channelID", cid)
-					continue
-				}
-				day := strings.TrimSpace(rc.BackfillStartDay)
-				initialDate := strings.TrimSpace(rc.BackfillInitialDate)
-
-				if day != "" {
-					dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
-					err := ms.router.Dispatch(dispatchCtx, task.Task{
-						Type:    "monitor.backfill_entry_exit_day",
-						Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: day},
-						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+			// Guild targets
+			for _, g := range cfg.Guilds {
+				cid := g.Channels.BackfillChannelID()
+				if cid != "" {
+					featureEnabled := cfg.ResolveFeatures(g.GuildID).Backfill.Enabled
+					targets = append(targets, backfillTarget{
+						ChannelID:      cid,
+						RC:             cfg.ResolveRuntimeConfig(g.GuildID),
+						FeatureEnabled: featureEnabled,
 					})
-					cancel()
-					if err != nil {
-						log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
-					} else {
-						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
-					}
-					continue
 				}
+			}
 
-				// If no specific day, check for initial scan or recovery
-				if initialDate == "" {
-					log.ApplicationLogger().Debug("Backfill skip for channel: no day set and initial_date is empty", "channelID", cid)
-					continue
-				}
-
-				// Check progress for this channel
-				_, hasProgress, err := ms.store.GetMetadata("backfill_progress:" + cid)
+			if len(targets) == 0 {
+				log.ApplicationLogger().Debug("No target channels for backfill check")
+			} else {
+				lastEvent, hasLastEvent, err := ms.getLastEvent()
 				if err != nil {
+					lastEvent = time.Time{}
+					hasLastEvent = false
 					log.ErrorLoggerRaw().Error(
-						"Failed to read backfill progress; skipping backfill dispatch for channel",
-						"operation", "monitoring.start.backfill.get_progress",
-						"channelID", cid,
+						"Failed to read last event for backfill recovery; downtime recovery disabled for this startup",
+						"operation", "monitoring.start.backfill.get_last_event",
 						"err", err,
 					)
-					continue
 				}
+				now := time.Now().UTC()
 
-				if !hasProgress {
-					// Use initialDate to calculate start date
-					parsedDate, err := time.Parse("2006-01-02", initialDate)
-					if err != nil {
-						log.ApplicationLogger().Error("Failed to parse backfill_initial_date", "date", initialDate, "err", err)
+				for _, target := range targets {
+					cid := target.ChannelID
+					rc := target.RC
+					if !target.FeatureEnabled {
+						log.ApplicationLogger().Debug("Backfill disabled by features.backfill.enabled", "channelID", cid)
 						continue
 					}
-					start := parsedDate.Format(time.RFC3339)
-					end := now.Format(time.RFC3339)
-					dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
-					err = ms.router.Dispatch(dispatchCtx, task.Task{
-						Type:    "monitor.backfill_entry_exit_range",
-						Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
-						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					})
-					cancel()
-					if err != nil {
-						log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
-					} else {
-						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
-					}
-					continue
-				}
+					day := strings.TrimSpace(rc.BackfillStartDay)
+					initialDate := strings.TrimSpace(rc.BackfillInitialDate)
 
-				// If we have progress, check if we need downtime recovery
-				if hasLastEvent {
-					downtime := now.Sub(lastEvent)
-					if downtime > downtimeThreshold {
-						start := lastEvent.UTC().Format(time.RFC3339)
-						end := now.Format(time.RFC3339)
+					if day != "" {
 						dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
 						err := ms.router.Dispatch(dispatchCtx, task.Task{
+							Type:    "monitor.backfill_entry_exit_day",
+							Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: day},
+							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+						})
+						cancel()
+						if err != nil {
+							log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
+						} else {
+							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
+						}
+						continue
+					}
+
+					// If no specific day, check for initial scan or recovery
+					if initialDate == "" {
+						log.ApplicationLogger().Debug("Backfill skip for channel: no day set and initial_date is empty", "channelID", cid)
+						continue
+					}
+
+					// Check progress for this channel
+					_, hasProgress, err := ms.store.GetMetadata("backfill_progress:" + cid)
+					if err != nil {
+						log.ErrorLoggerRaw().Error(
+							"Failed to read backfill progress; skipping backfill dispatch for channel",
+							"operation", "monitoring.start.backfill.get_progress",
+							"channelID", cid,
+							"err", err,
+						)
+						continue
+					}
+
+					if !hasProgress {
+						// Use initialDate to calculate start date
+						parsedDate, err := time.Parse("2006-01-02", initialDate)
+						if err != nil {
+							log.ApplicationLogger().Error("Failed to parse backfill_initial_date", "date", initialDate, "err", err)
+							continue
+						}
+						start := parsedDate.Format(time.RFC3339)
+						end := now.Format(time.RFC3339)
+						dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
+						err = ms.router.Dispatch(dispatchCtx, task.Task{
 							Type:    "monitor.backfill_entry_exit_range",
 							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
 							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 						})
 						cancel()
 						if err != nil {
-							log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
+							log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
 						} else {
-							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+							log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
+						}
+						continue
+					}
+
+					// If we have progress, check if we need downtime recovery
+					if hasLastEvent {
+						downtime := now.Sub(lastEvent)
+						if downtime > downtimeThreshold {
+							start := lastEvent.UTC().Format(time.RFC3339)
+							end := now.Format(time.RFC3339)
+							dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
+							err := ms.router.Dispatch(dispatchCtx, task.Task{
+								Type:    "monitor.backfill_entry_exit_range",
+								Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+								Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+							})
+							cancel()
+							if err != nil {
+								log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
+							} else {
+								log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+							}
+						} else {
+							log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
 						}
 					} else {
-						log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
+						log.ApplicationLogger().Debug("No last event recorded, skipping downtime recovery", "channelID", cid)
 					}
-				} else {
-					log.ApplicationLogger().Debug("No last event recorded, skipping downtime recovery", "channelID", cid)
 				}
 			}
+		} else {
+			log.ApplicationLogger().Info("Backfill skip: config manager or config is nil")
 		}
-	} else {
-		log.ApplicationLogger().Info("Backfill skip: config manager or config is nil")
 	}
 
 	now := time.Now()
@@ -1228,12 +1252,15 @@ func shouldRunMemberEventService(cfg *files.BotConfig, globalRC files.RuntimeCon
 
 	// Global/default behavior still matters for guilds that only inherit config.
 	globalFeatures := cfg.ResolveFeatures("")
-	if !globalRC.DisableEntryExitLogs && (globalFeatures.Logging.MemberJoin || globalFeatures.Logging.MemberLeave) {
+	if globalFeatures.Services.Monitoring && !globalRC.DisableEntryExitLogs && (globalFeatures.Logging.MemberJoin || globalFeatures.Logging.MemberLeave) {
 		return true
 	}
 
 	for _, guildCfg := range cfg.Guilds {
 		features := cfg.ResolveFeatures(guildCfg.GuildID)
+		if !features.Services.Monitoring {
+			continue
+		}
 		guildDisableEntryExit := globalRC.DisableEntryExitLogs || guildCfg.RuntimeConfig.DisableEntryExitLogs
 		if !guildDisableEntryExit && (features.Logging.MemberJoin || features.Logging.MemberLeave) {
 			return true
@@ -1246,11 +1273,151 @@ func shouldRunMemberEventService(cfg *files.BotConfig, globalRC files.RuntimeCon
 	return false
 }
 
+type monitoringWorkloadState struct {
+	memberEventService    bool
+	messageEventService   bool
+	reactionEventService  bool
+	presenceHandler       bool
+	memberUpdateHandler   bool
+	userUpdateHandler     bool
+	botPermMirrorHandlers bool
+	avatarScan            bool
+	statsUpdates          bool
+	rolesRefresh          bool
+	backfill              bool
+}
+
+func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadState {
+	state := monitoringWorkloadState{}
+	if cfg == nil {
+		return state
+	}
+
+	state.memberEventService = shouldRunMemberEventService(cfg, cfg.RuntimeConfig)
+	for _, guildCfg := range cfg.Guilds {
+		features := cfg.ResolveFeatures(guildCfg.GuildID)
+		if !features.Services.Monitoring {
+			continue
+		}
+		rc := cfg.ResolveRuntimeConfig(guildCfg.GuildID)
+
+		avatarEnabled := !rc.DisableUserLogs && features.Logging.AvatarLogging
+		roleEnabled := !rc.DisableUserLogs && features.Logging.RoleUpdate
+		presenceWatchEnabled := (features.PresenceWatch.User && strings.TrimSpace(rc.PresenceWatchUserID) != "") ||
+			(features.PresenceWatch.Bot && rc.PresenceWatchBot)
+
+		if avatarEnabled || presenceWatchEnabled {
+			state.presenceHandler = true
+		}
+		if avatarEnabled || roleEnabled {
+			state.memberUpdateHandler = true
+		}
+		if avatarEnabled {
+			state.userUpdateHandler = true
+			state.avatarScan = true
+		}
+		if !rc.DisableMessageLogs && (features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete) {
+			state.messageEventService = true
+		}
+		if !rc.DisableReactionLogs && features.Logging.ReactionMetric {
+			state.reactionEventService = true
+		}
+		if features.StatsChannels && statsEnabled(guildCfg.Stats) {
+			state.statsUpdates = true
+		}
+		if features.Backfill.Enabled && strings.TrimSpace(rc.BackfillChannelID) != "" {
+			state.backfill = true
+		}
+		if features.Safety.BotRolePermMirror && !rc.DisableBotRolePermMirror {
+			state.botPermMirrorHandlers = true
+		}
+		if roleEnabled || (features.AutoRoleAssign && guildCfg.Roles.AutoAssignment.Enabled) {
+			state.rolesRefresh = true
+		}
+	}
+	if state.memberEventService {
+		state.rolesRefresh = true
+	}
+	return state
+}
+
 func (ms *MonitoringService) shouldRunMemberEventService(globalRC files.RuntimeConfig) bool {
 	if ms.configManager == nil {
 		return false
 	}
-	return shouldRunMemberEventService(ms.configManager.Config(), globalRC)
+	return shouldRunMemberEventService(ms.scopedConfig(), globalRC)
+}
+
+func (ms *MonitoringService) workloadState(globalRC files.RuntimeConfig) monitoringWorkloadState {
+	cfg := ms.scopedConfig()
+	if cfg == nil {
+		return monitoringWorkloadState{}
+	}
+	scoped := *cfg
+	scoped.RuntimeConfig = globalRC
+	return resolveMonitoringWorkloadState(&scoped)
+}
+
+func (ms *MonitoringService) scopedConfig() *files.BotConfig {
+	if ms == nil || ms.configManager == nil {
+		return nil
+	}
+	cfg := ms.configManager.Config()
+	if cfg == nil {
+		return nil
+	}
+	scopedGuilds := cfg.GuildsForBotInstance(ms.botInstanceID, ms.defaultBotInstanceID)
+	if len(scopedGuilds) == len(cfg.Guilds) {
+		return cfg
+	}
+	scoped := *cfg
+	scoped.Guilds = scopedGuilds
+	return &scoped
+}
+
+func (ms *MonitoringService) configuredGuilds() []files.GuildConfig {
+	if cfg := ms.scopedConfig(); cfg != nil {
+		return cfg.Guilds
+	}
+	return nil
+}
+
+func (ms *MonitoringService) handlesGuild(guildID string) bool {
+	if ms == nil || ms.configManager == nil {
+		return false
+	}
+	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" && files.NormalizeBotInstanceID(ms.defaultBotInstanceID) == "" {
+		return true
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return false
+	}
+	guild := ms.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return false
+	}
+	return guild.EffectiveBotInstanceID(ms.defaultBotInstanceID) == files.NormalizeBotInstanceID(ms.botInstanceID)
+}
+
+func (ms *MonitoringService) getLastEvent() (time.Time, bool, error) {
+	if ms == nil || ms.store == nil {
+		return time.Time{}, false, fmt.Errorf("store unavailable")
+	}
+	if ts, ok, err := ms.store.GetLastEventForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+		return ts, ok, err
+	}
+	return ms.store.GetLastEvent()
+}
+
+func (ms *MonitoringService) getHeartbeat() (time.Time, bool, error) {
+	if ms == nil || ms.store == nil {
+		return time.Time{}, false, fmt.Errorf("store unavailable")
+	}
+	if ts, ok, err := ms.store.GetHeartbeatForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+		return ts, ok, err
+	}
+	return ms.store.GetHeartbeat()
 }
 
 // Stop stops the monitoring service. Returns error if not running.
@@ -1281,6 +1448,8 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	ms.cronCancel = nil
 	statsCronCancel := ms.statsCronCancel
 	ms.statsCronCancel = nil
+	rolesRefreshCronCancel := ms.rolesRefreshCronCancel
+	ms.rolesRefreshCronCancel = nil
 	router := ms.router
 	ms.router = nil
 	ms.adapters = nil
@@ -1298,6 +1467,9 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	}
 	if statsCronCancel != nil {
 		statsCronCancel()
+	}
+	if rolesRefreshCronCancel != nil {
+		rolesRefreshCronCancel()
 	}
 
 	ms.removeEventHandlers()
@@ -1375,7 +1547,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 
 // initializeCache loads the current member users for all configured guilds.
 func (ms *MonitoringService) initializeCache() {
-	cfg := ms.configManager.Config()
+	cfg := ms.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		log.ApplicationLogger().Info("No guild configured for monitoring")
 		return
@@ -1519,14 +1691,11 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		return nil
 	}
 
-	features := (&files.BotConfig{}).ResolveFeatures("")
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		features = ms.configManager.Config().ResolveFeatures("")
-	}
+	workload := ms.workloadState(rc)
 	var stopErrs []error
 
 	// Entry/Exit logs and auto-role assignment -> MemberEventService
-	if !ms.shouldRunMemberEventService(rc) {
+	if !workload.memberEventService {
 		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
 			if err := stopMonitoringSubService(
 				ctx,
@@ -1548,7 +1717,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Message logs -> MessageEventService
-	if rc.DisableMessageLogs || !(features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete) {
+	if !workload.messageEventService {
 		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
 			if err := stopMonitoringSubService(
 				ctx,
@@ -1570,7 +1739,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	}
 
 	// Reaction logs -> ReactionEventService
-	if rc.DisableReactionLogs || !features.Logging.ReactionMetric {
+	if !workload.reactionEventService {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
 			if err := stopMonitoringSubService(
 				ctx,
@@ -1583,7 +1752,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		}
 	} else {
 		if ms.reactionEventService == nil {
-			ms.reactionEventService = NewReactionEventService(ms.session, ms.configManager, ms.store)
+			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID)
 		}
 		if !ms.reactionEventService.IsRunning() {
 			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_reaction", "reaction_event_service", func() error {
@@ -1597,6 +1766,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	// User logs -> re-register handlers (presence/member/user updates)
 	ms.removeEventHandlers()
 	ms.setupEventHandlersFromRuntimeConfig(rc)
+	ms.syncDisabledSchedulesLocked(workload)
 
 	if len(stopErrs) > 0 {
 		return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
@@ -1608,8 +1778,8 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 func (ms *MonitoringService) setupEventHandlers() {
 	// Delegate to config-driven version (keeps behavior in one spot).
 	rc := files.RuntimeConfig{}
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		rc = ms.configManager.Config().RuntimeConfig
+	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+		rc = scopedCfg.RuntimeConfig
 	}
 	ms.setupEventHandlersFromRuntimeConfig(rc)
 }
@@ -1617,37 +1787,45 @@ func (ms *MonitoringService) setupEventHandlers() {
 // setupEventHandlersFromRuntimeConfig registers handlers based on the provided runtime config.
 // This is used both at startup and for hot-apply.
 func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.RuntimeConfig) {
-	// Store handler references for later removal
-	// Gate user logs (avatars and roles) via runtime config
-	features := (&files.BotConfig{}).ResolveFeatures("")
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		features = ms.configManager.Config().ResolveFeatures("")
-	}
-	disableUser := rc.DisableUserLogs || (!features.Logging.AvatarLogging && !features.Logging.RoleUpdate)
+	state := ms.workloadState(rc)
 
-	if disableUser {
-		// Register only non-user handlers
-		ms.eventHandlers = append(ms.eventHandlers,
-			ms.session.AddHandler(ms.handleGuildCreate),
-			ms.session.AddHandler(ms.handleGuildUpdate),
-		)
-		log.ApplicationLogger().Info("🛑 User logs disabled by runtime config/features; avatar/role handlers not registered")
-	} else {
-		ms.eventHandlers = append(ms.eventHandlers,
-			ms.session.AddHandler(ms.handlePresenceUpdate),
-			ms.session.AddHandler(ms.handleMemberUpdate),
-			ms.session.AddHandler(ms.handleUserUpdate),
-			ms.session.AddHandler(ms.handleGuildCreate),
-			ms.session.AddHandler(ms.handleGuildUpdate),
-		)
+	if state.presenceHandler {
+		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handlePresenceUpdate))
 	}
-
-	// Always keep an eye on role updates so bot-role permission resets can be detected.
-	// This is independent from ALICE_DISABLE_USER_LOGS (it can be a safety mechanism).
+	if state.memberUpdateHandler {
+		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handleMemberUpdate))
+	}
+	if state.userUpdateHandler {
+		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handleUserUpdate))
+	}
 	ms.eventHandlers = append(ms.eventHandlers,
-		ms.session.AddHandler(ms.handleRoleUpdateForBotPermMirroring),
-		ms.session.AddHandler(ms.handleRoleCreateForBotPermMirroring),
+		ms.session.AddHandler(ms.handleGuildCreate),
+		ms.session.AddHandler(ms.handleGuildUpdate),
 	)
+	if !state.presenceHandler && !state.memberUpdateHandler && !state.userUpdateHandler {
+		log.ApplicationLogger().Info("🛑 User and presence handlers are disabled by effective runtime/features")
+	}
+	if state.botPermMirrorHandlers {
+		ms.eventHandlers = append(ms.eventHandlers,
+			ms.session.AddHandler(ms.handleRoleUpdateForBotPermMirroring),
+			ms.session.AddHandler(ms.handleRoleCreateForBotPermMirroring),
+		)
+	}
+}
+
+func (ms *MonitoringService) syncDisabledSchedulesLocked(state monitoringWorkloadState) {
+	if !state.avatarScan && ms.cronCancel != nil {
+		ms.cronCancel()
+		ms.cronCancel = nil
+	}
+	if !state.statsUpdates && ms.statsCronCancel != nil {
+		ms.statsCronCancel()
+		ms.statsCronCancel = nil
+	}
+	if !state.rolesRefresh && ms.rolesRefreshCronCancel != nil {
+		ms.rolesRefreshCronCancel()
+		ms.rolesRefreshCronCancel = nil
+	}
 }
 
 // removeEventHandlers removes all registered event handlers
@@ -1678,7 +1856,10 @@ func (ms *MonitoringService) ensureGuildsListed() {
 			continue
 		}
 		if ms.configManager.GuildConfig(g.ID) == nil {
-			if err := ms.configManager.AddGuildConfig(files.GuildConfig{GuildID: g.ID}); err != nil {
+			if err := ms.configManager.AddGuildConfig(files.GuildConfig{
+				GuildID:       g.ID,
+				BotInstanceID: files.NormalizeBotInstanceID(ms.botInstanceID),
+			}); err != nil {
 				log.ErrorLoggerRaw().Error("Error adding minimal guild entry for guild", "guildID", g.ID, "err", err)
 				continue
 			}
@@ -1692,6 +1873,9 @@ func (ms *MonitoringService) ensureGuildsListed() {
 }
 
 func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordgo.GuildCreate) {
+	if e == nil {
+		return
+	}
 	guildID := e.ID
 	if guildID == "" {
 		return
@@ -1705,9 +1889,12 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 
 	if ms.configManager.GuildConfig(guildID) == nil {
 		// New guild: add to config and initialize cache
-		if err := ms.configManager.RegisterGuild(s, guildID); err != nil {
+		if err := ms.configManager.RegisterGuildForBot(s, guildID, ms.botInstanceID); err != nil {
 			log.ErrorLoggerRaw().Error("Falling back to minimal guild entry for guild", "guildID", guildID, "err", err)
-			if err2 := ms.configManager.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err2 != nil {
+			if err2 := ms.configManager.AddGuildConfig(files.GuildConfig{
+				GuildID:       guildID,
+				BotInstanceID: files.NormalizeBotInstanceID(ms.botInstanceID),
+			}); err2 != nil {
 				log.ErrorLoggerRaw().Error("Error adding minimal guild entry for guild", "guildID", guildID, "err", err2)
 				return
 			}
@@ -1724,6 +1911,9 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 // handleGuildUpdate updates the OwnerID cache when the server ownership changes.
 func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordgo.GuildUpdate) {
 	if e == nil || e.Guild == nil || e.Guild.ID == "" {
+		return
+	}
+	if !ms.handlesGuild(e.Guild.ID) {
 		return
 	}
 
@@ -1762,7 +1952,7 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 	if m.User == nil {
 		return
 	}
-	if ms.configManager.GuildConfig(m.GuildID) == nil {
+	if !ms.handlesGuild(m.GuildID) {
 		return
 	}
 	if m.User.Username == "" {
@@ -1787,7 +1977,7 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 	if m == nil || m.User == nil || ms.configManager == nil {
 		return
 	}
-	cfg := ms.configManager.Config()
+	cfg := ms.scopedConfig()
 	if cfg == nil {
 		return
 	}
@@ -1970,6 +2160,9 @@ func deviceStatusChanges(prev, cur discordgo.ClientStatus) []string {
 // handleMemberUpdate processes member updates.
 func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m.User == nil {
+		return
+	}
+	if !ms.handlesGuild(m.GuildID) {
 		return
 	}
 
@@ -2356,7 +2549,7 @@ func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo
 	)
 	defer done()
 
-	cfg := ms.configManager.Config()
+	cfg := ms.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return
 	}
@@ -2876,7 +3069,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 		ok bool
 	}
 	hb, err := monitoringRunWithTimeout(ctx, monitoringPersistenceTimeout, func() (heartbeatState, error) {
-		at, ok, err := ms.store.GetHeartbeat()
+		at, ok, err := ms.getHeartbeat()
 		return heartbeatState{at: at, ok: ok}, err
 	})
 	lastHB := hb.at
@@ -2890,7 +3083,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 				downtimeDuration = time.Since(lastHB).Round(time.Second).String()
 			}
 			log.ApplicationLogger().Info("⏱️ Detected downtime; performing silent avatar refresh before enabling notifications", "downtime", downtimeDuration, "threshold", downtimeThreshold.String())
-			cfg := ms.configManager.Config()
+			cfg := ms.scopedConfig()
 			if cfg == nil || len(cfg.Guilds) == 0 {
 				log.ApplicationLogger().Info("No configured guilds for startup silent refresh")
 				return nil
@@ -2957,7 +3150,7 @@ func (ms *MonitoringService) fetchAllGuildMembersContext(ctx context.Context, gu
 
 func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 	log.ApplicationLogger().Info("Running periodic avatar check...")
-	cfg := ms.configManager.Config()
+	cfg := ms.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		log.ApplicationLogger().Info("No configured guilds for periodic check")
 		return nil
@@ -3042,8 +3235,8 @@ func (ms *MonitoringService) botRolePermSnapshotKey(guildID, roleID string) stri
 func (ms *MonitoringService) botPermMirrorEnabled(guildID string) bool {
 	// Enabled by default (safety feature).
 	// Previously gated via ALICE_DISABLE_BOT_ROLE_PERM_MIRROR env var; now read from runtime_config in settings.json.
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		cfg := ms.configManager.Config()
+	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+		cfg := scopedCfg
 		rc := cfg.ResolveRuntimeConfig(guildID)
 		features := cfg.ResolveFeatures(guildID)
 		if !features.Safety.BotRolePermMirror {
@@ -3056,8 +3249,8 @@ func (ms *MonitoringService) botPermMirrorEnabled(guildID string) bool {
 
 func (ms *MonitoringService) botPermMirrorActorRoleID(guildID string) string {
 	// Previously overridable via ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID env var; now read from runtime_config in settings.json.
-	if ms.configManager != nil && ms.configManager.Config() != nil {
-		rc := ms.configManager.Config().ResolveRuntimeConfig(guildID)
+	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+		rc := scopedCfg.ResolveRuntimeConfig(guildID)
 		v := strings.TrimSpace(rc.BotRolePermMirrorActorRoleID)
 		if v != "" {
 			return v
@@ -3195,6 +3388,9 @@ func (ms *MonitoringService) handleRoleCreateForBotPermMirroring(s *discordgo.Se
 	if e == nil || e.Role == nil || e.GuildID == "" {
 		return
 	}
+	if !ms.handlesGuild(e.GuildID) {
+		return
+	}
 
 	done := perf.StartGatewayEvent(
 		"guild_role_create",
@@ -3216,6 +3412,9 @@ func (ms *MonitoringService) handleRoleCreateForBotPermMirroring(s *discordgo.Se
 
 func (ms *MonitoringService) handleRoleUpdateForBotPermMirroring(s *discordgo.Session, e *discordgo.GuildRoleUpdate) {
 	if e == nil || e.Role == nil || e.GuildID == "" {
+		return
+	}
+	if !ms.handlesGuild(e.GuildID) {
 		return
 	}
 

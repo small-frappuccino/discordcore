@@ -29,7 +29,16 @@ const (
 var ErrControlServerBind = errors.New("control server bind failed")
 
 type botGuildIDsProvider func(context.Context) ([]string, error)
-type guildRegistrationFunc func(context.Context, string) error
+type botGuildBindingsProvider func(context.Context) ([]BotGuildBinding, error)
+type guildRegistrationFunc func(context.Context, string, string) error
+type discordSessionResolver func(string) *discordgo.Session
+
+// BotGuildBinding associates a guild visible to the control plane with a bot
+// instance identifier from the host runtime catalog.
+type BotGuildBinding struct {
+	GuildID       string
+	BotInstanceID string
+}
 
 type requestAuthMode string
 
@@ -46,21 +55,23 @@ type requestAuthorization struct {
 
 // Server exposes operational controls for a running Discordcore instance.
 type Server struct {
-	addr                string
-	authBearerToken     string
-	tlsCertFile         string
-	tlsKeyFile          string
-	configManager       *files.ConfigManager
-	partnerBoardService partners.BoardService
-	partnerBoardSyncer  partners.GuildSyncExecutor
-	botGuildIDsProvider botGuildIDsProvider
-	guildRegistration   guildRegistrationFunc
-	discordSession      func() *discordgo.Session
-	discordOAuth        *discordOAuthProvider
-	publicOrigin        controlPublicOrigin
-	runtimeApplier      *runtimeapply.Manager
-	httpServer          *http.Server
-	listener            net.Listener
+	addr                 string
+	authBearerToken      string
+	tlsCertFile          string
+	tlsKeyFile           string
+	configManager        *files.ConfigManager
+	partnerBoardService  partners.BoardService
+	partnerBoardSyncer   partners.GuildSyncExecutor
+	botGuildIDsProvider  botGuildIDsProvider
+	botGuildBindings     botGuildBindingsProvider
+	guildRegistration    guildRegistrationFunc
+	discordSession       discordSessionResolver
+	defaultBotInstanceID string
+	discordOAuth         *discordOAuthProvider
+	publicOrigin         controlPublicOrigin
+	runtimeApplier       *runtimeapply.Manager
+	httpServer           *http.Server
+	listener             net.Listener
 }
 
 // NewServer returns nil if addr is empty.
@@ -164,14 +175,65 @@ func (s *Server) SetBotGuildIDsProvider(provider func(context.Context) ([]string
 		return
 	}
 	s.botGuildIDsProvider = provider
+	s.botGuildBindings = func(ctx context.Context) ([]BotGuildBinding, error) {
+		ids, err := provider(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]BotGuildBinding, 0, len(ids))
+		for _, guildID := range ids {
+			out = append(out, BotGuildBinding{GuildID: guildID})
+		}
+		return out, nil
+	}
 }
 
-// SetDiscordSessionProvider exposes the live Discord session for readiness inspection.
+// SetBotGuildBindingsProvider sets a guild -> bot binding provider used by the
+// settings registry and OAuth manageable-guild endpoints.
+func (s *Server) SetBotGuildBindingsProvider(provider func(context.Context) ([]BotGuildBinding, error)) {
+	if s == nil || provider == nil {
+		return
+	}
+	s.botGuildBindings = provider
+	s.botGuildIDsProvider = func(ctx context.Context) ([]string, error) {
+		bindings, err := provider(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]string, 0, len(bindings))
+		seen := make(map[string]struct{}, len(bindings))
+		for _, binding := range bindings {
+			guildID := strings.TrimSpace(binding.GuildID)
+			if guildID == "" {
+				continue
+			}
+			if _, ok := seen[guildID]; ok {
+				continue
+			}
+			seen[guildID] = struct{}{}
+			ids = append(ids, guildID)
+		}
+		return ids, nil
+	}
+}
+
+// SetDiscordSessionProvider exposes a fallback Discord session for readiness inspection.
 func (s *Server) SetDiscordSessionProvider(provider func() *discordgo.Session) {
 	if s == nil || provider == nil {
 		return
 	}
-	s.discordSession = provider
+	s.discordSession = func(string) *discordgo.Session {
+		return provider()
+	}
+}
+
+// SetDiscordSessionResolver exposes a guild-aware Discord session resolver for
+// readiness inspection.
+func (s *Server) SetDiscordSessionResolver(resolver func(string) *discordgo.Session) {
+	if s == nil || resolver == nil {
+		return
+	}
+	s.discordSession = resolver
 }
 
 // SetGuildRegistrationFunc configures Discord-aware guild bootstrap used by
@@ -180,7 +242,27 @@ func (s *Server) SetGuildRegistrationFunc(fn func(context.Context, string) error
 	if s == nil || fn == nil {
 		return
 	}
+	s.guildRegistration = func(ctx context.Context, guildID, _ string) error {
+		return fn(ctx, guildID)
+	}
+}
+
+// SetGuildRegistrationResolver configures Discord-aware guild bootstrap with an
+// explicit bot instance choice.
+func (s *Server) SetGuildRegistrationResolver(fn func(context.Context, string, string) error) {
+	if s == nil || fn == nil {
+		return
+	}
 	s.guildRegistration = fn
+}
+
+// SetDefaultBotInstanceID configures the fallback bot instance used for legacy
+// guild configs that do not yet have an explicit binding.
+func (s *Server) SetDefaultBotInstanceID(botInstanceID string) {
+	if s == nil {
+		return
+	}
+	s.defaultBotInstanceID = strings.TrimSpace(botInstanceID)
 }
 
 // Start opens the control server listening socket.

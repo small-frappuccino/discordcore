@@ -17,7 +17,7 @@ func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 	if ms.session == nil || ms.configManager == nil {
 		return nil
 	}
-	cfg := ms.configManager.Config()
+	cfg := ms.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}

@@ -15,6 +15,14 @@ var (
 	closeSession = func(s *discordgo.Session) error { return s.Close() }
 )
 
+const defaultSessionIntents = discordgo.IntentsGuilds |
+	discordgo.IntentsGuildMembers |
+	discordgo.IntentsGuildPresences |
+	discordgo.IntentsGuildMessages |
+	discordgo.IntentAutoModerationConfiguration |
+	discordgo.IntentAutoModerationExecution |
+	discordgo.IntentMessageContent
+
 // Error messages
 const (
 	ErrSessionCreationFailed   = "failed to create Discord session: %w"
@@ -23,6 +31,11 @@ const (
 
 // NewDiscordSession creates a new Discord session
 func NewDiscordSession(token string) (*discordgo.Session, error) {
+	return NewDiscordSessionWithIntents(token, defaultSessionIntents)
+}
+
+// NewDiscordSessionWithIntents creates a new Discord session with an explicit gateway intents mask.
+func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*discordgo.Session, error) {
 	var s *discordgo.Session
 
 	// Validate token before creating session
@@ -47,13 +60,10 @@ func NewDiscordSession(token string) (*discordgo.Session, error) {
 	}
 
 	log.DiscordLogger().Info("Discord session created successfully")
-	s.Identify.Intents = discordgo.IntentsGuilds |
-		discordgo.IntentsGuildMembers |
-		discordgo.IntentsGuildPresences |
-		discordgo.IntentsGuildMessages |
-		discordgo.IntentAutoModerationConfiguration |
-		discordgo.IntentAutoModerationExecution |
-		discordgo.IntentMessageContent
+	if intents == 0 {
+		intents = defaultSessionIntents
+	}
+	s.Identify.Intents = intents
 
 	// Add logging for connection
 	log.DiscordLogger().Info("Connecting to Discord...")

@@ -12,9 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
-	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/errors"
@@ -24,21 +21,21 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
-	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 var (
-	newDiscordSession      = session.NewDiscordSession
-	newCommandHandler      = commands.NewCommandHandler
-	setupCommandHandler    = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
-	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
-	closeStore             = func(c interface{ Close() error }) error { return c.Close() }
-	closeDiscordSession    = func(c interface{ Close() error }) error { return c.Close() }
-	waitForInterrupt       = util.WaitForInterrupt
-	shutdownDelay          = time.Sleep
+	newDiscordSession            = session.NewDiscordSession
+	newDiscordSessionWithIntents = session.NewDiscordSessionWithIntents
+	newCommandHandler            = commands.NewCommandHandler
+	newCommandHandlerForBot      = commands.NewCommandHandlerForBot
+	setupCommandHandler          = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
+	shutdownCommandHandler       = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
+	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
+	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }
+	waitForInterrupt             = util.WaitForInterrupt
+	shutdownDelay                = time.Sleep
 )
 
 const (
@@ -72,12 +69,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// App name first (affects paths)
 	util.SetAppName(appName)
 
-	// Load env (with $HOME/.local/bin fallback)
-	token, loadErr := util.LoadEnvWithLocalBinFallback(tokenEnv)
-	if loadErr != nil {
-		log.ApplicationLogger().Warn(fmt.Sprintf("Warning: %v", loadErr))
-	}
-
 	// Logger first so subsequent steps can log meaningfully
 	if err := log.SetupLogger(); err != nil {
 		return fmt.Errorf("configure logger: %w", err)
@@ -105,9 +96,9 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	msg := formatStartupMessage(appName, AppVersion(), Version)
 	log.ApplicationLogger().Info(msg)
 
-	// Token must be present
-	if token == "" {
-		return fmt.Errorf("%s not set in environment or .env file", tokenEnv)
+	botInstances, defaultBotInstanceID, err := resolveBotInstances(tokenEnv, opts)
+	if err != nil {
+		return err
 	}
 
 	databaseBootstrap, err := resolveDatabaseBootstrap()
@@ -119,26 +110,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		"operation", "startup.database.bootstrap",
 		"source", databaseBootstrap.Source,
 	)
-
-	// Discord session
-	log.DiscordLogger().Info("🔑 Attempting to authenticate with Discord API...")
-	log.DiscordLogger().Info("Using bot token (value redacted)")
-	discordSession, err := newDiscordSession(token)
-	if err != nil {
-		return fmt.Errorf("create discord session: %w", err)
-	}
-	closeDiscordSessionOnReturn := true
-	defer func() {
-		if closeDiscordSessionOnReturn && discordSession != nil {
-			if err := closeDiscordSession(discordSession); err != nil {
-				log.ErrorLoggerRaw().Error("Discord session close failed during startup cleanup", "err", err)
-			}
-		}
-	}()
-	if discordSession.State == nil || discordSession.State.User == nil {
-		return fmt.Errorf("discord session state not properly initialized")
-	}
-	log.DiscordLogger().Info(fmt.Sprintf("✅ Authenticated as %s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator))
 
 	// Minimal on-disk structure
 	if err := util.EnsureCacheInitialized(); err != nil {
@@ -223,14 +194,119 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
 		return fmt.Errorf("sync runtime database bootstrap config: %w", err)
 	}
+
+	// Theme configuration (from persisted runtime_config)
+	{
+		cfg := configManager.Config()
+		themeName := ""
+		if cfg != nil {
+			themeName = cfg.RuntimeConfig.BotTheme
+		}
+
+		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
+		}
+		if themeName == "" {
+			if err := util.SetTheme(""); err != nil {
+				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
+			} else {
+				log.ApplicationLogger().Info("🌈 Default theme applied")
+			}
+		}
+	}
+
+	// Periodic cleanup (every 6 hours), can be disabled via runtime config
+	var cleanupStop chan struct{}
+	disableCleanup := false
+	features := (&files.BotConfig{}).ResolveFeatures("")
 	if cfg := configManager.Config(); cfg != nil {
+		features = cfg.ResolveFeatures("")
+		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
+	}
+	cleanupEnabled := features.Maintenance.DBCleanup
+	if cleanupEnabled && !disableCleanup {
+		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
+	} else {
+		if !cleanupEnabled {
+			log.ApplicationLogger().Info("🛑 DB cleanup disabled by features.maintenance.db_cleanup")
+		} else {
+			log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
+		}
+	}
+	defer func() {
+		if cleanupStop != nil {
+			close(cleanupStop)
+		}
+	}()
+
+	// Create runtime hot-apply manager and set initial baseline from current config.
+	// This lets the runtime config panel apply environment-like toggles without a full restart.
+	runtimeApplier = runtimeapply.New(nil, nil)
+	if cfg := configManager.Config(); cfg != nil {
+		runtimeApplier.SetInitial(cfg.RuntimeConfig)
+	}
+
+	runtimes := make(map[string]*botRuntime, len(botInstances))
+	runtimeCapabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
+	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
+	cleanupRuntimesOnReturn := true
+	defer func() {
+		if !cleanupRuntimesOnReturn {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for i := len(runtimeOrder) - 1; i >= 0; i-- {
+			runtime := runtimeOrder[i]
+			for _, err := range shutdownBotRuntime(runtime, ctx) {
+				log.ErrorLoggerRaw().Error("Bot runtime cleanup failed during startup rollback", "botInstanceID", runtime.instanceID, "err", err)
+			}
+		}
+	}()
+	closeDiscordSessionsOnReturn := true
+	defer func() {
+		if !closeDiscordSessionsOnReturn {
+			return
+		}
+		for i := len(runtimeOrder) - 1; i >= 0; i-- {
+			runtime := runtimeOrder[i]
+			if runtime == nil || runtime.session == nil {
+				continue
+			}
+			if err := closeDiscordSession(runtime.session); err != nil {
+				log.ErrorLoggerRaw().Error("Discord session close failed during startup cleanup", "botInstanceID", runtime.instanceID, "err", err)
+			}
+		}
+	}()
+
+	configSnapshot := configManager.Config()
+	for _, instance := range botInstances {
+		runtimeCapabilities[instance.ID] = resolveBotRuntimeCapabilities(configSnapshot, instance.ID, defaultBotInstanceID)
+	}
+
+	for _, instance := range botInstances {
+		runtime, openErr := openBotRuntime(instance, runtimeCapabilities[instance.ID])
+		if openErr != nil {
+			return openErr
+		}
+		runtimes[instance.ID] = runtime
+		runtimeOrder = append(runtimeOrder, runtime)
+	}
+
+	if err := validateConfiguredBotInstances(configManager.Config(), runtimes, defaultBotInstanceID); err != nil {
+		return fmt.Errorf("validate configured bot instances: %w", err)
+	}
+
+	runtimeResolver := newBotRuntimeResolver(configManager, runtimes, defaultBotInstanceID)
+	defaultSession := runtimeResolver.sessionForGuild("")
+	if cfg := configManager.Config(); cfg != nil && defaultSession != nil {
 		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
 			operation := fmt.Sprintf(
 				"runtime_config.webhook_embed_updates[%s:%d]",
 				item.scope,
 				item.index,
 			)
-			if err := webhook.PatchMessageEmbed(discordSession, webhook.MessageEmbedPatch{
+			if err := webhook.PatchMessageEmbed(defaultSession, webhook.MessageEmbedPatch{
 				MessageID:  item.update.MessageID,
 				WebhookURL: item.update.WebhookURL,
 				Embed:      item.update.Embed,
@@ -253,90 +329,34 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}
 
-	features := (&files.BotConfig{}).ResolveFeatures("")
-	if cfg := configManager.Config(); cfg != nil {
-		features = cfg.ResolveFeatures("")
-	}
-	monitoringEnabled := features.Services.Monitoring
-
-	// Theme configuration (from persisted runtime_config)
-	{
-		cfg := configManager.Config()
-		themeName := ""
-		if cfg != nil {
-			themeName = cfg.RuntimeConfig.BotTheme
-		}
-
-		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
-		}
-		if themeName == "" {
-			if err := util.SetTheme(""); err != nil {
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
-			} else {
-				log.ApplicationLogger().Info("🌈 Default theme applied")
-			}
-		}
-	}
-
-	// Log configured guilds
-	if err := files.LogConfiguredGuilds(configManager, discordSession); err != nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some configured guilds could not be accessed: %v", err))
-	}
-
-	// Periodic cleanup (every 6 hours), can be disabled via runtime config
-	var cleanupStop chan struct{}
-	disableCleanup := false
-	cleanupEnabled := features.Maintenance.DBCleanup
-	if cfg := configManager.Config(); cfg != nil {
-		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
-	}
-	if cleanupEnabled && !disableCleanup {
-		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
-	} else {
-		if !cleanupEnabled {
-			log.ApplicationLogger().Info("🛑 DB cleanup disabled by features.maintenance.db_cleanup")
-		} else {
-			log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
-		}
-	}
-	defer func() {
-		if cleanupStop != nil {
-			close(cleanupStop)
-		}
-	}()
-
-	// Service manager
-	serviceManager := service.NewServiceManager(errorHandler)
-
-	// Monitoring service (central orchestration + unified cache)
-	monitoringService, err := logging.NewMonitoringService(discordSession, configManager, store)
-	if err != nil {
-		return fmt.Errorf("create monitoring service: %w", err)
-	}
-
-	// Create runtime hot-apply manager and set initial baseline from current config.
-	// This lets the runtime config panel apply environment-like toggles without a full restart.
-	runtimeApplier = runtimeapply.New(serviceManager, monitoringService)
-	if cfg := configManager.Config(); cfg != nil {
-		runtimeApplier.SetInitial(cfg.RuntimeConfig)
-	}
-
 	partnerSyncService := partners.NewBoardSyncService(configManager)
-	partnerSyncExecutor := partners.NewSessionBoundBoardSyncExecutor(partnerSyncService, discordSession)
-	partnerAutoSyncCoordinator := partners.NewAutoSyncCoordinator(partnerSyncExecutor, partners.AutoSyncCoordinatorOptions{})
-	if err := partnerAutoSyncCoordinator.Start(); err != nil {
-		return fmt.Errorf("start partner auto-sync coordinator: %w", err)
+	partnerSyncDispatcher := newBotPartnerSyncDispatcher(configManager, partnerSyncService, runtimes, defaultBotInstanceID)
+	if err := partnerSyncDispatcher.Start(); err != nil {
+		return fmt.Errorf("start partner sync dispatcher: %w", err)
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := partnerAutoSyncCoordinator.Stop(ctx); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to stop partner auto-sync coordinator cleanly", "err", err)
+		if err := partnerSyncDispatcher.Stop(ctx); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to stop partner sync dispatcher cleanly", "err", err)
 		}
 	}()
 
-	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerAutoSyncCoordinator)
+	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerSyncDispatcher)
+
+	for _, runtime := range runtimeOrder {
+		if err := initializeBotRuntime(runtime, botRuntimeOptions{
+			defaultBotInstanceID: defaultBotInstanceID,
+			configManager:        configManager,
+			store:                store,
+			errorHandler:         errorHandler,
+			runtimeApplier:       runtimeApplier,
+			partnerBoardService:  partnerBoardAppService,
+			partnerSyncExecutor:  partnerSyncDispatcher,
+		}); err != nil {
+			return err
+		}
+	}
 
 	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
 	controlRuntime, err := resolveControlRuntime(context.Background(), opts)
@@ -365,16 +385,17 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		if controlBearerToken != "" {
 			controlServer.SetBearerToken(controlBearerToken)
 		}
+		controlServer.SetDefaultBotInstanceID(defaultBotInstanceID)
 		controlServer.SetPartnerBoardService(partnerBoardAppService)
-		controlServer.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
-		controlServer.SetDiscordSessionProvider(func() *discordgo.Session {
-			return discordSession
+		controlServer.SetPartnerBoardSyncExecutor(partnerSyncDispatcher)
+		controlServer.SetDiscordSessionResolver(func(guildID string) *discordgo.Session {
+			return runtimeResolver.sessionForGuild(guildID)
 		})
-		controlServer.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
-			return listBotGuildIDsFromSessionState(discordSession)
+		controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
+			return runtimeResolver.guildBindings(ctx)
 		})
-		controlServer.SetGuildRegistrationFunc(func(_ context.Context, guildID string) error {
-			return configManager.RegisterGuild(discordSession, guildID)
+		controlServer.SetGuildRegistrationResolver(func(ctx context.Context, guildID, botInstanceID string) error {
+			return runtimeResolver.registerGuild(ctx, guildID, botInstanceID)
 		})
 		if err := controlServer.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
 			return fmt.Errorf("configure control public origin: %w", err)
@@ -417,168 +438,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}
 
-	// Cache warmup (persisted + fetch missing)
-	// NOTE: Warmup responsibility is consolidated in the app runner.
-	// MonitoringService does not perform its own warmup to avoid duplicate work during startup.
-	unifiedCache := monitoringService.GetUnifiedCache()
-	if monitoringEnabled {
-		if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
-			log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)")
-		} else {
-			warmupConfig := cache.DefaultWarmupConfig()
-			warmupConfig.MaxMembersPerGuild = 500 // mitigate initial load
-			if err := cache.IntelligentWarmup(discordSession, unifiedCache, store, warmupConfig); err != nil {
-				log.ApplicationLogger().Warn(fmt.Sprintf("Intelligent warmup failed (continuing): %v", err))
-			}
-		}
-	}
-
-	// Periodic cache persistence (hardcoded interval)
-	persistInterval := time.Hour
-	var persistStop chan struct{}
-	if monitoringEnabled {
-		persistStop = unifiedCache.SetPersistInterval(persistInterval)
-	}
-	defer func() {
-		if persistStop != nil {
-			close(persistStop)
-		}
-	}()
-
-	// Monitoring service
-	if monitoringEnabled {
-	} else {
-		log.ApplicationLogger().Info("🛑 Monitoring service disabled by features.services.monitoring")
-	}
-
-	// Automod service with TaskRouter adapters (gated by runtime config)
-	disableAutomod := false
-	if cfg := configManager.Config(); cfg != nil {
-		disableAutomod = cfg.RuntimeConfig.DisableAutomodLogs
-	}
-	var automodWrapper *service.ServiceWrapper
-	if !features.Services.Automod {
-		log.ApplicationLogger().Info("🛑 Automod service disabled by features.services.automod")
-	} else if !features.Logging.AutomodAction {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by features.logging.automod_action; AutomodService will not start")
-	} else if disableAutomod {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start")
-	} else {
-		automodService := logging.NewAutomodService(discordSession, configManager)
-		automodRouter := task.NewRouter(task.Defaults())
-		defer automodRouter.Close()
-		automodAdapters := task.NewNotificationAdapters(automodRouter, discordSession, configManager, store, monitoringService.Notifier())
-		automodService.SetAdapters(automodAdapters)
-
-		automodWrapper = service.NewServiceWrapper(
-			"automod",
-			service.TypeAutomod,
-			service.PriorityNormal,
-			[]string{},
-			func(context.Context) error { automodService.Start(); return nil },
-			func(context.Context) error { automodService.Stop(); return nil },
-			func() bool { return true },
-		)
-	}
-
-	// Register services
-	if monitoringEnabled {
-		if err := serviceManager.Register(monitoringService); err != nil {
-			return fmt.Errorf("register monitoring service: %w", err)
-		}
-	}
-	if automodWrapper != nil {
-		if err := serviceManager.Register(automodWrapper); err != nil {
-			return fmt.Errorf("register automod service: %w", err)
-		}
-	}
-
-	// User prune service (optional; native Discord prune, day 28, 30-day window)
-	{
-		cfg := configManager.Config()
-		enabled := false
-		if cfg != nil {
-			for _, g := range cfg.Guilds {
-				feature := cfg.ResolveFeatures(g.GuildID)
-				if !feature.UserPrune {
-					continue
-				}
-				if g.UserPrune.Enabled {
-					enabled = true
-					break
-				}
-			}
-		}
-
-		if enabled {
-			userPruneService := maintenance.NewUserPruneService(discordSession, configManager, store)
-			userPruneWrapper := service.NewServiceWrapper(
-				"user-prune",
-				service.TypeMonitoring,
-				service.PriorityNormal,
-				[]string{"monitoring"},
-				func(context.Context) error { userPruneService.Start(); return nil },
-				func(context.Context) error { userPruneService.Stop(); return nil },
-				func() bool { return userPruneService.IsRunning() },
-			)
-			if err := serviceManager.Register(userPruneWrapper); err != nil {
-				return fmt.Errorf("register user prune service: %w", err)
-			}
-			log.ApplicationLogger().Info("✅ User prune enabled (Discord native prune: day 28, 30 days)")
-		}
-	}
-
-	// Start services
-	log.ApplicationLogger().Info("🚀 Starting all services...")
-	if err := serviceManager.StartAll(); err != nil {
-		return fmt.Errorf("start services: %w", err)
-	}
-
-	// Commands
-	var commandHandler *commands.CommandHandler
-	if features.Services.Commands {
-		commandHandler = newCommandHandler(discordSession, configManager)
-		commandHandler.SetPartnerBoardService(partnerBoardAppService)
-		commandHandler.SetPartnerBoardSyncExecutor(partnerSyncExecutor)
-		if err := setupCommandHandler(commandHandler); err != nil {
-			return fmt.Errorf("configure slash commands: %w", err)
-		}
-	} else {
-		log.ApplicationLogger().Info("🛑 Commands disabled by features.services.commands")
-	}
-
-	// NOTE:
-	// The runtime hot-apply manager is created here and kept alive for the lifetime of the process.
-	// The /config runtime panel should call runtimeApplier.Apply(ctx, nextRuntimeConfig) after saving.
-	_ = runtimeApplier
-
-	// Inject store and unified cache into command router
-	if commandHandler != nil {
-		if cm := commandHandler.GetCommandManager(); cm != nil {
-			if router := cm.GetRouter(); router != nil {
-				router.SetStore(store)
-				if monitoringService != nil {
-					router.SetCache(monitoringService.GetUnifiedCache())
-					router.SetTaskRouter(monitoringService.TaskRouter())
-				}
-				// Wire runtime hot-apply manager so /config runtime can apply changes immediately.
-				router.SetRuntimeApplier(runtimeApplier)
-			}
-		}
-	}
-
-	// Admin commands
-	if features.Services.AdminCommands {
-		if commandHandler != nil {
-			adminCommands := admin.NewAdminCommands(serviceManager, unifiedCache, store)
-			adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
-		} else {
-			log.ApplicationLogger().Warn("Admin commands enabled but commands are disabled; skipping admin command registration")
-		}
-	} else {
-		log.ApplicationLogger().Info("🛑 Admin commands disabled by features.services.admin_commands")
-	}
-
 	log.ApplicationLogger().Info("🔗 Slash commands sync completed")
 	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
 	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
@@ -593,15 +452,11 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	defer shutdownCancel()
 	var shutdownErrs []error
 
-	if err := serviceManager.StopAll(); err != nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("Some services failed to stop cleanly: %v", err))
-		shutdownErrs = append(shutdownErrs, fmt.Errorf("stop services: %w", err))
-	}
-
-	if commandHandler != nil {
-		if err := shutdownCommandHandler(commandHandler); err != nil {
-			log.ErrorLoggerRaw().Error("Command handler shutdown failed", "err", err)
-			shutdownErrs = append(shutdownErrs, fmt.Errorf("shutdown command handler: %w", err))
+	for i := len(runtimeOrder) - 1; i >= 0; i-- {
+		runtime := runtimeOrder[i]
+		for _, err := range shutdownBotRuntime(runtime, shutdownCtx) {
+			log.ErrorLoggerRaw().Error("Bot runtime shutdown failed", "botInstanceID", runtime.instanceID, "err", err)
+			shutdownErrs = append(shutdownErrs, err)
 		}
 	}
 
@@ -616,11 +471,16 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}
 
-	closeDiscordSessionOnReturn = false
-	if discordSession != nil {
-		if err := closeDiscordSession(discordSession); err != nil {
-			log.ErrorLoggerRaw().Error("Discord session close failed during shutdown", "err", err)
-			shutdownErrs = append(shutdownErrs, fmt.Errorf("close discord session: %w", err))
+	closeDiscordSessionsOnReturn = false
+	cleanupRuntimesOnReturn = false
+	for i := len(runtimeOrder) - 1; i >= 0; i-- {
+		runtime := runtimeOrder[i]
+		if runtime == nil || runtime.session == nil {
+			continue
+		}
+		if err := closeDiscordSession(runtime.session); err != nil {
+			log.ErrorLoggerRaw().Error("Discord session close failed during shutdown", "botInstanceID", runtime.instanceID, "err", err)
+			shutdownErrs = append(shutdownErrs, fmt.Errorf("close discord session for %s: %w", runtime.instanceID, err))
 		}
 	}
 

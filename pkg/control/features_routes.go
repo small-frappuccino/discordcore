@@ -228,7 +228,7 @@ func (s *Server) handleGuildFeaturesList(w http.ResponseWriter, guildID string) 
 		return
 	}
 
-	workspace, err := buildFeatureWorkspace(cfg, s.configManager, guildID, s.currentDiscordSession())
+	workspace, err := buildFeatureWorkspace(cfg, s.configManager, guildID, s.discordSessionForGuild(guildID))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build guild feature workspace: %v", err), http.StatusInternalServerError)
 		return
@@ -247,7 +247,7 @@ func (s *Server) handleGuildFeatureGet(w http.ResponseWriter, guildID, featureID
 		return
 	}
 
-	record, err := buildSingleFeatureRecord(cfg, s.configManager, guildID, featureID, s.currentDiscordSession())
+	record, err := buildSingleFeatureRecord(cfg, s.configManager, guildID, featureID, s.discordSessionForGuild(guildID))
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, errUnknownFeatureID) {
@@ -272,7 +272,7 @@ func (s *Server) handleGuildFeaturePatch(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	record, err := buildSingleFeatureRecord(updated, s.configManager, guildID, featureID, s.currentDiscordSession())
+	record, err := buildSingleFeatureRecord(updated, s.configManager, guildID, featureID, s.discordSessionForGuild(guildID))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build updated guild feature: %v", err), http.StatusInternalServerError)
 		return
@@ -1356,8 +1356,12 @@ func setLogFeatureChannelID(guild *files.GuildConfig, eventType discordlogging.L
 }
 
 func (s *Server) currentDiscordSession() *discordgo.Session {
+	return s.discordSessionForGuild("")
+}
+
+func (s *Server) discordSessionForGuild(guildID string) *discordgo.Session {
 	if s == nil || s.discordSession == nil {
 		return nil
 	}
-	return s.discordSession()
+	return s.discordSession(guildID)
 }

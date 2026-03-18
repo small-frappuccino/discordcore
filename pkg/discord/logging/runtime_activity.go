@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ type runtimeActivityOptions struct {
 	RunErr           runtimeActivityRunner
 	EventTimeout     time.Duration
 	HeartbeatTimeout time.Duration
+	BotInstanceID    string
 	Warn             func(string, ...any)
 	Now              func() time.Time
 }
@@ -24,6 +26,7 @@ type runtimeActivity struct {
 	runErr           runtimeActivityRunner
 	eventTimeout     time.Duration
 	heartbeatTimeout time.Duration
+	botInstanceID    string
 	warn             func(string, ...any)
 	now              func() time.Time
 
@@ -48,16 +51,22 @@ func newRuntimeActivity(store *storage.Store, opts runtimeActivityOptions) *runt
 		runErr:           runErr,
 		eventTimeout:     opts.EventTimeout,
 		heartbeatTimeout: opts.HeartbeatTimeout,
+		botInstanceID:    strings.TrimSpace(opts.BotInstanceID),
 		warn:             opts.Warn,
 		now:              now,
 	}
 }
 
-func newMonitoringRuntimeActivity(store *storage.Store) *runtimeActivity {
+func newMonitoringRuntimeActivity(store *storage.Store, botInstanceID ...string) *runtimeActivity {
+	scopedBotInstanceID := ""
+	if len(botInstanceID) > 0 {
+		scopedBotInstanceID = botInstanceID[0]
+	}
 	return newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           monitoringRunErrWithTimeoutContext,
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
+		BotInstanceID:    scopedBotInstanceID,
 		Warn:             log.ApplicationLogger().Warn,
 	})
 }
@@ -71,7 +80,7 @@ func (ra *runtimeActivity) MarkEvent(ctx context.Context, source string) {
 	}
 
 	if err := ra.runErr(ctx, ra.eventTimeout, func(runCtx context.Context) error {
-		return ra.store.SetLastEventContext(runCtx, ra.now())
+		return ra.store.SetLastEventForBotContext(runCtx, ra.botInstanceID, ra.now())
 	}); err != nil && ra.warn != nil {
 		ra.warn("Failed to persist last event timestamp", "source", source, "error", err)
 	}
@@ -98,7 +107,7 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 	ra.mu.Unlock()
 
 	if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
-		return ra.store.SetHeartbeatContext(runCtx, ra.now())
+		return ra.store.SetHeartbeatForBotContext(runCtx, ra.botInstanceID, ra.now())
 	}); err != nil && ra.warn != nil {
 		ra.warn("Failed to persist startup heartbeat", "error", err)
 	}
@@ -112,7 +121,7 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 			select {
 			case <-ticker.C:
 				if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
-					return ra.store.SetHeartbeatContext(runCtx, ra.now())
+					return ra.store.SetHeartbeatForBotContext(runCtx, ra.botInstanceID, ra.now())
 				}); err != nil && ra.warn != nil {
 					ra.warn("Failed to persist heartbeat", "error", err)
 				}

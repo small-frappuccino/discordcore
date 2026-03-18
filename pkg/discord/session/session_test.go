@@ -83,3 +83,22 @@ func TestNewDiscordSessionSuccess(t *testing.T) {
 		t.Fatalf("expected intents to be set on session")
 	}
 }
+
+func TestNewDiscordSessionWithIntentsUsesProvidedMask(t *testing.T) {
+	session := &discordgo.Session{}
+	restoreSessionStubs(t, func(token string) (*discordgo.Session, error) {
+		return session, nil
+	}, func(*discordgo.Session) error { return nil }, func(*discordgo.Session) error { t.Fatalf("closeSession should not be called on success"); return nil })
+
+	mask := discordgo.IntentsGuilds | discordgo.IntentsGuildMessageReactions
+	got, err := NewDiscordSessionWithIntents("token", mask)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != session {
+		t.Fatalf("expected returned session pointer")
+	}
+	if session.Identify.Intents != mask {
+		t.Fatalf("expected intents mask %d, got %d", mask, session.Identify.Intents)
+	}
+}

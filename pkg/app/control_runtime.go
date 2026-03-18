@@ -25,7 +25,9 @@ const (
 var errControlLocalTLSUnavailable = errors.New("control local tls unavailable")
 
 type RunOptions struct {
-	Control ControlOptions
+	Control              ControlOptions
+	BotCatalog           []BotInstanceDefinition
+	DefaultBotInstanceID string
 }
 
 type ControlOptions struct {

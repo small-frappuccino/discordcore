@@ -412,14 +412,15 @@ type UserPruneConfig struct {
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID    string         `json:"guild_id"`
-	Features   FeatureToggles `json:"features,omitempty"`
-	Channels   ChannelsConfig `json:"channels,omitempty"`
-	Roles      RolesConfig    `json:"roles,omitempty"`
-	Stats      StatsConfig    `json:"stats,omitempty"`
-	Rulesets   []Ruleset      `json:"rulesets,omitempty"`
-	LooseLists []Rule         `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
-	Blocklist  []string       `json:"blocklist,omitempty"`
+	GuildID       string         `json:"guild_id"`
+	BotInstanceID string         `json:"bot_instance_id,omitempty"`
+	Features      FeatureToggles `json:"features,omitempty"`
+	Channels      ChannelsConfig `json:"channels,omitempty"`
+	Roles         RolesConfig    `json:"roles,omitempty"`
+	Stats         StatsConfig    `json:"stats,omitempty"`
+	Rulesets      []Ruleset      `json:"rulesets,omitempty"`
+	LooseLists    []Rule         `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
+	Blocklist     []string       `json:"blocklist,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
 	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")

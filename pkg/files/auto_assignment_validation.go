@@ -42,6 +42,8 @@ func validateBotConfig(cfg *BotConfig) error {
 	}
 
 	for idx := range cfg.Guilds {
+		cfg.Guilds[idx].BotInstanceID = NormalizeBotInstanceID(cfg.Guilds[idx].BotInstanceID)
+
 		moderation, err := NormalizeGuildModerationConfig(
 			cfg.Guilds[idx].Rulesets,
 			cfg.Guilds[idx].LooseLists,

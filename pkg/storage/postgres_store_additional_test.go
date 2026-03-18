@@ -197,6 +197,44 @@ func TestHeartbeatMetadataRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
+	store := newTempStore(t)
+	aliceHeartbeat := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	yuzuhaHeartbeat := time.Now().UTC().Truncate(time.Second)
+	aliceLastEvent := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second)
+	yuzuhaLastEvent := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Second)
+
+	if err := store.SetHeartbeatForBot("alice", aliceHeartbeat); err != nil {
+		t.Fatalf("set alice heartbeat: %v", err)
+	}
+	if err := store.SetHeartbeatForBot("yuzuha", yuzuhaHeartbeat); err != nil {
+		t.Fatalf("set yuzuha heartbeat: %v", err)
+	}
+	if err := store.SetLastEventForBot("alice", aliceLastEvent); err != nil {
+		t.Fatalf("set alice last event: %v", err)
+	}
+	if err := store.SetLastEventForBot("yuzuha", yuzuhaLastEvent); err != nil {
+		t.Fatalf("set yuzuha last event: %v", err)
+	}
+
+	gotAliceHeartbeat, ok, err := store.GetHeartbeatForBot("alice")
+	if err != nil || !ok || !gotAliceHeartbeat.Equal(aliceHeartbeat) {
+		t.Fatalf("unexpected alice heartbeat: got=%v ok=%v err=%v", gotAliceHeartbeat, ok, err)
+	}
+	gotYuzuhaHeartbeat, ok, err := store.GetHeartbeatForBot("yuzuha")
+	if err != nil || !ok || !gotYuzuhaHeartbeat.Equal(yuzuhaHeartbeat) {
+		t.Fatalf("unexpected yuzuha heartbeat: got=%v ok=%v err=%v", gotYuzuhaHeartbeat, ok, err)
+	}
+	gotAliceLastEvent, ok, err := store.GetLastEventForBot("alice")
+	if err != nil || !ok || !gotAliceLastEvent.Equal(aliceLastEvent) {
+		t.Fatalf("unexpected alice last event: got=%v ok=%v err=%v", gotAliceLastEvent, ok, err)
+	}
+	gotYuzuhaLastEvent, ok, err := store.GetLastEventForBot("yuzuha")
+	if err != nil || !ok || !gotYuzuhaLastEvent.Equal(yuzuhaLastEvent) {
+		t.Fatalf("unexpected yuzuha last event: got=%v ok=%v err=%v", gotYuzuhaLastEvent, ok, err)
+	}
+}
+
 func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
 	store := newTempStore(t)
 

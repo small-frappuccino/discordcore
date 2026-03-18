@@ -186,24 +186,43 @@ func (s *Server) resolveManageableGuilds(
 }
 
 func (s *Server) resolveBotGuildIDSet(ctx context.Context) (map[string]struct{}, error) {
-	if s == nil || s.botGuildIDsProvider == nil {
-		return nil, errBotGuildIDsProviderUnavailable
-	}
-
-	ids, err := s.botGuildIDsProvider(ctx)
+	bindings, err := s.resolveBotGuildBindings(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("resolve bot guild id set: %w", err)
+		return nil, err
 	}
 
-	set := make(map[string]struct{}, len(ids))
-	for _, guildID := range ids {
-		trimmed := strings.TrimSpace(guildID)
+	set := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		trimmed := strings.TrimSpace(binding.GuildID)
 		if trimmed == "" {
 			continue
 		}
 		set[trimmed] = struct{}{}
 	}
 	return set, nil
+}
+
+func (s *Server) resolveBotGuildBindings(ctx context.Context) ([]BotGuildBinding, error) {
+	if s == nil || s.botGuildBindings == nil {
+		if s != nil && s.botGuildIDsProvider != nil {
+			ids, err := s.botGuildIDsProvider(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("resolve bot guild bindings: %w", err)
+			}
+			out := make([]BotGuildBinding, 0, len(ids))
+			for _, guildID := range ids {
+				out = append(out, BotGuildBinding{GuildID: guildID})
+			}
+			return out, nil
+		}
+		return nil, errBotGuildIDsProviderUnavailable
+	}
+
+	bindings, err := s.botGuildBindings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve bot guild bindings: %w", err)
+	}
+	return bindings, nil
 }
 
 func isGuildManageableByUser(guild discordOAuthGuild) bool {

@@ -121,3 +121,33 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		_ = ms.reactionEventService.Stop(context.Background())
 	}
 }
+
+func TestMonitoringService_SetupEventHandlersKeepsPresenceWatchWhenUserLogsDisabled(t *testing.T) {
+	session := newLoggingLifecycleSession(t)
+	cfgMgr := newMonitoringTestConfigManager(t)
+	enabled := true
+	disabled := false
+	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Features.Logging.AvatarLogging = &disabled
+		cfg.Features.Logging.RoleUpdate = &disabled
+		cfg.Features.PresenceWatch.Bot = &enabled
+		cfg.Features.Safety.BotRolePermMirror = &disabled
+		return nil
+	}); err != nil {
+		t.Fatalf("update config: %v", err)
+	}
+
+	ms := &MonitoringService{
+		session:       session,
+		configManager: cfgMgr,
+		eventHandlers: make([]interface{}, 0),
+	}
+
+	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{
+		DisableUserLogs:  true,
+		PresenceWatchBot: true,
+	})
+	if got := len(ms.eventHandlers); got != 3 {
+		t.Fatalf("expected 3 handlers with presence watch only, got %d", got)
+	}
+}

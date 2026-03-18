@@ -28,8 +28,8 @@ type guildSettingsResponse struct {
 }
 
 type guildRegistryResponse struct {
-	Status    string                 `json:"status"`
-	Workspace guildRegistryWorkspace `json:"workspace"`
+	Status    string                   `json:"status"`
+	Workspace guildRegistryWorkspace   `json:"workspace"`
 	Guilds    []configuredGuildSummary `json:"guilds"`
 }
 
@@ -391,6 +391,83 @@ func TestGuildRegistryWorkspaceIncludesAvailableGuilds(t *testing.T) {
 	}
 	if !configured["g1"] || configured["g2"] || configured["g3"] {
 		t.Fatalf("unexpected configured flags: %+v", response.Workspace.Entries)
+	}
+}
+
+func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	srv.SetDefaultBotInstanceID("alice")
+	srv.SetBotGuildBindingsProvider(func(_ context.Context) ([]BotGuildBinding, error) {
+		return []BotGuildBinding{
+			{GuildID: "g2", BotInstanceID: "alice"},
+			{GuildID: "g2", BotInstanceID: "yuzuha"},
+		}, nil
+	})
+	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
+				GuildID:       guildID,
+				BotInstanceID: botInstanceID,
+			})
+			return nil
+		})
+		return err
+	})
+
+	rec := performHandlerJSONRequest(
+		t,
+		srv.httpServer.Handler,
+		http.MethodPost,
+		"/v1/settings/guilds",
+		registerGuildRequest{GuildID: "g2", BotInstanceID: "yuzuha"},
+	)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var response guildSettingsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode guild registration response: %v", err)
+	}
+	if response.Workspace.BotInstanceID != "yuzuha" {
+		t.Fatalf("expected workspace bot_instance_id=yuzuha, got %+v", response.Workspace)
+	}
+	if strings.Join(response.Workspace.AvailableBotInstanceIDs, ",") != "alice,yuzuha" {
+		t.Fatalf("unexpected available bot instances: %+v", response.Workspace.AvailableBotInstanceIDs)
+	}
+
+	cfg := cm.SnapshotConfig()
+	guild, ok := findGuildSettings(cfg, "g2")
+	if !ok {
+		t.Fatal("expected registered guild g2 in config")
+	}
+	if guild.BotInstanceID != "yuzuha" {
+		t.Fatalf("expected persisted bot_instance_id=yuzuha, got %+v", guild)
+	}
+}
+
+func TestSettingsOverviewDisplaysEffectiveBotInstanceID(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetDefaultBotInstanceID("alice")
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/settings", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /v1/settings status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var payload settingsOverviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode settings overview: %v", err)
+	}
+	if len(payload.Workspace.Guilds) != 1 {
+		t.Fatalf("expected one configured guild summary, got %+v", payload.Workspace.Guilds)
+	}
+	if payload.Workspace.Guilds[0].BotInstanceID != "alice" {
+		t.Fatalf("expected effective bot_instance_id=alice, got %+v", payload.Workspace.Guilds[0])
 	}
 }
 

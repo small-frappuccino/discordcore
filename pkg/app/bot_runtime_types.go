@@ -1,0 +1,225 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/control"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/util"
+)
+
+const DefaultBotInstanceID = "default"
+
+// BotInstanceDefinition describes one Discord bot instance managed by the host
+// runtime. Tokens remain host-owned and are referenced by environment variable.
+type BotInstanceDefinition struct {
+	ID       string
+	TokenEnv string
+}
+
+type resolvedBotInstance struct {
+	ID       string
+	TokenEnv string
+	Token    string
+}
+
+type botRuntime struct {
+	instanceID        string
+	capabilities      botRuntimeCapabilities
+	session           *discordgo.Session
+	serviceManager    *service.ServiceManager
+	monitoringService *logging.MonitoringService
+	commandHandler    *commands.CommandHandler
+	cleanupStop       chan struct{}
+	persistStop       chan struct{}
+}
+
+type botRuntimeResolver struct {
+	configManager        *files.ConfigManager
+	runtimes             map[string]*botRuntime
+	defaultBotInstanceID string
+}
+
+func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBotInstance, string, error) {
+	catalog := opts.BotCatalog
+	defaultBotInstanceID := strings.TrimSpace(opts.DefaultBotInstanceID)
+	if len(catalog) == 0 {
+		primaryTokenEnv = strings.TrimSpace(primaryTokenEnv)
+		if primaryTokenEnv == "" {
+			return nil, "", fmt.Errorf("token environment variable is required")
+		}
+		catalog = []BotInstanceDefinition{{
+			ID:       DefaultBotInstanceID,
+			TokenEnv: primaryTokenEnv,
+		}}
+	}
+	if defaultBotInstanceID == "" {
+		defaultBotInstanceID = strings.TrimSpace(catalog[0].ID)
+	}
+
+	resolved := make([]resolvedBotInstance, 0, len(catalog))
+	seenIDs := make(map[string]struct{}, len(catalog))
+	if firstTokenEnv := strings.TrimSpace(catalog[0].TokenEnv); firstTokenEnv != "" {
+		if _, loadErr := util.LoadEnvWithLocalBinFallback(firstTokenEnv); loadErr != nil {
+			log.ApplicationLogger().Warn(fmt.Sprintf("Warning: %v", loadErr))
+		}
+	}
+
+	for _, item := range catalog {
+		botInstanceID := strings.TrimSpace(item.ID)
+		if botInstanceID == "" {
+			return nil, "", fmt.Errorf("bot instance id is required")
+		}
+		if _, exists := seenIDs[botInstanceID]; exists {
+			return nil, "", fmt.Errorf("duplicate bot instance id: %s", botInstanceID)
+		}
+		seenIDs[botInstanceID] = struct{}{}
+
+		tokenEnv := strings.TrimSpace(item.TokenEnv)
+		if tokenEnv == "" {
+			return nil, "", fmt.Errorf("bot instance %s is missing token env", botInstanceID)
+		}
+
+		token := strings.TrimSpace(util.EnvString(tokenEnv, ""))
+		if token == "" {
+			if _, loadErr := util.LoadEnvWithLocalBinFallback(tokenEnv); loadErr != nil {
+				log.ApplicationLogger().Warn(fmt.Sprintf("Warning: %v", loadErr))
+			}
+			token = strings.TrimSpace(util.EnvString(tokenEnv, ""))
+		}
+		if token == "" {
+			return nil, "", fmt.Errorf("%s not set in environment or .env file", tokenEnv)
+		}
+
+		resolved = append(resolved, resolvedBotInstance{
+			ID:       botInstanceID,
+			TokenEnv: tokenEnv,
+			Token:    token,
+		})
+	}
+
+	if _, ok := seenIDs[defaultBotInstanceID]; !ok {
+		return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultBotInstanceID)
+	}
+
+	return resolved, defaultBotInstanceID, nil
+}
+
+func newBotRuntimeResolver(
+	configManager *files.ConfigManager,
+	runtimes map[string]*botRuntime,
+	defaultBotInstanceID string,
+) *botRuntimeResolver {
+	return &botRuntimeResolver{
+		configManager:        configManager,
+		runtimes:             runtimes,
+		defaultBotInstanceID: strings.TrimSpace(defaultBotInstanceID),
+	}
+}
+
+func (r *botRuntimeResolver) runtimeForGuild(guildID string) *botRuntime {
+	if r == nil {
+		return nil
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID != "" && r.configManager != nil {
+		if guild := r.configManager.GuildConfig(guildID); guild != nil {
+			if runtime := r.runtimes[guild.EffectiveBotInstanceID(r.defaultBotInstanceID)]; runtime != nil {
+				return runtime
+			}
+		}
+	}
+	return r.runtimes[r.defaultBotInstanceID]
+}
+
+func (r *botRuntimeResolver) sessionForGuild(guildID string) *discordgo.Session {
+	if runtime := r.runtimeForGuild(guildID); runtime != nil {
+		return runtime.session
+	}
+	return nil
+}
+
+func (r *botRuntimeResolver) registerGuild(ctx context.Context, guildID, botInstanceID string) error {
+	if r == nil || r.configManager == nil {
+		return fmt.Errorf("bot runtime resolver is unavailable")
+	}
+	selectedBotInstanceID := strings.TrimSpace(botInstanceID)
+	if selectedBotInstanceID == "" {
+		selectedBotInstanceID = r.defaultBotInstanceID
+	}
+	runtime := r.runtimes[selectedBotInstanceID]
+	if runtime == nil || runtime.session == nil {
+		return fmt.Errorf("bot instance %q is unavailable", selectedBotInstanceID)
+	}
+	return r.configManager.RegisterGuildForBot(runtime.session, guildID, selectedBotInstanceID)
+}
+
+func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildBinding, error) {
+	if r == nil {
+		return nil, fmt.Errorf("bot runtime resolver is unavailable")
+	}
+
+	out := make([]control.BotGuildBinding, 0)
+	for botInstanceID, runtime := range r.runtimes {
+		if runtime == nil || runtime.session == nil {
+			continue
+		}
+		bindings, err := listBotGuildBindingsFromSessionState(botInstanceID, runtime.session)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bindings...)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].GuildID == out[j].GuildID {
+			return out[i].BotInstanceID < out[j].BotInstanceID
+		}
+		return out[i].GuildID < out[j].GuildID
+	})
+	return out, nil
+}
+
+func listBotGuildBindingsFromSessionState(botInstanceID string, session *discordgo.Session) ([]control.BotGuildBinding, error) {
+	ids, err := listBotGuildIDsFromSessionState(session)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]control.BotGuildBinding, 0, len(ids))
+	for _, guildID := range ids {
+		out = append(out, control.BotGuildBinding{
+			GuildID:       guildID,
+			BotInstanceID: botInstanceID,
+		})
+	}
+	return out, nil
+}
+
+func validateConfiguredBotInstances(
+	cfg *files.BotConfig,
+	runtimes map[string]*botRuntime,
+	defaultBotInstanceID string,
+) error {
+	if cfg == nil {
+		return nil
+	}
+	for _, guild := range cfg.Guilds {
+		botInstanceID := guild.EffectiveBotInstanceID(defaultBotInstanceID)
+		if botInstanceID == "" {
+			return fmt.Errorf("guild %s does not resolve to a bot instance", guild.GuildID)
+		}
+		if _, ok := runtimes[botInstanceID]; !ok {
+			return fmt.Errorf("guild %s references unknown bot instance %q", guild.GuildID, botInstanceID)
+		}
+	}
+	return nil
+}

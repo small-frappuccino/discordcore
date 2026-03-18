@@ -23,6 +23,7 @@ type CommandRouter struct {
 	permChecker     *PermissionChecker
 	autocompleteMap map[string]AutocompleteHandler
 	store           *storage.Store
+	guildFilter     func(string) bool
 
 	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
 	// It is set by the app runner and can be used by interaction handlers to apply changes
@@ -67,9 +68,27 @@ func (cr *CommandRouter) RegisterAutocomplete(commandName string, handler Autoco
 	cr.autocompleteMap[commandName] = handler
 }
 
+// SetGuildFilter restricts interaction handling to guilds accepted by the provided predicate.
+func (cr *CommandRouter) SetGuildFilter(filter func(string) bool) {
+	if cr == nil {
+		return
+	}
+	cr.guildFilter = filter
+}
+
+func (cr *CommandRouter) shouldHandleGuild(guildID string) bool {
+	if cr == nil || cr.guildFilter == nil || guildID == "" {
+		return true
+	}
+	return cr.guildFilter(guildID)
+}
+
 // HandleInteraction routes interactions to the appropriate handlers
 func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i == nil {
+		return
+	}
+	if !cr.shouldHandleGuild(i.GuildID) {
 		return
 	}
 

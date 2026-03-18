@@ -34,6 +34,33 @@ func TestRuntimeActivityMarkEventPersistsTimestamp(t *testing.T) {
 	}
 }
 
+func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
+	store, _ := newLoggingStore(t, "runtime-activity-mark-event-by-bot.db")
+	expected := time.Date(2026, time.January, 2, 3, 14, 15, 0, time.UTC)
+
+	activity := newRuntimeActivity(store, runtimeActivityOptions{
+		RunErr:        runErrWithTimeoutContext,
+		EventTimeout:  time.Second,
+		BotInstanceID: "yuzuha",
+		Now: func() time.Time {
+			return expected
+		},
+	})
+
+	activity.MarkEvent(context.Background(), "test")
+
+	got, ok, err := store.GetLastEventForBot("yuzuha")
+	if err != nil {
+		t.Fatalf("get last event by bot: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected namespaced last event timestamp to be persisted")
+	}
+	if !got.Equal(expected) {
+		t.Fatalf("unexpected namespaced last event timestamp: got=%s want=%s", got.UTC(), expected.UTC())
+	}
+}
+
 func TestRuntimeActivityMarkEventUsesBackgroundWhenContextNil(t *testing.T) {
 	store, _ := newLoggingStore(t, "runtime-activity-mark-event-nil.db")
 	expected := time.Date(2026, time.January, 2, 4, 5, 6, 0, time.UTC)

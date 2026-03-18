@@ -313,6 +313,13 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 
 // AutoDetectGuilds automatically detects guilds where the bot is present.
 func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
+	return mgr.DetectGuildsForBot(session, "")
+}
+
+// DetectGuildsForBot automatically detects guilds and binds them to a bot
+// instance when one is provided.
+func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInstanceID string) error {
+	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	detected := make([]GuildConfig, 0, len(session.State.Guilds))
 
 	for _, g := range session.State.Guilds {
@@ -337,7 +344,8 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 			entryLeaveID = channelID
 		}
 		guildCfg := GuildConfig{
-			GuildID: g.ID,
+			GuildID:       g.ID,
+			BotInstanceID: botInstanceID,
 			Channels: ChannelsConfig{
 				Commands:      channelID,
 				AvatarLogging: channelID,
@@ -364,9 +372,16 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 
 // AddGuildToConfig adds a new guild to the configuration.
 func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID string) error {
+	return mgr.RegisterGuildForBot(session, guildID, "")
+}
+
+// RegisterGuildForBot adds a new guild to the configuration and binds it to
+// the provided bot instance when one is specified.
+func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildID, botInstanceID string) error {
 	if session == nil {
 		return fmt.Errorf("%w: discord session is unavailable", ErrGuildBootstrapDiscordFetch)
 	}
+	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	if mgr.GuildConfig(guildID) != nil {
 		log.ApplicationLogger().Info("Guild already configured, skipping", "guildID", guildID)
 		return nil
@@ -386,7 +401,8 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 	}
 
 	guildCfg := GuildConfig{
-		GuildID: guildID,
+		GuildID:       guildID,
+		BotInstanceID: botInstanceID,
 		Channels: ChannelsConfig{
 			Commands:      channelID,
 			AvatarLogging: channelID,
@@ -770,14 +786,31 @@ func SaveSettingsFileWithPath(settingsPath string, config *BotConfig) error {
 
 // LogConfiguredGuilds logs a summary of configured guilds. Returns error if any guilds are inaccessible.
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
+	return LogConfiguredGuildsForBot(configManager, session, "", "")
+}
+
+// LogConfiguredGuildsForBot logs the guild subset assigned to the provided bot
+// instance. Legacy guilds without a binding are included when botInstanceID is
+// empty.
+func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.Session, botInstanceID, defaultBotInstanceID string) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		log.ApplicationLogger().Warn(LogNoConfiguredGuilds)
 		return nil
 	}
-	log.ApplicationLogger().Info(fmt.Sprintf(LogFoundConfiguredGuilds, len(cfg.Guilds)))
+
+	guilds := cfg.Guilds
+	if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
+		guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID, defaultBotInstanceID)
+	}
+	if len(guilds) == 0 {
+		log.ApplicationLogger().Warn(LogNoConfiguredGuilds)
+		return nil
+	}
+
+	log.ApplicationLogger().Info(fmt.Sprintf(LogFoundConfiguredGuilds, len(guilds)))
 	var errCount int
-	for _, g := range cfg.Guilds {
+	for _, g := range guilds {
 		guild, err := session.Guild(g.GuildID)
 		if err == nil {
 			log.ApplicationLogger().Info(fmt.Sprintf("🔎 Will monitor this guild: %s (%s)", guild.Name, guild.ID))

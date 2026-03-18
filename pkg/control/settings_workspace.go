@@ -1,6 +1,7 @@
 package control
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -32,6 +33,7 @@ type settingsOverview struct {
 
 type configuredGuildSummary struct {
 	GuildID             string `json:"guild_id"`
+	BotInstanceID       string `json:"bot_instance_id,omitempty"`
 	ConfiguredChannels  int    `json:"configured_channels"`
 	AllowedRoles        int    `json:"allowed_roles"`
 	StatsChannels       int    `json:"stats_channels"`
@@ -51,29 +53,32 @@ type guildRegistryWorkspace struct {
 }
 
 type guildRegistryEntry struct {
-	GuildID             string `json:"guild_id"`
-	Name                string `json:"name,omitempty"`
-	Icon                string `json:"icon,omitempty"`
-	Owner               bool   `json:"owner"`
-	Permissions         int64  `json:"permissions"`
-	Configured          bool   `json:"configured"`
-	ConfiguredChannels  int    `json:"configured_channels,omitempty"`
-	AllowedRoles        int    `json:"allowed_roles,omitempty"`
-	StatsChannels       int    `json:"stats_channels,omitempty"`
-	Rulesets            int    `json:"rulesets,omitempty"`
-	LooseRules          int    `json:"loose_rules,omitempty"`
-	BlocklistEntries    int    `json:"blocklist_entries,omitempty"`
-	Partners            int    `json:"partners,omitempty"`
-	HasFeatureOverrides bool   `json:"has_feature_overrides,omitempty"`
-	HasRuntimeOverrides bool   `json:"has_runtime_overrides,omitempty"`
+	GuildID                 string   `json:"guild_id"`
+	Name                    string   `json:"name,omitempty"`
+	Icon                    string   `json:"icon,omitempty"`
+	Owner                   bool     `json:"owner"`
+	Permissions             int64    `json:"permissions"`
+	Configured              bool     `json:"configured"`
+	BotInstanceID           string   `json:"bot_instance_id,omitempty"`
+	AvailableBotInstanceIDs []string `json:"available_bot_instance_ids,omitempty"`
+	ConfiguredChannels      int      `json:"configured_channels,omitempty"`
+	AllowedRoles            int      `json:"allowed_roles,omitempty"`
+	StatsChannels           int      `json:"stats_channels,omitempty"`
+	Rulesets                int      `json:"rulesets,omitempty"`
+	LooseRules              int      `json:"loose_rules,omitempty"`
+	BlocklistEntries        int      `json:"blocklist_entries,omitempty"`
+	Partners                int      `json:"partners,omitempty"`
+	HasFeatureOverrides     bool     `json:"has_feature_overrides,omitempty"`
+	HasRuntimeOverrides     bool     `json:"has_runtime_overrides,omitempty"`
 }
 
 type guildRegistrySource struct {
-	GuildID     string
-	Name        string
-	Icon        string
-	Owner       bool
-	Permissions int64
+	GuildID                 string
+	Name                    string
+	Icon                    string
+	Owner                   bool
+	Permissions             int64
+	AvailableBotInstanceIDs []string
 }
 
 type globalSettingsWorkspace struct {
@@ -93,10 +98,12 @@ type globalSettingsEffective struct {
 }
 
 type guildSettingsWorkspace struct {
-	Scope     string                 `json:"scope"`
-	GuildID   string                 `json:"guild_id"`
-	Sections  guildSettingsSections  `json:"sections"`
-	Effective guildSettingsEffective `json:"effective"`
+	Scope                   string                 `json:"scope"`
+	GuildID                 string                 `json:"guild_id"`
+	BotInstanceID           string                 `json:"bot_instance_id,omitempty"`
+	AvailableBotInstanceIDs []string               `json:"available_bot_instance_ids,omitempty"`
+	Sections                guildSettingsSections  `json:"sections"`
+	Effective               guildSettingsEffective `json:"effective"`
 }
 
 type guildSettingsSections struct {
@@ -194,15 +201,16 @@ type updateGlobalSettingsRequest struct {
 }
 
 type updateGuildSettingsRequest struct {
-	Features     *files.FeatureToggles      `json:"features,omitempty"`
-	Channels     *files.ChannelsConfig      `json:"channels,omitempty"`
-	Roles        *files.RolesConfig         `json:"roles,omitempty"`
-	Stats        *files.StatsConfig         `json:"stats,omitempty"`
-	Moderation   *guildModerationSection    `json:"moderation,omitempty"`
-	Cache        *guildCacheSettingsSection `json:"cache,omitempty"`
-	UserPrune    *files.UserPruneConfig     `json:"user_prune,omitempty"`
-	PartnerBoard *files.PartnerBoardConfig  `json:"partner_board,omitempty"`
-	Runtime      *runtimeSettingsSections   `json:"runtime,omitempty"`
+	BotInstanceID *string                    `json:"bot_instance_id,omitempty"`
+	Features      *files.FeatureToggles      `json:"features,omitempty"`
+	Channels      *files.ChannelsConfig      `json:"channels,omitempty"`
+	Roles         *files.RolesConfig         `json:"roles,omitempty"`
+	Stats         *files.StatsConfig         `json:"stats,omitempty"`
+	Moderation    *guildModerationSection    `json:"moderation,omitempty"`
+	Cache         *guildCacheSettingsSection `json:"cache,omitempty"`
+	UserPrune     *files.UserPruneConfig     `json:"user_prune,omitempty"`
+	PartnerBoard  *files.PartnerBoardConfig  `json:"partner_board,omitempty"`
+	Runtime       *runtimeSettingsSections   `json:"runtime,omitempty"`
 }
 
 func buildSettingsCatalog() settingsCatalog {
@@ -299,13 +307,14 @@ func buildSettingsOverview(
 	configPath string,
 	registry guildRegistryWorkspace,
 	allowedGuilds map[string]struct{},
+	defaultBotInstanceID string,
 ) settingsOverview {
 	return settingsOverview{
 		ConfigPath: configPath,
 		Catalog:    buildSettingsCatalog(),
 		Global:     buildGlobalSettingsWorkspace(cfg),
 		Registry:   registry,
-		Guilds:     buildConfiguredGuildSummaries(cfg, allowedGuilds),
+		Guilds:     buildConfiguredGuildSummaries(cfg, allowedGuilds, defaultBotInstanceID),
 	}
 }
 
@@ -324,9 +333,20 @@ func buildGlobalSettingsWorkspace(cfg files.BotConfig) globalSettingsWorkspace {
 }
 
 func buildGuildSettingsWorkspace(cfg files.BotConfig, guild files.GuildConfig) guildSettingsWorkspace {
+	return buildGuildSettingsWorkspaceWithBindings(cfg, guild, nil, "")
+}
+
+func buildGuildSettingsWorkspaceWithBindings(
+	cfg files.BotConfig,
+	guild files.GuildConfig,
+	availableBotInstanceIDs []string,
+	defaultBotInstanceID string,
+) guildSettingsWorkspace {
 	return guildSettingsWorkspace{
-		Scope:   "guild",
-		GuildID: guild.GuildID,
+		Scope:                   "guild",
+		GuildID:                 guild.GuildID,
+		BotInstanceID:           guild.EffectiveBotInstanceID(defaultBotInstanceID),
+		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
 			Features: guild.Features,
 			Channels: guild.Channels,
@@ -354,13 +374,17 @@ func buildGuildSettingsWorkspace(cfg files.BotConfig, guild files.GuildConfig) g
 	}
 }
 
-func buildConfiguredGuildSummaries(cfg files.BotConfig, allowedGuilds map[string]struct{}) []configuredGuildSummary {
+func buildConfiguredGuildSummaries(
+	cfg files.BotConfig,
+	allowedGuilds map[string]struct{},
+	defaultBotInstanceID string,
+) []configuredGuildSummary {
 	out := make([]configuredGuildSummary, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
 		if !guildAllowed(guild.GuildID, allowedGuilds) {
 			continue
 		}
-		out = append(out, buildConfiguredGuildSummary(guild))
+		out = append(out, buildConfiguredGuildSummary(guild, defaultBotInstanceID))
 	}
 	return out
 }
@@ -369,13 +393,14 @@ func buildGuildRegistryWorkspace(
 	cfg files.BotConfig,
 	sources []guildRegistrySource,
 	allowedGuilds map[string]struct{},
+	defaultBotInstanceID string,
 ) guildRegistryWorkspace {
 	configured := make(map[string]configuredGuildSummary, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
 		if !guildAllowed(guild.GuildID, allowedGuilds) {
 			continue
 		}
-		configured[guild.GuildID] = buildConfiguredGuildSummary(guild)
+		configured[guild.GuildID] = buildConfiguredGuildSummary(guild, defaultBotInstanceID)
 	}
 
 	entries := make([]guildRegistryEntry, 0, len(sources)+len(configured))
@@ -392,11 +417,12 @@ func buildGuildRegistryWorkspace(
 		}
 
 		entry := guildRegistryEntry{
-			GuildID:     guildID,
-			Name:        strings.TrimSpace(source.Name),
-			Icon:        strings.TrimSpace(source.Icon),
-			Owner:       source.Owner,
-			Permissions: source.Permissions,
+			GuildID:                 guildID,
+			Name:                    strings.TrimSpace(source.Name),
+			Icon:                    strings.TrimSpace(source.Icon),
+			Owner:                   source.Owner,
+			Permissions:             source.Permissions,
+			AvailableBotInstanceIDs: slices.Clone(source.AvailableBotInstanceIDs),
 		}
 		if summary, ok := configured[guildID]; ok {
 			entry.Configured = true
@@ -446,9 +472,10 @@ func buildGuildRegistryWorkspace(
 	}
 }
 
-func buildConfiguredGuildSummary(guild files.GuildConfig) configuredGuildSummary {
+func buildConfiguredGuildSummary(guild files.GuildConfig, defaultBotInstanceID string) configuredGuildSummary {
 	return configuredGuildSummary{
 		GuildID:             guild.GuildID,
+		BotInstanceID:       guild.EffectiveBotInstanceID(defaultBotInstanceID),
 		ConfiguredChannels:  countConfiguredChannels(guild.Channels),
 		AllowedRoles:        len(guild.Roles.Allowed),
 		StatsChannels:       len(guild.Stats.Channels),
@@ -465,6 +492,7 @@ func applyConfiguredSummary(entry *guildRegistryEntry, summary configuredGuildSu
 	if entry == nil {
 		return
 	}
+	entry.BotInstanceID = summary.BotInstanceID
 	entry.ConfiguredChannels = summary.ConfiguredChannels
 	entry.AllowedRoles = summary.AllowedRoles
 	entry.StatsChannels = summary.StatsChannels

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -20,6 +21,8 @@ import (
 type ReactionEventService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
+	botInstanceID string
+	defaultBotID  string
 	store         *storage.Store
 	activity      *runtimeActivity
 	lifecycle     serviceLifecycle
@@ -30,14 +33,28 @@ type ReactionEventService struct {
 
 // NewReactionEventService creates a new ReactionEventService.
 func NewReactionEventService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *ReactionEventService {
+	return NewReactionEventServiceForBot(session, configManager, store, "", "")
+}
+
+// NewReactionEventServiceForBot creates a ReactionEventService scoped to one bot instance.
+func NewReactionEventServiceForBot(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	store *storage.Store,
+	botInstanceID string,
+	defaultBotInstanceID string,
+) *ReactionEventService {
 	return &ReactionEventService{
 		session:       session,
 		configManager: configManager,
+		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		store:         store,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
-			RunErr:       runErrWithTimeoutContext,
-			EventTimeout: loggingDependencyTimeout,
-			Warn:         slog.Warn,
+			RunErr:        runErrWithTimeoutContext,
+			EventTimeout:  loggingDependencyTimeout,
+			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+			Warn:          slog.Warn,
 		}),
 		lifecycle:      newServiceLifecycle("reaction event service"),
 		handlerCancels: make([]func(), 0, 2),
@@ -122,6 +139,9 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 		slog.Debug("ReactionAdd: guildID missing; skipping metrics", "channelID", e.ChannelID, "userID", e.UserID)
 		return
 	}
+	if !rs.handlesGuild(guildID) {
+		return
+	}
 
 	done := perf.StartGatewayEvent(
 		"message_reaction_add",
@@ -173,4 +193,22 @@ func emojiName(e discordgo.Emoji) string {
 		return e.ID
 	}
 	return ""
+}
+
+func (rs *ReactionEventService) handlesGuild(guildID string) bool {
+	if rs == nil || rs.configManager == nil {
+		return false
+	}
+	if files.NormalizeBotInstanceID(rs.botInstanceID) == "" && files.NormalizeBotInstanceID(rs.defaultBotID) == "" {
+		return true
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return false
+	}
+	guild := rs.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return false
+	}
+	return guild.EffectiveBotInstanceID(rs.defaultBotID) == files.NormalizeBotInstanceID(rs.botInstanceID)
 }

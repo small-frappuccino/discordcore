@@ -27,11 +27,11 @@ import (
 type Manager struct {
 	mu sync.Mutex
 
-	// serviceManager is optional; if nil, service-level hot-apply is skipped.
-	serviceManager *service.ServiceManager
+	// serviceManagers are optional; when empty, service-level hot-apply is skipped.
+	serviceManagers []*service.ServiceManager
 
-	// monitoringHotApply is optional; if nil, monitoring-level hot-apply is skipped.
-	monitoringHotApply MonitoringHotApplier
+	// monitoringHotApply targets are optional; when empty, monitoring hot-apply is skipped.
+	monitoringHotApply []MonitoringHotApplier
 
 	// lastApplied is used to compute diffs. It should be initialized from config
 	// during startup via SetInitial().
@@ -49,10 +49,24 @@ type MonitoringHotApplier interface {
 
 // New creates a Manager. Any dependency can be nil; unsupported apply steps will be skipped.
 func New(sm *service.ServiceManager, monitoring MonitoringHotApplier) *Manager {
-	return &Manager{
-		serviceManager:     sm,
-		monitoringHotApply: monitoring,
-		lastApplied:        files.RuntimeConfig{},
+	m := &Manager{lastApplied: files.RuntimeConfig{}}
+	m.AddRuntime(sm, monitoring)
+	return m
+}
+
+// AddRuntime registers another runtime target for hot-apply. Nil dependencies
+// are ignored so callers can add runtimes progressively during startup.
+func (m *Manager) AddRuntime(sm *service.ServiceManager, monitoring MonitoringHotApplier) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if sm != nil {
+		m.serviceManagers = append(m.serviceManagers, sm)
+	}
+	if monitoring != nil {
+		m.monitoringHotApply = append(m.monitoringHotApply, monitoring)
 	}
 }
 
@@ -82,11 +96,16 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 
 	// Apply monitoring toggles (entry/exit, message logs, reaction logs, user logs, perm mirror)
 	// This is done through an interface so the logging package can implement it without cycles.
-	if m.monitoringHotApply != nil {
+	if len(m.monitoringHotApply) > 0 {
 		// Only call if any relevant toggle changed, to avoid churn.
 		if monitoringTogglesChanged(prev, next) {
-			if err := m.monitoringHotApply.ApplyRuntimeToggles(ctx, next); err != nil {
-				return fmt.Errorf("apply monitoring toggles: %w", err)
+			for _, target := range m.monitoringHotApply {
+				if target == nil {
+					continue
+				}
+				if err := target.ApplyRuntimeToggles(ctx, next); err != nil {
+					return fmt.Errorf("apply monitoring toggles: %w", err)
+				}
 			}
 		}
 	}
@@ -96,13 +115,18 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 	// NOTE: This code only handles services that are actually registered in ServiceManager.
 	// In this repo today, `monitoring` is registered, `automod` may be registered depending
 	// on startup gating.
-	if m.serviceManager != nil {
+	if len(m.serviceManagers) > 0 {
 		if prev.DisableAutomodLogs != next.DisableAutomodLogs {
 			// If disabled => stop. If enabled => start.
-			if next.DisableAutomodLogs {
-				_ = m.serviceManager.StopService("automod")
-			} else {
-				_ = m.serviceManager.StartService("automod")
+			for _, manager := range m.serviceManagers {
+				if manager == nil {
+					continue
+				}
+				if next.DisableAutomodLogs {
+					_ = manager.StopService("automod")
+				} else {
+					_ = manager.StartService("automod")
+				}
 			}
 		}
 

@@ -19,7 +19,8 @@ var (
 )
 
 type registerGuildRequest struct {
-	GuildID string `json:"guild_id"`
+	GuildID       string `json:"guild_id"`
+	BotInstanceID string `json:"bot_instance_id,omitempty"`
 }
 
 func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
@@ -90,10 +91,10 @@ func (s *Server) handleSettingsOverviewGet(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	registry := buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds)
+	registry := buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
-		"workspace": buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds),
+		"workspace": buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds, s.defaultBotInstanceID),
 	})
 }
 
@@ -154,8 +155,8 @@ func (s *Server) handleGuildRegistryGet(w http.ResponseWriter, r *http.Request, 
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
-		"workspace": buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds),
-		"guilds":    buildConfiguredGuildSummaries(cfg, allowedGuilds),
+		"workspace": buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID),
+		"guilds":    buildConfiguredGuildSummaries(cfg, allowedGuilds, s.defaultBotInstanceID),
 	})
 }
 
@@ -170,6 +171,17 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "guild_id is required", http.StatusBadRequest)
 		return
 	}
+	availableBotInstanceIDs, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), auth, guildID)
+	if err != nil {
+		status := statusForManageableGuildsError(err)
+		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), status)
+		return
+	}
+	botInstanceID, err := selectGuildBotInstanceID(payload.BotInstanceID, availableBotInstanceIDs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if !s.authorizeGuildAccess(w, r, auth, guildID) {
 		return
 	}
@@ -181,7 +193,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 			"status":    "ok",
 			"guild_id":  guildID,
 			"created":   false,
-			"workspace": buildGuildSettingsWorkspace(current, guild),
+			"workspace": buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
 		})
 		return
 	}
@@ -193,7 +205,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	}
 
 	logSettingsRegistrationAttempt(auth, guildID)
-	if err := s.guildRegistration(r.Context(), guildID); err != nil {
+	if err := s.guildRegistration(r.Context(), guildID, botInstanceID); err != nil {
 		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.failed", err)
 		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
 		return
@@ -213,7 +225,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		"status":    "ok",
 		"guild_id":  guildID,
 		"created":   true,
-		"workspace": buildGuildSettingsWorkspace(updated, guild),
+		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -224,10 +236,15 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, fmt.Sprintf("guild settings not found for %s", guildID), http.StatusNotFound)
 		return
 	}
+	availableBotInstanceIDs, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
+	if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
-		"workspace": buildGuildSettingsWorkspace(cfg, guild),
+		"workspace": buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -240,11 +257,32 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "payload must contain at least one settings section", http.StatusBadRequest)
 		return
 	}
+	var (
+		availableBotInstanceIDs []string
+		nextBotInstanceID       string
+	)
+	if payload.BotInstanceID != nil {
+		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
+		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
+			return
+		}
+		selectedBotInstanceID, err := selectGuildBotInstanceID(*payload.BotInstanceID, available)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		availableBotInstanceIDs = available
+		nextBotInstanceID = selectedBotInstanceID
+	}
 
 	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
 		guild, ok := findGuildSettingsMutable(cfg, guildID)
 		if !ok {
 			return fmt.Errorf("%w: register this guild first (guild_id=%s)", errGuildRegistrationRequired, guildID)
+		}
+		if payload.BotInstanceID != nil {
+			guild.BotInstanceID = nextBotInstanceID
 		}
 		if payload.Features != nil {
 			guild.Features = *payload.Features
@@ -306,10 +344,17 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, fmt.Sprintf("updated guild settings not found for %s", guildID), http.StatusInternalServerError)
 		return
 	}
+	if payload.BotInstanceID == nil {
+		availableBotInstanceIDs, err = s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
+		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
+			return
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
-		"workspace": buildGuildSettingsWorkspace(updated, guild),
+		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -345,25 +390,14 @@ func (s *Server) resolveGuildRegistrySources(
 		ctx, cancel := context.WithTimeout(r.Context(), defaultManageableGuildsQuery)
 		defer cancel()
 
-		botGuildSet, err := s.resolveBotGuildIDSet(ctx)
+		bindings, err := s.resolveBotGuildBindings(ctx)
 		if err != nil {
 			if errors.Is(err, errBotGuildIDsProviderUnavailable) {
 				return nil, nil, nil
 			}
 			return nil, nil, err
 		}
-
-		ids := make([]string, 0, len(botGuildSet))
-		for guildID := range botGuildSet {
-			ids = append(ids, guildID)
-		}
-		sort.Strings(ids)
-
-		sources := make([]guildRegistrySource, 0, len(ids))
-		for _, guildID := range ids {
-			sources = append(sources, guildRegistrySource{GuildID: guildID})
-		}
-		return sources, nil, nil
+		return guildRegistrySourcesFromBindings(bindings), nil, nil
 	case requestAuthModeDiscordOAuthSession:
 		ctx, cancel := context.WithTimeout(r.Context(), defaultManageableGuildsQuery)
 		defer cancel()
@@ -372,6 +406,14 @@ func (s *Server) resolveGuildRegistrySources(
 		if err != nil {
 			return nil, nil, err
 		}
+		bindings, err := s.resolveBotGuildBindings(ctx)
+		if err != nil {
+			if !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+				return nil, nil, err
+			}
+			bindings = nil
+		}
+		botInstanceIDsByGuild := groupBotInstanceIDsByGuild(bindings)
 
 		out := make(map[string]struct{}, len(manageable))
 		sources := make([]guildRegistrySource, 0, len(manageable))
@@ -382,11 +424,12 @@ func (s *Server) resolveGuildRegistrySources(
 			}
 			out[guildID] = struct{}{}
 			sources = append(sources, guildRegistrySource{
-				GuildID:     guildID,
-				Name:        strings.TrimSpace(guild.Name),
-				Icon:        strings.TrimSpace(guild.Icon),
-				Owner:       guild.Owner,
-				Permissions: guild.Permissions,
+				GuildID:                 guildID,
+				Name:                    strings.TrimSpace(guild.Name),
+				Icon:                    strings.TrimSpace(guild.Icon),
+				Owner:                   guild.Owner,
+				Permissions:             guild.Permissions,
+				AvailableBotInstanceIDs: botInstanceIDsByGuild[guildID],
 			})
 		}
 		return sources, out, nil
@@ -404,7 +447,8 @@ func normalizeSettingsRoutePath(path string) string {
 }
 
 func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
-	return payload.Features == nil &&
+	return payload.BotInstanceID == nil &&
+		payload.Features == nil &&
 		payload.Channels == nil &&
 		payload.Roles == nil &&
 		payload.Stats == nil &&
@@ -413,6 +457,140 @@ func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 		payload.UserPrune == nil &&
 		payload.PartnerBoard == nil &&
 		payload.Runtime == nil
+}
+
+func (s *Server) resolveAvailableBotInstanceIDsForGuild(
+	ctx context.Context,
+	auth requestAuthorization,
+	guildID string,
+) ([]string, error) {
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, fmt.Errorf("guild_id is required")
+	}
+
+	bindings, err := s.resolveBotGuildBindings(ctx)
+	if err != nil {
+		if errors.Is(err, errBotGuildIDsProviderUnavailable) && auth.mode != requestAuthModeDiscordOAuthSession {
+			return nil, nil
+		}
+		return nil, err
+	}
+	available := groupBotInstanceIDsByGuild(bindings)[guildID]
+	if auth.mode == requestAuthModeDiscordOAuthSession {
+		manageable, resolveErr := s.resolveManageableGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		allowed := false
+		for _, guild := range manageable {
+			if strings.TrimSpace(guild.ID) == guildID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return nil, fmt.Errorf("guild %s is not manageable by the authenticated user", guildID)
+		}
+	}
+	return available, nil
+}
+
+func selectGuildBotInstanceID(requested string, availableBotInstanceIDs []string) (string, error) {
+	availableBotInstanceIDs = normalizeBotInstanceIDs(availableBotInstanceIDs)
+	requested = strings.TrimSpace(requested)
+
+	switch {
+	case requested == "" && len(availableBotInstanceIDs) == 0:
+		return "", nil
+	case requested == "" && len(availableBotInstanceIDs) == 1:
+		return availableBotInstanceIDs[0], nil
+	case requested == "":
+		return "", fmt.Errorf("bot_instance_id is required when multiple bot instances are available")
+	}
+
+	if len(availableBotInstanceIDs) == 0 {
+		return requested, nil
+	}
+	for _, candidate := range availableBotInstanceIDs {
+		if candidate == requested {
+			return requested, nil
+		}
+	}
+	return "", fmt.Errorf("bot_instance_id %q is not available for this guild", requested)
+}
+
+func groupBotInstanceIDsByGuild(bindings []BotGuildBinding) map[string][]string {
+	out := make(map[string][]string)
+	seen := make(map[string]map[string]struct{})
+	for _, binding := range bindings {
+		guildID := strings.TrimSpace(binding.GuildID)
+		botInstanceID := strings.TrimSpace(binding.BotInstanceID)
+		if guildID == "" || botInstanceID == "" {
+			continue
+		}
+		if _, ok := seen[guildID]; !ok {
+			seen[guildID] = make(map[string]struct{})
+		}
+		if _, ok := seen[guildID][botInstanceID]; ok {
+			continue
+		}
+		seen[guildID][botInstanceID] = struct{}{}
+		out[guildID] = append(out[guildID], botInstanceID)
+	}
+	for guildID := range out {
+		sort.Strings(out[guildID])
+	}
+	return out
+}
+
+func guildRegistrySourcesFromBindings(bindings []BotGuildBinding) []guildRegistrySource {
+	if len(bindings) == 0 {
+		return nil
+	}
+
+	availableByGuild := groupBotInstanceIDsByGuild(bindings)
+	seen := make(map[string]struct{}, len(bindings))
+	sources := make([]guildRegistrySource, 0, len(bindings))
+	for _, binding := range bindings {
+		guildID := strings.TrimSpace(binding.GuildID)
+		if guildID == "" {
+			continue
+		}
+		if _, ok := seen[guildID]; ok {
+			continue
+		}
+		seen[guildID] = struct{}{}
+		sources = append(sources, guildRegistrySource{
+			GuildID:                 guildID,
+			AvailableBotInstanceIDs: slices.Clone(availableByGuild[guildID]),
+		})
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].GuildID < sources[j].GuildID
+	})
+	return sources
+}
+
+func normalizeBotInstanceIDs(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func statusForSettingsMutationError(err error) int {

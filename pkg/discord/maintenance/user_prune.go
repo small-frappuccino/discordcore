@@ -29,6 +29,8 @@ type pruneResponse struct {
 type UserPruneService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
+	botInstanceID string
+	defaultBotID  string
 	store         *storage.Store
 
 	stopOnce sync.Once
@@ -40,9 +42,21 @@ type UserPruneService struct {
 }
 
 func NewUserPruneService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *UserPruneService {
+	return NewUserPruneServiceForBot(session, configManager, store, "", "")
+}
+
+func NewUserPruneServiceForBot(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	store *storage.Store,
+	botInstanceID string,
+	defaultBotInstanceID string,
+) *UserPruneService {
 	return &UserPruneService{
 		session:       session,
 		configManager: configManager,
+		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		store:         store,
 		stopCh:        make(chan struct{}),
 	}
@@ -99,7 +113,11 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 		return
 	}
 	cfg := s.configManager.Config()
-	if cfg == nil || len(cfg.Guilds) == 0 {
+	if cfg == nil {
+		return
+	}
+	guilds := cfg.GuildsForBotInstance(s.botInstanceID, s.defaultBotID)
+	if len(guilds) == 0 {
 		return
 	}
 	if s.session == nil || s.store == nil {
@@ -111,7 +129,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 
 	botID := s.currentBotID()
 
-	for _, gcfg := range cfg.Guilds {
+	for _, gcfg := range guilds {
 		if !cfg.ResolveFeatures(gcfg.GuildID).UserPrune {
 			continue
 		}

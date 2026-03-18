@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,8 @@ const unknownServerTimeSentinel time.Duration = -1
 type MemberEventService struct {
 	session        *discordgo.Session
 	configManager  *files.ConfigManager
+	botInstanceID  string
+	defaultBotID   string
 	notifier       *NotificationSender
 	adapters       *task.NotificationAdapters
 	activity       *runtimeActivity
@@ -41,15 +44,30 @@ type MemberEventService struct {
 
 // NewMemberEventService creates a new instance of the member events service
 func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MemberEventService {
+	return NewMemberEventServiceForBot(session, configManager, notifier, store, "", "")
+}
+
+// NewMemberEventServiceForBot creates a member event service scoped to one bot instance.
+func NewMemberEventServiceForBot(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	notifier *NotificationSender,
+	store *storage.Store,
+	botInstanceID string,
+	defaultBotInstanceID string,
+) *MemberEventService {
 	return &MemberEventService{
 		session:       session,
 		configManager: configManager,
+		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		notifier:      notifier,
 		store:         store,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
-			RunErr:       runErrWithTimeoutContext,
-			EventTimeout: loggingDependencyTimeout,
-			Warn:         slog.Warn,
+			RunErr:        runErrWithTimeoutContext,
+			EventTimeout:  loggingDependencyTimeout,
+			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+			Warn:          slog.Warn,
 		}),
 		lifecycle:      newServiceLifecycle("member event service"),
 		handlerCancels: make([]func(), 0, 3),
@@ -177,6 +195,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 
 	mes.markEvent(ctx)
 	if mes.configManager == nil {
+		return
+	}
+	if !mes.handlesGuild(m.GuildID) {
 		return
 	}
 	cfg := mes.configManager.Config()
@@ -319,6 +340,9 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, s *d
 	if mes.configManager == nil {
 		return
 	}
+	if !mes.handlesGuild(m.GuildID) {
+		return
+	}
 	cfg := mes.configManager.Config()
 	if cfg == nil {
 		return
@@ -395,6 +419,9 @@ func (mes *MemberEventService) handleGuildMemberUpdate(ctx context.Context, s *d
 	defer done()
 
 	if mes.configManager == nil {
+		return
+	}
+	if !mes.handlesGuild(m.GuildID) {
 		return
 	}
 	cfg := mes.configManager.Config()
@@ -574,4 +601,22 @@ func (mes *MemberEventService) guildMemberRoleRemove(ctx context.Context, guildI
 	return runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
 		return mes.session.GuildMemberRoleRemove(guildID, userID, roleID)
 	})
+}
+
+func (mes *MemberEventService) handlesGuild(guildID string) bool {
+	if mes == nil || mes.configManager == nil {
+		return false
+	}
+	if files.NormalizeBotInstanceID(mes.botInstanceID) == "" && files.NormalizeBotInstanceID(mes.defaultBotID) == "" {
+		return true
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return false
+	}
+	guild := mes.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return false
+	}
+	return guild.EffectiveBotInstanceID(mes.defaultBotID) == files.NormalizeBotInstanceID(mes.botInstanceID)
 }

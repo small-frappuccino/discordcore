@@ -113,12 +113,14 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	}
 
 	origNewDiscordSession := newDiscordSession
+	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
 	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	origSetupCommandHandler := setupCommandHandler
 	origShutdownCommandHandler := shutdownCommandHandler
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
+		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
 		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 		setupCommandHandler = origSetupCommandHandler
@@ -126,6 +128,9 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	})
 
 	newDiscordSession = func(string) (*discordgo.Session, error) {
+		return session, nil
+	}
+	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
 		return session, nil
 	}
 	waitForInterrupt = func() {}
@@ -210,12 +215,14 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	}
 
 	origNewDiscordSession := newDiscordSession
+	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
 	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	origCloseStore := closeStore
 	origCloseDiscordSession := closeDiscordSession
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
+		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
 		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 		closeStore = origCloseStore
@@ -223,6 +230,9 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	})
 
 	newDiscordSession = func(string) (*discordgo.Session, error) {
+		return session, nil
+	}
+	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
 		return session, nil
 	}
 	waitForInterrupt = func() {}
@@ -318,15 +328,20 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	})
 
 	origNewDiscordSession := newDiscordSession
+	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
 	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
+		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
 		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 	})
 
 	newDiscordSession = func(string) (*discordgo.Session, error) {
+		return session, nil
+	}
+	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
 		return session, nil
 	}
 	waitForInterrupt = func() {}

@@ -1,0 +1,242 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
+	coreerrors "github.com/small-frappuccino/discordcore/pkg/errors"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/partners"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
+	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/task"
+)
+
+type botRuntimeOptions struct {
+	defaultBotInstanceID string
+	configManager        *files.ConfigManager
+	store                *storage.Store
+	errorHandler         *coreerrors.ErrorHandler
+	runtimeApplier       *runtimeapply.Manager
+	partnerBoardService  partners.BoardService
+	partnerSyncExecutor  partners.GuildSyncExecutor
+}
+
+func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
+	log.DiscordLogger().Info(
+		"Attempting to authenticate with Discord API...",
+		"botInstanceID", instance.ID,
+	)
+	log.DiscordLogger().Info("Using bot token (value redacted)", "botInstanceID", instance.ID)
+
+	discordSession, err := newDiscordSessionWithIntents(instance.Token, capabilities.intents)
+	if err != nil {
+		return nil, fmt.Errorf("create discord session for %s: %w", instance.ID, err)
+	}
+	if discordSession.State == nil || discordSession.State.User == nil {
+		return nil, fmt.Errorf("discord session state not properly initialized for %s", instance.ID)
+	}
+
+	log.DiscordLogger().Info(
+		"Authenticated with Discord",
+		"botInstanceID", instance.ID,
+		"botUser", fmt.Sprintf("%s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator),
+	)
+	return &botRuntime{
+		instanceID:   instance.ID,
+		capabilities: capabilities,
+		session:      discordSession,
+	}, nil
+}
+
+func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
+	if runtime == nil || runtime.session == nil {
+		return fmt.Errorf("bot runtime is unavailable")
+	}
+
+	if err := files.LogConfiguredGuildsForBot(opts.configManager, runtime.session, runtime.instanceID, opts.defaultBotInstanceID); err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Some configured guilds could not be accessed",
+			"botInstanceID", runtime.instanceID,
+			"err", err,
+		)
+	}
+
+	cfg := opts.configManager.Config()
+	runtimeConfig := files.RuntimeConfig{}
+	if cfg != nil {
+		runtimeConfig = cfg.RuntimeConfig
+	}
+
+	runtime.serviceManager = service.NewServiceManager(opts.errorHandler)
+	var monitoringService *logging.MonitoringService
+	var unifiedCache *cache.UnifiedCache
+	if runtime.capabilities.monitoring {
+		var err error
+		monitoringService, err = logging.NewMonitoringServiceForBot(
+			runtime.session,
+			opts.configManager,
+			opts.store,
+			runtime.instanceID,
+			opts.defaultBotInstanceID,
+		)
+		if err != nil {
+			return fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
+		}
+		runtime.monitoringService = monitoringService
+		unifiedCache = monitoringService.GetUnifiedCache()
+		if runtime.capabilities.warmup {
+			if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
+				log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)", "botInstanceID", runtime.instanceID)
+			} else {
+				warmupConfig := cache.DefaultWarmupConfig()
+				warmupConfig.MaxMembersPerGuild = 500
+				if err := cache.IntelligentWarmup(runtime.session, unifiedCache, opts.store, warmupConfig); err != nil {
+					log.ApplicationLogger().Warn(
+						fmt.Sprintf("Intelligent warmup failed (continuing): %v", err),
+						"botInstanceID", runtime.instanceID,
+					)
+				}
+			}
+		}
+		if unifiedCache != nil {
+			runtime.persistStop = unifiedCache.SetPersistInterval(time.Hour)
+		}
+	} else {
+		log.ApplicationLogger().Info("Monitoring runtime skipped; no effective monitoring workload is enabled", "botInstanceID", runtime.instanceID)
+	}
+	if opts.runtimeApplier != nil {
+		opts.runtimeApplier.AddRuntime(runtime.serviceManager, monitoringService)
+	}
+
+	disableAutomod := runtimeConfig.DisableAutomodLogs
+	var automodWrapper *service.ServiceWrapper
+	if !runtime.capabilities.automod {
+		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
+	} else if disableAutomod {
+		log.ApplicationLogger().Info("Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start", "botInstanceID", runtime.instanceID)
+	} else {
+		automodService := logging.NewAutomodService(runtime.session, opts.configManager)
+		automodRouter := task.NewRouter(task.Defaults())
+		notifier := logging.NewNotificationSender(runtime.session)
+		if monitoringService != nil {
+			notifier = monitoringService.Notifier()
+		}
+		automodAdapters := task.NewNotificationAdapters(automodRouter, runtime.session, opts.configManager, opts.store, notifier)
+		automodService.SetAdapters(automodAdapters)
+
+		automodWrapper = service.NewServiceWrapper(
+			"automod",
+			service.TypeAutomod,
+			service.PriorityNormal,
+			[]string{},
+			func(context.Context) error { automodService.Start(); return nil },
+			func(context.Context) error {
+				automodRouter.Close()
+				automodService.Stop()
+				return nil
+			},
+			func() bool { return true },
+		)
+	}
+
+	if monitoringService != nil {
+		if err := runtime.serviceManager.Register(monitoringService); err != nil {
+			return fmt.Errorf("register monitoring service for %s: %w", runtime.instanceID, err)
+		}
+	}
+	if automodWrapper != nil {
+		if err := runtime.serviceManager.Register(automodWrapper); err != nil {
+			return fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
+		}
+	}
+
+	if runtime.capabilities.userPrune {
+		userPruneService := maintenance.NewUserPruneServiceForBot(runtime.session, opts.configManager, opts.store, runtime.instanceID, opts.defaultBotInstanceID)
+		userPruneDependencies := []string{}
+		if monitoringService != nil {
+			userPruneDependencies = []string{"monitoring"}
+		}
+		userPruneWrapper := service.NewServiceWrapper(
+			"user-prune",
+			service.TypeMonitoring,
+			service.PriorityNormal,
+			userPruneDependencies,
+			func(context.Context) error { userPruneService.Start(); return nil },
+			func(context.Context) error { userPruneService.Stop(); return nil },
+			func() bool { return userPruneService.IsRunning() },
+		)
+		if err := runtime.serviceManager.Register(userPruneWrapper); err != nil {
+			return fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
+		}
+		log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
+	}
+
+	log.ApplicationLogger().Info("Starting runtime services", "botInstanceID", runtime.instanceID)
+	if err := runtime.serviceManager.StartAll(); err != nil {
+		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
+	}
+
+	if runtime.capabilities.commands {
+		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
+		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
+		if err := setupCommandHandler(commandHandler); err != nil {
+			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
+		}
+		if cm := commandHandler.GetCommandManager(); cm != nil {
+			if router := cm.GetRouter(); router != nil {
+				router.SetStore(opts.store)
+				if monitoringService != nil {
+					router.SetCache(monitoringService.GetUnifiedCache())
+					router.SetTaskRouter(monitoringService.TaskRouter())
+				}
+				router.SetRuntimeApplier(opts.runtimeApplier)
+			}
+		}
+		if runtime.capabilities.admin {
+			adminCommands := admin.NewAdminCommands(runtime.serviceManager, unifiedCache, opts.store)
+			adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
+		}
+		runtime.commandHandler = commandHandler
+	} else {
+		log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
+	}
+
+	return nil
+}
+
+func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
+	if runtime == nil {
+		return nil
+	}
+
+	var errs []error
+	if runtime.serviceManager != nil {
+		if err := runtime.serviceManager.StopAll(); err != nil {
+			errs = append(errs, fmt.Errorf("stop services for %s: %w", runtime.instanceID, err))
+		}
+	}
+	if runtime.commandHandler != nil {
+		if err := shutdownCommandHandler(runtime.commandHandler); err != nil {
+			errs = append(errs, fmt.Errorf("shutdown command handler for %s: %w", runtime.instanceID, err))
+		}
+	}
+	if runtime.persistStop != nil {
+		close(runtime.persistStop)
+		runtime.persistStop = nil
+	}
+	if runtime.cleanupStop != nil {
+		close(runtime.cleanupStop)
+		runtime.cleanupStop = nil
+	}
+	_ = ctx
+	return errs
+}
