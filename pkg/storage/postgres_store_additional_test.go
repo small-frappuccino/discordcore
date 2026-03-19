@@ -2,13 +2,13 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
@@ -73,59 +73,48 @@ func TestSchemaInitialized(t *testing.T) {
 	}
 }
 
-func TestInitRepairsMissingMemberJoinLastSeenColumn(t *testing.T) {
+func TestInitRepairsMissingMemberJoinStateColumns(t *testing.T) {
 	store := newTempStore(t)
 	joinedAt := time.Date(2022, 4, 5, 6, 7, 8, 0, time.UTC)
 	if err := store.UpsertMemberJoin("g1", "u1", joinedAt); err != nil {
 		t.Fatalf("seed member join: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	migrator := persistence.NewPostgresMigrator(store.db)
-	if err := migrator.Down(ctx, 1); err != nil {
-		t.Fatalf("rollback migration 3: %v", err)
+	if _, err := store.db.Exec(`
+		ALTER TABLE member_joins
+			DROP COLUMN IF EXISTS left_at,
+			DROP COLUMN IF EXISTS is_bot,
+			DROP COLUMN IF EXISTS last_seen_at
+	`); err != nil {
+		t.Fatalf("drop member join state columns: %v", err)
 	}
 
-	var exists bool
-	if err := store.db.QueryRow(
-		`SELECT EXISTS (
-			SELECT 1
-			FROM information_schema.columns
-			WHERE table_schema = current_schema()
-			  AND table_name = 'member_joins'
-			  AND column_name = 'last_seen_at'
-		)`,
-	).Scan(&exists); err != nil {
-		t.Fatalf("check column removed: %v", err)
+	missing, err := store.missingColumns(context.Background(), "member_joins", requiredSchemaColumns["member_joins"])
+	if err != nil {
+		t.Fatalf("missingColumns(before repair): %v", err)
 	}
-	if exists {
-		t.Fatal("expected last_seen_at column to be absent after rollback")
+	if len(missing) != len(requiredSchemaColumns["member_joins"]) {
+		t.Fatalf("expected all member_joins state columns to be absent, missing=%v", missing)
 	}
 
 	if err := store.Init(); err != nil {
-		t.Fatalf("Init() should repair missing last_seen_at column: %v", err)
+		t.Fatalf("Init() should repair missing member_joins state columns: %v", err)
 	}
 
-	if err := store.db.QueryRow(
-		`SELECT EXISTS (
-			SELECT 1
-			FROM information_schema.columns
-			WHERE table_schema = current_schema()
-			  AND table_name = 'member_joins'
-			  AND column_name = 'last_seen_at'
-		)`,
-	).Scan(&exists); err != nil {
-		t.Fatalf("check column restored: %v", err)
+	missing, err = store.missingColumns(context.Background(), "member_joins", requiredSchemaColumns["member_joins"])
+	if err != nil {
+		t.Fatalf("missingColumns(after repair): %v", err)
 	}
-	if !exists {
-		t.Fatal("expected last_seen_at column to be restored by Init()")
+	if len(missing) != 0 {
+		t.Fatalf("expected member_joins state columns to be restored by Init(), missing=%v", missing)
 	}
 
 	var gotJoinedAt, gotLastSeen time.Time
+	var gotIsBot sql.NullBool
+	var gotLeftAt sql.NullTime
 	if err := store.db.QueryRow(
-		`SELECT joined_at, last_seen_at FROM member_joins WHERE guild_id = 'g1' AND user_id = 'u1'`,
-	).Scan(&gotJoinedAt, &gotLastSeen); err != nil {
+		`SELECT joined_at, last_seen_at, is_bot, left_at FROM member_joins WHERE guild_id = 'g1' AND user_id = 'u1'`,
+	).Scan(&gotJoinedAt, &gotLastSeen, &gotIsBot, &gotLeftAt); err != nil {
 		t.Fatalf("read repaired join row: %v", err)
 	}
 	if !gotJoinedAt.Equal(joinedAt) {
@@ -133,6 +122,12 @@ func TestInitRepairsMissingMemberJoinLastSeenColumn(t *testing.T) {
 	}
 	if !gotLastSeen.Equal(joinedAt) {
 		t.Fatalf("expected last_seen_at to backfill from joined_at %s, got %s", joinedAt.Format(time.RFC3339), gotLastSeen.Format(time.RFC3339))
+	}
+	if gotIsBot.Valid {
+		t.Fatalf("expected repaired is_bot to remain unknown, got %v", gotIsBot.Bool)
+	}
+	if gotLeftAt.Valid {
+		t.Fatalf("expected repaired left_at to remain null, got %s", gotLeftAt.Time.Format(time.RFC3339))
 	}
 }
 

@@ -152,6 +152,114 @@ func TestTouchMemberJoin_UpdatesLastSeenWithoutCreatingMissingJoin(t *testing.T)
 	}
 }
 
+func TestUpsertMemberPresenceAndMarkMemberLeftTracksActiveState(t *testing.T) {
+	t.Parallel()
+
+	store := newTempStore(t)
+	guildID := "g1"
+	userID := "u1"
+	joinedAt := time.Date(2022, 7, 1, 8, 0, 0, 0, time.UTC)
+	seenAt := joinedAt.Add(30 * time.Minute)
+
+	if err := store.UpsertMemberPresenceContext(context.Background(), guildID, userID, joinedAt, seenAt, true); err != nil {
+		t.Fatalf("UpsertMemberPresenceContext() failed: %v", err)
+	}
+	if err := store.UpsertMemberRoles(guildID, userID, []string{"r1", "r2"}, seenAt); err != nil {
+		t.Fatalf("UpsertMemberRoles() failed: %v", err)
+	}
+
+	states, err := store.GetActiveGuildMemberStatesContext(context.Background(), guildID)
+	if err != nil {
+		t.Fatalf("GetActiveGuildMemberStatesContext() failed: %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("expected one active member state, got %d", len(states))
+	}
+	if !states[0].HasBot || !states[0].IsBot {
+		t.Fatalf("expected bot flag to round-trip, got hasBot=%v isBot=%v", states[0].HasBot, states[0].IsBot)
+	}
+	if len(states[0].Roles) != 2 {
+		t.Fatalf("expected active roles to round-trip, got %v", states[0].Roles)
+	}
+
+	leftAt := seenAt.Add(15 * time.Minute)
+	if err := store.MarkMemberLeftContext(context.Background(), guildID, userID, leftAt); err != nil {
+		t.Fatalf("MarkMemberLeftContext() failed: %v", err)
+	}
+
+	states, err = store.GetActiveGuildMemberStatesContext(context.Background(), guildID)
+	if err != nil {
+		t.Fatalf("GetActiveGuildMemberStatesContext(after leave) failed: %v", err)
+	}
+	if len(states) != 0 {
+		t.Fatalf("expected no active members after leave, got %d", len(states))
+	}
+
+	roles, err := store.GetMemberRoles(guildID, userID)
+	if err != nil {
+		t.Fatalf("GetMemberRoles(after leave) failed: %v", err)
+	}
+	if len(roles) != 0 {
+		t.Fatalf("expected roles to be cleared on leave, got %v", roles)
+	}
+
+	row := store.db.QueryRow(
+		rebind(`SELECT left_at FROM member_joins WHERE guild_id=? AND user_id=?`),
+		guildID,
+		userID,
+	)
+	var gotLeftAt sql.NullTime
+	if err := row.Scan(&gotLeftAt); err != nil {
+		t.Fatalf("query left_at: %v", err)
+	}
+	if !gotLeftAt.Valid || !gotLeftAt.Time.Equal(leftAt) {
+		t.Fatalf("expected left_at=%s, got %v", leftAt.Format(time.RFC3339), gotLeftAt)
+	}
+}
+
+func TestUpsertGuildMemberSnapshotsContextPersistsBotFlagsAndReactivatesMembers(t *testing.T) {
+	t.Parallel()
+
+	store := newTempStore(t)
+	guildID := "g1"
+	userID := "u1"
+	joinedAt := time.Date(2022, 9, 5, 9, 30, 0, 0, time.UTC)
+
+	if err := store.UpsertMemberPresenceContext(context.Background(), guildID, userID, joinedAt, joinedAt.Add(30*time.Minute), false); err != nil {
+		t.Fatalf("UpsertMemberPresenceContext(seed) failed: %v", err)
+	}
+	if err := store.MarkMemberLeftContext(context.Background(), guildID, userID, joinedAt.Add(time.Hour)); err != nil {
+		t.Fatalf("MarkMemberLeftContext() failed: %v", err)
+	}
+
+	if err := store.UpsertGuildMemberSnapshotsContext(context.Background(), guildID, []GuildMemberSnapshot{
+		{
+			UserID:   userID,
+			Roles:    []string{"r9"},
+			HasRoles: true,
+			JoinedAt: joinedAt,
+			IsBot:    false,
+			HasBot:   true,
+		},
+	}, joinedAt.Add(2*time.Hour)); err != nil {
+		t.Fatalf("UpsertGuildMemberSnapshotsContext() failed: %v", err)
+	}
+
+	states, err := store.GetActiveGuildMemberStatesContext(context.Background(), guildID)
+	if err != nil {
+		t.Fatalf("GetActiveGuildMemberStatesContext() failed: %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("expected one active state after snapshot upsert, got %d", len(states))
+	}
+	if !states[0].HasBot || states[0].IsBot {
+		t.Fatalf("expected human bot flag after snapshot upsert, got hasBot=%v isBot=%v", states[0].HasBot, states[0].IsBot)
+	}
+	if len(states[0].Roles) != 1 || states[0].Roles[0] != "r9" {
+		t.Fatalf("unexpected roles after snapshot upsert: %v", states[0].Roles)
+	}
+}
+
 func readMemberLastSeen(store *Store, guildID, userID string) (time.Time, bool, error) {
 	row := store.db.QueryRow(
 		rebind(`SELECT last_seen_at FROM member_joins WHERE guild_id=? AND user_id=?`),

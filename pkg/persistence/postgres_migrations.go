@@ -185,4 +185,17 @@ var postgresMigrations = []migration{
 			`DROP TABLE IF EXISTS message_version_counters`,
 		},
 	},
+	{
+		Version: 5,
+		UpSQL: []string{
+			`ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS is_bot BOOLEAN`,
+			`ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ`,
+			`CREATE INDEX IF NOT EXISTS idx_member_joins_active ON member_joins(guild_id, left_at)`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_member_joins_active`,
+			`ALTER TABLE member_joins DROP COLUMN IF EXISTS left_at`,
+			`ALTER TABLE member_joins DROP COLUMN IF EXISTS is_bot`,
+		},
+	},
 }

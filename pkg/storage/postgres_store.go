@@ -26,6 +26,19 @@ type GuildMemberSnapshot struct {
 	Roles      []string
 	HasRoles   bool
 	JoinedAt   time.Time
+	IsBot      bool
+	HasBot     bool
+}
+
+type GuildMemberCurrentState struct {
+	UserID     string
+	JoinedAt   time.Time
+	LastSeenAt time.Time
+	LeftAt     time.Time
+	Active     bool
+	IsBot      bool
+	HasBot     bool
+	Roles      []string
 }
 
 type CacheEntryRecord struct {
@@ -47,8 +60,8 @@ func (s *Store) Init() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := s.ensureMemberJoinLastSeenColumn(ctx); err != nil {
-		return fmt.Errorf("ensure member join freshness column: %w", err)
+	if err := s.ensureMemberJoinColumns(ctx); err != nil {
+		return fmt.Errorf("ensure member join state columns: %w", err)
 	}
 	if err := validateSchema(ctx, s.db); err != nil {
 		return fmt.Errorf("validate schema: %w", err)
@@ -501,7 +514,7 @@ func upsertGuildMemberSnapshotBatch(ctx context.Context, tx *sql.Tx, guildID str
 			roleRows = append(roleRows, snapshot)
 			roleUserIDs = append(roleUserIDs, snapshot.UserID)
 		}
-		if !snapshot.JoinedAt.IsZero() {
+		if !snapshot.JoinedAt.IsZero() || snapshot.HasBot {
 			joinRows = append(joinRows, snapshot)
 		}
 	}
@@ -565,6 +578,10 @@ func normalizeGuildMemberSnapshots(snapshots []GuildMemberSnapshot) []GuildMembe
 		if snapshot.HasRoles {
 			existing.HasRoles = true
 			existing.Roles = dedupeNonEmptyStrings(snapshot.Roles)
+		}
+		if snapshot.HasBot {
+			existing.HasBot = true
+			existing.IsBot = snapshot.IsBot
 		}
 		if !snapshot.JoinedAt.IsZero() {
 			joinedAt := snapshot.JoinedAt.UTC()
@@ -730,7 +747,7 @@ func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 
 func upsertMemberJoinsBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, seenAt time.Time) error {
 	return execValuesInChunks(ctx, tx,
-		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at) VALUES `,
+		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at, is_bot, left_at) VALUES `,
 		` ON CONFLICT(guild_id, user_id) DO UPDATE SET
            joined_at = CASE
              WHEN excluded.joined_at < member_joins.joined_at THEN excluded.joined_at
@@ -739,12 +756,22 @@ func upsertMemberJoinsBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
            last_seen_at = CASE
              WHEN member_joins.last_seen_at IS NULL OR excluded.last_seen_at > member_joins.last_seen_at THEN excluded.last_seen_at
              ELSE member_joins.last_seen_at
-           END`,
+           END,
+           is_bot = COALESCE(excluded.is_bot, member_joins.is_bot),
+           left_at = NULL`,
 		len(snapshots),
-		4,
+		6,
 		func(args []any, rowIndex int) []any {
 			row := snapshots[rowIndex]
-			return append(args, guildID, row.UserID, row.JoinedAt.UTC(), seenAt)
+			joinedAt := seenAt
+			if !row.JoinedAt.IsZero() {
+				joinedAt = row.JoinedAt.UTC()
+			}
+			var isBot any
+			if row.HasBot {
+				isBot = row.IsBot
+			}
+			return append(args, guildID, row.UserID, joinedAt, seenAt, isBot, nil)
 		},
 	)
 }
@@ -862,8 +889,8 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
 	seenAt := time.Now().UTC()
 	_, err := s.execContext(
 		ctx,
-		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at)
-         VALUES (?, ?, ?, ?)
+		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at, left_at)
+         VALUES (?, ?, ?, ?, NULL)
          ON CONFLICT(guild_id, user_id) DO UPDATE SET
            joined_at = CASE
              WHEN excluded.joined_at < member_joins.joined_at THEN excluded.joined_at
@@ -872,10 +899,104 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
            last_seen_at = CASE
              WHEN member_joins.last_seen_at IS NULL OR excluded.last_seen_at > member_joins.last_seen_at THEN excluded.last_seen_at
              ELSE member_joins.last_seen_at
-           END`,
+           END,
+           left_at = NULL`,
 		guildID, userID, joinedAt, seenAt,
 	)
 	return err
+}
+
+// UpsertMemberPresenceContext records that a member is currently present in a guild.
+// When joinedAt is unknown, seenAt is used as a fallback seed for the row.
+func (s *Store) UpsertMemberPresenceContext(ctx context.Context, guildID, userID string, joinedAt, seenAt time.Time, isBot bool) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	userID = strings.TrimSpace(userID)
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if seenAt.IsZero() {
+		seenAt = time.Now().UTC()
+	} else {
+		seenAt = seenAt.UTC()
+	}
+	if joinedAt.IsZero() {
+		joinedAt = seenAt
+	} else {
+		joinedAt = joinedAt.UTC()
+	}
+
+	_, err := s.execContext(
+		ctx,
+		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at, is_bot, left_at)
+         VALUES (?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(guild_id, user_id) DO UPDATE SET
+           joined_at = CASE
+             WHEN excluded.joined_at < member_joins.joined_at THEN excluded.joined_at
+             ELSE member_joins.joined_at
+           END,
+           last_seen_at = CASE
+             WHEN member_joins.last_seen_at IS NULL OR excluded.last_seen_at > member_joins.last_seen_at THEN excluded.last_seen_at
+             ELSE member_joins.last_seen_at
+           END,
+           is_bot = excluded.is_bot,
+           left_at = NULL`,
+		guildID, userID, joinedAt, seenAt, isBot,
+	)
+	return err
+}
+
+// MarkMemberLeftContext records that a member is no longer active in a guild and clears current roles.
+func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID string, leftAt time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	userID = strings.TrimSpace(userID)
+	if guildID == "" || userID == "" {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if leftAt.IsZero() {
+		leftAt = time.Now().UTC()
+	} else {
+		leftAt = leftAt.UTC()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := txExecContext(
+		ctx,
+		tx,
+		`UPDATE member_joins
+		    SET left_at = CASE
+		          WHEN left_at IS NULL OR ? > left_at THEN ?
+		          ELSE left_at
+		        END,
+		        last_seen_at = CASE
+		          WHEN last_seen_at IS NULL OR ? > last_seen_at THEN ?
+		          ELSE last_seen_at
+		        END
+		  WHERE guild_id=? AND user_id=?`,
+		leftAt, leftAt, leftAt, leftAt, guildID, userID,
+	); err != nil {
+		return err
+	}
+	if _, err := txExecContext(ctx, tx, `DELETE FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // GetMemberJoin returns the stored join time for a member, if any.
@@ -897,6 +1018,75 @@ func (s *Store) GetMemberJoinContext(ctx context.Context, guildID, userID string
 		return time.Time{}, false, err
 	}
 	return jt, true, nil
+}
+
+// GetActiveGuildMemberStatesContext returns the persisted current member state for all active members in a guild.
+func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) ([]GuildMemberCurrentState, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	rows, err := s.queryContext(ctx, `
+		SELECT mj.user_id, mj.joined_at, mj.last_seen_at, mj.is_bot, rc.role_id
+		  FROM member_joins mj
+		  LEFT JOIN roles_current rc
+		    ON rc.guild_id = mj.guild_id
+		   AND rc.user_id = mj.user_id
+		 WHERE mj.guild_id = ?
+		   AND mj.left_at IS NULL
+		 ORDER BY mj.user_id, rc.role_id
+	`, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	states := make([]GuildMemberCurrentState, 0)
+	indexByUser := make(map[string]int)
+	for rows.Next() {
+		var (
+			userID     string
+			joinedAt   time.Time
+			lastSeenAt sql.NullTime
+			isBot      sql.NullBool
+			roleID     sql.NullString
+		)
+		if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
+			return nil, err
+		}
+		idx, ok := indexByUser[userID]
+		if !ok {
+			state := GuildMemberCurrentState{
+				UserID:   userID,
+				JoinedAt: joinedAt.UTC(),
+				Active:   true,
+			}
+			if lastSeenAt.Valid {
+				state.LastSeenAt = lastSeenAt.Time.UTC()
+			}
+			if isBot.Valid {
+				state.HasBot = true
+				state.IsBot = isBot.Bool
+			}
+			states = append(states, state)
+			idx = len(states) - 1
+			indexByUser[userID] = idx
+		}
+		if roleID.Valid && strings.TrimSpace(roleID.String) != "" {
+			states[idx].Roles = append(states[idx].Roles, roleID.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return states, nil
 }
 
 // UpsertAvatar sets the current avatar hash for a member in a guild.
@@ -1320,10 +1510,10 @@ var requiredSchemaTables = []string{
 }
 
 var requiredSchemaColumns = map[string][]string{
-	"member_joins": []string{"last_seen_at"},
+	"member_joins": []string{"last_seen_at", "is_bot", "left_at"},
 }
 
-func (s *Store) ensureMemberJoinLastSeenColumn(ctx context.Context) error {
+func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("database handle is nil")
 	}
@@ -1331,33 +1521,28 @@ func (s *Store) ensureMemberJoinLastSeenColumn(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	var exists bool
-	if err := s.db.QueryRowContext(
-		ctx,
-		`SELECT EXISTS (
-			SELECT 1
-			FROM information_schema.columns
-			WHERE table_schema = current_schema()
-			  AND table_name = $1
-			  AND column_name = $2
-		)`,
-		"member_joins",
-		"last_seen_at",
-	).Scan(&exists); err != nil {
-		return fmt.Errorf("check member_joins.last_seen_at existence: %w", err)
+	missingColumns, err := s.missingColumns(ctx, "member_joins", requiredSchemaColumns["member_joins"])
+	if err != nil {
+		return err
 	}
-	if exists {
+	if len(missingColumns) == 0 {
 		return nil
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin member_joins.last_seen_at bootstrap tx: %w", err)
+		return fmt.Errorf("begin member_joins bootstrap tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`); err != nil {
 		return fmt.Errorf("add member_joins.last_seen_at column: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS is_bot BOOLEAN`); err != nil {
+		return fmt.Errorf("add member_joins.is_bot column: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ`); err != nil {
+		return fmt.Errorf("add member_joins.left_at column: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE member_joins
@@ -1366,10 +1551,44 @@ func (s *Store) ensureMemberJoinLastSeenColumn(ctx context.Context) error {
 	`); err != nil {
 		return fmt.Errorf("backfill member_joins.last_seen_at: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_member_joins_active ON member_joins(guild_id, left_at)`); err != nil {
+		return fmt.Errorf("create member_joins active index: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit member_joins.last_seen_at bootstrap: %w", err)
+		return fmt.Errorf("commit member_joins bootstrap: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) missingColumns(ctx context.Context, table string, columns []string) ([]string, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("database handle is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	missing := make([]string, 0)
+	for _, column := range columns {
+		var exists bool
+		if err := s.db.QueryRowContext(
+			ctx,
+			`SELECT EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = $1
+				  AND column_name = $2
+			)`,
+			table,
+			column,
+		).Scan(&exists); err != nil {
+			return nil, fmt.Errorf("check %s.%s existence: %w", table, column, err)
+		}
+		if !exists {
+			missing = append(missing, column)
+		}
+	}
+	return missing, nil
 }
 
 func validateSchema(ctx context.Context, db *sql.DB) error {
@@ -1878,7 +2097,8 @@ func (s *Store) TouchMemberJoin(guildID, userID string) error {
          SET last_seen_at = CASE
            WHEN last_seen_at IS NULL OR ? > last_seen_at THEN ?
            ELSE last_seen_at
-         END
+         END,
+             left_at = NULL
          WHERE guild_id=? AND user_id=?`,
 		seenAt, seenAt, guildID, userID,
 	)

@@ -240,6 +240,7 @@ type MonitoringService struct {
 	statsCronCancel        func()
 	rolesRefreshCronCancel func()
 	statsLastRun           map[string]time.Time
+	statsGuilds            map[string]*statsGuildState
 	statsMu                sync.Mutex
 
 	// Metrics counters
@@ -486,6 +487,7 @@ func NewMonitoringServiceForBot(
 		eventHandlers:        make([]interface{}, 0),
 		presenceWatch:        make(map[string]presenceSnapshot),
 		statsLastRun:         make(map[string]time.Time),
+		statsGuilds:          make(map[string]*statsGuildState),
 	}
 	ms.rebuildTaskPipeline()
 	return ms, nil
@@ -1171,6 +1173,7 @@ type monitoringWorkloadState struct {
 	reactionEventService  bool
 	presenceHandler       bool
 	memberUpdateHandler   bool
+	statsMemberHandlers   bool
 	userUpdateHandler     bool
 	botPermMirrorHandlers bool
 	avatarScan            bool
@@ -1192,6 +1195,7 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 			continue
 		}
 		rc := cfg.ResolveRuntimeConfig(guildCfg.GuildID)
+		statsEnabledForGuild := features.StatsChannels && statsEnabled(guildCfg.Stats)
 
 		avatarEnabled := !rc.DisableUserLogs && features.Logging.AvatarLogging
 		roleEnabled := !rc.DisableUserLogs && features.Logging.RoleUpdate
@@ -1201,7 +1205,7 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 		if avatarEnabled || presenceWatchEnabled {
 			state.presenceHandler = true
 		}
-		if avatarEnabled || roleEnabled {
+		if avatarEnabled || roleEnabled || statsEnabledForGuild {
 			state.memberUpdateHandler = true
 		}
 		if avatarEnabled {
@@ -1214,8 +1218,9 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 		if !rc.DisableReactionLogs && features.Logging.ReactionMetric {
 			state.reactionEventService = true
 		}
-		if features.StatsChannels && statsEnabled(guildCfg.Stats) {
+		if statsEnabledForGuild {
 			state.statsUpdates = true
+			state.statsMemberHandlers = true
 		}
 		if features.Backfill.Enabled && strings.TrimSpace(rc.BackfillChannelID) != "" {
 			state.backfill = true
@@ -1537,6 +1542,8 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 				Roles:      member.Roles,
 				HasRoles:   true,
 				JoinedAt:   member.JoinedAt,
+				IsBot:      member.User.Bot,
+				HasBot:     true,
 			})
 		}
 		if len(snapshots) == 0 {
@@ -1787,6 +1794,8 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 					Roles:    member.Roles,
 					HasRoles: true,
 					JoinedAt: member.JoinedAt,
+					IsBot:    member.User.Bot,
+					HasBot:   true,
 				})
 			}
 			if len(snapshots) == 0 {
@@ -1878,6 +1887,12 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 	}
 	if state.memberUpdateHandler {
 		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handleMemberUpdate))
+	}
+	if state.statsMemberHandlers {
+		ms.eventHandlers = append(ms.eventHandlers,
+			ms.session.AddHandler(ms.handleStatsMemberAdd),
+			ms.session.AddHandler(ms.handleStatsMemberRemove),
+		)
 	}
 	if state.userUpdateHandler {
 		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handleUserUpdate))
@@ -2229,6 +2244,8 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	if gcfg == nil {
 		return
 	}
+
+	ms.applyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
 
 	// Avatar change logging (already in place)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
@@ -3272,6 +3289,8 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 					joinSnapshots = append(joinSnapshots, storage.GuildMemberSnapshot{
 						UserID:   member.User.ID,
 						JoinedAt: member.JoinedAt,
+						IsBot:    member.User.Bot,
+						HasBot:   true,
 					})
 				}
 			}
