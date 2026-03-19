@@ -1,9 +1,6 @@
 package files
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -334,7 +331,7 @@ func TestNormalizeGuildModerationConfigNormalizesBlockedKeywordsAndBlocklist(t *
 func TestConfigManagerSaveConfigRejectsInvalidModeration(t *testing.T) {
 	t.Parallel()
 
-	mgr := NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := NewMemoryConfigManager()
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -359,8 +356,8 @@ func TestConfigManagerSaveConfigRejectsInvalidModeration(t *testing.T) {
 func TestConfigManagerSaveConfigNormalizesModerationCollections(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "settings.json")
-	mgr := NewConfigManagerWithPath(path)
+	store := NewMemoryConfigStore()
+	mgr := NewConfigManagerWithStore(store)
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -407,14 +404,9 @@ func TestConfigManagerSaveConfigNormalizesModerationCollections(t *testing.T) {
 		t.Fatalf("unexpected normalized blocklist: %q", got)
 	}
 
-	raw, err := os.ReadFile(path)
+	persisted, err := store.Load()
 	if err != nil {
-		t.Fatalf("read saved config: %v", err)
-	}
-
-	var persisted BotConfig
-	if err := json.Unmarshal(raw, &persisted); err != nil {
-		t.Fatalf("decode saved config: %v", err)
+		t.Fatalf("load saved config: %v", err)
 	}
 	if got := strings.Join(persisted.Guilds[0].Rulesets[0].Rules[0].Lists[0].BlockedKeywords, "|"); got != "alpha|beta" {
 		t.Fatalf("unexpected persisted blocked keywords: %q", got)

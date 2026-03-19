@@ -27,7 +27,7 @@ type CommandRouter struct {
 
 	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
 	// It is set by the app runner and can be used by interaction handlers to apply changes
-	// immediately after persisting settings.json.
+	// immediately after persisting runtime config changes.
 	runtimeApplier *runtimeapply.Manager
 
 	// taskRouter is an optional shared task router (backfill, async notifications).

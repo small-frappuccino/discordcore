@@ -18,7 +18,7 @@ Discordcore is the core Discord bot library and service layer used by Alicebot. 
 ```
 cmd/discordcore/      # Example runner
 pkg/discord/          # Discord services, logging, commands, cache
-pkg/files/            # settings.json configuration
+pkg/files/            # Bot config model and persistence stores
 pkg/persistence/      # DB connection, health, migrator
 pkg/partners/         # Partner board rendering services (template + list -> embeds)
 pkg/storage/          # Bot domain persistence store (Postgres)
@@ -35,6 +35,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
@@ -46,13 +47,29 @@ import (
 )
 
 func main() {
-	cfg := files.NewConfigManager()
-	if err := cfg.LoadConfig(); err != nil {
+	token, err := util.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	token, err := util.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
+	databaseURL := os.Getenv("ALICE_DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("ALICE_DATABASE_URL is required")
+	}
+
+	db, err := persistence.Open(context.Background(), persistence.Config{
+		Driver:      "postgres",
+		DatabaseURL: databaseURL,
+	})
 	if err != nil {
+		log.Fatal(err)
+	}
+	if err := persistence.NewPostgresMigrator(db).Up(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+
+	cfg := files.NewConfigManagerWithStore(files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey))
+	if err := cfg.LoadConfig(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -63,18 +80,7 @@ func main() {
 
 	botCfg := cfg.Config()
 	if botCfg == nil {
-		log.Fatal("settings.json not loaded")
-	}
-	rc := botCfg.ResolveRuntimeConfig("")
-	db, err := persistence.Open(context.Background(), persistence.Config{
-		Driver:      rc.Database.Driver,
-		DatabaseURL: rc.Database.DatabaseURL,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := persistence.NewPostgresMigrator(db).Up(context.Background()); err != nil {
-		log.Fatal(err)
+		log.Fatal("config store not loaded")
 	}
 
 	store := storage.NewStore(db)
@@ -104,9 +110,9 @@ func main() {
 }
 ```
 
-## Configuration (settings.json)
+## Configuration (canonical config store)
 
-A minimal example:
+The canonical bot config is stored in Postgres as one JSONB document. A minimal example:
 
 ```json
 {
@@ -181,7 +187,7 @@ A minimal example:
 
 ## Runtime configuration panel
 
-Use `/config runtime` in Discord to edit `settings.json` at runtime. Toggles include:
+Use `/config runtime` in Discord to edit persisted runtime config. Toggles include:
 
 - `disable_entry_exit_logs`
 - `disable_user_logs`

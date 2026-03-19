@@ -1891,17 +1891,10 @@ func (ms *MonitoringService) ensureGuildsListed() {
 			continue
 		}
 		if ms.configManager.GuildConfig(g.ID) == nil {
-			if err := ms.configManager.AddGuildConfig(files.GuildConfig{
-				GuildID:       g.ID,
-				BotInstanceID: files.NormalizeBotInstanceID(ms.botInstanceID),
-			}); err != nil {
-				log.ErrorLoggerRaw().Error("Error adding minimal guild entry for guild", "guildID", g.ID, "err", err)
-				continue
-			}
-			if err := ms.configManager.SaveConfig(); err != nil {
-				log.ErrorLoggerRaw().Error("Error saving config after minimal guild add for guild", "guildID", g.ID, "err", err)
+			if err := ms.configManager.EnsureMinimalGuildConfigForBot(g.ID, ms.botInstanceID); err != nil {
+				log.ErrorLoggerRaw().Error("Error adding minimal dormant guild entry", "guildID", g.ID, "err", err)
 			} else {
-				log.ApplicationLogger().Info("📘 Guild listed in config (minimal entry) for guild", "guildID", g.ID)
+				log.ApplicationLogger().Info("📘 Guild listed in config with disabled defaults", "guildID", g.ID)
 			}
 		}
 	}
@@ -1923,21 +1916,11 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	defer done()
 
 	if ms.configManager.GuildConfig(guildID) == nil {
-		// New guild: add to config and initialize cache
-		if err := ms.configManager.RegisterGuildForBot(s, guildID, ms.botInstanceID); err != nil {
-			log.ErrorLoggerRaw().Error("Falling back to minimal guild entry for guild", "guildID", guildID, "err", err)
-			if err2 := ms.configManager.AddGuildConfig(files.GuildConfig{
-				GuildID:       guildID,
-				BotInstanceID: files.NormalizeBotInstanceID(ms.botInstanceID),
-			}); err2 != nil {
-				log.ErrorLoggerRaw().Error("Error adding minimal guild entry for guild", "guildID", guildID, "err", err2)
-				return
-			}
+		if err := ms.configManager.EnsureMinimalGuildConfigForBot(guildID, ms.botInstanceID); err != nil {
+			log.ErrorLoggerRaw().Error("Error adding dormant guild entry for new guild", "guildID", guildID, "err", err)
+			return
 		}
-		if err := ms.configManager.SaveConfig(); err != nil {
-			log.ErrorLoggerRaw().Error("Error saving config after guild add for guild", "guildID", guildID, "err", err)
-		}
-		log.ApplicationLogger().Info("🆕 New guild listed in config for guild", "guildID", guildID)
+		log.ApplicationLogger().Info("🆕 New guild listed in config with disabled defaults", "guildID", guildID)
 		ms.initializeGuildCache(guildID)
 		// No-op: avatars persisted per change in Postgres store
 	}
@@ -3269,7 +3252,7 @@ func (ms *MonitoringService) botRolePermSnapshotKey(guildID, roleID string) stri
 
 func (ms *MonitoringService) botPermMirrorEnabled(guildID string) bool {
 	// Enabled by default (safety feature).
-	// Previously gated via ALICE_DISABLE_BOT_ROLE_PERM_MIRROR env var; now read from runtime_config in settings.json.
+	// Previously gated via ALICE_DISABLE_BOT_ROLE_PERM_MIRROR env var; now read from persisted runtime_config.
 	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
 		cfg := scopedCfg
 		rc := cfg.ResolveRuntimeConfig(guildID)
@@ -3283,7 +3266,7 @@ func (ms *MonitoringService) botPermMirrorEnabled(guildID string) bool {
 }
 
 func (ms *MonitoringService) botPermMirrorActorRoleID(guildID string) string {
-	// Previously overridable via ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID env var; now read from runtime_config in settings.json.
+	// Previously overridable via ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID env var; now read from persisted runtime_config.
 	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
 		rc := scopedCfg.ResolveRuntimeConfig(guildID)
 		v := strings.TrimSpace(rc.BotRolePermMirrorActorRoleID)

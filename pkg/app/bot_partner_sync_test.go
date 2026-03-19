@@ -1,7 +1,6 @@
 package app
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -12,7 +11,7 @@ func TestBotPartnerSyncDispatcherStartIsLazy(t *testing.T) {
 	t.Parallel()
 
 	dispatcher := newBotPartnerSyncDispatcher(
-		files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json")),
+		files.NewMemoryConfigManager(),
 		&partners.BoardSyncService{},
 		map[string]*botRuntime{
 			"alice": {instanceID: "alice"},

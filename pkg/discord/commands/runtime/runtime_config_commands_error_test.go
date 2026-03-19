@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -224,7 +223,7 @@ func TestEditInteractionMessageWithLog_LogsFailure(t *testing.T) {
 
 func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -246,7 +245,7 @@ func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 	if rec.webhookPatchCount() == 0 {
 		t.Fatalf("expected panel edit after modal submit")
 	}
-	if !strings.Contains(rec.patchBody(), "Saved to settings.json, but failed to apply runtime changes immediately") {
+	if !strings.Contains(rec.patchBody(), "Saved runtime config, but failed to apply changes immediately") {
 		t.Fatalf("expected hot-apply warning in edited embed payload, got body=%q", rec.patchBody())
 	}
 

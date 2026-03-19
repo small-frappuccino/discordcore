@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -73,7 +72,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	handler := NewCommandHandler(session, cfgMgr)
 
 	if err := handler.SetupCommands(); err != nil {
@@ -128,7 +127,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	handler := NewCommandHandler(session, cfgMgr)
 
 	err = handler.SetupCommands()

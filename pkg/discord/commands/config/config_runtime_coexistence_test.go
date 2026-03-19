@@ -1,7 +1,6 @@
 package config
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,7 +11,7 @@ import (
 
 func TestConfigRuntimeCoexistenceRegisterOrderConfigThenRuntime(t *testing.T) {
 	session, _ := newConfigCommandTestSession(t)
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	router := core.NewCommandRouter(session, cm)
 
 	NewConfigCommands(cm).RegisterCommands(router)
@@ -33,7 +32,7 @@ func TestConfigRuntimeCoexistenceRegisterOrderConfigThenRuntime(t *testing.T) {
 
 func TestConfigRuntimeCoexistenceRegisterOrderRuntimeThenConfig(t *testing.T) {
 	session, _ := newConfigCommandTestSession(t)
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	router := core.NewCommandRouter(session, cm)
 
 	runtimecfg.NewRuntimeConfigCommands(cm).RegisterCommands(router)
@@ -85,7 +84,7 @@ func assertConfigGroupContainsSubcommands(t *testing.T, router *core.CommandRout
 
 func TestConfigRuntimeCoexistenceCommandOptionsAreSubcommands(t *testing.T) {
 	session, _ := newConfigCommandTestSession(t)
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	router := core.NewCommandRouter(session, cm)
 	NewConfigCommands(cm).RegisterCommands(router)
 	runtimecfg.NewRuntimeConfigCommands(cm).RegisterCommands(router)
@@ -106,7 +105,7 @@ func TestConfigRuntimeCoexistenceCommandOptionsAreSubcommands(t *testing.T) {
 
 func TestConfigSubcommandsRequiredOptionsBeforeOptional(t *testing.T) {
 	session, _ := newConfigCommandTestSession(t)
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	router := core.NewCommandRouter(session, cm)
 	NewConfigCommands(cm).RegisterCommands(router)
 	runtimecfg.NewRuntimeConfigCommands(cm).RegisterCommands(router)

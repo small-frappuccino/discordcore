@@ -1,7 +1,6 @@
 package partner
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -11,7 +10,7 @@ import (
 
 func TestPartnerCommandRegistration(t *testing.T) {
 	session, _ := newPartnerCommandTestSession(t)
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	router := core.NewCommandRouter(session, cm)
 
 	NewPartnerCommands(cm).RegisterCommands(router)

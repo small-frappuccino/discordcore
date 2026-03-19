@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -136,7 +135,7 @@ func TestCommandRegistryRegisterLookup(t *testing.T) {
 
 func TestHandleSlashCommandUnknownCommand(t *testing.T) {
 	session, rec := newTestSession(t)
-	config := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	config := files.NewMemoryConfigManager()
 	router := NewCommandRouter(session, config)
 
 	router.handleSlashCommand(buildInteraction("missing", "guild", "user"))
@@ -155,7 +154,7 @@ func TestHandleSlashCommandUnknownCommand(t *testing.T) {
 
 func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 	session, rec := newTestSession(t)
-	config := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	config := files.NewMemoryConfigManager()
 	router := NewCommandRouter(session, config)
 
 	router.RegisterCommand(testCommand{name: "guild", requiresGuild: true, handler: func(*Context) error {
@@ -176,7 +175,7 @@ func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 
 func TestHandleSlashCommandPermissionDenied(t *testing.T) {
 	session, rec := newTestSession(t)
-	config := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	config := files.NewMemoryConfigManager()
 	_ = config.AddGuildConfig(files.GuildConfig{GuildID: "guild", Roles: files.RolesConfig{Allowed: []string{"role"}}})
 	router := NewCommandRouter(session, config)
 
@@ -212,7 +211,7 @@ func TestHandleSlashCommandCommandErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			session, rec := newTestSession(t)
-			config := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+			config := files.NewMemoryConfigManager()
 			router := NewCommandRouter(session, config)
 
 			router.RegisterCommand(testCommand{name: "cmd", handler: func(*Context) error {
@@ -237,7 +236,7 @@ func TestHandleSlashCommandCommandErrorMapping(t *testing.T) {
 }
 
 func TestGroupCommandDispatch(t *testing.T) {
-	cfg := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfg := files.NewMemoryConfigManager()
 	checker := NewPermissionChecker(nil, cfg)
 	group := NewGroupCommand("group", "", checker)
 

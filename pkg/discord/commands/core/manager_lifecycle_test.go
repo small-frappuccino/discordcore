@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -59,7 +58,7 @@ func TestCommandManagerSetupAndShutdownHandlerLifecycle(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	})
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	cm := NewCommandManager(session, cfgMgr)
 
 	if err := cm.SetupCommands(); err != nil {
@@ -101,7 +100,7 @@ func TestCommandManagerSetupCommandsRollbackOnFetchError(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	})
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	cm := NewCommandManager(session, cfgMgr)
 
 	err := cm.SetupCommands()
@@ -124,7 +123,7 @@ func TestCommandManagerSetupCommandsRequiresSessionUser(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	cm := NewCommandManager(session, cfgMgr)
 
 	err = cm.SetupCommands()
@@ -159,7 +158,7 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	cm := NewCommandManager(session, cfgMgr)
 	cm.GetRouter().RegisterCommand(testCommand{name: "ping"})
 

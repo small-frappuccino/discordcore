@@ -37,27 +37,34 @@ func IsDatabaseURLNotConfigured(err error) bool {
 // OpenIsolatedDatabase creates a temporary schema and returns a DB handle scoped to it plus cleanup.
 // Tests must set DISCORDCORE_TEST_DATABASE_URL to a writable PostgreSQL database URL.
 func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*sql.DB, func() error, error) {
+	db, _, cleanup, err := OpenIsolatedDatabaseWithDSN(ctx, baseDSN)
+	return db, cleanup, err
+}
+
+// OpenIsolatedDatabaseWithDSN creates a temporary schema and returns a DB
+// handle scoped to it, the DSN pointing at that schema, plus cleanup.
+func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*sql.DB, string, func() error, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	baseDSN = strings.TrimSpace(baseDSN)
 	if baseDSN == "" {
-		return nil, nil, fmt.Errorf("base database url is empty")
+		return nil, "", nil, fmt.Errorf("base database url is empty")
 	}
 
 	_, err := url.Parse(baseDSN)
 	if err != nil {
-		return nil, nil, fmt.Errorf("parse base database url: %w", err)
+		return nil, "", nil, fmt.Errorf("parse base database url: %w", err)
 	}
 
 	admin, err := sql.Open("pgx", baseDSN)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open base database connection: %w", err)
+		return nil, "", nil, fmt.Errorf("open base database connection: %w", err)
 	}
 	defer admin.Close()
 
 	if err := admin.PingContext(ctx); err != nil {
-		return nil, nil, fmt.Errorf("ping base database connection: %w", err)
+		return nil, "", nil, fmt.Errorf("ping base database connection: %w", err)
 	}
 
 	seq := schemaCounter.Add(1)
@@ -66,28 +73,28 @@ func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*sql.DB, func() 
 		schemaName = schemaName[:63]
 	}
 	if !dbNamePattern.MatchString(schemaName) {
-		return nil, nil, fmt.Errorf("generated invalid test schema name %q", schemaName)
+		return nil, "", nil, fmt.Errorf("generated invalid test schema name %q", schemaName)
 	}
 
 	if _, err := admin.ExecContext(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName)); err != nil {
-		return nil, nil, fmt.Errorf("create test schema %s: %w", schemaName, err)
+		return nil, "", nil, fmt.Errorf("create test schema %s: %w", schemaName, err)
 	}
 
 	testDSN, err := withSearchPath(baseDSN, schemaName)
 	if err != nil {
 		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 
 	testDB, err := sql.Open("pgx", testDSN)
 	if err != nil {
 		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
-		return nil, nil, fmt.Errorf("open test database handle for schema %s: %w", schemaName, err)
+		return nil, "", nil, fmt.Errorf("open test database handle for schema %s: %w", schemaName, err)
 	}
 	if err := testDB.PingContext(ctx); err != nil {
 		_ = testDB.Close()
 		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
-		return nil, nil, fmt.Errorf("ping test database handle for schema %s: %w", schemaName, err)
+		return nil, "", nil, fmt.Errorf("ping test database handle for schema %s: %w", schemaName, err)
 	}
 
 	migrateCtx, migrateCancel := context.WithTimeout(ctx, 30*time.Second)
@@ -95,7 +102,7 @@ func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*sql.DB, func() 
 	if err := persistence.NewPostgresMigrator(testDB).Up(migrateCtx); err != nil {
 		_ = testDB.Close()
 		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
-		return nil, nil, fmt.Errorf("apply postgres migrations for test schema %s: %w", schemaName, err)
+		return nil, "", nil, fmt.Errorf("apply postgres migrations for test schema %s: %w", schemaName, err)
 	}
 
 	cleanup := func() error {
@@ -115,7 +122,7 @@ func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*sql.DB, func() 
 		return nil
 	}
 
-	return testDB, cleanup, nil
+	return testDB, testDSN, cleanup, nil
 }
 
 func withSearchPath(baseDSN, schemaName string) (string, error) {

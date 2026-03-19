@@ -15,7 +15,7 @@ func TestJSONManagerSaveWritesAtomically(t *testing.T) {
 		Count int    `json:"count"`
 	}
 
-	path := filepath.Join(t.TempDir(), "settings.json")
+	path := filepath.Join(t.TempDir(), "payload.json")
 	manager := NewJSONManager(path)
 
 	if err := manager.Save(payload{Name: "first", Count: 1}); err != nil {

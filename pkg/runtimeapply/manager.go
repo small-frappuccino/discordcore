@@ -21,8 +21,8 @@ import (
 // - DB path / cache persist interval / backfill: intentionally not handled here
 // - Message cache/versioning: intentionally not handled here
 //
-// This package is designed to be called after persisting settings.json updates.
-// It assumes the caller already wrote the desired config to disk (or to the active
+// This package is designed to be called after persisting runtime config updates.
+// It assumes the caller already wrote the desired config to the active store (or to the active
 // ConfigManager) and just wants to apply the effect to the running process.
 type Manager struct {
 	mu sync.Mutex

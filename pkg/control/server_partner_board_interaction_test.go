@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 )
 
 func TestPartnerBoardEndpointsInteraction(t *testing.T) {
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
@@ -94,7 +93,7 @@ func TestPartnerBoardEndpointsInteraction(t *testing.T) {
 }
 
 func TestPartnerBoardSyncEndpointInteraction(t *testing.T) {
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

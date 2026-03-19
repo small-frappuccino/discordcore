@@ -23,6 +23,7 @@ const DefaultBotInstanceID = "default"
 type BotInstanceDefinition struct {
 	ID       string
 	TokenEnv string
+	Optional bool
 }
 
 type resolvedBotInstance struct {
@@ -61,17 +62,10 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 			TokenEnv: primaryTokenEnv,
 		}}
 	}
-	if defaultBotInstanceID == "" {
-		defaultBotInstanceID = strings.TrimSpace(catalog[0].ID)
-	}
 
 	resolved := make([]resolvedBotInstance, 0, len(catalog))
 	seenIDs := make(map[string]struct{}, len(catalog))
-	if firstTokenEnv := strings.TrimSpace(catalog[0].TokenEnv); firstTokenEnv != "" {
-		if _, loadErr := util.LoadEnvWithLocalBinFallback(firstTokenEnv); loadErr != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Warning: %v", loadErr))
-		}
-	}
+	resolvedIDs := make(map[string]struct{}, len(catalog))
 
 	for _, item := range catalog {
 		botInstanceID := strings.TrimSpace(item.ID)
@@ -88,14 +82,16 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 			return nil, "", fmt.Errorf("bot instance %s is missing token env", botInstanceID)
 		}
 
-		token := strings.TrimSpace(util.EnvString(tokenEnv, ""))
+		token := resolveBotToken(tokenEnv)
 		if token == "" {
-			if _, loadErr := util.LoadEnvWithLocalBinFallback(tokenEnv); loadErr != nil {
-				log.ApplicationLogger().Warn(fmt.Sprintf("Warning: %v", loadErr))
+			if item.Optional {
+				log.ApplicationLogger().Info(
+					"Skipping optional bot instance without token",
+					"botInstanceID", botInstanceID,
+					"tokenEnv", tokenEnv,
+				)
+				continue
 			}
-			token = strings.TrimSpace(util.EnvString(tokenEnv, ""))
-		}
-		if token == "" {
 			return nil, "", fmt.Errorf("%s not set in environment or .env file", tokenEnv)
 		}
 
@@ -104,13 +100,38 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 			TokenEnv: tokenEnv,
 			Token:    token,
 		})
+		resolvedIDs[botInstanceID] = struct{}{}
 	}
 
-	if _, ok := seenIDs[defaultBotInstanceID]; !ok {
+	if len(resolved) == 0 {
+		return nil, "", fmt.Errorf("no bot instances have a configured token")
+	}
+	if defaultBotInstanceID == "" && len(resolved) > 0 {
+		defaultBotInstanceID = resolved[0].ID
+	}
+	if _, ok := resolvedIDs[defaultBotInstanceID]; !ok {
 		return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultBotInstanceID)
 	}
 
 	return resolved, defaultBotInstanceID, nil
+}
+
+func resolveBotToken(tokenEnv string) string {
+	tokenEnv = strings.TrimSpace(tokenEnv)
+	if tokenEnv == "" {
+		return ""
+	}
+
+	token := strings.TrimSpace(util.EnvString(tokenEnv, ""))
+	if token != "" {
+		return token
+	}
+
+	if _, err := util.LoadEnvWithLocalBinFallback(tokenEnv); err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(util.EnvString(tokenEnv, ""))
 }
 
 func newBotRuntimeResolver(
@@ -147,7 +168,7 @@ func (r *botRuntimeResolver) sessionForGuild(guildID string) *discordgo.Session 
 	return nil
 }
 
-func (r *botRuntimeResolver) registerGuild(ctx context.Context, guildID, botInstanceID string) error {
+func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID, botInstanceID string) error {
 	if r == nil || r.configManager == nil {
 		return fmt.Errorf("bot runtime resolver is unavailable")
 	}
@@ -159,7 +180,7 @@ func (r *botRuntimeResolver) registerGuild(ctx context.Context, guildID, botInst
 	if runtime == nil || runtime.session == nil {
 		return fmt.Errorf("bot instance %q is unavailable", selectedBotInstanceID)
 	}
-	return r.configManager.RegisterGuildForBot(runtime.session, guildID, selectedBotInstanceID)
+	return r.configManager.EnsureMinimalGuildConfigForBot(guildID, selectedBotInstanceID)
 }
 
 func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildBinding, error) {

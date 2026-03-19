@@ -51,13 +51,13 @@ type MessageEventService struct {
 	lifecycle      serviceLifecycle
 	handlerCancels []func()
 
-	// Message cache configuration (populated from settings.json runtime_config)
+	// Message cache configuration (populated from persisted runtime_config)
 	cacheEnabled   bool
 	cacheTTL       time.Duration
 	deleteOnLog    bool
 	cleanupEnabled bool
 
-	// Versioning configuration (populated from settings.json runtime_config)
+	// Versioning configuration (populated from persisted runtime_config)
 	versioningEnabled bool
 
 	auditCacheMu  sync.Mutex
@@ -145,7 +145,7 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 		return err
 	}
 
-	// Load message cache configuration from settings.json runtime_config,
+	// Load message cache configuration from persisted runtime_config,
 	// but keep cache + versioning hardcoded enabled.
 	{
 		rc := files.RuntimeConfig{}

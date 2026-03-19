@@ -2,7 +2,6 @@ package partners
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -21,7 +20,7 @@ func (n *mutationNotifierStub) Notify(guildID string) error {
 func newBoardAppTestManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
 
-	mgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := files.NewMemoryConfigManager()
 	if err := mgr.LoadConfig(); err != nil {
 		t.Fatalf("load config: %v", err)
 	}

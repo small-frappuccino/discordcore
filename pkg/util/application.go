@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.268.0"
+const DiscordCoreVersion = "v0.269.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string
@@ -102,7 +102,7 @@ func SetTheme(name string) error {
 	return theme.SetCurrent(name)
 }
 
-// ConfigureThemeFromConfig loads theme from settings.json runtime_config (bot_theme), if set.
+// ConfigureThemeFromConfig loads theme from the persisted runtime config (bot_theme), if set.
 // This replaces the previous environment-variable based theme selection.
 func ConfigureThemeFromConfig(themeName string) error {
 	if strings.TrimSpace(themeName) != "" {
@@ -160,12 +160,6 @@ func MigrationCacheFilePath() string {
 // Deprecated: LegacyMigrationCacheFilePath returns the previous JSON cache path, used only for migration.
 func LegacyMigrationCacheFilePath() string {
 	return filepath.Join(ApplicationSupportPath, "data", "application_cache.json")
-}
-
-// GetSettingsFilePath returns the path for the primary settings JSON.
-// Layout: <ConfigBase>/preferences/settings.json
-func GetSettingsFilePath() string {
-	return filepath.Join(ApplicationSupportPath, "preferences", "settings.json")
 }
 
 // GetCustomRPCFilePath returns the path for the custom Discord RPC JSON.

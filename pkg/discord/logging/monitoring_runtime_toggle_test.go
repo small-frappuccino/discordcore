@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 func newMonitoringTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
 
-	mgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := files.NewMemoryConfigManager()
 	if err := mgr.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

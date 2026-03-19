@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -172,7 +171,7 @@ func newPartnerCommandTestRouter(
 ) (*core.CommandRouter, *files.ConfigManager) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}

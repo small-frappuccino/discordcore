@@ -3,7 +3,6 @@ package partners
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,7 +45,7 @@ func (s *updaterStub) UpdateEmbeds(_ *discordgo.Session, target messageupdate.Em
 
 func newSyncServiceTestManager(t *testing.T, cfg *files.BotConfig) *files.ConfigManager {
 	t.Helper()
-	mgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := files.NewMemoryConfigManager()
 	if err := mgr.LoadConfig(); err != nil {
 		t.Fatalf("load config: %v", err)
 	}

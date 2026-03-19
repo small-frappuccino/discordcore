@@ -113,3 +113,54 @@ func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 		t.Fatalf("expected guilds-only intent for unbound bot, got %d", capabilities.intents)
 	}
 }
+
+func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := &files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: boolPtr(false),
+				Commands:   boolPtr(false),
+			},
+			Logging: files.FeatureLoggingToggles{
+				ReactionMetric: boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{
+			{
+				GuildID:       "g1",
+				BotInstanceID: "alice",
+				Features: files.FeatureToggles{
+					Services: files.FeatureServiceToggles{
+						Commands: boolPtr(true),
+					},
+				},
+			},
+			{
+				GuildID:       "g2",
+				BotInstanceID: "alice",
+				Features: files.FeatureToggles{
+					Services: files.FeatureServiceToggles{
+						Monitoring: boolPtr(true),
+					},
+					Logging: files.FeatureLoggingToggles{
+						ReactionMetric: boolPtr(true),
+					},
+				},
+			},
+		},
+	}
+
+	capabilities := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
+	if !capabilities.commands {
+		t.Fatal("expected commands capability to include any guild assigned to alice")
+	}
+	if !capabilities.monitoring {
+		t.Fatal("expected monitoring capability to include any guild assigned to alice")
+	}
+	if capabilities.intents&discordgo.IntentsGuildMessageReactions == 0 {
+		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
+	}
+}

@@ -18,21 +18,19 @@ const (
 )
 
 type resolvedDatabaseBootstrap struct {
-	Config             files.DatabaseRuntimeConfig
-	Source             string
-	LegacySettingsPath string
+	Config files.DatabaseRuntimeConfig
+	Source string
 }
 
 func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 	if cfg, ok := databaseBootstrapFromEnv(); ok {
 		return resolvedDatabaseBootstrap{
-			Config:             cfg,
-			Source:             "env",
-			LegacySettingsPath: util.GetSettingsFilePath(),
+			Config: cfg,
+			Source: "env",
 		}, nil
 	}
 	return resolvedDatabaseBootstrap{}, fmt.Errorf(
-		"postgres bootstrap config unavailable: set %s before startup; legacy settings.json is only used for one-time config migration after postgres is reachable",
+		"postgres bootstrap config unavailable: set %s before startup",
 		databaseURLEnv,
 	)
 }

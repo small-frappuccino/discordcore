@@ -3,7 +3,6 @@ package files
 import (
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"testing"
 )
 
@@ -17,7 +16,7 @@ func newWebhookUpdatesTestManager(t *testing.T, cfg *BotConfig) *ConfigManager {
 		cfg.Guilds = []GuildConfig{}
 	}
 
-	mgr := NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := NewMemoryConfigManager()
 	mgr.config = cfg
 	return mgr
 }

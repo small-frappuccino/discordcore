@@ -1001,7 +1001,7 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 
 func renderHelpEmbed() *discordgo.MessageEmbed {
 	desc := strings.Join([]string{
-		"This panel edits `settings.json` in `runtime_config`.",
+		"This panel edits the persisted `runtime_config`.",
 		"",
 		"**Notes:**",
 		"• Names stay in ALL CAPS to preserve mental compatibility with env vars.",
@@ -1231,7 +1231,7 @@ func asRuntimeConfigApplier(applier *runtimeapply.Manager) runtimeConfigApplier 
 
 // HandleRuntimeConfigInteractions should be registered on the discordgo session (outside the slash router).
 // It captures the runtime hot-apply manager via closure, so the panel can apply changes immediately
-// after persisting settings.json.
+// after persisting runtime config changes.
 func HandleRuntimeConfigInteractions(configManager *files.ConfigManager, applier *runtimeapply.Manager) func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	runtimeApplier := asRuntimeConfigApplier(applier)
 
@@ -1656,7 +1656,7 @@ func withHotApplyWarning(embed *discordgo.MessageEmbed, applyErr error) *discord
 
 	clone := *embed
 	msg := fmt.Sprintf(
-		"Saved to settings.json, but failed to apply runtime changes immediately. Restart may be required.\nError: %v",
+		"Saved runtime config, but failed to apply changes immediately. Restart may be required.\nError: %v",
 		applyErr,
 	)
 	if strings.TrimSpace(clone.Description) == "" {

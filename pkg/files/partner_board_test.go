@@ -2,7 +2,6 @@ package files
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 )
 
@@ -16,7 +15,7 @@ func newPartnerBoardTestManager(t *testing.T, cfg *BotConfig) *ConfigManager {
 		cfg.Guilds = []GuildConfig{}
 	}
 
-	mgr := NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := NewMemoryConfigManager()
 	mgr.config = cfg
 	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
 		t.Fatalf("rebuild index: %v", err)

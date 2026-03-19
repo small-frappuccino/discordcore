@@ -1,10 +1,10 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -14,10 +14,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
-func runtimeDatabaseConfigForRunnerTests(t *testing.T) files.DatabaseRuntimeConfig {
+func openRunnerConfigStore(t *testing.T) (files.DatabaseRuntimeConfig, *files.PostgresConfigStore) {
 	t.Helper()
 
 	dsn, err := testdb.BaseDatabaseURLFromEnv()
@@ -28,13 +27,23 @@ func runtimeDatabaseConfigForRunnerTests(t *testing.T) files.DatabaseRuntimeConf
 		t.Fatalf("resolve test database dsn: %v", err)
 	}
 
+	db, isolatedDSN, cleanup, err := testdb.OpenIsolatedDatabaseWithDSN(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("open isolated postgres database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated postgres database: %v", err)
+		}
+	})
+
 	return files.DatabaseRuntimeConfig{
 		Driver:        "postgres",
-		DatabaseURL:   dsn,
+		DatabaseURL:   isolatedDSN,
 		MaxOpenConns:  5,
 		MaxIdleConns:  5,
 		PingTimeoutMS: 5000,
-	}
+	}, files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
 }
 
 func setRunnerDatabaseBootstrapEnv(t *testing.T, cfg files.DatabaseRuntimeConfig) {
@@ -49,18 +58,11 @@ func setRunnerDatabaseBootstrapEnv(t *testing.T, cfg files.DatabaseRuntimeConfig
 	t.Setenv(databasePingTimeoutMSEnv, strconv.Itoa(cfg.PingTimeoutMS))
 }
 
-func writeRunnerLegacyConfig(t *testing.T, appName string, cfg files.BotConfig) string {
+func seedRunnerConfig(t *testing.T, store files.ConfigStore, cfg files.BotConfig) {
 	t.Helper()
-
-	util.SetAppName(appName)
-	settingsPath := util.GetSettingsFilePath()
-	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
-		t.Fatalf("create settings directory: %v", err)
+	if err := store.Save(&cfg); err != nil {
+		t.Fatalf("seed config store: %v", err)
 	}
-	if err := files.SaveSettingsFileWithPath(settingsPath, &cfg); err != nil {
-		t.Fatalf("write settings config: %v", err)
-	}
-	return settingsPath
 }
 
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
@@ -80,7 +82,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	t.Setenv(tokenEnv, "test-token")
 
 	boolPtr := func(v bool) *bool { return &v }
-	dbCfg := runtimeDatabaseConfigForRunnerTests(t)
+	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
@@ -99,7 +101,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{},
 	}
-	settingsPath := writeRunnerLegacyConfig(t, appName, cfg)
+	seedRunnerConfig(t, configStore, cfg)
 
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {
@@ -157,12 +159,6 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	if got := atomic.LoadInt32(&shutdownCalls); got != 1 {
 		t.Fatalf("expected one shutdown command call, got %d", got)
 	}
-	if _, err := os.Stat(settingsPath); !os.IsNotExist(err) {
-		t.Fatalf("expected migrated settings file to be removed, stat err=%v", err)
-	}
-	if _, err := os.Stat(filepath.Dir(settingsPath)); !os.IsNotExist(err) {
-		t.Fatalf("expected migrated settings directory to be removed, stat err=%v", err)
-	}
 }
 
 func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
@@ -182,7 +178,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	t.Setenv(tokenEnv, "test-token")
 
 	boolPtr := func(v bool) *bool { return &v }
-	dbCfg := runtimeDatabaseConfigForRunnerTests(t)
+	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
@@ -201,7 +197,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{},
 	}
-	_ = writeRunnerLegacyConfig(t, appName, cfg)
+	seedRunnerConfig(t, configStore, cfg)
 
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {
@@ -287,7 +283,7 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	t.Setenv(tokenEnv, "test-token")
 
 	boolPtr := func(v bool) *bool { return &v }
-	dbCfg := runtimeDatabaseConfigForRunnerTests(t)
+	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
@@ -306,7 +302,7 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{},
 	}
-	_ = writeRunnerLegacyConfig(t, appName, cfg)
+	seedRunnerConfig(t, configStore, cfg)
 
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -63,7 +62,7 @@ func TestPermissionCheckerGetOwnerID_StoreWriteFailureKeepsRESTFallbackAndCache(
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	})
 
-	cfg := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfg := files.NewMemoryConfigManager()
 	checker := NewPermissionChecker(session, cfg)
 
 	// Intentionally uninitialized store to force Get/SetGuildOwnerID errors.

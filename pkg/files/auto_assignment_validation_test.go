@@ -1,9 +1,6 @@
 package files
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -89,9 +86,7 @@ func TestValidateBotConfigRejectsInvalidRequiredRolesLength(t *testing.T) {
 }
 
 func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) {
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "settings.json")
-
+	store := NewMemoryConfigStore()
 	input := BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -106,16 +101,11 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 			},
 		},
 	}
-
-	raw, err := json.Marshal(input)
-	if err != nil {
-		t.Fatalf("marshal input config: %v", err)
-	}
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
-		t.Fatalf("write input config: %v", err)
+	if err := store.Save(&input); err != nil {
+		t.Fatalf("seed config store: %v", err)
 	}
 
-	mgr := NewConfigManagerWithPath(path)
+	mgr := NewConfigManagerWithStore(store)
 	if err := mgr.LoadConfig(); err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -128,26 +118,20 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 		t.Fatalf("expected booster_role migration, got=%q", got)
 	}
 
-	persisted, err := os.ReadFile(path)
+	persisted, err := store.Load()
 	if err != nil {
-		t.Fatalf("read persisted config: %v", err)
+		t.Fatalf("load persisted config: %v", err)
 	}
-	var cfgOnDisk BotConfig
-	if err := json.Unmarshal(persisted, &cfgOnDisk); err != nil {
-		t.Fatalf("unmarshal persisted config: %v", err)
+	if len(persisted.Guilds) != 1 {
+		t.Fatalf("expected one guild persisted in store, got %d", len(persisted.Guilds))
 	}
-	if len(cfgOnDisk.Guilds) != 1 {
-		t.Fatalf("expected one guild on disk, got %d", len(cfgOnDisk.Guilds))
-	}
-	if got := cfgOnDisk.Guilds[0].Roles.BoosterRole; got != "booster-role" {
+	if got := persisted.Guilds[0].Roles.BoosterRole; got != "booster-role" {
 		t.Fatalf("expected booster_role persisted after migration, got=%q", got)
 	}
 }
 
 func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) {
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "settings.json")
-	mgr := NewConfigManagerWithPath(path)
+	mgr := NewMemoryConfigManager()
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{

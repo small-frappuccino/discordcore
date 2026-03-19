@@ -172,21 +172,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
 
 	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
-	migrationResult, err := files.MigrateLegacyJSONConfigToStore(databaseBootstrap.LegacySettingsPath, configStore)
-	if err != nil {
-		return fmt.Errorf("migrate legacy settings.json to postgres: %w", err)
-	}
-	if migrationResult.Migrated {
-		log.ApplicationLogger().Info(
-			"Migrated legacy settings.json into postgres config store",
-			"operation", "startup.config.migrate_legacy_json",
-			"store", configStore.Describe(),
-			"path", databaseBootstrap.LegacySettingsPath,
-			"removedFile", migrationResult.RemovedFile,
-			"removedParentDir", migrationResult.RemovedParentDir,
-		)
-	}
-
 	configManager := files.NewConfigManagerWithStore(configStore)
 	if err := configManager.LoadConfig(); err != nil {
 		return fmt.Errorf("load config from postgres: %w", err)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -145,7 +144,7 @@ func TestCommandManagerSetupCommands_NormalizesOptionOrderBeforeSync(t *testing.
 		}
 	})
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	cm := NewCommandManager(session, cfgMgr)
 	cm.GetRouter().RegisterCommand(orderedOptionsCommand{})
 

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +43,7 @@ func (s *syncExecutorStub) SyncGuild(_ context.Context, guildID string) error {
 func newControlTestServer(t *testing.T) (*Server, *files.ConfigManager) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
@@ -459,7 +458,7 @@ func TestControlAuthEnforcement(t *testing.T) {
 func TestControlServerStartWithoutConfiguredAuth(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cm := files.NewMemoryConfigManager()
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

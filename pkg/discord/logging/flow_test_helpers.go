@@ -3,7 +3,6 @@ package logging
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -47,7 +46,7 @@ func newLoggingStore(t *testing.T, _ string) (*storage.Store, *sql.DB) {
 func newLoggingConfigManager(t *testing.T, guildID string, channels files.ChannelsConfig) *files.ConfigManager {
 	t.Helper()
 
-	mgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	mgr := files.NewMemoryConfigManager()
 	if err := mgr.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
 		Channels: channels,

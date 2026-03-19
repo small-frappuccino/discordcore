@@ -320,6 +320,66 @@ func TestGuildRegistrationPostCreatesGuildWorkspace(t *testing.T) {
 	}
 }
 
+func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	srv.SetDefaultBotInstanceID("alice")
+	srv.SetBotGuildBindingsProvider(func(_ context.Context) ([]BotGuildBinding, error) {
+		return []BotGuildBinding{
+			{GuildID: "g2", BotInstanceID: "alice"},
+		}, nil
+	})
+	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
+		return cm.EnsureMinimalGuildConfigForBot(guildID, botInstanceID)
+	})
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPost, "/v1/settings/guilds", registerGuildRequest{GuildID: "g2"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var response guildSettingsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode guild registration response: %v", err)
+	}
+	if !response.Created {
+		t.Fatalf("expected created=true, got %+v", response)
+	}
+	if response.Workspace.BotInstanceID != "alice" {
+		t.Fatalf("expected workspace bot_instance_id=alice, got %+v", response.Workspace)
+	}
+	if response.Workspace.Sections.Channels != (files.ChannelsConfig{}) {
+		t.Fatalf("expected empty channels for dormant guild, got %+v", response.Workspace.Sections.Channels)
+	}
+	if len(response.Workspace.Sections.Roles.Allowed) != 0 ||
+		response.Workspace.Sections.Roles.AutoAssignment.Enabled ||
+		response.Workspace.Sections.Roles.AutoAssignment.TargetRoleID != "" ||
+		len(response.Workspace.Sections.Roles.AutoAssignment.RequiredRoles) != 0 {
+		t.Fatalf("expected empty roles for dormant guild, got %+v", response.Workspace.Sections.Roles)
+	}
+	if response.Workspace.Effective.Features.Services.Monitoring ||
+		response.Workspace.Effective.Features.Services.Commands ||
+		response.Workspace.Effective.Features.Logging.MemberJoin ||
+		response.Workspace.Effective.Features.StatsChannels ||
+		response.Workspace.Effective.Features.AutoRoleAssign ||
+		response.Workspace.Effective.Features.UserPrune {
+		t.Fatalf("expected dormant effective features to stay disabled, got %+v", response.Workspace.Effective.Features)
+	}
+
+	cfg := cm.SnapshotConfig()
+	guild, ok := findGuildSettings(cfg, "g2")
+	if !ok {
+		t.Fatal("expected registered guild g2 in config")
+	}
+	if guild.BotInstanceID != "alice" {
+		t.Fatalf("expected persisted bot_instance_id=alice, got %+v", guild)
+	}
+	if guild.Channels != (files.ChannelsConfig{}) {
+		t.Fatalf("expected persisted dormant guild channels to remain empty, got %+v", guild.Channels)
+	}
+}
+
 func TestGuildRegistrationPostReturnsExistingWorkspaceWhenAlreadyConfigured(t *testing.T) {
 	t.Parallel()
 

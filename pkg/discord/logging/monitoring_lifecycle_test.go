@@ -3,7 +3,6 @@ package logging
 import (
 	"context"
 	stdErrors "errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,7 +13,7 @@ import (
 func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	store, _ := newLoggingStore(t, "monitoring-restart.db")
 
-	cfgMgr := files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	cfgMgr := files.NewMemoryConfigManager()
 	if _, err := cfgMgr.UpdateRuntimeConfig(func(rc *files.RuntimeConfig) error {
 		rc.DisableEntryExitLogs = true
 		rc.DisableMessageLogs = true

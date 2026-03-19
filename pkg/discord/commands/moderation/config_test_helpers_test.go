@@ -1,7 +1,6 @@
 package moderation
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -9,7 +8,7 @@ import (
 
 func newTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
-	return files.NewConfigManagerWithPath(filepath.Join(t.TempDir(), "settings.json"))
+	return files.NewMemoryConfigManager()
 }
 
 func mustUpdateConfig(t *testing.T, cm *files.ConfigManager, fn func(*files.BotConfig)) {

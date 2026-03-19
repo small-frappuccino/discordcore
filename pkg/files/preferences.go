@@ -1,36 +1,16 @@
 package files
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // --- Initialization & Persistence ---
-
-func NewConfigManager() *ConfigManager {
-	configFilePath := util.GetSettingsFilePath()
-	return &ConfigManager{
-		configFilePath: configFilePath,
-		store:          NewJSONConfigStore(configFilePath),
-	}
-}
-
-// NewConfigManagerWithPath creates a new configuration manager.
-func NewConfigManagerWithPath(configPath string) *ConfigManager {
-	return &ConfigManager{
-		configFilePath: configPath,
-		store:          NewJSONConfigStore(configPath),
-	}
-}
 
 // NewConfigManagerWithStore creates a new configuration manager backed by the
 // provided persistence store.
@@ -610,157 +590,6 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 	if (permissions & discordgo.PermissionSendMessages) == 0 {
 		return errors.New(ErrChannelNoPermissions)
 	}
-	return nil
-}
-
-func EnsureConfigFiles() error {
-	// Create base directory if it doesn't exist
-	if err := os.MkdirAll(util.ApplicationSupportPath, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	// Ensure settings file
-	if err := EnsureSettingsFile(); err != nil {
-		return fmt.Errorf("failed to ensure settings file: %w", err)
-	}
-
-	return nil
-}
-
-// EnsureSettingsFile ensures the settings.json file exists and is properly initialized.
-// If the file already exists and has a valid structure, it will not be modified.
-func EnsureSettingsFile() error {
-	// Ensure base config directory exists
-	if err := os.MkdirAll(util.ApplicationSupportPath, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-	// Ensure preferences subdirectory (explicit layout: ~/.config/<BotName>/preferences/settings.json)
-	preferencesDir := filepath.Join(util.ApplicationSupportPath, "preferences")
-	if err := os.MkdirAll(preferencesDir, 0755); err != nil {
-		return fmt.Errorf("failed to create preferences directory: %w", err)
-	}
-
-	// Determine settings file status
-	exists, valid, settingsFilePath, err := SettingsFileStatus()
-	if err != nil {
-		return fmt.Errorf("failed to check settings file status: %w", err)
-	}
-
-	// If file does not exist, create default
-	if !exists {
-		log.ApplicationLogger().Info(fmt.Sprintf("Settings file not found, creating default at %s", settingsFilePath))
-		defaultConfig := BotConfig{Guilds: []GuildConfig{}}
-		configData, err := json.MarshalIndent(defaultConfig, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to create settings file: %w", err)
-		}
-		if err := os.WriteFile(settingsFilePath, configData, 0644); err != nil {
-			return fmt.Errorf("failed to write settings file: %w", err)
-		}
-		return nil
-	}
-
-	// If it exists and is valid, do not modify it
-	if valid {
-		log.ApplicationLogger().Info(fmt.Sprintf("Settings file exists and is valid at %s; no changes made", settingsFilePath))
-		return nil
-	}
-
-	// If it exists but is invalid, replace with a default structure
-	log.ApplicationLogger().Warn(fmt.Sprintf("Settings file at %s exists but is invalid JSON structure; rewriting with default schema", settingsFilePath))
-	defaultConfig := BotConfig{Guilds: []GuildConfig{}}
-	configData, err := json.MarshalIndent(defaultConfig, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to create default settings content: %w", err)
-	}
-	if err := os.WriteFile(settingsFilePath, configData, 0644); err != nil {
-		return fmt.Errorf("failed to write settings file: %w", err)
-	}
-
-	return nil
-}
-
-// SettingsFileStatus reports whether settings.json exists and whether its structure is valid.
-func SettingsFileStatus() (exists bool, valid bool, path string, err error) {
-	path = util.GetSettingsFilePath()
-	info, statErr := os.Stat(path)
-	if statErr != nil {
-		if os.IsNotExist(statErr) {
-			return false, false, path, nil
-		}
-		return false, false, path, fmt.Errorf("failed to stat settings file: %w", statErr)
-	}
-	if info.IsDir() {
-		return true, false, path, fmt.Errorf("settings path is a directory")
-	}
-
-	data, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return true, false, path, fmt.Errorf("failed to read settings file: %w", readErr)
-	}
-
-	// Validate minimal structure by attempting to unmarshal into BotConfig
-	var tmp BotConfig
-	if json.Unmarshal(data, &tmp) != nil {
-		return true, false, path, nil
-	}
-
-	// Consider it valid if it unmarshals into BotConfig (even if empty)
-	return true, true, path, nil
-}
-
-// --- Unified Settings Operations ---
-//
-// These functions provide a standardized way to work with settings.json
-//
-// Example usage:
-//   config, err := LoadSettingsFile()
-//   if err != nil { /* handle error */ }
-//
-//   // Modify config...
-//
-//   err = SaveSettingsFile(config)
-//   if err != nil { /* handle error */ }
-
-// LoadSettingsFile loads the legacy settings.json file from the default path.
-func LoadSettingsFile() (*BotConfig, error) {
-	return LoadSettingsFileWithPath(util.GetSettingsFilePath())
-}
-
-// LoadSettingsFileWithPath loads the legacy settings.json file from an explicit path.
-func LoadSettingsFileWithPath(settingsPath string) (*BotConfig, error) {
-	store := NewJSONConfigStore(settingsPath)
-	config, err := store.Load()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load settings from %s: %w", settingsPath, err)
-	}
-	_ = normalizeAutoAssignmentRoleOrder(config)
-	if validationErr := validateBotConfig(config); validationErr != nil {
-		return nil, fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
-	}
-
-	return config, nil
-}
-
-// SaveSettingsFile saves the legacy settings.json file to the default path.
-func SaveSettingsFile(config *BotConfig) error {
-	return SaveSettingsFileWithPath(util.GetSettingsFilePath(), config)
-}
-
-// SaveSettingsFileWithPath saves the legacy settings.json file to an explicit path.
-func SaveSettingsFileWithPath(settingsPath string, config *BotConfig) error {
-	if config == nil {
-		return fmt.Errorf("cannot save nil config")
-	}
-	_ = normalizeAutoAssignmentRoleOrder(config)
-	if validationErr := validateBotConfig(config); validationErr != nil {
-		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
-	}
-
-	if err := NewJSONConfigStore(settingsPath).Save(config); err != nil {
-		return fmt.Errorf("failed to save settings to %s: %w", settingsPath, err)
-	}
-
 	return nil
 }
 

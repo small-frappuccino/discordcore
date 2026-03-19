@@ -1,10 +1,7 @@
 package files
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -153,37 +150,28 @@ func TestGuildConfigIndexDuplicateFix(t *testing.T) {
 }
 
 func TestGuildConfigIndexDedupePersistsOnLoad(t *testing.T) {
-	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, "settings.json")
-	raw := BotConfig{
+	store := NewMemoryConfigStore()
+	raw := &BotConfig{
 		Guilds: []GuildConfig{
 			{GuildID: "g1"},
 			{GuildID: "g1"},
 			{GuildID: "g2"},
 		},
 	}
-	data, err := json.Marshal(raw)
-	if err != nil {
-		t.Fatalf("marshal config: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
+	if err := store.Save(raw); err != nil {
+		t.Fatalf("seed config store: %v", err)
 	}
 
-	mgr := NewConfigManagerWithPath(path)
+	mgr := NewConfigManagerWithStore(store)
 	if err := mgr.LoadConfig(); err != nil {
 		t.Fatalf("load config: %v", err)
 	}
 
-	updated, err := os.ReadFile(path)
+	updated, err := store.Load()
 	if err != nil {
-		t.Fatalf("read config: %v", err)
+		t.Fatalf("load persisted config: %v", err)
 	}
-	var cfg BotConfig
-	if err := json.Unmarshal(updated, &cfg); err != nil {
-		t.Fatalf("unmarshal config: %v", err)
-	}
-	if got := len(cfg.Guilds); got != 2 {
+	if got := len(updated.Guilds); got != 2 {
 		t.Fatalf("expected 2 guilds after dedupe, got %d", got)
 	}
 	if stats := mgr.GuildIndexStats(); stats.Duplicates == 0 {
