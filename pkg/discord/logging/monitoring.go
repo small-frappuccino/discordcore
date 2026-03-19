@@ -146,6 +146,10 @@ const (
 	monitoringPersistenceTimeout   = 10 * time.Second
 	monitoringRouterCloseTimeout   = 10 * time.Second
 	monitoringStartupDispatchLimit = 5 * time.Second
+	monitoringRoleAuditCacheTTL    = 2 * time.Second
+	monitoringRoleAuditDebounceTTL = 1 * time.Second
+	monitoringRoleAuditRetryDelay  = 300 * time.Millisecond
+	monitoringRoleAuditEntryMaxAge = 2 * time.Minute
 )
 
 var heartbeatTickInterval = heartbeatInterval
@@ -229,6 +233,11 @@ type MonitoringService struct {
 	rolesTTL          time.Duration
 	rolesCacheCleanup chan struct{}
 
+	// Short-lived audit cache for member role updates.
+	roleUpdateAuditMu       sync.Mutex
+	roleUpdateAuditCache    map[string]cachedRoleUpdateAudit
+	roleUpdateAuditDebounce map[string]time.Time
+
 	// Event handler references for cleanup
 	eventHandlers []interface{}
 
@@ -250,6 +259,7 @@ type MonitoringService struct {
 	cacheStateMemberHits uint64
 	cacheRolesMemoryHits uint64
 	cacheRolesStoreHits  uint64
+	cacheRoleAuditHits   uint64
 }
 
 func (ms *MonitoringService) Name() string {
@@ -431,6 +441,11 @@ type cachedRoles struct {
 	expiresAt time.Time
 }
 
+type cachedRoleUpdateAudit struct {
+	fetchedAt time.Time
+	entries   []*discordgo.AuditLogEntry
+}
+
 type presenceSnapshot struct {
 	Status       discordgo.Status
 	ClientStatus discordgo.ClientStatus
@@ -468,26 +483,28 @@ func NewMonitoringServiceForBot(
 	unifiedCache := cache.NewUnifiedCache(cacheConfig)
 
 	ms := &MonitoringService{
-		session:              session,
-		configManager:        configManager,
-		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
-		store:                store,
-		activity:             newMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
-		notifier:             n,
-		unifiedCache:         unifiedCache,
-		userWatcher:          NewUserWatcher(session, configManager, store, n, unifiedCache),
-		memberEventService:   NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
-		messageEventService:  NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
-		stopChan:             make(chan struct{}),
-		recentChanges:        make(map[string]time.Time),
-		rolesCache:           make(map[string]cachedRoles),
-		rolesTTL:             5 * time.Minute,
-		rolesCacheCleanup:    make(chan struct{}),
-		eventHandlers:        make([]interface{}, 0),
-		presenceWatch:        make(map[string]presenceSnapshot),
-		statsLastRun:         make(map[string]time.Time),
-		statsGuilds:          make(map[string]*statsGuildState),
+		session:                 session,
+		configManager:           configManager,
+		botInstanceID:           files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotInstanceID:    files.NormalizeBotInstanceID(defaultBotInstanceID),
+		store:                   store,
+		activity:                newMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
+		notifier:                n,
+		unifiedCache:            unifiedCache,
+		userWatcher:             NewUserWatcher(session, configManager, store, n, unifiedCache),
+		memberEventService:      NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
+		messageEventService:     NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
+		stopChan:                make(chan struct{}),
+		recentChanges:           make(map[string]time.Time),
+		rolesCache:              make(map[string]cachedRoles),
+		rolesTTL:                5 * time.Minute,
+		rolesCacheCleanup:       make(chan struct{}),
+		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
+		roleUpdateAuditDebounce: make(map[string]time.Time),
+		eventHandlers:           make([]interface{}, 0),
+		presenceWatch:           make(map[string]presenceSnapshot),
+		statsLastRun:            make(map[string]time.Time),
+		statsGuilds:             make(map[string]*statsGuildState),
 	}
 	ms.rebuildTaskPipeline()
 	return ms, nil
@@ -2224,6 +2241,285 @@ func deviceStatusChanges(prev, cur discordgo.ClientStatus) []string {
 	return changes
 }
 
+type auditRolePartial struct {
+	ID   string
+	Name string
+}
+
+func diffStringIDs(prev, cur []string) (added []string, removed []string) {
+	curSet := make(map[string]struct{}, len(cur))
+	for _, roleID := range cur {
+		if roleID != "" {
+			curSet[roleID] = struct{}{}
+		}
+	}
+	prevSet := make(map[string]struct{}, len(prev))
+	for _, roleID := range prev {
+		if roleID != "" {
+			prevSet[roleID] = struct{}{}
+		}
+	}
+	for roleID := range curSet {
+		if _, ok := prevSet[roleID]; !ok {
+			added = append(added, roleID)
+		}
+	}
+	for roleID := range prevSet {
+		if _, ok := curSet[roleID]; !ok {
+			removed = append(removed, roleID)
+		}
+	}
+	return added, removed
+}
+
+func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, proposed []string) (cur []string, added []string, removed []string, known bool) {
+	switch {
+	case proposed != nil:
+		cur = append([]string(nil), proposed...)
+		known = true
+	default:
+		member, err := ms.getGuildMember(guildID, userID)
+		if err == nil && member != nil {
+			cur = append([]string(nil), member.Roles...)
+			known = true
+		}
+	}
+	if !known {
+		return nil, nil, nil, false
+	}
+
+	var prev []string
+	if p, ok := ms.cacheRolesGet(guildID, userID); ok {
+		atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
+		prev = p
+	} else if ms.store != nil {
+		if r, err := ms.store.GetMemberRoles(guildID, userID); err == nil {
+			atomic.AddUint64(&ms.cacheRolesStoreHits, 1)
+			prev = r
+		}
+	}
+
+	added, removed = diffStringIDs(prev, cur)
+	return cur, added, removed, true
+}
+
+func (ms *MonitoringService) persistMemberRoleSnapshot(guildID, userID string, roles []string) error {
+	if ms.store != nil {
+		if err := ms.store.UpsertMemberRoles(guildID, userID, roles, time.Now()); err != nil {
+			return err
+		}
+	}
+	ms.cacheRolesSet(guildID, userID, roles)
+	return nil
+}
+
+func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefresh bool) ([]*discordgo.AuditLogEntry, bool, error) {
+	now := time.Now()
+
+	ms.roleUpdateAuditMu.Lock()
+	if !forceRefresh {
+		if entry, ok := ms.roleUpdateAuditCache[guildID]; ok && now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
+			entries := append([]*discordgo.AuditLogEntry(nil), entry.entries...)
+			atomic.AddUint64(&ms.cacheRoleAuditHits, 1)
+			ms.roleUpdateAuditMu.Unlock()
+			return entries, true, nil
+		}
+	}
+	ms.roleUpdateAuditMu.Unlock()
+
+	audit, err := ms.session.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMemberRoleUpdate), 10)
+	atomic.AddUint64(&ms.apiAuditLogCalls, 1)
+	if err != nil {
+		return nil, false, err
+	}
+	if audit == nil {
+		return nil, false, nil
+	}
+
+	entries := make([]*discordgo.AuditLogEntry, 0, len(audit.AuditLogEntries))
+	for _, entry := range audit.AuditLogEntries {
+		if entry == nil || entry.ActionType == nil || *entry.ActionType != discordgo.AuditLogActionMemberRoleUpdate {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+
+	ms.roleUpdateAuditMu.Lock()
+	ms.roleUpdateAuditCache[guildID] = cachedRoleUpdateAudit{
+		fetchedAt: now,
+		entries:   append([]*discordgo.AuditLogEntry(nil), entries...),
+	}
+	if len(ms.roleUpdateAuditCache) > 100 {
+		for key, entry := range ms.roleUpdateAuditCache {
+			if now.Sub(entry.fetchedAt) > 5*time.Minute {
+				delete(ms.roleUpdateAuditCache, key)
+			}
+		}
+	}
+	ms.roleUpdateAuditMu.Unlock()
+
+	return entries, false, nil
+}
+
+func (ms *MonitoringService) shouldDebounceRoleUpdateAuditRefresh(guildID, userID string) bool {
+	now := time.Now()
+	key := guildID + ":" + userID
+
+	ms.roleUpdateAuditMu.Lock()
+	defer ms.roleUpdateAuditMu.Unlock()
+
+	if last, ok := ms.roleUpdateAuditDebounce[key]; ok && now.Sub(last) < monitoringRoleAuditDebounceTTL {
+		return true
+	}
+	ms.roleUpdateAuditDebounce[key] = now
+	if len(ms.roleUpdateAuditDebounce) > 200 {
+		for debounceKey, last := range ms.roleUpdateAuditDebounce {
+			if now.Sub(last) > 5*time.Minute {
+				delete(ms.roleUpdateAuditDebounce, debounceKey)
+			}
+		}
+	}
+	return false
+}
+
+func isRecentRoleUpdateAuditEntry(entry *discordgo.AuditLogEntry) bool {
+	if entry == nil || entry.ID == "" {
+		return true
+	}
+	entryTime, ok := snowflakeTimestamp(entry.ID)
+	if !ok {
+		return true
+	}
+	return time.Since(entryTime) <= monitoringRoleAuditEntryMaxAge
+}
+
+func extractAuditRolePartials(v interface{}) []auditRolePartial {
+	arr, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]auditRolePartial, 0, len(arr))
+	for _, item := range arr {
+		obj, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role := auditRolePartial{}
+		if value, ok := obj["id"].(string); ok {
+			role.ID = value
+		}
+		if value, ok := obj["name"].(string); ok {
+			role.Name = value
+		}
+		if role.ID != "" || role.Name != "" {
+			out = append(out, role)
+		}
+	}
+	return out
+}
+
+func extractAuditRoleDelta(entry *discordgo.AuditLogEntry) (added []auditRolePartial, removed []auditRolePartial) {
+	if entry == nil {
+		return nil, nil
+	}
+	for _, change := range entry.Changes {
+		if change == nil || change.Key == nil {
+			continue
+		}
+		switch *change.Key {
+		case discordgo.AuditLogChangeKeyRoleAdd:
+			added = append(added, extractAuditRolePartials(change.NewValue)...)
+			added = append(added, extractAuditRolePartials(change.OldValue)...)
+		case discordgo.AuditLogChangeKeyRoleRemove:
+			removed = append(removed, extractAuditRolePartials(change.NewValue)...)
+			removed = append(removed, extractAuditRolePartials(change.OldValue)...)
+		}
+	}
+	return added, removed
+}
+
+func toIDSet(ids []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id != "" {
+			set[id] = struct{}{}
+		}
+	}
+	return set
+}
+
+func buildAuditRoleList(list []auditRolePartial) string {
+	if len(list) == 0 {
+		return "None"
+	}
+	out := ""
+	for i, role := range list {
+		display := ""
+		if role.ID != "" {
+			display = "<@&" + role.ID + ">"
+		}
+		if display == "" && role.Name != "" {
+			display = "`" + role.Name + "`"
+		}
+		if display == "" && role.ID != "" {
+			display = "`" + role.ID + "`"
+		}
+		if i > 0 {
+			out += ", "
+		}
+		out += display
+	}
+	return out
+}
+
+func buildRoleIDList(list []string) string {
+	if len(list) == 0 {
+		return "None"
+	}
+	out := ""
+	for i, id := range list {
+		if i > 0 {
+			out += ", "
+		}
+		out += "<@&" + id + ">"
+	}
+	return out
+}
+
+func (ms *MonitoringService) sendRoleUpdateNotification(channelID string, user *discordgo.User, actorID string, added string, removed string, source string) error {
+	if user == nil {
+		return fmt.Errorf("role update user is nil")
+	}
+	targetLabel := formatUserLabel(user.Username, user.ID)
+	actorLabel := formatUserRef(actorID)
+	desc := fmt.Sprintf("**Target:** %s\n**Actor:** %s", targetLabel, actorLabel)
+	embed := &discordgo.MessageEmbed{
+		Title:       "Roles Updated",
+		Color:       theme.MemberRoleUpdate(),
+		Description: desc,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Added",
+				Value:  added,
+				Inline: true,
+			},
+			{
+				Name:   "Removed",
+				Value:  removed,
+				Inline: true,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: source,
+		},
+	}
+
+	atomic.AddUint64(&ms.apiMessagesSent, 1)
+	_, err := ms.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
 // handleMemberUpdate processes member updates.
 func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m.User == nil {
@@ -2257,351 +2553,143 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	}
 	channelID := emit.ChannelID
 
-	// Fetch role update audit log using constant with a short retry
-	actionType := int(discordgo.AuditLogActionMemberRoleUpdate)
-
-	// Helper to compute a verified diff between the local snapshot (memory/persistent store) and the current Discord state.
-	// Also returns the current roles considered for snapshot update.
-	computeVerifiedDiff := func(guildID, userID string, proposed []string) (cur []string, added []string, removed []string) {
-		// 1) determine current state from the proposed (event) or from Discord
-		cur = proposed
-		if len(cur) == 0 {
-			if member, err := ms.getGuildMember(guildID, userID); err == nil && member != nil {
-				cur = member.Roles
-			}
-		}
-		if len(cur) == 0 {
-			return cur, nil, nil
-		}
-
-		// 2) get previous state (prefer in-memory TTL cache; fallback persistent store)
-		var prev []string
-		if p, ok := ms.cacheRolesGet(guildID, userID); ok {
-			atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
-			prev = p
-		} else if ms.store != nil {
-			if r, err := ms.store.GetMemberRoles(guildID, userID); err == nil {
-				atomic.AddUint64(&ms.cacheRolesStoreHits, 1)
-				prev = r
-			}
-		}
-
-		// 3) compute diffs
-		curSet := make(map[string]struct{}, len(cur))
-		for _, r := range cur {
-			if r != "" {
-				curSet[r] = struct{}{}
-			}
-		}
-		prevSet := make(map[string]struct{}, len(prev))
-		for _, r := range prev {
-			if r != "" {
-				prevSet[r] = struct{}{}
-			}
-		}
-		for r := range curSet {
-			if _, ok := prevSet[r]; !ok {
-				added = append(added, r)
-			}
-		}
-		for r := range prevSet {
-			if _, ok := curSet[r]; !ok {
-				removed = append(removed, r)
-			}
-		}
-		return cur, added, removed
+	curRoles, verifiedAdded, verifiedRemoved, known := ms.computeMemberRoleDiff(m.GuildID, m.User.ID, m.Roles)
+	if !known {
+		log.ApplicationLogger().Debug(
+			"Role update skipped because current role state could not be resolved",
+			"guildID", m.GuildID,
+			"userID", m.User.ID,
+		)
+		return
 	}
 
-	tryFetchAndNotify := func() (sent bool) {
-		audit, err := ms.session.GuildAuditLog(m.GuildID, "", "", actionType, 10)
-		atomic.AddUint64(&ms.apiAuditLogCalls, 1)
-		if err != nil || audit == nil {
-			log.ApplicationLogger().Warn("Failed to fetch audit logs for role update", "guildID", m.GuildID, "userID", m.User.ID, "err", err)
-			return false
+	if len(verifiedAdded) == 0 && len(verifiedRemoved) == 0 {
+		if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
+			log.ApplicationLogger().Warn(
+				"Failed to persist role snapshot after empty local diff",
+				"guildID", m.GuildID,
+				"userID", m.User.ID,
+				"roleCount", len(curRoles),
+				"err", err,
+			)
 		}
+		return
+	}
 
-		for _, entry := range audit.AuditLogEntries {
-			if entry == nil || entry.ActionType == nil || *entry.ActionType != discordgo.AuditLogActionMemberRoleUpdate || entry.TargetID != m.User.ID {
-				continue
-			}
-			actorID := entry.UserID
+	tryNotifyFromEntries := func(entries []*discordgo.AuditLogEntry) bool {
+		verifiedAddedSet := toIDSet(verifiedAdded)
+		verifiedRemovedSet := toIDSet(verifiedRemoved)
 
-			// Recency check of the entry (via Snowflake ID -> timestamp)
-			recentThreshold := 2 * time.Minute
-			if entry.ID != "" {
-				if sid, err := strconv.ParseUint(entry.ID, 10, 64); err == nil {
-					const discordEpoch = int64(1420070400000) // 2015-01-01 UTC em ms
-					tsMillis := int64(sid>>22) + discordEpoch
-					entryTime := time.Unix(0, tsMillis*int64(time.Millisecond))
-					if time.Since(entryTime) > recentThreshold {
-						continue
-					}
-				}
-			}
-
-			type rolePartial struct {
-				ID   string
-				Name string
-			}
-			extractRoles := func(v interface{}) []rolePartial {
-				arr, ok := v.([]interface{})
-				if !ok {
-					return nil
-				}
-				out := make([]rolePartial, 0, len(arr))
-				for _, it := range arr {
-					if obj, ok := it.(map[string]interface{}); ok {
-						r := rolePartial{}
-						if vv, ok := obj["id"].(string); ok {
-							r.ID = vv
-						}
-						if vv, ok := obj["name"].(string); ok {
-							r.Name = vv
-						}
-						if r.ID != "" || r.Name != "" {
-							out = append(out, r)
-						}
-					}
-				}
-				return out
-			}
-
-			added := []rolePartial{}
-			removed := []rolePartial{}
-
-			for _, ch := range entry.Changes {
-				if ch == nil || ch.Key == nil {
-					continue
-				}
-				switch *ch.Key {
-				case discordgo.AuditLogChangeKeyRoleAdd:
-					// consider NewValue and OldValue for robustness
-					added = append(added, extractRoles(ch.NewValue)...)
-					added = append(added, extractRoles(ch.OldValue)...)
-				case discordgo.AuditLogChangeKeyRoleRemove:
-					removed = append(removed, extractRoles(ch.NewValue)...)
-					removed = append(removed, extractRoles(ch.OldValue)...)
-				}
-			}
-
-			if len(added) == 0 && len(removed) == 0 {
-				// No relevant changes detected in this entry; continue scanning
+		for _, entry := range entries {
+			if entry == nil || entry.TargetID != m.User.ID || !isRecentRoleUpdateAuditEntry(entry) {
 				continue
 			}
 
-			buildList := func(list []rolePartial) string {
-				if len(list) == 0 {
-					return "None"
-				}
-				out := ""
-				for i, r := range list {
-					display := ""
-					if r.ID != "" {
-						display = "<@&" + r.ID + ">"
-					}
-					if display == "" && r.Name != "" {
-						display = "`" + r.Name + "`"
-					}
-					if display == "" && r.ID != "" {
-						display = "`" + r.ID + "`"
-					}
-					if i > 0 {
-						out += ", "
-					}
-					out += display
-				}
-				return out
+			auditAdded, auditRemoved := extractAuditRoleDelta(entry)
+			if len(auditAdded) == 0 && len(auditRemoved) == 0 {
+				continue
 			}
 
-			// Verify with Discord + DB which changes were actually applied
-			curRoles, verifiedAdded, verifiedRemoved := computeVerifiedDiff(m.GuildID, m.User.ID, m.Roles)
-
-			toSet := func(ids []string) map[string]struct{} {
-				s := make(map[string]struct{}, len(ids))
-				for _, id := range ids {
-					if id != "" {
-						s[id] = struct{}{}
-					}
-				}
-				return s
-			}
-			verifiedAddedSet := toSet(verifiedAdded)
-			verifiedRemovedSet := toSet(verifiedRemoved)
-
-			// Filter only the roles that were actually added/removed according to the current state
-			filteredAdded := make([]rolePartial, 0, len(added))
-			for _, r := range added {
-				if r.ID != "" {
-					if _, ok := verifiedAddedSet[r.ID]; ok {
-						filteredAdded = append(filteredAdded, r)
-					}
+			filteredAdded := make([]auditRolePartial, 0, len(auditAdded))
+			for _, role := range auditAdded {
+				if _, ok := verifiedAddedSet[role.ID]; ok {
+					filteredAdded = append(filteredAdded, role)
 				}
 			}
-			filteredRemoved := make([]rolePartial, 0, len(removed))
-			for _, r := range removed {
-				if r.ID != "" {
-					if _, ok := verifiedRemovedSet[r.ID]; ok {
-						filteredRemoved = append(filteredRemoved, r)
-					}
+			filteredRemoved := make([]auditRolePartial, 0, len(auditRemoved))
+			for _, role := range auditRemoved {
+				if _, ok := verifiedRemovedSet[role.ID]; ok {
+					filteredRemoved = append(filteredRemoved, role)
 				}
 			}
 
-			// If nothing remains after verification, do not send an embed
 			if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
 				log.ApplicationLogger().Debug(
 					"Role update skipped after verification produced empty delta",
 					"guildID", m.GuildID,
 					"userID", m.User.ID,
-					"auditAddedCount", len(added),
-					"auditRemovedCount", len(removed),
+					"auditAddedCount", len(auditAdded),
+					"auditRemovedCount", len(auditRemoved),
 					"verifiedAddedCount", len(verifiedAdded),
 					"verifiedRemovedCount", len(verifiedRemoved),
 				)
-				// Update the snapshot anyway to keep the DB consistent
-				if ms.store != nil && len(curRoles) > 0 {
-					if err := ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now()); err != nil {
-						log.ApplicationLogger().Warn(
-							"Failed to persist role snapshot after verification skip",
-							"guildID", m.GuildID,
-							"userID", m.User.ID,
-							"roleCount", len(curRoles),
-							"err", err,
-						)
-					} else {
-						ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
-					}
+				if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
+					log.ApplicationLogger().Warn(
+						"Failed to persist role snapshot after verification skip",
+						"guildID", m.GuildID,
+						"userID", m.User.ID,
+						"roleCount", len(curRoles),
+						"err", err,
+					)
 				}
-				// Continue scanning other possible entries
-				continue
+				return true
 			}
 
-			targetLabel := formatUserLabel(m.User.Username, m.User.ID)
-			actorLabel := formatUserRef(actorID)
-			desc := fmt.Sprintf("**Target:** %s\n**Actor:** %s", targetLabel, actorLabel)
-			embed := &discordgo.MessageEmbed{
-				Title:       "Roles Updated",
-				Color:       theme.MemberRoleUpdate(),
-				Description: desc,
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name:   "Added",
-						Value:  buildList(filteredAdded),
-						Inline: true,
-					},
-					{
-						Name:   "Removed",
-						Value:  buildList(filteredRemoved),
-						Inline: true,
-					},
-				},
-				Timestamp: time.Now().Format(time.RFC3339),
-				Footer: &discordgo.MessageEmbedFooter{
-					Text: "Source: Audit Log",
-				},
-			}
-
-			atomic.AddUint64(&ms.apiMessagesSent, 1)
-			if _, sendErr := ms.session.ChannelMessageSendEmbed(channelID, embed); sendErr != nil {
-				log.ErrorLoggerRaw().Error("Failed to send role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", sendErr)
+			if err := ms.sendRoleUpdateNotification(
+				channelID,
+				m.User,
+				entry.UserID,
+				buildAuditRoleList(filteredAdded),
+				buildAuditRoleList(filteredRemoved),
+				"Source: Audit Log",
+			); err != nil {
+				log.ErrorLoggerRaw().Error("Failed to send role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", err)
 			} else {
 				log.ApplicationLogger().Info("Role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
-				// Update the snapshot to reflect the state after the change
-				if ms.store != nil && len(curRoles) > 0 {
-					_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
-					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
+				if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
+					log.ApplicationLogger().Warn(
+						"Failed to persist role snapshot after role update notification",
+						"guildID", m.GuildID,
+						"userID", m.User.ID,
+						"roleCount", len(curRoles),
+						"err", err,
+					)
 				}
 			}
-
-			// Consider only the latest relevant entry
 			return true
 		}
 		return false
 	}
 
-	// Primeira tentativa
-	if tryFetchAndNotify() {
+	auditLookupDebounced := ms.shouldDebounceRoleUpdateAuditRefresh(m.GuildID, m.User.ID)
+	entries, fromCache, err := ms.getRoleUpdateAuditEntries(m.GuildID, false)
+	if err != nil {
+		log.ApplicationLogger().Warn("Failed to fetch audit logs for role update", "guildID", m.GuildID, "userID", m.User.ID, "err", err)
+	} else if tryNotifyFromEntries(entries) {
 		return
 	}
-	// Retentativa curta
-	time.Sleep(300 * time.Millisecond)
-	if tryFetchAndNotify() {
+
+	if fromCache && !auditLookupDebounced {
+		time.Sleep(monitoringRoleAuditRetryDelay)
+		refreshedEntries, _, refreshErr := ms.getRoleUpdateAuditEntries(m.GuildID, true)
+		if refreshErr != nil {
+			log.ApplicationLogger().Warn("Failed to refresh audit logs for role update", "guildID", m.GuildID, "userID", m.User.ID, "err", refreshErr)
+		} else if tryNotifyFromEntries(refreshedEntries) {
+			return
+		}
+	}
+
+	if err := ms.sendRoleUpdateNotification(
+		channelID,
+		m.User,
+		"",
+		buildRoleIDList(verifiedAdded),
+		buildRoleIDList(verifiedRemoved),
+		"Source: Role Diff",
+	); err != nil {
+		log.ErrorLoggerRaw().Error("Failed to send fallback role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", err)
 		return
 	}
-	// Fallback by role diff when the audit log produced no result
-	if ms.store != nil {
-		curRoles := m.Roles
-		if len(curRoles) == 0 {
-			if member, err := ms.getGuildMember(m.GuildID, m.User.ID); err == nil && member != nil {
-				curRoles = member.Roles
-			}
-		}
-		if len(curRoles) > 0 {
-			var addedIDs, removedIDs []string
-			_, addedIDs, removedIDs = computeVerifiedDiff(m.GuildID, m.User.ID, curRoles)
 
-			if len(addedIDs) > 0 || len(removedIDs) > 0 {
-				buildListIDs := func(list []string) string {
-					if len(list) == 0 {
-						return "None"
-					}
-					out := ""
-					for i, id := range list {
-						display := ""
-						if id != "" {
-							display = "<@&" + id + ">"
-						}
-						if i > 0 {
-							out += ", "
-						}
-						out += display
-					}
-					return out
-				}
-				targetLabel := formatUserLabel(m.User.Username, m.User.ID)
-				actorLabel := formatUserRef("")
-				desc := fmt.Sprintf("**Target:** %s\n**Actor:** %s", targetLabel, actorLabel)
-				embed := &discordgo.MessageEmbed{
-					Title:       "Roles Updated",
-					Color:       theme.MemberRoleUpdate(),
-					Description: desc,
-					Fields: []*discordgo.MessageEmbedField{
-						{
-							Name:   "Added",
-							Value:  buildListIDs(addedIDs),
-							Inline: true,
-						},
-						{
-							Name:   "Removed",
-							Value:  buildListIDs(removedIDs),
-							Inline: true,
-						},
-					},
-					Timestamp: time.Now().Format(time.RFC3339),
-					Footer: &discordgo.MessageEmbedFooter{
-						Text: "Source: Role Diff",
-					},
-				}
-				if _, sendErr := ms.session.ChannelMessageSendEmbed(channelID, embed); sendErr != nil {
-					log.ErrorLoggerRaw().Error("Failed to send fallback role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", sendErr)
-				} else {
-					log.ApplicationLogger().Info("Fallback role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
-					// Update roles snapshot after sending
-					if ms.store != nil {
-						_ = ms.store.UpsertMemberRoles(m.GuildID, m.User.ID, curRoles, time.Now())
-					}
-					// update in-memory cache
-
-					ms.cacheRolesSet(m.GuildID, m.User.ID, curRoles)
-				}
-
-			} else {
-				log.ApplicationLogger().Debug(
-					"Role update fallback diff produced empty delta; no notification sent",
-					"guildID", m.GuildID,
-					"userID", m.User.ID,
-				)
-			}
-		}
+	log.ApplicationLogger().Info("Fallback role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
+	if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
+		log.ApplicationLogger().Warn(
+			"Failed to persist role snapshot after fallback role update notification",
+			"guildID", m.GuildID,
+			"userID", m.User.ID,
+			"roleCount", len(curRoles),
+			"err", err,
+		)
 	}
 
 }
@@ -2898,19 +2986,26 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 	ms.rolesCacheMu.RLock()
 	size := len(ms.rolesCache)
 	ms.rolesCacheMu.RUnlock()
+	ms.roleUpdateAuditMu.Lock()
+	roleAuditCacheSize := len(ms.roleUpdateAuditCache)
+	roleAuditDebounceSize := len(ms.roleUpdateAuditDebounce)
+	ms.roleUpdateAuditMu.Unlock()
 	ttl := ms.rolesTTL
 	isRunning := ms.IsRunning()
 
 	stats := map[string]interface{}{
-		"isRunning":            isRunning,
-		"rolesCacheSize":       size,
-		"rolesCacheTTLSeconds": int(ttl.Seconds()),
-		"apiAuditLogCalls":     atomic.LoadUint64(&ms.apiAuditLogCalls),
-		"apiGuildMemberCalls":  atomic.LoadUint64(&ms.apiGuildMemberCalls),
-		"apiMessagesSent":      atomic.LoadUint64(&ms.apiMessagesSent),
-		"cacheStateMemberHits": atomic.LoadUint64(&ms.cacheStateMemberHits),
-		"cacheRolesMemoryHits": atomic.LoadUint64(&ms.cacheRolesMemoryHits),
-		"cacheRolesStoreHits":  atomic.LoadUint64(&ms.cacheRolesStoreHits),
+		"isRunning":                   isRunning,
+		"rolesCacheSize":              size,
+		"rolesCacheTTLSeconds":        int(ttl.Seconds()),
+		"roleUpdateAuditCacheSize":    roleAuditCacheSize,
+		"roleUpdateAuditDebounceSize": roleAuditDebounceSize,
+		"apiAuditLogCalls":            atomic.LoadUint64(&ms.apiAuditLogCalls),
+		"apiGuildMemberCalls":         atomic.LoadUint64(&ms.apiGuildMemberCalls),
+		"apiMessagesSent":             atomic.LoadUint64(&ms.apiMessagesSent),
+		"cacheStateMemberHits":        atomic.LoadUint64(&ms.cacheStateMemberHits),
+		"cacheRolesMemoryHits":        atomic.LoadUint64(&ms.cacheRolesMemoryHits),
+		"cacheRolesStoreHits":         atomic.LoadUint64(&ms.cacheRolesStoreHits),
+		"cacheRoleAuditHits":          atomic.LoadUint64(&ms.cacheRoleAuditHits),
 	}
 
 	// Add unified cache stats
