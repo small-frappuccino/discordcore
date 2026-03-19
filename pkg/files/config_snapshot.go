@@ -198,6 +198,7 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 		MessageCacheTTLHours:         in.MessageCacheTTLHours,
 		MessageDeleteOnLog:           in.MessageDeleteOnLog,
 		MessageCacheCleanup:          in.MessageCacheCleanup,
+		GlobalMaxWorkers:             in.GlobalMaxWorkers,
 		BackfillChannelID:            in.BackfillChannelID,
 		BackfillStartDay:             in.BackfillStartDay,
 		BackfillInitialDate:          in.BackfillInitialDate,

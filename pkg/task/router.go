@@ -1,6 +1,7 @@
 package task
 
 import (
+	"container/heap"
 	"context"
 	"errors"
 	"maps"
@@ -75,6 +76,10 @@ type RouterConfig struct {
 	// 0 or less means unlimited.
 	GlobalMaxWorkers int
 
+	// ExecutionLimiter allows multiple routers to share the same global execution budget.
+	// When nil, NewRouter creates a private limiter from GlobalMaxWorkers.
+	ExecutionLimiter *ExecutionLimiter
+
 	// GroupMaxParallel limits how many workers a single group has.
 	// Minimum is 1 (default), which preserves serialized execution per group.
 	GroupMaxParallel int
@@ -95,6 +100,44 @@ func Defaults() RouterConfig {
 	}
 }
 
+// ExecutionLimiter bounds concurrent task handler execution and can be shared across routers.
+type ExecutionLimiter struct {
+	sem chan struct{}
+}
+
+func NewExecutionLimiter(maxWorkers int) *ExecutionLimiter {
+	if maxWorkers <= 0 {
+		return nil
+	}
+	return &ExecutionLimiter{
+		sem: make(chan struct{}, maxWorkers),
+	}
+}
+
+func (l *ExecutionLimiter) Acquire() {
+	if l == nil || l.sem == nil {
+		return
+	}
+	l.sem <- struct{}{}
+}
+
+func (l *ExecutionLimiter) Release() {
+	if l == nil || l.sem == nil {
+		return
+	}
+	select {
+	case <-l.sem:
+	default:
+	}
+}
+
+func (l *ExecutionLimiter) Capacity() int {
+	if l == nil || l.sem == nil {
+		return 0
+	}
+	return cap(l.sem)
+}
+
 // Errors returned by the router.
 var (
 	ErrRouterClosed    = errors.New("task router is closed")
@@ -105,8 +148,9 @@ var (
 )
 
 const (
-	globalGroup        = "_global"
-	maxEnqueueAttempts = 3
+	globalGroup         = "_global"
+	maxEnqueueAttempts  = 3
+	retryRescheduleWait = 50 * time.Millisecond
 )
 
 type groupSendResult uint8
@@ -116,6 +160,7 @@ const (
 	groupSendClosed
 	groupSendContextDone
 	groupSendRouterClosed
+	groupSendWouldBlock
 )
 
 // TaskRouter is a minimal in-memory dispatcher with per-group serialization,
@@ -132,8 +177,13 @@ type TaskRouter struct {
 	stopCh    chan struct{}
 	randMutex sync.Mutex // for jitter RNG
 
-	// Global concurrency semaphore; nil when unlimited.
-	execSem chan struct{}
+	// Global concurrency limiter; nil when unlimited.
+	execLimiter *ExecutionLimiter
+
+	retryMu     sync.Mutex
+	retryQueue  retryTaskHeap
+	retryWakeCh chan struct{}
+	retrySeq    uint64
 
 	// Simple cron scheduler
 	cronMu   sync.Mutex
@@ -155,6 +205,48 @@ type groupWorker struct {
 type enqueuedTask struct {
 	task    Task
 	attempt int
+}
+
+type scheduledRetry struct {
+	at       time.Time
+	groupKey string
+	task     *enqueuedTask
+	seq      uint64
+	index    int
+}
+
+type retryTaskHeap []*scheduledRetry
+
+func (h retryTaskHeap) Len() int {
+	return len(h)
+}
+
+func (h retryTaskHeap) Less(i, j int) bool {
+	if h[i].at.Equal(h[j].at) {
+		return h[i].seq < h[j].seq
+	}
+	return h[i].at.Before(h[j].at)
+}
+
+func (h retryTaskHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+	h[i].index = i
+	h[j].index = j
+}
+
+func (h *retryTaskHeap) Push(x any) {
+	item := x.(*scheduledRetry)
+	item.index = len(*h)
+	*h = append(*h, item)
+}
+
+func (h *retryTaskHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	item.index = -1
+	*h = old[:n-1]
+	return item
 }
 
 type cronJob struct {
@@ -194,19 +286,23 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 	}
 
 	tr := &TaskRouter{
-		handlers: make(map[string]TaskHandler),
-		groups:   make(map[string]*groupWorker),
-		inflight: make(map[string]time.Time),
-		cfg:      cfg,
-		stopCh:   make(chan struct{}),
+		handlers:    make(map[string]TaskHandler),
+		groups:      make(map[string]*groupWorker),
+		inflight:    make(map[string]time.Time),
+		cfg:         cfg,
+		stopCh:      make(chan struct{}),
+		retryWakeCh: make(chan struct{}, 1),
 	}
-	// Initialize global semaphore if needed
-	if cfg.GlobalMaxWorkers > 0 {
-		tr.execSem = make(chan struct{}, cfg.GlobalMaxWorkers)
+	if cfg.ExecutionLimiter != nil {
+		tr.execLimiter = cfg.ExecutionLimiter
+	} else if cfg.GlobalMaxWorkers > 0 {
+		tr.execLimiter = NewExecutionLimiter(cfg.GlobalMaxWorkers)
 	}
 
 	tr.wg.Add(1)
 	go tr.backgroundLoop()
+	tr.wg.Add(1)
+	go tr.retryLoop()
 	return tr
 }
 
@@ -404,18 +500,11 @@ func (tr *TaskRouter) ensureGroupLocked(key string) *groupWorker {
 }
 
 func (tr *TaskRouter) acquireExecSlot() {
-	if tr.execSem != nil {
-		tr.execSem <- struct{}{}
-	}
+	tr.execLimiter.Acquire()
 }
 
 func (tr *TaskRouter) releaseExecSlot() {
-	if tr.execSem != nil {
-		select {
-		case <-tr.execSem:
-		default:
-		}
-	}
+	tr.execLimiter.Release()
 }
 
 func (tr *TaskRouter) groupLoop(gw *groupWorker) {
@@ -472,28 +561,8 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 					)
 				}
 
-				// Re-enqueue after backoff (same group)
-				tr.wg.Add(1)
-				go func(et *enqueuedTask, d time.Duration) {
-					defer tr.wg.Done()
-					timer := time.NewTimer(d)
-					defer timer.Stop()
-					select {
-					case <-timer.C:
-						et.attempt = attempt
-						// Retry enqueue can race with idle cleanup closing the group channel.
-						// Use a panic-safe enqueue path that recreates the group when needed.
-						if ok := tr.enqueueRetry(gw.key, et); !ok {
-							log.ApplicationLogger().Debug("Task retry dropped while enqueuing",
-								"type", et.task.Type,
-								"group", gw.key,
-								"attempt", et.attempt,
-							)
-						}
-					case <-tr.stopCh:
-						return
-					}
-				}(enq, delay)
+				enq.attempt = attempt
+				tr.scheduleRetry(gw.key, enq, delay)
 				continue
 			}
 
@@ -520,24 +589,145 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 }
 
 func (tr *TaskRouter) enqueueRetry(groupKey string, et *enqueuedTask) bool {
+	return tr.tryEnqueueRetry(groupKey, et) == groupSendEnqueued
+}
+
+func (tr *TaskRouter) scheduleRetry(groupKey string, et *enqueuedTask, delay time.Duration) {
 	if groupKey == "" || et == nil {
-		return false
+		return
+	}
+
+	item := &scheduledRetry{
+		at:       time.Now().Add(delay),
+		groupKey: groupKey,
+		task:     et,
+	}
+
+	tr.retryMu.Lock()
+	tr.retrySeq++
+	item.seq = tr.retrySeq
+	heap.Push(&tr.retryQueue, item)
+	tr.retryMu.Unlock()
+	tr.signalRetryLoop()
+}
+
+func (tr *TaskRouter) signalRetryLoop() {
+	select {
+	case tr.retryWakeCh <- struct{}{}:
+	default:
+	}
+}
+
+func (tr *TaskRouter) retryLoop() {
+	defer tr.wg.Done()
+
+	for {
+		delay, ok := tr.nextRetryDelay()
+		if !ok {
+			select {
+			case <-tr.stopCh:
+				return
+			case <-tr.retryWakeCh:
+				continue
+			}
+		}
+
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-tr.stopCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return
+			case <-tr.retryWakeCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				continue
+			case <-timer.C:
+			}
+		}
+
+		for _, item := range tr.popDueRetries(time.Now()) {
+			switch tr.tryEnqueueRetry(item.groupKey, item.task) {
+			case groupSendEnqueued:
+				continue
+			case groupSendWouldBlock:
+				tr.scheduleRetry(item.groupKey, item.task, retryRescheduleWait)
+			case groupSendRouterClosed:
+				return
+			default:
+				log.ApplicationLogger().Debug("Task retry dropped while enqueuing",
+					"type", item.task.task.Type,
+					"group", item.groupKey,
+					"attempt", item.task.attempt,
+				)
+			}
+		}
+	}
+}
+
+func (tr *TaskRouter) nextRetryDelay() (time.Duration, bool) {
+	tr.retryMu.Lock()
+	defer tr.retryMu.Unlock()
+
+	if len(tr.retryQueue) == 0 {
+		return 0, false
+	}
+
+	delay := time.Until(tr.retryQueue[0].at)
+	if delay < 0 {
+		delay = 0
+	}
+	return delay, true
+}
+
+func (tr *TaskRouter) popDueRetries(now time.Time) []*scheduledRetry {
+	tr.retryMu.Lock()
+	defer tr.retryMu.Unlock()
+
+	var due []*scheduledRetry
+	for len(tr.retryQueue) > 0 {
+		next := tr.retryQueue[0]
+		if next == nil || next.at.After(now) {
+			break
+		}
+		due = append(due, heap.Pop(&tr.retryQueue).(*scheduledRetry))
+	}
+	return due
+}
+
+func (tr *TaskRouter) tryEnqueueRetry(groupKey string, et *enqueuedTask) groupSendResult {
+	if groupKey == "" || et == nil {
+		return groupSendClosed
 	}
 
 	for i := 0; i < maxEnqueueAttempts; i++ {
 		select {
 		case <-tr.stopCh:
-			return false
+			return groupSendRouterClosed
 		default:
 		}
 
 		gw, ok := tr.getOrCreateGroup(groupKey)
 		if !ok || gw == nil {
-			return false
+			return groupSendRouterClosed
 		}
 
-		if tr.sendToGroup(gw, et) {
-			return true
+		switch tr.sendToGroupTry(gw, et) {
+		case groupSendEnqueued:
+			return groupSendEnqueued
+		case groupSendWouldBlock:
+			return groupSendWouldBlock
+		case groupSendRouterClosed:
+			return groupSendRouterClosed
 		}
 
 		// If enqueue failed, the channel may have been closed concurrently.
@@ -545,7 +735,7 @@ func (tr *TaskRouter) enqueueRetry(groupKey string, et *enqueuedTask) bool {
 		tr.dropStaleGroup(groupKey, gw)
 	}
 
-	return false
+	return groupSendClosed
 }
 
 func (tr *TaskRouter) getOrCreateGroup(groupKey string) (*groupWorker, bool) {
@@ -569,6 +759,27 @@ func (tr *TaskRouter) getOrCreateGroup(groupKey string) (*groupWorker, bool) {
 
 func (tr *TaskRouter) sendToGroup(gw *groupWorker, et *enqueuedTask) (ok bool) {
 	return tr.sendToGroupContext(nil, gw, et) == groupSendEnqueued
+}
+
+func (tr *TaskRouter) sendToGroupTry(gw *groupWorker, et *enqueuedTask) (result groupSendResult) {
+	if gw == nil || gw.ch == nil || et == nil {
+		return groupSendClosed
+	}
+
+	defer func() {
+		if recover() != nil {
+			result = groupSendClosed
+		}
+	}()
+
+	select {
+	case gw.ch <- et:
+		return groupSendEnqueued
+	case <-tr.stopCh:
+		return groupSendRouterClosed
+	default:
+		return groupSendWouldBlock
+	}
 }
 
 func (tr *TaskRouter) sendToGroupContext(ctx context.Context, gw *groupWorker, et *enqueuedTask) (result groupSendResult) {

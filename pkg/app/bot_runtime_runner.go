@@ -21,6 +21,7 @@ import (
 
 type botRuntimeOptions struct {
 	defaultBotInstanceID string
+	runtimeCount         int
 	configManager        *files.ConfigManager
 	store                *storage.Store
 	errorHandler         *coreerrors.ErrorHandler
@@ -74,6 +75,13 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	if cfg != nil {
 		runtimeConfig = cfg.RuntimeConfig
 	}
+	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.defaultBotInstanceID, opts.runtimeCount)
+	log.ApplicationLogger().Info(
+		"Configured runtime task router budget",
+		"botInstanceID", runtime.instanceID,
+		"globalMaxWorkers", routerConfig.GlobalMaxWorkers,
+		"sharedLimiter", routerConfig.ExecutionLimiter != nil,
+	)
 
 	runtime.serviceManager = service.NewServiceManager(opts.errorHandler)
 	var monitoringService *logging.MonitoringService
@@ -90,6 +98,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		if err != nil {
 			return fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
 		}
+		monitoringService.SetTaskRouterConfig(routerConfig)
 		runtime.monitoringService = monitoringService
 		unifiedCache = monitoringService.GetUnifiedCache()
 		if runtime.capabilities.warmup {
@@ -124,7 +133,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		log.ApplicationLogger().Info("Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start", "botInstanceID", runtime.instanceID)
 	} else {
 		automodService := logging.NewAutomodService(runtime.session, opts.configManager)
-		automodRouter := task.NewRouter(task.Defaults())
+		automodRouter := task.NewRouter(routerConfig)
 		notifier := logging.NewNotificationSender(runtime.session)
 		if monitoringService != nil {
 			notifier = monitoringService.Notifier()

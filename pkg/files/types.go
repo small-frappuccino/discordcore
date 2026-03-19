@@ -49,6 +49,10 @@ type RuntimeConfig struct {
 	MessageDeleteOnLog   bool `json:"message_delete_on_log,omitempty"`
 	MessageCacheCleanup  bool `json:"message_cache_cleanup,omitempty"`
 
+	// TASK ROUTER
+	// 0 means "use the runtime default budget".
+	GlobalMaxWorkers int `json:"global_max_workers,omitempty"`
+
 	// BACKFILL (ENTRY/EXIT)
 	BackfillChannelID   string `json:"backfill_channel_id,omitempty"`
 	BackfillStartDay    string `json:"backfill_start_day,omitempty"` // YYYY-MM-DD, default: today UTC when empty
@@ -611,6 +615,9 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildRC.MessageCacheCleanup {
 		resolved.MessageCacheCleanup = true
+	}
+	if guildRC.GlobalMaxWorkers != 0 {
+		resolved.GlobalMaxWorkers = guildRC.GlobalMaxWorkers
 	}
 
 	if guildRC.BackfillChannelID != "" {

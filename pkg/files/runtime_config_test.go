@@ -68,6 +68,31 @@ func TestResolveRuntimeConfigModerationLoggingMerge(t *testing.T) {
 	}
 }
 
+func TestResolveRuntimeConfigGlobalMaxWorkersMerge(t *testing.T) {
+	t.Parallel()
+
+	cfg := &BotConfig{
+		RuntimeConfig: RuntimeConfig{
+			GlobalMaxWorkers: 8,
+		},
+		Guilds: []GuildConfig{
+			{
+				GuildID: "g1",
+				RuntimeConfig: RuntimeConfig{
+					GlobalMaxWorkers: 3,
+				},
+			},
+		},
+	}
+
+	if got := cfg.ResolveRuntimeConfig("g1").GlobalMaxWorkers; got != 3 {
+		t.Fatalf("expected guild override to win for global_max_workers, got %d", got)
+	}
+	if got := cfg.ResolveRuntimeConfig("g2").GlobalMaxWorkers; got != 8 {
+		t.Fatalf("expected global fallback for unknown guild, got %d", got)
+	}
+}
+
 func TestRuntimeConfigNormalizedWebhookEmbedUpdates(t *testing.T) {
 	t.Parallel()
 
@@ -222,5 +247,13 @@ func TestResolveRuntimeConfigWebhookEmbedValidationMerge(t *testing.T) {
 	}
 	if g2.TimeoutMS != 9000 {
 		t.Fatalf("expected g2 timeout override 9000, got %d", g2.TimeoutMS)
+	}
+}
+
+func TestNormalizeRuntimeConfigRejectsNegativeGlobalMaxWorkers(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NormalizeRuntimeConfig(RuntimeConfig{GlobalMaxWorkers: -1}); err == nil {
+		t.Fatal("expected negative global_max_workers to be rejected")
 	}
 }

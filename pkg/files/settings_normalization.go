@@ -16,6 +16,9 @@ func NormalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 	} else if ok {
 		out.Database = normalizedDB
 	}
+	if out.GlobalMaxWorkers < 0 {
+		return RuntimeConfig{}, fmt.Errorf("global_max_workers must be >= 0")
+	}
 
 	updates := out.NormalizedWebhookEmbedUpdates()
 	if len(updates) > 0 {

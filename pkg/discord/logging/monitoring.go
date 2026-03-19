@@ -199,6 +199,7 @@ type MonitoringService struct {
 	notifier             *NotificationSender
 	adapters             *task.NotificationAdapters
 	router               *task.TaskRouter
+	routerConfig         task.RouterConfig
 	userWatcher          *UserWatcher
 	memberEventService   *MemberEventService   // Service for member events
 	messageEventService  *MessageEventService  // Service for message events
@@ -495,7 +496,7 @@ func (ms *MonitoringService) rebuildTaskPipeline() {
 		ms.router.Close()
 	}
 
-	router := task.NewRouter(task.Defaults())
+	router := task.NewRouter(ms.routerConfig)
 	adapters := task.NewNotificationAdapters(router, ms.session, ms.configManager, ms.store, ms.notifier)
 	if ms.userWatcher != nil {
 		adapters.SetAvatarProcessor(ms.userWatcher)
@@ -511,6 +512,14 @@ func (ms *MonitoringService) rebuildTaskPipeline() {
 		ms.messageEventService.SetAdapters(adapters)
 		ms.messageEventService.SetTaskRouter(router)
 	}
+}
+
+func (ms *MonitoringService) SetTaskRouterConfig(cfg task.RouterConfig) {
+	if ms == nil {
+		return
+	}
+	ms.routerConfig = cfg
+	ms.rebuildTaskPipeline()
 }
 
 // Start starts the monitoring service. Returns error if already running.

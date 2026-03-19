@@ -110,6 +110,52 @@ func TestDispatchRetriesOnError(t *testing.T) {
 	}
 }
 
+func TestRetryLoopReschedulesWhenGroupIsTemporarilyFull(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.CleanupInterval = time.Hour
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	done := make(chan struct{}, 1)
+	router.RegisterHandler("retry-full", func(ctx context.Context, payload any) error {
+		done <- struct{}{}
+		return nil
+	})
+
+	blocked := &groupWorker{
+		key:        "busy",
+		ch:         make(chan *enqueuedTask, 1),
+		lastActive: time.Now(),
+	}
+	blocked.ch <- &enqueuedTask{task: Task{Type: "retry-full"}}
+
+	router.mu.Lock()
+	router.groups["busy"] = blocked
+	router.mu.Unlock()
+
+	router.scheduleRetry("busy", &enqueuedTask{
+		task: Task{
+			Type: "retry-full",
+			Options: TaskOptions{
+				GroupKey: "busy",
+			},
+		},
+		attempt: 2,
+	}, 5*time.Millisecond)
+
+	time.Sleep(20 * time.Millisecond)
+
+	router.mu.Lock()
+	delete(router.groups, "busy")
+	router.mu.Unlock()
+
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatalf("scheduled retry did not run after blocked group was released")
+	}
+}
+
 func TestScheduleEveryRunsAndCancels(t *testing.T) {
 	cfg := newTestConfig()
 	cfg.CleanupInterval = 10 * time.Millisecond
@@ -227,6 +273,71 @@ func TestEnqueueRetryRecoversFromClosedGroupChannel(t *testing.T) {
 	case <-done:
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("re-enqueued task did not execute in time")
+	}
+}
+
+func TestSharedExecutionLimiterBoundsMultipleRouters(t *testing.T) {
+	cfg := newTestConfig()
+	limiter := NewExecutionLimiter(1)
+	cfg.ExecutionLimiter = limiter
+	cfg.GlobalMaxWorkers = limiter.Capacity()
+
+	routerA := NewRouter(cfg)
+	t.Cleanup(routerA.Close)
+	routerB := NewRouter(cfg)
+	t.Cleanup(routerB.Close)
+
+	var active int32
+	var maxActive int32
+	release := make(chan struct{})
+	started := make(chan struct{}, 2)
+
+	handler := func(ctx context.Context, payload any) error {
+		current := atomic.AddInt32(&active, 1)
+		for {
+			observed := atomic.LoadInt32(&maxActive)
+			if current <= observed || atomic.CompareAndSwapInt32(&maxActive, observed, current) {
+				break
+			}
+		}
+		started <- struct{}{}
+		<-release
+		atomic.AddInt32(&active, -1)
+		return nil
+	}
+
+	routerA.RegisterHandler("work", handler)
+	routerB.RegisterHandler("work", handler)
+
+	if err := routerA.Dispatch(context.Background(), Task{Type: "work", Options: TaskOptions{GroupKey: "a"}}); err != nil {
+		t.Fatalf("dispatch on routerA failed: %v", err)
+	}
+	if err := routerB.Dispatch(context.Background(), Task{Type: "work", Options: TaskOptions{GroupKey: "b"}}); err != nil {
+		t.Fatalf("dispatch on routerB failed: %v", err)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected first handler to start")
+	}
+
+	select {
+	case <-started:
+		t.Fatalf("second handler started before limiter slot was released")
+	case <-time.After(40 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case <-started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected second handler to start after limiter release")
+	}
+
+	if got := atomic.LoadInt32(&maxActive); got != 1 {
+		t.Fatalf("expected max concurrent handlers to be 1, got %d", got)
 	}
 }
 

@@ -474,11 +474,15 @@ var runtimeConfigFieldSetters = map[string]setterFunc{
 		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(v)) != "off")
 		rc.ModerationLogMode = v
 	}),
-	"presence_watch_user_id":             stringSetter(func(rc *files.RuntimeConfig, v string) { rc.PresenceWatchUserID = v }),
-	"presence_watch_bot":                 boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.PresenceWatchBot = v }),
-	"message_cache_ttl_hours":            intSetter(func(rc *files.RuntimeConfig, v int) { rc.MessageCacheTTLHours = v }),
-	"message_delete_on_log":              boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageDeleteOnLog = v }),
-	"message_cache_cleanup":              boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageCacheCleanup = v }),
+	"presence_watch_user_id":  stringSetter(func(rc *files.RuntimeConfig, v string) { rc.PresenceWatchUserID = v }),
+	"presence_watch_bot":      boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.PresenceWatchBot = v }),
+	"message_cache_ttl_hours": intSetter(func(rc *files.RuntimeConfig, v int) { rc.MessageCacheTTLHours = v }),
+	"message_delete_on_log":   boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageDeleteOnLog = v }),
+	"message_cache_cleanup":   boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.MessageCacheCleanup = v }),
+	"global_max_workers": nonNegativeIntSetter(
+		"global_max_workers",
+		func(rc *files.RuntimeConfig, v int) { rc.GlobalMaxWorkers = v },
+	),
 	"backfill_channel_id":                stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillChannelID = v }),
 	"backfill_start_day":                 stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillStartDay = v }),
 	"backfill_initial_date":              stringSetter(func(rc *files.RuntimeConfig, v string) { rc.BackfillInitialDate = v }),
@@ -513,6 +517,20 @@ func intSetter(assign func(*files.RuntimeConfig, int)) setterFunc {
 		v, err := decodeInt(raw)
 		if err != nil {
 			return err
+		}
+		assign(rc, v)
+		return nil
+	}
+}
+
+func nonNegativeIntSetter(field string, assign func(*files.RuntimeConfig, int)) setterFunc {
+	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
+		v, err := decodeInt(raw)
+		if err != nil {
+			return err
+		}
+		if v < 0 {
+			return fmt.Errorf("%s must be >= 0", field)
 		}
 		assign(rc, v)
 		return nil

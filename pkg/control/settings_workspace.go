@@ -191,6 +191,7 @@ type runtimeWebhookSection struct {
 }
 
 type runtimeAdvancedSection struct {
+	GlobalMaxWorkers        int                            `json:"global_max_workers,omitempty"`
 	ModerationLogMode       string                         `json:"moderation_log_mode,omitempty"`
 	LegacyWebhookEmbedPatch files.WebhookEmbedUpdateConfig `json:"legacy_webhook_embed_update,omitempty"`
 }
@@ -541,6 +542,7 @@ func groupRuntimeSettings(rc files.RuntimeConfig) runtimeSettingsSections {
 			Validation: rc.WebhookEmbedValidation,
 		},
 		Advanced: runtimeAdvancedSection{
+			GlobalMaxWorkers:        rc.GlobalMaxWorkers,
 			ModerationLogMode:       rc.ModerationLogMode,
 			LegacyWebhookEmbedPatch: rc.WebhookEmbedUpdate,
 		},
@@ -565,6 +567,7 @@ func flattenRuntimeSettingsSections(in runtimeSettingsSections) files.RuntimeCon
 		MessageCacheTTLHours:         in.MessageCache.MessageCacheTTLHours,
 		MessageDeleteOnLog:           in.MessageCache.MessageDeleteOnLog,
 		MessageCacheCleanup:          in.MessageCache.MessageCacheCleanup,
+		GlobalMaxWorkers:             in.Advanced.GlobalMaxWorkers,
 		BackfillChannelID:            in.Backfill.BackfillChannelID,
 		BackfillStartDay:             in.Backfill.BackfillStartDay,
 		BackfillInitialDate:          in.Backfill.BackfillInitialDate,
@@ -684,6 +687,7 @@ func hasRuntimeOverrides(rc files.RuntimeConfig) bool {
 		rc.MessageCacheTTLHours != 0 ||
 		rc.MessageDeleteOnLog ||
 		rc.MessageCacheCleanup ||
+		rc.GlobalMaxWorkers != 0 ||
 		rc.BackfillChannelID != "" ||
 		rc.BackfillStartDay != "" ||
 		rc.BackfillInitialDate != "" ||
