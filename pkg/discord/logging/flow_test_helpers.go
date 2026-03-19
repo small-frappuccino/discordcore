@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -124,6 +125,28 @@ func messageHistoryCount(t *testing.T, db *sql.DB, guildID, messageID, eventType
 		messageID,
 		eventType,
 	)
+}
+
+func waitForCondition(t *testing.T, timeout time.Duration, description string, fn func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if fn() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if fn() {
+		return
+	}
+	t.Fatalf("timed out waiting for %s", description)
+}
+
+func waitForDailyMessageMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userID string, at time.Time, want int) {
+	t.Helper()
+	waitForCondition(t, 3*time.Second, fmt.Sprintf("daily_message_metrics=%d for %s/%s/%s", want, guildID, channelID, userID), func() bool {
+		return dailyMessageMetricCount(t, db, guildID, channelID, userID, at) == want
+	})
 }
 
 func sameStringSet(a, b []string) bool {

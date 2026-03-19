@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -47,13 +48,14 @@ func TestSchemaInitialized(t *testing.T) {
 	defer rows.Close()
 
 	required := map[string]bool{
-		"messages":         false,
-		"member_joins":     false,
-		"persistent_cache": false,
-		"guild_meta":       false,
-		"runtime_meta":     false,
-		"moderation_cases": false,
-		"roles_current":    false,
+		"messages":                 false,
+		"member_joins":             false,
+		"persistent_cache":         false,
+		"guild_meta":               false,
+		"runtime_meta":             false,
+		"moderation_cases":         false,
+		"roles_current":            false,
+		"message_version_counters": false,
 	}
 	for rows.Next() {
 		var name string
@@ -165,6 +167,299 @@ func TestUpsertMessageIsTransactional(t *testing.T) {
 	}
 }
 
+func TestUpsertMessagesContextDeduplicatesByMessage(t *testing.T) {
+	store := newTempStore(t)
+
+	now := time.Now().UTC()
+	err := store.UpsertMessagesContext(context.Background(), []MessageRecord{
+		{GuildID: "g", MessageID: "m1", ChannelID: "c", AuthorID: "u", Content: "first", CachedAt: now},
+		{GuildID: "g", MessageID: "m1", ChannelID: "c", AuthorID: "u", Content: "second", CachedAt: now.Add(time.Second)},
+		{GuildID: "g", MessageID: "m2", ChannelID: "c", AuthorID: "u", Content: "other", CachedAt: now},
+	})
+	if err != nil {
+		t.Fatalf("UpsertMessagesContext() failed: %v", err)
+	}
+
+	got, err := store.GetMessage("g", "m1")
+	if err != nil {
+		t.Fatalf("GetMessage(m1) failed: %v", err)
+	}
+	if got == nil || got.Content != "second" {
+		t.Fatalf("expected latest content for m1, got %+v", got)
+	}
+
+	got, err = store.GetMessage("g", "m2")
+	if err != nil {
+		t.Fatalf("GetMessage(m2) failed: %v", err)
+	}
+	if got == nil || got.Content != "other" {
+		t.Fatalf("expected second message to be inserted, got %+v", got)
+	}
+}
+
+func TestDeleteMessagesContextDeduplicatesKeys(t *testing.T) {
+	store := newTempStore(t)
+
+	now := time.Now().UTC()
+	if err := store.UpsertMessagesContext(context.Background(), []MessageRecord{
+		{GuildID: "g", MessageID: "m1", ChannelID: "c", AuthorID: "u", Content: "first", CachedAt: now},
+		{GuildID: "g", MessageID: "m2", ChannelID: "c", AuthorID: "u", Content: "second", CachedAt: now},
+	}); err != nil {
+		t.Fatalf("seed messages: %v", err)
+	}
+
+	err := store.DeleteMessagesContext(context.Background(), []MessageDeleteKey{
+		{GuildID: "g", MessageID: "m1"},
+		{GuildID: "g", MessageID: "m1"},
+		{GuildID: "g", MessageID: "m2"},
+	})
+	if err != nil {
+		t.Fatalf("DeleteMessagesContext() failed: %v", err)
+	}
+
+	if got, err := store.GetMessage("g", "m1"); err != nil {
+		t.Fatalf("GetMessage(m1) failed: %v", err)
+	} else if got != nil {
+		t.Fatalf("expected m1 to be deleted, got %+v", got)
+	}
+	if got, err := store.GetMessage("g", "m2"); err != nil {
+		t.Fatalf("GetMessage(m2) failed: %v", err)
+	} else if got != nil {
+		t.Fatalf("expected m2 to be deleted, got %+v", got)
+	}
+}
+
+func TestInsertMessageVersionsBatchContextPreservesExplicitVersions(t *testing.T) {
+	store := newTempStore(t)
+
+	createdAt := time.Now().UTC()
+	err := store.InsertMessageVersionsBatchContext(context.Background(), []MessageVersion{
+		{
+			GuildID:   "g",
+			MessageID: "m",
+			ChannelID: "c",
+			AuthorID:  "u",
+			Version:   1,
+			EventType: "create",
+			Content:   "before",
+			CreatedAt: createdAt,
+		},
+		{
+			GuildID:   "g",
+			MessageID: "m",
+			ChannelID: "c",
+			AuthorID:  "u",
+			Version:   2,
+			EventType: "edit",
+			Content:   "after",
+			CreatedAt: createdAt.Add(time.Second),
+		},
+	})
+	if err != nil {
+		t.Fatalf("InsertMessageVersionsBatchContext() failed: %v", err)
+	}
+
+	rows, err := store.db.Query(`SELECT version, event_type FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	if err != nil {
+		t.Fatalf("query versions: %v", err)
+	}
+	defer rows.Close()
+
+	var got []string
+	for rows.Next() {
+		var version int
+		var eventType string
+		if err := rows.Scan(&version, &eventType); err != nil {
+			t.Fatalf("scan version row: %v", err)
+		}
+		got = append(got, fmt.Sprintf("%d:%s", version, eventType))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate versions: %v", err)
+	}
+	if want := []string{"1:create", "2:edit"}; !sameStringSlice(got, want) {
+		t.Fatalf("unexpected persisted versions: got=%v want=%v", got, want)
+	}
+
+	var lastVersion int
+	if err := store.db.QueryRow(
+		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
+	).Scan(&lastVersion); err != nil {
+		t.Fatalf("query version counter: %v", err)
+	}
+	if lastVersion != 2 {
+		t.Fatalf("expected version counter to track explicit batch at 2, got %d", lastVersion)
+	}
+}
+
+func TestInsertMessageVersionsMixedBatchContextAssignsContiguousVersions(t *testing.T) {
+	store := newTempStore(t)
+
+	createdAt := time.Now().UTC()
+	err := store.InsertMessageVersionsMixedBatchContext(context.Background(), []MessageVersion{
+		{
+			GuildID:   "g",
+			MessageID: "m",
+			ChannelID: "c",
+			AuthorID:  "u",
+			Version:   1,
+			EventType: "create",
+			Content:   "before",
+			CreatedAt: createdAt,
+		},
+		{
+			GuildID:   "g",
+			MessageID: "m",
+			ChannelID: "c",
+			AuthorID:  "u",
+			EventType: "edit",
+			Content:   "after",
+			CreatedAt: createdAt.Add(time.Second),
+		},
+		{
+			GuildID:   "g",
+			MessageID: "m",
+			ChannelID: "c",
+			AuthorID:  "u",
+			EventType: "delete",
+			Content:   "after",
+			CreatedAt: createdAt.Add(2 * time.Second),
+		},
+	})
+	if err != nil {
+		t.Fatalf("InsertMessageVersionsMixedBatchContext() failed: %v", err)
+	}
+
+	rows, err := store.db.Query(`SELECT version, event_type FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	if err != nil {
+		t.Fatalf("query versions: %v", err)
+	}
+	defer rows.Close()
+
+	var got []string
+	for rows.Next() {
+		var version int
+		var eventType string
+		if err := rows.Scan(&version, &eventType); err != nil {
+			t.Fatalf("scan version row: %v", err)
+		}
+		got = append(got, fmt.Sprintf("%d:%s", version, eventType))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate versions: %v", err)
+	}
+	if want := []string{"1:create", "2:edit", "3:delete"}; !sameStringSlice(got, want) {
+		t.Fatalf("unexpected persisted versions: got=%v want=%v", got, want)
+	}
+}
+
+func TestInsertMessageVersionBackfillsCounterFromHistoryWhenMissing(t *testing.T) {
+	store := newTempStore(t)
+
+	createdAt := time.Now().UTC().Add(-time.Minute)
+	if _, err := store.db.Exec(
+		`INSERT INTO messages_history (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, 0, $8)`,
+		"g",
+		"m",
+		"c",
+		"u",
+		5,
+		"edit",
+		"before",
+		createdAt,
+	); err != nil {
+		t.Fatalf("seed history row: %v", err)
+	}
+
+	if err := store.InsertMessageVersion(MessageVersion{
+		GuildID:   "g",
+		MessageID: "m",
+		ChannelID: "c",
+		AuthorID:  "u",
+		EventType: "delete",
+		Content:   "after",
+		CreatedAt: createdAt.Add(time.Second),
+	}); err != nil {
+		t.Fatalf("InsertMessageVersion() failed: %v", err)
+	}
+
+	rows, err := store.db.Query(`SELECT version FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	if err != nil {
+		t.Fatalf("query versions: %v", err)
+	}
+	defer rows.Close()
+
+	var versions []int
+	for rows.Next() {
+		var version int
+		if err := rows.Scan(&version); err != nil {
+			t.Fatalf("scan version row: %v", err)
+		}
+		versions = append(versions, version)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate versions: %v", err)
+	}
+	if want := []int{5, 6}; len(versions) != len(want) || versions[0] != want[0] || versions[1] != want[1] {
+		t.Fatalf("expected backfilled versions %v, got %v", want, versions)
+	}
+
+	var lastVersion int
+	if err := store.db.QueryRow(
+		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
+	).Scan(&lastVersion); err != nil {
+		t.Fatalf("query version counter: %v", err)
+	}
+	if lastVersion != 6 {
+		t.Fatalf("expected backfilled counter to end at 6, got %d", lastVersion)
+	}
+}
+
+func TestIncrementDailyMessageCountsContextAggregatesDeltas(t *testing.T) {
+	store := newTempStore(t)
+
+	err := store.IncrementDailyMessageCountsContext(context.Background(), []DailyMessageCountDelta{
+		{GuildID: "g", ChannelID: "c", UserID: "u", Day: "2026-03-19", Count: 1},
+		{GuildID: "g", ChannelID: "c", UserID: "u", Day: "2026-03-19", Count: 2},
+		{GuildID: "g", ChannelID: "c", UserID: "v", Day: "2026-03-19", Count: 4},
+	})
+	if err != nil {
+		t.Fatalf("IncrementDailyMessageCountsContext() failed: %v", err)
+	}
+
+	var count int
+	if err := store.db.QueryRow(
+		`SELECT count FROM daily_message_metrics WHERE guild_id='g' AND channel_id='c' AND user_id='u' AND day='2026-03-19'`,
+	).Scan(&count); err != nil {
+		t.Fatalf("query aggregated count: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("expected aggregated count 3, got %d", count)
+	}
+
+	if err := store.db.QueryRow(
+		`SELECT count FROM daily_message_metrics WHERE guild_id='g' AND channel_id='c' AND user_id='v' AND day='2026-03-19'`,
+	).Scan(&count); err != nil {
+		t.Fatalf("query second bucket count: %v", err)
+	}
+	if count != 4 {
+		t.Fatalf("expected second bucket count 4, got %d", count)
+	}
+}
+
+func sameStringSlice(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestForeignKeysAndUniqueConstraints(t *testing.T) {
 	store := newTempStore(t)
 
@@ -235,6 +530,164 @@ func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 	}
 }
 
+func TestUpsertGuildMemberSnapshotsContext_BatchesAvatarRolesAndJoins(t *testing.T) {
+	store := newTempStore(t)
+
+	ctx := context.Background()
+	guildID := "g1"
+	firstSeen := time.Date(2022, 2, 10, 9, 0, 0, 0, time.UTC)
+	secondSeen := firstSeen.Add(24 * time.Hour)
+
+	err := store.UpsertGuildMemberSnapshotsContext(ctx, guildID, []GuildMemberSnapshot{
+		{
+			UserID:     "u1",
+			AvatarHash: "avatar-old",
+			HasAvatar:  true,
+			Roles:      []string{"r1", "r2", "r2"},
+			HasRoles:   true,
+			JoinedAt:   firstSeen,
+		},
+		{
+			UserID:   "u2",
+			Roles:    []string{"r9"},
+			HasRoles: true,
+			JoinedAt: secondSeen,
+		},
+	}, time.Date(2022, 2, 10, 10, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("UpsertGuildMemberSnapshotsContext(first) failed: %v", err)
+	}
+
+	err = store.UpsertGuildMemberSnapshotsContext(ctx, guildID, []GuildMemberSnapshot{
+		{
+			UserID:     "u1",
+			AvatarHash: "avatar-new",
+			HasAvatar:  true,
+			Roles:      []string{"r3"},
+			HasRoles:   true,
+			JoinedAt:   secondSeen,
+		},
+		{
+			UserID:   "u2",
+			Roles:    nil,
+			HasRoles: true,
+			JoinedAt: firstSeen,
+		},
+	}, time.Date(2022, 2, 10, 11, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("UpsertGuildMemberSnapshotsContext(second) failed: %v", err)
+	}
+
+	avatarHash, _, ok, err := store.GetAvatar(guildID, "u1")
+	if err != nil {
+		t.Fatalf("GetAvatar() failed: %v", err)
+	}
+	if !ok || avatarHash != "avatar-new" {
+		t.Fatalf("expected updated avatar hash, got hash=%q ok=%v", avatarHash, ok)
+	}
+
+	var historyCount int
+	var oldHash, newHash string
+	if err := store.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(MIN(old_hash), ''), COALESCE(MIN(new_hash), '') FROM avatars_history WHERE guild_id = $1 AND user_id = $2`,
+		guildID,
+		"u1",
+	).Scan(&historyCount, &oldHash, &newHash); err != nil {
+		t.Fatalf("query avatar history: %v", err)
+	}
+	if historyCount != 1 || oldHash != "avatar-old" || newHash != "avatar-new" {
+		t.Fatalf("unexpected avatar history: count=%d old=%q new=%q", historyCount, oldHash, newHash)
+	}
+
+	roles, err := store.GetMemberRoles(guildID, "u1")
+	if err != nil {
+		t.Fatalf("GetMemberRoles(u1) failed: %v", err)
+	}
+	sort.Strings(roles)
+	if len(roles) != 1 || roles[0] != "r3" {
+		t.Fatalf("unexpected roles for u1: %v", roles)
+	}
+
+	roles, err = store.GetMemberRoles(guildID, "u2")
+	if err != nil {
+		t.Fatalf("GetMemberRoles(u2) failed: %v", err)
+	}
+	if len(roles) != 0 {
+		t.Fatalf("expected cleared roles for u2, got %v", roles)
+	}
+
+	joinedAt, ok, err := store.GetMemberJoin(guildID, "u1")
+	if err != nil {
+		t.Fatalf("GetMemberJoin(u1) failed: %v", err)
+	}
+	if !ok || !joinedAt.Equal(firstSeen) {
+		t.Fatalf("expected earliest join for u1=%s, got %s (ok=%v)", firstSeen.Format(time.RFC3339), joinedAt.Format(time.RFC3339), ok)
+	}
+
+	joinedAt, ok, err = store.GetMemberJoin(guildID, "u2")
+	if err != nil {
+		t.Fatalf("GetMemberJoin(u2) failed: %v", err)
+	}
+	if !ok || !joinedAt.Equal(firstSeen) {
+		t.Fatalf("expected earliest join for u2=%s, got %s (ok=%v)", firstSeen.Format(time.RFC3339), joinedAt.Format(time.RFC3339), ok)
+	}
+}
+
+func TestUpsertGuildMemberSnapshotsContext_OptionalFieldsDoNotOverwriteExistingData(t *testing.T) {
+	store := newTempStore(t)
+
+	ctx := context.Background()
+	guildID := "g1"
+	joinedAt := time.Date(2023, 3, 5, 12, 0, 0, 0, time.UTC)
+
+	if err := store.UpsertGuildMemberSnapshotsContext(ctx, guildID, []GuildMemberSnapshot{
+		{
+			UserID:     "u1",
+			AvatarHash: "avatar-one",
+			HasAvatar:  true,
+			Roles:      []string{"r1"},
+			HasRoles:   true,
+			JoinedAt:   joinedAt,
+		},
+	}, time.Date(2023, 3, 5, 13, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("seed snapshots: %v", err)
+	}
+
+	if err := store.UpsertGuildMemberSnapshotsContext(ctx, guildID, []GuildMemberSnapshot{
+		{
+			UserID:   "u1",
+			JoinedAt: joinedAt.Add(48 * time.Hour),
+		},
+	}, time.Date(2023, 3, 5, 14, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("join-only snapshot: %v", err)
+	}
+
+	avatarHash, _, ok, err := store.GetAvatar(guildID, "u1")
+	if err != nil {
+		t.Fatalf("GetAvatar() failed: %v", err)
+	}
+	if !ok || avatarHash != "avatar-one" {
+		t.Fatalf("expected avatar hash to remain unchanged, got hash=%q ok=%v", avatarHash, ok)
+	}
+
+	roles, err := store.GetMemberRoles(guildID, "u1")
+	if err != nil {
+		t.Fatalf("GetMemberRoles() failed: %v", err)
+	}
+	sort.Strings(roles)
+	if len(roles) != 1 || roles[0] != "r1" {
+		t.Fatalf("expected roles to remain unchanged, got %v", roles)
+	}
+
+	gotJoin, ok, err := store.GetMemberJoin(guildID, "u1")
+	if err != nil {
+		t.Fatalf("GetMemberJoin() failed: %v", err)
+	}
+	if !ok || !gotJoin.Equal(joinedAt) {
+		t.Fatalf("expected earliest join to remain %s, got %s (ok=%v)", joinedAt.Format(time.RFC3339), gotJoin.Format(time.RFC3339), ok)
+	}
+}
+
 func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
 	store := newTempStore(t)
 
@@ -297,6 +750,16 @@ func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
 		if version != expected {
 			t.Fatalf("expected contiguous versions starting at 1; got %v", versions)
 		}
+	}
+
+	var lastVersion int
+	if err := store.db.QueryRow(
+		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
+	).Scan(&lastVersion); err != nil {
+		t.Fatalf("query version counter: %v", err)
+	}
+	if lastVersion != writers {
+		t.Fatalf("expected version counter to advance to %d, got %d", writers, lastVersion)
 	}
 }
 

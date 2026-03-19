@@ -31,7 +31,7 @@ var ErrControlServerBind = errors.New("control server bind failed")
 type botGuildIDsProvider func(context.Context) ([]string, error)
 type botGuildBindingsProvider func(context.Context) ([]BotGuildBinding, error)
 type guildRegistrationFunc func(context.Context, string, string) error
-type discordSessionResolver func(string) *discordgo.Session
+type discordSessionResolver func(string) (*discordgo.Session, error)
 
 // BotGuildBinding associates a guild visible to the control plane with a bot
 // instance identifier from the host runtime catalog.
@@ -222,14 +222,14 @@ func (s *Server) SetDiscordSessionProvider(provider func() *discordgo.Session) {
 	if s == nil || provider == nil {
 		return
 	}
-	s.discordSession = func(string) *discordgo.Session {
-		return provider()
+	s.discordSession = func(string) (*discordgo.Session, error) {
+		return provider(), nil
 	}
 }
 
 // SetDiscordSessionResolver exposes a guild-aware Discord session resolver for
 // readiness inspection.
-func (s *Server) SetDiscordSessionResolver(resolver func(string) *discordgo.Session) {
+func (s *Server) SetDiscordSessionResolver(resolver func(string) (*discordgo.Session, error)) {
 	if s == nil || resolver == nil {
 		return
 	}

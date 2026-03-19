@@ -146,26 +146,60 @@ func newBotRuntimeResolver(
 	}
 }
 
-func (r *botRuntimeResolver) runtimeForGuild(guildID string) *botRuntime {
+func (r *botRuntimeResolver) defaultRuntime() (*botRuntime, string, error) {
 	if r == nil {
-		return nil
+		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
 	}
-	guildID = strings.TrimSpace(guildID)
-	if guildID != "" && r.configManager != nil {
-		if guild := r.configManager.GuildConfig(guildID); guild != nil {
-			if runtime := r.runtimes[guild.EffectiveBotInstanceID(r.defaultBotInstanceID)]; runtime != nil {
-				return runtime
-			}
-		}
+	botInstanceID := strings.TrimSpace(r.defaultBotInstanceID)
+	if botInstanceID == "" {
+		return nil, "", fmt.Errorf("default bot instance is not configured")
 	}
-	return r.runtimes[r.defaultBotInstanceID]
+	runtime := r.runtimes[botInstanceID]
+	if runtime == nil {
+		return nil, botInstanceID, fmt.Errorf("default bot instance %q is unavailable", botInstanceID)
+	}
+	return runtime, botInstanceID, nil
 }
 
-func (r *botRuntimeResolver) sessionForGuild(guildID string) *discordgo.Session {
-	if runtime := r.runtimeForGuild(guildID); runtime != nil {
-		return runtime.session
+func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, string, error) {
+	if r == nil {
+		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
 	}
-	return nil
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return r.defaultRuntime()
+	}
+	if r.configManager == nil {
+		return nil, "", fmt.Errorf("bot runtime resolver config manager is unavailable")
+	}
+	guild := r.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
+	}
+	botInstanceID := guild.EffectiveBotInstanceID(r.defaultBotInstanceID)
+	if botInstanceID == "" {
+		return nil, "", fmt.Errorf("guild %s does not resolve to a bot instance", guildID)
+	}
+	runtime := r.runtimes[botInstanceID]
+	if runtime == nil {
+		return nil, botInstanceID, fmt.Errorf("bot instance %q is unavailable for guild %s", botInstanceID, guildID)
+	}
+	return runtime, botInstanceID, nil
+}
+
+func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session, error) {
+	runtime, botInstanceID, err := r.runtimeForGuild(guildID)
+	if err != nil {
+		return nil, err
+	}
+	if runtime.session == nil {
+		guildID = strings.TrimSpace(guildID)
+		if guildID == "" {
+			return nil, fmt.Errorf("discord session for default bot instance %q is unavailable", botInstanceID)
+		}
+		return nil, fmt.Errorf("discord session for guild %s (bot instance %q) is unavailable", guildID, botInstanceID)
+	}
+	return runtime.session, nil
 }
 
 func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID, botInstanceID string) error {

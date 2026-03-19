@@ -69,6 +69,8 @@ type MessageEventService struct {
 	verifyPending map[string]time.Time
 
 	taskRouter *task.TaskRouter
+
+	messageCreateWriter *messageCreateWriter
 }
 
 const (
@@ -179,6 +181,10 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 			slog.Warn("MessageEventService: startup cleanup failed", "error", err)
 		}
 	}
+	if mes.store != nil {
+		mes.messageCreateWriter = newMessageCreateWriter(mes.store)
+		mes.messageCreateWriter.Start()
+	}
 
 	mes.handlerCancels = mes.handlerCancels[:0]
 	mes.handlerCancels = append(mes.handlerCancels,
@@ -260,8 +266,15 @@ func (mes *MessageEventService) Stop(ctx context.Context) error {
 	}
 	mes.handlerCancels = nil
 
-	if err := mes.lifecycle.Wait(ctx); err != nil {
-		return err
+	waitErr := mes.lifecycle.Wait(ctx)
+	if mes.messageCreateWriter != nil {
+		if err := mes.messageCreateWriter.Stop(ctx); err != nil {
+			return err
+		}
+		mes.messageCreateWriter = nil
+	}
+	if waitErr != nil {
+		return waitErr
 	}
 
 	slog.Info("Message event service stopped")
@@ -360,47 +373,8 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 
 	mes.markEvent(ctx)
 
-	// Persist to Postgres store (write-through; best effort)
-	if mes.cacheEnabled && mes.store != nil && m.Author != nil {
-		if err := mes.store.UpsertMessage(storage.MessageRecord{
-			GuildID:        guildID,
-			MessageID:      m.ID,
-			ChannelID:      m.ChannelID,
-			AuthorID:       m.Author.ID,
-			AuthorUsername: m.Author.Username,
-			AuthorAvatar:   m.Author.Avatar,
-			Content:        m.Content,
-			CachedAt:       time.Now().UTC(),
-			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
-			HasExpiry:      true,
-		}); err != nil {
-			slog.Warn("MessageCreate: failed to persist message cache entry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
-		}
-
-		// Versioned history (v1) - hardcoded enabled
-		if mes.versioningEnabled {
-			if err := mes.store.InsertMessageVersion(storage.MessageVersion{
-				GuildID:     guildID,
-				MessageID:   m.ID,
-				ChannelID:   m.ChannelID,
-				AuthorID:    m.Author.ID,
-				Version:     1,
-				EventType:   "create",
-				Content:     m.Content,
-				Attachments: len(m.Attachments),
-				Embeds:      len(m.Embeds),
-				Stickers:    len(m.StickerItems),
-				CreatedAt:   time.Now().UTC(),
-			}); err != nil {
-				slog.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
-			}
-		}
-	}
-
 	if mes.store != nil && m.Author != nil {
-		if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, time.Now().UTC()); err != nil {
-			slog.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
-		}
+		mes.persistMessageCreate(guildID, m)
 	}
 	slog.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
 }
@@ -505,10 +479,14 @@ func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
 }
 
 func (mes *MessageEventService) GetCacheStats() map[string]any {
-	return map[string]any{
+	stats := map[string]any{
 		"isRunning": mes.IsRunning(),
 		"backend":   "postgres",
 	}
+	if mes.messageCreateWriter != nil {
+		stats["messageWriter"] = mes.messageCreateWriter.Stats()
+	}
+	return stats
 }
 
 func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {
@@ -709,35 +687,7 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 		Timestamp: cached.Timestamp,
 	}
 	if contentResolved && mes.cacheEnabled && mes.store != nil && updated.Author != nil {
-		if err := mes.store.UpsertMessage(storage.MessageRecord{
-			GuildID:        updated.GuildID,
-			MessageID:      updated.ID,
-			ChannelID:      updated.ChannelID,
-			AuthorID:       updated.Author.ID,
-			AuthorUsername: updated.Author.Username,
-			AuthorAvatar:   updated.Author.Avatar,
-			Content:        updated.Content,
-			CachedAt:       time.Now().UTC(),
-			ExpiresAt:      time.Now().UTC().Add(mes.cacheTTL),
-			HasExpiry:      true,
-		}); err != nil {
-			slog.Warn("MessageUpdate: failed to persist updated message cache entry", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
-		}
-
-		// Versioned history (edit) - hardcoded enabled
-		if mes.versioningEnabled {
-			if err := mes.store.InsertMessageVersion(storage.MessageVersion{
-				GuildID:   updated.GuildID,
-				MessageID: updated.ID,
-				ChannelID: updated.ChannelID,
-				AuthorID:  updated.Author.ID,
-				EventType: "edit",
-				Content:   m.Content,
-				CreatedAt: time.Now().UTC(),
-			}); err != nil {
-				slog.Warn("MessageUpdate: failed to persist message edit version", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
-			}
-		}
+		mes.persistMessageUpdate(updated, m.Content)
 	}
 	slog.Info("MessageUpdate: store updated with new content", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID)
 	return nil
@@ -783,9 +733,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 		}
 		// Deletion from store is disabled by default
 		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-			if err := mes.store.DeleteMessage(m.GuildID, m.ID); err != nil {
-				slog.Warn("MessageDelete: failed to delete message cache entry after suppressed notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "error", err)
-			}
+			mes.persistMessageDelete(cached, true, false, "message_delete_suppressed")
 		}
 		return nil
 	}
@@ -795,9 +743,7 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 	if cached.Author.Bot {
 		// Deletion from store is disabled by default
 		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-			if err := mes.store.DeleteMessage(m.GuildID, m.ID); err != nil {
-				slog.Warn("MessageDelete: failed to delete cached bot message", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "error", err)
-			}
+			mes.persistMessageDelete(cached, true, false, "message_delete_bot")
 		}
 		return nil
 	}
@@ -840,30 +786,18 @@ func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *di
 
 	// Remove from cache and persistence (disabled by default)
 	// Versioned history (delete) - hardcoded enabled
-	if mes.versioningEnabled && mes.store != nil && cached.Author != nil {
-		if err := mes.store.InsertMessageVersion(storage.MessageVersion{
-			GuildID:   cached.GuildID,
-			MessageID: cached.ID,
-			ChannelID: cached.ChannelID,
-			AuthorID:  cached.Author.ID,
-			EventType: "delete",
-			Content:   cached.Content,
-			CreatedAt: time.Now().UTC(),
-		}); err != nil {
-			slog.Warn("MessageDelete: failed to persist message delete version", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "error", err)
-		}
-	}
-	if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
-		if err := mes.store.DeleteMessage(m.GuildID, m.ID); err != nil {
-			slog.Warn("MessageDelete: failed to delete message cache entry", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "error", err)
-		}
-	}
+	mes.persistMessageDelete(cached, mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil, mes.versioningEnabled && mes.store != nil && cached.Author != nil, "message_delete")
 	return nil
 }
 
 func (mes *MessageEventService) lookupCachedMessage(guildID, messageID string, allowWait bool) *CachedMessage {
 	if mes.store == nil || guildID == "" || messageID == "" {
 		return nil
+	}
+	if mes.messageCreateWriter != nil {
+		if cached := mes.messageCreateWriter.Lookup(guildID, messageID); cached != nil {
+			return cached
+		}
 	}
 	tryFetch := func() *CachedMessage {
 		if rec, err := mes.store.GetMessage(guildID, messageID); err == nil && rec != nil {
@@ -889,6 +823,167 @@ func (mes *MessageEventService) lookupCachedMessage(guildID, messageID string, a
 	}
 	time.Sleep(400 * time.Millisecond)
 	return tryFetch()
+}
+
+func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordgo.MessageCreate) {
+	if mes.store == nil || m == nil || m.Author == nil {
+		return
+	}
+
+	now := time.Now().UTC()
+	record := storage.MessageRecord{
+		GuildID:        guildID,
+		MessageID:      m.ID,
+		ChannelID:      m.ChannelID,
+		AuthorID:       m.Author.ID,
+		AuthorUsername: m.Author.Username,
+		AuthorAvatar:   m.Author.Avatar,
+		Content:        m.Content,
+		CachedAt:       now,
+		ExpiresAt:      now.Add(mes.cacheTTL),
+		HasExpiry:      true,
+	}
+
+	var version *storage.MessageVersion
+	if mes.versioningEnabled {
+		version = &storage.MessageVersion{
+			GuildID:     guildID,
+			MessageID:   m.ID,
+			ChannelID:   m.ChannelID,
+			AuthorID:    m.Author.ID,
+			Version:     1,
+			EventType:   "create",
+			Content:     m.Content,
+			Attachments: len(m.Attachments),
+			Embeds:      len(m.Embeds),
+			Stickers:    len(m.StickerItems),
+			CreatedAt:   now,
+		}
+	}
+
+	metric := storage.DailyMessageCountDelta{
+		GuildID:   guildID,
+		ChannelID: m.ChannelID,
+		UserID:    m.Author.ID,
+		Day:       now.Format("2006-01-02"),
+		Count:     1,
+	}
+
+	if mes.messageCreateWriter != nil {
+		if err := mes.messageCreateWriter.Enqueue(record, version, metric); err == nil {
+			return
+		} else {
+			slog.Warn("MessageCreate: async writer enqueue failed; falling back to synchronous persistence", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+		}
+	}
+
+	if err := mes.store.UpsertMessage(record); err != nil {
+		slog.Warn("MessageCreate: failed to persist message cache entry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+	}
+	if version != nil {
+		if err := mes.store.InsertMessageVersion(*version); err != nil {
+			slog.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+		}
+	}
+	if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, now); err != nil {
+		slog.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+	}
+}
+
+func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, content string) {
+	if mes == nil || mes.store == nil || updated == nil || updated.Author == nil {
+		return
+	}
+
+	now := time.Now().UTC()
+	record := storage.MessageRecord{
+		GuildID:        updated.GuildID,
+		MessageID:      updated.ID,
+		ChannelID:      updated.ChannelID,
+		AuthorID:       updated.Author.ID,
+		AuthorUsername: updated.Author.Username,
+		AuthorAvatar:   updated.Author.Avatar,
+		Content:        content,
+		CachedAt:       now,
+		ExpiresAt:      now.Add(mes.cacheTTL),
+		HasExpiry:      true,
+	}
+
+	var version *storage.MessageVersion
+	if mes.versioningEnabled {
+		version = &storage.MessageVersion{
+			GuildID:   updated.GuildID,
+			MessageID: updated.ID,
+			ChannelID: updated.ChannelID,
+			AuthorID:  updated.Author.ID,
+			EventType: "edit",
+			Content:   content,
+			CreatedAt: now,
+		}
+	}
+
+	if mes.messageCreateWriter != nil {
+		if err := mes.messageCreateWriter.Enqueue(record, version, storage.DailyMessageCountDelta{}); err == nil {
+			return
+		} else {
+			slog.Warn("MessageUpdate: async writer enqueue failed; falling back to synchronous persistence", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+		}
+	}
+
+	if err := mes.store.UpsertMessage(record); err != nil {
+		slog.Warn("MessageUpdate: failed to persist updated message cache entry", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+	}
+	if version != nil {
+		if err := mes.store.InsertMessageVersion(*version); err != nil {
+			slog.Warn("MessageUpdate: failed to persist message edit version", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+		}
+	}
+}
+
+func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, deleteFromStore bool, includeVersion bool, operation string) {
+	if mes == nil || mes.store == nil || cached == nil {
+		return
+	}
+
+	var version *storage.MessageVersion
+	if includeVersion && cached.Author != nil {
+		version = &storage.MessageVersion{
+			GuildID:   cached.GuildID,
+			MessageID: cached.ID,
+			ChannelID: cached.ChannelID,
+			AuthorID:  cached.Author.ID,
+			EventType: "delete",
+			Content:   cached.Content,
+			CreatedAt: time.Now().UTC(),
+		}
+	}
+
+	if mes.messageCreateWriter != nil {
+		var err error
+		switch {
+		case deleteFromStore:
+			err = mes.messageCreateWriter.EnqueueDelete(cached.GuildID, cached.ID, version)
+		case version != nil:
+			err = mes.messageCreateWriter.EnqueueVersion(*version)
+		default:
+			return
+		}
+		if err == nil {
+			return
+		}
+		slog.Warn("MessageDelete: async writer enqueue failed; falling back to synchronous persistence", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
+	}
+
+	if version != nil {
+		if err := mes.store.InsertMessageVersion(*version); err != nil {
+			slog.Warn("MessageDelete: failed to persist message delete version", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
+		}
+	}
+	if deleteFromStore {
+		if err := mes.store.DeleteMessage(cached.GuildID, cached.ID); err != nil {
+			slog.Warn("MessageDelete: failed to delete message cache entry", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "error", err)
+		}
+	}
 }
 
 func cloneMessageUpdate(m *discordgo.MessageUpdate) *discordgo.MessageUpdate {

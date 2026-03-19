@@ -283,7 +283,10 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	}
 
 	runtimeResolver := newBotRuntimeResolver(configManager, runtimes, defaultBotInstanceID)
-	defaultSession := runtimeResolver.sessionForGuild("")
+	defaultSession, err := runtimeResolver.sessionForGuild("")
+	if err != nil {
+		return fmt.Errorf("resolve default discord session: %w", err)
+	}
 	if cfg := configManager.Config(); cfg != nil && defaultSession != nil {
 		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
 			operation := fmt.Sprintf(
@@ -373,7 +376,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		controlServer.SetDefaultBotInstanceID(defaultBotInstanceID)
 		controlServer.SetPartnerBoardService(partnerBoardAppService)
 		controlServer.SetPartnerBoardSyncExecutor(partnerSyncDispatcher)
-		controlServer.SetDiscordSessionResolver(func(guildID string) *discordgo.Session {
+		controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
 			return runtimeResolver.sessionForGuild(guildID)
 		})
 		controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {

@@ -16,6 +16,7 @@ import (
 var (
 	errGuildRegistrationRequired    = errors.New("guild registration required")
 	errGuildRegistrationUnavailable = errors.New("guild registration unavailable")
+	errGuildDiscoveryRequired       = errors.New("guild discovery required")
 )
 
 type registerGuildRequest struct {
@@ -237,7 +238,7 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	availableBotInstanceIDs, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
-	if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 		return
 	}
@@ -263,7 +264,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	)
 	if payload.BotInstanceID != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
-		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 			return
 		}
@@ -346,7 +347,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	}
 	if payload.BotInstanceID == nil {
 		availableBotInstanceIDs, err = s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
-		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 			return
 		}
@@ -359,6 +360,10 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Request, guildID string) {
+	if _, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID); err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
+		return
+	}
 	_, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID != guildID {
@@ -392,9 +397,6 @@ func (s *Server) resolveGuildRegistrySources(
 
 		bindings, err := s.resolveBotGuildBindings(ctx)
 		if err != nil {
-			if errors.Is(err, errBotGuildIDsProviderUnavailable) {
-				return nil, nil, nil
-			}
 			return nil, nil, err
 		}
 		return guildRegistrySourcesFromBindings(bindings), nil, nil
@@ -408,10 +410,7 @@ func (s *Server) resolveGuildRegistrySources(
 		}
 		bindings, err := s.resolveBotGuildBindings(ctx)
 		if err != nil {
-			if !errors.Is(err, errBotGuildIDsProviderUnavailable) {
-				return nil, nil, err
-			}
-			bindings = nil
+			return nil, nil, err
 		}
 		botInstanceIDsByGuild := groupBotInstanceIDsByGuild(bindings)
 
@@ -471,10 +470,10 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 
 	bindings, err := s.resolveBotGuildBindings(ctx)
 	if err != nil {
-		if errors.Is(err, errBotGuildIDsProviderUnavailable) && auth.mode != requestAuthModeDiscordOAuthSession {
-			return nil, nil
-		}
 		return nil, err
+	}
+	if !guildIDPresentInBindings(bindings, guildID) {
+		return nil, fmt.Errorf("%w: guild_id=%s", errGuildDiscoveryRequired, guildID)
 	}
 	available := groupBotInstanceIDsByGuild(bindings)[guildID]
 	if auth.mode == requestAuthModeDiscordOAuthSession {
@@ -494,6 +493,19 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 		}
 	}
 	return available, nil
+}
+
+func guildIDPresentInBindings(bindings []BotGuildBinding, guildID string) bool {
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return false
+	}
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.GuildID) == guildID {
+			return true
+		}
+	}
+	return false
 }
 
 func selectGuildBotInstanceID(requested string, availableBotInstanceIDs []string) (string, error) {

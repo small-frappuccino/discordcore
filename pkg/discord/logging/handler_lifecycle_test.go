@@ -160,9 +160,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			},
 		},
 	})
-	if got := dailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 1 {
-		t.Fatalf("expected one processed message after first dispatch, got %d", got)
-	}
+	waitForDailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC(), 1)
 
 	if err := service.Stop(context.Background()); err != nil {
 		t.Fatalf("stop message event service: %v", err)
@@ -206,10 +204,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			},
 		},
 	})
-
-	if got := dailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 2 {
-		t.Fatalf("expected one processed message per dispatch after restart, got daily metric=%d", got)
-	}
+	waitForDailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC(), 2)
 
 	if err := service.Stop(context.Background()); err != nil {
 		t.Fatalf("final stop message event service: %v", err)

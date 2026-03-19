@@ -101,9 +101,22 @@ var (
 	ErrUnknownTaskType = errors.New("unknown task type")
 	ErrDuplicateTask   = errors.New("duplicate task (idempotency key present)")
 	ErrRetrySilent     = errors.New("retryable task error (silent)")
+	errTaskEnqueue     = errors.New("task enqueue failed")
 )
 
-const globalGroup = "_global"
+const (
+	globalGroup        = "_global"
+	maxEnqueueAttempts = 3
+)
+
+type groupSendResult uint8
+
+const (
+	groupSendEnqueued groupSendResult = iota
+	groupSendClosed
+	groupSendContextDone
+	groupSendRouterClosed
+)
 
 // TaskRouter is a minimal in-memory dispatcher with per-group serialization,
 // idempotency (dedupe), and retry with exponential backoff.
@@ -208,16 +221,51 @@ func (tr *TaskRouter) RegisterHandler(taskType string, handler TaskHandler) {
 // Returns ErrUnknownTaskType if no handler is registered.
 // Returns ErrDuplicateTask when a non-expired IdempotencyKey already exists.
 func (tr *TaskRouter) Dispatch(ctx context.Context, t Task) error {
+	groupKey, eff, err := tr.prepareDispatch(t)
+	if err != nil {
+		return err
+	}
+
+	enq := &enqueuedTask{task: t, attempt: 1}
+	for i := 0; i < maxEnqueueAttempts; i++ {
+		gw, ok := tr.getOrCreateGroup(groupKey)
+		if !ok || gw == nil {
+			tr.rollbackIdempotencyReservation(eff)
+			return ErrRouterClosed
+		}
+
+		switch tr.sendToGroupContext(ctx, gw, enq) {
+		case groupSendEnqueued:
+			return nil
+		case groupSendContextDone:
+			tr.rollbackIdempotencyReservation(eff)
+			if ctx == nil {
+				return context.Canceled
+			}
+			return ctx.Err()
+		case groupSendRouterClosed:
+			tr.rollbackIdempotencyReservation(eff)
+			return ErrRouterClosed
+		case groupSendClosed:
+			tr.dropStaleGroup(groupKey, gw)
+		}
+	}
+
+	tr.rollbackIdempotencyReservation(eff)
+	return errTaskEnqueue
+}
+
+func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 
 	if tr.closed {
-		return ErrRouterClosed
+		return "", TaskOptions{}, ErrRouterClosed
 	}
 
 	handler, ok := tr.handlers[t.Type]
 	if !ok || handler == nil {
-		return ErrUnknownTaskType
+		return "", TaskOptions{}, ErrUnknownTaskType
 	}
 
 	// Resolve effective options
@@ -226,26 +274,17 @@ func (tr *TaskRouter) Dispatch(ctx context.Context, t Task) error {
 	// Idempotency: reject duplicates within TTL window
 	if eff.IdempotencyKey != "" {
 		if expiry, exists := tr.inflight[eff.IdempotencyKey]; exists && time.Now().Before(expiry) {
-			return ErrDuplicateTask
+			return "", TaskOptions{}, ErrDuplicateTask
 		}
 		tr.inflight[eff.IdempotencyKey] = time.Now().Add(eff.IdempotencyTTL)
 	}
 
-	// Ensure group worker
 	groupKey := eff.GroupKey
 	if groupKey == "" {
 		groupKey = globalGroup
 	}
-	gw := tr.ensureGroupLocked(groupKey)
 
-	// Enqueue
-	enq := &enqueuedTask{task: t, attempt: 1}
-	select {
-	case gw.ch <- enq:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return groupKey, eff, nil
 }
 
 // Close gracefully stops the router, waits for background goroutines to exit.
@@ -485,7 +524,6 @@ func (tr *TaskRouter) enqueueRetry(groupKey string, et *enqueuedTask) bool {
 		return false
 	}
 
-	const maxEnqueueAttempts = 3
 	for i := 0; i < maxEnqueueAttempts; i++ {
 		select {
 		case <-tr.stopCh:
@@ -493,7 +531,7 @@ func (tr *TaskRouter) enqueueRetry(groupKey string, et *enqueuedTask) bool {
 		default:
 		}
 
-		gw, ok := tr.getOrCreateGroupForRetry(groupKey)
+		gw, ok := tr.getOrCreateGroup(groupKey)
 		if !ok || gw == nil {
 			return false
 		}
@@ -504,17 +542,13 @@ func (tr *TaskRouter) enqueueRetry(groupKey string, et *enqueuedTask) bool {
 
 		// If enqueue failed, the channel may have been closed concurrently.
 		// Remove stale group reference so the next attempt can recreate workers.
-		tr.mu.Lock()
-		if current, exists := tr.groups[groupKey]; exists && current == gw {
-			delete(tr.groups, groupKey)
-		}
-		tr.mu.Unlock()
+		tr.dropStaleGroup(groupKey, gw)
 	}
 
 	return false
 }
 
-func (tr *TaskRouter) getOrCreateGroupForRetry(groupKey string) (*groupWorker, bool) {
+func (tr *TaskRouter) getOrCreateGroup(groupKey string) (*groupWorker, bool) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 
@@ -534,28 +568,50 @@ func (tr *TaskRouter) getOrCreateGroupForRetry(groupKey string) (*groupWorker, b
 }
 
 func (tr *TaskRouter) sendToGroup(gw *groupWorker, et *enqueuedTask) (ok bool) {
+	return tr.sendToGroupContext(nil, gw, et) == groupSendEnqueued
+}
+
+func (tr *TaskRouter) sendToGroupContext(ctx context.Context, gw *groupWorker, et *enqueuedTask) (result groupSendResult) {
 	if gw == nil || gw.ch == nil || et == nil {
-		return false
+		return groupSendClosed
 	}
 
 	defer func() {
 		if recover() != nil {
-			ok = false
+			result = groupSendClosed
 		}
 	}()
 
+	var ctxDone <-chan struct{}
+	if ctx != nil {
+		ctxDone = ctx.Done()
+	}
+
 	select {
 	case gw.ch <- et:
-		return true
-	default:
-		// Best-effort: if buffer is full, try a blocking send unless router is closing.
-		select {
-		case gw.ch <- et:
-			return true
-		case <-tr.stopCh:
-			return false
-		}
+		return groupSendEnqueued
+	case <-ctxDone:
+		return groupSendContextDone
+	case <-tr.stopCh:
+		return groupSendRouterClosed
 	}
+}
+
+func (tr *TaskRouter) dropStaleGroup(groupKey string, gw *groupWorker) {
+	tr.mu.Lock()
+	if current, exists := tr.groups[groupKey]; exists && current == gw {
+		delete(tr.groups, groupKey)
+	}
+	tr.mu.Unlock()
+}
+
+func (tr *TaskRouter) rollbackIdempotencyReservation(eff TaskOptions) {
+	if eff.IdempotencyKey == "" {
+		return
+	}
+	tr.mu.Lock()
+	delete(tr.inflight, eff.IdempotencyKey)
+	tr.mu.Unlock()
 }
 
 func (tr *TaskRouter) computeBackoff(initial, max time.Duration, attempt int) time.Duration {

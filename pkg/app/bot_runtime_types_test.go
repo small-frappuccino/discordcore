@@ -36,17 +36,77 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 		"yuzuha": {instanceID: "yuzuha", session: yuzuhaSession},
 	}, "alice")
 
-	if got := resolver.sessionForGuild("g1"); got != aliceSession {
-		t.Fatalf("expected alice session for g1, got %p want %p", got, aliceSession)
+	if got, err := resolver.sessionForGuild("g1"); err != nil || got != aliceSession {
+		t.Fatalf("expected alice session for g1, got %p err=%v want %p", got, err, aliceSession)
 	}
-	if got := resolver.sessionForGuild("g2"); got != yuzuhaSession {
-		t.Fatalf("expected yuzuha session for g2, got %p want %p", got, yuzuhaSession)
+	if got, err := resolver.sessionForGuild("g2"); err != nil || got != yuzuhaSession {
+		t.Fatalf("expected yuzuha session for g2, got %p err=%v want %p", got, err, yuzuhaSession)
 	}
-	if got := resolver.sessionForGuild("g3"); got != aliceSession {
-		t.Fatalf("expected alice session for g3, got %p want %p", got, aliceSession)
+	if got, err := resolver.sessionForGuild("g3"); err != nil || got != aliceSession {
+		t.Fatalf("expected alice session for g3, got %p err=%v want %p", got, err, aliceSession)
 	}
-	if got := resolver.sessionForGuild("missing"); got != aliceSession {
-		t.Fatalf("expected default alice session for unknown guild, got %p want %p", got, aliceSession)
+	if got, err := resolver.sessionForGuild(""); err != nil || got != aliceSession {
+		t.Fatalf("expected default alice session for empty guild, got %p err=%v want %p", got, err, aliceSession)
+	}
+}
+
+func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
+	t.Parallel()
+
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+		t.Fatalf("add guild g1: %v", err)
+	}
+
+	aliceSession, err := discordgo.New("Bot alice-token")
+	if err != nil {
+		t.Fatalf("create alice session: %v", err)
+	}
+
+	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
+		"alice": {instanceID: "alice", session: aliceSession},
+	}, "alice")
+
+	if got, err := resolver.sessionForGuild("missing"); err == nil {
+		t.Fatalf("expected missing guild lookup to fail, got session %p", got)
+	} else if gotErr := err.Error(); gotErr != "guild missing is not configured" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T) {
+	t.Parallel()
+
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+		t.Fatalf("add guild g1: %v", err)
+	}
+
+	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{}, "alice")
+
+	if got, err := resolver.sessionForGuild("g1"); err == nil {
+		t.Fatalf("expected unavailable runtime to fail, got session %p", got)
+	} else if gotErr := err.Error(); gotErr != `bot instance "alice" is unavailable for guild g1` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBotRuntimeResolverSessionForGuildRejectsMissingSession(t *testing.T) {
+	t.Parallel()
+
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+		t.Fatalf("add guild g1: %v", err)
+	}
+
+	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
+		"alice": {instanceID: "alice"},
+	}, "alice")
+
+	if got, err := resolver.sessionForGuild("g1"); err == nil {
+		t.Fatalf("expected missing session to fail, got session %p", got)
+	} else if gotErr := err.Error(); gotErr != `discord session for guild g1 (bot instance "alice") is unavailable` {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

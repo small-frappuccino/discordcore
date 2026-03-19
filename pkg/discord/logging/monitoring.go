@@ -26,6 +26,11 @@ import (
 
 var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
 
+const (
+	monitoringGuildMembersPageSize   = 1000
+	monitoringMaxConcurrentGuildScan = 4
+)
+
 func stopMonitoringSubService(ctx context.Context, operation, serviceName string, stopFn func() error) error {
 	if stopFn == nil {
 		return nil
@@ -1430,17 +1435,18 @@ func (ms *MonitoringService) initializeCache() {
 		log.ApplicationLogger().Info("No guild configured for monitoring")
 		return
 	}
-	var wg sync.WaitGroup
 	ms.markEvent(nil)
+	guildIDs := make([]string, 0, len(cfg.Guilds))
 	for _, gcfg := range cfg.Guilds {
-		gid := gcfg.GuildID
-		wg.Add(1)
-		go func(guildID string) {
-			defer wg.Done()
-			_ = ms.initializeGuildCacheContext(context.Background(), guildID)
-		}(gid)
+		if gid := strings.TrimSpace(gcfg.GuildID); gid != "" {
+			guildIDs = append(guildIDs, gid)
+		}
 	}
-	wg.Wait()
+	if err := runGuildTasksWithLimit(context.Background(), guildIDs, monitoringMaxConcurrentGuildScan, func(runCtx context.Context, guildID string) error {
+		return ms.initializeGuildCacheContext(runCtx, guildID)
+	}); err != nil {
+		log.ApplicationLogger().Warn("Some guild cache initializations failed", "err", err)
+	}
 	// No-op: avatars are persisted per change in the Postgres store
 }
 
@@ -1501,51 +1507,52 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 			}
 		}
 	}
-	members, err := ms.fetchAllGuildMembersContext(ctx, guildID)
+	totalMembers, err := ms.forEachGuildMemberPageContext(ctx, guildID, func(members []*discordgo.Member) error {
+		snapshotAt := time.Now().UTC()
+		snapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
+		for _, member := range members {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if member == nil || member.User == nil {
+				continue
+			}
+			avatarHash := member.User.Avatar
+			if avatarHash == "" {
+				avatarHash = "default"
+			}
+			snapshots = append(snapshots, storage.GuildMemberSnapshot{
+				UserID:     member.User.ID,
+				AvatarHash: avatarHash,
+				HasAvatar:  true,
+				Roles:      member.Roles,
+				HasRoles:   true,
+				JoinedAt:   member.JoinedAt,
+			})
+		}
+		if len(snapshots) == 0 {
+			return nil
+		}
+		if err := ms.store.UpsertGuildMemberSnapshotsContext(ctx, guildID, snapshots, snapshotAt); err != nil {
+			log.ApplicationLogger().Warn(
+				"Failed to persist guild member snapshot page",
+				"operation", "monitoring.initialize_guild_cache.persist_page",
+				"guildID", guildID,
+				"members", len(snapshots),
+				"err", err,
+			)
+			return nil
+		}
+		for _, snapshot := range snapshots {
+			ms.cacheRolesSet(guildID, snapshot.UserID, snapshot.Roles)
+		}
+		return nil
+	})
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", guildID, "err", err)
 		return err
 	}
-	for _, member := range members {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		avatarHash := member.User.Avatar
-		if avatarHash == "" {
-			avatarHash = "default"
-		}
-		if _, _, err := ms.store.UpsertAvatar(guildID, member.User.ID, avatarHash, time.Now()); err != nil {
-			log.ApplicationLogger().Warn("Failed to persist member avatar snapshot", "guildID", guildID, "userID", member.User.ID, "err", err)
-		}
-		// Persist roles snapshot for the member to enable efficient role diffing later.
-		// Empty role slices are also persisted so stale snapshots are cleared.
-		if ms.store != nil {
-			if err := ms.store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now()); err != nil {
-				log.ApplicationLogger().Warn("Failed to persist member roles snapshot", "guildID", guildID, "userID", member.User.ID, "err", err)
-			}
-			ms.cacheRolesSet(guildID, member.User.ID, member.Roles)
-		}
-
-		// Backfill missing member join date using Discord data
-		if ms.store != nil && !member.JoinedAt.IsZero() {
-			_, hasJoinRecord, err := ms.store.GetMemberJoin(guildID, member.User.ID)
-			if err != nil {
-				log.ErrorLoggerRaw().Error(
-					"Failed to read member join timestamp during cache initialization",
-					"operation", "monitoring.initialize_guild_cache.get_member_join",
-					"guildID", guildID,
-					"userID", member.User.ID,
-					"err", err,
-				)
-				continue
-			}
-			if !hasJoinRecord {
-				if err := ms.store.UpsertMemberJoin(guildID, member.User.ID, member.JoinedAt); err != nil {
-					log.ApplicationLogger().Warn("Failed to backfill member join timestamp", "guildID", guildID, "userID", member.User.ID, "joinedAt", member.JoinedAt, "err", err)
-				}
-			}
-		}
-	}
+	log.ApplicationLogger().Info("Guild cache initialization member scan completed", "guildID", guildID, "members", totalMembers)
 	return nil
 }
 
@@ -1754,31 +1761,49 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 		if err := runCtx.Err(); err != nil {
 			return err
 		}
-		members, err := ms.fetchAllGuildMembersContext(runCtx, gcfg.GuildID)
+		botUsers := make(map[string]struct{})
+		guildUpdates := 0
+		_, err := ms.forEachGuildMemberPageContext(runCtx, gcfg.GuildID, func(members []*discordgo.Member) error {
+			snapshotAt := time.Now().UTC()
+			snapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
+			for _, member := range members {
+				if member == nil || member.User == nil {
+					continue
+				}
+				if member.User.Bot {
+					botUsers[member.User.ID] = struct{}{}
+				}
+				snapshots = append(snapshots, storage.GuildMemberSnapshot{
+					UserID:   member.User.ID,
+					Roles:    member.Roles,
+					HasRoles: true,
+					JoinedAt: member.JoinedAt,
+				})
+			}
+			if len(snapshots) == 0 {
+				return nil
+			}
+			if err := ms.store.UpsertGuildMemberSnapshotsContext(runCtx, gcfg.GuildID, snapshots, snapshotAt); err != nil {
+				log.ApplicationLogger().Warn(
+					"Failed to persist guild role snapshot page",
+					"operation", "monitoring.refresh_roles.persist_page",
+					"guildID", gcfg.GuildID,
+					"members", len(snapshots),
+					"err", err,
+				)
+				return nil
+			}
+			for _, snapshot := range snapshots {
+				ms.cacheRolesSet(gcfg.GuildID, snapshot.UserID, snapshot.Roles)
+			}
+			guildUpdates += len(snapshots)
+			return nil
+		})
 		if err != nil {
 			log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
 			continue
 		}
-		botUsers := make(map[string]struct{})
-		for _, member := range members {
-			if member == nil || member.User == nil {
-				continue
-			}
-			if member.User.Bot {
-				botUsers[member.User.ID] = struct{}{}
-			}
-			if !member.JoinedAt.IsZero() {
-				if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
-					log.ApplicationLogger().Warn("Failed to upsert join time for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
-				}
-			}
-			if err := ms.store.UpsertMemberRoles(gcfg.GuildID, member.User.ID, member.Roles, time.Now()); err != nil {
-				log.ApplicationLogger().Warn("Failed to upsert roles for user in guild", "userID", member.User.ID, "guildID", gcfg.GuildID, "err", err)
-				continue
-			}
-			ms.cacheRolesSet(gcfg.GuildID, member.User.ID, member.Roles)
-			totalUpdates++
-		}
+		totalUpdates += guildUpdates
 		botUsersByGuild[gcfg.GuildID] = botUsers
 	}
 
@@ -3107,24 +3132,16 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 				return nil
 			}
 			startTime := time.Now()
-			var wg sync.WaitGroup
-			errCh := make(chan error, len(cfg.Guilds))
+			guildIDs := make([]string, 0, len(cfg.Guilds))
 			for _, gcfg := range cfg.Guilds {
-				gid := gcfg.GuildID
-				wg.Add(1)
-				go func(guildID string) {
-					defer wg.Done()
-					if err := ms.initializeGuildCacheContext(ctx, guildID); err != nil {
-						errCh <- err
-					}
-				}(gid)
-			}
-			wg.Wait()
-			close(errCh)
-			for err := range errCh {
-				if err != nil {
-					return err
+				if gid := strings.TrimSpace(gcfg.GuildID); gid != "" {
+					guildIDs = append(guildIDs, gid)
 				}
+			}
+			if err := runGuildTasksWithLimit(ctx, guildIDs, monitoringMaxConcurrentGuildScan, func(runCtx context.Context, guildID string) error {
+				return ms.initializeGuildCacheContext(runCtx, guildID)
+			}); err != nil {
+				return err
 			}
 			log.ApplicationLogger().Info("✅ Silent avatar refresh completed", "duration", time.Since(startTime).Round(time.Millisecond))
 			return nil
@@ -3134,35 +3151,91 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 	return nil
 }
 
-// fetchAllGuildMembers paginates through all guild members in batches up to 1000 until exhaustion.
+type guildMemberPageFetcher func(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error)
+
+func paginateGuildMembersContext(
+	ctx context.Context,
+	guildID string,
+	pageSize int,
+	fetch guildMemberPageFetcher,
+	handle func([]*discordgo.Member) error,
+) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if pageSize <= 0 {
+		pageSize = monitoringGuildMembersPageSize
+	}
+	if fetch == nil {
+		return 0, fmt.Errorf("guild member fetcher is nil")
+	}
+
+	total := 0
+	after := ""
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		members, err := fetch(ctx, guildID, after, pageSize)
+		if err != nil {
+			return total, err
+		}
+		if len(members) == 0 {
+			return total, nil
+		}
+		if handle != nil {
+			if err := handle(members); err != nil {
+				return total, err
+			}
+		}
+		total += len(members)
+		if len(members) < pageSize {
+			return total, nil
+		}
+		last := members[len(members)-1]
+		if last == nil || last.User == nil || strings.TrimSpace(last.User.ID) == "" {
+			return total, fmt.Errorf("paginate guild members: invalid page tail for guild %s", guildID)
+		}
+		after = last.User.ID
+	}
+}
+
+func (ms *MonitoringService) fetchGuildMemberPageContext(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error) {
+	if ms == nil || ms.session == nil {
+		return nil, fmt.Errorf("discord session is unavailable")
+	}
+	if limit <= 0 {
+		limit = monitoringGuildMembersPageSize
+	}
+	return monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
+		return ms.session.GuildMembers(guildID, after, limit)
+	})
+}
+
+func (ms *MonitoringService) forEachGuildMemberPageContext(ctx context.Context, guildID string, handle func([]*discordgo.Member) error) (int, error) {
+	total, err := paginateGuildMembersContext(ctx, guildID, monitoringGuildMembersPageSize, ms.fetchGuildMemberPageContext, handle)
+	if err != nil {
+		log.ErrorLoggerRaw().Error("Failed to paginate guild members", "guildID", guildID, "fetched_so_far", total, "err", err)
+		return total, err
+	}
+	log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
+	return total, nil
+}
+
+// fetchAllGuildMembers paginates through all guild members until exhaustion and materializes them in memory.
 func (ms *MonitoringService) fetchAllGuildMembers(guildID string) ([]*discordgo.Member, error) {
 	return ms.fetchAllGuildMembersContext(context.Background(), guildID)
 }
 
 func (ms *MonitoringService) fetchAllGuildMembersContext(ctx context.Context, guildID string) ([]*discordgo.Member, error) {
-	var all []*discordgo.Member
-	after := ""
-	for {
-		if err := ctx.Err(); err != nil {
-			return all, err
-		}
-		members, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
-			return ms.session.GuildMembers(guildID, after, 1000)
-		})
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to paginate guild members", "guildID", guildID, "after", after, "fetched_so_far", len(all), "err", err)
-			return all, err
-		}
-		if len(members) == 0 {
-			break
-		}
+	all := make([]*discordgo.Member, 0)
+	_, err := ms.forEachGuildMemberPageContext(ctx, guildID, func(members []*discordgo.Member) error {
 		all = append(all, members...)
-		if len(members) < 1000 {
-			break
-		}
-		after = members[len(members)-1].User.ID
+		return nil
+	})
+	if err != nil {
+		return all, err
 	}
-	log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", len(all))
 	return all, nil
 }
 
@@ -3177,41 +3250,105 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		members, err := ms.fetchAllGuildMembersContext(ctx, gcfg.GuildID)
+		_, err := ms.forEachGuildMemberPageContext(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
+			joinSnapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
+			for _, member := range members {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if member == nil || member.User == nil {
+					continue
+				}
+				if ms.store != nil && !member.JoinedAt.IsZero() {
+					joinSnapshots = append(joinSnapshots, storage.GuildMemberSnapshot{
+						UserID:   member.User.ID,
+						JoinedAt: member.JoinedAt,
+					})
+				}
+			}
+			if ms.store != nil && len(joinSnapshots) > 0 {
+				if err := ms.store.UpsertGuildMemberSnapshotsContext(ctx, gcfg.GuildID, joinSnapshots, time.Now().UTC()); err != nil {
+					log.ApplicationLogger().Warn(
+						"Periodic check: failed to backfill member join page",
+						"operation", "monitoring.periodic_check.persist_joins_page",
+						"guildID", gcfg.GuildID,
+						"members", len(joinSnapshots),
+						"err", err,
+					)
+				}
+			}
+
+			for _, member := range members {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if member == nil || member.User == nil {
+					continue
+				}
+
+				avatarHash := member.User.Avatar
+				if avatarHash == "" {
+					avatarHash = "default"
+				}
+				ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
+			}
+			return nil
+		})
 		if err != nil {
 			log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
 			continue
 		}
-		for _, member := range members {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			// Backfill missing member join date using Discord data
-			if ms.store != nil && !member.JoinedAt.IsZero() {
-				_, hasJoinRecord, err := ms.store.GetMemberJoin(gcfg.GuildID, member.User.ID)
-				if err != nil {
-					log.ErrorLoggerRaw().Error(
-						"Periodic check: failed to read member join timestamp",
-						"operation", "monitoring.periodic_check.get_member_join",
-						"guildID", gcfg.GuildID,
-						"userID", member.User.ID,
-						"err", err,
-					)
-				} else if !hasJoinRecord {
-					if err := ms.store.UpsertMemberJoin(gcfg.GuildID, member.User.ID, member.JoinedAt); err != nil {
-						log.ApplicationLogger().Warn("Periodic check: failed to backfill member join timestamp", "guildID", gcfg.GuildID, "userID", member.User.ID, "joinedAt", member.JoinedAt, "err", err)
-					}
-				}
-			}
-
-			avatarHash := member.User.Avatar
-			if avatarHash == "" {
-				avatarHash = "default"
-			}
-			ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
-		}
 	}
 	return nil
+}
+
+func runGuildTasksWithLimit(ctx context.Context, guildIDs []string, limit int, fn func(context.Context, string) error) error {
+	if fn == nil || len(guildIDs) == 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if limit <= 0 {
+		limit = 1
+	}
+
+	sem := make(chan struct{}, limit)
+	errCh := make(chan error, len(guildIDs))
+	var wg sync.WaitGroup
+
+	for _, guildID := range guildIDs {
+		guildID = strings.TrimSpace(guildID)
+		if guildID == "" {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			break
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(gid string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if err := fn(ctx, gid); err != nil {
+				errCh <- err
+			}
+		}(guildID)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	var errs []error
+	for err := range errCh {
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return ctx.Err()
 }
 
 // MemberEvents exposes the member event sub-service.

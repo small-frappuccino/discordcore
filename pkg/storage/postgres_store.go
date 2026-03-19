@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"hash/fnv"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +13,19 @@ import (
 // avatar hashes (current and history), guild metadata (e.g., bot_since) and member joins.
 type Store struct {
 	db *sql.DB
+}
+
+const storeBulkInsertMaxRows = 4000
+
+// GuildMemberSnapshot represents the persisted snapshot for one guild member.
+// Fields are opt-in so callers can batch only the parts they need to refresh.
+type GuildMemberSnapshot struct {
+	UserID     string
+	AvatarHash string
+	HasAvatar  bool
+	Roles      []string
+	HasRoles   bool
+	JoinedAt   time.Time
 }
 
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
@@ -74,8 +86,22 @@ func txExec(tx *sql.Tx, query string, args ...any) (sql.Result, error) {
 	return tx.Exec(rebind(query), args...)
 }
 
+func txExecContext(ctx context.Context, tx *sql.Tx, query string, args ...any) (sql.Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return tx.ExecContext(ctx, rebind(query), args...)
+}
+
 func txQueryRow(tx *sql.Tx, query string, args ...any) *sql.Row {
 	return tx.QueryRow(rebind(query), args...)
+}
+
+func txQueryContext(ctx context.Context, tx *sql.Tx, query string, args ...any) (*sql.Rows, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return tx.QueryContext(ctx, rebind(query), args...)
 }
 
 // rebind converts question-mark placeholders to PostgreSQL-style numbered placeholders.
@@ -119,6 +145,12 @@ type MessageRecord struct {
 	HasExpiry      bool
 }
 
+// MessageDeleteKey identifies one cached message row to delete.
+type MessageDeleteKey struct {
+	GuildID   string
+	MessageID string
+}
+
 // UpsertMessage inserts or updates a message record (write-through).
 func (s *Store) UpsertMessage(m MessageRecord) error {
 	if s.db == nil {
@@ -145,6 +177,81 @@ func (s *Store) UpsertMessage(m MessageRecord) error {
 		m.GuildID, m.MessageID, m.ChannelID, m.AuthorID, m.AuthorUsername, m.AuthorAvatar, m.Content, m.CachedAt.UTC(), expires,
 	)
 	return err
+}
+
+// UpsertMessagesContext upserts a batch of cached messages.
+func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageRecord) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	normalized := normalizeMessageRecords(records)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return execValuesContext(ctx, s.db,
+		`INSERT INTO messages (guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at) VALUES `,
+		` ON CONFLICT(guild_id, message_id) DO UPDATE SET
+           channel_id=excluded.channel_id,
+           author_id=excluded.author_id,
+           author_username=excluded.author_username,
+           author_avatar=excluded.author_avatar,
+           content=excluded.content,
+           cached_at=excluded.cached_at,
+           expires_at=excluded.expires_at`,
+		len(normalized),
+		9,
+		func(args []any, rowIndex int) []any {
+			record := normalized[rowIndex]
+			var expires any
+			if record.HasExpiry {
+				expires = record.ExpiresAt.UTC()
+			}
+			return append(args,
+				record.GuildID,
+				record.MessageID,
+				record.ChannelID,
+				record.AuthorID,
+				record.AuthorUsername,
+				record.AuthorAvatar,
+				record.Content,
+				record.CachedAt.UTC(),
+				expires,
+			)
+		},
+	)
+}
+
+func normalizeMessageRecords(records []MessageRecord) []MessageRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	order := make([]string, 0, len(records))
+	byKey := make(map[string]MessageRecord, len(records))
+	for _, record := range records {
+		guildID := strings.TrimSpace(record.GuildID)
+		messageID := strings.TrimSpace(record.MessageID)
+		if guildID == "" || messageID == "" {
+			continue
+		}
+		record.GuildID = guildID
+		record.MessageID = messageID
+		key := guildID + ":" + messageID
+		if _, ok := byKey[key]; !ok {
+			order = append(order, key)
+		}
+		byKey[key] = record
+	}
+
+	normalized := make([]MessageRecord, 0, len(order))
+	for _, key := range order {
+		normalized = append(normalized, byKey[key])
+	}
+	return normalized
 }
 
 // GetMessage returns a non-expired message if present; nil if not found or expired.
@@ -192,6 +299,58 @@ func (s *Store) DeleteMessage(guildID, messageID string) error {
 	}
 	_, err := s.exec(`DELETE FROM messages WHERE guild_id=? AND message_id=?`, guildID, messageID)
 	return err
+}
+
+// DeleteMessagesContext removes a batch of message records.
+func (s *Store) DeleteMessagesContext(ctx context.Context, keys []MessageDeleteKey) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	normalized := normalizeMessageDeleteKeys(keys)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return execValuesContext(ctx, s.db,
+		`DELETE FROM messages USING (VALUES `,
+		`) AS doomed(guild_id, message_id) WHERE messages.guild_id = doomed.guild_id AND messages.message_id = doomed.message_id`,
+		len(normalized),
+		2,
+		func(args []any, rowIndex int) []any {
+			key := normalized[rowIndex]
+			return append(args, key.GuildID, key.MessageID)
+		},
+	)
+}
+
+func normalizeMessageDeleteKeys(keys []MessageDeleteKey) []MessageDeleteKey {
+	if len(keys) == 0 {
+		return nil
+	}
+	order := make([]string, 0, len(keys))
+	byKey := make(map[string]MessageDeleteKey, len(keys))
+	for _, key := range keys {
+		key.GuildID = strings.TrimSpace(key.GuildID)
+		key.MessageID = strings.TrimSpace(key.MessageID)
+		if key.GuildID == "" || key.MessageID == "" {
+			continue
+		}
+		composite := key.GuildID + ":" + key.MessageID
+		if _, ok := byKey[composite]; !ok {
+			order = append(order, composite)
+		}
+		byKey[composite] = key
+	}
+
+	normalized := make([]MessageDeleteKey, 0, len(order))
+	for _, composite := range order {
+		normalized = append(normalized, byKey[composite])
+	}
+	return normalized
 }
 
 // CleanupExpiredMessages deletes all expired messages.
@@ -281,6 +440,401 @@ func (s *Store) CleanupAllObsoleteData() error {
 		return fmt.Errorf("cleanup avatars: %w", err)
 	}
 
+	return nil
+}
+
+// UpsertGuildMemberSnapshotsContext persists one page of guild member snapshots in a single transaction.
+func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" || len(snapshots) == 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	} else {
+		updatedAt = updatedAt.UTC()
+	}
+
+	normalized := normalizeGuildMemberSnapshots(snapshots)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := upsertGuildMemberSnapshotBatch(ctx, tx, guildID, normalized, updatedAt); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func upsertGuildMemberSnapshotBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+	avatarRows := make([]GuildMemberSnapshot, 0, len(snapshots))
+	roleRows := make([]GuildMemberSnapshot, 0, len(snapshots))
+	joinRows := make([]GuildMemberSnapshot, 0, len(snapshots))
+	avatarUserIDs := make([]string, 0, len(snapshots))
+	roleUserIDs := make([]string, 0, len(snapshots))
+
+	for _, snapshot := range snapshots {
+		if snapshot.HasAvatar {
+			avatarRows = append(avatarRows, snapshot)
+			avatarUserIDs = append(avatarUserIDs, snapshot.UserID)
+		}
+		if snapshot.HasRoles {
+			roleRows = append(roleRows, snapshot)
+			roleUserIDs = append(roleUserIDs, snapshot.UserID)
+		}
+		if !snapshot.JoinedAt.IsZero() {
+			joinRows = append(joinRows, snapshot)
+		}
+	}
+
+	if len(avatarRows) > 0 {
+		currentHashes, err := queryCurrentAvatarHashesByUserID(ctx, tx, guildID, avatarUserIDs)
+		if err != nil {
+			return fmt.Errorf("query current avatar hashes: %w", err)
+		}
+		if err := insertAvatarHistoryBatch(ctx, tx, guildID, avatarRows, currentHashes, updatedAt); err != nil {
+			return fmt.Errorf("insert avatar history batch: %w", err)
+		}
+		if err := upsertAvatarCurrentBatch(ctx, tx, guildID, avatarRows, updatedAt); err != nil {
+			return fmt.Errorf("upsert avatar current batch: %w", err)
+		}
+	}
+
+	if len(roleRows) > 0 {
+		if err := deleteRolesForUsersBatch(ctx, tx, guildID, roleUserIDs); err != nil {
+			return fmt.Errorf("delete roles batch: %w", err)
+		}
+		if err := insertMemberRolesBatch(ctx, tx, guildID, roleRows, updatedAt); err != nil {
+			return fmt.Errorf("insert roles batch: %w", err)
+		}
+	}
+
+	if len(joinRows) > 0 {
+		if err := upsertMemberJoinsBatch(ctx, tx, guildID, joinRows, updatedAt); err != nil {
+			return fmt.Errorf("upsert member joins batch: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func normalizeGuildMemberSnapshots(snapshots []GuildMemberSnapshot) []GuildMemberSnapshot {
+	if len(snapshots) == 0 {
+		return nil
+	}
+
+	order := make([]string, 0, len(snapshots))
+	byUser := make(map[string]*GuildMemberSnapshot, len(snapshots))
+	for _, snapshot := range snapshots {
+		userID := strings.TrimSpace(snapshot.UserID)
+		if userID == "" {
+			continue
+		}
+		existing, ok := byUser[userID]
+		if !ok {
+			existing = &GuildMemberSnapshot{UserID: userID}
+			byUser[userID] = existing
+			order = append(order, userID)
+		}
+		if snapshot.HasAvatar {
+			existing.HasAvatar = true
+			existing.AvatarHash = strings.TrimSpace(snapshot.AvatarHash)
+			if existing.AvatarHash == "" {
+				existing.AvatarHash = "default"
+			}
+		}
+		if snapshot.HasRoles {
+			existing.HasRoles = true
+			existing.Roles = dedupeNonEmptyStrings(snapshot.Roles)
+		}
+		if !snapshot.JoinedAt.IsZero() {
+			joinedAt := snapshot.JoinedAt.UTC()
+			if existing.JoinedAt.IsZero() || joinedAt.Before(existing.JoinedAt) {
+				existing.JoinedAt = joinedAt
+			}
+		}
+	}
+
+	normalized := make([]GuildMemberSnapshot, 0, len(order))
+	for _, userID := range order {
+		normalized = append(normalized, *byUser[userID])
+	}
+	return normalized
+}
+
+func dedupeNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func queryCurrentAvatarHashesByUserID(ctx context.Context, tx *sql.Tx, guildID string, userIDs []string) (map[string]string, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	var b strings.Builder
+	b.WriteString(`SELECT user_id, avatar_hash FROM avatars_current WHERE guild_id=? AND user_id IN (`)
+	args := make([]any, 0, len(userIDs)+1)
+	args = append(args, guildID)
+	for i, userID := range userIDs {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('?')
+		args = append(args, userID)
+	}
+	b.WriteByte(')')
+
+	rows, err := txQueryContext(ctx, tx, b.String(), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	hashes := make(map[string]string, len(userIDs))
+	for rows.Next() {
+		var userID, avatarHash string
+		if err := rows.Scan(&userID, &avatarHash); err != nil {
+			return nil, err
+		}
+		hashes[userID] = avatarHash
+	}
+	return hashes, rows.Err()
+}
+
+func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, currentHashes map[string]string, updatedAt time.Time) error {
+	type avatarHistoryRow struct {
+		UserID    string
+		OldHash   string
+		NewHash   string
+		ChangedAt time.Time
+	}
+	rows := make([]avatarHistoryRow, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		oldHash, ok := currentHashes[snapshot.UserID]
+		if !ok || oldHash == snapshot.AvatarHash {
+			continue
+		}
+		rows = append(rows, avatarHistoryRow{
+			UserID:    snapshot.UserID,
+			OldHash:   oldHash,
+			NewHash:   snapshot.AvatarHash,
+			ChangedAt: updatedAt,
+		})
+	}
+	return execValuesInChunks(ctx, tx,
+		`INSERT INTO avatars_history (guild_id, user_id, old_hash, new_hash, changed_at) VALUES `,
+		``,
+		len(rows),
+		5,
+		func(args []any, rowIndex int) []any {
+			row := rows[rowIndex]
+			return append(args, guildID, row.UserID, row.OldHash, row.NewHash, row.ChangedAt)
+		},
+	)
+}
+
+func upsertAvatarCurrentBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+	return execValuesInChunks(ctx, tx,
+		`INSERT INTO avatars_current (guild_id, user_id, avatar_hash, updated_at) VALUES `,
+		` ON CONFLICT(guild_id, user_id) DO UPDATE SET avatar_hash=excluded.avatar_hash, updated_at=excluded.updated_at`,
+		len(snapshots),
+		4,
+		func(args []any, rowIndex int) []any {
+			row := snapshots[rowIndex]
+			return append(args, guildID, row.UserID, row.AvatarHash, updatedAt)
+		},
+	)
+}
+
+func deleteRolesForUsersBatch(ctx context.Context, tx *sql.Tx, guildID string, userIDs []string) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	b.WriteString(`DELETE FROM roles_current WHERE guild_id=? AND user_id IN (`)
+	args := make([]any, 0, len(userIDs)+1)
+	args = append(args, guildID)
+	for i, userID := range userIDs {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('?')
+		args = append(args, userID)
+	}
+	b.WriteByte(')')
+	_, err := txExecContext(ctx, tx, b.String(), args...)
+	return err
+}
+
+func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+	type roleRow struct {
+		UserID    string
+		RoleID    string
+		UpdatedAt time.Time
+	}
+	rows := make([]roleRow, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		for _, roleID := range snapshot.Roles {
+			rows = append(rows, roleRow{
+				UserID:    snapshot.UserID,
+				RoleID:    roleID,
+				UpdatedAt: updatedAt,
+			})
+		}
+	}
+	return execValuesInChunks(ctx, tx,
+		`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at) VALUES `,
+		``,
+		len(rows),
+		4,
+		func(args []any, rowIndex int) []any {
+			row := rows[rowIndex]
+			return append(args, guildID, row.UserID, row.RoleID, row.UpdatedAt)
+		},
+	)
+}
+
+func upsertMemberJoinsBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, seenAt time.Time) error {
+	return execValuesInChunks(ctx, tx,
+		`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at) VALUES `,
+		` ON CONFLICT(guild_id, user_id) DO UPDATE SET
+           joined_at = CASE
+             WHEN excluded.joined_at < member_joins.joined_at THEN excluded.joined_at
+             ELSE member_joins.joined_at
+           END,
+           last_seen_at = CASE
+             WHEN member_joins.last_seen_at IS NULL OR excluded.last_seen_at > member_joins.last_seen_at THEN excluded.last_seen_at
+             ELSE member_joins.last_seen_at
+           END`,
+		len(snapshots),
+		4,
+		func(args []any, rowIndex int) []any {
+			row := snapshots[rowIndex]
+			return append(args, guildID, row.UserID, row.JoinedAt.UTC(), seenAt)
+		},
+	)
+}
+
+func execValuesInChunks(ctx context.Context, tx *sql.Tx, prefix, suffix string, rowCount, columnCount int, appendArgs func([]any, int) []any) error {
+	if rowCount == 0 {
+		return nil
+	}
+	if columnCount <= 0 {
+		return fmt.Errorf("column count must be positive")
+	}
+	if appendArgs == nil {
+		return fmt.Errorf("append args callback is nil")
+	}
+
+	for start := 0; start < rowCount; start += storeBulkInsertMaxRows {
+		end := start + storeBulkInsertMaxRows
+		if end > rowCount {
+			end = rowCount
+		}
+
+		var b strings.Builder
+		b.Grow(len(prefix) + len(suffix) + (end-start)*(columnCount*2+4))
+		b.WriteString(prefix)
+
+		args := make([]any, 0, (end-start)*columnCount)
+		for rowIndex := start; rowIndex < end; rowIndex++ {
+			if rowIndex > start {
+				b.WriteByte(',')
+			}
+			b.WriteByte('(')
+			for columnIndex := 0; columnIndex < columnCount; columnIndex++ {
+				if columnIndex > 0 {
+					b.WriteByte(',')
+				}
+				b.WriteByte('?')
+			}
+			b.WriteByte(')')
+			args = appendArgs(args, rowIndex)
+		}
+		b.WriteString(suffix)
+
+		if _, err := txExecContext(ctx, tx, b.String(), args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func execValuesContext(ctx context.Context, db *sql.DB, prefix, suffix string, rowCount, columnCount int, appendArgs func([]any, int) []any) error {
+	if db == nil {
+		return fmt.Errorf("database handle is nil")
+	}
+	if rowCount == 0 {
+		return nil
+	}
+	if columnCount <= 0 {
+		return fmt.Errorf("column count must be positive")
+	}
+	if appendArgs == nil {
+		return fmt.Errorf("append args callback is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	for start := 0; start < rowCount; start += storeBulkInsertMaxRows {
+		end := start + storeBulkInsertMaxRows
+		if end > rowCount {
+			end = rowCount
+		}
+
+		var b strings.Builder
+		b.Grow(len(prefix) + len(suffix) + (end-start)*(columnCount*2+4))
+		b.WriteString(prefix)
+
+		args := make([]any, 0, (end-start)*columnCount)
+		for rowIndex := start; rowIndex < end; rowIndex++ {
+			if rowIndex > start {
+				b.WriteByte(',')
+			}
+			b.WriteByte('(')
+			for columnIndex := 0; columnIndex < columnCount; columnIndex++ {
+				if columnIndex > 0 {
+					b.WriteByte(',')
+				}
+				b.WriteByte('?')
+			}
+			b.WriteByte(')')
+			args = appendArgs(args, rowIndex)
+		}
+		b.WriteString(suffix)
+
+		if _, err := db.ExecContext(ctx, rebind(b.String()), args...); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -746,6 +1300,7 @@ var requiredSchemaTables = []string{
 	"avatars_current",
 	"avatars_history",
 	"messages_history",
+	"message_version_counters",
 	"guild_meta",
 	"runtime_meta",
 	"moderation_cases",
@@ -877,76 +1432,221 @@ type MessageVersion struct {
 	CreatedAt   time.Time
 }
 
-// InsertMessageVersion inserts a new version row for a message.
-// If Version <= 0, it will compute next version as (MAX(version)+1) within (guild_id, message_id).
-func (s *Store) InsertMessageVersion(v MessageVersion) error {
-	return s.InsertMessageVersionContext(context.Background(), v)
+// InsertMessageVersionsBatchContext inserts a batch of message history rows and keeps version counters in sync.
+func (s *Store) InsertMessageVersionsBatchContext(ctx context.Context, versions []MessageVersion) error {
+	return s.InsertMessageVersionsMixedBatchContext(ctx, versions)
 }
 
-// InsertMessageVersionContext inserts a new version row for a message with context support.
-// If Version <= 0, it computes the next version atomically under an advisory transaction lock.
-func (s *Store) InsertMessageVersionContext(ctx context.Context, v MessageVersion) error {
+// InsertMessageVersionsMixedBatchContext inserts a batch of message history rows, assigning versions for rows with Version <= 0.
+func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []MessageVersion) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// basic validation
-	if v.GuildID == "" || v.MessageID == "" || v.ChannelID == "" || v.AuthorID == "" || v.EventType == "" {
+
+	normalized := normalizeMessageVersions(versions)
+	if len(normalized) == 0 {
 		return nil
-	}
-	if v.CreatedAt.IsZero() {
-		v.CreatedAt = time.Now().UTC()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin message version tx: %w", err)
+		return fmt.Errorf("begin message versions tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	lockKey := messageVersionAdvisoryLockKey(v.GuildID, v.MessageID)
-	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, lockKey); err != nil {
-		return fmt.Errorf("acquire message version advisory lock: %w", err)
+	assigned, err := reserveMessageVersionRangesTx(ctx, tx, normalized)
+	if err != nil {
+		return err
 	}
-
-	// Compute next version if not provided
-	if v.Version <= 0 {
-		var cur sql.NullInt64
-		if err := tx.QueryRowContext(ctx, rebind(
-			`SELECT COALESCE(MAX(version),0) FROM messages_history WHERE guild_id=? AND message_id=?`,
-		),
-			v.GuildID, v.MessageID,
-		).Scan(&cur); err != nil {
-			return fmt.Errorf("read max message version: %w", err)
-		}
-		v.Version = int(cur.Int64) + 1
+	if err := insertMessageHistoryBatchTx(ctx, tx, assigned); err != nil {
+		return err
 	}
-
-	// Insert history row
-	if _, err := tx.ExecContext(ctx, rebind(
-		`INSERT INTO messages_history
-         (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-	),
-		v.GuildID, v.MessageID, v.ChannelID, v.AuthorID, v.Version, v.EventType, v.Content, v.Attachments, v.Embeds, v.Stickers, v.CreatedAt,
-	); err != nil {
-		return fmt.Errorf("insert message version: %w", err)
-	}
-
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit message version tx: %w", err)
+		return fmt.Errorf("commit message versions tx: %w", err)
 	}
 	return nil
 }
 
-func messageVersionAdvisoryLockKey(guildID, messageID string) int64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(guildID))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(messageID))
-	return int64(h.Sum64())
+func normalizeMessageVersions(versions []MessageVersion) []MessageVersion {
+	if len(versions) == 0 {
+		return nil
+	}
+	normalized := make([]MessageVersion, 0, len(versions))
+	for _, version := range versions {
+		if strings.TrimSpace(version.GuildID) == "" ||
+			strings.TrimSpace(version.MessageID) == "" ||
+			strings.TrimSpace(version.ChannelID) == "" ||
+			strings.TrimSpace(version.AuthorID) == "" ||
+			strings.TrimSpace(version.EventType) == "" {
+			continue
+		}
+		if version.CreatedAt.IsZero() {
+			version.CreatedAt = time.Now().UTC()
+		} else {
+			version.CreatedAt = version.CreatedAt.UTC()
+		}
+		normalized = append(normalized, version)
+	}
+	return normalized
+}
+
+// InsertMessageVersion inserts a new version row for a message.
+// If Version <= 0, it will compute the next version from the per-message counter.
+func (s *Store) InsertMessageVersion(v MessageVersion) error {
+	return s.InsertMessageVersionContext(context.Background(), v)
+}
+
+// InsertMessageVersionContext inserts a new version row for a message with context support.
+// If Version <= 0, it computes the next version atomically using the per-message counter table.
+func (s *Store) InsertMessageVersionContext(ctx context.Context, v MessageVersion) error {
+	return s.InsertMessageVersionsMixedBatchContext(ctx, []MessageVersion{v})
+}
+
+type messageVersionGroup struct {
+	GuildID   string
+	MessageID string
+	Indexes   []int
+}
+
+func reserveMessageVersionRangesTx(ctx context.Context, tx *sql.Tx, versions []MessageVersion) ([]MessageVersion, error) {
+	if len(versions) == 0 {
+		return nil, nil
+	}
+
+	assigned := append([]MessageVersion(nil), versions...)
+	for _, group := range groupMessageVersions(assigned) {
+		lastVersion, err := lockMessageVersionCounterTx(ctx, tx, group.GuildID, group.MessageID)
+		if err != nil {
+			return nil, err
+		}
+		nextVersion := lastVersion
+		for _, idx := range group.Indexes {
+			if assigned[idx].Version > 0 {
+				if assigned[idx].Version > nextVersion {
+					nextVersion = assigned[idx].Version
+				}
+				continue
+			}
+			nextVersion++
+			assigned[idx].Version = nextVersion
+		}
+		if nextVersion != lastVersion {
+			if err := updateMessageVersionCounterTx(ctx, tx, group.GuildID, group.MessageID, nextVersion); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return assigned, nil
+}
+
+func groupMessageVersions(versions []MessageVersion) []messageVersionGroup {
+	if len(versions) == 0 {
+		return nil
+	}
+	order := make([]string, 0, len(versions))
+	groups := make(map[string]*messageVersionGroup, len(versions))
+	for idx, version := range versions {
+		key := strings.TrimSpace(version.GuildID) + ":" + strings.TrimSpace(version.MessageID)
+		group, ok := groups[key]
+		if !ok {
+			group = &messageVersionGroup{
+				GuildID:   strings.TrimSpace(version.GuildID),
+				MessageID: strings.TrimSpace(version.MessageID),
+				Indexes:   make([]int, 0, 4),
+			}
+			groups[key] = group
+			order = append(order, key)
+		}
+		group.Indexes = append(group.Indexes, idx)
+	}
+
+	grouped := make([]messageVersionGroup, 0, len(order))
+	for _, key := range order {
+		grouped = append(grouped, *groups[key])
+	}
+	return grouped
+}
+
+func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messageID string) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if guildID == "" || messageID == "" {
+		return 0, nil
+	}
+
+	if _, err := tx.ExecContext(ctx, rebind(
+		`INSERT INTO message_version_counters (guild_id, message_id, last_version)
+         VALUES (?, ?, COALESCE((SELECT MAX(version) FROM messages_history WHERE guild_id=? AND message_id=?), 0))
+         ON CONFLICT (guild_id, message_id) DO NOTHING`,
+	), guildID, messageID, guildID, messageID); err != nil {
+		return 0, fmt.Errorf("ensure message version counter: %w", err)
+	}
+
+	var lastVersion int64
+	if err := tx.QueryRowContext(ctx, rebind(
+		`SELECT last_version FROM message_version_counters WHERE guild_id=? AND message_id=? FOR UPDATE`,
+	), guildID, messageID).Scan(&lastVersion); err != nil {
+		return 0, fmt.Errorf("lock message version counter: %w", err)
+	}
+	return int(lastVersion), nil
+}
+
+func updateMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messageID string, lastVersion int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if guildID == "" || messageID == "" {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, rebind(
+		`UPDATE message_version_counters SET last_version=? WHERE guild_id=? AND message_id=?`,
+	), lastVersion, guildID, messageID); err != nil {
+		return fmt.Errorf("update message version counter: %w", err)
+	}
+	return nil
+}
+
+func insertMessageHistoryBatchTx(ctx context.Context, tx *sql.Tx, versions []MessageVersion) error {
+	if len(versions) == 0 {
+		return nil
+	}
+	return execValuesInChunks(ctx, tx,
+		`INSERT INTO messages_history
+         (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
+         VALUES `,
+		` ON CONFLICT(guild_id, message_id, version) DO NOTHING`,
+		len(versions),
+		11,
+		func(args []any, rowIndex int) []any {
+			version := versions[rowIndex]
+			return append(args,
+				version.GuildID,
+				version.MessageID,
+				version.ChannelID,
+				version.AuthorID,
+				version.Version,
+				version.EventType,
+				version.Content,
+				version.Attachments,
+				version.Embeds,
+				version.Stickers,
+				version.CreatedAt.UTC(),
+			)
+		},
+	)
+}
+
+// DailyMessageCountDelta represents a delta to be applied to one daily message metric bucket.
+type DailyMessageCountDelta struct {
+	GuildID   string
+	ChannelID string
+	UserID    string
+	Day       string
+	Count     int64
 }
 
 // Persistent Cache Methods
@@ -1238,6 +1938,70 @@ func (s *Store) IncrementDailyMessageCountContext(ctx context.Context, guildID, 
 		return nil
 	}
 	return s.incrementDailyMetricByChannelAndUser(ctx, "daily_message_metrics", guildID, channelID, userID, at)
+}
+
+// IncrementDailyMessageCountsContext applies a batch of daily message count deltas.
+func (s *Store) IncrementDailyMessageCountsContext(ctx context.Context, deltas []DailyMessageCountDelta) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	normalized := normalizeDailyMessageCountDeltas(deltas)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return execValuesContext(ctx, s.db,
+		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count) VALUES `,
+		` ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
+           count = daily_message_metrics.count + excluded.count`,
+		len(normalized),
+		5,
+		func(args []any, rowIndex int) []any {
+			delta := normalized[rowIndex]
+			return append(args, delta.GuildID, delta.ChannelID, delta.UserID, delta.Day, delta.Count)
+		},
+	)
+}
+
+func normalizeDailyMessageCountDeltas(deltas []DailyMessageCountDelta) []DailyMessageCountDelta {
+	if len(deltas) == 0 {
+		return nil
+	}
+	order := make([]string, 0, len(deltas))
+	agg := make(map[string]DailyMessageCountDelta, len(deltas))
+	for _, delta := range deltas {
+		delta.GuildID = strings.TrimSpace(delta.GuildID)
+		delta.ChannelID = strings.TrimSpace(delta.ChannelID)
+		delta.UserID = strings.TrimSpace(delta.UserID)
+		if delta.GuildID == "" || delta.ChannelID == "" || delta.UserID == "" || delta.Count == 0 {
+			continue
+		}
+		if strings.TrimSpace(delta.Day) == "" {
+			delta.Day = dailyMetricDay(time.Now().UTC())
+		}
+		key := strings.Join([]string{delta.GuildID, delta.ChannelID, delta.UserID, delta.Day}, ":")
+		if current, ok := agg[key]; ok {
+			current.Count += delta.Count
+			agg[key] = current
+			continue
+		}
+		order = append(order, key)
+		agg[key] = delta
+	}
+
+	normalized := make([]DailyMessageCountDelta, 0, len(order))
+	for _, key := range order {
+		delta := agg[key]
+		if delta.Count == 0 {
+			continue
+		}
+		normalized = append(normalized, delta)
+	}
+	return normalized
 }
 
 // IncrementDailyReactionCount increments the per-day reaction count for a user in a channel.

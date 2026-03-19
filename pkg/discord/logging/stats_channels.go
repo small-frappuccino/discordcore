@@ -84,37 +84,37 @@ func (ms *MonitoringService) updateStatsForGuild(ctx context.Context, gcfg files
 		return nil
 	}
 
-	members, err := ms.fetchAllGuildMembersContext(ctx, gcfg.GuildID)
-	if err != nil {
-		return fmt.Errorf("fetch guild members: %w", err)
-	}
-
 	targets := make([]statsTarget, 0, len(gcfg.Stats.Channels))
 	for _, sc := range gcfg.Stats.Channels {
 		targets = append(targets, statsTarget{cfg: sc})
 	}
 
-	for _, member := range members {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if member == nil || member.User == nil {
-			continue
-		}
-		isBot := member.User.Bot
-		for i := range targets {
-			cfg := targets[i].cfg
-			if !memberTypeMatches(cfg.MemberType, isBot) {
+	if _, err := ms.forEachGuildMemberPageContext(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
+		for _, member := range members {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if member == nil || member.User == nil {
 				continue
 			}
-			if cfg.RoleID != "" {
-				if memberHasRole(member, cfg.RoleID) {
-					targets[i].count++
+			isBot := member.User.Bot
+			for i := range targets {
+				cfg := targets[i].cfg
+				if !memberTypeMatches(cfg.MemberType, isBot) {
+					continue
 				}
-				continue
+				if cfg.RoleID != "" {
+					if memberHasRole(member, cfg.RoleID) {
+						targets[i].count++
+					}
+					continue
+				}
+				targets[i].count++
 			}
-			targets[i].count++
 		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("fetch guild members: %w", err)
 	}
 
 	for _, t := range targets {

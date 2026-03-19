@@ -242,6 +242,8 @@ func statusForManageableGuildsError(err error) int {
 	switch {
 	case errors.Is(err, errBotGuildIDsProviderUnavailable):
 		return http.StatusServiceUnavailable
+	case errors.Is(err, errGuildDiscoveryRequired):
+		return http.StatusNotFound
 	case errors.Is(err, errDiscordOAuthSessionReauthenticationRequired):
 		return http.StatusUnauthorized
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):

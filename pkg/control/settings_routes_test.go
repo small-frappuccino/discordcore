@@ -33,10 +33,20 @@ type guildRegistryResponse struct {
 	Guilds    []configuredGuildSummary `json:"guilds"`
 }
 
+func setTestBotGuildBindings(srv *Server, bindings ...BotGuildBinding) {
+	if srv == nil {
+		return
+	}
+	srv.SetBotGuildBindingsProvider(func(context.Context) ([]BotGuildBinding, error) {
+		return append([]BotGuildBinding(nil), bindings...), nil
+	})
+}
+
 func TestSettingsOverviewReturnsCatalogGlobalWorkspaceAndGuildSummaries(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Features = files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -93,6 +103,17 @@ func TestSettingsOverviewReturnsCatalogGlobalWorkspaceAndGuildSummaries(t *testi
 	}
 	if payload.Workspace.Guilds[0].Partners != 1 {
 		t.Fatalf("unexpected partner count: %+v", payload.Workspace.Guilds[0])
+	}
+}
+
+func TestSettingsOverviewRejectsWhenGuildDiscoveryUnavailable(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/settings", nil)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when guild discovery is unavailable, got %d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
@@ -187,6 +208,7 @@ func TestGuildSettingsPutGetListAndDelete(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"}, BotGuildBinding{GuildID: "g2"})
 	handler := srv.httpServer.Handler
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g2"}); err != nil {
 		t.Fatalf("seed second guild: %v", err)
@@ -267,6 +289,7 @@ func TestGuildSettingsPutRejectsMissingGuildUntilRegistered(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2"})
 
 	payload := updateGuildSettingsRequest{
 		Channels: &files.ChannelsConfig{Commands: "100"},
@@ -285,6 +308,7 @@ func TestGuildRegistrationPostCreatesGuildWorkspace(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2"})
 	callCount := 0
 	srv.SetGuildRegistrationFunc(func(_ context.Context, guildID string) error {
 		callCount++
@@ -325,11 +349,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 
 	srv, cm := newControlTestServer(t)
 	srv.SetDefaultBotInstanceID("alice")
-	srv.SetBotGuildBindingsProvider(func(_ context.Context) ([]BotGuildBinding, error) {
-		return []BotGuildBinding{
-			{GuildID: "g2", BotInstanceID: "alice"},
-		}, nil
-	})
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2", BotInstanceID: "alice"})
 	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
 		return cm.EnsureMinimalGuildConfigForBot(guildID, botInstanceID)
 	})
@@ -384,6 +404,7 @@ func TestGuildRegistrationPostReturnsExistingWorkspaceWhenAlreadyConfigured(t *t
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 	callCount := 0
 	srv.SetGuildRegistrationFunc(func(context.Context, string) error {
 		callCount++
@@ -411,10 +432,27 @@ func TestGuildRegistrationPostRejectsWhenBootstrapUnavailable(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2"})
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPost, "/v1/settings/guilds", registerGuildRequest{GuildID: "g2"})
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 when registration bootstrap is unavailable, got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGuildRegistrationPostRejectsUndiscoveredGuild(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
+	srv.SetGuildRegistrationFunc(func(context.Context, string) error {
+		t.Fatal("registration should not run for undiscovered guild")
+		return nil
+	})
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPost, "/v1/settings/guilds", registerGuildRequest{GuildID: "g2"})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for undiscovered guild registration, got %d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
@@ -459,12 +497,10 @@ func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
 
 	srv, cm := newControlTestServer(t)
 	srv.SetDefaultBotInstanceID("alice")
-	srv.SetBotGuildBindingsProvider(func(_ context.Context) ([]BotGuildBinding, error) {
-		return []BotGuildBinding{
-			{GuildID: "g2", BotInstanceID: "alice"},
-			{GuildID: "g2", BotInstanceID: "yuzuha"},
-		}, nil
-	})
+	setTestBotGuildBindings(srv,
+		BotGuildBinding{GuildID: "g2", BotInstanceID: "alice"},
+		BotGuildBinding{GuildID: "g2", BotInstanceID: "yuzuha"},
+	)
 	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
 		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
 			cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
@@ -513,6 +549,7 @@ func TestSettingsOverviewDisplaysEffectiveBotInstanceID(t *testing.T) {
 
 	srv, _ := newControlTestServer(t)
 	srv.SetDefaultBotInstanceID("alice")
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/settings", nil)
 	if rec.Code != http.StatusOK {
@@ -535,6 +572,7 @@ func TestGuildSettingsPutRejectsInvalidAutoAssignmentOrdering(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 
 	payload := updateGuildSettingsRequest{
 		Roles: &files.RolesConfig{
@@ -559,6 +597,7 @@ func TestGuildSettingsPutRejectsInvalidPartnerBoardTarget(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 
 	payload := updateGuildSettingsRequest{
 		PartnerBoard: &files.PartnerBoardConfig{

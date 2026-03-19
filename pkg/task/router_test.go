@@ -152,6 +152,43 @@ func TestSendToGroupClosedChannelDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestDispatchRecoversFromClosedGroupChannel(t *testing.T) {
+	router := NewRouter(newTestConfig())
+	t.Cleanup(router.Close)
+
+	done := make(chan struct{}, 1)
+	router.RegisterHandler("dispatch-recover", func(ctx context.Context, payload any) error {
+		done <- struct{}{}
+		return nil
+	})
+
+	stale := &groupWorker{
+		key:        "g1",
+		ch:         make(chan *enqueuedTask, 1),
+		lastActive: time.Now(),
+	}
+	close(stale.ch)
+
+	router.mu.Lock()
+	router.groups["g1"] = stale
+	router.mu.Unlock()
+
+	if err := router.Dispatch(context.Background(), Task{
+		Type: "dispatch-recover",
+		Options: TaskOptions{
+			GroupKey: "g1",
+		},
+	}); err != nil {
+		t.Fatalf("expected dispatch to recover from closed group channel, got %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("recovered dispatch did not execute in time")
+	}
+}
+
 func TestEnqueueRetryRecoversFromClosedGroupChannel(t *testing.T) {
 	router := NewRouter(newTestConfig())
 	t.Cleanup(router.Close)
@@ -190,6 +227,74 @@ func TestEnqueueRetryRecoversFromClosedGroupChannel(t *testing.T) {
 	case <-done:
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("re-enqueued task did not execute in time")
+	}
+}
+
+func TestDispatchDoesNotSerializeUnrelatedGroupsWhenOneGroupBufferIsFull(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.GroupBuffer = 1
+	cfg.CleanupInterval = time.Hour
+
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	coolDone := make(chan struct{}, 1)
+	router.RegisterHandler("work", func(ctx context.Context, payload any) error {
+		if s, _ := payload.(string); s == "cool" {
+			coolDone <- struct{}{}
+		}
+		return nil
+	})
+
+	hotGroup := &groupWorker{
+		key:        "hot",
+		ch:         make(chan *enqueuedTask, 1),
+		lastActive: time.Now(),
+	}
+	hotGroup.ch <- &enqueuedTask{task: Task{Type: "work", Payload: "prefill"}}
+
+	router.mu.Lock()
+	router.groups["hot"] = hotGroup
+
+	hotStarted := make(chan struct{})
+	hotResult := make(chan error, 1)
+	go func() {
+		close(hotStarted)
+		hotCtx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		defer cancel()
+		hotResult <- router.Dispatch(hotCtx, Task{
+			Type:    "work",
+			Payload: "hot",
+			Options: TaskOptions{
+				GroupKey: "hot",
+			},
+		})
+	}()
+	<-hotStarted
+	router.mu.Unlock()
+
+	time.Sleep(20 * time.Millisecond)
+
+	coolCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := router.Dispatch(coolCtx, Task{
+		Type:    "work",
+		Payload: "cool",
+		Options: TaskOptions{
+			GroupKey: "cool",
+		},
+	}); err != nil {
+		t.Fatalf("expected unrelated group dispatch to proceed while hot group is blocked, got %v", err)
+	}
+
+	select {
+	case <-coolDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("unrelated group handler did not execute in time")
+	}
+
+	if err := <-hotResult; !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected hot group dispatch to time out while blocked, got %v", err)
 	}
 }
 

@@ -172,7 +172,12 @@ func (s *Server) handleFeatureCatalogGet(w http.ResponseWriter) {
 
 func (s *Server) handleGlobalFeaturesList(w http.ResponseWriter) {
 	cfg := s.configManager.SnapshotConfig()
-	workspace, err := buildFeatureWorkspace(cfg, s.configManager, "", s.currentDiscordSession())
+	session, err := s.currentDiscordSession()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve global feature session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	workspace, err := buildFeatureWorkspace(cfg, s.configManager, "", session)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build global feature workspace: %v", err), http.StatusInternalServerError)
 		return
@@ -185,7 +190,12 @@ func (s *Server) handleGlobalFeaturesList(w http.ResponseWriter) {
 }
 
 func (s *Server) handleGlobalFeatureGet(w http.ResponseWriter, featureID string) {
-	record, err := buildSingleFeatureRecord(s.configManager.SnapshotConfig(), s.configManager, "", featureID, s.currentDiscordSession())
+	session, err := s.currentDiscordSession()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve global feature session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	record, err := buildSingleFeatureRecord(s.configManager.SnapshotConfig(), s.configManager, "", featureID, session)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, errUnknownFeatureID) {
@@ -209,7 +219,12 @@ func (s *Server) handleGlobalFeaturePatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	record, err := buildSingleFeatureRecord(updated, s.configManager, "", featureID, s.currentDiscordSession())
+	session, err := s.currentDiscordSession()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve global feature session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	record, err := buildSingleFeatureRecord(updated, s.configManager, "", featureID, session)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build updated feature: %v", err), http.StatusInternalServerError)
 		return
@@ -228,7 +243,12 @@ func (s *Server) handleGuildFeaturesList(w http.ResponseWriter, guildID string) 
 		return
 	}
 
-	workspace, err := buildFeatureWorkspace(cfg, s.configManager, guildID, s.discordSessionForGuild(guildID))
+	session, err := s.discordSessionForGuild(guildID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve guild feature session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	workspace, err := buildFeatureWorkspace(cfg, s.configManager, guildID, session)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build guild feature workspace: %v", err), http.StatusInternalServerError)
 		return
@@ -247,7 +267,12 @@ func (s *Server) handleGuildFeatureGet(w http.ResponseWriter, guildID, featureID
 		return
 	}
 
-	record, err := buildSingleFeatureRecord(cfg, s.configManager, guildID, featureID, s.discordSessionForGuild(guildID))
+	session, err := s.discordSessionForGuild(guildID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve guild feature session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	record, err := buildSingleFeatureRecord(cfg, s.configManager, guildID, featureID, session)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, errUnknownFeatureID) {
@@ -272,7 +297,12 @@ func (s *Server) handleGuildFeaturePatch(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	record, err := buildSingleFeatureRecord(updated, s.configManager, guildID, featureID, s.discordSessionForGuild(guildID))
+	session, err := s.discordSessionForGuild(guildID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve guild feature session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	record, err := buildSingleFeatureRecord(updated, s.configManager, guildID, featureID, session)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build updated guild feature: %v", err), http.StatusInternalServerError)
 		return
@@ -1355,13 +1385,13 @@ func setLogFeatureChannelID(guild *files.GuildConfig, eventType discordlogging.L
 	}
 }
 
-func (s *Server) currentDiscordSession() *discordgo.Session {
+func (s *Server) currentDiscordSession() (*discordgo.Session, error) {
 	return s.discordSessionForGuild("")
 }
 
-func (s *Server) discordSessionForGuild(guildID string) *discordgo.Session {
+func (s *Server) discordSessionForGuild(guildID string) (*discordgo.Session, error) {
 	if s == nil || s.discordSession == nil {
-		return nil
+		return nil, nil
 	}
 	return s.discordSession(guildID)
 }

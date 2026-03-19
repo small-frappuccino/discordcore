@@ -165,4 +165,24 @@ var postgresMigrations = []migration{
 			`ALTER TABLE member_joins DROP COLUMN IF EXISTS last_seen_at`,
 		},
 	},
+	{
+		Version: 4,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS message_version_counters (
+				guild_id     TEXT NOT NULL,
+				message_id   TEXT NOT NULL,
+				last_version BIGINT NOT NULL DEFAULT 0,
+				PRIMARY KEY (guild_id, message_id)
+			)`,
+			`INSERT INTO message_version_counters (guild_id, message_id, last_version)
+			 SELECT guild_id, message_id, MAX(version)::BIGINT
+			 FROM messages_history
+			 GROUP BY guild_id, message_id
+			 ON CONFLICT (guild_id, message_id) DO UPDATE
+			 SET last_version = GREATEST(message_version_counters.last_version, EXCLUDED.last_version)`,
+		},
+		DownSQL: []string{
+			`DROP TABLE IF EXISTS message_version_counters`,
+		},
+	},
 }
