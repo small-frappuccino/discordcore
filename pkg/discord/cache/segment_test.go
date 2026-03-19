@@ -63,3 +63,34 @@ func TestSegmentConcurrentAccess(t *testing.T) {
 		t.Fatalf("expected at least one entry after concurrent access")
 	}
 }
+
+func TestSegmentTakeDirtySnapshotReturnsOnlyChangedEntries(t *testing.T) {
+	seg := newSegment[int](time.Minute, 0)
+	seg.Set("a", 1)
+	seg.Set("b", 2)
+
+	first := seg.TakeDirtySnapshot(time.Now())
+	if len(first) != 2 {
+		t.Fatalf("expected 2 dirty entries on first drain, got %d", len(first))
+	}
+
+	second := seg.TakeDirtySnapshot(time.Now())
+	if len(second) != 0 {
+		t.Fatalf("expected dirty set to be drained, got %d remaining entries", len(second))
+	}
+
+	seg.Set("a", 3)
+	third := seg.TakeDirtySnapshot(time.Now())
+	if len(third) != 1 || third[0].Key != "a" || third[0].Value != 3 {
+		t.Fatalf("expected only updated key a in dirty snapshot, got %+v", third)
+	}
+}
+
+func TestSegmentSetCleanWithExpirationDoesNotMarkDirty(t *testing.T) {
+	seg := newSegment[int](time.Minute, 0)
+	seg.SetCleanWithExpiration("warm", 7, time.Now().Add(time.Minute))
+
+	if got := seg.TakeDirtySnapshot(time.Now()); len(got) != 0 {
+		t.Fatalf("expected clean warmup set to avoid dirty tracking, got %+v", got)
+	}
+}

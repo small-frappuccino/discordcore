@@ -1,11 +1,10 @@
 package cache
 
-// Generic LRU+TTL segment for reducing repetition across cache types (members/guilds/roles/channels).
+// Generic sharded LRU+TTL segment for reducing repetition across cache types (members/guilds/roles/channels).
 //
-// This segment maintains a map for O(1) lookup and a container/list-based LRU for eviction order.
-// Entries can have a TTL defined at segment-level (uniform for all entries). TTL <= 0 disables
-// expiration. Eviction occurs on Set when a limit is configured and the size threshold is met.
-// Get will return false if the key does not exist or has expired (expired entries are removed).
+// Each segment is split into independent shards to reduce lock contention on unrelated keys.
+// Entries keep shard-local LRU state for eviction order. Expiration is uniform per segment unless
+// explicitly overridden via SetWithExpiration.
 //
 // Concurrency: all operations are safe for concurrent access.
 
@@ -18,18 +17,29 @@ import (
 	"time"
 )
 
-// segment is a generic LRU+TTL container.
+const defaultSegmentShardCount = 16
+
+// segment is a generic sharded LRU+TTL container.
 type segment[T any] struct {
-	mu    sync.RWMutex
-	data  map[string]*entry[T]
-	lru   *list.List
-	ttl   time.Duration
-	limit int
+	shards []segmentShard[T]
+
+	ttl        time.Duration
+	ttlMu      sync.RWMutex
+	limit      int
+	limitMu    sync.RWMutex
+	shardLimit int
 
 	// Metrics
 	hits      atomic.Uint64
 	misses    atomic.Uint64
 	evictions atomic.Uint64
+}
+
+type segmentShard[T any] struct {
+	mu    sync.RWMutex
+	data  map[string]*entry[T]
+	lru   *list.List
+	dirty map[string]struct{}
 }
 
 type entry[T any] struct {
@@ -39,20 +49,35 @@ type entry[T any] struct {
 	elem      *list.Element
 }
 
+type segmentSnapshot[T any] struct {
+	Key       string
+	Value     T
+	ExpiresAt time.Time
+}
+
 // newSegment creates a new segment with the given TTL and capacity limit.
 // ttl <= 0 disables expiration. limit <= 0 means unbounded size (no LRU evictions).
 func newSegment[T any](ttl time.Duration, limit int) *segment[T] {
+	shardCount := configuredSegmentShardCount(limit)
+	shards := make([]segmentShard[T], shardCount)
+	for i := range shards {
+		shards[i] = segmentShard[T]{
+			data:  make(map[string]*entry[T]),
+			lru:   list.New(),
+			dirty: make(map[string]struct{}),
+		}
+	}
+
 	return &segment[T]{
-		data:  make(map[string]*entry[T]),
-		lru:   list.New(),
-		ttl:   ttl,
-		limit: limit,
+		shards:     shards,
+		ttl:        ttl,
+		limit:      limit,
+		shardLimit: shardScopedLimit(limit, len(shards)),
 	}
 }
 
 // Get returns the value for key if present and not expired.
-// If the entry exists and is valid, it is promoted to the front of the LRU.
-// If missing or expired, returns the zero value for T and false.
+// Promotion to the front of the shard-local LRU is opportunistic and never blocks readers.
 func (s *segment[T]) Get(key string) (T, bool) {
 	var zero T
 	if key == "" {
@@ -61,100 +86,94 @@ func (s *segment[T]) Get(key string) (T, bool) {
 	}
 
 	now := time.Now()
+	shard := s.shardFor(key)
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	e, ok := s.data[key]
+	shard.mu.RLock()
+	e, ok := shard.data[key]
 	if !ok {
+		shard.mu.RUnlock()
 		s.misses.Add(1)
 		return zero, false
 	}
-	// Expired?
-	if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
-		s.lru.Remove(e.elem)
-		delete(s.data, key)
+	value := e.value
+	expiresAt := e.expiresAt
+	shard.mu.RUnlock()
+
+	if !expiresAt.IsZero() && now.After(expiresAt) {
+		shard.mu.Lock()
+		current, exists := shard.data[key]
+		if exists && current == e && !current.expiresAt.IsZero() && now.After(current.expiresAt) {
+			shard.removeEntry(current)
+		}
+		shard.mu.Unlock()
 		s.misses.Add(1)
 		return zero, false
 	}
 
-	// Promote
-	s.lru.MoveToFront(e.elem)
 	s.hits.Add(1)
-	return e.value, true
+
+	if shard.mu.TryLock() {
+		if current, exists := shard.data[key]; exists && current == e {
+			shard.lru.MoveToFront(current.elem)
+		}
+		shard.mu.Unlock()
+	}
+
+	return value, true
 }
 
-// Set stores the value for key, updating TTL and promoting to the front of the LRU.
-// If limit > 0 and size >= limit, evicts one LRU entry before inserting.
+// Set stores the value for key, updating TTL and promoting to the front of the shard-local LRU.
 func (s *segment[T]) Set(key string, v T) {
 	if key == "" {
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Update existing
-	if e, ok := s.data[key]; ok {
-		e.value = v
-		if s.ttl > 0 {
-			e.expiresAt = time.Now().Add(s.ttl)
-		} else {
-			e.expiresAt = time.Time{}
-		}
-		s.lru.MoveToFront(e.elem)
-		return
-	}
-
-	// Evict if full
-	if s.limit > 0 && len(s.data) >= s.limit {
-		s.evictLRU()
-	}
-
-	// Insert new
 	expiresAt := time.Time{}
-	if s.ttl > 0 {
-		expiresAt = time.Now().Add(s.ttl)
+	if ttl := s.currentTTL(); ttl > 0 {
+		expiresAt = time.Now().Add(ttl)
 	}
-	elem := s.lru.PushFront(key)
-	s.data[key] = &entry[T]{
-		key:       key,
-		value:     v,
-		expiresAt: expiresAt,
-		elem:      elem,
-	}
+	s.setWithExpiration(key, v, expiresAt, true)
 }
 
 // SetWithExpiration stores the value for key with a specific expiration time,
 // overriding the segment TTL for this entry.
 func (s *segment[T]) SetWithExpiration(key string, v T, expiresAt time.Time) {
+	s.setWithExpiration(key, v, expiresAt, true)
+}
+
+func (s *segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, markDirty bool) {
 	if key == "" {
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	shard := s.shardFor(key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
 
-	// Update existing
-	if e, ok := s.data[key]; ok {
+	if e, ok := shard.data[key]; ok {
 		e.value = v
 		e.expiresAt = expiresAt
-		s.lru.MoveToFront(e.elem)
+		shard.lru.MoveToFront(e.elem)
+		if markDirty {
+			shard.dirty[key] = struct{}{}
+		}
 		return
 	}
 
-	// Evict if full
-	if s.limit > 0 && len(s.data) >= s.limit {
-		s.evictLRU()
+	shardLimit := s.currentShardLimit()
+	if shardLimit > 0 && len(shard.data) >= shardLimit {
+		s.evictLRU(shard)
 	}
 
-	// Insert new
-	elem := s.lru.PushFront(key)
-	s.data[key] = &entry[T]{
+	elem := shard.lru.PushFront(key)
+	shard.data[key] = &entry[T]{
 		key:       key,
 		value:     v,
 		expiresAt: expiresAt,
 		elem:      elem,
+	}
+	if markDirty {
+		shard.dirty[key] = struct{}{}
 	}
 }
 
@@ -163,88 +182,110 @@ func (s *segment[T]) Invalidate(key string) {
 	if key == "" {
 		return
 	}
-	s.mu.Lock()
-	if e, ok := s.data[key]; ok {
-		s.lru.Remove(e.elem)
-		delete(s.data, key)
+	shard := s.shardFor(key)
+	shard.mu.Lock()
+	if e, ok := shard.data[key]; ok {
+		shard.removeEntry(e)
 	}
-	s.mu.Unlock()
+	delete(shard.dirty, key)
+	shard.mu.Unlock()
 }
 
 // Clear removes all entries from the segment.
 func (s *segment[T]) Clear() {
-	s.mu.Lock()
-	clear(s.data)
-	s.lru = list.New()
-	s.mu.Unlock()
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.Lock()
+		clear(shard.data)
+		clear(shard.dirty)
+		shard.lru = list.New()
+		shard.mu.Unlock()
+	}
 }
 
 // CleanupExpired scans and removes all expired entries.
-// Callers should pass time.Now() for typical usage; passing a custom time eases testing.
 func (s *segment[T]) CleanupExpired(now time.Time) {
-	s.mu.Lock()
-	for k, e := range s.data {
-		if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
-			s.lru.Remove(e.elem)
-			delete(s.data, k)
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.Lock()
+		for k, e := range shard.data {
+			if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
+				shard.removeEntry(e)
+				delete(shard.dirty, k)
+			}
 		}
+		shard.mu.Unlock()
 	}
-	s.mu.Unlock()
 }
 
 // CleanupExpiredWithCallback removes expired entries and invokes onEvict for each removed entry.
 // If onEvict is nil, behaves like CleanupExpired.
 func (s *segment[T]) CleanupExpiredWithCallback(now time.Time, onEvict func(key string, value T)) {
-	s.mu.Lock()
-	if onEvict == nil {
-		for k, e := range s.data {
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.Lock()
+		if onEvict == nil {
+			for k, e := range shard.data {
+				if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
+					shard.removeEntry(e)
+					delete(shard.dirty, k)
+				}
+			}
+			shard.mu.Unlock()
+			continue
+		}
+
+		evicted := make([]*entry[T], 0)
+		for k, e := range shard.data {
 			if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
-				s.lru.Remove(e.elem)
-				delete(s.data, k)
+				shard.removeEntry(e)
+				delete(shard.dirty, k)
+				ev := *e
+				evicted = append(evicted, &ev)
 			}
 		}
-		s.mu.Unlock()
-		return
-	}
-	// Collect evicted to call callback without holding lock too long
-	evicted := make([]*entry[T], 0)
-	for k, e := range s.data {
-		if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
-			s.lru.Remove(e.elem)
-			delete(s.data, k)
-			// keep a copy to call outside lock
-			ev := *e
-			evicted = append(evicted, &ev)
+		shard.mu.Unlock()
+
+		for _, e := range evicted {
+			onEvict(e.key, e.value)
 		}
-	}
-	s.mu.Unlock()
-	for _, e := range evicted {
-		onEvict(e.key, e.value)
 	}
 }
 
-// Len returns the number of entries currently stored (including non-expired only as expired are removed on access/cleanup).
+// Len returns the number of entries currently stored.
 func (s *segment[T]) Len() int {
-	s.mu.RLock()
-	n := len(s.data)
-	s.mu.RUnlock()
-	return n
+	total := 0
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.RLock()
+		total += len(shard.data)
+		shard.mu.RUnlock()
+	}
+	return total
 }
 
 // Keys returns a copy of current keys. Use with caution on large segments.
 func (s *segment[T]) Keys() []string {
-	s.mu.RLock()
-	keys := slices.Collect(maps.Keys(s.data))
-	s.mu.RUnlock()
+	keys := make([]string, 0)
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.RLock()
+		keys = append(keys, slices.Collect(maps.Keys(shard.data))...)
+		shard.mu.RUnlock()
+	}
 	return keys
 }
 
 // GetExpiration returns the expiration time for a key, if present.
 // When the key is not present or has no expiration, returns zero time and false.
 func (s *segment[T]) GetExpiration(key string) (time.Time, bool) {
-	s.mu.RLock()
-	e, ok := s.data[key]
-	s.mu.RUnlock()
+	if key == "" {
+		return time.Time{}, false
+	}
+	shard := s.shardFor(key)
+	shard.mu.RLock()
+	e, ok := shard.data[key]
+	shard.mu.RUnlock()
 	if !ok {
 		return time.Time{}, false
 	}
@@ -253,35 +294,152 @@ func (s *segment[T]) GetExpiration(key string) (time.Time, bool) {
 
 // SetTTL updates the TTL for subsequent insertions. Existing entries keep their current expiration.
 func (s *segment[T]) SetTTL(ttl time.Duration) {
-	s.mu.Lock()
+	s.ttlMu.Lock()
 	s.ttl = ttl
-	s.mu.Unlock()
+	s.ttlMu.Unlock()
 }
 
 // SetLimit updates the capacity limit for the segment. If the new limit is lower than the current size,
-// the segment will evict LRU entries to satisfy the limit.
+// each shard evicts LRU entries to satisfy its local limit.
 func (s *segment[T]) SetLimit(limit int) {
-	s.mu.Lock()
+	shardLimit := shardScopedLimit(limit, len(s.shards))
+
+	s.limitMu.Lock()
 	s.limit = limit
-	// Enforce limit if needed
-	if s.limit > 0 {
-		for len(s.data) > s.limit {
-			s.evictLRU()
-		}
+	s.shardLimit = shardLimit
+	s.limitMu.Unlock()
+
+	if shardLimit <= 0 {
+		return
 	}
-	s.mu.Unlock()
+
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.Lock()
+		for len(shard.data) > shardLimit {
+			s.evictLRU(shard)
+		}
+		shard.mu.Unlock()
+	}
 }
 
-// evictLRU removes the least recently used entry. Caller must hold s.mu (write lock).
-func (s *segment[T]) evictLRU() {
-	back := s.lru.Back()
+// TakeDirtySnapshot drains the current dirty set and returns live entries for incremental persistence.
+func (s *segment[T]) TakeDirtySnapshot(now time.Time) []segmentSnapshot[T] {
+	snapshots := make([]segmentSnapshot[T], 0)
+	for i := range s.shards {
+		shard := &s.shards[i]
+		shard.mu.Lock()
+		for key := range shard.dirty {
+			e, ok := shard.data[key]
+			if !ok {
+				delete(shard.dirty, key)
+				continue
+			}
+			if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
+				shard.removeEntry(e)
+				delete(shard.dirty, key)
+				continue
+			}
+			snapshots = append(snapshots, segmentSnapshot[T]{
+				Key:       key,
+				Value:     e.value,
+				ExpiresAt: e.expiresAt,
+			})
+			delete(shard.dirty, key)
+		}
+		shard.mu.Unlock()
+	}
+	return snapshots
+}
+
+// MarkDirty re-adds keys to the dirty set when an incremental persist attempt fails.
+func (s *segment[T]) MarkDirty(keys []string) {
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		shard := s.shardFor(key)
+		shard.mu.Lock()
+		if _, ok := shard.data[key]; ok {
+			shard.dirty[key] = struct{}{}
+		}
+		shard.mu.Unlock()
+	}
+}
+
+// SetCleanWithExpiration stores the value without adding it to the dirty set.
+// Intended for warmup/reload paths that hydrate cache state from persistence.
+func (s *segment[T]) SetCleanWithExpiration(key string, v T, expiresAt time.Time) {
+	s.setWithExpiration(key, v, expiresAt, false)
+}
+
+func (s *segment[T]) currentTTL() time.Duration {
+	s.ttlMu.RLock()
+	ttl := s.ttl
+	s.ttlMu.RUnlock()
+	return ttl
+}
+
+func (s *segment[T]) currentShardLimit() int {
+	s.limitMu.RLock()
+	limit := s.shardLimit
+	s.limitMu.RUnlock()
+	return limit
+}
+
+func (s *segment[T]) shardFor(key string) *segmentShard[T] {
+	return &s.shards[segmentShardIndex(key, len(s.shards))]
+}
+
+// evictLRU removes the least recently used entry from a shard. Caller must hold shard.mu.
+func (s *segment[T]) evictLRU(shard *segmentShard[T]) {
+	if shard == nil {
+		return
+	}
+	back := shard.lru.Back()
 	if back == nil {
 		return
 	}
 	key := back.Value.(string)
-	s.lru.Remove(back)
-	delete(s.data, key)
+	shard.lru.Remove(back)
+	delete(shard.data, key)
+	delete(shard.dirty, key)
 	s.evictions.Add(1)
+}
+
+func (shard *segmentShard[T]) removeEntry(e *entry[T]) {
+	if shard == nil || e == nil {
+		return
+	}
+	shard.lru.Remove(e.elem)
+	delete(shard.data, e.key)
+	delete(shard.dirty, e.key)
+}
+
+func segmentShardIndex(key string, shardCount int) int {
+	if shardCount <= 1 {
+		return 0
+	}
+	var hash uint32 = 2166136261
+	for i := 0; i < len(key); i++ {
+		hash ^= uint32(key[i])
+		hash *= 16777619
+	}
+	return int(hash % uint32(shardCount))
+}
+
+func shardScopedLimit(limit, shardCount int) int {
+	if limit <= 0 || shardCount <= 0 {
+		return 0
+	}
+	return (limit + shardCount - 1) / shardCount
+}
+
+func configuredSegmentShardCount(limit int) int {
+	if limit > 0 && limit <= 128 {
+		return 1
+	}
+	return defaultSegmentShardCount
 }
 
 // segmentStats summarizes a segment's state and counters.
@@ -300,7 +458,6 @@ type segmentStats struct {
 }
 
 // Stats returns a snapshot of the segment's counters and configuration.
-// EntriesSeen = Hits + Misses; HitRate/MissRate computed when EntriesSeen > 0.
 func (s *segment[T]) Stats() segmentStats {
 	h := s.hits.Load()
 	m := s.misses.Load()
@@ -314,10 +471,13 @@ func (s *segment[T]) Stats() segmentStats {
 		missRate = float64(m) / float64(total)
 	}
 
-	s.mu.RLock()
+	s.ttlMu.RLock()
 	ttl := s.ttl
+	s.ttlMu.RUnlock()
+
+	s.limitMu.RLock()
 	limit := s.limit
-	s.mu.RUnlock()
+	s.limitMu.RUnlock()
 
 	return segmentStats{
 		Size:        size,

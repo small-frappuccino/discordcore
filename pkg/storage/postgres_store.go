@@ -28,6 +28,13 @@ type GuildMemberSnapshot struct {
 	JoinedAt   time.Time
 }
 
+type CacheEntryRecord struct {
+	Key       string
+	CacheType string
+	Data      string
+	ExpiresAt time.Time
+}
+
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
@@ -1669,6 +1676,40 @@ func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Tim
 		key, cacheType, data, expiresAt, time.Now().UTC(),
 	)
 	return err
+}
+
+func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEntryRecord) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	normalized := make([]CacheEntryRecord, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Key == "" || entry.CacheType == "" || entry.Data == "" {
+			continue
+		}
+		normalized = append(normalized, entry)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	cachedAt := time.Now().UTC()
+	return execValuesContext(ctx, s.db,
+		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at) VALUES `,
+		` ON CONFLICT(cache_key) DO UPDATE SET
+			data=excluded.data,
+			expires_at=excluded.expires_at,
+			cached_at=excluded.cached_at`,
+		len(normalized), 5,
+		func(args []any, idx int) []any {
+			entry := normalized[idx]
+			return append(args, entry.Key, entry.CacheType, entry.Data, entry.ExpiresAt, cachedAt)
+		},
+	)
 }
 
 // GetCacheEntry retrieves a cache entry from persistent storage

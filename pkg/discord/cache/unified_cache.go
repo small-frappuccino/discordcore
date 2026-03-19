@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
+
+const unifiedCachePersistTimeout = 30 * time.Second
 
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
 // and optional Postgres-backed persistence.
@@ -658,105 +661,165 @@ func (uc *UnifiedCache) cleanupExpired() {
 }
 
 // Persist saves current cache state to the persistent store (if enabled)
-// Persist writes all non-expired in-memory entries to the persistent store.
+// Persist writes only dirty, non-expired in-memory entries to the persistent store.
 //
 // Notes:
-// - Each cache type is encoded to JSON and upserted with its TTL-derived expiry.
+// - Each cache type drains a dirty snapshot, encodes changed rows, and upserts them in batch.
 // - Errors are aggregated; the method returns a single error summarizing count, if any.
-// - No entries are removed in-memory by this call.
+// - Failed rows are re-marked dirty so they can be retried on the next interval.
 func (uc *UnifiedCache) Persist() error {
 	if !uc.persistEnabled || uc.store == nil {
 		return nil
 	}
 
 	var errs []error
+	now := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), unifiedCachePersistTimeout)
+	defer cancel()
 
-	// Persist members
-	if uc.members != nil {
-		for _, key := range uc.members.Keys() {
-			member, ok := uc.members.Get(key)
-			if !ok || member == nil {
-				continue
-			}
-			data, err := encodeEntity(member)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("encode member %s: %w", key, err))
-				continue
-			}
-			exp, _ := uc.members.GetExpiration(key)
-			persistedKey := persistKey("member", key)
-			if err := uc.store.UpsertCacheEntry(persistedKey, "member", data, exp); err != nil {
-				errs = append(errs, fmt.Errorf("persist member %s: %w", key, err))
-			}
-		}
+	if err := uc.persistDirtyMembers(ctx, now); err != nil {
+		errs = append(errs, err)
 	}
-
-	// Persist guilds
-	if uc.guilds != nil {
-		for _, key := range uc.guilds.Keys() {
-			guild, ok := uc.guilds.Get(key)
-			if !ok || guild == nil {
-				continue
-			}
-			data, err := encodeEntity(guild)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("encode guild %s: %w", key, err))
-				continue
-			}
-			exp, _ := uc.guilds.GetExpiration(key)
-			persistedKey := persistKey("guild", key)
-			if err := uc.store.UpsertCacheEntry(persistedKey, "guild", data, exp); err != nil {
-				errs = append(errs, fmt.Errorf("persist guild %s: %w", key, err))
-			}
-		}
+	if err := uc.persistDirtyGuilds(ctx, now); err != nil {
+		errs = append(errs, err)
 	}
-
-	// Persist roles
-	if uc.roles != nil {
-		for _, key := range uc.roles.Keys() {
-			roles, ok := uc.roles.Get(key)
-			if !ok || roles == nil {
-				continue
-			}
-			data, err := encodeEntity(roles)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("encode roles %s: %w", key, err))
-				continue
-			}
-			exp, _ := uc.roles.GetExpiration(key)
-			persistedKey := persistKey("roles", key)
-			if err := uc.store.UpsertCacheEntry(persistedKey, "roles", data, exp); err != nil {
-				errs = append(errs, fmt.Errorf("persist roles %s: %w", key, err))
-			}
-		}
+	if err := uc.persistDirtyRoles(ctx, now); err != nil {
+		errs = append(errs, err)
 	}
-
-	// Persist channels
-	if uc.channels != nil {
-		for _, key := range uc.channels.Keys() {
-			ch, ok := uc.channels.Get(key)
-			if !ok || ch == nil {
-				continue
-			}
-			data, err := encodeEntity(ch)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("encode channel %s: %w", key, err))
-				continue
-			}
-			cacheKey := key
-			if ch.GuildID != "" {
-				cacheKey = ch.GuildID + ":" + ch.ID
-			}
-			cacheKey = persistKey("channel", cacheKey)
-			exp, _ := uc.channels.GetExpiration(key)
-			if err := uc.store.UpsertCacheEntry(cacheKey, "channel", data, exp); err != nil {
-				errs = append(errs, fmt.Errorf("persist channel %s: %w", key, err))
-			}
-		}
+	if err := uc.persistDirtyChannels(ctx, now); err != nil {
+		errs = append(errs, err)
 	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("persist cache: %w", errors.Join(errs...))
+	}
+	return nil
+}
+
+func (uc *UnifiedCache) persistDirtyMembers(ctx context.Context, now time.Time) error {
+	return persistDirtySnapshots(ctx, uc.store, "members", uc.members, now, func(snapshot segmentSnapshot[*discordgo.Member]) (storage.CacheEntryRecord, error) {
+		if snapshot.Value == nil {
+			return storage.CacheEntryRecord{}, nil
+		}
+		data, err := encodeEntity(snapshot.Value)
+		if err != nil {
+			return storage.CacheEntryRecord{}, fmt.Errorf("encode member %s: %w", snapshot.Key, err)
+		}
+		return storage.CacheEntryRecord{
+			Key:       persistKey("member", snapshot.Key),
+			CacheType: "member",
+			Data:      data,
+			ExpiresAt: snapshot.ExpiresAt,
+		}, nil
+	})
+}
+
+func (uc *UnifiedCache) persistDirtyGuilds(ctx context.Context, now time.Time) error {
+	return persistDirtySnapshots(ctx, uc.store, "guilds", uc.guilds, now, func(snapshot segmentSnapshot[*discordgo.Guild]) (storage.CacheEntryRecord, error) {
+		if snapshot.Value == nil {
+			return storage.CacheEntryRecord{}, nil
+		}
+		data, err := encodeEntity(snapshot.Value)
+		if err != nil {
+			return storage.CacheEntryRecord{}, fmt.Errorf("encode guild %s: %w", snapshot.Key, err)
+		}
+		return storage.CacheEntryRecord{
+			Key:       persistKey("guild", snapshot.Key),
+			CacheType: "guild",
+			Data:      data,
+			ExpiresAt: snapshot.ExpiresAt,
+		}, nil
+	})
+}
+
+func (uc *UnifiedCache) persistDirtyRoles(ctx context.Context, now time.Time) error {
+	return persistDirtySnapshots(ctx, uc.store, "roles", uc.roles, now, func(snapshot segmentSnapshot[[]*discordgo.Role]) (storage.CacheEntryRecord, error) {
+		if snapshot.Value == nil {
+			return storage.CacheEntryRecord{}, nil
+		}
+		data, err := encodeEntity(snapshot.Value)
+		if err != nil {
+			return storage.CacheEntryRecord{}, fmt.Errorf("encode roles %s: %w", snapshot.Key, err)
+		}
+		return storage.CacheEntryRecord{
+			Key:       persistKey("roles", snapshot.Key),
+			CacheType: "roles",
+			Data:      data,
+			ExpiresAt: snapshot.ExpiresAt,
+		}, nil
+	})
+}
+
+func (uc *UnifiedCache) persistDirtyChannels(ctx context.Context, now time.Time) error {
+	return persistDirtySnapshots(ctx, uc.store, "channels", uc.channels, now, func(snapshot segmentSnapshot[*discordgo.Channel]) (storage.CacheEntryRecord, error) {
+		if snapshot.Value == nil {
+			return storage.CacheEntryRecord{}, nil
+		}
+		data, err := encodeEntity(snapshot.Value)
+		if err != nil {
+			return storage.CacheEntryRecord{}, fmt.Errorf("encode channel %s: %w", snapshot.Key, err)
+		}
+		cacheKey := snapshot.Key
+		if snapshot.Value.GuildID != "" {
+			channelID := snapshot.Value.ID
+			if channelID == "" {
+				channelID = snapshot.Key
+			}
+			cacheKey = snapshot.Value.GuildID + ":" + channelID
+		}
+		return storage.CacheEntryRecord{
+			Key:       persistKey("channel", cacheKey),
+			CacheType: "channel",
+			Data:      data,
+			ExpiresAt: snapshot.ExpiresAt,
+		}, nil
+	})
+}
+
+func persistDirtySnapshots[T any](
+	ctx context.Context,
+	store *storage.Store,
+	name string,
+	seg *segment[T],
+	now time.Time,
+	build func(segmentSnapshot[T]) (storage.CacheEntryRecord, error),
+) error {
+	if seg == nil || store == nil {
+		return nil
+	}
+
+	snapshots := seg.TakeDirtySnapshot(now)
+	if len(snapshots) == 0 {
+		return nil
+	}
+
+	entries := make([]storage.CacheEntryRecord, 0, len(snapshots))
+	keys := make([]string, 0, len(snapshots))
+	var errs []error
+
+	for _, snapshot := range snapshots {
+		record, err := build(snapshot)
+		if err != nil {
+			seg.MarkDirty([]string{snapshot.Key})
+			errs = append(errs, err)
+			continue
+		}
+		if record.Key == "" || record.CacheType == "" || record.Data == "" {
+			continue
+		}
+		entries = append(entries, record)
+		keys = append(keys, snapshot.Key)
+	}
+
+	if len(entries) > 0 {
+		if err := store.UpsertCacheEntriesContext(ctx, entries); err != nil {
+			seg.MarkDirty(keys)
+			errs = append(errs, fmt.Errorf("persist %s batch: %w", name, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }
@@ -847,21 +910,21 @@ func (uc *UnifiedCache) setMemberInternal(key string, member *discordgo.Member, 
 	if key == "" || member == nil || uc.members == nil {
 		return
 	}
-	uc.members.SetWithExpiration(key, member, expiresAt)
+	uc.members.SetCleanWithExpiration(key, member, expiresAt)
 }
 
 func (uc *UnifiedCache) setGuildInternal(key string, guild *discordgo.Guild, expiresAt time.Time) {
 	if key == "" || guild == nil || uc.guilds == nil {
 		return
 	}
-	uc.guilds.SetWithExpiration(key, guild, expiresAt)
+	uc.guilds.SetCleanWithExpiration(key, guild, expiresAt)
 }
 
 func (uc *UnifiedCache) setRolesInternal(key string, roles []*discordgo.Role, expiresAt time.Time) {
 	if key == "" || roles == nil || uc.roles == nil {
 		return
 	}
-	uc.roles.SetWithExpiration(key, roles, expiresAt)
+	uc.roles.SetCleanWithExpiration(key, roles, expiresAt)
 }
 
 func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channel, expiresAt time.Time) {
@@ -897,7 +960,7 @@ func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channe
 		uc.channelToGuildMu.Unlock()
 	}
 
-	uc.channels.SetWithExpiration(key, channel, expiresAt)
+	uc.channels.SetCleanWithExpiration(key, channel, expiresAt)
 }
 
 // encodeEntity serializes a Discord entity to JSON
