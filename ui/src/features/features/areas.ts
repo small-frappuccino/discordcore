@@ -4,7 +4,7 @@ export type FeatureAreaID =
   | "commands"
   | "moderation"
   | "logging"
-  | "roles-members"
+  | "roles"
   | "maintenance"
   | "stats";
 
@@ -13,6 +13,7 @@ export interface FeatureAreaDefinition {
   anchor: string;
   label: string;
   description: string;
+  navigation: "primary" | "advanced";
   featureIDs: string[];
 }
 
@@ -29,6 +30,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Commands",
     description:
       "Command handling, privileged access, and the shared core service that supports command workflows.",
+    navigation: "primary",
     featureIDs: [
       "services.monitoring",
       "services.commands",
@@ -41,6 +43,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Moderation",
     description:
       "AutoMod controls plus moderation event logging needed for enforcement workflows.",
+    navigation: "primary",
     featureIDs: [
       "services.automod",
       "logging.automod_action",
@@ -54,6 +57,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Logging",
     description:
       "User, message, and reaction event logging for day-to-day observability.",
+    navigation: "primary",
     featureIDs: [
       "logging.avatar_logging",
       "logging.role_update",
@@ -66,11 +70,12 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     ],
   },
   {
-    id: "roles-members",
-    anchor: "roles-members",
-    label: "Roles & Members",
+    id: "roles",
+    anchor: "roles",
+    label: "Roles",
     description:
-      "Role automation, presence watching, and member-facing safeguards.",
+      "Role assignment and member-facing safeguards that still depend on role configuration.",
+    navigation: "primary",
     featureIDs: [
       "presence_watch.bot",
       "presence_watch.user",
@@ -83,7 +88,8 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     anchor: "maintenance",
     label: "Maintenance",
     description:
-      "Cache cleanup, backfill, pruning, and scheduled data maintenance.",
+      "Advanced cleanup, backfill, pruning, and scheduled data maintenance.",
+    navigation: "advanced",
     featureIDs: [
       "message_cache.cleanup_on_startup",
       "message_cache.delete_on_log",
@@ -98,9 +104,18 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Stats",
     description:
       "Server statistics and member-count channel updates for the selected guild.",
+    navigation: "primary",
     featureIDs: ["stats_channels"],
   },
 ];
+
+export const primaryFeatureAreaDefinitions = featureAreaDefinitions.filter(
+  (area) => area.navigation === "primary",
+);
+
+export const advancedFeatureAreaDefinitions = featureAreaDefinitions.filter(
+  (area) => area.navigation === "advanced",
+);
 
 export const plannedModules: PlannedModuleDefinition[] = [
   {

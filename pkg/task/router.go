@@ -163,6 +163,14 @@ const (
 	groupSendWouldBlock
 )
 
+type queueState uint32
+
+const (
+	queueStateOpen queueState = iota
+	queueStateStopping
+	queueStateClosed
+)
+
 // TaskRouter is a minimal in-memory dispatcher with per-group serialization,
 // idempotency (dedupe), and retry with exponential backoff.
 type TaskRouter struct {
@@ -172,6 +180,7 @@ type TaskRouter struct {
 	inflight  map[string]time.Time // idempotencyKey -> expiry
 	closed    bool
 	cfg       RouterConfig
+	startedAt time.Time
 	wg        sync.WaitGroup
 	stopOnce  sync.Once
 	stopCh    chan struct{}
@@ -196,10 +205,14 @@ type TaskRouter struct {
 }
 
 type groupWorker struct {
-	key        string
-	ch         chan *enqueuedTask
-	lastActive time.Time
-	stopping   bool
+	key          string
+	ch           chan *enqueuedTask
+	state        atomic.Uint32
+	senders      atomic.Int32
+	closeMu      sync.Mutex
+	closeCond    *sync.Cond
+	lastActiveNs atomic.Int64
+	activeCount  atomic.Int32
 }
 
 type enqueuedTask struct {
@@ -290,6 +303,7 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 		groups:      make(map[string]*groupWorker),
 		inflight:    make(map[string]time.Time),
 		cfg:         cfg,
+		startedAt:   time.Now(),
 		stopCh:      make(chan struct{}),
 		retryWakeCh: make(chan struct{}, 1),
 	}
@@ -387,13 +401,17 @@ func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 // Enqueued tasks that are not yet picked up may be dropped.
 func (tr *TaskRouter) Close() {
 	tr.stopOnce.Do(func() {
+		groups := make([]*groupWorker, 0, len(tr.groups))
 		tr.mu.Lock()
 		tr.closed = true
 		for _, gw := range tr.groups {
-			if gw != nil && !gw.stopping {
-				gw.stopping = true
-				close(gw.ch)
+			if gw == nil {
+				continue
 			}
+			if gw.queueState() == queueStateOpen {
+				gw.beginStop()
+			}
+			groups = append(groups, gw)
 		}
 		// Clear internal maps
 		clear(tr.groups)
@@ -401,6 +419,9 @@ func (tr *TaskRouter) Close() {
 		clear(tr.handlers)
 		tr.mu.Unlock()
 		close(tr.stopCh)
+		for _, gw := range groups {
+			gw.finishStop()
+		}
 		tr.wg.Wait()
 	})
 }
@@ -480,15 +501,114 @@ func (tr *TaskRouter) effectiveGroupParallel() int {
 	return tr.cfg.GroupMaxParallel
 }
 
+func newGroupWorker(key string, buffer int, nowNs int64) *groupWorker {
+	gw := &groupWorker{
+		key: key,
+		ch:  make(chan *enqueuedTask, buffer),
+	}
+	gw.closeCond = sync.NewCond(&gw.closeMu)
+	gw.state.Store(uint32(queueStateOpen))
+	gw.markActive(nowNs)
+	return gw
+}
+
+func (tr *TaskRouter) nowNs() int64 {
+	// Keep zero reserved for "never marked active".
+	return time.Since(tr.startedAt).Nanoseconds() + 1
+}
+
+func (gw *groupWorker) queueState() queueState {
+	if gw == nil {
+		return queueStateClosed
+	}
+	return queueState(gw.state.Load())
+}
+
+func (gw *groupWorker) markActive(nowNs int64) {
+	gw.lastActiveNs.Store(nowNs)
+}
+
+func (gw *groupWorker) beginWork(nowNs int64) {
+	gw.markActive(nowNs)
+	gw.activeCount.Add(1)
+}
+
+func (gw *groupWorker) endWork(nowNs int64) {
+	gw.markActive(nowNs)
+	gw.activeCount.Add(-1)
+}
+
+func (gw *groupWorker) idleFor(nowNs int64) time.Duration {
+	lastActiveNs := gw.lastActiveNs.Load()
+	if lastActiveNs <= 0 || nowNs <= lastActiveNs {
+		return 0
+	}
+	return time.Duration(nowNs - lastActiveNs)
+}
+
+func (gw *groupWorker) tryAcquireSender() bool {
+	if gw == nil {
+		return false
+	}
+	for {
+		if gw.queueState() != queueStateOpen {
+			return false
+		}
+		current := gw.senders.Load()
+		if !gw.senders.CompareAndSwap(current, current+1) {
+			continue
+		}
+		if gw.queueState() == queueStateOpen {
+			return true
+		}
+		gw.releaseSender()
+		return false
+	}
+}
+
+func (gw *groupWorker) releaseSender() {
+	if gw == nil {
+		return
+	}
+	if gw.senders.Add(-1) == 0 && gw.queueState() != queueStateOpen {
+		gw.closeMu.Lock()
+		if gw.closeCond != nil {
+			gw.closeCond.Broadcast()
+		}
+		gw.closeMu.Unlock()
+	}
+}
+
+func (gw *groupWorker) beginStop() bool {
+	if gw == nil {
+		return false
+	}
+	return gw.state.CompareAndSwap(uint32(queueStateOpen), uint32(queueStateStopping))
+}
+
+func (gw *groupWorker) finishStop() {
+	if gw == nil {
+		return
+	}
+	gw.closeMu.Lock()
+	for gw.senders.Load() > 0 {
+		gw.closeCond.Wait()
+	}
+	if gw.queueState() == queueStateStopping {
+		close(gw.ch)
+		gw.state.Store(uint32(queueStateClosed))
+	}
+	if gw.closeCond != nil {
+		gw.closeCond.Broadcast()
+	}
+	gw.closeMu.Unlock()
+}
+
 func (tr *TaskRouter) ensureGroupLocked(key string) *groupWorker {
 	if gw, ok := tr.groups[key]; ok && gw != nil {
 		return gw
 	}
-	gw := &groupWorker{
-		key:        key,
-		ch:         make(chan *enqueuedTask, tr.cfg.GroupBuffer),
-		lastActive: time.Now(),
-	}
+	gw := newGroupWorker(key, tr.cfg.GroupBuffer, tr.nowNs())
 	tr.groups[key] = gw
 	// Spawn up to GroupMaxParallel workers for this group
 	parallel := tr.effectiveGroupParallel()
@@ -511,7 +631,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 	defer tr.wg.Done()
 
 	for enq := range gw.ch {
-		gw.lastActive = time.Now()
+		gw.beginWork(tr.nowNs())
 
 		// Resolve handler and effective options each run (options may be zero).
 		tr.mu.RLock()
@@ -521,6 +641,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 
 		// Safety: ensure handler still registered
 		if handler == nil {
+			gw.endWork(tr.nowNs())
 			log.ApplicationLogger().Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
 			tr.maybeReleaseIdempotency(enq.task, eff)
 			continue
@@ -533,6 +654,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 			ctx := context.Background()
 			return handler(ctx, enq.task.Payload)
 		}()
+		gw.endWork(tr.nowNs())
 
 		if err != nil {
 			silent := errors.Is(err, ErrRetrySilent)
@@ -747,7 +869,7 @@ func (tr *TaskRouter) getOrCreateGroup(groupKey string) (*groupWorker, bool) {
 	}
 
 	if gw, exists := tr.groups[groupKey]; exists && gw != nil {
-		if gw.stopping {
+		if gw.queueState() != queueStateOpen {
 			delete(tr.groups, groupKey)
 		} else {
 			return gw, true
@@ -765,12 +887,10 @@ func (tr *TaskRouter) sendToGroupTry(gw *groupWorker, et *enqueuedTask) (result 
 	if gw == nil || gw.ch == nil || et == nil {
 		return groupSendClosed
 	}
-
-	defer func() {
-		if recover() != nil {
-			result = groupSendClosed
-		}
-	}()
+	if !gw.tryAcquireSender() {
+		return groupSendClosed
+	}
+	defer gw.releaseSender()
 
 	select {
 	case gw.ch <- et:
@@ -786,12 +906,10 @@ func (tr *TaskRouter) sendToGroupContext(ctx context.Context, gw *groupWorker, e
 	if gw == nil || gw.ch == nil || et == nil {
 		return groupSendClosed
 	}
-
-	defer func() {
-		if recover() != nil {
-			result = groupSendClosed
-		}
-	}()
+	if !gw.tryAcquireSender() {
+		return groupSendClosed
+	}
+	defer gw.releaseSender()
 
 	var ctxDone <-chan struct{}
 	if ctx != nil {
@@ -876,6 +994,8 @@ func (tr *TaskRouter) backgroundLoop() {
 
 func (tr *TaskRouter) cleanupOnce() {
 	now := time.Now()
+	nowNs := tr.nowNs()
+	toClose := make([]*groupWorker, 0)
 
 	// Clean idempotency map
 	tr.mu.Lock()
@@ -885,16 +1005,25 @@ func (tr *TaskRouter) cleanupOnce() {
 
 	// Stop idle groups
 	for key, gw := range tr.groups {
-		if gw == nil || gw.stopping {
+		if gw == nil {
+			delete(tr.groups, key)
 			continue
 		}
-		if time.Since(gw.lastActive) >= tr.cfg.GroupIdleTTL && len(gw.ch) == 0 {
-			gw.stopping = true
-			close(gw.ch)
+		if gw.queueState() != queueStateOpen {
 			delete(tr.groups, key)
+			toClose = append(toClose, gw)
+			continue
+		}
+		if gw.activeCount.Load() == 0 && gw.senders.Load() == 0 && len(gw.ch) == 0 && gw.idleFor(nowNs) >= tr.cfg.GroupIdleTTL {
+			gw.beginStop()
+			delete(tr.groups, key)
+			toClose = append(toClose, gw)
 		}
 	}
 	tr.mu.Unlock()
+	for _, gw := range toClose {
+		gw.finishStop()
+	}
 }
 
 func (tr *TaskRouter) runCronOnce() {

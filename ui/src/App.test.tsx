@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import type { FeatureRecord, PartnerBoardConfig } from "./api/control";
+import type { FeatureRecord, GuildRoleOption, PartnerBoardConfig } from "./api/control";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -25,6 +25,54 @@ function createFetchMock() {
     guildID: string;
     payload: Record<string, unknown>;
   }> = [];
+  const roleOptionsByGuild: Record<string, GuildRoleOption[]> = {
+    "guild-1": [
+      {
+        id: "guild-1",
+        name: "@everyone",
+        position: 0,
+        managed: false,
+        is_default: true,
+      },
+      {
+        id: "role-target",
+        name: "Members",
+        position: 4,
+        managed: false,
+        is_default: false,
+      },
+      {
+        id: "role-level",
+        name: "Level Five",
+        position: 3,
+        managed: false,
+        is_default: false,
+      },
+      {
+        id: "role-booster",
+        name: "Boosters",
+        position: 2,
+        managed: false,
+        is_default: false,
+      },
+      {
+        id: "role-guard",
+        name: "Moderators",
+        position: 1,
+        managed: false,
+        is_default: false,
+      },
+    ],
+    "guild-2": [
+      {
+        id: "guild-2",
+        name: "@everyone",
+        position: 0,
+        managed: false,
+        is_default: true,
+      },
+    ],
+  };
   const boardByGuild: Record<string, PartnerBoardConfig> = {
     "guild-1": {
       target: {
@@ -169,6 +217,22 @@ function createFetchMock() {
         editable_fields: ["enabled", "channel_id"],
       },
       {
+        id: "presence_watch.bot",
+        category: "presence_watch",
+        label: "Presence watch (bot)",
+        description: "Presence watch for the bot identity",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "disabled",
+        effective_enabled: false,
+        effective_source: "guild",
+        readiness: "disabled",
+        details: {
+          watch_bot: false,
+        },
+        editable_fields: ["enabled", "watch_bot"],
+      },
+      {
         id: "presence_watch.user",
         category: "presence_watch",
         label: "Presence watch (user)",
@@ -179,6 +243,27 @@ function createFetchMock() {
         effective_enabled: false,
         effective_source: "guild",
         readiness: "disabled",
+        details: {
+          user_id: "",
+        },
+        editable_fields: ["enabled", "user_id"],
+      },
+      {
+        id: "safety.bot_role_perm_mirror",
+        category: "safety",
+        label: "Bot role permission mirror",
+        description: "Permission mirror guard",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "disabled",
+        effective_enabled: false,
+        effective_source: "guild",
+        readiness: "disabled",
+        details: {
+          actor_role_id: "",
+          runtime_disabled: false,
+        },
+        editable_fields: ["enabled", "actor_role_id"],
       },
       {
         id: "auto_role_assignment",
@@ -187,10 +272,31 @@ function createFetchMock() {
         description: "Auto role",
         scope: "guild",
         supports_guild_override: true,
-        override_state: "disabled",
-        effective_enabled: false,
+        override_state: "enabled",
+        effective_enabled: true,
         effective_source: "guild",
-        readiness: "disabled",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "config_disabled",
+            message: "Auto assignment config is disabled.",
+            field: "config_enabled",
+          },
+        ],
+        details: {
+          config_enabled: false,
+          target_role_id: "",
+          required_role_ids: [],
+          required_role_count: 0,
+          level_role_id: "",
+          booster_role_id: "",
+        },
+        editable_fields: [
+          "enabled",
+          "config_enabled",
+          "target_role_id",
+          "required_role_ids",
+        ],
       },
       {
         id: "maintenance.db_cleanup",
@@ -274,6 +380,99 @@ function createFetchMock() {
       return;
     }
 
+    if (feature.id === "auto_role_assignment") {
+      const configEnabled = feature.details?.config_enabled === true;
+      const targetRoleId =
+        typeof feature.details?.target_role_id === "string"
+          ? feature.details.target_role_id.trim()
+          : "";
+      const requiredRoleIds = Array.isArray(feature.details?.required_role_ids)
+        ? feature.details.required_role_ids.filter(
+            (value): value is string => typeof value === "string" && value.trim() !== "",
+          )
+        : [];
+
+      if (!configEnabled) {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "config_disabled",
+            message: "Auto assignment config is disabled.",
+            field: "config_enabled",
+          },
+        ];
+        return;
+      }
+
+      if (targetRoleId === "") {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "missing_target_role",
+            message: "Auto assignment needs a target role.",
+            field: "target_role_id",
+          },
+        ];
+        return;
+      }
+
+      if (requiredRoleIds.length !== 2) {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "invalid_required_roles",
+            message: "Auto assignment needs exactly two required roles in order.",
+            field: "required_role_ids",
+          },
+        ];
+        return;
+      }
+    }
+
+    if (feature.id === "presence_watch.bot" && feature.details?.watch_bot !== true) {
+      feature.readiness = "blocked";
+      feature.blockers = [
+        {
+          code: "runtime_disabled",
+          message: "Runtime bot presence watching is disabled.",
+          field: "watch_bot",
+        },
+      ];
+      return;
+    }
+
+    if (
+      feature.id === "presence_watch.user" &&
+      typeof feature.details?.user_id === "string" &&
+      feature.details.user_id.trim() === ""
+    ) {
+      feature.readiness = "blocked";
+      feature.blockers = [
+        {
+          code: "missing_user_id",
+          message: "Presence watch needs a user ID.",
+          field: "user_id",
+        },
+      ];
+      return;
+    }
+
+    if (
+      feature.id === "safety.bot_role_perm_mirror" &&
+      typeof feature.details?.actor_role_id === "string" &&
+      feature.details.actor_role_id.trim() === "missing-role"
+    ) {
+      feature.readiness = "blocked";
+      feature.blockers = [
+        {
+          code: "invalid_actor_role",
+          message: "Permission mirror actor role is no longer available in this server.",
+          field: "actor_role_id",
+        },
+      ];
+      return;
+    }
+
     feature.readiness = "ready";
     feature.blockers = [];
   }
@@ -316,6 +515,18 @@ function createFetchMock() {
       });
     }
 
+    if (url.includes("/role-options")) {
+      const match = url.match(/\/v1\/guilds\/([^/]+)\/role-options$/);
+      if (match) {
+        const guildID = decodeURIComponent(match[1] ?? "");
+        return jsonResponse({
+          status: "ok",
+          guild_id: guildID,
+          roles: roleOptionsByGuild[guildID] ?? [],
+        });
+      }
+    }
+
     if (url.includes("/features/") && init?.method === "PATCH") {
       const match = url.match(/\/v1\/guilds\/([^/]+)\/features\/([^/?]+)/);
       if (match) {
@@ -353,6 +564,57 @@ function createFetchMock() {
           feature.details = {
             ...(feature.details ?? {}),
             channel_id: String(payload.channel_id ?? ""),
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "config_enabled")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            config_enabled: Boolean(payload.config_enabled),
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "target_role_id")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            target_role_id: String(payload.target_role_id ?? ""),
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "required_role_ids")) {
+          const requiredRoleIDs = Array.isArray(payload.required_role_ids)
+            ? payload.required_role_ids
+                .filter((value): value is string => typeof value === "string")
+                .map((value) => value.trim())
+                .filter((value) => value !== "")
+            : [];
+          feature.details = {
+            ...(feature.details ?? {}),
+            required_role_ids: requiredRoleIDs,
+            required_role_count: requiredRoleIDs.length,
+            level_role_id: requiredRoleIDs[0] ?? "",
+            booster_role_id: requiredRoleIDs[1] ?? "",
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "watch_bot")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            watch_bot: Boolean(payload.watch_bot),
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "user_id")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            user_id: String(payload.user_id ?? ""),
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "actor_role_id")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            actor_role_id: String(payload.actor_role_id ?? ""),
           };
         }
 
@@ -468,10 +730,10 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByRole("link", { name: "Commands" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Moderation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Logging" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Roles & Members" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Maintenance" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Roles" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Stats" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Maintenance" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Automations" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Activity Log" })).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Commands", level: 2 })).toBeInTheDocument();
@@ -585,10 +847,85 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByRole("heading", { name: "Partner Board", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Commands", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Roles", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Settings", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Maintenance", level: 2 })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Open Partner Board" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Open Commands" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Maintenance" })).toBeInTheDocument();
     expect(screen.getByText("Tickets")).toBeInTheDocument();
+  });
+
+  it("redirects the legacy roles-members route to the stable Roles workspace route", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/roles-members");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Roles", level: 1 });
+    expect(window.location.pathname).toBe("/dashboard/roles");
+  });
+
+  it("opens the dedicated Roles workspace and saves auto role configuration through the drawer", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/roles");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Roles", level: 1 });
+    await screen.findByRole("heading", {
+      name: "Automatic role assignment",
+      level: 2,
+    });
+    expect(screen.getAllByText("Not configured").length).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure auto role" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure automatic role assignment" }),
+    ).toBeVisible();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Assignment rule"),
+      "enabled",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Target role"),
+      "role-target",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Level role"),
+      "role-level",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Booster role"),
+      "role-booster",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save auto role" }));
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "auto_role_assignment",
+          payload: {
+            config_enabled: true,
+            target_role_id: "role-target",
+            required_role_ids: ["role-level", "role-booster"],
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure automatic role assignment" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Members").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Level Five + Boosters").length).toBeGreaterThan(0);
   });
 
   it("opens a generic category workspace from the sidebar and updates feature state inline", async () => {

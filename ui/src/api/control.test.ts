@@ -120,4 +120,37 @@ describe("ControlApiClient feature routes", () => {
     const headers = secondCall?.[1]?.headers as Headers;
     expect(headers.get("X-CSRF-Token")).toBe("csrf-token");
   });
+
+  it("loads guild role options from /v1/guilds/{guild_id}/role-options", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: "ok",
+        guild_id: "guild-1",
+        roles: [
+          {
+            id: "role-1",
+            name: "Moderators",
+            position: 3,
+            managed: false,
+            is_default: false,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const response = await client.listGuildRoleOptions("guild-1");
+
+    expect(response.roles).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith("/v1/guilds/guild-1/role-options", {
+      method: "GET",
+      headers: expect.any(Headers),
+      credentials: "include",
+      body: undefined,
+    });
+  });
 });

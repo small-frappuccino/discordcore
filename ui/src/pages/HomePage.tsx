@@ -14,7 +14,12 @@ import {
   StatusBadge,
   SurfaceCard,
 } from "../components/ui";
-import { featureAreaDefinitions, getFeatureAreaRecords, plannedModules } from "../features/features/areas";
+import {
+  advancedFeatureAreaDefinitions,
+  getFeatureAreaRecords,
+  plannedModules,
+  primaryFeatureAreaDefinitions,
+} from "../features/features/areas";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoardSummary";
 
@@ -60,16 +65,22 @@ export function HomePage() {
 
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
-  const readyFeatures = featureWorkspace.features.filter(
-    (feature) => feature.readiness === "ready",
-  ).length;
-  const blockedFeatures = featureWorkspace.features.filter(
-    (feature) => feature.readiness === "blocked",
-  ).length;
-  const disabledFeatures = featureWorkspace.features.filter(
-    (feature) => !feature.effective_enabled,
-  ).length;
   const homeLoading = featureWorkspace.loading || boardSummaryLoading;
+  const primaryAreaSummaries = primaryFeatureAreaDefinitions.map((area) =>
+    summarizeFeatureArea(
+      getFeatureAreaRecords(featureWorkspace.features, area.id),
+      featureWorkspace.workspaceState,
+    ),
+  );
+  const operationalModules = primaryAreaSummaries.filter(
+    (summary) => summary.tone === "success",
+  ).length;
+  const modulesNeedingAttention = primaryAreaSummaries.filter(
+    (summary) => summary.tone === "error",
+  ).length;
+  const disabledModules = primaryAreaSummaries.filter(
+    (summary) => summary.label === "Disabled",
+  ).length;
 
   async function handleRefreshHome() {
     await Promise.all([
@@ -140,17 +151,17 @@ export function HomePage() {
       tone: selectedGuild === null ? "info" : "neutral",
     },
     {
-      label: "Feature areas",
+      label: "Main modules",
       value:
         featureWorkspace.workspaceState === "ready"
-          ? `${readyFeatures} ready`
+          ? `${operationalModules}/${primaryFeatureAreaDefinitions.length} operational`
           : formatHomeWorkspaceLabel(featureWorkspace.workspaceState),
       description:
         featureWorkspace.workspaceState === "ready"
-          ? `${blockedFeatures} blocked • ${disabledFeatures} disabled`
+          ? `${modulesNeedingAttention} need attention • ${disabledModules} disabled`
           : formatHomeWorkspaceSupport(featureWorkspace.workspaceState),
       tone:
-        blockedFeatures > 0
+        modulesNeedingAttention > 0
           ? "error"
           : featureWorkspace.workspaceState === "ready"
             ? "success"
@@ -169,7 +180,7 @@ export function HomePage() {
       <PageHeader
         eyebrow="Home"
         title="Home"
-        description="Review server-scoped feature areas, open the main workspaces, and spot blocked categories before configuration work begins."
+        description="Review the main server modules, open the right workspace, and spot blockers before configuration work begins."
         status={
           <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
             {formatAuthStateLabel(authState)}
@@ -252,7 +263,7 @@ export function HomePage() {
           </div>
         </SurfaceCard>
 
-        {featureAreaDefinitions.map((area) => {
+        {primaryFeatureAreaDefinitions.map((area) => {
           const areaFeatures = getFeatureAreaRecords(featureWorkspace.features, area.id);
           const areaSummary = summarizeFeatureArea(
             areaFeatures,
@@ -311,7 +322,7 @@ export function HomePage() {
               <p className="section-label">Technical</p>
               <h2>Settings</h2>
               <p className="section-description">
-                Session state, control connection, and diagnostics stay separate from daily feature management.
+                Session state, control connection, diagnostics, and advanced controls stay separate from daily feature management.
               </p>
             </div>
             <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
@@ -343,6 +354,67 @@ export function HomePage() {
             </Link>
           </div>
         </SurfaceCard>
+      </section>
+
+      <section className="page-main" aria-label="Advanced controls">
+        <div className="card-copy">
+          <p className="section-label">Advanced</p>
+          <h2>Advanced controls</h2>
+          <p className="section-description">
+            Keep routine setup in the main modules. Leave cleanup, backfill, and other technical workflows here until they earn a simpler operator flow.
+          </p>
+        </div>
+
+        <div className="home-planned-grid">
+          {advancedFeatureAreaDefinitions.map((area) => {
+            const areaFeatures = getFeatureAreaRecords(featureWorkspace.features, area.id);
+            const areaSummary = summarizeFeatureArea(
+              areaFeatures,
+              featureWorkspace.workspaceState,
+            );
+
+            return (
+              <SurfaceCard className="home-area-card" id={area.anchor} key={area.id}>
+                <div className="home-area-card-header">
+                  <div className="card-copy">
+                    <p className="section-label">Advanced area</p>
+                    <h2>{area.label}</h2>
+                    <p className="section-description">{area.description}</p>
+                  </div>
+                  <StatusBadge tone={areaSummary.tone}>{areaSummary.label}</StatusBadge>
+                </div>
+
+                <ul className="home-area-list">
+                  <li className="home-area-row">
+                    <span>Tracked features</span>
+                    <strong>{areaSummary.total}</strong>
+                  </li>
+                  <li className="home-area-row">
+                    <span>Ready</span>
+                    <strong>{areaSummary.ready}</strong>
+                  </li>
+                  <li className="home-area-row">
+                    <span>Blocked</span>
+                    <strong>{areaSummary.blocked}</strong>
+                  </li>
+                  <li className="home-area-row">
+                    <span>Current signal</span>
+                    <strong>{areaSummary.support}</strong>
+                  </li>
+                </ul>
+
+                <div className="home-area-footer">
+                  <Link
+                    className="button-secondary"
+                    to={getFeatureAreaRoute(area.id)}
+                  >
+                    Open {area.label}
+                  </Link>
+                </div>
+              </SurfaceCard>
+            );
+          })}
+        </div>
       </section>
 
       <section className="home-planned-grid" id="planned" aria-label="Planned modules">

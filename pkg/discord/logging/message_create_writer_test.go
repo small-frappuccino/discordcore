@@ -11,6 +11,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testing.T) {
@@ -330,6 +331,60 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 		t.Fatalf("unexpected version sequence: got=%v want=%v", got, want)
 	}
 	service.messageCreateWriter = nil
+}
+
+func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
+	writer := newMessageCreateWriter(nil)
+	writer.flushInterval = time.Hour
+	writer.Start()
+
+	if !writer.tryAcquireProducer() {
+		t.Fatalf("expected to acquire in-flight producer")
+	}
+
+	stopDone := make(chan error, 1)
+	go func() {
+		stopDone <- writer.Stop(context.Background())
+	}()
+
+	select {
+	case err := <-stopDone:
+		t.Fatalf("writer stop returned before producer release: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	writer.releaseProducer()
+
+	select {
+	case err := <-stopDone:
+		if err != nil {
+			t.Fatalf("stop writer: %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("writer stop did not finish after producer release")
+	}
+
+	if got := writer.stateValue(); got != writerStateClosed {
+		t.Fatalf("expected writer to be closed after stop, got %v", got)
+	}
+}
+
+func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
+	writer := newMessageCreateWriter(nil)
+	writer.flushInterval = time.Hour
+	writer.Start()
+
+	if err := writer.Stop(context.Background()); err != nil {
+		t.Fatalf("stop writer: %v", err)
+	}
+
+	err := writer.Enqueue(storage.MessageRecord{
+		GuildID:   "guild",
+		MessageID: "message",
+	}, nil, storage.DailyMessageCountDelta{})
+	if err != errMessageCreateWriterStopped {
+		t.Fatalf("expected stopped error after shutdown, got %v", err)
+	}
 }
 
 func newMessageWriterConfigManager(t *testing.T, guildID string, channels files.ChannelsConfig, opts ...func(*files.GuildConfig)) *files.ConfigManager {

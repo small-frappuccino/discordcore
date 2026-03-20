@@ -175,6 +175,20 @@ export interface FeaturePatchPayload {
   dry_run?: boolean;
 }
 
+export interface GuildRoleOption {
+  id: string;
+  name: string;
+  position: number;
+  managed: boolean;
+  is_default: boolean;
+}
+
+export interface GuildRoleOptionsResponse {
+  status: string;
+  guild_id: string;
+  roles: GuildRoleOption[];
+}
+
 export interface DiscordOAuthStatusResponse {
   status: string;
   oauth_configured: boolean;
@@ -340,6 +354,15 @@ export class ControlApiClient {
       "PATCH",
       `/v1/guilds/${encodeURIComponent(guildId)}/features/${encodeURIComponent(featureId)}`,
       payload,
+    );
+  }
+
+  async listGuildRoleOptions(
+    guildId: string,
+  ): Promise<GuildRoleOptionsResponse> {
+    return this.request<GuildRoleOptionsResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/role-options`,
     );
   }
 

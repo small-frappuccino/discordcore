@@ -4,7 +4,7 @@ export const featureAreaRoutes = {
   commands: "/dashboard/commands",
   moderation: "/dashboard/moderation",
   logging: "/dashboard/logging",
-  "roles-members": "/dashboard/roles-members",
+  roles: "/dashboard/roles",
   maintenance: "/dashboard/maintenance",
   stats: "/dashboard/stats",
 } as const satisfies Record<FeatureAreaID, string>;
@@ -24,7 +24,7 @@ export const appRoutes = {
   commands: featureAreaRoutes.commands,
   moderation: featureAreaRoutes.moderation,
   logging: featureAreaRoutes.logging,
-  rolesMembers: featureAreaRoutes["roles-members"],
+  roles: featureAreaRoutes.roles,
   maintenance: featureAreaRoutes.maintenance,
   stats: featureAreaRoutes.stats,
   automations: "/dashboard/automations",
@@ -68,14 +68,9 @@ export const sidebarItems: SidebarItem[] = [
     path: appRoutes.logging,
   },
   {
-    label: "Roles & Members",
-    to: appRoutes.rolesMembers,
-    path: appRoutes.rolesMembers,
-  },
-  {
-    label: "Maintenance",
-    to: appRoutes.maintenance,
-    path: appRoutes.maintenance,
+    label: "Roles",
+    to: appRoutes.roles,
+    path: appRoutes.roles,
   },
   {
     label: "Stats",

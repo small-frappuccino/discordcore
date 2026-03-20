@@ -4,20 +4,23 @@ import type {
   FeatureCatalogEntry,
   FeatureRecord,
   FeatureWorkspaceResponse,
+  GuildRoleOption,
 } from "../../api/control";
 import { useFeatureCatalog } from "./useFeatureCatalog";
 import { useFeatureMutation } from "./useFeatureMutation";
+import { useGuildRoleOptions } from "./useGuildRoleOptions";
 import { useFeatureWorkspace } from "./useFeatureWorkspace";
 
 let mockDashboardSession: {
   authState: string;
-  client: {
-    getFeatureCatalog: ReturnType<typeof vi.fn>;
-    listGlobalFeatures: ReturnType<typeof vi.fn>;
-    listGuildFeatures: ReturnType<typeof vi.fn>;
-    patchGlobalFeature: ReturnType<typeof vi.fn>;
-    patchGuildFeature: ReturnType<typeof vi.fn>;
-  };
+    client: {
+      getFeatureCatalog: ReturnType<typeof vi.fn>;
+      listGlobalFeatures: ReturnType<typeof vi.fn>;
+      listGuildFeatures: ReturnType<typeof vi.fn>;
+      listGuildRoleOptions: ReturnType<typeof vi.fn>;
+      patchGlobalFeature: ReturnType<typeof vi.fn>;
+      patchGuildFeature: ReturnType<typeof vi.fn>;
+    };
   selectedGuildID: string;
 };
 
@@ -67,6 +70,7 @@ describe("feature hooks", () => {
         getFeatureCatalog: vi.fn(),
         listGlobalFeatures: vi.fn(),
         listGuildFeatures: vi.fn(),
+        listGuildRoleOptions: vi.fn(),
         patchGlobalFeature: vi.fn(),
         patchGuildFeature: vi.fn(),
       },
@@ -162,6 +166,41 @@ describe("feature hooks", () => {
         features: [expect.objectContaining({ id: "services.commands" })],
       },
     ]);
+  });
+
+  it("loads guild role options for the selected server", async () => {
+    const roles: GuildRoleOption[] = [
+      {
+        id: "role-a",
+        name: "Alpha",
+        position: 2,
+        managed: false,
+        is_default: false,
+      },
+      {
+        id: "guild-1",
+        name: "@everyone",
+        position: 0,
+        managed: false,
+        is_default: true,
+      },
+    ];
+    mockDashboardSession.client.listGuildRoleOptions.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      roles,
+    });
+
+    const { result } = renderHook(() => useGuildRoleOptions());
+
+    await waitFor(() => {
+      expect(result.current.roles).toEqual(roles);
+    });
+
+    expect(mockDashboardSession.client.listGuildRoleOptions).toHaveBeenCalledWith(
+      "guild-1",
+    );
+    expect(result.current.notice).toBeNull();
   });
 
   it("patches a guild feature and supports enabled: null", async () => {

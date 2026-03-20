@@ -22,6 +22,14 @@ const (
 
 var errMessageCreateWriterStopped = errors.New("message create writer is stopped")
 
+type writerState uint32
+
+const (
+	writerStateOpen writerState = iota
+	writerStateStopping
+	writerStateClosed
+)
+
 type messageWriteRecordOp uint8
 
 const (
@@ -75,9 +83,15 @@ type messageWriteStats struct {
 type messageCreateWriter struct {
 	store         *storage.Store
 	queue         chan messageWriteRequest
+	stopCh        chan struct{}
 	done          chan struct{}
 	flushInterval time.Duration
 	maxBatch      int
+
+	state        atomic.Uint32
+	producers    atomic.Int32
+	producerMu   sync.Mutex
+	producerCond *sync.Cond
 
 	mu        sync.RWMutex
 	nextToken uint64
@@ -87,14 +101,18 @@ type messageCreateWriter struct {
 }
 
 func newMessageCreateWriter(store *storage.Store) *messageCreateWriter {
-	return &messageCreateWriter{
+	writer := &messageCreateWriter{
 		store:         store,
 		queue:         make(chan messageWriteRequest, messageCreateWriterQueueSize),
+		stopCh:        make(chan struct{}),
 		done:          make(chan struct{}),
 		flushInterval: messageCreateWriterFlushInterval,
 		maxBatch:      messageCreateWriterMaxBatch,
 		pending:       make(map[string]pendingMessageState),
 	}
+	writer.producerCond = sync.NewCond(&writer.producerMu)
+	writer.state.Store(uint32(writerStateOpen))
+	return writer
 }
 
 func (w *messageCreateWriter) Start() {
@@ -109,7 +127,9 @@ func (w *messageCreateWriter) Stop(ctx context.Context) error {
 		return nil
 	}
 	w.stopOnce.Do(func() {
-		close(w.queue)
+		w.beginStop()
+		w.waitForProducers()
+		close(w.stopCh)
 	})
 	if ctx == nil {
 		ctx = context.Background()
@@ -120,6 +140,64 @@ func (w *messageCreateWriter) Stop(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (w *messageCreateWriter) stateValue() writerState {
+	if w == nil {
+		return writerStateClosed
+	}
+	return writerState(w.state.Load())
+}
+
+func (w *messageCreateWriter) tryAcquireProducer() bool {
+	if w == nil {
+		return false
+	}
+	for {
+		if w.stateValue() != writerStateOpen {
+			return false
+		}
+		current := w.producers.Load()
+		if !w.producers.CompareAndSwap(current, current+1) {
+			continue
+		}
+		if w.stateValue() == writerStateOpen {
+			return true
+		}
+		w.releaseProducer()
+		return false
+	}
+}
+
+func (w *messageCreateWriter) releaseProducer() {
+	if w == nil {
+		return
+	}
+	if w.producers.Add(-1) == 0 && w.stateValue() != writerStateOpen {
+		w.producerMu.Lock()
+		if w.producerCond != nil {
+			w.producerCond.Broadcast()
+		}
+		w.producerMu.Unlock()
+	}
+}
+
+func (w *messageCreateWriter) beginStop() {
+	if w == nil {
+		return
+	}
+	w.state.CompareAndSwap(uint32(writerStateOpen), uint32(writerStateStopping))
+}
+
+func (w *messageCreateWriter) waitForProducers() {
+	if w == nil {
+		return
+	}
+	w.producerMu.Lock()
+	for w.producers.Load() > 0 {
+		w.producerCond.Wait()
+	}
+	w.producerMu.Unlock()
 }
 
 func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *storage.MessageVersion, metric storage.DailyMessageCountDelta) error {
@@ -204,15 +282,20 @@ func (w *messageCreateWriter) enqueueRequest(req messageWriteRequest) error {
 }
 
 func (w *messageCreateWriter) trySendRequest(req messageWriteRequest) (sent bool, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = errMessageCreateWriterStopped
-		}
-	}()
+	if !w.tryAcquireProducer() {
+		return false, errMessageCreateWriterStopped
+	}
+	defer w.releaseProducer()
+
 	select {
+	case <-w.stopCh:
+		return false, errMessageCreateWriterStopped
 	case w.queue <- req:
 		return true, nil
 	default:
+		if w.stateValue() != writerStateOpen {
+			return false, errMessageCreateWriterStopped
+		}
 		return false, nil
 	}
 }
@@ -308,7 +391,10 @@ func (w *messageCreateWriter) Stats() map[string]any {
 }
 
 func (w *messageCreateWriter) run() {
-	defer close(w.done)
+	defer func() {
+		w.state.Store(uint32(writerStateClosed))
+		close(w.done)
+	}()
 
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
@@ -324,17 +410,26 @@ func (w *messageCreateWriter) run() {
 
 	for {
 		select {
-		case req, ok := <-w.queue:
-			if !ok {
-				flush()
-				return
-			}
+		case req := <-w.queue:
 			batch = append(batch, req)
 			if len(batch) >= w.maxBatch {
 				flush()
 			}
 		case <-ticker.C:
 			flush()
+		case <-w.stopCh:
+			for {
+				select {
+				case req := <-w.queue:
+					batch = append(batch, req)
+					if len(batch) >= w.maxBatch {
+						flush()
+					}
+				default:
+					flush()
+					return
+				}
+			}
 		}
 	}
 }

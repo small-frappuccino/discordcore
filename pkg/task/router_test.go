@@ -22,6 +22,22 @@ func newTestConfig() RouterConfig {
 	}
 }
 
+func newTestGroupWorker(router *TaskRouter, key string, buffer int) *groupWorker {
+	nowNs := int64(1)
+	if router != nil {
+		nowNs = router.nowNs()
+	}
+	return newGroupWorker(key, buffer, nowNs)
+}
+
+func stopTestGroup(gw *groupWorker) {
+	if gw == nil {
+		return
+	}
+	gw.beginStop()
+	gw.finishStop()
+}
+
 func TestDispatchExecutesHandler(t *testing.T) {
 	router := NewRouter(newTestConfig())
 	t.Cleanup(router.Close)
@@ -122,11 +138,7 @@ func TestRetryLoopReschedulesWhenGroupIsTemporarilyFull(t *testing.T) {
 		return nil
 	})
 
-	blocked := &groupWorker{
-		key:        "busy",
-		ch:         make(chan *enqueuedTask, 1),
-		lastActive: time.Now(),
-	}
+	blocked := newTestGroupWorker(router, "busy", 1)
 	blocked.ch <- &enqueuedTask{task: Task{Type: "retry-full"}}
 
 	router.mu.Lock()
@@ -190,7 +202,8 @@ func TestSendToGroupClosedChannelDoesNotPanic(t *testing.T) {
 		key: "g1",
 		ch:  make(chan *enqueuedTask, 1),
 	}
-	close(gw.ch)
+	gw = newTestGroupWorker(router, "g1", 1)
+	stopTestGroup(gw)
 
 	ok := router.sendToGroup(gw, &enqueuedTask{task: Task{Type: "noop"}})
 	if ok {
@@ -208,12 +221,8 @@ func TestDispatchRecoversFromClosedGroupChannel(t *testing.T) {
 		return nil
 	})
 
-	stale := &groupWorker{
-		key:        "g1",
-		ch:         make(chan *enqueuedTask, 1),
-		lastActive: time.Now(),
-	}
-	close(stale.ch)
+	stale := newTestGroupWorker(router, "g1", 1)
+	stopTestGroup(stale)
 
 	router.mu.Lock()
 	router.groups["g1"] = stale
@@ -245,12 +254,8 @@ func TestEnqueueRetryRecoversFromClosedGroupChannel(t *testing.T) {
 		return nil
 	})
 
-	stale := &groupWorker{
-		key:        "g1",
-		ch:         make(chan *enqueuedTask, 1),
-		lastActive: time.Now(),
-	}
-	close(stale.ch)
+	stale := newTestGroupWorker(router, "g1", 1)
+	stopTestGroup(stale)
 
 	router.mu.Lock()
 	router.groups["g1"] = stale
@@ -357,11 +362,7 @@ func TestDispatchDoesNotSerializeUnrelatedGroupsWhenOneGroupBufferIsFull(t *test
 		return nil
 	})
 
-	hotGroup := &groupWorker{
-		key:        "hot",
-		ch:         make(chan *enqueuedTask, 1),
-		lastActive: time.Now(),
-	}
+	hotGroup := newTestGroupWorker(router, "hot", 1)
 	hotGroup.ch <- &enqueuedTask{task: Task{Type: "work", Payload: "prefill"}}
 
 	router.mu.Lock()
@@ -494,5 +495,163 @@ func TestRunCronOnce_TracksDispatchSuccessMetrics(t *testing.T) {
 	}
 	if stats.CronDispatchFailures != 0 {
 		t.Fatalf("expected zero failed cron dispatches, got %d", stats.CronDispatchFailures)
+	}
+}
+
+func TestCleanupOnceKeepsGroupWithActiveHandler(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.CleanupInterval = time.Hour
+	cfg.GroupIdleTTL = 10 * time.Millisecond
+
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	done := make(chan struct{}, 1)
+
+	router.RegisterHandler("busy", func(ctx context.Context, payload any) error {
+		started <- struct{}{}
+		<-release
+		done <- struct{}{}
+		return nil
+	})
+
+	if err := router.Dispatch(context.Background(), Task{
+		Type: "busy",
+		Options: TaskOptions{
+			GroupKey: "busy",
+		},
+	}); err != nil {
+		t.Fatalf("dispatch failed: %v", err)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("handler did not start in time")
+	}
+
+	time.Sleep(2 * cfg.GroupIdleTTL)
+	router.cleanupOnce()
+
+	router.mu.RLock()
+	gw, ok := router.groups["busy"]
+	router.mu.RUnlock()
+	if !ok || gw == nil {
+		t.Fatalf("expected active group to remain registered during cleanup")
+	}
+	if got := gw.queueState(); got != queueStateOpen {
+		t.Fatalf("expected active group to remain open during cleanup, got %v", got)
+	}
+
+	close(release)
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("handler did not finish in time")
+	}
+}
+
+func TestCleanupOnceClosesIdleGroupAfterHandlerCompletes(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.CleanupInterval = time.Hour
+	cfg.GroupIdleTTL = 10 * time.Millisecond
+
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	done := make(chan struct{}, 1)
+
+	router.RegisterHandler("idle", func(ctx context.Context, payload any) error {
+		started <- struct{}{}
+		<-release
+		done <- struct{}{}
+		return nil
+	})
+
+	if err := router.Dispatch(context.Background(), Task{
+		Type: "idle",
+		Options: TaskOptions{
+			GroupKey: "idle",
+		},
+	}); err != nil {
+		t.Fatalf("dispatch failed: %v", err)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("handler did not start in time")
+	}
+
+	close(release)
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("handler did not finish in time")
+	}
+
+	router.cleanupOnce()
+
+	router.mu.RLock()
+	_, ok := router.groups["idle"]
+	router.mu.RUnlock()
+	if !ok {
+		t.Fatalf("expected group to remain before idle TTL elapses")
+	}
+
+	time.Sleep(2 * cfg.GroupIdleTTL)
+	router.cleanupOnce()
+
+	router.mu.RLock()
+	_, ok = router.groups["idle"]
+	router.mu.RUnlock()
+	if ok {
+		t.Fatalf("expected idle group to be removed after cleanup")
+	}
+}
+
+func TestCloseWaitsForInFlightSenderWithoutPanicking(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.CleanupInterval = time.Hour
+
+	router := NewRouter(cfg)
+
+	gw := newTestGroupWorker(router, "close", 1)
+	router.mu.Lock()
+	router.groups["close"] = gw
+	router.mu.Unlock()
+
+	if !gw.tryAcquireSender() {
+		t.Fatalf("expected to acquire sender for test group")
+	}
+
+	closeDone := make(chan struct{})
+	go func() {
+		router.Close()
+		close(closeDone)
+	}()
+
+	select {
+	case <-closeDone:
+		t.Fatalf("router close returned before in-flight sender released")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	gw.releaseSender()
+
+	select {
+	case <-closeDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("router close did not finish after sender release")
+	}
+
+	if got := gw.queueState(); got != queueStateClosed {
+		t.Fatalf("expected group queue to be closed after router shutdown, got %v", got)
 	}
 }

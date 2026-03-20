@@ -28,6 +28,12 @@ type featureRecordResponse struct {
 	Feature featureRecord `json:"feature"`
 }
 
+type guildRoleOptionsResponse struct {
+	Status  string            `json:"status"`
+	GuildID string            `json:"guild_id"`
+	Roles   []guildRoleOption `json:"roles"`
+}
+
 func TestFeatureCatalogAndWorkspaceRoutes(t *testing.T) {
 	t.Parallel()
 
@@ -357,6 +363,112 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 	})
 }
 
+func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
+	t.Parallel()
+
+	t.Run("lists guild role options", func(t *testing.T) {
+		t.Parallel()
+
+		srv, _ := newControlTestServer(t)
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildRoles("g1",
+				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
+				&discordgo.Role{ID: "booster-role", Name: "Booster", Position: 9},
+				&discordgo.Role{ID: "target-role", Name: "Partner", Position: 3},
+			)
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/role-options", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /v1/guilds/g1/role-options status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[guildRoleOptionsResponse](t, rec)
+		if len(response.Roles) != 3 {
+			t.Fatalf("expected 3 role options, got %+v", response.Roles)
+		}
+		if response.Roles[0].ID != "booster-role" || response.Roles[1].ID != "target-role" || response.Roles[2].ID != "g1" {
+			t.Fatalf("expected roles sorted by descending position, got %+v", response.Roles)
+		}
+		if !response.Roles[2].IsDefault {
+			t.Fatalf("expected guild default role flagged, got %+v", response.Roles[2])
+		}
+	})
+
+	t.Run("auto role assignment blocks invalid target role", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.AutoRoleAssign = testBoolPtr(true)
+			cfg.Guilds[0].Roles.AutoAssignment.Enabled = true
+			cfg.Guilds[0].Roles.AutoAssignment.TargetRoleID = "target-role"
+			cfg.Guilds[0].Roles.AutoAssignment.RequiredRoles = []string{"level-role", "booster-role"}
+			cfg.Guilds[0].Roles.BoosterRole = "booster-role"
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed auto role config: %v", err)
+		}
+
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildRoles("g1",
+				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
+				&discordgo.Role{ID: "level-role", Name: "Level", Position: 8},
+				&discordgo.Role{ID: "booster-role", Name: "Booster", Position: 7},
+			)
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/auto_role_assignment", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET auto_role_assignment status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "invalid_target_role" {
+			t.Fatalf("expected invalid_target_role blocker, got %+v", response.Feature.Blockers)
+		}
+		if response.Feature.Details["booster_role_id"] != "booster-role" {
+			t.Fatalf("expected booster_role_id detail, got %+v", response.Feature.Details)
+		}
+		if response.Feature.Details["level_role_id"] != "level-role" {
+			t.Fatalf("expected level_role_id detail, got %+v", response.Feature.Details)
+		}
+	})
+
+	t.Run("permission mirror blocks invalid actor role", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.Safety.BotRolePermMirror = testBoolPtr(true)
+			cfg.Guilds[0].RuntimeConfig.BotRolePermMirrorActorRoleID = "actor-role"
+			cfg.Guilds[0].RuntimeConfig.DisableBotRolePermMirror = false
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed permission mirror config: %v", err)
+		}
+
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildRoles("g1",
+				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
+				&discordgo.Role{ID: "helper-role", Name: "Helper", Position: 4},
+			)
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/safety.bot_role_perm_mirror", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET safety.bot_role_perm_mirror status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "invalid_actor_role" {
+			t.Fatalf("expected invalid_actor_role blocker, got %+v", response.Feature.Blockers)
+		}
+	})
+}
+
 func decodeFeatureResponse[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 	t.Helper()
 
@@ -365,4 +477,15 @@ func decodeFeatureResponse[T any](t *testing.T, rec *httptest.ResponseRecorder) 
 		t.Fatalf("decode response: %v body=%q", err, rec.Body.String())
 	}
 	return out
+}
+
+func newTestDiscordSessionWithGuildRoles(guildID string, roles ...*discordgo.Role) *discordgo.Session {
+	session := &discordgo.Session{
+		State: discordgo.NewState(),
+	}
+	_ = session.State.GuildAdd(&discordgo.Guild{
+		ID:    guildID,
+		Roles: roles,
+	})
+	return session
 }

@@ -5,6 +5,7 @@ import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
+import { RolesPage } from "../pages/RolesPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { PartnerBoardProvider } from "../features/partner-board/PartnerBoardContext";
 import { PartnerBoardLayout } from "../features/partner-board/PartnerBoardLayout";
@@ -57,8 +58,12 @@ export function AppRoutes() {
           element={<LoggingCategoryPage />}
         />
         <Route
+          path="roles"
+          element={<RolesPage />}
+        />
+        <Route
           path="roles-members"
-          element={<FeatureCategoryPage areaId="roles-members" />}
+          element={<Navigate replace to={appRoutes.roles} />}
         />
         <Route
           path="maintenance"

@@ -552,6 +552,10 @@ func buildFeatureDetails(cfg *files.BotConfig, guildID string, def featureDefini
 				out["target_role_id"] = strings.TrimSpace(guild.Roles.AutoAssignment.TargetRoleID)
 				out["required_role_ids"] = slices.Clone(guild.Roles.AutoAssignment.RequiredRoles)
 				out["required_role_count"] = len(guild.Roles.AutoAssignment.RequiredRoles)
+				if len(guild.Roles.AutoAssignment.RequiredRoles) > 0 {
+					out["level_role_id"] = strings.TrimSpace(guild.Roles.AutoAssignment.RequiredRoles[0])
+				}
+				out["booster_role_id"] = strings.TrimSpace(guild.Roles.BoosterRole)
 			}
 		}
 	case "user_prune":
@@ -611,6 +615,16 @@ func buildFeatureReadiness(
 		if rc.DisableBotRolePermMirror {
 			return "blocked", []featureBlocker{{Code: "runtime_kill_switch", Message: "Runtime permission mirroring is disabled."}}
 		}
+		if guildID != "" {
+			actorRoleID := strings.TrimSpace(rc.BotRolePermMirrorActorRoleID)
+			if actorRoleID != "" {
+				if roleIndex, err := guildRoleOptionIndex(session, guildID); err == nil {
+					if _, ok := roleIndex[actorRoleID]; !ok {
+						return "blocked", []featureBlocker{{Code: "invalid_actor_role", Message: "Permission mirror actor role is no longer available in this server.", Field: "actor_role_id"}}
+					}
+				}
+			}
+		}
 	case "backfill.enabled":
 		channelID := strings.TrimSpace(rc.BackfillChannelID)
 		if guildID != "" {
@@ -647,6 +661,16 @@ func buildFeatureReadiness(
 				}
 				if len(auto.RequiredRoles) != 2 {
 					return "blocked", []featureBlocker{{Code: "invalid_required_roles", Message: "Auto assignment needs exactly two required roles in order.", Field: "required_role_ids"}}
+				}
+				if roleIndex, err := guildRoleOptionIndex(session, guildID); err == nil {
+					if _, ok := roleIndex[strings.TrimSpace(auto.TargetRoleID)]; !ok {
+						return "blocked", []featureBlocker{{Code: "invalid_target_role", Message: "Auto assignment target role is no longer available in this server.", Field: "target_role_id"}}
+					}
+					for _, roleID := range auto.RequiredRoles {
+						if _, ok := roleIndex[strings.TrimSpace(roleID)]; !ok {
+							return "blocked", []featureBlocker{{Code: "invalid_required_roles", Message: "Auto assignment required roles are no longer available in this server.", Field: "required_role_ids"}}
+						}
+					}
 				}
 			}
 		}

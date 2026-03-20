@@ -652,6 +652,13 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		}
 		s.handleGuildFeaturesList(w, guildID)
 		return
+	case len(tail) == 1 && tail[0] == "role-options":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleGuildRoleOptionsGet(w, guildID)
+		return
 	case len(tail) == 2 && tail[0] == "features":
 		switch r.Method {
 		case http.MethodGet:
