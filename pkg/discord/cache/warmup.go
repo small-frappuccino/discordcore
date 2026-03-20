@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -79,6 +80,18 @@ func DefaultWarmupConfig() WarmupConfig {
 
 // IntelligentWarmup performs cache warmup by loading persisted cache and fetching missing data
 func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *storage.Store, config WarmupConfig) error {
+	return IntelligentWarmupContext(context.Background(), session, cache, store, config)
+}
+
+// IntelligentWarmupContext performs cache warmup with cooperative cancellation checks.
+func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, cache *UnifiedCache, store *storage.Store, config WarmupConfig) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	startTime := time.Now()
 	log.ApplicationLogger().Info("🚀 Starting cache warmup (persistent preload + Discord backfill)...")
 
@@ -101,6 +114,9 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 	}
 
 	// Step 2: Determine which guilds to warmup
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	guildIDs := config.GuildIDs
 	if len(guildIDs) == 0 {
 		// Get all guilds the bot is in
@@ -119,9 +135,15 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 	// Step 3: Warmup each guild
 	var totalMembers, totalRoles, totalChannels, totalGuilds int
 	for _, guildID := range guildIDs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// Fetch missing guild data
 		if config.FetchMissingGuilds {
 			if err := warmupGuild(ws, cache, guildID); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup guild %s: %v", guildID, err))
 			} else {
 				totalGuilds++
@@ -132,6 +154,9 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		if config.FetchMissingRoles {
 			rolesCount, err := warmupGuildRoles(ws, cache, store, guildID)
 			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup roles for guild %s: %v", guildID, err))
 			} else {
 				totalRoles += rolesCount
@@ -142,6 +167,9 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 		if config.FetchMissingChannels {
 			channelsCount, err := warmupGuildChannels(ws, cache, guildID)
 			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup channels for guild %s: %v", guildID, err))
 			} else {
 				totalChannels += channelsCount
@@ -150,8 +178,11 @@ func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *s
 
 		// Fetch missing members (can be expensive, so we limit it)
 		if config.FetchMissingMembers {
-			membersCount, err := warmupGuildMembers(ws, cache, store, guildID, config.MaxMembersPerGuild)
+			membersCount, err := warmupGuildMembersContext(ctx, ws, cache, store, guildID, config.MaxMembersPerGuild)
 			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup members for guild %s: %v", guildID, err))
 			} else {
 				totalMembers += membersCount
@@ -231,6 +262,14 @@ func warmupGuildChannels(session warmupSession, cache *UnifiedCache, guildID str
 
 // warmupGuildMembers fetches members if missing from storage and caches them
 func warmupGuildMembers(session warmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
+	return warmupGuildMembersContext(context.Background(), session, cache, store, guildID, maxMembers)
+}
+
+func warmupGuildMembersContext(ctx context.Context, session warmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// Fetch members from Discord
 	// Use chunking for large guilds
 	after := ""
@@ -239,6 +278,9 @@ func warmupGuildMembers(session warmupSession, cache *UnifiedCache, store *stora
 	limit := 1000 // Discord API limit
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return cachedCount, err
+		}
 		if maxMembers > 0 && fetchedCount >= maxMembers {
 			break
 		}
@@ -260,6 +302,9 @@ func warmupGuildMembers(session warmupSession, cache *UnifiedCache, store *stora
 
 		// Process each member
 		for _, member := range members {
+			if err := ctx.Err(); err != nil {
+				return cachedCount, err
+			}
 			fetchedCount++
 
 			// Cache the member

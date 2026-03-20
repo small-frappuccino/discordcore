@@ -28,6 +28,7 @@ type botRuntimeOptions struct {
 	runtimeApplier       *runtimeapply.Manager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
+	startupBackground    *runtimeStartupBackgroundWorker
 }
 
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
@@ -101,20 +102,6 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		monitoringService.SetTaskRouterConfig(routerConfig)
 		runtime.monitoringService = monitoringService
 		unifiedCache = monitoringService.GetUnifiedCache()
-		if runtime.capabilities.warmup {
-			if unifiedCache != nil && unifiedCache.WasWarmedUpRecently(10*time.Minute) {
-				log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)", "botInstanceID", runtime.instanceID)
-			} else {
-				warmupConfig := cache.DefaultWarmupConfig()
-				warmupConfig.MaxMembersPerGuild = 500
-				if err := cache.IntelligentWarmup(runtime.session, unifiedCache, opts.store, warmupConfig); err != nil {
-					log.ApplicationLogger().Warn(
-						fmt.Sprintf("Intelligent warmup failed (continuing): %v", err),
-						"botInstanceID", runtime.instanceID,
-					)
-				}
-			}
-		}
 		if unifiedCache != nil {
 			runtime.persistStop = unifiedCache.SetPersistInterval(time.Hour)
 		}
@@ -219,7 +206,55 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
 	}
 
+	scheduleRuntimeWarmup(runtime, opts.store, opts.startupBackground)
 	return nil
+}
+
+var intelligentWarmupFn = cache.IntelligentWarmupContext
+
+func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, worker *runtimeStartupBackgroundWorker) {
+	if runtime == nil || runtime.session == nil || !runtime.capabilities.warmup || runtime.monitoringService == nil {
+		return
+	}
+
+	unifiedCache := runtime.monitoringService.GetUnifiedCache()
+	if unifiedCache == nil {
+		return
+	}
+	if unifiedCache.WasWarmedUpRecently(10 * time.Minute) {
+		log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)", "botInstanceID", runtime.instanceID)
+		return
+	}
+
+	warmupConfig := cache.DefaultWarmupConfig()
+	warmupConfig.MaxMembersPerGuild = 500
+	runWarmup := func(ctx context.Context) error {
+		return intelligentWarmupFn(ctx, runtime.session, unifiedCache, store, warmupConfig)
+	}
+
+	if worker == nil {
+		if err := runWarmup(context.Background()); err != nil {
+			log.ApplicationLogger().Warn(
+				fmt.Sprintf("Intelligent warmup failed (continuing): %v", err),
+				"botInstanceID", runtime.instanceID,
+			)
+		}
+		return
+	}
+
+	log.ApplicationLogger().Info("Scheduling cache warmup in background", "botInstanceID", runtime.instanceID)
+	worker.Go(func(ctx context.Context) error {
+		if err := runWarmup(ctx); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			log.ApplicationLogger().Warn(
+				fmt.Sprintf("Intelligent warmup failed (continuing): %v", err),
+				"botInstanceID", runtime.instanceID,
+			)
+		}
+		return nil
+	})
 }
 
 func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {

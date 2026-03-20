@@ -243,7 +243,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		defer cancel()
 		for i := len(runtimeOrder) - 1; i >= 0; i-- {
 			runtime := runtimeOrder[i]
-			for _, err := range shutdownBotRuntime(runtime, ctx) {
+			for _, err := range shutdownBotRuntimeFn(runtime, ctx) {
 				log.ErrorLoggerRaw().Error("Bot runtime cleanup failed during startup rollback", "botInstanceID", runtime.instanceID, "err", err)
 			}
 		}
@@ -263,19 +263,24 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 			}
 		}
 	}()
+	startupBackgroundWorker := newRuntimeStartupBackgroundWorker(len(botInstances))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := startupBackgroundWorker.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+			log.ApplicationLogger().Warn("Runtime startup background tasks did not finish cleanly", "err", err)
+		}
+	}()
 
 	configSnapshot := configManager.Config()
 	for _, instance := range botInstances {
 		runtimeCapabilities[instance.ID] = resolveBotRuntimeCapabilities(configSnapshot, instance.ID, defaultBotInstanceID)
 	}
 
-	for _, instance := range botInstances {
-		runtime, openErr := openBotRuntime(instance, runtimeCapabilities[instance.ID])
-		if openErr != nil {
-			return openErr
-		}
-		runtimes[instance.ID] = runtime
-		runtimeOrder = append(runtimeOrder, runtime)
+	var openErr error
+	runtimes, runtimeOrder, openErr = openBotRuntimes(botInstances, runtimeCapabilities)
+	if openErr != nil {
+		return openErr
 	}
 
 	if err := validateConfiguredBotInstances(configManager.Config(), runtimes, defaultBotInstanceID); err != nil {
@@ -332,19 +337,18 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerSyncDispatcher)
 
-	for _, runtime := range runtimeOrder {
-		if err := initializeBotRuntime(runtime, botRuntimeOptions{
-			defaultBotInstanceID: defaultBotInstanceID,
-			runtimeCount:         len(runtimeOrder),
-			configManager:        configManager,
-			store:                store,
-			errorHandler:         errorHandler,
-			runtimeApplier:       runtimeApplier,
-			partnerBoardService:  partnerBoardAppService,
-			partnerSyncExecutor:  partnerSyncDispatcher,
-		}); err != nil {
-			return err
-		}
+	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
+		defaultBotInstanceID: defaultBotInstanceID,
+		runtimeCount:         len(runtimeOrder),
+		configManager:        configManager,
+		store:                store,
+		errorHandler:         errorHandler,
+		runtimeApplier:       runtimeApplier,
+		partnerBoardService:  partnerBoardAppService,
+		partnerSyncExecutor:  partnerSyncDispatcher,
+		startupBackground:    startupBackgroundWorker,
+	}); err != nil {
+		return err
 	}
 
 	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
@@ -436,6 +440,12 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	log.ApplicationLogger().Info(fmt.Sprintf("🛑 Stopping %s...", appName))
 	log.GlobalLogger.Sync()
 
+	backgroundShutdownCtx, backgroundShutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := startupBackgroundWorker.Shutdown(backgroundShutdownCtx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+		log.ApplicationLogger().Warn("Runtime startup background tasks did not finish before shutdown", "err", err)
+	}
+	backgroundShutdownCancel()
+
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeoutCause(context.Background(), 30*time.Second, fmt.Errorf("application shutdown"))
 	defer shutdownCancel()
@@ -443,7 +453,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	for i := len(runtimeOrder) - 1; i >= 0; i-- {
 		runtime := runtimeOrder[i]
-		for _, err := range shutdownBotRuntime(runtime, shutdownCtx) {
+		for _, err := range shutdownBotRuntimeFn(runtime, shutdownCtx) {
 			log.ErrorLoggerRaw().Error("Bot runtime shutdown failed", "botInstanceID", runtime.instanceID, "err", err)
 			shutdownErrs = append(shutdownErrs, err)
 		}
