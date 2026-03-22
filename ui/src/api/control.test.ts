@@ -121,6 +121,148 @@ describe("ControlApiClient feature routes", () => {
     expect(headers.get("X-CSRF-Token")).toBe("csrf-token");
   });
 
+  it("patches the commands channel with the expected payload", async () => {
+    const updatedFeature: FeatureRecord = {
+      id: "services.commands",
+      category: "services",
+      label: "Commands",
+      description: "Route commands for this server.",
+      scope: "guild",
+      supports_guild_override: true,
+      override_state: "enabled",
+      effective_enabled: true,
+      effective_source: "guild",
+      readiness: "ready",
+      blockers: [],
+      details: {
+        channel_id: "bot-commands",
+      },
+      editable_fields: ["enabled", "channel_id"],
+    };
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, _init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        if (url.endsWith("/auth/me")) {
+          return jsonResponse({
+            status: "ok",
+            user: {
+              id: "user-1",
+              username: "alice",
+            },
+            scopes: ["identify"],
+            csrf_token: "csrf-token",
+            expires_at: "2099-01-01T00:00:00Z",
+          });
+        }
+
+        return jsonResponse({
+          status: "ok",
+          guild_id: "guild-1",
+          feature: updatedFeature,
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const response = await client.patchGuildFeature("guild-1", "services.commands", {
+      channel_id: "bot-commands",
+    });
+
+    expect(response.feature).toEqual(updatedFeature);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/v1/guilds/guild-1/features/services.commands",
+      {
+        method: "PATCH",
+        headers: expect.objectContaining({
+          get: expect.any(Function),
+        }),
+        credentials: "include",
+        body: JSON.stringify({
+          channel_id: "bot-commands",
+        }),
+      },
+    );
+  });
+
+  it("patches admin command roles with the expected payload", async () => {
+    const updatedFeature: FeatureRecord = {
+      id: "services.admin_commands",
+      category: "services",
+      label: "Admin commands",
+      description: "Privileged command access for this server.",
+      scope: "guild",
+      supports_guild_override: true,
+      override_state: "enabled",
+      effective_enabled: true,
+      effective_source: "guild",
+      readiness: "ready",
+      blockers: [],
+      details: {
+        allowed_role_ids: ["role-guard", "role-target"],
+      },
+      editable_fields: ["enabled", "allowed_role_ids"],
+    };
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, _init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        if (url.endsWith("/auth/me")) {
+          return jsonResponse({
+            status: "ok",
+            user: {
+              id: "user-1",
+              username: "alice",
+            },
+            scopes: ["identify"],
+            csrf_token: "csrf-token",
+            expires_at: "2099-01-01T00:00:00Z",
+          });
+        }
+
+        return jsonResponse({
+          status: "ok",
+          guild_id: "guild-1",
+          feature: updatedFeature,
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const response = await client.patchGuildFeature(
+      "guild-1",
+      "services.admin_commands",
+      {
+        allowed_role_ids: ["role-guard", "role-target"],
+      },
+    );
+
+    expect(response.feature).toEqual(updatedFeature);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/v1/guilds/guild-1/features/services.admin_commands",
+      {
+        method: "PATCH",
+        headers: expect.objectContaining({
+          get: expect.any(Function),
+        }),
+        credentials: "include",
+        body: JSON.stringify({
+          allowed_role_ids: ["role-guard", "role-target"],
+        }),
+      },
+    );
+  });
+
   it("loads guild role options from /v1/guilds/{guild_id}/role-options", async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({

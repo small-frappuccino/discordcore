@@ -1149,6 +1149,62 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("opens Commands on a dedicated route and keeps the primary workspace focused on the two command tasks", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/commands");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Commands", level: 1 });
+    await screen.findByRole("heading", { name: "Command routing", level: 2 });
+
+    expect(window.location.pathname).toBe("/dashboard/commands");
+    expect(
+      await screen.findByRole("button", { name: "Configure command channel" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Configure admin access" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Monitoring")).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Feature" })).not.toBeInTheDocument();
+  });
+
+  it("keeps command setup inside a drawer with pickers first and raw IDs behind Advanced", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/commands");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Commands", level: 1 });
+    await screen.findByRole("button", { name: "Configure command channel" });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure command channel" }),
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Configure commands" });
+    expect(dialog).toBeVisible();
+    expect(screen.getByLabelText("Command channel")).toBeVisible();
+    const advancedDetails = screen
+      .getByText("Advanced", { selector: "summary" })
+      .closest("details");
+    expect(advancedDetails).not.toBeNull();
+    expect(advancedDetails).not.toHaveAttribute("open");
+
+    await userEvent.click(screen.getByText("Advanced", { selector: "summary" }));
+    expect(advancedDetails).toHaveAttribute("open");
+    expect(
+      screen.getByLabelText("Command channel ID fallback"),
+    ).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Configure commands" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens the dedicated commands workspace and saves a command channel through the drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
