@@ -1,4 +1,8 @@
-import type { FeatureRecord, GuildRoleOption } from "../../api/control";
+import type {
+  FeatureRecord,
+  GuildMemberOption,
+  GuildRoleOption,
+} from "../../api/control";
 
 interface AutoRoleFeatureDetails {
   configEnabled: boolean;
@@ -155,7 +159,7 @@ export function summarizeAdvancedRoleSignal(feature: FeatureRecord) {
     case "runtime_disabled":
       return "The runtime watch flag is turned off.";
     case "missing_user_id":
-      return "Enter the user ID that should be monitored.";
+      return "Choose the member that should be monitored.";
     case "runtime_kill_switch":
       return "Permission mirroring is disabled at runtime.";
     case "invalid_actor_role":
@@ -174,6 +178,33 @@ export function formatRoleOptionLabel(role: GuildRoleOption) {
     return `${name} (managed)`;
   }
   return name;
+}
+
+export function formatMemberOptionLabel(member: GuildMemberOption) {
+  const displayName = member.display_name.trim();
+  const username = member.username.trim();
+  const suffix =
+    username !== "" && username !== displayName ? ` (@${username})` : "";
+  const botSuffix = member.bot ? " • Bot" : "";
+  return `${displayName}${suffix}${botSuffix}`;
+}
+
+export function formatMemberValue(
+  memberId: string,
+  memberOptions: GuildMemberOption[],
+  emptyLabel = "Not configured",
+) {
+  const normalizedMemberId = memberId.trim();
+  if (normalizedMemberId === "") {
+    return emptyLabel;
+  }
+
+  const option = memberOptions.find((item) => item.id === normalizedMemberId);
+  if (option === undefined) {
+    return "Member no longer available";
+  }
+
+  return formatMemberOptionLabel(option);
 }
 
 export function countEnabledFeatures(features: FeatureRecord[]) {

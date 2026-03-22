@@ -34,6 +34,12 @@ type guildRoleOptionsResponse struct {
 	Roles   []guildRoleOption `json:"roles"`
 }
 
+type guildMemberOptionsResponse struct {
+	Status  string              `json:"status"`
+	GuildID string              `json:"guild_id"`
+	Members []guildMemberOption `json:"members"`
+}
+
 func TestFeatureCatalogAndWorkspaceRoutes(t *testing.T) {
 	t.Parallel()
 
@@ -395,6 +401,62 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 	})
 
+	t.Run("lists guild member options with selected member pinned", func(t *testing.T) {
+		t.Parallel()
+
+		srv, _ := newControlTestServer(t)
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildMembers("g1",
+				&discordgo.Member{
+					GuildID: "g1",
+					Nick:    "Alice Alpha",
+					User: &discordgo.User{
+						ID:       "user-alice",
+						Username: "alice",
+					},
+				},
+				&discordgo.Member{
+					GuildID: "g1",
+					Nick:    "Bob",
+					User: &discordgo.User{
+						ID:       "user-bob",
+						Username: "bob",
+					},
+				},
+				&discordgo.Member{
+					GuildID: "g1",
+					Nick:    "Carol",
+					User: &discordgo.User{
+						ID:       "user-carol",
+						Username: "carol",
+					},
+				},
+			)
+		})
+
+		rec := performHandlerJSONRequest(
+			t,
+			srv.httpServer.Handler,
+			http.MethodGet,
+			"/v1/guilds/g1/member-options?query=ali&selected_id=user-bob&limit=3",
+			nil,
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /v1/guilds/g1/member-options status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[guildMemberOptionsResponse](t, rec)
+		if len(response.Members) != 2 {
+			t.Fatalf("expected 2 member options, got %+v", response.Members)
+		}
+		if response.Members[0].ID != "user-bob" {
+			t.Fatalf("expected selected member first, got %+v", response.Members)
+		}
+		if response.Members[1].ID != "user-alice" {
+			t.Fatalf("expected query match after selected member, got %+v", response.Members)
+		}
+	})
+
 	t.Run("auto role assignment blocks invalid target role", func(t *testing.T) {
 		t.Parallel()
 
@@ -487,5 +549,23 @@ func newTestDiscordSessionWithGuildRoles(guildID string, roles ...*discordgo.Rol
 		ID:    guildID,
 		Roles: roles,
 	})
+	return session
+}
+
+func newTestDiscordSessionWithGuildMembers(guildID string, members ...*discordgo.Member) *discordgo.Session {
+	session := &discordgo.Session{
+		State: discordgo.NewState(),
+	}
+	_ = session.State.GuildAdd(&discordgo.Guild{
+		ID:      guildID,
+		Members: members,
+	})
+	for _, member := range members {
+		if member == nil {
+			continue
+		}
+		member.GuildID = guildID
+		_ = session.State.MemberAdd(member)
+	}
 	return session
 }

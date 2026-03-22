@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import type { FeatureRecord, GuildRoleOption, PartnerBoardConfig } from "./api/control";
+import type {
+  FeatureRecord,
+  GuildMemberOption,
+  GuildRoleOption,
+  PartnerBoardConfig,
+} from "./api/control";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,6 +75,42 @@ function createFetchMock() {
         position: 0,
         managed: false,
         is_default: true,
+      },
+    ],
+  };
+  const memberOptionsByGuild: Record<string, GuildMemberOption[]> = {
+    "guild-1": [
+      {
+        id: "user-alice",
+        display_name: "Alice Alpha",
+        username: "alice",
+        bot: false,
+      },
+      {
+        id: "user-bob",
+        display_name: "Bob Beta",
+        username: "bob",
+        bot: false,
+      },
+      {
+        id: "user-carol",
+        display_name: "Carol Gamma",
+        username: "carol",
+        bot: false,
+      },
+      {
+        id: "bot-helper",
+        display_name: "Helper Bot",
+        username: "helperbot",
+        bot: true,
+      },
+    ],
+    "guild-2": [
+      {
+        id: "user-delta",
+        display_name: "Delta",
+        username: "delta",
+        bot: false,
       },
     ],
   };
@@ -527,6 +568,43 @@ function createFetchMock() {
       }
     }
 
+    if (url.includes("/member-options")) {
+      const parsed = new URL(url, "http://localhost");
+      const match = parsed.pathname.match(/\/v1\/guilds\/([^/]+)\/member-options$/);
+      if (match) {
+        const guildID = decodeURIComponent(match[1] ?? "");
+        const query = (parsed.searchParams.get("query") ?? "").trim().toLowerCase();
+        const selectedID = (parsed.searchParams.get("selected_id") ?? "").trim();
+        const limit = Number(parsed.searchParams.get("limit") ?? "25");
+        const allMembers = memberOptionsByGuild[guildID] ?? [];
+
+        const selectedMember =
+          selectedID === ""
+            ? null
+            : allMembers.find((member) => member.id === selectedID) ?? null;
+        const matches = allMembers.filter((member) => {
+          if (query === "") {
+            return true;
+          }
+          return (
+            member.display_name.toLowerCase().startsWith(query) ||
+            member.username.toLowerCase().startsWith(query) ||
+            member.id.toLowerCase().startsWith(query)
+          );
+        });
+        const members = [
+          ...(selectedMember === null ? [] : [selectedMember]),
+          ...matches.filter((member) => member.id !== selectedID),
+        ].slice(0, Number.isFinite(limit) && limit > 0 ? limit : 25);
+
+        return jsonResponse({
+          status: "ok",
+          guild_id: guildID,
+          members,
+        });
+      }
+    }
+
     if (url.includes("/features/") && init?.method === "PATCH") {
       const match = url.match(/\/v1\/guilds\/([^/]+)\/features\/([^/?]+)/);
       if (match) {
@@ -926,6 +1004,65 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Members").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Level Five + Boosters").length).toBeGreaterThan(0);
+  });
+
+  it("uses a member picker for presence watch user instead of a raw user ID field", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/roles");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Roles", level: 1 });
+    await screen.findByRole("heading", {
+      name: "Automatic role assignment",
+      level: 2,
+    });
+    const advancedControlsSummary =
+      screen
+        .getAllByText("Advanced controls")
+        .find((element) => element.closest("summary") !== null)
+        ?.closest("summary") ?? null;
+    expect(advancedControlsSummary).not.toBeNull();
+    await userEvent.click(advancedControlsSummary!);
+
+    const configureButtons = await screen.findAllByRole("button", {
+      name: "Configure",
+    });
+    await userEvent.click(configureButtons[1]!);
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure user presence watch" }),
+    ).toBeVisible();
+    expect(screen.queryByLabelText("User ID")).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("Search members"), "car");
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Carol Gamma (@carol)" })).toBeInTheDocument();
+    });
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Member"),
+      "user-carol",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save user watch" }));
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "presence_watch.user",
+          payload: {
+            user_id: "user-carol",
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure user presence watch" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a generic category workspace from the sidebar and updates feature state inline", async () => {

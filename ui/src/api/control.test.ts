@@ -153,4 +153,43 @@ describe("ControlApiClient feature routes", () => {
       body: undefined,
     });
   });
+
+  it("loads guild member options with query parameters", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: "ok",
+        guild_id: "guild-1",
+        members: [
+          {
+            id: "user-1",
+            display_name: "Alice",
+            username: "alice",
+            bot: false,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const response = await client.listGuildMemberOptions("guild-1", {
+      query: "ali",
+      selectedId: "user-2",
+      limit: 10,
+    });
+
+    expect(response.members).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/guilds/guild-1/member-options?query=ali&selected_id=user-2&limit=10",
+      {
+        method: "GET",
+        headers: expect.any(Headers),
+        credentials: "include",
+        body: undefined,
+      },
+    );
+  });
 });

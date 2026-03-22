@@ -189,6 +189,19 @@ export interface GuildRoleOptionsResponse {
   roles: GuildRoleOption[];
 }
 
+export interface GuildMemberOption {
+  id: string;
+  display_name: string;
+  username: string;
+  bot: boolean;
+}
+
+export interface GuildMemberOptionsResponse {
+  status: string;
+  guild_id: string;
+  members: GuildMemberOption[];
+}
+
 export interface DiscordOAuthStatusResponse {
   status: string;
   oauth_configured: boolean;
@@ -363,6 +376,38 @@ export class ControlApiClient {
     return this.request<GuildRoleOptionsResponse>(
       "GET",
       `/v1/guilds/${encodeURIComponent(guildId)}/role-options`,
+    );
+  }
+
+  async listGuildMemberOptions(
+    guildId: string,
+    options: {
+      query?: string;
+      selectedId?: string;
+      limit?: number;
+    } = {},
+  ): Promise<GuildMemberOptionsResponse> {
+    const params = new URLSearchParams();
+    const query = options.query?.trim() ?? "";
+    const selectedId = options.selectedId?.trim() ?? "";
+    if (query !== "") {
+      params.set("query", query);
+    }
+    if (selectedId !== "") {
+      params.set("selected_id", selectedId);
+    }
+    if (
+      typeof options.limit === "number" &&
+      Number.isFinite(options.limit) &&
+      options.limit > 0
+    ) {
+      params.set("limit", String(Math.trunc(options.limit)));
+    }
+
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.request<GuildMemberOptionsResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/member-options${suffix}`,
     );
   }
 

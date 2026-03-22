@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import type { FeatureRecord, GuildRoleOption } from "../api/control";
+import type {
+  FeatureRecord,
+  GuildMemberOption,
+  GuildRoleOption,
+} from "../api/control";
 import { appRoutes } from "../app/routes";
 import {
   AlertBanner,
@@ -26,6 +30,8 @@ import {
   canEditPresenceWatchBot,
   canEditPresenceWatchUser,
   countEnabledFeatures,
+  formatMemberOptionLabel,
+  formatMemberValue,
   formatRequirementRolesValue,
   formatRoleOptionLabel,
   formatRoleValue,
@@ -38,6 +44,7 @@ import {
 } from "../features/features/roles";
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
+import { useGuildMemberOptions } from "../features/features/useGuildMemberOptions";
 import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 
 type RolesDrawerKind =
@@ -74,7 +81,14 @@ export function RolesPage() {
   const [boosterRoleDraft, setBoosterRoleDraft] = useState("");
   const [watchBotDraft, setWatchBotDraft] = useState("enabled");
   const [userIdDraft, setUserIdDraft] = useState("");
+  const [memberSearchDraft, setMemberSearchDraft] = useState("");
   const [actorRoleDraft, setActorRoleDraft] = useState("");
+  const memberOptions = useGuildMemberOptions({
+    enabled: drawerState?.featureId === "presence_watch.user",
+    query: memberSearchDraft,
+    selectedMemberId:
+      drawerState?.featureId === "presence_watch.user" ? userIdDraft : "",
+  });
 
   if (definition === null) {
     return null;
@@ -108,7 +122,11 @@ export function RolesPage() {
   const rolePickerUnavailable = roleOptions.notice !== null || roleOptions.roles.length === 0;
 
   async function handleRefreshRoles() {
-    await Promise.all([workspace.refresh(), roleOptions.refresh()]);
+    await Promise.all([
+      workspace.refresh(),
+      roleOptions.refresh(),
+      memberOptions.refresh(),
+    ]);
   }
 
   async function handleSetFeatureEnabled(
@@ -170,6 +188,7 @@ export function RolesPage() {
       case "presence_watch.user": {
         const details = getPresenceWatchUserDetails(feature);
         setUserIdDraft(details.userId);
+        setMemberSearchDraft("");
         setDrawerState({
           featureId: feature.id,
         });
@@ -196,6 +215,7 @@ export function RolesPage() {
     setBoosterRoleDraft("");
     setWatchBotDraft("enabled");
     setUserIdDraft("");
+    setMemberSearchDraft("");
     setActorRoleDraft("");
     mutation.clearNotice();
   }
@@ -793,15 +813,21 @@ export function RolesPage() {
               boosterRoleDraft,
               watchBotDraft,
               userIdDraft,
+              memberSearchDraft,
               actorRoleDraft,
+              memberOptions: memberOptions.members,
+              memberLookupLoading: memberOptions.loading,
+              memberLookupNotice: memberOptions.notice,
               setConfigEnabledDraft,
               setTargetRoleDraft,
               setLevelRoleDraft,
               setBoosterRoleDraft,
               setWatchBotDraft,
               setUserIdDraft,
+              setMemberSearchDraft,
               setActorRoleDraft,
               closeDrawer,
+              refreshMemberOptions: memberOptions.refresh,
               handleSaveAutoRole,
               handleSavePresenceWatchBot,
               handleSavePresenceWatchUser,
@@ -825,15 +851,21 @@ interface RenderDrawerBodyProps {
   boosterRoleDraft: string;
   watchBotDraft: string;
   userIdDraft: string;
+  memberSearchDraft: string;
   actorRoleDraft: string;
+  memberOptions: GuildMemberOption[];
+  memberLookupLoading: boolean;
+  memberLookupNotice: { tone: "info" | "success" | "error"; message: string } | null;
   setConfigEnabledDraft: (value: string) => void;
   setTargetRoleDraft: (value: string) => void;
   setLevelRoleDraft: (value: string) => void;
   setBoosterRoleDraft: (value: string) => void;
   setWatchBotDraft: (value: string) => void;
   setUserIdDraft: (value: string) => void;
+  setMemberSearchDraft: (value: string) => void;
   setActorRoleDraft: (value: string) => void;
   closeDrawer: () => void;
+  refreshMemberOptions: () => Promise<void>;
   handleSaveAutoRole: () => Promise<void>;
   handleSavePresenceWatchBot: () => Promise<void>;
   handleSavePresenceWatchUser: () => Promise<void>;
@@ -851,15 +883,21 @@ function renderDrawerBody({
   boosterRoleDraft,
   watchBotDraft,
   userIdDraft,
+  memberSearchDraft,
   actorRoleDraft,
+  memberOptions,
+  memberLookupLoading,
+  memberLookupNotice,
   setConfigEnabledDraft,
   setTargetRoleDraft,
   setLevelRoleDraft,
   setBoosterRoleDraft,
   setWatchBotDraft,
   setUserIdDraft,
+  setMemberSearchDraft,
   setActorRoleDraft,
   closeDrawer,
+  refreshMemberOptions,
   handleSaveAutoRole,
   handleSavePresenceWatchBot,
   handleSavePresenceWatchUser,
@@ -1046,22 +1084,81 @@ function renderDrawerBody({
               label: "Current signal",
               value: summarizeAdvancedRoleSignal(selectedFeature),
             },
+            {
+              label: "Current member",
+              value: formatMemberValue(userIdDraft, memberOptions),
+            },
           ]}
         />
 
-        <label className="field-stack">
-          <span className="field-label">User ID</span>
-          <input
-            aria-label="User ID"
-            value={userIdDraft}
-            onChange={(event) => setUserIdDraft(event.target.value)}
-            placeholder="Discord user ID"
-          />
-          <span className="meta-note">
-            This stays advanced for now. The future version can replace this
-            field with a member picker.
-          </span>
-        </label>
+        <div className="field-grid roles-form-grid">
+          <label className="field-stack">
+            <span className="field-label">Search members</span>
+            <input
+              aria-label="Search members"
+              value={memberSearchDraft}
+              onChange={(event) => setMemberSearchDraft(event.target.value)}
+              placeholder="Search by username, nickname, or user ID"
+            />
+            <span className="meta-note">
+              Type to narrow the server member list without exposing raw IDs in
+              the primary control.
+            </span>
+          </label>
+
+          <label className="field-stack">
+            <span className="field-label">Member</span>
+            <select
+              aria-label="Member"
+              value={userIdDraft}
+              disabled={memberLookupLoading || memberOptions.length === 0}
+              onChange={(event) => setUserIdDraft(event.target.value)}
+            >
+              <option value="">
+                {memberLookupLoading
+                  ? "Loading members..."
+                  : memberOptions.length === 0
+                    ? "No matching members"
+                    : "No member selected"}
+              </option>
+              {memberOptions.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {formatMemberOptionLabel(member)}
+                </option>
+              ))}
+            </select>
+            <span className="meta-note">
+              The selected member stays available while you refine the search.
+            </span>
+          </label>
+        </div>
+
+        {memberLookupNotice ? (
+          <div className="surface-subsection">
+            <p className="section-label">Member lookup unavailable</p>
+            <p className="meta-note">{memberLookupNotice.message}</p>
+            <div className="sidebar-actions">
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={memberLookupLoading}
+                onClick={() => void refreshMemberOptions()}
+              >
+                Retry member lookup
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {!memberLookupNotice && !memberLookupLoading && memberOptions.length === 0 ? (
+          <div className="surface-subsection">
+            <p className="section-label">No matches</p>
+            <p className="meta-note">
+              Adjust the search text to find a different member from the
+              selected server.
+            </p>
+          </div>
+        ) : null}
 
         <div className="drawer-actions">
           <button

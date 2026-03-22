@@ -3,23 +3,26 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type {
   FeatureCatalogEntry,
   FeatureRecord,
+  GuildMemberOption,
   FeatureWorkspaceResponse,
   GuildRoleOption,
 } from "../../api/control";
 import { useFeatureCatalog } from "./useFeatureCatalog";
 import { useFeatureMutation } from "./useFeatureMutation";
+import { useGuildMemberOptions } from "./useGuildMemberOptions";
 import { useGuildRoleOptions } from "./useGuildRoleOptions";
 import { useFeatureWorkspace } from "./useFeatureWorkspace";
 
 let mockDashboardSession: {
   authState: string;
-    client: {
-      getFeatureCatalog: ReturnType<typeof vi.fn>;
-      listGlobalFeatures: ReturnType<typeof vi.fn>;
-      listGuildFeatures: ReturnType<typeof vi.fn>;
-      listGuildRoleOptions: ReturnType<typeof vi.fn>;
-      patchGlobalFeature: ReturnType<typeof vi.fn>;
-      patchGuildFeature: ReturnType<typeof vi.fn>;
+      client: {
+        getFeatureCatalog: ReturnType<typeof vi.fn>;
+        listGlobalFeatures: ReturnType<typeof vi.fn>;
+        listGuildFeatures: ReturnType<typeof vi.fn>;
+        listGuildMemberOptions: ReturnType<typeof vi.fn>;
+        listGuildRoleOptions: ReturnType<typeof vi.fn>;
+        patchGlobalFeature: ReturnType<typeof vi.fn>;
+        patchGuildFeature: ReturnType<typeof vi.fn>;
     };
   selectedGuildID: string;
 };
@@ -70,6 +73,7 @@ describe("feature hooks", () => {
         getFeatureCatalog: vi.fn(),
         listGlobalFeatures: vi.fn(),
         listGuildFeatures: vi.fn(),
+        listGuildMemberOptions: vi.fn(),
         listGuildRoleOptions: vi.fn(),
         patchGlobalFeature: vi.fn(),
         patchGuildFeature: vi.fn(),
@@ -199,6 +203,44 @@ describe("feature hooks", () => {
 
     expect(mockDashboardSession.client.listGuildRoleOptions).toHaveBeenCalledWith(
       "guild-1",
+    );
+    expect(result.current.notice).toBeNull();
+  });
+
+  it("loads guild member options for the selected server", async () => {
+    const members: GuildMemberOption[] = [
+      {
+        id: "user-1",
+        display_name: "Alice",
+        username: "alice",
+        bot: false,
+      },
+    ];
+    mockDashboardSession.client.listGuildMemberOptions.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      members,
+    });
+
+    const { result } = renderHook(() =>
+      useGuildMemberOptions({
+        enabled: true,
+        query: "ali",
+        selectedMemberId: "user-2",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.members).toEqual(members);
+    });
+
+    expect(mockDashboardSession.client.listGuildMemberOptions).toHaveBeenCalledWith(
+      "guild-1",
+      {
+        query: "ali",
+        selectedId: "user-2",
+        limit: 25,
+      },
     );
     expect(result.current.notice).toBeNull();
   });
