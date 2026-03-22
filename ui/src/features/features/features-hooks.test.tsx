@@ -3,12 +3,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type {
   FeatureCatalogEntry,
   FeatureRecord,
+  GuildChannelOption,
   GuildMemberOption,
   FeatureWorkspaceResponse,
   GuildRoleOption,
 } from "../../api/control";
 import { useFeatureCatalog } from "./useFeatureCatalog";
 import { useFeatureMutation } from "./useFeatureMutation";
+import { useGuildChannelOptions } from "./useGuildChannelOptions";
 import { useGuildMemberOptions } from "./useGuildMemberOptions";
 import { useGuildRoleOptions } from "./useGuildRoleOptions";
 import { useFeatureWorkspace } from "./useFeatureWorkspace";
@@ -18,6 +20,7 @@ let mockDashboardSession: {
       client: {
         getFeatureCatalog: ReturnType<typeof vi.fn>;
         listGlobalFeatures: ReturnType<typeof vi.fn>;
+        listGuildChannelOptions: ReturnType<typeof vi.fn>;
         listGuildFeatures: ReturnType<typeof vi.fn>;
         listGuildMemberOptions: ReturnType<typeof vi.fn>;
         listGuildRoleOptions: ReturnType<typeof vi.fn>;
@@ -72,6 +75,7 @@ describe("feature hooks", () => {
       client: {
         getFeatureCatalog: vi.fn(),
         listGlobalFeatures: vi.fn(),
+        listGuildChannelOptions: vi.fn(),
         listGuildFeatures: vi.fn(),
         listGuildMemberOptions: vi.fn(),
         listGuildRoleOptions: vi.fn(),
@@ -204,6 +208,41 @@ describe("feature hooks", () => {
     expect(mockDashboardSession.client.listGuildRoleOptions).toHaveBeenCalledWith(
       "guild-1",
     );
+    expect(result.current.notice).toBeNull();
+  });
+
+  it("loads guild channel options for the selected server", async () => {
+    const channels: GuildChannelOption[] = [
+      {
+        id: "channel-a",
+        name: "bot-commands",
+        display_name: "#bot-commands",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "channel-v",
+        name: "Voice",
+        display_name: "Voice",
+        kind: "voice",
+        supports_message_route: false,
+      },
+    ];
+    mockDashboardSession.client.listGuildChannelOptions.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      channels,
+    });
+
+    const { result } = renderHook(() => useGuildChannelOptions());
+
+    await waitFor(() => {
+      expect(result.current.channels).toEqual(channels);
+    });
+
+    expect(
+      mockDashboardSession.client.listGuildChannelOptions,
+    ).toHaveBeenCalledWith("guild-1");
     expect(result.current.notice).toBeNull();
   });
 

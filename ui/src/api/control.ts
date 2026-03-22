@@ -183,10 +183,26 @@ export interface GuildRoleOption {
   is_default: boolean;
 }
 
+export interface GuildChannelOption {
+  id: string;
+  name: string;
+  display_name: string;
+  kind: string;
+  parent_id?: string;
+  parent_name?: string;
+  supports_message_route: boolean;
+}
+
 export interface GuildRoleOptionsResponse {
   status: string;
   guild_id: string;
   roles: GuildRoleOption[];
+}
+
+export interface GuildChannelOptionsResponse {
+  status: string;
+  guild_id: string;
+  channels: GuildChannelOption[];
 }
 
 export interface GuildMemberOption {
@@ -376,6 +392,15 @@ export class ControlApiClient {
     return this.request<GuildRoleOptionsResponse>(
       "GET",
       `/v1/guilds/${encodeURIComponent(guildId)}/role-options`,
+    );
+  }
+
+  async listGuildChannelOptions(
+    guildId: string,
+  ): Promise<GuildChannelOptionsResponse> {
+    return this.request<GuildChannelOptionsResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/channel-options`,
     );
   }
 

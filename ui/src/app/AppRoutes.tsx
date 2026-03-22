@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { appRoutes } from "./routes";
 import { DashboardLayout } from "../pages/DashboardLayout";
+import { CommandsPage } from "../pages/CommandsPage";
 import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
@@ -47,7 +48,7 @@ export function AppRoutes() {
         </Route>
         <Route
           path="commands"
-          element={<FeatureCategoryPage areaId="commands" />}
+          element={<CommandsPage />}
         />
         <Route
           path="moderation"

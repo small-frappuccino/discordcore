@@ -154,6 +154,39 @@ describe("ControlApiClient feature routes", () => {
     });
   });
 
+  it("loads guild channel options from /v1/guilds/{guild_id}/channel-options", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: "ok",
+        guild_id: "guild-1",
+        channels: [
+          {
+            id: "channel-1",
+            name: "bot-commands",
+            display_name: "#bot-commands",
+            kind: "text",
+            supports_message_route: true,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const response = await client.listGuildChannelOptions("guild-1");
+
+    expect(response.channels).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith("/v1/guilds/guild-1/channel-options", {
+      method: "GET",
+      headers: expect.any(Headers),
+      credentials: "include",
+      body: undefined,
+    });
+  });
+
   it("loads guild member options with query parameters", async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({

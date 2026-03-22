@@ -833,6 +833,91 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.commands-module-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commands-module-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.commands-module-head,
+.commands-module-copy,
+.commands-role-picker,
+.commands-role-option-copy,
+.entity-multi-picker,
+.entity-option-copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.commands-module-head {
+  align-items: start;
+}
+
+.commands-module-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.commands-module-note {
+  margin: 0;
+}
+
+.commands-module-actions {
+  justify-content: flex-start;
+}
+
+.commands-drawer {
+  gap: var(--space-5);
+}
+
+.commands-role-list,
+.entity-option-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.commands-role-option,
+.entity-option-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-surface-muted);
+}
+
+.commands-role-option input[type="checkbox"],
+.entity-option-card input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--bg-accent);
+}
+
+.commands-role-option-copy strong,
+.entity-option-copy strong {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.entity-picker-field select {
+  width: 100%;
+}
+
 .roles-primary-status,
 .roles-advanced-copy {
   display: grid;
@@ -1616,11 +1701,16 @@ textarea:focus {
   .overview-next-step,
   .home-area-card-header,
   .logging-drawer-title-row,
+  .commands-module-title-row,
   .workspace-view-header,
   .workspace-toolbar,
   .workspace-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .commands-module-grid {
+    grid-template-columns: 1fr;
   }
 
   .roles-advanced-row {

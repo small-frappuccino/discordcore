@@ -34,6 +34,12 @@ type guildRoleOptionsResponse struct {
 	Roles   []guildRoleOption `json:"roles"`
 }
 
+type guildChannelOptionsResponse struct {
+	Status   string               `json:"status"`
+	GuildID  string               `json:"guild_id"`
+	Channels []guildChannelOption `json:"channels"`
+}
+
 type guildMemberOptionsResponse struct {
 	Status  string              `json:"status"`
 	GuildID string              `json:"guild_id"`
@@ -401,6 +407,42 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 	})
 
+	t.Run("lists guild channel options", func(t *testing.T) {
+		t.Parallel()
+
+		srv, _ := newControlTestServer(t)
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildChannels("g1",
+				&discordgo.Channel{ID: "cat-ops", Name: "Operations", Type: discordgo.ChannelTypeGuildCategory, Position: 5},
+				&discordgo.Channel{ID: "logs", Name: "logs", Type: discordgo.ChannelTypeGuildText, Position: 4, ParentID: "cat-ops"},
+				&discordgo.Channel{ID: "alerts", Name: "alerts", Type: discordgo.ChannelTypeGuildNews, Position: 3, ParentID: "cat-ops"},
+				&discordgo.Channel{ID: "voice-hub", Name: "Voice Hub", Type: discordgo.ChannelTypeGuildVoice, Position: 2},
+			)
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/channel-options", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /v1/guilds/g1/channel-options status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[guildChannelOptionsResponse](t, rec)
+		if len(response.Channels) != 4 {
+			t.Fatalf("expected 4 channel options, got %+v", response.Channels)
+		}
+		if response.Channels[0].ID != "cat-ops" || response.Channels[1].ID != "logs" || response.Channels[2].ID != "alerts" {
+			t.Fatalf("expected category-grouped channel ordering, got %+v", response.Channels)
+		}
+		if response.Channels[1].DisplayName != "Operations / #logs" {
+			t.Fatalf("expected display name for text channel, got %+v", response.Channels[1])
+		}
+		if !response.Channels[1].SupportsMessageRoute || !response.Channels[2].SupportsMessageRoute {
+			t.Fatalf("expected text and announcement channels to support message routes, got %+v", response.Channels)
+		}
+		if response.Channels[3].SupportsMessageRoute {
+			t.Fatalf("expected voice channel to be excluded from message routes, got %+v", response.Channels[3])
+		}
+	})
+
 	t.Run("lists guild member options with selected member pinned", func(t *testing.T) {
 		t.Parallel()
 
@@ -567,5 +609,16 @@ func newTestDiscordSessionWithGuildMembers(guildID string, members ...*discordgo
 		member.GuildID = guildID
 		_ = session.State.MemberAdd(member)
 	}
+	return session
+}
+
+func newTestDiscordSessionWithGuildChannels(guildID string, channels ...*discordgo.Channel) *discordgo.Session {
+	session := &discordgo.Session{
+		State: discordgo.NewState(),
+	}
+	_ = session.State.GuildAdd(&discordgo.Guild{
+		ID:       guildID,
+		Channels: channels,
+	})
 	return session
 }

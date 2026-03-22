@@ -29,10 +29,9 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     anchor: "commands",
     label: "Commands",
     description:
-      "Command handling, privileged access, and the shared core service that supports command workflows.",
+      "Command handling, command routing, and privileged command access for the selected server.",
     navigation: "primary",
     featureIDs: [
-      "services.monitoring",
       "services.commands",
       "services.admin_commands",
     ],

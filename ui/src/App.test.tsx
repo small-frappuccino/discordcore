@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import type {
+  GuildChannelOption,
   FeatureRecord,
   GuildMemberOption,
   GuildRoleOption,
@@ -75,6 +76,54 @@ function createFetchMock() {
         position: 0,
         managed: false,
         is_default: true,
+      },
+    ],
+  };
+  const channelOptionsByGuild: Record<string, GuildChannelOption[]> = {
+    "guild-1": [
+      {
+        id: "bot-commands",
+        name: "bot-commands",
+        display_name: "#bot-commands",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "ops-commands",
+        name: "ops-commands",
+        display_name: "#ops-commands",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "user-log-channel",
+        name: "user-log-channel",
+        display_name: "#user-log-channel",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "join-channel",
+        name: "join-channel",
+        display_name: "#join-channel",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "voice-hub",
+        name: "Voice Hub",
+        display_name: "Voice Hub",
+        kind: "voice",
+        supports_message_route: false,
+      },
+    ],
+    "guild-2": [
+      {
+        id: "guild-2-general",
+        name: "general",
+        display_name: "#general",
+        kind: "text",
+        supports_message_route: true,
       },
     ],
   };
@@ -183,6 +232,10 @@ function createFetchMock() {
         effective_enabled: true,
         effective_source: "guild",
         readiness: "ready",
+        details: {
+          channel_id: "bot-commands",
+        },
+        editable_fields: ["enabled", "channel_id"],
       },
       {
         id: "services.admin_commands",
@@ -195,6 +248,11 @@ function createFetchMock() {
         effective_enabled: true,
         effective_source: "guild",
         readiness: "ready",
+        details: {
+          allowed_role_ids: ["role-guard"],
+          allowed_role_count: 1,
+        },
+        editable_fields: ["enabled", "allowed_role_ids"],
       },
       {
         id: "services.automod",
@@ -568,6 +626,18 @@ function createFetchMock() {
       }
     }
 
+    if (url.includes("/channel-options")) {
+      const match = url.match(/\/v1\/guilds\/([^/]+)\/channel-options$/);
+      if (match) {
+        const guildID = decodeURIComponent(match[1] ?? "");
+        return jsonResponse({
+          status: "ok",
+          guild_id: guildID,
+          channels: channelOptionsByGuild[guildID] ?? [],
+        });
+      }
+    }
+
     if (url.includes("/member-options")) {
       const parsed = new URL(url, "http://localhost");
       const match = parsed.pathname.match(/\/v1\/guilds\/([^/]+)\/member-options$/);
@@ -642,6 +712,20 @@ function createFetchMock() {
           feature.details = {
             ...(feature.details ?? {}),
             channel_id: String(payload.channel_id ?? ""),
+          };
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "allowed_role_ids")) {
+          const allowedRoleIDs = Array.isArray(payload.allowed_role_ids)
+            ? payload.allowed_role_ids
+                .filter((value): value is string => typeof value === "string")
+                .map((value) => value.trim())
+                .filter((value) => value !== "")
+            : [];
+          feature.details = {
+            ...(feature.details ?? {}),
+            allowed_role_ids: allowedRoleIDs,
+            allowed_role_count: allowedRoleIDs.length,
           };
         }
 
@@ -1065,7 +1149,7 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens a generic category workspace from the sidebar and updates feature state inline", async () => {
+  it("opens the dedicated commands workspace and saves a command channel through the drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", "/dashboard/home");
@@ -1076,11 +1160,29 @@ describe("dashboard routing and workspace", () => {
     await userEvent.click(screen.getByRole("link", { name: "Commands" }));
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
+    await screen.findByRole("heading", { name: "Command routing", level: 2 });
     expect(window.location.pathname).toBe("/dashboard/commands");
-    expect(screen.getByText("Monitoring")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Disable Commands" })).toBeInTheDocument();
+    expect(screen.queryByText("Monitoring")).not.toBeInTheDocument();
+    expect(screen.getAllByText("#bot-commands").length).toBeGreaterThan(0);
 
-    await userEvent.click(screen.getByRole("button", { name: "Disable Commands" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure command channel" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure commands" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Command channel")).toHaveValue(
+      "bot-commands",
+    );
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Command channel"),
+      "ops-commands",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save command channel" }),
+    );
 
     await waitFor(() => {
       expect(featureUpdates).toEqual([
@@ -1088,13 +1190,62 @@ describe("dashboard routing and workspace", () => {
           guildID: "guild-1",
           featureID: "services.commands",
           payload: {
-            enabled: false,
+            channel_id: "ops-commands",
           },
         },
       ]);
     });
 
-    await screen.findByRole("button", { name: "Enable Commands" });
+    expect(
+      screen.queryByRole("dialog", { name: "Configure commands" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("#ops-commands").length).toBeGreaterThan(0);
+  });
+
+  it("saves admin command access through the dedicated commands drawer", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/commands");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Commands", level: 1 });
+    await screen.findByRole("heading", { name: "Command routing", level: 2 });
+    await screen.findByRole("button", { name: "Configure admin access" });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure admin access" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure admin commands" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("checkbox", { name: /Moderators/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: /Members/i }),
+    ).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /Members/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Save admin access" }));
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "services.admin_commands",
+          payload: {
+            allowed_role_ids: ["role-guard", "role-target"],
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure admin commands" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("2 roles").length).toBeGreaterThan(0);
   });
 
   it("opens the dedicated logging workspace and saves a destination through the drawer", async () => {
@@ -1105,7 +1256,7 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Logging", level: 1 });
-    expect(await screen.findByText("user-log-channel")).toBeInTheDocument();
+    expect(await screen.findByText("#user-log-channel")).toBeInTheDocument();
     expect(await screen.findByText("Not configured")).toBeInTheDocument();
 
     const configureButtons = await screen.findAllByRole("button", {
@@ -1131,7 +1282,7 @@ describe("dashboard routing and workspace", () => {
     ).toBeVisible();
     expect(screen.getByLabelText("Destination channel")).toHaveValue("");
 
-    await userEvent.type(
+    await userEvent.selectOptions(
       screen.getByLabelText("Destination channel"),
       "join-channel",
     );
@@ -1154,7 +1305,7 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryByRole("dialog", { name: "Configure Member join logging" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("join-channel")).toBeInTheDocument();
+    expect(screen.getByText("#join-channel")).toBeInTheDocument();
   });
 
   it("hands off destination setup to Settings diagnostics with the requested posting method preselected", async () => {

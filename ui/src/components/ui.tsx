@@ -67,6 +67,32 @@ interface KeyValueListProps {
   className?: string;
 }
 
+export interface EntityPickerOption {
+  value: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}
+
+interface EntityPickerFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: EntityPickerOption[];
+  placeholder: string;
+  note?: ReactNode;
+  disabled?: boolean;
+}
+
+interface EntityMultiPickerFieldProps {
+  label: string;
+  options: EntityPickerOption[];
+  selectedValues: string[];
+  onToggle: (value: string) => void;
+  note?: ReactNode;
+  disabled?: boolean;
+}
+
 export function PageHeader({
   eyebrow,
   title,
@@ -170,6 +196,84 @@ export function KeyValueList({
         </div>
       ))}
     </dl>
+  );
+}
+
+export function EntityPickerField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  note,
+  disabled = false,
+}: EntityPickerFieldProps) {
+  return (
+    <label className="field-stack entity-picker-field">
+      <span className="field-label">{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option
+            key={option.value}
+            value={option.value}
+            disabled={option.disabled}
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {note ? <span className="meta-note">{note}</span> : null}
+    </label>
+  );
+}
+
+export function EntityMultiPickerField({
+  label,
+  options,
+  selectedValues,
+  onToggle,
+  note,
+  disabled = false,
+}: EntityMultiPickerFieldProps) {
+  const selectedSet = new Set(
+    selectedValues
+      .map((value) => value.trim())
+      .filter((value) => value !== ""),
+  );
+
+  return (
+    <div className="entity-multi-picker">
+      <p className="section-label">{label}</p>
+      <div className="entity-option-list" role="group" aria-label={label}>
+        {options.map((option) => {
+          const checked = selectedSet.has(option.value);
+
+          return (
+            <label className="entity-option-card" key={option.value}>
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={disabled || option.disabled}
+                onChange={() => onToggle(option.value)}
+              />
+              <span className="entity-option-copy">
+                <strong>{option.label}</strong>
+                {option.description ? (
+                  <span className="meta-note">{option.description}</span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {note ? <p className="meta-note">{note}</p> : null}
+    </div>
   );
 }
 

@@ -4,6 +4,10 @@ import type { FeatureRecord } from "../api/control";
 import { appRoutes } from "../app/routes";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import {
+  buildMessageRouteChannelPickerOptions,
+  formatGuildChannelValue,
+} from "../features/features/discordEntities";
+import {
   getFeatureAreaDefinition,
   getFeatureAreaRecords,
 } from "../features/features/areas";
@@ -26,8 +30,10 @@ import {
 } from "../features/features/presentation";
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
+import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
 import {
   AlertBanner,
+  EntityPickerField,
   EmptyState,
   KeyValueList,
   MetricCard,
@@ -51,6 +57,7 @@ export function LoggingCategoryPage() {
   const mutation = useFeatureMutation({
     scope: "guild",
   });
+  const channelOptions = useGuildChannelOptions();
   const [pendingFeatureId, setPendingFeatureId] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState("");
   const [channelDraft, setChannelDraft] = useState("");
@@ -98,9 +105,13 @@ export function LoggingCategoryPage() {
     () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
     [areaFeatures],
   );
+  const messageRouteChannelOptions = useMemo(
+    () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
+    [channelOptions.channels],
+  );
 
   async function handleRefreshLogging() {
-    await workspace.refresh();
+    await Promise.all([workspace.refresh(), channelOptions.refresh()]);
   }
 
   async function handleSetFeatureEnabled(
@@ -190,7 +201,7 @@ export function LoggingCategoryPage() {
       <button
         className="button-secondary"
         type="button"
-        disabled={workspace.loading || mutation.saving}
+        disabled={workspace.loading || mutation.saving || channelOptions.loading}
         onClick={() => void handleRefreshLogging()}
       >
         Refresh logging
@@ -272,7 +283,13 @@ export function LoggingCategoryPage() {
                   </td>
                   <td>
                     <div className="feature-table-copy">
-                      <strong>{summarizeLoggingDestination(feature)}</strong>
+                      <strong>
+                        {formatGuildChannelValue(
+                          getLoggingFeatureDetails(feature).channelId,
+                          channelOptions.channels,
+                          summarizeLoggingDestination(feature),
+                        )}
+                      </strong>
                       <p>{describeLoggingDestination(feature)}</p>
                     </div>
                   </td>
@@ -453,7 +470,7 @@ export function LoggingCategoryPage() {
                   busyLabel={
                     mutation.saving
                       ? "Saving logging settings..."
-                      : workspace.loading
+                      : workspace.loading || channelOptions.loading
                         ? "Refreshing logging workspace..."
                         : undefined
                   }
@@ -522,6 +539,23 @@ export function LoggingCategoryPage() {
                   </p>
                 </div>
               ) : null}
+
+              {channelOptions.notice ? (
+                <div className="surface-subsection">
+                  <p className="section-label">Channel references unavailable</p>
+                  <p className="meta-note">{channelOptions.notice.message}</p>
+                  <div className="sidebar-actions">
+                    <button
+                      className="button-secondary"
+                      type="button"
+                      disabled={channelOptions.loading}
+                      onClick={() => void channelOptions.refresh()}
+                    >
+                      Retry channel lookup
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </SurfaceCard>
           </aside>
         </section>
@@ -571,20 +605,57 @@ export function LoggingCategoryPage() {
                 },
               ]}
             />
+            <EntityPickerField
+              label="Destination channel"
+              value={channelDraft}
+              disabled={channelOptions.loading}
+              onChange={setChannelDraft}
+              options={messageRouteChannelOptions}
+              placeholder={
+                channelOptions.loading
+                  ? "Loading channels..."
+                  : messageRouteChannelOptions.length === 0
+                    ? "No channels available"
+                    : "No destination channel"
+              }
+              note="Leave this empty to clear the destination or keep the route without a dedicated channel."
+            />
 
-            <label className="field-stack">
-              <span className="field-label">Destination channel</span>
-              <input
-                aria-label="Destination channel"
-                value={channelDraft}
-                onChange={(event) => setChannelDraft(event.target.value)}
-                placeholder="Discord channel ID"
-              />
-              <span className="meta-note">
-                Paste the Discord channel ID used for this log route. Leave the
-                field empty to clear the destination.
-              </span>
-            </label>
+            {channelOptions.notice ? (
+              <div className="surface-subsection">
+                <p className="section-label">Channel references unavailable</p>
+                <p className="meta-note">{channelOptions.notice.message}</p>
+                <div className="sidebar-actions">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    disabled={channelOptions.loading}
+                    onClick={() => void channelOptions.refresh()}
+                  >
+                    Retry channel lookup
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <details className="details-panel">
+              <summary>Advanced</summary>
+              <div className="details-content">
+                <label className="field-stack">
+                  <span className="field-label">Channel ID fallback</span>
+                  <input
+                    aria-label="Destination channel ID fallback"
+                    value={channelDraft}
+                    onChange={(event) => setChannelDraft(event.target.value)}
+                    placeholder="Discord channel ID"
+                  />
+                  <span className="meta-note">
+                    Use this only when the channel picker is unavailable or
+                    when you need to paste a channel ID directly.
+                  </span>
+                </label>
+              </div>
+            </details>
 
             <div className="surface-subsection">
               <p className="section-label">Requirements</p>
