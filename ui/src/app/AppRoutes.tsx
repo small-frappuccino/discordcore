@@ -6,6 +6,7 @@ import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
+import { ModerationPage } from "../pages/ModerationPage";
 import { RolesPage } from "../pages/RolesPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { PartnerBoardProvider } from "../features/partner-board/PartnerBoardContext";
@@ -52,7 +53,7 @@ export function AppRoutes() {
         />
         <Route
           path="moderation"
-          element={<FeatureCategoryPage areaId="moderation" />}
+          element={<ModerationPage />}
         />
         <Route
           path="logging"

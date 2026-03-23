@@ -833,6 +833,50 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.moderation-workspace-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.moderation-service-panel,
+.moderation-log-panel,
+.moderation-rules-preview,
+.moderation-drawer {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.moderation-service-head,
+.moderation-log-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.moderation-service-copy,
+.moderation-rules-copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.moderation-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.moderation-service-actions {
+  justify-content: flex-start;
+}
+
+.moderation-log-table td:nth-child(2),
+.moderation-log-table td:nth-child(4) {
+  min-width: 220px;
+}
+
 .commands-module-grid {
   display: grid;
   gap: var(--space-4);
@@ -1701,6 +1745,9 @@ textarea:focus {
   .overview-next-step,
   .home-area-card-header,
   .logging-drawer-title-row,
+  .moderation-service-head,
+  .moderation-log-panel-header,
+  .moderation-title-row,
   .commands-module-title-row,
   .workspace-view-header,
   .workspace-toolbar,
@@ -1710,6 +1757,10 @@ textarea:focus {
   }
 
   .commands-module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .moderation-workspace-grid {
     grid-template-columns: 1fr;
   }
 
