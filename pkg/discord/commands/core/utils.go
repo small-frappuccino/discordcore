@@ -415,11 +415,8 @@ func (ConfigurationUtils) EnsureGuildConfig(configManager *files.ConfigManager, 
 	config := configManager.GuildConfig(guildID)
 	if config == nil {
 		config = &files.GuildConfig{
-			GuildID:    guildID,
-			Roles:      files.RolesConfig{Allowed: []string{}},
-			Rulesets:   []files.Ruleset{},
-			LooseLists: []files.Rule{},
-			Blocklist:  []string{},
+			GuildID: guildID,
+			Roles:   files.RolesConfig{Allowed: []string{}},
 		}
 	}
 	return config

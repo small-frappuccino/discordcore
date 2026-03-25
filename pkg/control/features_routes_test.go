@@ -170,6 +170,7 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	}{
 		{path: "/v1/guilds/g1/features/services.commands", payload: map[string]any{"channel_id": "cmd-channel"}},
 		{path: "/v1/guilds/g1/features/services.admin_commands", payload: map[string]any{"allowed_role_ids": []string{"admin-a", "admin-b", "admin-a", ""}}},
+		{path: "/v1/guilds/g1/features/moderation.mute_role", payload: map[string]any{"role_id": "mute-role"}},
 		{path: "/v1/guilds/g1/features/logging.member_join", payload: map[string]any{"channel_id": "join-channel"}},
 		{path: "/v1/guilds/g1/features/presence_watch.user", payload: map[string]any{"user_id": "user-42"}},
 		{path: "/v1/guilds/g1/features/safety.bot_role_perm_mirror", payload: map[string]any{"actor_role_id": "actor-7"}},
@@ -200,6 +201,9 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	}
 	if got := strings.Join(guild.Roles.Allowed, ","); got != "admin-a,admin-b" {
 		t.Fatalf("expected allowed roles persisted without duplicates, got %q", got)
+	}
+	if guild.Roles.MuteRole != "mute-role" {
+		t.Fatalf("expected mute role persisted, got %+v", guild.Roles)
 	}
 	if guild.Channels.MemberJoin != "join-channel" {
 		t.Fatalf("expected member_join channel persisted, got %+v", guild.Channels)
@@ -496,6 +500,95 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 		if response.Members[1].ID != "user-alice" {
 			t.Fatalf("expected query match after selected member, got %+v", response.Members)
+		}
+	})
+
+	t.Run("mute role blocks missing role", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.MuteRole = testBoolPtr(true)
+			cfg.Guilds[0].Roles.MuteRole = ""
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed mute role config: %v", err)
+		}
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/moderation.mute_role", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET moderation.mute_role status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "missing_role" {
+			t.Fatalf("expected missing_role blocker, got %+v", response.Feature.Blockers)
+		}
+	})
+
+	t.Run("mute role blocks invalid role", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.MuteRole = testBoolPtr(true)
+			cfg.Guilds[0].Roles.MuteRole = "mute-role"
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed mute role config: %v", err)
+		}
+
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildRoles("g1",
+				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
+				&discordgo.Role{ID: "helper-role", Name: "Helper", Position: 4},
+			)
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/moderation.mute_role", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET moderation.mute_role status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "invalid_role" {
+			t.Fatalf("expected invalid_role blocker, got %+v", response.Feature.Blockers)
+		}
+	})
+
+	t.Run("mute role is ready when role exists", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.MuteRole = testBoolPtr(true)
+			cfg.Guilds[0].Roles.MuteRole = "mute-role"
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed mute role config: %v", err)
+		}
+
+		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+			return newTestDiscordSessionWithGuildRoles("g1",
+				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
+				&discordgo.Role{ID: "mute-role", Name: "Muted", Position: 2},
+			)
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/moderation.mute_role", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET moderation.mute_role status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if response.Feature.Readiness != "ready" || len(response.Feature.Blockers) != 0 {
+			t.Fatalf("expected ready mute role feature, got %+v", response.Feature)
+		}
+		if response.Feature.Details["role_id"] != "mute-role" {
+			t.Fatalf("expected role_id detail, got %+v", response.Feature.Details)
 		}
 	})
 

@@ -20,13 +20,19 @@ import {
   summarizeLoggingGuidance,
 } from "../features/features/logging";
 import {
-  formatAutomodRuleCoverageValue,
+  canEditMuteRole,
+  formatAutomodModeValue,
   formatModerationRouteCoverageValue,
-  getAutomodFeatureDetails,
   getModerationLogFeatures,
-  summarizeAutomodRuleInventory,
+  getMuteRoleFeatureDetails,
+  summarizeAutomodMode,
   summarizeAutomodSignal,
+  summarizeMuteRoleSignal,
 } from "../features/features/moderation";
+import {
+  formatRoleOptionLabel,
+  formatRoleValue,
+} from "../features/features/roles";
 import {
   formatEffectiveSourceLabel,
   formatFeatureStatusLabel,
@@ -39,6 +45,7 @@ import {
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
+import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 import {
   AlertBanner,
   EntityPickerField,
@@ -66,9 +73,11 @@ export function ModerationPage() {
     scope: "guild",
   });
   const channelOptions = useGuildChannelOptions();
+  const roleOptions = useGuildRoleOptions();
   const [pendingFeatureId, setPendingFeatureId] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState("");
   const [channelDraft, setChannelDraft] = useState("");
+  const [roleDraft, setRoleDraft] = useState("");
 
   if (definition === null) {
     return null;
@@ -82,11 +91,11 @@ export function ModerationPage() {
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const automodFeature =
     areaFeatures.find((feature) => feature.id === "services.automod") ?? null;
+  const muteRoleFeature =
+    areaFeatures.find((feature) => feature.id === "moderation.mute_role") ?? null;
   const moderationLogFeatures = getModerationLogFeatures(areaFeatures);
   const selectedFeature =
-    moderationLogFeatures.find((feature) => feature.id === selectedFeatureId) ?? null;
-  const selectedFeatureDetails =
-    selectedFeature === null ? null : getLoggingFeatureDetails(selectedFeature);
+    areaFeatures.find((feature) => feature.id === selectedFeatureId) ?? null;
   const firstBlockedFeature = useMemo(
     () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
     [areaFeatures],
@@ -95,27 +104,57 @@ export function ModerationPage() {
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
   );
+  const muteRoleOptions = useMemo(
+    () =>
+      roleOptions.roles.map((role) => ({
+        value: role.id,
+        label: formatRoleOptionLabel(role),
+        disabled: role.is_default || role.managed,
+      })),
+    [roleOptions.roles],
+  );
   const configuredModerationRoutes = moderationLogFeatures.filter(
     (feature) => getLoggingFeatureDetails(feature).channelId !== "",
   ).length;
   const localOverrides = areaFeatures.filter(
     (feature) => feature.override_state !== "inherit",
   ).length;
+  const selectedIsMuteRole = selectedFeature?.id === "moderation.mute_role";
+  const muteRoleId =
+    muteRoleFeature === null
+      ? ""
+      : getMuteRoleFeatureDetails(muteRoleFeature).roleId;
 
   useEffect(() => {
     if (selectedFeature === null) {
+      setChannelDraft("");
+      setRoleDraft("");
       return;
     }
-    if (!canEditLoggingChannel(selectedFeature)) {
-      setSelectedFeatureId("");
+
+    if (selectedFeature.id === "moderation.mute_role") {
+      setRoleDraft(getMuteRoleFeatureDetails(selectedFeature).roleId);
       setChannelDraft("");
       return;
     }
+
+    if (!canEditLoggingChannel(selectedFeature)) {
+      setSelectedFeatureId("");
+      setChannelDraft("");
+      setRoleDraft("");
+      return;
+    }
+
     setChannelDraft(getLoggingFeatureDetails(selectedFeature).channelId);
+    setRoleDraft("");
   }, [selectedFeature]);
 
   async function handleRefreshModeration() {
-    await Promise.all([workspace.refresh(), channelOptions.refresh()]);
+    await Promise.all([
+      workspace.refresh(),
+      channelOptions.refresh(),
+      roleOptions.refresh(),
+    ]);
   }
 
   async function handleSetFeatureEnabled(
@@ -151,7 +190,7 @@ export function ModerationPage() {
     }
   }
 
-  async function handleSaveModerationRoute() {
+  async function handleSaveSelectedFeature() {
     if (selectedFeature === null) {
       return;
     }
@@ -159,9 +198,12 @@ export function ModerationPage() {
     setPendingFeatureId(selectedFeature.id);
 
     try {
-      const updated = await mutation.patchFeature(selectedFeature.id, {
-        channel_id: channelDraft.trim(),
-      });
+      const updated = await mutation.patchFeature(
+        selectedFeature.id,
+        selectedFeature.id === "moderation.mute_role"
+          ? { role_id: roleDraft.trim() }
+          : { channel_id: channelDraft.trim() },
+      );
       if (updated !== null) {
         await workspace.refresh();
         closeDrawer();
@@ -172,16 +214,25 @@ export function ModerationPage() {
   }
 
   function openDrawer(feature: FeatureRecord) {
-    if (!canEditLoggingChannel(feature)) {
+    if (!canEditLoggingChannel(feature) && !canEditMuteRole(feature)) {
       return;
     }
+
     setSelectedFeatureId(feature.id);
+    if (feature.id === "moderation.mute_role") {
+      setRoleDraft(getMuteRoleFeatureDetails(feature).roleId);
+      setChannelDraft("");
+      return;
+    }
+
     setChannelDraft(getLoggingFeatureDetails(feature).channelId);
+    setRoleDraft("");
   }
 
   function closeDrawer() {
     setSelectedFeatureId("");
     setChannelDraft("");
+    setRoleDraft("");
   }
 
   function renderHeaderActions() {
@@ -205,7 +256,12 @@ export function ModerationPage() {
       <button
         className="button-secondary"
         type="button"
-        disabled={workspace.loading || mutation.saving || channelOptions.loading}
+        disabled={
+          workspace.loading ||
+          mutation.saving ||
+          channelOptions.loading ||
+          roleOptions.loading
+        }
         onClick={() => void handleRefreshModeration()}
       >
         Refresh moderation
@@ -245,7 +301,11 @@ export function ModerationPage() {
       );
     }
 
-    if (automodFeature === null && moderationLogFeatures.length === 0) {
+    if (
+      automodFeature === null &&
+      muteRoleFeature === null &&
+      moderationLogFeatures.length === 0
+    ) {
       return (
         <div className="table-empty-state table-empty-state-compact">
           <div className="card-copy">
@@ -259,9 +319,6 @@ export function ModerationPage() {
         </div>
       );
     }
-
-    const automodDetails =
-      automodFeature === null ? null : getAutomodFeatureDetails(automodFeature);
 
     return (
       <div className="moderation-workspace-grid">
@@ -277,9 +334,9 @@ export function ModerationPage() {
                   </StatusBadge>
                 </div>
                 <p className="section-description">
-                  Keep the AutoMod service state, rule coverage, and current
-                  blockers visible in one place before a dedicated rule editor
-                  lands in this module.
+                  Discord still owns the actual AutoMod rules. This workspace
+                  only keeps the listener state and related log readiness
+                  visible for staff.
                 </p>
               </div>
 
@@ -297,49 +354,19 @@ export function ModerationPage() {
                   value: automodFeature.effective_enabled ? "On" : "Off",
                 },
                 {
-                  label: "Rulesets",
-                  value: String(automodDetails?.rulesetCount ?? 0),
-                },
-                {
-                  label: "Loose rules",
-                  value: String(automodDetails?.looseRuleCount ?? 0),
-                },
-                {
-                  label: "Blocklists",
-                  value: String(automodDetails?.blocklistCount ?? 0),
+                  label: "Mode",
+                  value: formatAutomodModeValue(automodFeature),
                 },
                 {
                   label: "Current signal",
                   value: summarizeAutomodSignal(automodFeature),
                 },
+                {
+                  label: "Supported actions",
+                  value: "ban, massban, kick, mute, timeout, warnings",
+                },
               ]}
             />
-
-            <div className="surface-subsection moderation-rules-preview">
-              <div className="card-copy moderation-rules-copy">
-                <p className="section-label">Rules workspace</p>
-                <h4>Prepared for future rule management</h4>
-                <p className="meta-note">
-                  This module already tracks service readiness and current rule
-                  counts, so a dedicated editor can plug into the same
-                  navigation later without changing where admins manage
-                  moderation.
-                </p>
-              </div>
-
-              <KeyValueList
-                items={[
-                  {
-                    label: "Rule coverage",
-                    value: formatAutomodRuleCoverageValue(automodFeature),
-                  },
-                  {
-                    label: "Inventory",
-                    value: summarizeAutomodRuleInventory(automodFeature),
-                  },
-                ]}
-              />
-            </div>
 
             <div className="inline-actions moderation-service-actions">
               <button
@@ -373,6 +400,110 @@ export function ModerationPage() {
           </section>
         ) : null}
 
+        {muteRoleFeature !== null ? (
+          <section className="surface-subsection moderation-service-panel">
+            <div className="moderation-service-head">
+              <div className="card-copy moderation-service-copy">
+                <p className="section-label">Role-based mute</p>
+                <div className="moderation-title-row">
+                  <h3>{muteRoleFeature.label}</h3>
+                  <StatusBadge tone={getFeatureStatusTone(muteRoleFeature)}>
+                    {formatFeatureStatusLabel(muteRoleFeature)}
+                  </StatusBadge>
+                </div>
+                <p className="section-description">
+                  Configure the role applied by the mute command. Keep it
+                  assignable by the bot and below both bot and moderator top
+                  roles.
+                </p>
+              </div>
+
+              <span className="meta-pill subtle-pill">
+                {muteRoleFeature.override_state === "inherit"
+                  ? "Using default"
+                  : "Configured here"}
+              </span>
+            </div>
+
+            <KeyValueList
+              items={[
+                {
+                  label: "Module state",
+                  value: muteRoleFeature.effective_enabled ? "On" : "Off",
+                },
+                {
+                  label: "Configured role",
+                  value: formatRoleValue(muteRoleId, roleOptions.roles),
+                },
+                {
+                  label: "Current signal",
+                  value: summarizeMuteRoleSignal(muteRoleFeature),
+                },
+                {
+                  label: "Used by",
+                  value: "/moderation mute",
+                },
+              ]}
+            />
+
+            {roleOptions.notice ? (
+              <div className="surface-subsection">
+                <p className="section-label">Role references unavailable</p>
+                <p className="meta-note">{roleOptions.notice.message}</p>
+                <div className="sidebar-actions">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    disabled={roleOptions.loading}
+                    onClick={() => void roleOptions.refresh()}
+                  >
+                    Retry role lookup
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="inline-actions moderation-service-actions">
+              {canEditMuteRole(muteRoleFeature) ? (
+                <button
+                  className="button-secondary"
+                  type="button"
+                  onClick={() => openDrawer(muteRoleFeature)}
+                >
+                  Configure mute role
+                </button>
+              ) : null}
+              <button
+                className="button-ghost"
+                type="button"
+                disabled={mutation.saving}
+                onClick={() =>
+                  void handleSetFeatureEnabled(
+                    muteRoleFeature,
+                    !muteRoleFeature.effective_enabled,
+                  )
+                }
+              >
+                {mutation.saving && pendingFeatureId === muteRoleFeature.id
+                  ? "Saving..."
+                  : muteRoleFeature.effective_enabled
+                    ? "Disable"
+                    : "Enable"}
+              </button>
+              {muteRoleFeature.override_state !== "inherit" ? (
+                <button
+                  className="button-ghost"
+                  type="button"
+                  disabled={mutation.saving}
+                  onClick={() => void handleUseDefault(muteRoleFeature)}
+                >
+                  Use inherited
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         <section className="surface-subsection moderation-log-panel">
           <div className="moderation-log-panel-header">
             <div className="card-copy">
@@ -398,9 +529,8 @@ export function ModerationPage() {
                 </StatusBadge>
               </div>
               <p className="section-description">
-                Keep AutoMod actions, moderation cases, and cleanup events
-                routed to the right moderation destinations without leaving this
-                workspace.
+                Keep AutoMod executions and moderation case logs routed to the
+                right staff destinations without leaving this workspace.
               </p>
             </div>
           </div>
@@ -411,7 +541,7 @@ export function ModerationPage() {
                 <p className="section-label">Routes</p>
                 <h2>No moderation log routes yet</h2>
                 <p className="section-description">
-                  This server is not exposing the moderation log routes in the
+                  This server is not exposing moderation log routes in the
                   current workspace snapshot.
                 </p>
               </div>
@@ -474,17 +604,13 @@ export function ModerationPage() {
                                   : "Disabled"}
                             </strong>
                             <p>{summarizeLoggingGuidance(feature)}</p>
-                            {details.exclusiveModerationChannel ? (
-                              <span className="meta-note">
-                                Requires an exclusive moderation destination.
-                              </span>
-                            ) : null}
                           </div>
                         </td>
                         <td>
                           <div className="feature-row-actions">
                             {canEditLoggingChannel(feature) ? (
                               <button
+                                aria-label={`Configure ${feature.label}`}
                                 className="button-secondary"
                                 type="button"
                                 onClick={() => openDrawer(feature)}
@@ -541,7 +667,7 @@ export function ModerationPage() {
         <PageHeader
           eyebrow="Feature area"
           title={areaLabel}
-          description="Review AutoMod readiness, moderation event logging, and the blockers that still need attention for the selected server."
+          description="Review the logging-only AutoMod listener, the mute role, and the routes used by ban, massban, kick, mute, timeout, and warnings workflows."
           status={
             <StatusBadge
               tone={
@@ -565,31 +691,47 @@ export function ModerationPage() {
           actions={renderHeaderActions()}
         />
 
-        {workspace.workspaceState === "ready" && automodFeature !== null ? (
+        {workspace.workspaceState === "ready" ? (
           <section
             className="overview-summary-strip"
             aria-label="Moderation summary"
           >
             <MetricCard
               label="AutoMod"
-              value={formatFeatureStatusLabel(automodFeature)}
-              description={summarizeAutomodSignal(automodFeature)}
-              tone={getFeatureStatusTone(automodFeature)}
+              value={
+                automodFeature === null
+                  ? "Not available"
+                  : formatFeatureStatusLabel(automodFeature)
+              }
+              description={
+                automodFeature === null
+                  ? "This server does not expose the AutoMod listener record."
+                  : summarizeAutomodMode(automodFeature)
+              }
+              tone={
+                automodFeature === null
+                  ? "neutral"
+                  : getFeatureStatusTone(automodFeature)
+              }
             />
             <MetricCard
-              label="Rule coverage"
-              value={formatAutomodRuleCoverageValue(automodFeature)}
-              description={summarizeAutomodRuleInventory(automodFeature)}
+              label="Mute role"
+              value={formatRoleValue(muteRoleId, roleOptions.roles)}
+              description={
+                muteRoleFeature === null
+                  ? "This server does not expose a mute role control."
+                  : summarizeMuteRoleSignal(muteRoleFeature)
+              }
               tone={
-                getAutomodFeatureDetails(automodFeature).rulesetCount > 0
-                  ? "info"
-                  : "neutral"
+                muteRoleFeature === null
+                  ? "neutral"
+                  : getFeatureStatusTone(muteRoleFeature)
               }
             />
             <MetricCard
               label="Moderation logs"
               value={formatModerationRouteCoverageValue(moderationLogFeatures)}
-              description="AutoMod, moderation case, and cleanup routes currently mapped in this workspace."
+              description="AutoMod action and moderation case routes configured in this workspace."
               tone={configuredModerationRoutes > 0 ? "info" : "neutral"}
             />
             <MetricCard
@@ -610,10 +752,9 @@ export function ModerationPage() {
                     <p className="section-label">Workspace</p>
                     <h2>Moderation controls</h2>
                     <p className="section-description">
-                      Keep the service switch, moderation event routes, and rule
-                      readiness in one operational workspace. This keeps the
-                      day-to-day moderation surface clear even before the future
-                      rule editor lands.
+                      Keep the moderation surface focused on the supported staff
+                      actions: log readiness, mute-role setup, and the listener
+                      state used alongside Discord native AutoMod.
                     </p>
                   </div>
                   <div className="workspace-view-meta">
@@ -635,7 +776,9 @@ export function ModerationPage() {
                   busyLabel={
                     mutation.saving
                       ? "Saving moderation settings..."
-                      : workspace.loading || channelOptions.loading
+                      : workspace.loading ||
+                          channelOptions.loading ||
+                          roleOptions.loading
                         ? "Refreshing moderation workspace..."
                         : undefined
                   }
@@ -652,9 +795,8 @@ export function ModerationPage() {
                 <p className="section-label">Summary</p>
                 <h2>Current moderation state</h2>
                 <p className="section-description">
-                  Use this panel to confirm the AutoMod service state, current
-                  rule coverage, and whether moderation events are already routed
-                  to the expected destinations.
+                  Use this panel to confirm whether the supported moderation
+                  workflows have their mute role and staff log routes ready.
                 </p>
               </div>
 
@@ -665,18 +807,19 @@ export function ModerationPage() {
                     value: selectedServerLabel,
                   },
                   {
-                    label: "AutoMod",
-                    value:
-                      automodFeature === null
-                        ? "Not available"
-                        : formatFeatureStatusLabel(automodFeature),
+                    label: "Supported actions",
+                    value: "ban, massban, kick, mute, timeout, warnings",
                   },
                   {
-                    label: "Rule coverage",
+                    label: "AutoMod mode",
                     value:
                       automodFeature === null
                         ? "Not available"
-                        : formatAutomodRuleCoverageValue(automodFeature),
+                        : formatAutomodModeValue(automodFeature),
+                  },
+                  {
+                    label: "Mute role",
+                    value: formatRoleValue(muteRoleId, roleOptions.roles),
                   },
                   {
                     label: "Moderation logs",
@@ -697,16 +840,16 @@ export function ModerationPage() {
                 <p className="section-label">Guidance</p>
                 <h2>How this page works</h2>
                 <p className="section-description">
-                  Keep the primary workspace centered on moderation outcomes:
-                  service state, logging routes, and blockers. Diagnostics and
-                  runtime details stay secondary.
+                  Keep the workspace centered on supported moderation outcomes.
+                  Rule engines and low-level diagnostics stay out of the primary
+                  path here.
                 </p>
               </div>
 
               <ul className="feature-guidance-list">
-                <li>Enable AutoMod only after the current rule coverage is ready for the selected server.</li>
-                <li>Keep moderation event routes configured before relying on enforcement logs in staff workflows.</li>
-                <li>Runtime gating and low-level logging toggles still belong in Settings diagnostics.</li>
+                <li>Supported moderation commands are ban, massban, kick, mute, timeout, and warnings.</li>
+                <li>AutoMod is logging-only here. Discord owns the actual rule execution and enforcement settings.</li>
+                <li>Configure the mute role and moderation log routes before relying on staff workflows.</li>
               </ul>
 
               {firstBlockedFeature ? (
@@ -735,12 +878,29 @@ export function ModerationPage() {
                   </div>
                 </div>
               ) : null}
+
+              {roleOptions.notice ? (
+                <div className="surface-subsection">
+                  <p className="section-label">Role references unavailable</p>
+                  <p className="meta-note">{roleOptions.notice.message}</p>
+                  <div className="sidebar-actions">
+                    <button
+                      className="button-secondary"
+                      type="button"
+                      disabled={roleOptions.loading}
+                      onClick={() => void roleOptions.refresh()}
+                    >
+                      Retry role lookup
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </SurfaceCard>
           </aside>
         </section>
       </section>
 
-      {selectedFeature !== null && canEditLoggingChannel(selectedFeature) ? (
+      {selectedFeature !== null ? (
         <div className="drawer-backdrop" onClick={closeDrawer} role="presentation">
           <aside
             aria-label={`Configure ${selectedFeature.label}`}
@@ -750,7 +910,9 @@ export function ModerationPage() {
             role="dialog"
           >
             <div className="card-copy">
-              <p className="section-label">Moderation logging</p>
+              <p className="section-label">
+                {selectedIsMuteRole ? "Role-based mute" : "Moderation logging"}
+              </p>
               <div className="logging-drawer-title-row">
                 <h2>{selectedFeature.label}</h2>
                 <StatusBadge tone={getFeatureStatusTone(selectedFeature)}>
@@ -762,122 +924,217 @@ export function ModerationPage() {
 
             {mutation.notice ? <AlertBanner notice={mutation.notice} /> : null}
 
-            <KeyValueList
-              items={[
-                {
-                  label: "Applied from",
-                  value: formatEffectiveSourceLabel(selectedFeature.effective_source),
-                },
-                {
-                  label: "Override",
-                  value: formatOverrideLabel(selectedFeature.override_state),
-                },
-                {
-                  label: "Destination rule",
-                  value: selectedFeatureDetails?.requiresChannel
-                    ? "Needs destination channel"
-                    : "No dedicated destination",
-                },
-                {
-                  label: "Current signal",
-                  value: summarizeLoggingGuidance(selectedFeature),
-                },
-              ]}
-            />
+            {selectedIsMuteRole ? (
+              <>
+                <KeyValueList
+                  items={[
+                    {
+                      label: "Applied from",
+                      value: formatEffectiveSourceLabel(
+                        selectedFeature.effective_source,
+                      ),
+                    },
+                    {
+                      label: "Override",
+                      value: formatOverrideLabel(selectedFeature.override_state),
+                    },
+                    {
+                      label: "Current role",
+                      value: formatRoleValue(roleDraft, roleOptions.roles),
+                    },
+                    {
+                      label: "Current signal",
+                      value: summarizeMuteRoleSignal(selectedFeature),
+                    },
+                  ]}
+                />
 
-            <EntityPickerField
-              label="Destination channel"
-              value={channelDraft}
-              disabled={channelOptions.loading}
-              onChange={setChannelDraft}
-              options={messageRouteChannelOptions}
-              placeholder={
-                channelOptions.loading
-                  ? "Loading channels..."
-                  : messageRouteChannelOptions.length === 0
-                    ? "No channels available"
-                    : "No destination channel"
-              }
-              note="Leave this empty to clear the destination or keep the route without a dedicated channel."
-            />
+                <EntityPickerField
+                  label="Mute role"
+                  value={roleDraft}
+                  disabled={roleOptions.loading}
+                  onChange={setRoleDraft}
+                  options={muteRoleOptions}
+                  placeholder={
+                    roleOptions.loading
+                      ? "Loading roles..."
+                      : muteRoleOptions.length === 0
+                        ? "No roles available"
+                        : "No mute role"
+                  }
+                  note="Choose a non-managed role that the bot can assign and remove."
+                />
 
-            {channelOptions.notice ? (
-              <div className="surface-subsection">
-                <p className="section-label">Channel references unavailable</p>
-                <p className="meta-note">{channelOptions.notice.message}</p>
-                <div className="sidebar-actions">
-                  <button
-                    className="button-secondary"
-                    type="button"
-                    disabled={channelOptions.loading}
-                    onClick={() => void channelOptions.refresh()}
-                  >
-                    Retry channel lookup
-                  </button>
+                {roleOptions.notice ? (
+                  <div className="surface-subsection">
+                    <p className="section-label">Role references unavailable</p>
+                    <p className="meta-note">{roleOptions.notice.message}</p>
+                    <div className="sidebar-actions">
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        disabled={roleOptions.loading}
+                        onClick={() => void roleOptions.refresh()}
+                      >
+                        Retry role lookup
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <details className="details-panel">
+                  <summary>Advanced</summary>
+                  <div className="details-content">
+                    <label className="field-stack">
+                      <span className="field-label">Mute role ID fallback</span>
+                      <input
+                        aria-label="Mute role ID fallback"
+                        value={roleDraft}
+                        onChange={(event) => setRoleDraft(event.target.value)}
+                        placeholder="Discord role ID"
+                      />
+                      <span className="meta-note">
+                        Use this only when the role picker is unavailable or you
+                        need to paste a role ID directly.
+                      </span>
+                    </label>
+                  </div>
+                </details>
+
+                <div className="surface-subsection">
+                  <p className="section-label">Requirements</p>
+                  <ul className="feature-guidance-list">
+                    <li>Use a dedicated mute role instead of @everyone.</li>
+                    <li>The mute role must stay below both the moderator and bot highest roles.</li>
+                    <li>Avoid managed integration roles because Discord will reject manual assignment.</li>
+                  </ul>
                 </div>
-              </div>
-            ) : null}
+              </>
+            ) : (
+              <>
+                <KeyValueList
+                  items={[
+                    {
+                      label: "Applied from",
+                      value: formatEffectiveSourceLabel(
+                        selectedFeature.effective_source,
+                      ),
+                    },
+                    {
+                      label: "Override",
+                      value: formatOverrideLabel(selectedFeature.override_state),
+                    },
+                    {
+                      label: "Destination rule",
+                      value: getLoggingFeatureDetails(selectedFeature)
+                        .requiresChannel
+                        ? "Needs destination channel"
+                        : "No dedicated destination",
+                    },
+                    {
+                      label: "Current signal",
+                      value: summarizeLoggingGuidance(selectedFeature),
+                    },
+                  ]}
+                />
 
-            <details className="details-panel">
-              <summary>Advanced</summary>
-              <div className="details-content">
-                <label className="field-stack">
-                  <span className="field-label">Channel ID fallback</span>
-                  <input
-                    aria-label="Destination channel ID fallback"
-                    value={channelDraft}
-                    onChange={(event) => setChannelDraft(event.target.value)}
-                    placeholder="Discord channel ID"
-                  />
-                  <span className="meta-note">
-                    Use this only when the channel picker is unavailable or
-                    when you need to paste a channel ID directly.
-                  </span>
-                </label>
-              </div>
-            </details>
+                <EntityPickerField
+                  label="Destination channel"
+                  value={channelDraft}
+                  disabled={channelOptions.loading}
+                  onChange={setChannelDraft}
+                  options={messageRouteChannelOptions}
+                  placeholder={
+                    channelOptions.loading
+                      ? "Loading channels..."
+                      : messageRouteChannelOptions.length === 0
+                        ? "No channels available"
+                        : "No destination channel"
+                  }
+                  note="Leave this empty to clear the destination or keep the route without a dedicated channel."
+                />
 
-            <div className="surface-subsection">
-              <p className="section-label">Requirements</p>
-              <ul className="feature-guidance-list">
-                {buildLoggingRequirementNotes(selectedFeature).map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </div>
+                {channelOptions.notice ? (
+                  <div className="surface-subsection">
+                    <p className="section-label">Channel references unavailable</p>
+                    <p className="meta-note">{channelOptions.notice.message}</p>
+                    <div className="sidebar-actions">
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        disabled={channelOptions.loading}
+                        onClick={() => void channelOptions.refresh()}
+                      >
+                        Retry channel lookup
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
-            {selectedFeature.blockers?.some(
-              (blocker) =>
-                blocker.code === "runtime_kill_switch" ||
-                blocker.code === "missing_intent",
-            ) ? (
-              <div className="surface-subsection">
-                <p className="section-label">Needs diagnostics</p>
-                <p className="meta-note">
-                  This route depends on runtime conditions that are reviewed in
-                  Settings diagnostics.
-                </p>
-                <div className="sidebar-actions">
-                  <Link
-                    className="button-secondary"
-                    to={`${appRoutes.settings}#diagnostics`}
-                  >
-                    Open Settings diagnostics
-                  </Link>
+                <details className="details-panel">
+                  <summary>Advanced</summary>
+                  <div className="details-content">
+                    <label className="field-stack">
+                      <span className="field-label">Channel ID fallback</span>
+                      <input
+                        aria-label="Destination channel ID fallback"
+                        value={channelDraft}
+                        onChange={(event) => setChannelDraft(event.target.value)}
+                        placeholder="Discord channel ID"
+                      />
+                      <span className="meta-note">
+                        Use this only when the channel picker is unavailable or
+                        when you need to paste a channel ID directly.
+                      </span>
+                    </label>
+                  </div>
+                </details>
+
+                <div className="surface-subsection">
+                  <p className="section-label">Requirements</p>
+                  <ul className="feature-guidance-list">
+                    {buildLoggingRequirementNotes(selectedFeature).map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
-            ) : null}
+
+                {selectedFeature.blockers?.some(
+                  (blocker) =>
+                    blocker.code === "runtime_kill_switch" ||
+                    blocker.code === "missing_intent",
+                ) ? (
+                  <div className="surface-subsection">
+                    <p className="section-label">Needs diagnostics</p>
+                    <p className="meta-note">
+                      This route depends on runtime conditions that are reviewed
+                      in Settings diagnostics.
+                    </p>
+                    <div className="sidebar-actions">
+                      <Link
+                        className="button-secondary"
+                        to={`${appRoutes.settings}#diagnostics`}
+                      >
+                        Open Settings diagnostics
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
 
             <div className="drawer-actions">
               <button
                 className="button-primary"
                 type="button"
                 disabled={mutation.saving}
-                onClick={() => void handleSaveModerationRoute()}
+                onClick={() => void handleSaveSelectedFeature()}
               >
                 {mutation.saving && pendingFeatureId === selectedFeature.id
                   ? "Saving..."
-                  : "Save destination"}
+                  : selectedIsMuteRole
+                    ? "Save mute role"
+                    : "Save destination"}
               </button>
               <button
                 className="button-secondary"

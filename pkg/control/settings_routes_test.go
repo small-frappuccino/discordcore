@@ -92,6 +92,11 @@ func TestSettingsOverviewReturnsCatalogGlobalWorkspaceAndGuildSummaries(t *testi
 	if len(payload.Workspace.Catalog.Global) == 0 || len(payload.Workspace.Catalog.Guild) == 0 {
 		t.Fatalf("expected populated settings catalog: %+v", payload.Workspace.Catalog)
 	}
+	for _, section := range payload.Workspace.Catalog.Guild {
+		if section.ID == "moderation" {
+			t.Fatalf("did not expect legacy moderation section in guild catalog: %+v", payload.Workspace.Catalog.Guild)
+		}
+	}
 	if len(payload.Workspace.Guilds) != 1 {
 		t.Fatalf("expected one configured guild summary, got %+v", payload.Workspace.Guilds)
 	}
@@ -285,6 +290,35 @@ func TestGuildSettingsPutGetListAndDelete(t *testing.T) {
 	}
 }
 
+func TestGuildSettingsGetOmitsLegacyModerationWorkspaceSection(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/settings", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /v1/guilds/g1/settings status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode guild settings payload: %v", err)
+	}
+
+	workspace, ok := payload["workspace"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected workspace object, got %+v", payload)
+	}
+	sections, ok := workspace["sections"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected sections object, got %+v", workspace)
+	}
+	if _, exists := sections["moderation"]; exists {
+		t.Fatalf("did not expect legacy moderation section in workspace: %+v", sections)
+	}
+}
+
 func TestGuildSettingsPutRejectsMissingGuildUntilRegistered(t *testing.T) {
 	t.Parallel()
 
@@ -381,6 +415,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	if response.Workspace.Effective.Features.Services.Monitoring ||
 		response.Workspace.Effective.Features.Services.Commands ||
 		response.Workspace.Effective.Features.Logging.MemberJoin ||
+		response.Workspace.Effective.Features.MuteRole ||
 		response.Workspace.Effective.Features.StatsChannels ||
 		response.Workspace.Effective.Features.AutoRoleAssign ||
 		response.Workspace.Effective.Features.UserPrune {

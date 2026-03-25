@@ -7,6 +7,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 func TestBuildMassBanLogDetails(t *testing.T) {
@@ -36,6 +37,34 @@ func TestBuildMassBanCommandMessageOnlyCount(t *testing.T) {
 	got := buildMassBanCommandMessage(4)
 	if got != "Banned 4 user(s)." {
 		t.Fatalf("unexpected message: %q", got)
+	}
+}
+
+func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
+	t.Parallel()
+
+	session := &discordgo.Session{State: discordgo.NewState()}
+	router := core.NewCommandRouter(session, files.NewMemoryConfigManager())
+
+	RegisterModerationCommands(router)
+
+	if _, ok := router.GetRegistry().GetCommand("clean"); ok {
+		t.Fatal("did not expect /clean to remain registered")
+	}
+
+	cmd, ok := router.GetRegistry().GetCommand("moderation")
+	if !ok {
+		t.Fatal("expected moderation group command to be registered")
+	}
+
+	options := cmd.Options()
+	got := make([]string, 0, len(options))
+	for _, option := range options {
+		got = append(got, option.Name)
+	}
+	expected := []string{"ban", "kick", "massban", "mute", "timeout", "warn", "warnings"}
+	if !sameStringSet(got, expected) {
+		t.Fatalf("unexpected moderation subcommands: got=%v want=%v", got, expected)
 	}
 }
 
@@ -102,8 +131,10 @@ func TestResolveModerationActionTypeNewAliases(t *testing.T) {
 	}{
 		{input: "unban", want: "Member Ban Remove"},
 		{input: "kick", want: "Member Kick"},
+		{input: "mute", want: "Member Role Update"},
 		{input: "timeout", want: "Member Update"},
 		{input: "untimeout", want: "Member Update"},
+		{input: "warn", want: "Warning Issued"},
 	}
 
 	for _, tt := range tests {
@@ -147,6 +178,85 @@ func TestResolveModerationCaseEmbedMeta(t *testing.T) {
 	if actionLabel != "unban" || targetField != "User" || detailsField != "Details" {
 		t.Fatalf("unexpected unban embed meta: %q, %q, %q", actionLabel, targetField, detailsField)
 	}
+
+	actionLabel, targetField, detailsField = resolveModerationCaseEmbedMeta("mute", "Member Role Update")
+	if actionLabel != "mute" || targetField != "Offender" || detailsField != "Details" {
+		t.Fatalf("unexpected mute embed meta: %q, %q, %q", actionLabel, targetField, detailsField)
+	}
+
+	actionLabel, targetField, detailsField = resolveModerationCaseEmbedMeta("warn", "Warning Issued")
+	if actionLabel != "warn" || targetField != "Offender" || detailsField != "Details" {
+		t.Fatalf("unexpected warn embed meta: %q, %q, %q", actionLabel, targetField, detailsField)
+	}
+}
+
+func TestResolveConfiguredMuteRole(t *testing.T) {
+	t.Parallel()
+
+	guildID := "g1"
+	cm := newTestConfigManager(t)
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID: guildID,
+		Features: files.FeatureToggles{
+			MuteRole: boolPtr(true),
+		},
+		Roles: files.RolesConfig{
+			MuteRole: "mute-role",
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	ctx := &core.Context{
+		Config:  cm,
+		GuildID: guildID,
+		UserID:  "moderator",
+		GuildConfig: &files.GuildConfig{
+			GuildID: guildID,
+			Roles: files.RolesConfig{
+				MuteRole: "mute-role",
+			},
+		},
+	}
+	actionCtx := &banContext{
+		rolesByID: map[string]*discordgo.Role{
+			"mute-role": {ID: "mute-role", Name: "Muted", Position: 2},
+		},
+		actorRolePos: 5,
+		botRolePos:   6,
+	}
+
+	role, roleID, err := resolveConfiguredMuteRole(ctx, actionCtx)
+	if err != nil {
+		t.Fatalf("resolveConfiguredMuteRole returned error: %v", err)
+	}
+	if roleID != "mute-role" {
+		t.Fatalf("unexpected role id: %q", roleID)
+	}
+	if role == nil || role.Name != "Muted" {
+		t.Fatalf("unexpected role: %+v", role)
+	}
+}
+
+func TestBuildWarningsCommandMessage(t *testing.T) {
+	t.Parallel()
+
+	message := buildWarningsCommandMessage("alice", []storage.ModerationWarning{
+		{
+			CaseNumber:  3,
+			ModeratorID: "mod-1",
+			Reason:      "Spam",
+		},
+		{
+			CaseNumber:  2,
+			ModeratorID: "mod-2",
+			Reason:      "Off-topic flood",
+		},
+	})
+
+	if !containsAll(message, []string{"alice", "#3", "Spam", "#2", "Off-topic flood"}) {
+		t.Fatalf("unexpected warnings message: %q", message)
+	}
 }
 
 func TestFormatTimeoutDuration(t *testing.T) {
@@ -163,63 +273,6 @@ func TestFormatTimeoutDuration(t *testing.T) {
 	}
 }
 
-func TestResolveMessageDeleteLogChannelFallbackOrder(t *testing.T) {
-	t.Parallel()
-
-	gcfg := &files.GuildConfig{
-		Channels: files.ChannelsConfig{
-			MessageDelete: "c-delete",
-			MessageEdit:   "c-edit",
-		},
-	}
-	ctx := &core.Context{GuildConfig: gcfg}
-
-	if got := resolveMessageDeleteLogChannel(ctx); got != "c-delete" {
-		t.Fatalf("expected message_delete first, got %q", got)
-	}
-
-	gcfg.Channels.MessageDelete = ""
-	if got := resolveMessageDeleteLogChannel(ctx); got != "c-edit" {
-		t.Fatalf("expected message_edit fallback, got %q", got)
-	}
-
-	gcfg.Channels.MessageEdit = ""
-	if got := resolveMessageDeleteLogChannel(ctx); got != "" {
-		t.Fatalf("expected no channel fallback, got %q", got)
-	}
-}
-
-func TestShouldSendCleanUsageMessageDeleteEmbed(t *testing.T) {
-	t.Parallel()
-
-	guildID := "g1"
-	cm := newTestConfigManager(t)
-	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
-		t.Fatalf("AddGuildConfig: %v", err)
-	}
-	ctx := &core.Context{Config: cm, GuildID: guildID}
-
-	if !shouldSendCleanUsageMessageDeleteEmbed(ctx) {
-		t.Fatal("expected clean usage delete embed enabled by default")
-	}
-
-	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
-		cfg.RuntimeConfig.DisableMessageLogs = true
-	})
-	if shouldSendCleanUsageMessageDeleteEmbed(ctx) {
-		t.Fatal("expected disabled when runtime disable_message_logs is true")
-	}
-
-	disableMessage := false
-	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
-		cfg.RuntimeConfig.DisableMessageLogs = false
-		cfg.Features.Logging.MessageDelete = &disableMessage
-	})
-	if shouldSendCleanUsageMessageDeleteEmbed(ctx) {
-		t.Fatal("expected disabled when features.logging.message_delete is false")
-	}
-}
-
 func containsAll(value string, parts []string) bool {
 	for _, part := range parts {
 		if !strings.Contains(value, part) {
@@ -227,4 +280,30 @@ func containsAll(value string, parts []string) bool {
 		}
 	}
 	return true
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	seen := make(map[string]int, len(left))
+	for _, item := range left {
+		seen[item]++
+	}
+	for _, item := range right {
+		seen[item]--
+		if seen[item] < 0 {
+			return false
+		}
+	}
+	for _, count := range seen {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

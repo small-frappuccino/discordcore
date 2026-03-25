@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -21,8 +21,6 @@ const (
 	maxAuditLogReasonLen = 512
 	minSnowflakeLength   = 15
 	maxSnowflakeLength   = 21
-	cleanMaxDelete       = 100
-	cleanMaxFetch        = 500
 	timeoutMaxMinutes    = 28 * 24 * 60
 )
 
@@ -179,6 +177,7 @@ var moderationActionAliases = map[string]discordgo.AuditLogAction{
 	"massban":   discordgo.AuditLogActionMemberBanAdd,
 	"unban":     discordgo.AuditLogActionMemberBanRemove,
 	"kick":      discordgo.AuditLogActionMemberKick,
+	"mute":      discordgo.AuditLogActionMemberRoleUpdate,
 	"timeout":   discordgo.AuditLogActionMemberUpdate,
 	"untimeout": discordgo.AuditLogActionMemberUpdate,
 }
@@ -198,12 +197,12 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 
 	moderationGroup.AddSubCommand(newBanCommand())
 	moderationGroup.AddSubCommand(newMassBanCommand())
-	moderationGroup.AddSubCommand(newUnbanCommand())
 	moderationGroup.AddSubCommand(newKickCommand())
+	moderationGroup.AddSubCommand(newMuteCommand())
 	moderationGroup.AddSubCommand(newTimeoutCommand())
-	moderationGroup.AddSubCommand(newUntimeoutCommand())
+	moderationGroup.AddSubCommand(newWarnCommand())
+	moderationGroup.AddSubCommand(newWarningsCommand())
 
-	router.RegisterCommand(newCleanCommand())
 	router.RegisterCommand(moderationGroup)
 }
 
@@ -380,75 +379,6 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMassBanCommandMessage(bannedCount))
 }
 
-type unbanCommand struct{}
-
-func newUnbanCommand() *unbanCommand { return &unbanCommand{} }
-
-func (c *unbanCommand) Name() string { return "unban" }
-
-func (c *unbanCommand) Description() string { return "Unban a user by ID or mention" }
-
-func (c *unbanCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        "user",
-			Description: "User ID or mention to unban",
-			Required:    true,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        "reason",
-			Description: "Reason for the unban",
-			Required:    false,
-		},
-	}
-}
-
-func (c *unbanCommand) RequiresGuild() bool { return true }
-
-func (c *unbanCommand) RequiresPermissions() bool { return true }
-
-func (c *unbanCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-
-	rawUserID, err := extractor.StringRequired("user")
-	if err != nil {
-		return core.NewCommandError(err.Error(), true)
-	}
-
-	userID, ok := normalizeUserID(rawUserID)
-	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
-	}
-
-	reason, truncated := sanitizeReason(extractor.String("reason"))
-
-	if _, err := prepareUnbanContext(ctx); err != nil {
-		return err
-	}
-
-	targetUsername := resolveUserDisplayName(ctx, userID)
-	if err := ctx.Session.GuildBanDelete(ctx.GuildID, userID, discordgo.WithAuditLogReason(reason)); err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to unban user %s: %v", userID, err), true)
-	}
-
-	details := "Status: Success"
-	if truncated {
-		details += " | Reason truncated to 512 characters"
-	}
-	sendModerationCaseActionLog(ctx, moderationLogPayload{
-		Action:      "unban",
-		TargetID:    userID,
-		TargetLabel: targetUsername,
-		Reason:      reason,
-		RequestedBy: ctx.UserID,
-		Extra:       details,
-	})
-
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildUnbanCommandMessage(targetUsername, reason, truncated))
-}
-
 type kickCommand struct{}
 
 func newKickCommand() *kickCommand { return &kickCommand{} }
@@ -614,36 +544,36 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildTimeoutCommandMessage(targetUsername, minutes, reason, truncated))
 }
 
-type untimeoutCommand struct{}
+type muteCommand struct{}
 
-func newUntimeoutCommand() *untimeoutCommand { return &untimeoutCommand{} }
+func newMuteCommand() *muteCommand { return &muteCommand{} }
 
-func (c *untimeoutCommand) Name() string { return "untimeout" }
+func (c *muteCommand) Name() string { return "mute" }
 
-func (c *untimeoutCommand) Description() string { return "Remove timeout from a member" }
+func (c *muteCommand) Description() string { return "Apply the configured mute role to a member" }
 
-func (c *untimeoutCommand) Options() []*discordgo.ApplicationCommandOption {
+func (c *muteCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        "user",
-			Description: "Member ID or mention to remove timeout from",
+			Description: "Member ID or mention to mute",
 			Required:    true,
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        "reason",
-			Description: "Reason for removing the timeout",
+			Description: "Reason for the mute",
 			Required:    false,
 		},
 	}
 }
 
-func (c *untimeoutCommand) RequiresGuild() bool { return true }
+func (c *muteCommand) RequiresGuild() bool { return true }
 
-func (c *untimeoutCommand) RequiresPermissions() bool { return true }
+func (c *muteCommand) RequiresPermissions() bool { return true }
 
-func (c *untimeoutCommand) Handle(ctx *core.Context) error {
+func (c *muteCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
@@ -658,26 +588,39 @@ func (c *untimeoutCommand) Handle(ctx *core.Context) error {
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
 
-	timeoutCtx, err := prepareTimeoutContext(ctx)
+	muteCtx, err := prepareMuteContext(ctx)
 	if err != nil {
 		return err
 	}
 
-	if ok, reasonText := canUntimeoutTarget(ctx, timeoutCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot remove timeout from `%s`: %s.", userID, reasonText), true)
+	muteRole, roleID, err := resolveConfiguredMuteRole(ctx, muteCtx)
+	if err != nil {
+		return err
+	}
+
+	if ok, reasonText := canMuteTarget(ctx, muteCtx, userID); !ok {
+		return core.NewCommandError(fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), true)
+	}
+
+	targetMember, ok, reasonText := resolveRoleTargetMember(ctx, userID)
+	if !ok {
+		return core.NewCommandError(fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), true)
+	}
+	if memberHasRole(targetMember, roleID) {
+		return core.NewCommandError(fmt.Sprintf("Cannot mute `%s`: target already has the configured mute role.", userID), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
-	if err := ctx.Session.GuildMemberTimeout(ctx.GuildID, userID, nil, discordgo.WithAuditLogReason(reason)); err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to remove timeout from user %s: %v", userID, err), true)
+	if err := ctx.Session.GuildMemberRoleAdd(ctx.GuildID, userID, roleID); err != nil {
+		return core.NewCommandError(fmt.Sprintf("Failed to mute user %s: %v", userID, err), true)
 	}
 
-	details := "Timeout removed"
+	details := fmt.Sprintf("Role applied: %s (`%s`)", formatRoleDisplayName(muteRole), roleID)
 	if truncated {
 		details += " | Reason truncated to 512 characters"
 	}
 	sendModerationCaseActionLog(ctx, moderationLogPayload{
-		Action:      "untimeout",
+		Action:      "mute",
 		TargetID:    userID,
 		TargetLabel: targetUsername,
 		Reason:      reason,
@@ -685,145 +628,161 @@ func (c *untimeoutCommand) Handle(ctx *core.Context) error {
 		Extra:       details,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildUntimeoutCommandMessage(targetUsername, reason, truncated))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMuteCommandMessage(targetUsername, muteRole, reason, truncated))
 }
 
-type cleanCommand struct{}
+type warnCommand struct{}
 
-func newCleanCommand() *cleanCommand { return &cleanCommand{} }
+func newWarnCommand() *warnCommand { return &warnCommand{} }
 
-func (c *cleanCommand) Name() string { return "clean" }
+func (c *warnCommand) Name() string { return "warn" }
 
-func (c *cleanCommand) Description() string {
-	return "Delete recent messages in this channel"
-}
+func (c *warnCommand) Description() string { return "Record a warning for a member" }
 
-func (c *cleanCommand) Options() []*discordgo.ApplicationCommandOption {
+func (c *warnCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
-			Type:        discordgo.ApplicationCommandOptionInteger,
-			Name:        "num",
-			Description: "How many messages to delete (max 100)",
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "user",
+			Description: "Member ID or mention to warn",
 			Required:    true,
-			MinValue:    floatPtr(1),
-			MaxValue:    float64(cleanMaxDelete),
 		},
 		{
-			Type:        discordgo.ApplicationCommandOptionUser,
-			Name:        "user",
-			Description: "Only delete messages from a specific user",
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "reason",
+			Description: "Reason for the warning",
 			Required:    false,
 		},
 	}
 }
 
-func (c *cleanCommand) RequiresGuild() bool { return true }
+func (c *warnCommand) RequiresGuild() bool { return true }
 
-func (c *cleanCommand) RequiresPermissions() bool { return true }
+func (c *warnCommand) RequiresPermissions() bool { return true }
 
-func (c *cleanCommand) Handle(ctx *core.Context) error {
-	if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
-		return core.NewCommandError("Session not ready. Try again shortly.", true)
-	}
-	channelID := strings.TrimSpace(ctx.Interaction.ChannelID)
-	if channelID == "" {
-		return core.NewCommandError("Channel not available for this command.", true)
-	}
+func (c *warnCommand) Handle(ctx *core.Context) error {
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
-	extractor := core.NewOptionExtractor(ctx.Interaction.ApplicationCommandData().Options)
-	num := extractor.Int("num")
-	if num <= 0 {
-		return core.NewCommandError("Please provide a valid number of messages to delete.", true)
-	}
-	if num > cleanMaxDelete {
-		return core.NewCommandError("You can delete up to 100 messages at a time.", true)
-	}
-
-	userID, userLabel, err := resolveCleanUserOption(ctx)
+	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
 		return core.NewCommandError(err.Error(), true)
 	}
 
-	if err := ensureManageMessagesPermission(ctx); err != nil {
+	userID, ok := normalizeUserID(rawUserID)
+	if !ok {
+		return core.NewCommandError("Invalid user ID or mention.", true)
+	}
+
+	reason, truncated := sanitizeReason(extractor.String("reason"))
+
+	warnCtx, err := prepareWarnContext(ctx)
+	if err != nil {
 		return err
 	}
 
-	messages, err := fetchMessagesForClean(ctx.Session, channelID, int(num), userID)
+	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
+		return core.NewCommandError(fmt.Sprintf("Cannot warn `%s`: %s.", userID, reasonText), true)
+	}
+
+	store := moderationStoreFromContext(ctx)
+	if store == nil {
+		return core.NewCommandError("Warnings storage is not available for this bot instance.", true)
+	}
+
+	targetUsername := resolveUserDisplayName(ctx, userID)
+	warning, err := store.CreateModerationWarning(ctx.GuildID, userID, ctx.UserID, reason, time.Now().UTC())
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to fetch messages: %v", err), true)
-	}
-	if len(messages) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No matching messages found.")
+		return core.NewCommandError(fmt.Sprintf("Failed to create warning for %s: %v", userID, err), true)
 	}
 
-	cutoff := time.Now().Add(-14 * 24 * time.Hour)
-	deleteIDs := make([]string, 0, len(messages))
-	skippedOld := 0
-	for _, msg := range messages {
-		if msg == nil || msg.ID == "" {
-			continue
-		}
-		if !msg.Timestamp.IsZero() && msg.Timestamp.Before(cutoff) {
-			skippedOld++
-			continue
-		}
-		deleteIDs = append(deleteIDs, msg.ID)
+	details := "Warning recorded"
+	if truncated {
+		details += " | Reason truncated to 512 characters"
 	}
-	if len(deleteIDs) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No messages could be deleted (all were too old).")
-	}
-
-	deleted, failed := cleanup.DeleteMessages(ctx.Session, channelID, deleteIDs, cleanup.DeleteOptions{
-		Mode: cleanup.DeleteModeBulkPreferred,
-	})
-	filterLabel := "any user"
-	if userID != "" {
-		filterLabel = "<@" + userID + ">"
-	}
-
-	log.ApplicationLogger().Info(
-		"Clean command executed",
-		"guildID", ctx.GuildID,
-		"channelID", channelID,
-		"requested", num,
-		"deleted", deleted,
-		"skipped_old", skippedOld,
-		"failed", failed,
-		"user_filter", userID,
-	)
-
-	sendCleanUsageMessageDeleteEmbed(ctx, cleanUsagePayload{
-		ChannelID:  channelID,
-		ActorID:    ctx.UserID,
-		UserID:     userID,
-		UserLabel:  userLabel,
-		Requested:  int(num),
-		Deleted:    deleted,
-		SkippedOld: skippedOld,
-		Failed:     failed,
+	sendModerationCaseActionLog(ctx, moderationLogPayload{
+		Action:        "warn",
+		TargetID:      userID,
+		TargetLabel:   targetUsername,
+		Reason:        reason,
+		RequestedBy:   ctx.UserID,
+		Extra:         details,
+		CaseNumber:    warning.CaseNumber,
+		HasCaseNumber: true,
 	})
 
-	sendModerationLogForEvent(ctx, moderationLogPayload{
-		Action:      "clean",
-		TargetID:    userID,
-		TargetLabel: userLabel,
-		Reason:      fmt.Sprintf("Deleted %d message(s)", deleted),
-		RequestedBy: ctx.UserID,
-		Extra:       fmt.Sprintf("Channel: <#%s> (`%s`) | Filter: %s | Requested: %d | Deleted: %d | Skipped (old): %d | Failed: %d", channelID, channelID, filterLabel, num, deleted, skippedOld, failed),
-	}, logging.LogEventCleanAction)
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildWarnCommandMessage(targetUsername, warning.CaseNumber, reason, truncated))
+}
 
-	message := fmt.Sprintf("Deleted %d message(s) in <#%s>.", deleted, channelID)
-	if userID != "" {
-		message = fmt.Sprintf("Deleted %d message(s) from <@%s> in <#%s>.", deleted, userID, channelID)
+type warningsCommand struct{}
+
+func newWarningsCommand() *warningsCommand { return &warningsCommand{} }
+
+func (c *warningsCommand) Name() string { return "warnings" }
+
+func (c *warningsCommand) Description() string { return "List recent warnings for a member" }
+
+func (c *warningsCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        "user",
+			Description: "Member ID or mention to inspect",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        "limit",
+			Description: "How many recent warnings to show (default 5, max 25)",
+			Required:    false,
+			MinValue:    floatPtr(1),
+			MaxValue:    25,
+		},
 	}
-	if skippedOld > 0 {
-		message += fmt.Sprintf(" Skipped %d message(s) older than 14 days.", skippedOld)
-	}
-	if failed > 0 {
-		message += fmt.Sprintf(" Failed to delete %d message(s).", failed)
+}
+
+func (c *warningsCommand) RequiresGuild() bool { return true }
+
+func (c *warningsCommand) RequiresPermissions() bool { return true }
+
+func (c *warningsCommand) Handle(ctx *core.Context) error {
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+
+	rawUserID, err := extractor.StringRequired("user")
+	if err != nil {
+		return core.NewCommandError(err.Error(), true)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, message)
+	userID, ok := normalizeUserID(rawUserID)
+	if !ok {
+		return core.NewCommandError("Invalid user ID or mention.", true)
+	}
+
+	limit := int(extractor.Int("limit"))
+	if limit <= 0 {
+		limit = 5
+	}
+
+	warnCtx, err := prepareWarnContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
+		return core.NewCommandError(fmt.Sprintf("Cannot inspect warnings for `%s`: %s.", userID, reasonText), true)
+	}
+
+	store := moderationStoreFromContext(ctx)
+	if store == nil {
+		return core.NewCommandError("Warnings storage is not available for this bot instance.", true)
+	}
+
+	targetUsername := resolveUserDisplayName(ctx, userID)
+	warnings, err := store.ListModerationWarnings(ctx.GuildID, userID, limit)
+	if err != nil {
+		return core.NewCommandError(fmt.Sprintf("Failed to load warnings for %s: %v", userID, err), true)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, buildWarningsCommandMessage(targetUsername, warnings))
 }
 
 func parseMemberIDs(input string) ([]string, []string) {
@@ -876,24 +835,24 @@ func buildMassBanCommandMessage(banned int) string {
 	return fmt.Sprintf("Banned %d user(s).", banned)
 }
 
-func buildUnbanCommandMessage(targetUsername, reason string, truncated bool) string {
-	targetLabel := strings.TrimSpace(targetUsername)
-	if targetLabel == "" {
-		targetLabel = "unknown user"
-	}
-	message := fmt.Sprintf("Unbanned **%s**. Reason: %s", targetLabel, reason)
-	if truncated {
-		message += " (reason truncated to 512 characters)"
-	}
-	return message
-}
-
 func buildKickCommandMessage(targetUsername, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
 	message := fmt.Sprintf("Kicked **%s**. Reason: %s", targetLabel, reason)
+	if truncated {
+		message += " (reason truncated to 512 characters)"
+	}
+	return message
+}
+
+func buildMuteCommandMessage(targetUsername string, muteRole *discordgo.Role, reason string, truncated bool) string {
+	targetLabel := strings.TrimSpace(targetUsername)
+	if targetLabel == "" {
+		targetLabel = "unknown user"
+	}
+	message := fmt.Sprintf("Muted **%s** with **%s**. Reason: %s", targetLabel, formatRoleDisplayName(muteRole), reason)
 	if truncated {
 		message += " (reason truncated to 512 characters)"
 	}
@@ -912,16 +871,41 @@ func buildTimeoutCommandMessage(targetUsername string, minutes int64, reason str
 	return message
 }
 
-func buildUntimeoutCommandMessage(targetUsername, reason string, truncated bool) string {
+func buildWarnCommandMessage(targetUsername string, caseNumber int64, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
-	message := fmt.Sprintf("Removed timeout from **%s**. Reason: %s", targetLabel, reason)
+	message := fmt.Sprintf("Warned **%s**. Case #%d. Reason: %s", targetLabel, caseNumber, reason)
 	if truncated {
 		message += " (reason truncated to 512 characters)"
 	}
 	return message
+}
+
+func buildWarningsCommandMessage(targetUsername string, warnings []storage.ModerationWarning) string {
+	targetLabel := strings.TrimSpace(targetUsername)
+	if targetLabel == "" {
+		targetLabel = "unknown user"
+	}
+	if len(warnings) == 0 {
+		return fmt.Sprintf("No warnings recorded for **%s**.", targetLabel)
+	}
+
+	lines := []string{fmt.Sprintf("Recent warnings for **%s**:", targetLabel)}
+	for _, warning := range warnings {
+		reason := strings.TrimSpace(warning.Reason)
+		if reason == "" {
+			reason = "No reason provided"
+		}
+		createdAt := warning.CreatedAt
+		if createdAt.IsZero() {
+			lines = append(lines, fmt.Sprintf("#%d • by <@%s> • %s", warning.CaseNumber, warning.ModeratorID, reason))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("#%d • <t:%d:d> • by <@%s> • %s", warning.CaseNumber, createdAt.Unix(), warning.ModeratorID, reason))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func formatTimeoutDuration(minutes int64) string {
@@ -933,40 +917,6 @@ func formatTimeoutDuration(minutes int64) string {
 	default:
 		return fmt.Sprintf("%d minute(s)", minutes)
 	}
-}
-
-func resolveCleanUserOption(ctx *core.Context) (string, string, error) {
-	if ctx == nil || ctx.Interaction == nil {
-		return "", "", nil
-	}
-	for _, opt := range ctx.Interaction.ApplicationCommandData().Options {
-		if opt == nil || opt.Name != "user" {
-			continue
-		}
-		switch opt.Type {
-		case discordgo.ApplicationCommandOptionUser:
-			if user := opt.UserValue(ctx.Session); user != nil {
-				return user.ID, user.Username, nil
-			}
-			if raw, ok := opt.Value.(string); ok {
-				if normalized, ok := normalizeUserID(raw); ok {
-					return normalized, "", nil
-				}
-				return "", "", fmt.Errorf("Invalid user ID or mention.")
-			}
-		case discordgo.ApplicationCommandOptionString:
-			raw := strings.TrimSpace(opt.StringValue())
-			if raw == "" {
-				return "", "", nil
-			}
-			normalized, ok := normalizeUserID(raw)
-			if !ok {
-				return "", "", fmt.Errorf("Invalid user ID or mention.")
-			}
-			return normalized, "", nil
-		}
-	}
-	return "", "", nil
 }
 
 func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
@@ -986,59 +936,6 @@ func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
 	}
 
 	return core.NewPermissionChecker(ctx.Session, ctx.Config)
-}
-
-func ensureManageMessagesPermission(ctx *core.Context) error {
-	_, err := prepareModerationContext(
-		ctx,
-		discordgo.PermissionManageMessages,
-		"You need the Manage Messages permission to use this command.",
-		"I need the Manage Messages permission to delete messages.",
-	)
-	return err
-}
-
-func fetchMessagesForClean(session *discordgo.Session, channelID string, target int, userID string) ([]*discordgo.Message, error) {
-	if session == nil || channelID == "" || target <= 0 {
-		return nil, nil
-	}
-	var out []*discordgo.Message
-	beforeID := ""
-	fetched := 0
-	for fetched < cleanMaxFetch && len(out) < target {
-		batchSize := minInt(100, cleanMaxFetch-fetched)
-		msgs, err := session.ChannelMessages(channelID, batchSize, beforeID, "", "")
-		if err != nil {
-			return nil, err
-		}
-		if len(msgs) == 0 {
-			break
-		}
-		fetched += len(msgs)
-		for _, msg := range msgs {
-			if msg == nil || msg.ID == "" {
-				continue
-			}
-			if userID != "" {
-				if msg.Author == nil || msg.Author.ID != userID {
-					continue
-				}
-			}
-			out = append(out, msg)
-			if len(out) >= target {
-				break
-			}
-		}
-		beforeID = msgs[len(msgs)-1].ID
-	}
-	return out, nil
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func floatPtr(v float64) *float64 { return &v }
@@ -1104,15 +1001,6 @@ func prepareBanContext(ctx *core.Context) (*banContext, error) {
 	)
 }
 
-func prepareUnbanContext(ctx *core.Context) (*banContext, error) {
-	return prepareModerationContext(
-		ctx,
-		discordgo.PermissionBanMembers,
-		"You need the Ban Members permission to use this command.",
-		"I need the Ban Members permission to unban members.",
-	)
-}
-
 func prepareKickContext(ctx *core.Context) (*banContext, error) {
 	return prepareModerationContext(
 		ctx,
@@ -1128,6 +1016,24 @@ func prepareTimeoutContext(ctx *core.Context) (*banContext, error) {
 		discordgo.PermissionModerateMembers,
 		"You need the Moderate Members permission to use this command.",
 		"I need the Moderate Members permission to timeout members.",
+	)
+}
+
+func prepareMuteContext(ctx *core.Context) (*banContext, error) {
+	return prepareModerationContext(
+		ctx,
+		discordgo.PermissionManageRoles,
+		"You need the Manage Roles permission to use this command.",
+		"I need the Manage Roles permission to mute members with the configured mute role.",
+	)
+}
+
+func prepareWarnContext(ctx *core.Context) (*banContext, error) {
+	return prepareModerationContext(
+		ctx,
+		discordgo.PermissionModerateMembers,
+		"You need the Moderate Members permission to use this command.",
+		"I need the Moderate Members permission to manage warnings.",
 	)
 }
 
@@ -1249,8 +1155,12 @@ func canTimeoutTarget(ctx *core.Context, actionCtx *banContext, targetID string)
 	return canModerateTarget(ctx, actionCtx, targetID, "timeout", true)
 }
 
-func canUntimeoutTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
-	return canModerateTarget(ctx, actionCtx, targetID, "remove timeout from", true)
+func canMuteTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
+	return canModerateTarget(ctx, actionCtx, targetID, "mute", true)
+}
+
+func canWarnTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
+	return canModerateTarget(ctx, actionCtx, targetID, "warn", true)
 }
 
 func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actionVerb string, requireMember bool) (bool, string) {
@@ -1302,6 +1212,101 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 		return false, "target has an equal or higher role than the bot"
 	}
 	return true, ""
+}
+
+func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*discordgo.Role, string, error) {
+	if ctx == nil || ctx.Config == nil {
+		return nil, "", core.NewCommandError("Configuration is not available right now.", true)
+	}
+	cfg := ctx.Config.Config()
+	if cfg == nil {
+		return nil, "", core.NewCommandError("Configuration is not available right now.", true)
+	}
+	if !cfg.ResolveFeatures(ctx.GuildID).MuteRole {
+		return nil, "", core.NewCommandError("Mute role moderation is disabled for this server.", true)
+	}
+
+	roleID := ""
+	if ctx.GuildConfig != nil {
+		roleID = strings.TrimSpace(ctx.GuildConfig.Roles.MuteRole)
+	}
+	if roleID == "" {
+		for _, guild := range cfg.Guilds {
+			if guild.GuildID == ctx.GuildID {
+				roleID = strings.TrimSpace(guild.Roles.MuteRole)
+				break
+			}
+		}
+	}
+	if roleID == "" {
+		return nil, "", core.NewCommandError("Mute role is not configured for this server.", true)
+	}
+	if actionCtx == nil {
+		return nil, roleID, core.NewCommandError("Mute role context is not available right now.", true)
+	}
+
+	role, ok := actionCtx.rolesByID[roleID]
+	if !ok || role == nil {
+		return nil, roleID, core.NewCommandError("Configured mute role is no longer available in this server.", true)
+	}
+	if role.Managed {
+		return nil, roleID, core.NewCommandError("Configured mute role is managed by an integration and cannot be assigned manually.", true)
+	}
+	if !actionCtx.actorIsOwner && actionCtx.actorRolePos <= role.Position {
+		return nil, roleID, core.NewCommandError("Your highest role must stay above the configured mute role.", true)
+	}
+	if !actionCtx.botIsOwner && actionCtx.botRolePos <= role.Position {
+		return nil, roleID, core.NewCommandError("My highest role must stay above the configured mute role.", true)
+	}
+	return role, roleID, nil
+}
+
+func resolveRoleTargetMember(ctx *core.Context, targetID string) (*discordgo.Member, bool, string) {
+	checker := permissionCheckerForContext(ctx)
+	if checker == nil {
+		return nil, false, "target member could not be resolved right now"
+	}
+	targetMember, ok, err := checker.ResolveMember(ctx.GuildID, targetID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Moderation role action failed to resolve target member",
+			"operation", "commands.moderation.resolve_role_target_member",
+			"guildID", ctx.GuildID,
+			"targetID", targetID,
+			"err", err,
+		)
+		return nil, false, "target member could not be resolved right now"
+	}
+	if !ok || targetMember == nil {
+		return nil, false, "target is not a member of this server"
+	}
+	return targetMember, true, ""
+}
+
+func memberHasRole(member *discordgo.Member, roleID string) bool {
+	if member == nil {
+		return false
+	}
+	roleID = strings.TrimSpace(roleID)
+	if roleID == "" {
+		return false
+	}
+	for _, existingRoleID := range member.Roles {
+		if strings.TrimSpace(existingRoleID) == roleID {
+			return true
+		}
+	}
+	return false
+}
+
+func formatRoleDisplayName(role *discordgo.Role) string {
+	if role == nil {
+		return "mute role"
+	}
+	if role.ID == role.Name || strings.TrimSpace(role.Name) == "" {
+		return role.ID
+	}
+	return role.Name
 }
 
 func buildRoleIndex(roles []*discordgo.Role) map[string]*discordgo.Role {
@@ -1390,23 +1395,14 @@ func highestRolePosition(member *discordgo.Member, rolesByID map[string]*discord
 }
 
 type moderationLogPayload struct {
-	Action      string
-	TargetID    string
-	TargetLabel string
-	Reason      string
-	RequestedBy string
-	Extra       string
-}
-
-type cleanUsagePayload struct {
-	ChannelID  string
-	ActorID    string
-	UserID     string
-	UserLabel  string
-	Requested  int
-	Deleted    int
-	SkippedOld int
-	Failed     int
+	Action        string
+	TargetID      string
+	TargetLabel   string
+	Reason        string
+	RequestedBy   string
+	Extra         string
+	CaseNumber    int64
+	HasCaseNumber bool
 }
 
 func buildMassBanLogDetails(total, banned int, invalid, skipped, failed []string) string {
@@ -1421,104 +1417,6 @@ func buildMassBanLogDetails(total, banned int, invalid, skipped, failed []string
 		parts = append(parts, fmt.Sprintf("Failed: %d", len(failed)))
 	}
 	return strings.Join(parts, " | ")
-}
-
-func shouldSendCleanUsageMessageDeleteEmbed(ctx *core.Context) bool {
-	if ctx == nil || ctx.Config == nil || ctx.GuildID == "" {
-		return false
-	}
-	cfg := ctx.Config.Config()
-	if cfg == nil {
-		return false
-	}
-	if !cfg.ResolveFeatures(ctx.GuildID).Logging.MessageDelete {
-		return false
-	}
-	rc := cfg.ResolveRuntimeConfig(ctx.GuildID)
-	return !rc.DisableMessageLogs
-}
-
-func resolveMessageDeleteLogChannel(ctx *core.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	if ctx.Config != nil && ctx.GuildID != "" {
-		if cid := logging.ResolveLogChannel(logging.LogEventMessageDelete, ctx.GuildID, ctx.Config); cid != "" {
-			return cid
-		}
-	}
-	if ctx.GuildConfig == nil {
-		return ""
-	}
-	if cid := strings.TrimSpace(ctx.GuildConfig.Channels.MessageDelete); cid != "" {
-		return cid
-	}
-	if cid := strings.TrimSpace(ctx.GuildConfig.Channels.MessageEdit); cid != "" {
-		return cid
-	}
-	return ""
-}
-
-func sendCleanUsageMessageDeleteEmbed(ctx *core.Context, payload cleanUsagePayload) {
-	if ctx == nil || ctx.Session == nil || ctx.GuildConfig == nil {
-		return
-	}
-	if !shouldSendCleanUsageMessageDeleteEmbed(ctx) {
-		return
-	}
-
-	logChannelID := resolveMessageDeleteLogChannel(ctx)
-	if logChannelID == "" {
-		return
-	}
-
-	filterValue := "Any user"
-	if payload.UserID != "" {
-		targetLabel := strings.TrimSpace(payload.UserLabel)
-		switch {
-		case targetLabel == "":
-			filterValue = fmt.Sprintf("<@%s> (`%s`)", payload.UserID, payload.UserID)
-		case targetLabel == payload.UserID:
-			filterValue = fmt.Sprintf("<@%s> (`%s`)", payload.UserID, payload.UserID)
-		default:
-			filterValue = fmt.Sprintf("**%s** (<@%s>, `%s`)", targetLabel, payload.UserID, payload.UserID)
-		}
-	}
-
-	channelValue := "Unknown"
-	if payload.ChannelID != "" {
-		channelValue = fmt.Sprintf("<#%s> (`%s`)", payload.ChannelID, payload.ChannelID)
-	}
-	actorValue := "Unknown"
-	if payload.ActorID != "" {
-		actorValue = fmt.Sprintf("<@%s> (`%s`)", payload.ActorID, payload.ActorID)
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "Message Delete Context",
-		Description: "Deletion executed via `/moderation clean`.",
-		Color:       theme.MessageDelete(),
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "CASO", Value: "`/clean` da alicebot foi usado", Inline: true},
-			{Name: "Actor", Value: actorValue, Inline: true},
-			{Name: "Channel", Value: channelValue, Inline: true},
-			{Name: "Filter", Value: filterValue, Inline: false},
-			{Name: "Requested", Value: fmt.Sprintf("%d", payload.Requested), Inline: true},
-			{Name: "Deleted", Value: fmt.Sprintf("%d", payload.Deleted), Inline: true},
-			{Name: "Skipped (14d+)", Value: fmt.Sprintf("%d", payload.SkippedOld), Inline: true},
-			{Name: "Failed", Value: fmt.Sprintf("%d", payload.Failed), Inline: true},
-		},
-	}
-
-	if _, err := ctx.Session.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Failed to send /clean usage context embed to message delete log",
-			"guildID", ctx.GuildID,
-			"channelID", logChannelID,
-			"err", err,
-		)
-	}
 }
 
 func nextGuildCaseNumber(ctx *core.Context) (int64, bool) {
@@ -1540,6 +1438,17 @@ func nextGuildCaseNumber(ctx *core.Context) (int64, bool) {
 		return nextFallbackCaseNumber(ctx.GuildID), true
 	}
 	return n, true
+}
+
+func moderationStoreFromContext(ctx *core.Context) *storage.Store {
+	if ctx == nil {
+		return nil
+	}
+	router := ctx.Router()
+	if router == nil {
+		return nil
+	}
+	return router.GetStore()
 }
 
 func nextFallbackCaseNumber(guildID string) int64 {
@@ -1565,6 +1474,13 @@ func resolveModerationActionType(action string) string {
 	raw := strings.TrimSpace(action)
 	if raw == "" {
 		return "Unknown Action"
+	}
+
+	switch compactModerationActionKey(raw) {
+	case "mute":
+		return "Member Role Update"
+	case "warn":
+		return "Warning Issued"
 	}
 
 	if code, err := strconv.Atoi(raw); err == nil {
@@ -1709,10 +1625,14 @@ func resolveModerationCaseEmbedMeta(action, actionType string) (string, string, 
 		return "unban", "User", "Details"
 	case "kick", "memberkick":
 		return "kick", "Offender", "Details"
+	case "mute", "memberroleupdate":
+		return "mute", "Offender", "Details"
 	case "timeout":
 		return "timeout", "Offender", "Details"
 	case "untimeout":
 		return "untimeout", "User", "Details"
+	case "warn":
+		return "warn", "Offender", "Details"
 	default:
 		label := strings.ToLower(strings.TrimSpace(actionType))
 		if label == "" {
@@ -1735,7 +1655,10 @@ func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload
 		return
 	}
 	channelID := emit.ChannelID
-	caseNumber, hasCaseNumber := nextGuildCaseNumber(ctx)
+	caseNumber, hasCaseNumber := payload.CaseNumber, payload.HasCaseNumber
+	if !hasCaseNumber || caseNumber <= 0 {
+		caseNumber, hasCaseNumber = nextGuildCaseNumber(ctx)
+	}
 
 	action := strings.TrimSpace(payload.Action)
 	if action == "" {

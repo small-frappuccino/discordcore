@@ -167,9 +167,6 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		Channels:        in.Channels,
 		Roles:           cloneRolesConfig(in.Roles),
 		Stats:           cloneStatsConfig(in.Stats),
-		Rulesets:        cloneRulesets(in.Rulesets),
-		LooseLists:      cloneRules(in.LooseLists),
-		Blocklist:       cloneStringSlice(in.Blocklist),
 		RolesCacheTTL:   in.RolesCacheTTL,
 		MemberCacheTTL:  in.MemberCacheTTL,
 		GuildCacheTTL:   in.GuildCacheTTL,
@@ -248,6 +245,7 @@ func cloneFeatureToggles(in FeatureToggles) FeatureToggles {
 		Backfill: FeatureBackfillToggles{
 			Enabled: cloneBoolPtr(in.Backfill.Enabled),
 		},
+		MuteRole:       cloneBoolPtr(in.MuteRole),
 		StatsChannels:  cloneBoolPtr(in.StatsChannels),
 		AutoRoleAssign: cloneBoolPtr(in.AutoRoleAssign),
 		UserPrune:      cloneBoolPtr(in.UserPrune),
@@ -260,6 +258,7 @@ func cloneRolesConfig(in RolesConfig) RolesConfig {
 		AutoAssignment:   cloneAutoAssignmentConfig(in.AutoAssignment),
 		VerificationRole: in.VerificationRole,
 		BoosterRole:      in.BoosterRole,
+		MuteRole:         in.MuteRole,
 	}
 }
 
@@ -307,56 +306,6 @@ func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 		Template: in.Template,
 		Partners: clonePartnerEntries(in.Partners),
 	}
-}
-
-func cloneRulesets(in []Ruleset) []Ruleset {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]Ruleset, 0, len(in))
-	for _, item := range in {
-		out = append(out, Ruleset{
-			ID:      item.ID,
-			Name:    item.Name,
-			Rules:   cloneRules(item.Rules),
-			Enabled: item.Enabled,
-		})
-	}
-	return out
-}
-
-func cloneRules(in []Rule) []Rule {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]Rule, 0, len(in))
-	for _, item := range in {
-		out = append(out, Rule{
-			ID:      item.ID,
-			Name:    item.Name,
-			Lists:   cloneLists(item.Lists),
-			Enabled: item.Enabled,
-		})
-	}
-	return out
-}
-
-func cloneLists(in []List) []List {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]List, 0, len(in))
-	for _, item := range in {
-		out = append(out, List{
-			ID:              item.ID,
-			Type:            item.Type,
-			Name:            item.Name,
-			Description:     item.Description,
-			NativeID:        item.NativeID,
-			BlockedKeywords: cloneStringSlice(item.BlockedKeywords),
-		})
-	}
-	return out
 }
 
 func cloneStringSlice(in []string) []string {

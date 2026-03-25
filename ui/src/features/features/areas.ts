@@ -41,13 +41,13 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     anchor: "moderation",
     label: "Moderation",
     description:
-      "AutoMod controls plus moderation event logging needed for enforcement workflows.",
+      "Logging-only AutoMod readiness, mute-role setup, and moderation event routes for staff workflows.",
     navigation: "primary",
     featureIDs: [
       "services.automod",
+      "moderation.mute_role",
       "logging.automod_action",
       "logging.moderation_case",
-      "logging.clean_action",
     ],
   },
   {

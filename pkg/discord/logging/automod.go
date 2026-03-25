@@ -14,7 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-// AutomodService listens to messages and enforces a simple keyword-based moderation.
+// AutomodService listens for Discord native AutoMod executions and routes them to logging.
 type AutomodService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager

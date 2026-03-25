@@ -54,6 +54,7 @@ func TestSchemaInitialized(t *testing.T) {
 		"guild_meta":               false,
 		"runtime_meta":             false,
 		"moderation_cases":         false,
+		"moderation_warnings":      false,
 		"roles_current":            false,
 		"message_version_counters": false,
 	}
@@ -189,6 +190,66 @@ func TestUpsertMessagesContextDeduplicatesByMessage(t *testing.T) {
 	}
 	if got == nil || got.Content != "other" {
 		t.Fatalf("expected second message to be inserted, got %+v", got)
+	}
+}
+
+func TestCreateAndListModerationWarnings(t *testing.T) {
+	store := newTempStore(t)
+
+	first, err := store.CreateModerationWarning(
+		"g1",
+		"user-1",
+		"mod-1",
+		"First warning",
+		time.Date(2026, 3, 24, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("CreateModerationWarning(first) failed: %v", err)
+	}
+	if first.CaseNumber != 1 {
+		t.Fatalf("expected first case number to be 1, got %+v", first)
+	}
+
+	second, err := store.CreateModerationWarning(
+		"g1",
+		"user-1",
+		"mod-2",
+		"Second warning",
+		time.Date(2026, 3, 24, 13, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("CreateModerationWarning(second) failed: %v", err)
+	}
+	if second.CaseNumber != 2 {
+		t.Fatalf("expected second case number to be 2, got %+v", second)
+	}
+
+	otherUser, err := store.CreateModerationWarning(
+		"g1",
+		"user-2",
+		"mod-1",
+		"Other user warning",
+		time.Date(2026, 3, 24, 14, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("CreateModerationWarning(other user) failed: %v", err)
+	}
+	if otherUser.CaseNumber != 3 {
+		t.Fatalf("expected shared guild case sequence, got %+v", otherUser)
+	}
+
+	warnings, err := store.ListModerationWarnings("g1", "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListModerationWarnings() failed: %v", err)
+	}
+	if len(warnings) != 2 {
+		t.Fatalf("expected 2 warnings, got %+v", warnings)
+	}
+	if warnings[0].CaseNumber != 2 || warnings[0].Reason != "Second warning" {
+		t.Fatalf("expected latest warning first, got %+v", warnings[0])
+	}
+	if warnings[1].CaseNumber != 1 || warnings[1].Reason != "First warning" {
+		t.Fatalf("expected oldest warning second, got %+v", warnings[1])
 	}
 }
 

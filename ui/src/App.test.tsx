@@ -68,6 +68,13 @@ function createFetchMock() {
         managed: false,
         is_default: false,
       },
+      {
+        id: "mute-role",
+        name: "Muted",
+        position: 1,
+        managed: false,
+        is_default: false,
+      },
     ],
     "guild-2": [
       {
@@ -106,6 +113,20 @@ function createFetchMock() {
         id: "join-channel",
         name: "join-channel",
         display_name: "#join-channel",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "mod-actions",
+        name: "mod-actions",
+        display_name: "#mod-actions",
+        kind: "text",
+        supports_message_route: true,
+      },
+      {
+        id: "mod-cases",
+        name: "mod-cases",
+        display_name: "#mod-cases",
         kind: "text",
         supports_message_route: true,
       },
@@ -258,7 +279,23 @@ function createFetchMock() {
         id: "services.automod",
         category: "services",
         label: "Automod service",
-        description: "Automod service",
+        description: "Discord native AutoMod listener used for logging.",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+        details: {
+          mode: "logging_only",
+        },
+        editable_fields: ["enabled"],
+      },
+      {
+        id: "moderation.mute_role",
+        category: "moderation",
+        label: "Mute role",
+        description: "Role applied by the mute command.",
         scope: "guild",
         supports_guild_override: true,
         override_state: "enabled",
@@ -267,10 +304,62 @@ function createFetchMock() {
         readiness: "blocked",
         blockers: [
           {
-            code: "missing_rules",
-            message: "Automod needs rules before it can be relied on.",
+            code: "missing_role",
+            message: "Choose the role that should be applied by the mute command.",
+            field: "role_id",
           },
         ],
+        details: {
+          role_id: "",
+        },
+        editable_fields: ["enabled", "role_id"],
+      },
+      {
+        id: "logging.automod_action",
+        category: "logging",
+        label: "Automod action logging",
+        description: "AutoMod executions",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+        details: {
+          requires_channel: true,
+          channel_id: "mod-actions",
+          validate_channel_permissions: true,
+          exclusive_moderation_channel: true,
+          runtime_toggle_path: "disable_automod_logs",
+        },
+        editable_fields: ["enabled", "channel_id"],
+      },
+      {
+        id: "logging.moderation_case",
+        category: "logging",
+        label: "Moderation case logging",
+        description: "Moderation cases",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "missing_channel",
+            message: "Choose a channel for this log route.",
+            field: "channel_id",
+          },
+        ],
+        details: {
+          requires_channel: true,
+          channel_id: "",
+          validate_channel_permissions: true,
+          exclusive_moderation_channel: true,
+          runtime_toggle_path: "moderation_logging",
+        },
+        editable_fields: ["enabled", "channel_id"],
       },
       {
         id: "logging.avatar_logging",
@@ -468,14 +557,41 @@ function createFetchMock() {
       return;
     }
 
+    if (feature.id === "moderation.mute_role") {
+      const roleId =
+        typeof feature.details?.role_id === "string"
+          ? feature.details.role_id.trim()
+          : "";
+
+      if (roleId === "") {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "missing_role",
+            message: "Choose the role that should be applied by the mute command.",
+            field: "role_id",
+          },
+        ];
+        return;
+      }
+
+      const guildRoleOptions = roleOptionsByGuild["guild-1"] ?? [];
+      if (!guildRoleOptions.some((role) => role.id === roleId)) {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "invalid_role",
+            message: "The configured mute role is no longer available in this server.",
+            field: "role_id",
+          },
+        ];
+        return;
+      }
+    }
+
     if (feature.id === "services.automod") {
-      feature.readiness = "blocked";
-      feature.blockers = [
-        {
-          code: "missing_rules",
-          message: "Automod needs rules before it can be relied on.",
-        },
-      ];
+      feature.readiness = "ready";
+      feature.blockers = [];
       return;
     }
 
@@ -715,6 +831,13 @@ function createFetchMock() {
           };
         }
 
+        if (Object.prototype.hasOwnProperty.call(payload, "role_id")) {
+          feature.details = {
+            ...(feature.details ?? {}),
+            role_id: String(payload.role_id ?? ""),
+          };
+        }
+
         if (Object.prototype.hasOwnProperty.call(payload, "allowed_role_ids")) {
           const allowedRoleIDs = Array.isArray(payload.allowed_role_ids)
             ? payload.allowed_role_ids
@@ -925,7 +1048,7 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("cell", { name: "Server Two" });
   });
 
-  it("opens Moderation as a real category workspace instead of redirecting to Home", async () => {
+  it("opens Moderation as a real category workspace and keeps the scope limited to logging, mute role, and moderation routes", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", "/dashboard/moderation");
@@ -933,11 +1056,89 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
+    await screen.findByRole("button", { name: "Disable Automod service" });
+
     expect(window.location.pathname).toBe("/dashboard/moderation");
     expect(window.location.hash).toBe("");
+    expect(screen.getAllByText("Logging only").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Mute role").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Supported actions").length).toBeGreaterThan(0);
     expect(
-      await screen.findByRole("button", { name: "Disable Automod service" }),
+      screen.getAllByText("ban, massban, kick, mute, timeout, warnings").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "Disable Automod service" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Rule coverage")).not.toBeInTheDocument();
+  });
+
+  it("saves mute role and moderation case route from the dedicated Moderation workspace", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/moderation");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Moderation", level: 1 });
+    await screen.findByRole("button", { name: "Configure mute role" });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure mute role" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure Mute role" }),
+    ).toBeVisible();
+    await userEvent.selectOptions(screen.getByLabelText("Mute role"), "mute-role");
+    await userEvent.click(screen.getByRole("button", { name: "Save mute role" }));
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "moderation.mute_role",
+          payload: {
+            role_id: "mute-role",
+          },
+        },
+      ]);
+    });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure Moderation case logging" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Configure Moderation case logging" }),
+    ).toBeVisible();
+    await userEvent.selectOptions(
+      screen.getByLabelText("Destination channel"),
+      "mod-cases",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save destination" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "moderation.mute_role",
+          payload: {
+            role_id: "mute-role",
+          },
+        },
+        {
+          guildID: "guild-1",
+          featureID: "logging.moderation_case",
+          payload: {
+            channel_id: "mod-cases",
+          },
+        },
+      ]);
+    });
+
+    expect(screen.getAllByText("Muted").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("#mod-cases").length).toBeGreaterThan(0);
   });
 
   it.each([

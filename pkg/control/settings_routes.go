@@ -297,19 +297,6 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		if payload.Stats != nil {
 			guild.Stats = *payload.Stats
 		}
-		if payload.Moderation != nil {
-			next, err := files.NormalizeGuildModerationConfig(
-				payload.Moderation.Rulesets,
-				payload.Moderation.LooseRules,
-				payload.Moderation.Blocklist,
-			)
-			if err != nil {
-				return err
-			}
-			guild.Rulesets = next.Rulesets
-			guild.LooseLists = next.LooseRules
-			guild.Blocklist = next.Blocklist
-		}
 		if payload.Cache != nil {
 			guild.RolesCacheTTL = payload.Cache.RolesCacheTTL
 			guild.MemberCacheTTL = payload.Cache.MemberCacheTTL
@@ -451,7 +438,6 @@ func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 		payload.Channels == nil &&
 		payload.Roles == nil &&
 		payload.Stats == nil &&
-		payload.Moderation == nil &&
 		payload.Cache == nil &&
 		payload.UserPrune == nil &&
 		payload.PartnerBoard == nil &&

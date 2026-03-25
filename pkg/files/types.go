@@ -9,8 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // RuntimeConfig centralizes operational toggles/parameters that were previously
@@ -220,6 +218,7 @@ type FeatureToggles struct {
 	Maintenance    FeatureMaintenanceToggles   `json:"maintenance,omitempty"`
 	Safety         FeatureSafetyToggles        `json:"safety,omitempty"`
 	Backfill       FeatureBackfillToggles      `json:"backfill,omitempty"`
+	MuteRole       *bool                       `json:"mute_role,omitempty"`
 	StatsChannels  *bool                       `json:"stats_channels,omitempty"`
 	AutoRoleAssign *bool                       `json:"auto_role_assignment,omitempty"`
 	UserPrune      *bool                       `json:"user_prune,omitempty"`
@@ -272,6 +271,7 @@ type ResolvedFeatureToggles struct {
 	Backfill struct {
 		Enabled bool
 	}
+	MuteRole       bool
 	StatsChannels  bool
 	AutoRoleAssign bool
 	UserPrune      bool
@@ -334,6 +334,7 @@ type RolesConfig struct {
 	AutoAssignment   AutoAssignmentConfig `json:"auto_assignment,omitempty"`
 	VerificationRole string               `json:"verification_role,omitempty"`
 	BoosterRole      string               `json:"booster_role,omitempty"`
+	MuteRole         string               `json:"mute_role,omitempty"`
 }
 
 const (
@@ -422,9 +423,6 @@ type GuildConfig struct {
 	Channels      ChannelsConfig `json:"channels,omitempty"`
 	Roles         RolesConfig    `json:"roles,omitempty"`
 	Stats         StatsConfig    `json:"stats,omitempty"`
-	Rulesets      []Ruleset      `json:"rulesets,omitempty"`
-	LooseLists    []Rule         `json:"loose_rules,omitempty"` // Loose rules not associated with any ruleset
-	Blocklist     []string       `json:"blocklist,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
 	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")
@@ -720,6 +718,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	out.Safety.BotRolePermMirror = resolveFeatureBool(guild.Safety.BotRolePermMirror, global.Safety.BotRolePermMirror, true)
 	out.Backfill.Enabled = resolveFeatureBool(guild.Backfill.Enabled, global.Backfill.Enabled, true)
 
+	out.MuteRole = resolveFeatureBool(guild.MuteRole, global.MuteRole, true)
 	out.StatsChannels = resolveFeatureBool(guild.StatsChannels, global.StatsChannels, true)
 	out.AutoRoleAssign = resolveFeatureBool(guild.AutoRoleAssign, global.AutoRoleAssign, true)
 	out.UserPrune = resolveFeatureBool(guild.UserPrune, global.UserPrune, true)
@@ -762,48 +761,6 @@ type AvatarChange struct {
 	Timestamp time.Time
 }
 
-// ## Rule and Ruleset Types
-
-// RuleType distinguishes between native Discord rules and custom bot rules.
-const (
-	RuleTypeNative = "native"
-	RuleTypeCustom = "custom"
-)
-
-// List represents a single list in the system.
-type List struct {
-	ID              string   `json:"id"`
-	Type            string   `json:"type"` // "native" or "custom"
-	Name            string   `json:"name"`
-	Description     string   `json:"description,omitempty"`
-	NativeID        string   `json:"native_id,omitempty"`        // Native list fields
-	BlockedKeywords []string `json:"blocked_keywords,omitempty"` // Custom list fields
-}
-
-// Rule represents a rule that can load a set of lists.
-type Rule struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Lists   []List `json:"lists"` // Set of lists associated with the rule
-	Enabled bool   `json:"enabled"`
-}
-
-// Ruleset holds a collection of rules.
-type Ruleset struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Rules   []Rule `json:"rules"`
-	Enabled bool   `json:"enabled"`
-}
-
-// StatusString returns a human-readable status for the ruleset (Enabled/Disabled).
-func (r Ruleset) StatusString() string {
-	if r.Enabled {
-		return "Enabled"
-	}
-	return "Disabled"
-}
-
 func guildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, strings.TrimSpace(guildID))
@@ -821,87 +778,6 @@ func guildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
 	}
 	return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, target)
 }
-
-// ## ConfigManager Methods
-
-// AddList adds a list to the LooseLists of a guild.
-func (mgr *ConfigManager) AddList(guildID string, list List) error {
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
-		guildConfig, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
-			return err
-		}
-		guildConfig.LooseLists = append(guildConfig.LooseLists, Rule{
-			ID:      list.ID,
-			Name:    list.Name,
-			Lists:   []List{list},
-			Enabled: true,
-		})
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully for guildID: %s", guildID))
-	return nil
-}
-
-// AddRule adds a rule to the LooseLists of a guild.
-func (mgr *ConfigManager) AddRule(guildID string, rule Rule) error {
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
-		guildConfig, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return err
-		}
-		guildConfig.LooseLists = append(guildConfig.LooseLists, rule)
-		return nil
-	})
-	return err
-}
-
-// AddRuleset adds a ruleset to a guild.
-func (mgr *ConfigManager) AddRuleset(guildID string, ruleset Ruleset) error {
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
-		guildConfig, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return err
-		}
-		guildConfig.Rulesets = append(guildConfig.Rulesets, ruleset)
-		return nil
-	})
-	return err
-}
-
-// AddListToRule adds a list to a specific rule in a guild.
-func (mgr *ConfigManager) AddListToRule(guildID string, ruleID string, list List) error {
-	log.DatabaseLogger().Info(fmt.Sprintf("AddListToRule called with guildID: %s, ruleID: %s, listID: %s", guildID, ruleID, list.ID))
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
-		guildConfig, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			log.ErrorLoggerRaw().Error(fmt.Sprintf("GuildConfig not found for guildID: %s", guildID))
-			return err
-		}
-
-		for i, rule := range guildConfig.LooseLists {
-			if rule.ID == ruleID {
-				log.DatabaseLogger().Info(fmt.Sprintf("Rule found for ruleID: %s, appending list", ruleID))
-				guildConfig.LooseLists[i].Lists = append(guildConfig.LooseLists[i].Lists, list)
-				return nil
-			}
-		}
-
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("Rule not found for ruleID: %s", ruleID))
-		return fmt.Errorf("rule not found")
-	})
-	if err != nil {
-		return err
-	}
-	log.DatabaseLogger().Info(fmt.Sprintf("List appended successfully to ruleID: %s", ruleID))
-	return nil
-}
-
-// ## GuildConfig Methods
 
 // RolesCacheTTLDuration returns the configured TTL for the roles cache or a default of 5m.
 func (gc *GuildConfig) RolesCacheTTLDuration() time.Duration {
@@ -984,23 +860,6 @@ func (mgr *ConfigManager) GetRolesCacheTTL(guildID string) string {
 		return ""
 	}
 	return gcfg.RolesCacheTTL
-}
-
-// FindListByName searches for a list by its name in LooseLists.
-func (gc *GuildConfig) FindListByName(name string) *List {
-	for _, rule := range gc.LooseLists {
-		for _, list := range rule.Lists {
-			if list.Name == name {
-				return &list
-			}
-		}
-	}
-	return nil
-}
-
-// ListExists checks if a list with the given name already exists in LooseLists.
-func (gc *GuildConfig) ListExists(name string) bool {
-	return gc.FindListByName(name) != nil
 }
 
 // ## Error Types

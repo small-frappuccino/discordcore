@@ -76,7 +76,8 @@ type featureBlocker struct {
 
 var featureDefinitions = []featureDefinition{
 	{ID: "services.monitoring", Category: "services", Label: "Monitoring", Description: "Core monitoring service lifecycle and shared event processing.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
-	{ID: "services.automod", Category: "services", Label: "Automod service", Description: "Automatic moderation service that uses configured rules, loose rules, and blocklist entries.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "services.automod", Category: "services", Label: "Automod service", Description: "Discord native AutoMod event listener used for moderation logging. No local rules engine is active yet.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "moderation.mute_role", Category: "moderation", Label: "Mute role", Description: "Role applied by the mute command when the selected server needs role-based muting.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "role_id"}},
 	{ID: "services.commands", Category: "services", Label: "Commands", Description: "Slash-command handling plus the optional command channel route used by guild configuration.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}},
 	{ID: "services.admin_commands", Category: "services", Label: "Admin commands", Description: "Privileged command workflows scoped by the configured allowed roles.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "allowed_role_ids"}},
 	{ID: "logging.avatar_logging", Category: "logging", Label: "Avatar logging", Description: "Record avatar changes in the configured user log channel.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}, LogEvent: discordlogging.LogEventAvatarChange},
@@ -89,7 +90,6 @@ var featureDefinitions = []featureDefinition{
 	{ID: "logging.reaction_metric", Category: "logging", Label: "Reaction metrics", Description: "Track reaction metrics without a dedicated routing channel.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}, LogEvent: discordlogging.LogEventReactionMetric},
 	{ID: "logging.automod_action", Category: "logging", Label: "Automod action logging", Description: "Record AutoMod executions in a validated moderation log channel.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}, LogEvent: discordlogging.LogEventAutomodAction},
 	{ID: "logging.moderation_case", Category: "logging", Label: "Moderation case logging", Description: "Record moderation cases in an exclusive moderation log channel.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}, LogEvent: discordlogging.LogEventModerationCase},
-	{ID: "logging.clean_action", Category: "logging", Label: "Clean action logging", Description: "Record cleanup actions in a validated moderation log channel.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}, LogEvent: discordlogging.LogEventCleanAction},
 	{ID: "message_cache.cleanup_on_startup", Category: "message_cache", Label: "Message cache cleanup", Description: "Allow startup cleanup when the runtime cache-cleanup switch is also enabled.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "message_cache.delete_on_log", Category: "message_cache", Label: "Delete on log", Description: "Delete cached messages after logging when the runtime delete-on-log switch is enabled.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "presence_watch.bot", Category: "presence_watch", Label: "Presence watch (bot)", Description: "Track presence changes for the bot identity when runtime watching is enabled.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled", "watch_bot"}, GuildEditableFields: []string{"enabled", "watch_bot"}},
@@ -498,11 +498,11 @@ func buildFeatureDetails(cfg *files.BotConfig, guildID string, def featureDefini
 	rc := cfg.ResolveRuntimeConfig(guildID)
 	switch def.ID {
 	case "services.automod":
+		out["mode"] = "logging_only"
+	case "moderation.mute_role":
 		if guildID != "" {
 			if guild, ok := findGuildSettings(*cfg, guildID); ok {
-				out["ruleset_count"] = len(guild.Rulesets)
-				out["loose_rule_count"] = len(guild.LooseLists)
-				out["blocklist_count"] = len(guild.Blocklist)
+				out["role_id"] = strings.TrimSpace(guild.Roles.MuteRole)
 			}
 		}
 	case "services.commands":
@@ -595,6 +595,20 @@ func buildFeatureReadiness(
 
 	rc := cfg.ResolveRuntimeConfig(guildID)
 	switch def.ID {
+	case "moderation.mute_role":
+		if guildID != "" {
+			if guild, ok := findGuildSettings(*cfg, guildID); ok {
+				roleID := strings.TrimSpace(guild.Roles.MuteRole)
+				if roleID == "" {
+					return "blocked", []featureBlocker{{Code: "missing_role", Message: "Choose the role that should be applied by the mute command.", Field: "role_id"}}
+				}
+				if roleIndex, err := guildRoleOptionIndex(session, guildID); err == nil {
+					if _, ok := roleIndex[roleID]; !ok {
+						return "blocked", []featureBlocker{{Code: "invalid_role", Message: "The configured mute role is no longer available in this server.", Field: "role_id"}}
+					}
+				}
+			}
+		}
 	case "message_cache.cleanup_on_startup":
 		if !rc.MessageCacheCleanup {
 			return "blocked", []featureBlocker{{Code: "runtime_disabled", Message: "Runtime message cache cleanup is disabled."}}
@@ -866,6 +880,12 @@ func applyGuildFeaturePatch(cfg *files.BotConfig, guild *files.GuildConfig, def 
 		} else if present {
 			guild.Roles.Allowed = normalizeStringList(value)
 		}
+	case "moderation.mute_role":
+		if present, value, err := consumeString(remaining, "role_id"); err != nil {
+			return err
+		} else if present {
+			guild.Roles.MuteRole = value
+		}
 	case "presence_watch.bot":
 		if present, value, err := consumeBool(remaining, "watch_bot"); err != nil {
 			return err
@@ -1045,6 +1065,8 @@ func resolvedFeatureValue(cfg *files.BotConfig, guildID, featureID string) bool 
 		return resolved.Services.Monitoring
 	case "services.automod":
 		return resolved.Services.Automod
+	case "moderation.mute_role":
+		return resolved.MuteRole
 	case "services.commands":
 		return resolved.Services.Commands
 	case "services.admin_commands":
@@ -1069,8 +1091,6 @@ func resolvedFeatureValue(cfg *files.BotConfig, guildID, featureID string) bool 
 		return resolved.Logging.AutomodAction
 	case "logging.moderation_case":
 		return resolved.Logging.ModerationCase
-	case "logging.clean_action":
-		return resolved.Logging.CleanAction
 	case "message_cache.cleanup_on_startup":
 		return resolved.MessageCache.CleanupOnStartup
 	case "message_cache.delete_on_log":
@@ -1102,6 +1122,8 @@ func getGlobalFeatureToggle(ft files.FeatureToggles, featureID string) *bool {
 		return ft.Services.Monitoring
 	case "services.automod":
 		return ft.Services.Automod
+	case "moderation.mute_role":
+		return ft.MuteRole
 	case "services.commands":
 		return ft.Services.Commands
 	case "services.admin_commands":
@@ -1126,8 +1148,6 @@ func getGlobalFeatureToggle(ft files.FeatureToggles, featureID string) *bool {
 		return ft.Logging.AutomodAction
 	case "logging.moderation_case":
 		return ft.Logging.ModerationCase
-	case "logging.clean_action":
-		return ft.Logging.CleanAction
 	case "message_cache.cleanup_on_startup":
 		return ft.MessageCache.CleanupOnStartup
 	case "message_cache.delete_on_log":
@@ -1159,6 +1179,8 @@ func setGlobalFeatureToggle(ft *files.FeatureToggles, featureID string, value *b
 		ft.Services.Monitoring = cloneBool(value)
 	case "services.automod":
 		ft.Services.Automod = cloneBool(value)
+	case "moderation.mute_role":
+		ft.MuteRole = cloneBool(value)
 	case "services.commands":
 		ft.Services.Commands = cloneBool(value)
 	case "services.admin_commands":
@@ -1183,8 +1205,6 @@ func setGlobalFeatureToggle(ft *files.FeatureToggles, featureID string, value *b
 		ft.Logging.AutomodAction = cloneBool(value)
 	case "logging.moderation_case":
 		ft.Logging.ModerationCase = cloneBool(value)
-	case "logging.clean_action":
-		ft.Logging.CleanAction = cloneBool(value)
 	case "message_cache.cleanup_on_startup":
 		ft.MessageCache.CleanupOnStartup = cloneBool(value)
 	case "message_cache.delete_on_log":

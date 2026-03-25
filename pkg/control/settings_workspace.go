@@ -37,9 +37,6 @@ type configuredGuildSummary struct {
 	ConfiguredChannels  int    `json:"configured_channels"`
 	AllowedRoles        int    `json:"allowed_roles"`
 	StatsChannels       int    `json:"stats_channels"`
-	Rulesets            int    `json:"rulesets"`
-	LooseRules          int    `json:"loose_rules"`
-	BlocklistEntries    int    `json:"blocklist_entries"`
 	Partners            int    `json:"partners"`
 	HasFeatureOverrides bool   `json:"has_feature_overrides"`
 	HasRuntimeOverrides bool   `json:"has_runtime_overrides"`
@@ -64,9 +61,6 @@ type guildRegistryEntry struct {
 	ConfiguredChannels      int      `json:"configured_channels,omitempty"`
 	AllowedRoles            int      `json:"allowed_roles,omitempty"`
 	StatsChannels           int      `json:"stats_channels,omitempty"`
-	Rulesets                int      `json:"rulesets,omitempty"`
-	LooseRules              int      `json:"loose_rules,omitempty"`
-	BlocklistEntries        int      `json:"blocklist_entries,omitempty"`
 	Partners                int      `json:"partners,omitempty"`
 	HasFeatureOverrides     bool     `json:"has_feature_overrides,omitempty"`
 	HasRuntimeOverrides     bool     `json:"has_runtime_overrides,omitempty"`
@@ -111,7 +105,6 @@ type guildSettingsSections struct {
 	Channels     files.ChannelsConfig      `json:"channels"`
 	Roles        files.RolesConfig         `json:"roles"`
 	Stats        files.StatsConfig         `json:"stats"`
-	Moderation   guildModerationSection    `json:"moderation"`
 	Cache        guildCacheSettingsSection `json:"cache"`
 	UserPrune    files.UserPruneConfig     `json:"user_prune"`
 	PartnerBoard files.PartnerBoardConfig  `json:"partner_board"`
@@ -121,12 +114,6 @@ type guildSettingsSections struct {
 type guildSettingsEffective struct {
 	Features files.ResolvedFeatureToggles `json:"features"`
 	Runtime  runtimeSettingsSections      `json:"runtime"`
-}
-
-type guildModerationSection struct {
-	Rulesets   []files.Ruleset `json:"rulesets,omitempty"`
-	LooseRules []files.Rule    `json:"loose_rules,omitempty"`
-	Blocklist  []string        `json:"blocklist,omitempty"`
 }
 
 type guildCacheSettingsSection struct {
@@ -207,7 +194,6 @@ type updateGuildSettingsRequest struct {
 	Channels      *files.ChannelsConfig      `json:"channels,omitempty"`
 	Roles         *files.RolesConfig         `json:"roles,omitempty"`
 	Stats         *files.StatsConfig         `json:"stats,omitempty"`
-	Moderation    *guildModerationSection    `json:"moderation,omitempty"`
 	Cache         *guildCacheSettingsSection `json:"cache,omitempty"`
 	UserPrune     *files.UserPruneConfig     `json:"user_prune,omitempty"`
 	PartnerBoard  *files.PartnerBoardConfig  `json:"partner_board,omitempty"`
@@ -244,14 +230,14 @@ func buildSettingsCatalog() settingsCatalog {
 			{
 				ID:          "channels",
 				Title:       "Channel routing",
-				Description: "Target channels for commands, logs, moderation, and cleanup flows.",
+				Description: "Target channels for commands, logs, and moderation flows.",
 				Scope:       "guild",
 				Kind:        "object",
 			},
 			{
 				ID:          "roles",
 				Title:       "Roles and auto-assignment",
-				Description: "Allowed admin roles, verification roles, booster role anchoring, and auto-assignment rules.",
+				Description: "Allowed admin roles, mute role setup, verification roles, booster role anchoring, and auto-assignment rules.",
 				Scope:       "guild",
 				Kind:        "object",
 			},
@@ -259,13 +245,6 @@ func buildSettingsCatalog() settingsCatalog {
 				ID:          "stats",
 				Title:       "Stats channels",
 				Description: "Periodic member-count channel updates with channel-level templates and filters.",
-				Scope:       "guild",
-				Kind:        "collection",
-			},
-			{
-				ID:          "moderation",
-				Title:       "Rules, lists, and blocklist",
-				Description: "Rulesets, loose rules, and raw blocklist entries used by moderation flows.",
 				Scope:       "guild",
 				Kind:        "collection",
 			},
@@ -353,11 +332,6 @@ func buildGuildSettingsWorkspaceWithBindings(
 			Channels: guild.Channels,
 			Roles:    guild.Roles,
 			Stats:    guild.Stats,
-			Moderation: guildModerationSection{
-				Rulesets:   guild.Rulesets,
-				LooseRules: guild.LooseLists,
-				Blocklist:  guild.Blocklist,
-			},
 			Cache: guildCacheSettingsSection{
 				RolesCacheTTL:   guild.RolesCacheTTL,
 				MemberCacheTTL:  guild.MemberCacheTTL,
@@ -480,9 +454,6 @@ func buildConfiguredGuildSummary(guild files.GuildConfig, defaultBotInstanceID s
 		ConfiguredChannels:  countConfiguredChannels(guild.Channels),
 		AllowedRoles:        len(guild.Roles.Allowed),
 		StatsChannels:       len(guild.Stats.Channels),
-		Rulesets:            len(guild.Rulesets),
-		LooseRules:          len(guild.LooseLists),
-		BlocklistEntries:    len(guild.Blocklist),
 		Partners:            len(guild.PartnerBoard.Partners),
 		HasFeatureOverrides: hasFeatureOverrides(guild.Features),
 		HasRuntimeOverrides: hasRuntimeOverrides(guild.RuntimeConfig),
@@ -497,9 +468,6 @@ func applyConfiguredSummary(entry *guildRegistryEntry, summary configuredGuildSu
 	entry.ConfiguredChannels = summary.ConfiguredChannels
 	entry.AllowedRoles = summary.AllowedRoles
 	entry.StatsChannels = summary.StatsChannels
-	entry.Rulesets = summary.Rulesets
-	entry.LooseRules = summary.LooseRules
-	entry.BlocklistEntries = summary.BlocklistEntries
 	entry.Partners = summary.Partners
 	entry.HasFeatureOverrides = summary.HasFeatureOverrides
 	entry.HasRuntimeOverrides = summary.HasRuntimeOverrides
@@ -620,7 +588,6 @@ func countConfiguredChannels(ch files.ChannelsConfig) int {
 		ch.MessageDelete,
 		ch.AutomodAction,
 		ch.ModerationCase,
-		ch.CleanAction,
 		ch.EntryBackfill,
 		ch.VerificationCleanup,
 	}
@@ -656,6 +623,7 @@ func hasFeatureOverrides(ft files.FeatureToggles) bool {
 		ft.Maintenance.DBCleanup,
 		ft.Safety.BotRolePermMirror,
 		ft.Backfill.Enabled,
+		ft.MuteRole,
 		ft.StatsChannels,
 		ft.AutoRoleAssign,
 		ft.UserPrune,

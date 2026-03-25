@@ -48,6 +48,16 @@ type CacheEntryRecord struct {
 	ExpiresAt time.Time
 }
 
+type ModerationWarning struct {
+	ID          int64
+	GuildID     string
+	UserID      string
+	CaseNumber  int64
+	ModeratorID string
+	Reason      string
+	CreatedAt   time.Time
+}
+
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
@@ -1362,6 +1372,144 @@ func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 	return next, nil
 }
 
+func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason string, createdAt time.Time) (ModerationWarning, error) {
+	if s.db == nil {
+		return ModerationWarning{}, fmt.Errorf("store not initialized")
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	userID = strings.TrimSpace(userID)
+	moderatorID = strings.TrimSpace(moderatorID)
+	reason = strings.TrimSpace(reason)
+	if guildID == "" {
+		return ModerationWarning{}, fmt.Errorf("guildID is empty")
+	}
+	if userID == "" {
+		return ModerationWarning{}, fmt.Errorf("userID is empty")
+	}
+	if moderatorID == "" {
+		return ModerationWarning{}, fmt.Errorf("moderatorID is empty")
+	}
+	if reason == "" {
+		return ModerationWarning{}, fmt.Errorf("reason is empty")
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	} else {
+		createdAt = createdAt.UTC()
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ModerationWarning{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	caseNumber, err := nextModerationCaseNumberTx(tx, guildID)
+	if err != nil {
+		return ModerationWarning{}, err
+	}
+
+	warning := ModerationWarning{
+		GuildID:     guildID,
+		UserID:      userID,
+		CaseNumber:  caseNumber,
+		ModeratorID: moderatorID,
+		Reason:      reason,
+		CreatedAt:   createdAt,
+	}
+	if err := txQueryRow(
+		tx,
+		`INSERT INTO moderation_warnings (guild_id, user_id, case_number, moderator_id, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         RETURNING id, created_at`,
+		warning.GuildID,
+		warning.UserID,
+		warning.CaseNumber,
+		warning.ModeratorID,
+		warning.Reason,
+		warning.CreatedAt,
+	).Scan(&warning.ID, &warning.CreatedAt); err != nil {
+		return ModerationWarning{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return ModerationWarning{}, err
+	}
+	return warning, nil
+}
+
+func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]ModerationWarning, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	userID = strings.TrimSpace(userID)
+	if guildID == "" || userID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 25 {
+		limit = 25
+	}
+
+	rows, err := s.query(
+		`SELECT id, guild_id, user_id, case_number, moderator_id, reason, created_at
+         FROM moderation_warnings
+         WHERE guild_id=? AND user_id=?
+         ORDER BY case_number DESC
+         LIMIT ?`,
+		guildID,
+		userID,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	warnings := make([]ModerationWarning, 0, limit)
+	for rows.Next() {
+		var warning ModerationWarning
+		if err := rows.Scan(
+			&warning.ID,
+			&warning.GuildID,
+			&warning.UserID,
+			&warning.CaseNumber,
+			&warning.ModeratorID,
+			&warning.Reason,
+			&warning.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		warning.CreatedAt = warning.CreatedAt.UTC()
+		warnings = append(warnings, warning)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return warnings, nil
+}
+
+func nextModerationCaseNumberTx(tx *sql.Tx, guildID string) (int64, error) {
+	var next int64
+	if err := txQueryRow(
+		tx,
+		`INSERT INTO moderation_cases (guild_id, last_case_number)
+         VALUES (?, 1)
+         ON CONFLICT(guild_id) DO UPDATE
+         SET last_case_number = moderation_cases.last_case_number + 1
+         RETURNING last_case_number`,
+		guildID,
+	).Scan(&next); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
 // SetGuildOwnerID sets or updates the cached owner ID for a guild.
 func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 	if s.db == nil {
@@ -1501,6 +1649,7 @@ var requiredSchemaTables = []string{
 	"guild_meta",
 	"runtime_meta",
 	"moderation_cases",
+	"moderation_warnings",
 	"roles_current",
 	"persistent_cache",
 	"daily_message_metrics",

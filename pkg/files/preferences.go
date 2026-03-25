@@ -653,13 +653,3 @@ func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.
 	}
 	return nil
 }
-
-// FindRulesetByID searches for a ruleset by its ID in the guild configuration.
-func (cfg *GuildConfig) FindRulesetByID(id string) (*Ruleset, int) {
-	for idx, rs := range cfg.Rulesets {
-		if rs.ID == id {
-			return &cfg.Rulesets[idx], idx
-		}
-	}
-	return nil, -1
-}

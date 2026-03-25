@@ -324,4 +324,44 @@ describe("feature hooks", () => {
     expect(onSuccess).toHaveBeenCalledWith(updatedFeature);
     expect(result.current.notice).toBeNull();
   });
+
+  it("patches a guild feature with role_id details", async () => {
+    const updatedFeature = buildFeatureRecord({
+      id: "moderation.mute_role",
+      category: "moderation",
+      label: "Mute role",
+      details: {
+        role_id: "mute-role",
+      },
+      editable_fields: ["enabled", "role_id"],
+    });
+    mockDashboardSession.client.patchGuildFeature.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      feature: updatedFeature,
+    });
+
+    const { result } = renderHook(() =>
+      useFeatureMutation({
+        scope: "guild",
+      }),
+    );
+
+    let response: FeatureRecord | null = null;
+    await act(async () => {
+      response = await result.current.patchFeature("moderation.mute_role", {
+        role_id: "mute-role",
+      });
+    });
+
+    expect(mockDashboardSession.client.patchGuildFeature).toHaveBeenCalledWith(
+      "guild-1",
+      "moderation.mute_role",
+      {
+        role_id: "mute-role",
+      },
+    );
+    expect(response).toEqual(updatedFeature);
+    expect(result.current.notice).toBeNull();
+  });
 });

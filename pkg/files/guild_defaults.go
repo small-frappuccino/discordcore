@@ -51,6 +51,7 @@ func NewMinimalGuildConfig(guildID, botInstanceID string) GuildConfig {
 			Backfill: FeatureBackfillToggles{
 				Enabled: boolPtr(disabled),
 			},
+			MuteRole:       boolPtr(disabled),
 			StatsChannels:  boolPtr(disabled),
 			AutoRoleAssign: boolPtr(disabled),
 			UserPrune:      boolPtr(disabled),

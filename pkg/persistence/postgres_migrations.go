@@ -198,4 +198,25 @@ var postgresMigrations = []migration{
 			`ALTER TABLE member_joins DROP COLUMN IF EXISTS is_bot`,
 		},
 	},
+	{
+		Version: 6,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS moderation_warnings (
+				id           BIGSERIAL PRIMARY KEY,
+				guild_id     TEXT NOT NULL,
+				user_id      TEXT NOT NULL,
+				case_number  BIGINT NOT NULL,
+				moderator_id TEXT NOT NULL,
+				reason       TEXT NOT NULL,
+				created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_moderation_warnings_case ON moderation_warnings(guild_id, case_number)`,
+			`CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(guild_id, user_id, created_at DESC)`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_moderation_warnings_user`,
+			`DROP INDEX IF EXISTS idx_moderation_warnings_case`,
+			`DROP TABLE IF EXISTS moderation_warnings`,
+		},
+	},
 }

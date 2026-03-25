@@ -156,6 +156,7 @@ export interface FeatureResponse {
 export interface FeaturePatchPayload {
   enabled?: boolean | null;
   channel_id?: string;
+  role_id?: string;
   allowed_role_ids?: string[];
   watch_bot?: boolean;
   user_id?: string;

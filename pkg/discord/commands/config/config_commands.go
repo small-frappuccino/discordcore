@@ -148,7 +148,6 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 				{Name: "channels.message_delete", Value: "channels.message_delete"},
 				{Name: "channels.automod_action", Value: "channels.automod_action"},
 				{Name: "channels.moderation_case", Value: "channels.moderation_case"},
-				{Name: "channels.clean_action", Value: "channels.clean_action"},
 				{Name: "channels.entry_backfill", Value: "channels.entry_backfill"},
 				{Name: "channels.verification_cleanup", Value: "channels.verification_cleanup"},
 			},
@@ -196,8 +195,6 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 			guildConfig.Channels.AutomodAction = value
 		case "channels.moderation_case":
 			guildConfig.Channels.ModerationCase = value
-		case "channels.clean_action":
-			guildConfig.Channels.CleanAction = value
 		case "channels.entry_backfill":
 			guildConfig.Channels.EntryBackfill = value
 		case "channels.verification_cleanup":
@@ -252,7 +249,6 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	b.WriteString(fmt.Sprintf("Message Delete: %s\n", emptyToDash(ctx.GuildConfig.Channels.MessageDelete)))
 	b.WriteString(fmt.Sprintf("Automod Action: %s\n", emptyToDash(ctx.GuildConfig.Channels.AutomodAction)))
 	b.WriteString(fmt.Sprintf("Moderation Case: %s\n", emptyToDash(ctx.GuildConfig.Channels.ModerationCase)))
-	b.WriteString(fmt.Sprintf("Clean Action: %s\n", emptyToDash(ctx.GuildConfig.Channels.CleanAction)))
 	b.WriteString(fmt.Sprintf("Entry Backfill: %s\n", emptyToDash(ctx.GuildConfig.Channels.EntryBackfill)))
 	b.WriteString(fmt.Sprintf("Verification Cleanup: %s\n", emptyToDash(ctx.GuildConfig.Channels.VerificationCleanup)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
@@ -295,7 +291,6 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`channels.message_delete` - Channel for message delete logs",
 		"`channels.automod_action` - Channel for automod action logs",
 		"`channels.moderation_case` - Dedicated channel for moderation case logs",
-		"`channels.clean_action` - Channel for /clean action logs",
 		"`channels.entry_backfill` - Channel used by entry/leave backfill",
 		"`channels.verification_cleanup` - Channel used for verification cleanup routines",
 		"",
