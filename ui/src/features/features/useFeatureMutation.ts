@@ -3,6 +3,7 @@ import type { FeaturePatchPayload, FeatureRecord } from "../../api/control";
 import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
+import { updateCachedGuildFeatureRecord } from "./guildResourceCache";
 import type { FeatureWorkspaceScope } from "./useFeatureWorkspace";
 
 interface UseFeatureMutationOptions {
@@ -16,7 +17,7 @@ export function useFeatureMutation({
   onSuccess,
   onError,
 }: UseFeatureMutationOptions) {
-  const { authState, client, selectedGuildID } = useDashboardSession();
+  const { authState, baseUrl, client, selectedGuildID } = useDashboardSession();
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -51,6 +52,13 @@ export function useFeatureMutation({
         scope === "guild"
           ? await client.patchGuildFeature(selectedGuildID.trim(), featureId, payload)
           : await client.patchGlobalFeature(featureId, payload);
+      if (scope === "guild") {
+        updateCachedGuildFeatureRecord(
+          baseUrl,
+          selectedGuildID.trim(),
+          response.feature,
+        );
+      }
       setNotice(null);
       onSuccess?.(response.feature);
       return response.feature;

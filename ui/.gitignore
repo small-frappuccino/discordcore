@@ -6,6 +6,7 @@ dist/*
 !dist/index.html
 !dist/brand/
 !dist/brand/alicebot.webp
+debug-screenshots/
 
 # Tooling caches
 .cache/

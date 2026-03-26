@@ -7,12 +7,18 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 var errBotGuildIDsProviderUnavailable = errors.New("bot guild ids provider unavailable")
+
+type manageableGuildCacheEntry struct {
+	guilds    []manageableGuildResponse
+	expiresAt time.Time
+}
 
 type manageableGuildResponse struct {
 	ID          string `json:"id"`
@@ -135,6 +141,9 @@ func (s *Server) resolveManageableGuilds(
 	if oauth == nil {
 		return nil, fmt.Errorf("resolve manageable guilds: oauth provider is nil")
 	}
+	if cached, ok := s.cachedManageableGuilds(session.ID, time.Now().UTC()); ok {
+		return cached, nil
+	}
 
 	botGuildSet, err := s.resolveBotGuildIDSet(ctx)
 	if err != nil {
@@ -182,7 +191,75 @@ func (s *Server) resolveManageableGuilds(
 		return li < lj
 	})
 
+	s.storeManageableGuilds(session, out, time.Now().UTC())
 	return out, nil
+}
+
+func (s *Server) cachedManageableGuilds(
+	sessionID string,
+	now time.Time,
+) ([]manageableGuildResponse, bool) {
+	if s == nil || s.manageableGuildsTTL <= 0 {
+		return nil, false
+	}
+
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, false
+	}
+
+	s.manageableGuildsMu.RLock()
+	entry, ok := s.manageableGuilds[sessionID]
+	s.manageableGuildsMu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	if !entry.expiresAt.IsZero() && !now.Before(entry.expiresAt) {
+		s.manageableGuildsMu.Lock()
+		delete(s.manageableGuilds, sessionID)
+		s.manageableGuildsMu.Unlock()
+		return nil, false
+	}
+	return cloneManageableGuildResponses(entry.guilds), true
+}
+
+func (s *Server) storeManageableGuilds(
+	session discordOAuthSession,
+	guilds []manageableGuildResponse,
+	now time.Time,
+) {
+	if s == nil || s.manageableGuildsTTL <= 0 {
+		return
+	}
+
+	sessionID := strings.TrimSpace(session.ID)
+	if sessionID == "" {
+		return
+	}
+
+	expiresAt := now.Add(s.manageableGuildsTTL)
+	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Before(expiresAt) {
+		expiresAt = session.ExpiresAt
+	}
+
+	s.manageableGuildsMu.Lock()
+	s.manageableGuilds[sessionID] = manageableGuildCacheEntry{
+		guilds:    cloneManageableGuildResponses(guilds),
+		expiresAt: expiresAt,
+	}
+	s.manageableGuildsMu.Unlock()
+}
+
+func cloneManageableGuildResponses(
+	guilds []manageableGuildResponse,
+) []manageableGuildResponse {
+	if len(guilds) == 0 {
+		return nil
+	}
+
+	out := make([]manageableGuildResponse, len(guilds))
+	copy(out, guilds)
+	return out
 }
 
 func (s *Server) resolveBotGuildIDSet(ctx context.Context) (map[string]struct{}, error) {

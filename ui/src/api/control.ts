@@ -240,6 +240,9 @@ export interface ControlApiClientConfig {
   baseUrl: string;
 }
 
+const transientGetRetryStatuses = new Set([502, 504]);
+const transientGetRetryDelaysMs = [80, 160];
+
 export class ControlApiClient {
   private readonly baseUrl: string;
   private csrfToken = "";
@@ -439,10 +442,7 @@ export class ControlApiClient {
 
   async getSessionStatus(): Promise<ControlAuthProbe> {
     const url = this.baseUrl === "" ? "/auth/me" : `${this.baseUrl}/auth/me`;
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-    });
+    const response = await this.fetchWithTransientGetRetry(url);
 
     if (response.status === 401) {
       return { status: "unauthorized" };
@@ -481,10 +481,7 @@ export class ControlApiClient {
       this.baseUrl === ""
         ? `/auth/discord/status${suffix}`
         : `${this.baseUrl}/auth/discord/status${suffix}`;
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-    });
+    const response = await this.fetchWithTransientGetRetry(url);
     if (!response.ok) {
       const text = await response.text();
       throw new Error(
@@ -517,9 +514,18 @@ export class ControlApiClient {
       credentials: "include",
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+    const resolvedResponse =
+      method === "GET" && transientGetRetryStatuses.has(response.status)
+        ? await this.retryTransientGetRequest(url, {
+            method,
+            headers,
+            credentials: "include",
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+          }, response)
+        : response;
 
     if (
-      response.status === 403 &&
+      resolvedResponse.status === 403 &&
       retryOnCSRF &&
       requiresCSRFHeader(method)
     ) {
@@ -527,17 +533,50 @@ export class ControlApiClient {
       return this.request<T>(method, path, body, false);
     }
 
-    if (!response.ok) {
-      const text = await response.text();
+    if (!resolvedResponse.ok) {
+      const text = await resolvedResponse.text();
       throw new Error(
-        `Control API ${method} ${path} failed: ${response.status} ${response.statusText} - ${text}`.trim(),
+        `Control API ${method} ${path} failed: ${resolvedResponse.status} ${resolvedResponse.statusText} - ${text}`.trim(),
       );
     }
 
-    if (response.status === 204) {
+    if (resolvedResponse.status === 204) {
       return {} as T;
     }
-    return (await response.json()) as T;
+    return (await resolvedResponse.json()) as T;
+  }
+
+  private async fetchWithTransientGetRetry(url: string) {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+    return this.retryTransientGetRequest(
+      url,
+      {
+        method: "GET",
+        credentials: "include",
+      },
+      response,
+    );
+  }
+
+  private async retryTransientGetRequest(
+    url: string,
+    init: RequestInit,
+    initialResponse: Response,
+  ) {
+    let response = initialResponse;
+
+    for (const delayMs of transientGetRetryDelaysMs) {
+      if (!transientGetRetryStatuses.has(response.status)) {
+        return response;
+      }
+      await delay(delayMs);
+      response = await fetch(url, init);
+    }
+
+    return response;
   }
 
   private async getCSRFToken(): Promise<string> {
@@ -593,4 +632,10 @@ function requiresCSRFHeader(
     method === "PATCH" ||
     method === "DELETE"
   );
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }

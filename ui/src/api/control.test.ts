@@ -12,6 +12,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 describe("ControlApiClient feature routes", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -327,6 +328,47 @@ describe("ControlApiClient feature routes", () => {
       credentials: "include",
       body: undefined,
     });
+  });
+
+  it("retries transient GET failures before surfacing an error", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("temporary failure", {
+          status: 502,
+          statusText: "Bad Gateway",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          status: "ok",
+          guild_id: "guild-1",
+          channels: [
+            {
+              id: "channel-1",
+              name: "bot-commands",
+              display_name: "#bot-commands",
+              kind: "text",
+              supports_message_route: true,
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const responsePromise = client.listGuildChannelOptions("guild-1");
+    await vi.advanceTimersByTimeAsync(80);
+    const response = await responsePromise;
+
+    expect(response.channels).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
   });
 
   it("loads guild member options with query parameters", async () => {

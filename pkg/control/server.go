@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ const (
 	defaultMaxBodyBytes          = 64 * 1024
 	defaultSyncTimeout           = 20 * time.Second
 	defaultManageableGuildsQuery = 20 * time.Second
+	defaultManageableGuildsCache = 45 * time.Second
 )
 
 var ErrControlServerBind = errors.New("control server bind failed")
@@ -72,6 +74,9 @@ type Server struct {
 	runtimeApplier       *runtimeapply.Manager
 	httpServer           *http.Server
 	listener             net.Listener
+	manageableGuildsTTL  time.Duration
+	manageableGuildsMu   sync.RWMutex
+	manageableGuilds     map[string]manageableGuildCacheEntry
 }
 
 // NewServer returns nil if addr is empty.
@@ -87,6 +92,8 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		configManager:       configManager,
 		partnerBoardService: partners.NewBoardApplicationService(configManager, nil),
 		runtimeApplier:      runtimeApplier,
+		manageableGuildsTTL: defaultManageableGuildsCache,
+		manageableGuilds:    make(map[string]manageableGuildCacheEntry),
 	}
 	s.httpServer = &http.Server{
 		Addr:              addr,

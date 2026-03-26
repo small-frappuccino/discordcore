@@ -22,6 +22,10 @@ import {
   normalizeBaseUrlInput,
   resolveGuildSelection,
 } from "../app/utils";
+import {
+  prefetchGuildDashboardResources,
+  resetGuildResourceCache,
+} from "../features/features/guildResourceCache";
 
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
@@ -95,6 +99,7 @@ export function DashboardSessionProvider({
     setSession(null);
     setManageableGuilds([]);
     setSelectedGuildID("");
+    resetGuildResourceCache();
   }
 
   async function performSessionRefresh(activeClient: ControlApiClient) {
@@ -127,11 +132,19 @@ export function DashboardSessionProvider({
       setSession(probe.session);
 
       const guildsResponse = await activeClient.listManageableGuilds();
-      setManageableGuilds(guildsResponse.guilds);
-      setSelectedGuildID((currentValue: string) =>
-        resolveGuildSelection(currentValue, preferredGuildID, guildsResponse.guilds),
+      const nextGuildID = resolveGuildSelection(
+        selectedGuildID,
+        preferredGuildID,
+        guildsResponse.guilds,
       );
+      setManageableGuilds(guildsResponse.guilds);
+      setSelectedGuildID(nextGuildID);
       setNotice(null);
+      if (nextGuildID !== "") {
+        void prefetchGuildDashboardResources(activeClient, baseUrl, nextGuildID).catch(
+          () => {},
+        );
+      }
     } catch (error) {
       setAuthState("signed_out");
       clearSessionState();
@@ -148,6 +161,15 @@ export function DashboardSessionProvider({
   useEffect(() => {
     void performSessionRefresh(client);
   }, [client]);
+
+  useEffect(() => {
+    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
+      return;
+    }
+    void prefetchGuildDashboardResources(client, baseUrl, selectedGuildID.trim()).catch(
+      () => {},
+    );
+  }, [authState, baseUrl, client, selectedGuildID]);
 
   async function refreshSession() {
     await performSessionRefresh(client);

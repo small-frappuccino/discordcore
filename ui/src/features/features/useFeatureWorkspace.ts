@@ -3,6 +3,7 @@ import type { FeatureRecord, FeatureWorkspace } from "../../api/control";
 import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
+import { loadFeatureWorkspace, peekFeatureWorkspace } from "./guildResourceCache";
 import { groupFeaturesByCategory } from "./model";
 
 export type FeatureWorkspaceScope = "global" | "guild";
@@ -21,9 +22,20 @@ interface UseFeatureWorkspaceOptions {
 export function useFeatureWorkspace({
   scope,
 }: UseFeatureWorkspaceOptions) {
-  const { authState, client, selectedGuildID } = useDashboardSession();
-  const [workspace, setWorkspace] = useState<FeatureWorkspace | null>(null);
-  const [hasLoadedAttempt, setHasLoadedAttempt] = useState(false);
+  const { authState, baseUrl, client, selectedGuildID } = useDashboardSession();
+  const normalizedGuildID = selectedGuildID.trim();
+  const [workspace, setWorkspace] = useState<FeatureWorkspace | null>(() => {
+    if (authState !== "signed_in") {
+      return null;
+    }
+    if (scope === "guild" && normalizedGuildID === "") {
+      return null;
+    }
+    return peekFeatureWorkspace(baseUrl, scope, normalizedGuildID);
+  });
+  const [hasLoadedAttempt, setHasLoadedAttempt] = useState(
+    workspace !== null,
+  );
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -59,27 +71,37 @@ export function useFeatureWorkspace({
     if (authState !== "signed_in") {
       return;
     }
-    if (scope === "guild" && selectedGuildID.trim() === "") {
+    if (scope === "guild" && normalizedGuildID === "") {
       return;
     }
 
     setLoading(true);
 
     try {
-      const response =
-        scope === "guild"
-          ? await client.listGuildFeatures(selectedGuildID.trim())
-          : await client.listGlobalFeatures();
-      setWorkspace(response.workspace);
+      const nextWorkspace = await loadFeatureWorkspace(
+        client,
+        baseUrl,
+        scope,
+        normalizedGuildID,
+        {
+          force: true,
+        },
+      );
+      setWorkspace(nextWorkspace);
       setHasLoadedAttempt(true);
       setNotice(null);
     } catch (error) {
-      setWorkspace(null);
+      const cachedWorkspace = peekFeatureWorkspace(baseUrl, scope, normalizedGuildID);
+      setWorkspace(cachedWorkspace);
       setHasLoadedAttempt(true);
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
+      if (cachedWorkspace === null) {
+        setNotice({
+          tone: "error",
+          message: formatError(error),
+        });
+      } else {
+        setNotice(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -91,37 +113,53 @@ export function useFeatureWorkspace({
       return;
     }
 
-    if (scope === "guild" && selectedGuildID.trim() === "") {
+    if (scope === "guild" && normalizedGuildID === "") {
       resetWorkspace();
       return;
     }
 
+    const cachedWorkspace = peekFeatureWorkspace(baseUrl, scope, normalizedGuildID);
+    setWorkspace(cachedWorkspace);
+    setHasLoadedAttempt(cachedWorkspace !== null);
+    setNotice(null);
+
     let cancelled = false;
 
     async function loadWorkspace() {
-      setLoading(true);
+      setLoading(cachedWorkspace === null);
 
       try {
-        const response =
-          scope === "guild"
-            ? await client.listGuildFeatures(selectedGuildID.trim())
-            : await client.listGlobalFeatures();
+        const nextWorkspace = await loadFeatureWorkspace(
+          client,
+          baseUrl,
+          scope,
+          normalizedGuildID,
+        );
         if (cancelled) {
           return;
         }
-        setWorkspace(response.workspace);
+        setWorkspace(nextWorkspace);
         setHasLoadedAttempt(true);
         setNotice(null);
       } catch (error) {
         if (cancelled) {
           return;
         }
-        setWorkspace(null);
+        const cachedErrorWorkspace = peekFeatureWorkspace(
+          baseUrl,
+          scope,
+          normalizedGuildID,
+        );
+        setWorkspace(cachedErrorWorkspace);
         setHasLoadedAttempt(true);
-        setNotice({
-          tone: "error",
-          message: formatError(error),
-        });
+        if (cachedErrorWorkspace === null) {
+          setNotice({
+            tone: "error",
+            message: formatError(error),
+          });
+        } else {
+          setNotice(null);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -134,7 +172,7 @@ export function useFeatureWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [authState, client, scope, selectedGuildID]);
+  }, [authState, baseUrl, client, normalizedGuildID, scope]);
 
   return {
     features,

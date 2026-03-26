@@ -14,9 +14,11 @@ import { useGuildChannelOptions } from "./useGuildChannelOptions";
 import { useGuildMemberOptions } from "./useGuildMemberOptions";
 import { useGuildRoleOptions } from "./useGuildRoleOptions";
 import { useFeatureWorkspace } from "./useFeatureWorkspace";
+import { resetGuildResourceCache } from "./guildResourceCache";
 
 let mockDashboardSession: {
   authState: string;
+  baseUrl: string;
   client: {
     getFeatureCatalog: ReturnType<typeof vi.fn>;
     listGlobalFeatures: ReturnType<typeof vi.fn>;
@@ -72,6 +74,7 @@ describe("feature hooks", () => {
   beforeEach(() => {
     mockDashboardSession = {
       authState: "signed_in",
+      baseUrl: "",
       client: {
         getFeatureCatalog: vi.fn(),
         listGlobalFeatures: vi.fn(),
@@ -88,6 +91,7 @@ describe("feature hooks", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    resetGuildResourceCache();
   });
 
   it("loads the feature catalog when signed in", async () => {
@@ -180,6 +184,40 @@ describe("feature hooks", () => {
     ]);
   });
 
+  it("reuses cached guild workspace data across mounts", async () => {
+    const features = [
+      buildFeatureRecord({
+        id: "services.commands",
+        category: "services",
+        label: "Commands",
+      }),
+    ];
+    mockDashboardSession.client.listGuildFeatures.mockResolvedValue(
+      buildWorkspaceResponse(features),
+    );
+
+    const firstHook = renderHook(() =>
+      useFeatureWorkspace({
+        scope: "guild",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(firstHook.result.current.workspaceState).toBe("ready");
+    });
+    firstHook.unmount();
+
+    const secondHook = renderHook(() =>
+      useFeatureWorkspace({
+        scope: "guild",
+      }),
+    );
+
+    expect(secondHook.result.current.workspaceState).toBe("ready");
+    expect(secondHook.result.current.features).toEqual(features);
+    expect(mockDashboardSession.client.listGuildFeatures).toHaveBeenCalledTimes(1);
+  });
+
   it("loads guild role options for the selected server", async () => {
     const roles: GuildRoleOption[] = [
       {
@@ -215,6 +253,36 @@ describe("feature hooks", () => {
     expect(result.current.notice).toBeNull();
   });
 
+  it("reuses cached guild role options across mounts", async () => {
+    const roles: GuildRoleOption[] = [
+      {
+        id: "role-a",
+        name: "Alpha",
+        position: 2,
+        managed: false,
+        is_default: false,
+      },
+    ];
+    mockDashboardSession.client.listGuildRoleOptions.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      roles,
+    });
+
+    const firstHook = renderHook(() => useGuildRoleOptions());
+    await waitFor(() => {
+      expect(firstHook.result.current.roles).toEqual(roles);
+    });
+    firstHook.unmount();
+
+    const secondHook = renderHook(() => useGuildRoleOptions());
+
+    expect(secondHook.result.current.roles).toEqual(roles);
+    expect(
+      mockDashboardSession.client.listGuildRoleOptions,
+    ).toHaveBeenCalledTimes(1);
+  });
+
   it("loads guild channel options for the selected server", async () => {
     const channels: GuildChannelOption[] = [
       {
@@ -248,6 +316,36 @@ describe("feature hooks", () => {
       mockDashboardSession.client.listGuildChannelOptions,
     ).toHaveBeenCalledWith("guild-1");
     expect(result.current.notice).toBeNull();
+  });
+
+  it("reuses cached guild channel options across mounts", async () => {
+    const channels: GuildChannelOption[] = [
+      {
+        id: "channel-a",
+        name: "bot-commands",
+        display_name: "#bot-commands",
+        kind: "text",
+        supports_message_route: true,
+      },
+    ];
+    mockDashboardSession.client.listGuildChannelOptions.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      channels,
+    });
+
+    const firstHook = renderHook(() => useGuildChannelOptions());
+    await waitFor(() => {
+      expect(firstHook.result.current.channels).toEqual(channels);
+    });
+    firstHook.unmount();
+
+    const secondHook = renderHook(() => useGuildChannelOptions());
+
+    expect(secondHook.result.current.channels).toEqual(channels);
+    expect(
+      mockDashboardSession.client.listGuildChannelOptions,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it("loads guild member options for the selected server", async () => {

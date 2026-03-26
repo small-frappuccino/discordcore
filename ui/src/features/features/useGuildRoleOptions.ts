@@ -3,10 +3,17 @@ import type { GuildRoleOption } from "../../api/control";
 import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
+import { loadGuildRoleOptions, peekGuildRoleOptions } from "./guildResourceCache";
 
 export function useGuildRoleOptions() {
-  const { authState, client, selectedGuildID } = useDashboardSession();
-  const [roles, setRoles] = useState<GuildRoleOption[]>([]);
+  const { authState, baseUrl, client, selectedGuildID } = useDashboardSession();
+  const normalizedGuildID = selectedGuildID.trim();
+  const [roles, setRoles] = useState<GuildRoleOption[]>(() => {
+    if (authState !== "signed_in" || normalizedGuildID === "") {
+      return [];
+    }
+    return peekGuildRoleOptions(baseUrl, normalizedGuildID);
+  });
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -17,54 +24,79 @@ export function useGuildRoleOptions() {
   }
 
   async function refresh() {
-    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
+    if (authState !== "signed_in" || normalizedGuildID === "") {
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await client.listGuildRoleOptions(selectedGuildID.trim());
-      setRoles(response.roles);
+      const nextRoles = await loadGuildRoleOptions(
+        client,
+        baseUrl,
+        normalizedGuildID,
+        {
+          force: true,
+        },
+      );
+      setRoles(nextRoles);
       setNotice(null);
     } catch (error) {
-      setRoles([]);
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
+      const cachedRoles = peekGuildRoleOptions(baseUrl, normalizedGuildID);
+      setRoles(cachedRoles);
+      if (cachedRoles.length === 0) {
+        setNotice({
+          tone: "error",
+          message: formatError(error),
+        });
+      } else {
+        setNotice(null);
+      }
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
+    if (authState !== "signed_in" || normalizedGuildID === "") {
       resetRoleOptions();
       return;
     }
 
+    const cachedRoles = peekGuildRoleOptions(baseUrl, normalizedGuildID);
+    setRoles(cachedRoles);
+    setNotice(null);
+
     let cancelled = false;
 
     async function loadRoleOptions() {
-      setLoading(true);
+      setLoading(cachedRoles.length === 0);
 
       try {
-        const response = await client.listGuildRoleOptions(selectedGuildID.trim());
+        const nextRoles = await loadGuildRoleOptions(
+          client,
+          baseUrl,
+          normalizedGuildID,
+        );
         if (cancelled) {
           return;
         }
-        setRoles(response.roles);
+        setRoles(nextRoles);
         setNotice(null);
       } catch (error) {
         if (cancelled) {
           return;
         }
-        setRoles([]);
-        setNotice({
-          tone: "error",
-          message: formatError(error),
-        });
+        const cachedErrorRoles = peekGuildRoleOptions(baseUrl, normalizedGuildID);
+        setRoles(cachedErrorRoles);
+        if (cachedErrorRoles.length === 0) {
+          setNotice({
+            tone: "error",
+            message: formatError(error),
+          });
+        } else {
+          setNotice(null);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -77,7 +109,7 @@ export function useGuildRoleOptions() {
     return () => {
       cancelled = true;
     };
-  }, [authState, client, selectedGuildID]);
+  }, [authState, baseUrl, client, normalizedGuildID]);
 
   return {
     roles,
