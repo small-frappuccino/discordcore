@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { appRoutes } from "./routes";
 import { DashboardLayout } from "../pages/DashboardLayout";
 import { CommandsPage } from "../pages/CommandsPage";
+import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
@@ -51,6 +52,7 @@ export function AppRoutes() {
         <Route path="moderation" element={<ModerationPage />} />
         <Route path="logging" element={<LoggingCategoryPage />} />
         <Route path="roles" element={<RolesPage />} />
+        <Route path="feature-areas/:areaId" element={<FeatureCategoryPage />} />
         <Route
           path="roles-members"
           element={<Navigate replace to={appRoutes.roles} />}

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
+import { appRoutes } from "../app/routes";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import {
   getFeatureAreaDefinition,
@@ -36,20 +37,17 @@ import {
 } from "../components/ui";
 
 interface FeatureCategoryPageProps {
-  areaId: FeatureAreaID;
+  areaId?: FeatureAreaID;
 }
 
-export function FeatureCategoryPage({
-  areaId,
-}: FeatureCategoryPageProps) {
-  const definition = getFeatureAreaDefinition(areaId);
+export function FeatureCategoryPage({ areaId }: FeatureCategoryPageProps) {
   const location = useLocation();
-  const {
-    authState,
-    beginLogin,
-    currentOriginLabel,
-    selectedGuild,
-  } = useDashboardSession();
+  const params = useParams();
+  const resolvedAreaId = (areaId ?? params.areaId ?? "") as FeatureAreaID | "";
+  const definition =
+    resolvedAreaId === "" ? null : getFeatureAreaDefinition(resolvedAreaId);
+  const { authState, beginLogin, currentOriginLabel, selectedGuild } =
+    useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -58,16 +56,22 @@ export function FeatureCategoryPage({
   });
   const [pendingFeatureId, setPendingFeatureId] = useState("");
 
+  const dedicatedRoute = getDedicatedAreaRoute(resolvedAreaId);
+  if (dedicatedRoute !== null) {
+    return <Navigate replace to={dedicatedRoute} />;
+  }
+
   if (definition === null) {
-    return null;
+    return <Navigate replace to={appRoutes.dashboardHome} />;
   }
 
   const areaLabel = definition.label;
   const areaDescription = definition.description;
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
-  const areaFeatures = getFeatureAreaRecords(workspace.features, areaId);
+  const areaFeatures = getFeatureAreaRecords(workspace.features, definition.id);
   const areaSummary = summarizeFeatureArea(areaFeatures);
-  const blockingFeature = areaFeatures.find((feature) => isFeatureBlocked(feature));
+  const blockingFeature =
+    areaFeatures.find((feature) => isFeatureBlocked(feature)) ?? null;
   const workspaceNotice = mutation.notice ?? workspace.notice;
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const localOverrides = areaFeatures.filter(
@@ -231,7 +235,9 @@ export function FeatureCategoryPage({
                   </td>
                   <td>
                     <div className="feature-table-meta">
-                      <strong>{formatOverrideLabel(feature.override_state)}</strong>
+                      <strong>
+                        {formatOverrideLabel(feature.override_state)}
+                      </strong>
                       <span className="meta-note">
                         {formatEffectiveSourceLabel(feature.effective_source)}
                       </span>
@@ -296,9 +302,9 @@ export function FeatureCategoryPage({
   return (
     <section className="page-shell">
       <PageHeader
-        eyebrow="Feature area"
+        eyebrow="Fallback workspace"
         title={areaLabel}
-        description={areaDescription}
+        description={`${areaDescription} This generic feature workspace is kept only for areas that do not have a dedicated operator page yet.`}
         status={
           <StatusBadge
             tone={
@@ -307,10 +313,7 @@ export function FeatureCategoryPage({
           >
             {workspace.workspaceState === "ready"
               ? areaSummary.label
-              : formatWorkspaceStateTitle(
-                  areaLabel,
-                  workspace.workspaceState,
-                )}
+              : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
           </StatusBadge>
         }
         meta={
@@ -358,11 +361,12 @@ export function FeatureCategoryPage({
             <div className="workspace-view">
               <div className="workspace-view-header">
                 <div className="card-copy">
-                  <p className="section-label">Workspace</p>
-                  <h2>Manage {areaLabel.toLowerCase()}</h2>
+                  <p className="section-label">Fallback</p>
+                  <h2>Generic feature list</h2>
                   <p className="section-description">
-                    Turn features on or off for the selected server and inspect
-                    the readiness signals returned by the control server.
+                    Use this page only for areas that still rely on the generic
+                    feature table. Dedicated workspaces should be preferred
+                    whenever they exist.
                   </p>
                 </div>
                 <div className="workspace-view-meta">
@@ -399,10 +403,10 @@ export function FeatureCategoryPage({
           <SurfaceCard>
             <div className="card-copy">
               <p className="section-label">Summary</p>
-              <h2>Category health</h2>
+              <h2>Fallback health</h2>
               <p className="section-description">
-                Keep the default workspace focused on feature state. Use this
-                panel to scan the current server signal and override count.
+                Keep this page narrowly focused on feature state for the few
+                remaining areas that have not been specialized yet.
               </p>
             </div>
 
@@ -425,7 +429,7 @@ export function FeatureCategoryPage({
                   value:
                     workspace.workspaceState === "ready"
                       ? areaSummary.signal
-                        : formatWorkspaceStateTitle(
+                      : formatWorkspaceStateTitle(
                           areaLabel,
                           workspace.workspaceState,
                         ),
@@ -437,17 +441,26 @@ export function FeatureCategoryPage({
           <SurfaceCard>
             <div className="card-copy">
               <p className="section-label">Guidance</p>
-              <h2>How editing works</h2>
+              <h2>Why this page exists</h2>
               <p className="section-description">
-                This page manages only the enabled state and inherited override
-                behavior for the selected server.
+                This generic workspace is a fallback. The main modules now use
+                dedicated pages so operators do not have to manage them from a
+                raw feature table.
               </p>
             </div>
 
             <ul className="feature-guidance-list">
-              <li>Enable or disable a feature without leaving the category list.</li>
-              <li>Use inherited to clear the server override and fall back to the configured default.</li>
-              <li>Readiness and blockers always come from the control server, not from client-side rules.</li>
+              <li>
+                Enable or disable a feature without leaving the category list.
+              </li>
+              <li>
+                Use inherited to clear the server override and fall back to the
+                configured default.
+              </li>
+              <li>
+                Readiness and blockers always come from the control server, not
+                from client-side rules.
+              </li>
             </ul>
 
             {blockingFeature ? (
@@ -459,9 +472,41 @@ export function FeatureCategoryPage({
                 </p>
               </div>
             ) : null}
+
+            <div className="surface-subsection">
+              <p className="section-label">Dedicated workspaces</p>
+              <p className="meta-note">
+                Commands, moderation, logging, roles, stats, Partner Board, and
+                advanced maintenance already have dedicated operator pages.
+              </p>
+              <div className="feature-row-actions">
+                <Link className="button-secondary" to={appRoutes.dashboardHome}>
+                  Return home
+                </Link>
+              </div>
+            </div>
           </SurfaceCard>
         </aside>
       </section>
     </section>
   );
+}
+
+function getDedicatedAreaRoute(areaId: FeatureAreaID | "") {
+  switch (areaId) {
+    case "commands":
+      return appRoutes.commands;
+    case "moderation":
+      return appRoutes.moderation;
+    case "logging":
+      return appRoutes.logging;
+    case "roles":
+      return appRoutes.roles;
+    case "stats":
+      return appRoutes.stats;
+    case "maintenance":
+      return appRoutes.settingsAdvanced;
+    default:
+      return null;
+  }
 }
