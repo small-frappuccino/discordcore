@@ -592,6 +592,69 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 	})
 
+	t.Run("stats channels expose configured channel inventory", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.StatsChannels = testBoolPtr(true)
+			cfg.Guilds[0].Stats.Enabled = true
+			cfg.Guilds[0].Stats.UpdateIntervalMins = 45
+			cfg.Guilds[0].Stats.Channels = []files.StatsChannelConfig{
+				{
+					ChannelID:    "stats-total",
+					Label:        "Total members",
+					NameTemplate: "{label} | {count}",
+					MemberType:   "all",
+				},
+				{
+					ChannelID:  "stats-bots",
+					Label:      "Bots",
+					MemberType: "bots",
+				},
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed stats config: %v", err)
+		}
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/stats_channels", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET stats_channels status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if response.Feature.Readiness != "ready" || len(response.Feature.Blockers) != 0 {
+			t.Fatalf("expected ready stats feature, got %+v", response.Feature)
+		}
+		if response.Feature.Details["config_enabled"] != true {
+			t.Fatalf("expected config_enabled detail, got %+v", response.Feature.Details)
+		}
+		if response.Feature.Details["update_interval_mins"] != float64(45) {
+			t.Fatalf("expected update_interval_mins detail, got %+v", response.Feature.Details)
+		}
+		if response.Feature.Details["configured_channel_count"] != float64(2) {
+			t.Fatalf("expected configured_channel_count detail, got %+v", response.Feature.Details)
+		}
+
+		channels, ok := response.Feature.Details["channels"].([]any)
+		if !ok || len(channels) != 2 {
+			t.Fatalf("expected two stats channel details, got %+v", response.Feature.Details["channels"])
+		}
+
+		firstChannel, ok := channels[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected first stats channel as map, got %+v", channels[0])
+		}
+		if firstChannel["channel_id"] != "stats-total" || firstChannel["label"] != "Total members" || firstChannel["name_template"] != "{label} | {count}" {
+			t.Fatalf("unexpected first stats channel detail: %+v", firstChannel)
+		}
+		if firstChannel["member_type"] != "all" {
+			t.Fatalf("expected first stats channel member_type, got %+v", firstChannel)
+		}
+	})
+
 	t.Run("auto role assignment blocks invalid target role", func(t *testing.T) {
 		t.Parallel()
 

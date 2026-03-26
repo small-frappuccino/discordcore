@@ -9,6 +9,7 @@ import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
 import { ModerationPage } from "../pages/ModerationPage";
 import { RolesPage } from "../pages/RolesPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { StatsPage } from "../pages/StatsPage";
 import { PartnerBoardProvider } from "../features/partner-board/PartnerBoardContext";
 import { PartnerBoardLayout } from "../features/partner-board/PartnerBoardLayout";
 import { PartnerBoardEntriesPage } from "../features/partner-board/PartnerBoardEntriesPage";
@@ -47,22 +48,10 @@ export function AppRoutes() {
             element={<Navigate replace to={appRoutes.partnerBoardEntries} />}
           />
         </Route>
-        <Route
-          path="commands"
-          element={<CommandsPage />}
-        />
-        <Route
-          path="moderation"
-          element={<ModerationPage />}
-        />
-        <Route
-          path="logging"
-          element={<LoggingCategoryPage />}
-        />
-        <Route
-          path="roles"
-          element={<RolesPage />}
-        />
+        <Route path="commands" element={<CommandsPage />} />
+        <Route path="moderation" element={<ModerationPage />} />
+        <Route path="logging" element={<LoggingCategoryPage />} />
+        <Route path="roles" element={<RolesPage />} />
         <Route
           path="roles-members"
           element={<Navigate replace to={appRoutes.roles} />}
@@ -71,10 +60,7 @@ export function AppRoutes() {
           path="maintenance"
           element={<FeatureCategoryPage areaId="maintenance" />}
         />
-        <Route
-          path="stats"
-          element={<FeatureCategoryPage areaId="stats" />}
-        />
+        <Route path="stats" element={<StatsPage />} />
         <Route
           path="automations"
           element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}

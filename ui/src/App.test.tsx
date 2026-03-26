@@ -137,6 +137,20 @@ function createFetchMock() {
         kind: "voice",
         supports_message_route: false,
       },
+      {
+        id: "stats-total",
+        name: "Total Members",
+        display_name: "Total Members",
+        kind: "voice",
+        supports_message_route: false,
+      },
+      {
+        id: "stats-bots",
+        name: "Bot Count",
+        display_name: "Bot Count",
+        kind: "voice",
+        supports_message_route: false,
+      },
     ],
     "guild-2": [
       {
@@ -305,7 +319,8 @@ function createFetchMock() {
         blockers: [
           {
             code: "missing_role",
-            message: "Choose the role that should be applied by the mute command.",
+            message:
+              "Choose the role that should be applied by the mute command.",
             field: "role_id",
           },
         ],
@@ -502,13 +517,41 @@ function createFetchMock() {
         id: "stats_channels",
         category: "stats",
         label: "Stats channels",
-        description: "Stats",
+        description:
+          "Periodic member-count channel updates driven by configured stats channels.",
         scope: "guild",
         supports_guild_override: true,
-        override_state: "disabled",
-        effective_enabled: false,
+        override_state: "enabled",
+        effective_enabled: true,
         effective_source: "guild",
-        readiness: "disabled",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "config_disabled",
+            message: "Stats channel config is disabled.",
+            field: "config_enabled",
+          },
+        ],
+        details: {
+          config_enabled: false,
+          update_interval_mins: 30,
+          configured_channel_count: 2,
+          channels: [
+            {
+              channel_id: "stats-total",
+              label: "Total members",
+              name_template: "",
+              member_type: "all",
+            },
+            {
+              channel_id: "stats-bots",
+              label: "Bot count",
+              name_template: "{label} | {count}",
+              member_type: "bots",
+            },
+          ],
+        },
+        editable_fields: ["enabled", "config_enabled", "update_interval_mins"],
       },
     ],
     "guild-2": [
@@ -568,7 +611,8 @@ function createFetchMock() {
         feature.blockers = [
           {
             code: "missing_role",
-            message: "Choose the role that should be applied by the mute command.",
+            message:
+              "Choose the role that should be applied by the mute command.",
             field: "role_id",
           },
         ];
@@ -581,7 +625,8 @@ function createFetchMock() {
         feature.blockers = [
           {
             code: "invalid_role",
-            message: "The configured mute role is no longer available in this server.",
+            message:
+              "The configured mute role is no longer available in this server.",
             field: "role_id",
           },
         ];
@@ -603,7 +648,8 @@ function createFetchMock() {
           : "";
       const requiredRoleIds = Array.isArray(feature.details?.required_role_ids)
         ? feature.details.required_role_ids.filter(
-            (value): value is string => typeof value === "string" && value.trim() !== "",
+            (value): value is string =>
+              typeof value === "string" && value.trim() !== "",
           )
         : [];
 
@@ -636,7 +682,8 @@ function createFetchMock() {
         feature.blockers = [
           {
             code: "invalid_required_roles",
-            message: "Auto assignment needs exactly two required roles in order.",
+            message:
+              "Auto assignment needs exactly two required roles in order.",
             field: "required_role_ids",
           },
         ];
@@ -644,7 +691,50 @@ function createFetchMock() {
       }
     }
 
-    if (feature.id === "presence_watch.bot" && feature.details?.watch_bot !== true) {
+    if (feature.id === "stats_channels") {
+      const configEnabled = feature.details?.config_enabled === true;
+      const configuredChannelCount =
+        typeof feature.details?.configured_channel_count === "number" &&
+        Number.isFinite(feature.details.configured_channel_count)
+          ? feature.details.configured_channel_count
+          : Array.isArray(feature.details?.channels)
+            ? feature.details.channels.filter(
+                (value): value is Record<string, unknown> =>
+                  typeof value === "object" &&
+                  value !== null &&
+                  typeof value.channel_id === "string" &&
+                  value.channel_id.trim() !== "",
+              ).length
+            : 0;
+
+      if (!configEnabled) {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "config_disabled",
+            message: "Stats channel config is disabled.",
+            field: "config_enabled",
+          },
+        ];
+        return;
+      }
+
+      if (configuredChannelCount === 0) {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "missing_channels",
+            message: "Stats channels need at least one configured target.",
+          },
+        ];
+        return;
+      }
+    }
+
+    if (
+      feature.id === "presence_watch.bot" &&
+      feature.details?.watch_bot !== true
+    ) {
       feature.readiness = "blocked";
       feature.blockers = [
         {
@@ -681,7 +771,8 @@ function createFetchMock() {
       feature.blockers = [
         {
           code: "invalid_actor_role",
-          message: "Permission mirror actor role is no longer available in this server.",
+          message:
+            "Permission mirror actor role is no longer available in this server.",
           field: "actor_role_id",
         },
       ];
@@ -692,295 +783,330 @@ function createFetchMock() {
     feature.blockers = [];
   }
 
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input.toString();
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
 
-    if (url.endsWith("/auth/me")) {
-      return jsonResponse({
-        status: "ok",
-        user: {
-          id: "user-1",
-          username: "alice",
-          global_name: "alice",
-        },
-        scopes: ["identify", "guilds"],
-        csrf_token: "csrf-token",
-        expires_at: "2099-01-01T00:00:00Z",
-      });
-    }
-
-    if (url.endsWith("/auth/guilds/manageable")) {
-      return jsonResponse({
-        status: "ok",
-        count: 2,
-        guilds: [
-          {
-            id: "guild-1",
-            name: "Server One",
-            owner: true,
-            permissions: 8,
+      if (url.endsWith("/auth/me")) {
+        return jsonResponse({
+          status: "ok",
+          user: {
+            id: "user-1",
+            username: "alice",
+            global_name: "alice",
           },
-          {
-            id: "guild-2",
-            name: "Server Two",
-            owner: false,
-            permissions: 32,
-          },
-        ],
-      });
-    }
-
-    if (url.includes("/role-options")) {
-      const match = url.match(/\/v1\/guilds\/([^/]+)\/role-options$/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
-        return jsonResponse({
-          status: "ok",
-          guild_id: guildID,
-          roles: roleOptionsByGuild[guildID] ?? [],
+          scopes: ["identify", "guilds"],
+          csrf_token: "csrf-token",
+          expires_at: "2099-01-01T00:00:00Z",
         });
       }
-    }
 
-    if (url.includes("/channel-options")) {
-      const match = url.match(/\/v1\/guilds\/([^/]+)\/channel-options$/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
+      if (url.endsWith("/auth/guilds/manageable")) {
         return jsonResponse({
           status: "ok",
-          guild_id: guildID,
-          channels: channelOptionsByGuild[guildID] ?? [],
+          count: 2,
+          guilds: [
+            {
+              id: "guild-1",
+              name: "Server One",
+              owner: true,
+              permissions: 8,
+            },
+            {
+              id: "guild-2",
+              name: "Server Two",
+              owner: false,
+              permissions: 32,
+            },
+          ],
         });
       }
-    }
 
-    if (url.includes("/member-options")) {
-      const parsed = new URL(url, "http://localhost");
-      const match = parsed.pathname.match(/\/v1\/guilds\/([^/]+)\/member-options$/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
-        const query = (parsed.searchParams.get("query") ?? "").trim().toLowerCase();
-        const selectedID = (parsed.searchParams.get("selected_id") ?? "").trim();
-        const limit = Number(parsed.searchParams.get("limit") ?? "25");
-        const allMembers = memberOptionsByGuild[guildID] ?? [];
-
-        const selectedMember =
-          selectedID === ""
-            ? null
-            : allMembers.find((member) => member.id === selectedID) ?? null;
-        const matches = allMembers.filter((member) => {
-          if (query === "") {
-            return true;
-          }
-          return (
-            member.display_name.toLowerCase().startsWith(query) ||
-            member.username.toLowerCase().startsWith(query) ||
-            member.id.toLowerCase().startsWith(query)
-          );
-        });
-        const members = [
-          ...(selectedMember === null ? [] : [selectedMember]),
-          ...matches.filter((member) => member.id !== selectedID),
-        ].slice(0, Number.isFinite(limit) && limit > 0 ? limit : 25);
-
-        return jsonResponse({
-          status: "ok",
-          guild_id: guildID,
-          members,
-        });
-      }
-    }
-
-    if (url.includes("/features/") && init?.method === "PATCH") {
-      const match = url.match(/\/v1\/guilds\/([^/]+)\/features\/([^/?]+)/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
-        const featureID = decodeURIComponent(match[2] ?? "");
-        const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
-        featureUpdates.push({
-          guildID,
-          featureID,
-          payload,
-        });
-
-        const feature = featuresByGuild[guildID]?.find(
-          (item) => item.id === featureID,
-        );
-        if (feature === undefined) {
-          return new Response("not found", { status: 404 });
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "enabled")) {
-          const enabled = payload.enabled;
-          if (enabled === null) {
-            feature.override_state = "inherit";
-            feature.effective_enabled = false;
-            feature.effective_source = "global";
-          } else {
-            const nextEnabled = Boolean(enabled);
-            feature.override_state = nextEnabled ? "enabled" : "disabled";
-            feature.effective_enabled = nextEnabled;
-            feature.effective_source = "guild";
-          }
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "channel_id")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            channel_id: String(payload.channel_id ?? ""),
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "role_id")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            role_id: String(payload.role_id ?? ""),
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "allowed_role_ids")) {
-          const allowedRoleIDs = Array.isArray(payload.allowed_role_ids)
-            ? payload.allowed_role_ids
-                .filter((value): value is string => typeof value === "string")
-                .map((value) => value.trim())
-                .filter((value) => value !== "")
-            : [];
-          feature.details = {
-            ...(feature.details ?? {}),
-            allowed_role_ids: allowedRoleIDs,
-            allowed_role_count: allowedRoleIDs.length,
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "config_enabled")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            config_enabled: Boolean(payload.config_enabled),
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "target_role_id")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            target_role_id: String(payload.target_role_id ?? ""),
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "required_role_ids")) {
-          const requiredRoleIDs = Array.isArray(payload.required_role_ids)
-            ? payload.required_role_ids
-                .filter((value): value is string => typeof value === "string")
-                .map((value) => value.trim())
-                .filter((value) => value !== "")
-            : [];
-          feature.details = {
-            ...(feature.details ?? {}),
-            required_role_ids: requiredRoleIDs,
-            required_role_count: requiredRoleIDs.length,
-            level_role_id: requiredRoleIDs[0] ?? "",
-            booster_role_id: requiredRoleIDs[1] ?? "",
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "watch_bot")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            watch_bot: Boolean(payload.watch_bot),
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "user_id")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            user_id: String(payload.user_id ?? ""),
-          };
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "actor_role_id")) {
-          feature.details = {
-            ...(feature.details ?? {}),
-            actor_role_id: String(payload.actor_role_id ?? ""),
-          };
-        }
-
-        evaluateFeatureState(feature);
-
-        return jsonResponse({
-          status: "ok",
-          guild_id: guildID,
-          feature: {
-            ...feature,
-          },
-        });
-      }
-    }
-
-    if (url.includes("/features") && !url.includes("/catalog")) {
-      const match = url.match(/\/v1\/guilds\/([^/]+)\/features$/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
-        featureCalls.push(guildID);
-        return jsonResponse({
-          status: "ok",
-          workspace: {
-            scope: "guild",
+      if (url.includes("/role-options")) {
+        const match = url.match(/\/v1\/guilds\/([^/]+)\/role-options$/);
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          return jsonResponse({
+            status: "ok",
             guild_id: guildID,
-            features: featuresByGuild[guildID] ?? [],
-          },
-        });
+            roles: roleOptionsByGuild[guildID] ?? [],
+          });
+        }
       }
-    }
 
-    if (url.includes("/partner-board/target") && init?.method === "PUT") {
-      const match = url.match(/\/v1\/guilds\/([^/]+)\/partner-board\/target$/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
-        const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
-        targetUpdates.push({ guildID, payload });
-        const nextBoard = boardByGuild[guildID];
-        nextBoard.target = {
-          ...nextBoard.target,
-          ...(payload as PartnerBoardConfig["target"]),
-        };
-
-        if (payload.type === "channel_message") {
-          delete nextBoard.target?.webhook_url;
+      if (url.includes("/channel-options")) {
+        const match = url.match(/\/v1\/guilds\/([^/]+)\/channel-options$/);
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          return jsonResponse({
+            status: "ok",
+            guild_id: guildID,
+            channels: channelOptionsByGuild[guildID] ?? [],
+          });
         }
-        if (payload.type === "webhook_message") {
-          delete nextBoard.target?.channel_id;
-        }
+      }
 
+      if (url.includes("/member-options")) {
+        const parsed = new URL(url, "http://localhost");
+        const match = parsed.pathname.match(
+          /\/v1\/guilds\/([^/]+)\/member-options$/,
+        );
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          const query = (parsed.searchParams.get("query") ?? "")
+            .trim()
+            .toLowerCase();
+          const selectedID = (
+            parsed.searchParams.get("selected_id") ?? ""
+          ).trim();
+          const limit = Number(parsed.searchParams.get("limit") ?? "25");
+          const allMembers = memberOptionsByGuild[guildID] ?? [];
+
+          const selectedMember =
+            selectedID === ""
+              ? null
+              : (allMembers.find((member) => member.id === selectedID) ?? null);
+          const matches = allMembers.filter((member) => {
+            if (query === "") {
+              return true;
+            }
+            return (
+              member.display_name.toLowerCase().startsWith(query) ||
+              member.username.toLowerCase().startsWith(query) ||
+              member.id.toLowerCase().startsWith(query)
+            );
+          });
+          const members = [
+            ...(selectedMember === null ? [] : [selectedMember]),
+            ...matches.filter((member) => member.id !== selectedID),
+          ].slice(0, Number.isFinite(limit) && limit > 0 ? limit : 25);
+
+          return jsonResponse({
+            status: "ok",
+            guild_id: guildID,
+            members,
+          });
+        }
+      }
+
+      if (url.includes("/features/") && init?.method === "PATCH") {
+        const match = url.match(/\/v1\/guilds\/([^/]+)\/features\/([^/?]+)/);
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          const featureID = decodeURIComponent(match[2] ?? "");
+          const payload = JSON.parse(String(init.body)) as Record<
+            string,
+            unknown
+          >;
+          featureUpdates.push({
+            guildID,
+            featureID,
+            payload,
+          });
+
+          const feature = featuresByGuild[guildID]?.find(
+            (item) => item.id === featureID,
+          );
+          if (feature === undefined) {
+            return new Response("not found", { status: 404 });
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "enabled")) {
+            const enabled = payload.enabled;
+            if (enabled === null) {
+              feature.override_state = "inherit";
+              feature.effective_enabled = false;
+              feature.effective_source = "global";
+            } else {
+              const nextEnabled = Boolean(enabled);
+              feature.override_state = nextEnabled ? "enabled" : "disabled";
+              feature.effective_enabled = nextEnabled;
+              feature.effective_source = "guild";
+            }
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "channel_id")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              channel_id: String(payload.channel_id ?? ""),
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "role_id")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              role_id: String(payload.role_id ?? ""),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "allowed_role_ids")
+          ) {
+            const allowedRoleIDs = Array.isArray(payload.allowed_role_ids)
+              ? payload.allowed_role_ids
+                  .filter((value): value is string => typeof value === "string")
+                  .map((value) => value.trim())
+                  .filter((value) => value !== "")
+              : [];
+            feature.details = {
+              ...(feature.details ?? {}),
+              allowed_role_ids: allowedRoleIDs,
+              allowed_role_count: allowedRoleIDs.length,
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "config_enabled")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              config_enabled: Boolean(payload.config_enabled),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(
+              payload,
+              "update_interval_mins",
+            )
+          ) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              update_interval_mins: Number(payload.update_interval_mins ?? 0),
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "target_role_id")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              target_role_id: String(payload.target_role_id ?? ""),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "required_role_ids")
+          ) {
+            const requiredRoleIDs = Array.isArray(payload.required_role_ids)
+              ? payload.required_role_ids
+                  .filter((value): value is string => typeof value === "string")
+                  .map((value) => value.trim())
+                  .filter((value) => value !== "")
+              : [];
+            feature.details = {
+              ...(feature.details ?? {}),
+              required_role_ids: requiredRoleIDs,
+              required_role_count: requiredRoleIDs.length,
+              level_role_id: requiredRoleIDs[0] ?? "",
+              booster_role_id: requiredRoleIDs[1] ?? "",
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "watch_bot")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              watch_bot: Boolean(payload.watch_bot),
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "user_id")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              user_id: String(payload.user_id ?? ""),
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "actor_role_id")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              actor_role_id: String(payload.actor_role_id ?? ""),
+            };
+          }
+
+          evaluateFeatureState(feature);
+
+          return jsonResponse({
+            status: "ok",
+            guild_id: guildID,
+            feature: {
+              ...feature,
+            },
+          });
+        }
+      }
+
+      if (url.includes("/features") && !url.includes("/catalog")) {
+        const match = url.match(/\/v1\/guilds\/([^/]+)\/features$/);
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          featureCalls.push(guildID);
+          return jsonResponse({
+            status: "ok",
+            workspace: {
+              scope: "guild",
+              guild_id: guildID,
+              features: featuresByGuild[guildID] ?? [],
+            },
+          });
+        }
+      }
+
+      if (url.includes("/partner-board/target") && init?.method === "PUT") {
+        const match = url.match(
+          /\/v1\/guilds\/([^/]+)\/partner-board\/target$/,
+        );
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          const payload = JSON.parse(String(init.body)) as Record<
+            string,
+            unknown
+          >;
+          targetUpdates.push({ guildID, payload });
+          const nextBoard = boardByGuild[guildID];
+          nextBoard.target = {
+            ...nextBoard.target,
+            ...(payload as PartnerBoardConfig["target"]),
+          };
+
+          if (payload.type === "channel_message") {
+            delete nextBoard.target?.webhook_url;
+          }
+          if (payload.type === "webhook_message") {
+            delete nextBoard.target?.channel_id;
+          }
+
+          return jsonResponse({
+            status: "ok",
+            guild_id: guildID,
+            target: nextBoard.target,
+          });
+        }
+      }
+
+      if (
+        url.includes("/partner-board") &&
+        !url.endsWith("/partner-board/sync")
+      ) {
+        const match = url.match(/\/v1\/guilds\/([^/]+)\/partner-board$/);
+        if (match) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          boardCalls.push(guildID);
+          return jsonResponse({
+            status: "ok",
+            guild_id: guildID,
+            partner_board: boardByGuild[guildID],
+          });
+        }
+      }
+
+      if (url.endsWith("/partner-board/sync")) {
         return jsonResponse({
           status: "ok",
-          guild_id: guildID,
-          target: nextBoard.target,
+          guild_id: "guild-1",
+          synced: true,
         });
       }
-    }
 
-    if (url.includes("/partner-board") && !url.endsWith("/partner-board/sync")) {
-      const match = url.match(/\/v1\/guilds\/([^/]+)\/partner-board$/);
-      if (match) {
-        const guildID = decodeURIComponent(match[1] ?? "");
-        boardCalls.push(guildID);
-        return jsonResponse({
-          status: "ok",
-          guild_id: guildID,
-          partner_board: boardByGuild[guildID],
-        });
-      }
-    }
-
-    if (url.endsWith("/partner-board/sync")) {
-      return jsonResponse({
-        status: "ok",
-        guild_id: "guild-1",
-        synced: true,
-      });
-    }
-
-    return new Response("not found", { status: 404 });
-  });
+      return new Response("not found", { status: 404 });
+    },
+  );
 
   return {
     boardCalls,
@@ -1011,17 +1137,29 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Partner Board" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Partner Board" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Commands" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Moderation" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Moderation" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Logging" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Roles" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Stats" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Maintenance" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Automations" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Activity Log" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Commands", level: 2 })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Maintenance" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Automations" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Activity Log" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Commands", level: 2 }),
+    ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/dashboard/home");
   });
 
@@ -1089,8 +1227,13 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.getByRole("dialog", { name: "Configure Mute role" }),
     ).toBeVisible();
-    await userEvent.selectOptions(screen.getByLabelText("Mute role"), "mute-role");
-    await userEvent.click(screen.getByRole("button", { name: "Save mute role" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Mute role"),
+      "mute-role",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save mute role" }),
+    );
 
     await waitFor(() => {
       expect(featureUpdates).toEqual([
@@ -1141,21 +1284,21 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getAllByText("#mod-cases").length).toBeGreaterThan(0);
   });
 
-  it.each([
-    "/dashboard/automations",
-    "/dashboard/activity",
-  ])("redirects %s to the planned Home section instead of a placeholder page", async (path) => {
-    const { fetchMock } = createFetchMock();
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", path);
+  it.each(["/dashboard/automations", "/dashboard/activity"])(
+    "redirects %s to the planned Home section instead of a placeholder page",
+    async (path) => {
+      const { fetchMock } = createFetchMock();
+      vi.stubGlobal("fetch", fetchMock);
+      window.history.replaceState({}, "", path);
 
-    render(<App />);
+      render(<App />);
 
-    await screen.findByRole("heading", { name: "Home", level: 1 });
-    expect(window.location.pathname).toBe("/dashboard/home");
-    expect(window.location.hash).toBe("#planned");
-    expect(screen.getByText("Tickets")).toBeInTheDocument();
-  });
+      await screen.findByRole("heading", { name: "Home", level: 1 });
+      expect(window.location.pathname).toBe("/dashboard/home");
+      expect(window.location.hash).toBe("#planned");
+      expect(screen.getByText("Tickets")).toBeInTheDocument();
+    },
+  );
 
   it("keeps Entries, Layout, and Destination on separate routes and removes the placeholder Activity tab", async () => {
     const { fetchMock } = createFetchMock();
@@ -1165,13 +1308,21 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Board text" });
-    expect(screen.queryByRole("heading", { name: "Manage entries" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Activity" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Manage entries" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Activity" }),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("link", { name: "Destination" }));
 
-    await screen.findByRole("heading", { name: "Set where the board is published" });
-    expect(screen.queryByRole("heading", { name: "Board text" })).not.toBeInTheDocument();
+    await screen.findByRole("heading", {
+      name: "Set where the board is published",
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Board text" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Board message ID")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Channel ID")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Webhook URL")).not.toBeInTheDocument();
@@ -1207,15 +1358,33 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
-    expect(screen.getByRole("heading", { name: "Partner Board", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Commands", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Roles", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Settings", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Maintenance", level: 2 })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Open Partner Board" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Open Commands" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Maintenance" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Partner Board", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Commands", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Moderation", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Roles", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Settings", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Maintenance", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: "Open Partner Board" }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("link", { name: "Open Commands" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open Maintenance" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Tickets")).toBeInTheDocument();
   });
 
@@ -1249,7 +1418,9 @@ describe("dashboard routing and workspace", () => {
     );
 
     expect(
-      screen.getByRole("dialog", { name: "Configure automatic role assignment" }),
+      screen.getByRole("dialog", {
+        name: "Configure automatic role assignment",
+      }),
     ).toBeVisible();
 
     await userEvent.selectOptions(
@@ -1268,7 +1439,9 @@ describe("dashboard routing and workspace", () => {
       screen.getByLabelText("Booster role"),
       "role-booster",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Save auto role" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save auto role" }),
+    );
 
     await waitFor(() => {
       expect(featureUpdates).toEqual([
@@ -1285,10 +1458,14 @@ describe("dashboard routing and workspace", () => {
     });
 
     expect(
-      screen.queryByRole("dialog", { name: "Configure automatic role assignment" }),
+      screen.queryByRole("dialog", {
+        name: "Configure automatic role assignment",
+      }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Members").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Level Five + Boosters").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Level Five + Boosters").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("uses a member picker for presence watch user instead of a raw user ID field", async () => {
@@ -1324,14 +1501,18 @@ describe("dashboard routing and workspace", () => {
     await userEvent.type(screen.getByLabelText("Search members"), "car");
 
     await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Carol Gamma (@carol)" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "Carol Gamma (@carol)" }),
+      ).toBeInTheDocument();
     });
 
     await userEvent.selectOptions(
       screen.getByLabelText("Member"),
       "user-carol",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Save user watch" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save user watch" }),
+    );
 
     await waitFor(() => {
       expect(featureUpdates).toEqual([
@@ -1368,7 +1549,9 @@ describe("dashboard routing and workspace", () => {
       await screen.findByRole("button", { name: "Configure admin access" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Monitoring")).not.toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Feature" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Feature" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps command setup inside a drawer with pickers first and raw IDs behind Advanced", async () => {
@@ -1394,11 +1577,11 @@ describe("dashboard routing and workspace", () => {
     expect(advancedDetails).not.toBeNull();
     expect(advancedDetails).not.toHaveAttribute("open");
 
-    await userEvent.click(screen.getByText("Advanced", { selector: "summary" }));
+    await userEvent.click(
+      screen.getByText("Advanced", { selector: "summary" }),
+    );
     expect(advancedDetails).toHaveAttribute("open");
-    expect(
-      screen.getByLabelText("Command channel ID fallback"),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Command channel ID fallback")).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(
@@ -1477,15 +1660,15 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.getByRole("dialog", { name: "Configure admin commands" }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("checkbox", { name: /Moderators/i }),
-    ).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Moderators/i })).toBeChecked();
     expect(
       screen.getByRole("checkbox", { name: /Members/i }),
     ).not.toBeChecked();
 
     await userEvent.click(screen.getByRole("checkbox", { name: /Members/i }));
-    await userEvent.click(screen.getByRole("button", { name: "Save admin access" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save admin access" }),
+    );
 
     await waitFor(() => {
       expect(featureUpdates).toEqual([
@@ -1519,9 +1702,7 @@ describe("dashboard routing and workspace", () => {
     const configureButtons = await screen.findAllByRole("button", {
       name: "Configure",
     });
-    await userEvent.click(
-      configureButtons[0]!,
-    );
+    await userEvent.click(configureButtons[0]!);
 
     expect(
       screen.getByRole("dialog", { name: "Configure Avatar logging" }),
@@ -1565,6 +1746,106 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByText("#join-channel")).toBeInTheDocument();
   });
 
+  it("opens the dedicated Stats workspace and replaces the generic feature table with a schedule-focused workspace", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/stats");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Stats", level: 1 });
+    await screen.findByRole("heading", { name: "Stats updates", level: 2 });
+
+    expect(window.location.pathname).toBe("/dashboard/stats");
+    expect(
+      screen.getByRole("button", { name: "Configure stats schedule" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("2 channels").length).toBeGreaterThan(0);
+    expect(screen.getByText("Total members")).toBeInTheDocument();
+    expect(screen.getByText("Bot count")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Feature" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves stats activation and interval from the dedicated Stats workspace", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/stats");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Stats", level: 1 });
+    await screen.findByRole("button", { name: "Configure stats schedule" });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure stats schedule" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Configure Stats channels" }),
+    ).toBeVisible();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Update rule"),
+      "enabled",
+    );
+    await userEvent.clear(screen.getByLabelText("Update interval (minutes)"));
+    await userEvent.type(
+      screen.getByLabelText("Update interval (minutes)"),
+      "45",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save stats settings" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "stats_channels",
+          payload: {
+            config_enabled: true,
+            update_interval_mins: 45,
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure Stats channels" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("45 minutes").length).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Disable stats module" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "stats_channels",
+          payload: {
+            config_enabled: true,
+            update_interval_mins: 45,
+          },
+        },
+        {
+          guildID: "guild-1",
+          featureID: "stats_channels",
+          payload: {
+            enabled: false,
+          },
+        },
+      ]);
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Enable stats module" }),
+    ).toBeInTheDocument();
+  });
+
   it("hands off destination setup to Settings diagnostics with the requested posting method preselected", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -1572,7 +1853,9 @@ describe("dashboard routing and workspace", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Set where the board is published" });
+    await screen.findByRole("heading", {
+      name: "Set where the board is published",
+    });
 
     await userEvent.selectOptions(
       screen.getByLabelText("Preferred posting method"),
@@ -1586,7 +1869,9 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe("/dashboard/settings");
     expect(window.location.hash).toBe("#diagnostics");
     expect(screen.getByText("Granted OAuth scopes")).toBeVisible();
-    expect(screen.getByLabelText("Posting method")).toHaveValue("webhook_message");
+    expect(screen.getByLabelText("Posting method")).toHaveValue(
+      "webhook_message",
+    );
     expect(screen.getByLabelText("Board message ID")).toBeVisible();
   });
 
@@ -1602,18 +1887,28 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByText("Granted OAuth scopes")).not.toBeVisible();
     expect(screen.getByText("Board message ID")).not.toBeVisible();
 
-    await userEvent.click(screen.getByText("Diagnostics", { selector: "summary" }));
+    await userEvent.click(
+      screen.getByText("Diagnostics", { selector: "summary" }),
+    );
 
     expect(screen.getByText("Granted OAuth scopes")).toBeVisible();
-    await userEvent.selectOptions(screen.getByLabelText("Posting method"), "webhook_message");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Posting method"),
+      "webhook_message",
+    );
     await userEvent.clear(screen.getByLabelText("Board message ID"));
-    await userEvent.type(screen.getByLabelText("Board message ID"), "999999999999999999");
+    await userEvent.type(
+      screen.getByLabelText("Board message ID"),
+      "999999999999999999",
+    );
     await userEvent.clear(screen.getByLabelText("Webhook URL"));
     await userEvent.type(
       screen.getByLabelText("Webhook URL"),
       "https://discord.com/api/webhooks/new-target",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Save destination" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save destination" }),
+    );
 
     await waitFor(() => {
       expect(targetUpdates).toEqual([
@@ -1628,6 +1923,8 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(screen.getByText("Partner Board destination updated.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Partner Board destination updated."),
+    ).toBeInTheDocument();
   });
 });

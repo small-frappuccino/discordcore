@@ -17,16 +17,16 @@ import { useFeatureWorkspace } from "./useFeatureWorkspace";
 
 let mockDashboardSession: {
   authState: string;
-      client: {
-        getFeatureCatalog: ReturnType<typeof vi.fn>;
-        listGlobalFeatures: ReturnType<typeof vi.fn>;
-        listGuildChannelOptions: ReturnType<typeof vi.fn>;
-        listGuildFeatures: ReturnType<typeof vi.fn>;
-        listGuildMemberOptions: ReturnType<typeof vi.fn>;
-        listGuildRoleOptions: ReturnType<typeof vi.fn>;
-        patchGlobalFeature: ReturnType<typeof vi.fn>;
-        patchGuildFeature: ReturnType<typeof vi.fn>;
-    };
+  client: {
+    getFeatureCatalog: ReturnType<typeof vi.fn>;
+    listGlobalFeatures: ReturnType<typeof vi.fn>;
+    listGuildChannelOptions: ReturnType<typeof vi.fn>;
+    listGuildFeatures: ReturnType<typeof vi.fn>;
+    listGuildMemberOptions: ReturnType<typeof vi.fn>;
+    listGuildRoleOptions: ReturnType<typeof vi.fn>;
+    patchGlobalFeature: ReturnType<typeof vi.fn>;
+    patchGuildFeature: ReturnType<typeof vi.fn>;
+  };
   selectedGuildID: string;
 };
 
@@ -111,7 +111,9 @@ describe("feature hooks", () => {
       expect(result.current.catalog).toEqual(catalog);
     });
 
-    expect(mockDashboardSession.client.getFeatureCatalog).toHaveBeenCalledTimes(1);
+    expect(mockDashboardSession.client.getFeatureCatalog).toHaveBeenCalledTimes(
+      1,
+    );
     expect(result.current.notice).toBeNull();
   });
 
@@ -125,7 +127,9 @@ describe("feature hooks", () => {
     );
 
     expect(result.current.workspaceState).toBe("server_required");
-    expect(mockDashboardSession.client.listGuildFeatures).not.toHaveBeenCalled();
+    expect(
+      mockDashboardSession.client.listGuildFeatures,
+    ).not.toHaveBeenCalled();
   });
 
   it("loads and groups guild feature records", async () => {
@@ -205,9 +209,9 @@ describe("feature hooks", () => {
       expect(result.current.roles).toEqual(roles);
     });
 
-    expect(mockDashboardSession.client.listGuildRoleOptions).toHaveBeenCalledWith(
-      "guild-1",
-    );
+    expect(
+      mockDashboardSession.client.listGuildRoleOptions,
+    ).toHaveBeenCalledWith("guild-1");
     expect(result.current.notice).toBeNull();
   });
 
@@ -273,14 +277,13 @@ describe("feature hooks", () => {
       expect(result.current.members).toEqual(members);
     });
 
-    expect(mockDashboardSession.client.listGuildMemberOptions).toHaveBeenCalledWith(
-      "guild-1",
-      {
-        query: "ali",
-        selectedId: "user-2",
-        limit: 25,
-      },
-    );
+    expect(
+      mockDashboardSession.client.listGuildMemberOptions,
+    ).toHaveBeenCalledWith("guild-1", {
+      query: "ali",
+      selectedId: "user-2",
+      limit: 25,
+    });
     expect(result.current.notice).toBeNull();
   });
 
@@ -359,6 +362,63 @@ describe("feature hooks", () => {
       "moderation.mute_role",
       {
         role_id: "mute-role",
+      },
+    );
+    expect(response).toEqual(updatedFeature);
+    expect(result.current.notice).toBeNull();
+  });
+
+  it("patches a guild stats feature with config_enabled and update_interval_mins", async () => {
+    const updatedFeature = buildFeatureRecord({
+      id: "stats_channels",
+      category: "stats",
+      label: "Stats channels",
+      description: "Periodic member-count channel updates",
+      details: {
+        config_enabled: true,
+        update_interval_mins: 45,
+        configured_channel_count: 2,
+        channels: [
+          {
+            channel_id: "stats-total",
+            label: "Total members",
+            member_type: "all",
+          },
+          {
+            channel_id: "stats-bots",
+            label: "Bot count",
+            member_type: "bots",
+          },
+        ],
+      },
+      editable_fields: ["enabled", "config_enabled", "update_interval_mins"],
+    });
+    mockDashboardSession.client.patchGuildFeature.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      feature: updatedFeature,
+    });
+
+    const { result } = renderHook(() =>
+      useFeatureMutation({
+        scope: "guild",
+      }),
+    );
+
+    let response: FeatureRecord | null = null;
+    await act(async () => {
+      response = await result.current.patchFeature("stats_channels", {
+        config_enabled: true,
+        update_interval_mins: 45,
+      });
+    });
+
+    expect(mockDashboardSession.client.patchGuildFeature).toHaveBeenCalledWith(
+      "guild-1",
+      "stats_channels",
+      {
+        config_enabled: true,
+        update_interval_mins: 45,
       },
     );
     expect(response).toEqual(updatedFeature);

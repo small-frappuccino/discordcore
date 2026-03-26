@@ -74,6 +74,14 @@ type featureBlocker struct {
 	Field   string `json:"field,omitempty"`
 }
 
+type featureStatsChannelDetail struct {
+	ChannelID    string `json:"channel_id,omitempty"`
+	Label        string `json:"label,omitempty"`
+	NameTemplate string `json:"name_template,omitempty"`
+	MemberType   string `json:"member_type,omitempty"`
+	RoleID       string `json:"role_id,omitempty"`
+}
+
 var featureDefinitions = []featureDefinition{
 	{ID: "services.monitoring", Category: "services", Label: "Monitoring", Description: "Core monitoring service lifecycle and shared event processing.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "services.automod", Category: "services", Label: "Automod service", Description: "Discord native AutoMod event listener used for moderation logging. No local rules engine is active yet.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
@@ -543,6 +551,7 @@ func buildFeatureDetails(cfg *files.BotConfig, guildID string, def featureDefini
 				out["config_enabled"] = guild.Stats.Enabled
 				out["update_interval_mins"] = guild.Stats.UpdateIntervalMins
 				out["configured_channel_count"] = len(guild.Stats.Channels)
+				out["channels"] = buildStatsChannelDetails(guild.Stats.Channels)
 			}
 		}
 	case "auto_role_assignment":
@@ -575,6 +584,24 @@ func buildFeatureDetails(cfg *files.BotConfig, guildID string, def featureDefini
 		}
 	}
 
+	return out
+}
+
+func buildStatsChannelDetails(channels []files.StatsChannelConfig) []featureStatsChannelDetail {
+	if len(channels) == 0 {
+		return []featureStatsChannelDetail{}
+	}
+
+	out := make([]featureStatsChannelDetail, 0, len(channels))
+	for _, channel := range channels {
+		out = append(out, featureStatsChannelDetail{
+			ChannelID:    strings.TrimSpace(channel.ChannelID),
+			Label:        strings.TrimSpace(channel.Label),
+			NameTemplate: strings.TrimSpace(channel.NameTemplate),
+			MemberType:   strings.TrimSpace(channel.MemberType),
+			RoleID:       strings.TrimSpace(channel.RoleID),
+		})
+	}
 	return out
 }
 
