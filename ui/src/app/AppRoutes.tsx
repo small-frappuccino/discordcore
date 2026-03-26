@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { appRoutes } from "./routes";
 import { DashboardLayout } from "../pages/DashboardLayout";
 import { CommandsPage } from "../pages/CommandsPage";
-import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
@@ -58,7 +57,7 @@ export function AppRoutes() {
         />
         <Route
           path="maintenance"
-          element={<FeatureCategoryPage areaId="maintenance" />}
+          element={<Navigate replace to={appRoutes.settingsAdvanced} />}
         />
         <Route path="stats" element={<StatsPage />} />
         <Route

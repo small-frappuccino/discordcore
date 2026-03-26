@@ -15,13 +15,37 @@ import {
   SurfaceCard,
 } from "../components/ui";
 import {
-  advancedFeatureAreaDefinitions,
   getFeatureAreaRecords,
   plannedModules,
   primaryFeatureAreaDefinitions,
 } from "../features/features/areas";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoardSummary";
+
+type WorkspaceState = ReturnType<typeof useFeatureWorkspace>["workspaceState"];
+
+interface HomeModuleSummary {
+  id: string;
+  label: string;
+  description: string;
+  meta: string;
+  tone: "neutral" | "info" | "success" | "error";
+  statusLabel: string;
+  signal: string;
+  primaryTo: string;
+  primaryLabel: string;
+  secondaryTo?: string;
+  secondaryLabel?: string;
+  blocked: boolean;
+}
+
+interface HomeBlocker {
+  id: string;
+  label: string;
+  message: string;
+  to: string;
+  actionLabel: string;
+}
 
 export function HomePage() {
   const location = useLocation();
@@ -66,27 +90,155 @@ export function HomePage() {
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const homeLoading = featureWorkspace.loading || boardSummaryLoading;
-  const primaryAreaSummaries = primaryFeatureAreaDefinitions.map((area) =>
-    summarizeFeatureArea(
+  const featureAreaModules = primaryFeatureAreaDefinitions.map((area) => {
+    const areaSummary = summarizeFeatureArea(
       getFeatureAreaRecords(featureWorkspace.features, area.id),
       featureWorkspace.workspaceState,
-    ),
+    );
+
+    return {
+      area,
+      summary: areaSummary,
+    };
+  });
+
+  const partnerBoardModule = buildPartnerBoardModule({
+    authState,
+    deliveryConfigured,
+    lastLoadedAt,
+    layoutConfigured,
+    partnerCount,
+    postingMethodLabel,
+    selectedGuildPresent: selectedGuild !== null,
+    shellStatus,
+    summarizePostingDestination,
+  });
+  const mainModules: HomeModuleSummary[] = [
+    partnerBoardModule,
+    ...featureAreaModules.map(({ area, summary }) => ({
+      blocked: summary.tone === "error",
+      description: area.description,
+      id: area.id,
+      label: area.label,
+      meta:
+        summary.total === 0
+          ? "No mapped features yet"
+          : `${summary.total} tracked features`,
+      primaryLabel: `Open ${area.label}`,
+      primaryTo: getFeatureAreaRoute(area.id),
+      signal: summary.support,
+      statusLabel: summary.label,
+      tone: summary.tone,
+    })),
+  ];
+  const blockedModules = mainModules.filter((module) => module.blocked);
+  const readyModules = mainModules.filter(
+    (module) => module.tone === "success",
   );
-  const operationalModules = primaryAreaSummaries.filter(
-    (summary) => summary.tone === "success",
-  ).length;
-  const modulesNeedingAttention = primaryAreaSummaries.filter(
-    (summary) => summary.tone === "error",
-  ).length;
-  const disabledModules = primaryAreaSummaries.filter(
-    (summary) => summary.label === "Disabled",
-  ).length;
+  const blockers = blockedModules.map(
+    (module): HomeBlocker => ({
+      actionLabel: module.secondaryLabel ?? module.primaryLabel,
+      id: module.id,
+      label: module.label,
+      message: module.signal,
+      to: module.secondaryTo ?? module.primaryTo,
+    }),
+  );
+  const quickShortcutItems = [
+    {
+      label: "Partner Board",
+      value: (
+        <Link className="button-secondary" to={appRoutes.partnerBoardEntries}>
+          Board entries
+        </Link>
+      ),
+    },
+    ...primaryFeatureAreaDefinitions.map((area) => ({
+      label: area.label,
+      value: (
+        <Link className="button-secondary" to={getFeatureAreaRoute(area.id)}>
+          {area.homeShortcutLabel}
+        </Link>
+      ),
+    })),
+    {
+      label: "Settings",
+      value: (
+        <Link className="button-secondary" to={appRoutes.settings}>
+          Diagnostics
+        </Link>
+      ),
+    },
+  ];
+  const mainModulesLabel =
+    authState !== "signed_in"
+      ? "Sign in required"
+      : selectedGuild === null
+        ? "Choose a server"
+        : `${readyModules.length}/${mainModules.length} operational`;
+  const mainModulesSupport =
+    authState !== "signed_in"
+      ? formatAuthSupportText(authState, manageableGuilds.length)
+      : selectedGuild === null
+        ? "Choose a server to load module health and blockers."
+        : `${blockers.length} blockers across the main modules.`;
+  const blockersLabel =
+    authState !== "signed_in"
+      ? "Waiting for access"
+      : selectedGuild === null
+        ? "Choose a server"
+        : blockers.length === 0
+          ? "All clear"
+          : `${blockers.length} active`;
+  const blockersSupport =
+    authState !== "signed_in"
+      ? "Sign in before reviewing module blockers."
+      : selectedGuild === null
+        ? "Choose a server to inspect blockers."
+        : (blockers[0]?.message ??
+          "No active blockers across the main modules.");
+  const summaryItems = [
+    {
+      label: "Access",
+      value: formatAuthStateLabel(authState),
+      description: formatAuthSupportText(authState, manageableGuilds.length),
+      tone: authState === "signed_in" ? "success" : "info",
+    },
+    {
+      label: "Server",
+      value: selectedServerLabel,
+      description:
+        selectedGuild === null
+          ? "Choose a server to load category health and blocker summaries."
+          : "The selected server drives every server-scoped workspace.",
+      tone: selectedGuild === null ? "info" : "neutral",
+    },
+    {
+      label: "Main modules",
+      value: mainModulesLabel,
+      description: mainModulesSupport,
+      tone:
+        authState === "signed_in" && selectedGuild !== null
+          ? blockers.length > 0
+            ? "error"
+            : "success"
+          : "info",
+    },
+    {
+      label: "Blockers",
+      value: blockersLabel,
+      description: blockersSupport,
+      tone:
+        authState === "signed_in" && selectedGuild !== null
+          ? blockers.length > 0
+            ? "error"
+            : "success"
+          : "info",
+    },
+  ] as const;
 
   async function handleRefreshHome() {
-    await Promise.all([
-      featureWorkspace.refresh(),
-      refreshBoardSummary(),
-    ]);
+    await Promise.all([featureWorkspace.refresh(), refreshBoardSummary()]);
   }
 
   function renderPrimaryAction() {
@@ -134,53 +286,12 @@ export function HomePage() {
     );
   }
 
-  const summaryItems = [
-    {
-      label: "Access",
-      value: formatAuthStateLabel(authState),
-      description: formatAuthSupportText(authState, manageableGuilds.length),
-      tone: authState === "signed_in" ? "success" : "info",
-    },
-    {
-      label: "Server",
-      value: selectedServerLabel,
-      description:
-        selectedGuild === null
-          ? "Choose a server to load category health and feature readiness."
-          : "The selected server drives every server-scoped workspace.",
-      tone: selectedGuild === null ? "info" : "neutral",
-    },
-    {
-      label: "Main modules",
-      value:
-        featureWorkspace.workspaceState === "ready"
-          ? `${operationalModules}/${primaryFeatureAreaDefinitions.length} operational`
-          : formatHomeWorkspaceLabel(featureWorkspace.workspaceState),
-      description:
-        featureWorkspace.workspaceState === "ready"
-          ? `${modulesNeedingAttention} need attention • ${disabledModules} disabled`
-          : formatHomeWorkspaceSupport(featureWorkspace.workspaceState),
-      tone:
-        modulesNeedingAttention > 0
-          ? "error"
-          : featureWorkspace.workspaceState === "ready"
-            ? "success"
-            : "info",
-    },
-    {
-      label: "Partner Board",
-      value: shellStatus.label,
-      description: shellStatus.description,
-      tone: shellStatus.tone,
-    },
-  ] as const;
-
   return (
     <section className="page-shell">
       <PageHeader
         eyebrow="Home"
         title="Home"
-        description="Review the main server modules, open the right workspace, and spot blockers before configuration work begins."
+        description="See the main modules first, review blockers, and jump straight into the right workspace."
         status={
           <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
             {formatAuthStateLabel(authState)}
@@ -212,214 +323,199 @@ export function HomePage() {
         ))}
       </section>
 
-      <section className="home-area-grid" aria-label="Feature areas">
+      <SurfaceCard className="home-area-card">
+        <div className="home-area-card-header">
+          <div className="card-copy">
+            <p className="section-label">Workspace</p>
+            <h2>Main modules</h2>
+            <p className="section-description">
+              Start from the main operator workspaces and use the signal column
+              to decide which module needs attention first.
+            </p>
+          </div>
+          <StatusBadge
+            tone={
+              authState === "signed_in" && selectedGuild !== null
+                ? blockers.length > 0
+                  ? "error"
+                  : "success"
+                : "info"
+            }
+          >
+            {mainModulesLabel}
+          </StatusBadge>
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table feature-table">
+            <thead>
+              <tr>
+                <th scope="col">Module</th>
+                <th scope="col">Status</th>
+                <th scope="col">Signal</th>
+                <th scope="col">Shortcut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mainModules.map((module) => (
+                <tr key={module.id}>
+                  <td>
+                    <div className="feature-table-copy">
+                      <strong>{module.label}</strong>
+                      <p>{module.description}</p>
+                      <span className="meta-note">{module.meta}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="feature-status-cell">
+                      <StatusBadge tone={module.tone}>
+                        {module.statusLabel}
+                      </StatusBadge>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="feature-table-copy">
+                      <p>{module.signal}</p>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="feature-row-actions">
+                      <Link className="button-secondary" to={module.primaryTo}>
+                        {module.primaryLabel}
+                      </Link>
+                      {module.secondaryTo && module.secondaryLabel ? (
+                        <Link className="button-ghost" to={module.secondaryTo}>
+                          {module.secondaryLabel}
+                        </Link>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SurfaceCard>
+
+      <section className="home-area-grid" aria-label="Home context">
         <SurfaceCard className="home-area-card">
           <div className="home-area-card-header">
             <div className="card-copy">
-              <p className="section-label">Workspace</p>
-              <h2>Partner Board</h2>
+              <p className="section-label">Focus</p>
+              <h2>Current blockers</h2>
               <p className="section-description">
-                Entries, layout, and delivery stay together in the dedicated publishing workspace.
+                Keep the blocker list short and actionable so setup work starts
+                with the modules that are actually preventing use.
               </p>
             </div>
-            <StatusBadge tone={shellStatus.tone}>{shellStatus.label}</StatusBadge>
-          </div>
-
-          <KeyValueList
-            className="workspace-status-list"
-            items={[
-              {
-                label: "Destination",
-                value: summarizePostingDestination,
-              },
-              {
-                label: "Posting method",
-                value: postingMethodLabel,
-              },
-              {
-                label: "Entries",
-                value: String(partnerCount),
-              },
-              {
-                label: "Layout",
-                value: layoutConfigured ? "Ready" : "Needs setup",
-              },
-              {
-                label: "Last checked",
-                value: formatTimestamp(lastLoadedAt, "Not checked yet"),
-              },
-            ]}
-          />
-
-          <div className="home-area-footer">
-            <Link className="button-primary" to={appRoutes.partnerBoardEntries}>
-              Open Partner Board
-            </Link>
-            {!deliveryConfigured ? (
-              <Link className="button-secondary" to={appRoutes.partnerBoardDelivery}>
-                Finish destination
-              </Link>
-            ) : null}
-          </div>
-        </SurfaceCard>
-
-        {primaryFeatureAreaDefinitions.map((area) => {
-          const areaFeatures = getFeatureAreaRecords(featureWorkspace.features, area.id);
-          const areaSummary = summarizeFeatureArea(
-            areaFeatures,
-            featureWorkspace.workspaceState,
-          );
-
-          return (
-            <SurfaceCard className="home-area-card" id={area.anchor} key={area.id}>
-              <div className="home-area-card-header">
-                <div className="card-copy">
-                  <p className="section-label">Feature area</p>
-                  <h2>{area.label}</h2>
-                  <p className="section-description">{area.description}</p>
-                </div>
-                <StatusBadge tone={areaSummary.tone}>{areaSummary.label}</StatusBadge>
-              </div>
-
-              <ul className="home-area-list">
-                <li className="home-area-row">
-                  <span>Tracked features</span>
-                  <strong>{areaSummary.total}</strong>
-                </li>
-                <li className="home-area-row">
-                  <span>Ready</span>
-                  <strong>{areaSummary.ready}</strong>
-                </li>
-                <li className="home-area-row">
-                  <span>Blocked</span>
-                  <strong>{areaSummary.blocked}</strong>
-                </li>
-                <li className="home-area-row">
-                  <span>Disabled</span>
-                  <strong>{areaSummary.disabled}</strong>
-                </li>
-                <li className="home-area-row">
-                  <span>Current signal</span>
-                  <strong>{areaSummary.support}</strong>
-                </li>
-              </ul>
-
-              <div className="home-area-footer">
-                <Link
-                  className="button-secondary"
-                  to={getFeatureAreaRoute(area.id)}
-                >
-                  Open {area.label}
-                </Link>
-              </div>
-            </SurfaceCard>
-          );
-        })}
-
-        <SurfaceCard className="home-area-card">
-          <div className="home-area-card-header">
-            <div className="card-copy">
-              <p className="section-label">Technical</p>
-              <h2>Settings</h2>
-              <p className="section-description">
-                Session state, control connection, diagnostics, and advanced controls stay separate from daily feature management.
-              </p>
-            </div>
-            <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
-              {formatAuthStateLabel(authState)}
+            <StatusBadge
+              tone={
+                authState === "signed_in" && selectedGuild !== null
+                  ? blockers.length > 0
+                    ? "error"
+                    : "success"
+                  : "info"
+              }
+            >
+              {blockersLabel}
             </StatusBadge>
           </div>
 
+          {authState !== "signed_in" ? (
+            <p className="meta-note">
+              Sign in with Discord before reviewing server blockers.
+            </p>
+          ) : selectedGuild === null ? (
+            <p className="meta-note">
+              Choose a server from the sidebar before reviewing blockers.
+            </p>
+          ) : blockers.length === 0 ? (
+            <p className="meta-note">
+              No active blockers across Partner Board, commands, moderation,
+              logging, roles, or stats.
+            </p>
+          ) : (
+            <ul className="feature-guidance-list">
+              {blockers.map((blocker) => (
+                <li key={blocker.id}>
+                  <strong>{blocker.label}:</strong> {blocker.message}{" "}
+                  <Link to={blocker.to}>{blocker.actionLabel}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {authState === "signed_in" && selectedGuild !== null ? (
+            <div className="home-area-footer">
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={homeLoading}
+                onClick={() => void handleRefreshHome()}
+              >
+                Refresh blockers
+              </button>
+            </div>
+          ) : null}
+        </SurfaceCard>
+
+        <SurfaceCard className="home-area-card">
+          <div className="home-area-card-header">
+            <div className="card-copy">
+              <p className="section-label">Shortcuts</p>
+              <h2>Quick shortcuts</h2>
+              <p className="section-description">
+                Jump straight into the most common setup tasks without scanning
+                the full navigation every time.
+              </p>
+            </div>
+          </div>
+
           <KeyValueList
             className="workspace-status-list"
-            items={[
-              {
-                label: "Connection",
-                value: currentOriginLabel,
-              },
-              {
-                label: "Server access",
-                value: formatAuthSupportText(authState, manageableGuilds.length),
-              },
-              {
-                label: "Diagnostics",
-                value: "Advanced connection and destination details stay there.",
-              },
-            ]}
+            items={quickShortcutItems}
           />
+        </SurfaceCard>
+
+        <SurfaceCard className="home-area-card">
+          <div className="home-area-card-header">
+            <div className="card-copy">
+              <p className="section-label">Secondary</p>
+              <h2>Advanced stays in Settings</h2>
+              <p className="section-description">
+                Cleanup, backfill, prune, cache, and diagnostics remain outside
+                the main Home flow so they stay available without dominating the
+                landing page.
+              </p>
+            </div>
+          </div>
+
+          <p className="meta-note">
+            Use Settings for diagnostics and connection work. Use Settings &gt;
+            Advanced only when you are working on maintenance routines.
+          </p>
 
           <div className="home-area-footer">
-            <Link className="button-primary" to={appRoutes.settings}>
+            <Link className="button-secondary" to={appRoutes.settings}>
               Open settings
+            </Link>
+            <Link className="button-secondary" to={appRoutes.settingsAdvanced}>
+              Open Settings &gt; Advanced
             </Link>
           </div>
         </SurfaceCard>
       </section>
 
-      <section className="page-main" aria-label="Advanced controls">
-        <div className="card-copy">
-          <p className="section-label">Advanced</p>
-          <h2>Advanced controls</h2>
-          <p className="section-description">
-            Keep routine setup in the main modules. Leave cleanup, backfill, and other technical workflows here until they earn a simpler operator flow.
-          </p>
-        </div>
-
-        <div className="home-planned-grid">
-          {advancedFeatureAreaDefinitions.map((area) => {
-            const areaFeatures = getFeatureAreaRecords(featureWorkspace.features, area.id);
-            const areaSummary = summarizeFeatureArea(
-              areaFeatures,
-              featureWorkspace.workspaceState,
-            );
-
-            return (
-              <SurfaceCard className="home-area-card" id={area.anchor} key={area.id}>
-                <div className="home-area-card-header">
-                  <div className="card-copy">
-                    <p className="section-label">Advanced area</p>
-                    <h2>{area.label}</h2>
-                    <p className="section-description">{area.description}</p>
-                  </div>
-                  <StatusBadge tone={areaSummary.tone}>{areaSummary.label}</StatusBadge>
-                </div>
-
-                <ul className="home-area-list">
-                  <li className="home-area-row">
-                    <span>Tracked features</span>
-                    <strong>{areaSummary.total}</strong>
-                  </li>
-                  <li className="home-area-row">
-                    <span>Ready</span>
-                    <strong>{areaSummary.ready}</strong>
-                  </li>
-                  <li className="home-area-row">
-                    <span>Blocked</span>
-                    <strong>{areaSummary.blocked}</strong>
-                  </li>
-                  <li className="home-area-row">
-                    <span>Current signal</span>
-                    <strong>{areaSummary.support}</strong>
-                  </li>
-                </ul>
-
-                <div className="home-area-footer">
-                  <Link
-                    className="button-secondary"
-                    to={getFeatureAreaRoute(area.id)}
-                  >
-                    Open {area.label}
-                  </Link>
-                </div>
-              </SurfaceCard>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="home-planned-grid" id="planned" aria-label="Planned modules">
+      <section
+        className="home-planned-grid"
+        id="planned"
+        aria-label="Planned modules"
+      >
         {plannedModules.map((module) => (
-          <SurfaceCard className="roadmap-card roadmap-card-muted home-planned-card" key={module.id}>
+          <SurfaceCard
+            className="roadmap-card roadmap-card-muted home-planned-card"
+            key={module.id}
+          >
             <div className="card-copy">
               <p className="section-label">Planned module</p>
               <h2>{module.label}</h2>
@@ -427,7 +523,8 @@ export function HomePage() {
             </div>
             <div className="home-area-footer">
               <span className="meta-note">
-                This stays off the main navigation until the operator workflow is intentionally designed.
+                This stays off the main navigation until the operator workflow
+                is intentionally designed.
               </span>
             </div>
           </SurfaceCard>
@@ -437,9 +534,92 @@ export function HomePage() {
   );
 }
 
-function formatHomeWorkspaceLabel(
-  state: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
-) {
+function buildPartnerBoardModule({
+  authState,
+  deliveryConfigured,
+  lastLoadedAt,
+  layoutConfigured,
+  partnerCount,
+  postingMethodLabel,
+  selectedGuildPresent,
+  shellStatus,
+  summarizePostingDestination,
+}: {
+  authState: string;
+  deliveryConfigured: boolean;
+  lastLoadedAt: string | null;
+  layoutConfigured: boolean;
+  partnerCount: number;
+  postingMethodLabel: string;
+  selectedGuildPresent: boolean;
+  shellStatus: ReturnType<typeof usePartnerBoardSummary>["shellStatus"];
+  summarizePostingDestination: string;
+}): HomeModuleSummary {
+  if (authState !== "signed_in") {
+    return {
+      blocked: false,
+      description:
+        "Entries, layout, and delivery stay together in the dedicated publishing workspace.",
+      id: "partner-board",
+      label: "Partner Board",
+      meta: "Publishing workspace",
+      primaryLabel: "Open Partner Board",
+      primaryTo: appRoutes.partnerBoardEntries,
+      signal: "Sign in with Discord to load the Partner Board workspace.",
+      statusLabel: "Sign in required",
+      tone: "info",
+    };
+  }
+
+  if (!selectedGuildPresent) {
+    return {
+      blocked: false,
+      description:
+        "Entries, layout, and delivery stay together in the dedicated publishing workspace.",
+      id: "partner-board",
+      label: "Partner Board",
+      meta: "Choose a server",
+      primaryLabel: "Open Partner Board",
+      primaryTo: appRoutes.partnerBoardEntries,
+      signal: "Choose a server to review destination, layout, and entries.",
+      statusLabel: "Choose a server",
+      tone: "info",
+    };
+  }
+
+  const blocked =
+    shellStatus.tone === "error" || !deliveryConfigured || !layoutConfigured;
+
+  return {
+    blocked,
+    description:
+      "Entries, layout, and delivery stay together in the dedicated publishing workspace.",
+    id: "partner-board",
+    label: "Partner Board",
+    meta: `${partnerCount} entries • ${postingMethodLabel} • ${formatTimestamp(lastLoadedAt, "Not checked yet")}`,
+    primaryLabel: "Open Partner Board",
+    primaryTo: appRoutes.partnerBoardEntries,
+    secondaryLabel: !deliveryConfigured
+      ? "Finish destination"
+      : !layoutConfigured
+        ? "Review layout"
+        : undefined,
+    secondaryTo: !deliveryConfigured
+      ? appRoutes.partnerBoardDelivery
+      : !layoutConfigured
+        ? appRoutes.partnerBoardLayout
+        : undefined,
+    signal: !deliveryConfigured
+      ? summarizePostingDestination
+      : !layoutConfigured
+        ? "Board layout still needs to be reviewed before relying on the published output."
+        : shellStatus.description,
+    statusLabel: shellStatus.label,
+    tone: shellStatus.tone,
+  };
+}
+
+function formatHomeWorkspaceLabel(state: WorkspaceState) {
   switch (state) {
     case "checking":
       return "Checking access";
@@ -448,7 +628,7 @@ function formatHomeWorkspaceLabel(
     case "server_required":
       return "Choose a server";
     case "loading":
-      return "Loading categories";
+      return "Loading modules";
     case "unavailable":
       return "Unavailable";
     case "ready":
@@ -458,14 +638,12 @@ function formatHomeWorkspaceLabel(
   }
 }
 
-function formatHomeWorkspaceSupport(
-  state: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
-) {
+function formatHomeWorkspaceSupport(state: WorkspaceState) {
   switch (state) {
     case "checking":
       return "The dashboard is verifying session access.";
     case "auth_required":
-      return "Sign in with Discord to load feature categories.";
+      return "Sign in with Discord to load the main modules.";
     case "server_required":
       return "Choose a server to load guild feature readiness.";
     case "loading":
@@ -473,20 +651,19 @@ function formatHomeWorkspaceSupport(
     case "unavailable":
       return "The feature workspace could not be loaded for this server.";
     case "ready":
-      return "Feature categories are loaded and ready to summarize.";
+      return "Main modules are loaded and ready to summarize.";
     default:
-      return "Feature categories are unavailable.";
+      return "Main modules are unavailable.";
   }
 }
 
 function summarizeFeatureArea(
   features: ReturnType<typeof getFeatureAreaRecords>,
-  workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
+  workspaceState: WorkspaceState,
 ) {
   if (workspaceState !== "ready") {
     return {
       blocked: 0,
-      disabled: 0,
       label: formatHomeWorkspaceLabel(workspaceState),
       ready: 0,
       support: formatHomeWorkspaceSupport(workspaceState),
@@ -496,35 +673,40 @@ function summarizeFeatureArea(
   }
 
   const total = features.length;
-  const ready = features.filter((feature) => feature.readiness === "ready").length;
-  const blocked = features.filter((feature) => feature.readiness === "blocked").length;
-  const disabled = features.filter((feature) => !feature.effective_enabled).length;
+  const ready = features.filter(
+    (feature) => feature.readiness === "ready",
+  ).length;
+  const blocked = features.filter(
+    (feature) => feature.readiness === "blocked",
+  ).length;
+  const disabled = features.filter(
+    (feature) => !feature.effective_enabled,
+  ).length;
 
   let tone: "neutral" | "info" | "success" | "error" = "neutral";
   let label = "Disabled";
-  let support = total === 0 ? "No feature records are mapped to this category yet." : "Everything is currently disabled.";
+  let support =
+    total === 0
+      ? "No feature records are mapped to this module yet."
+      : "Everything is currently disabled.";
 
   if (blocked > 0) {
     tone = "error";
     label = "Needs attention";
     support =
-      features.find((feature) => feature.blockers?.length)?.blockers?.[0]?.message ??
-      "One or more features in this category are blocked.";
+      features.find((feature) => feature.blockers?.length)?.blockers?.[0]
+        ?.message ?? "One or more features in this module are blocked.";
   } else if (ready > 0) {
     tone = "success";
     label = "Operational";
     support =
       disabled === 0
-        ? "Every mapped feature in this area is ready."
-        : "At least one feature in this area is ready to use.";
-  } else if (total > 0) {
-    tone = "neutral";
-    label = "Disabled";
+        ? "Everything mapped to this module is ready."
+        : "At least one feature in this module is ready to use.";
   }
 
   return {
     blocked,
-    disabled,
     label,
     ready,
     support,

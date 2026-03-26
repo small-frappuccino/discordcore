@@ -13,6 +13,7 @@ export interface FeatureAreaDefinition {
   anchor: string;
   label: string;
   description: string;
+  homeShortcutLabel: string;
   navigation: "primary" | "advanced";
   featureIDs: string[];
 }
@@ -30,11 +31,9 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Commands",
     description:
       "Command handling, command routing, and privileged command access for the selected server.",
+    homeShortcutLabel: "Command setup",
     navigation: "primary",
-    featureIDs: [
-      "services.commands",
-      "services.admin_commands",
-    ],
+    featureIDs: ["services.commands", "services.admin_commands"],
   },
   {
     id: "moderation",
@@ -42,6 +41,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Moderation",
     description:
       "Logging-only AutoMod readiness, mute-role setup, and moderation event routes for staff workflows.",
+    homeShortcutLabel: "Moderation setup",
     navigation: "primary",
     featureIDs: [
       "services.automod",
@@ -56,6 +56,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Logging",
     description:
       "User, message, and reaction event logging for day-to-day observability.",
+    homeShortcutLabel: "Log routes",
     navigation: "primary",
     featureIDs: [
       "logging.avatar_logging",
@@ -74,6 +75,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Roles",
     description:
       "Role assignment and member-facing safeguards that still depend on role configuration.",
+    homeShortcutLabel: "Role setup",
     navigation: "primary",
     featureIDs: [
       "presence_watch.bot",
@@ -87,7 +89,8 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     anchor: "maintenance",
     label: "Maintenance",
     description:
-      "Advanced cleanup, backfill, pruning, and scheduled data maintenance.",
+      "Advanced cleanup, backfill, pruning, and scheduled data routines that now live under Settings > Advanced.",
+    homeShortcutLabel: "Advanced routines",
     navigation: "advanced",
     featureIDs: [
       "message_cache.cleanup_on_startup",
@@ -103,6 +106,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     label: "Stats",
     description:
       "Server statistics and member-count channel updates for the selected guild.",
+    homeShortcutLabel: "Stats schedule",
     navigation: "primary",
     featureIDs: ["stats_channels"],
   },
@@ -114,6 +118,10 @@ export const primaryFeatureAreaDefinitions = featureAreaDefinitions.filter(
 
 export const advancedFeatureAreaDefinitions = featureAreaDefinitions.filter(
   (area) => area.navigation === "advanced",
+);
+
+export const advancedSettingsFeatureIDs = Array.from(
+  new Set(advancedFeatureAreaDefinitions.flatMap((area) => area.featureIDs)),
 );
 
 export const plannedModules: PlannedModuleDefinition[] = [
@@ -141,5 +149,12 @@ export function getFeatureAreaRecords(
   }
 
   const featureIDSet = new Set(definition.featureIDs);
+  return features.filter((feature) => featureIDSet.has(feature.id));
+}
+
+export function getAdvancedFeatureRecords(
+  features: FeatureRecord[],
+): FeatureRecord[] {
+  const featureIDSet = new Set(advancedSettingsFeatureIDs);
   return features.filter((feature) => featureIDSet.has(feature.id));
 }

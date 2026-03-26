@@ -30,6 +30,7 @@ export const appRoutes = {
   automations: "/dashboard/automations",
   activity: "/dashboard/activity",
   settings: "/dashboard/settings",
+  settingsAdvanced: "/dashboard/settings#advanced",
 } as const;
 
 export interface SidebarItem {

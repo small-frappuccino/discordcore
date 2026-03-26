@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import type {
@@ -502,6 +508,34 @@ function createFetchMock() {
         ],
       },
       {
+        id: "message_cache.cleanup_on_startup",
+        category: "message_cache",
+        label: "Message cache cleanup",
+        description:
+          "Allow startup cleanup when the runtime switch is enabled.",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "inherit",
+        effective_enabled: false,
+        effective_source: "global",
+        readiness: "disabled",
+        editable_fields: ["enabled"],
+      },
+      {
+        id: "message_cache.delete_on_log",
+        category: "message_cache",
+        label: "Delete on log",
+        description:
+          "Delete cached messages after logging when the runtime switch is enabled.",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+        editable_fields: ["enabled"],
+      },
+      {
         id: "maintenance.db_cleanup",
         category: "maintenance",
         label: "Database cleanup",
@@ -512,6 +546,68 @@ function createFetchMock() {
         effective_enabled: true,
         effective_source: "guild",
         readiness: "ready",
+        editable_fields: ["enabled"],
+      },
+      {
+        id: "backfill.enabled",
+        category: "backfill",
+        label: "Entry/exit backfill",
+        description:
+          "Backfill entry and exit metrics when routing and runtime dates are configured.",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "missing_channel",
+            message: "Backfill needs a configured source channel.",
+            field: "channel_id",
+          },
+        ],
+        details: {
+          channel_id: "",
+          start_day: "",
+          initial_date: "",
+        },
+        editable_fields: ["enabled", "channel_id", "start_day", "initial_date"],
+      },
+      {
+        id: "user_prune",
+        category: "maintenance",
+        label: "User prune",
+        description:
+          "Periodic user prune workflow plus its guild-level pruning configuration.",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "ready",
+        details: {
+          config_enabled: true,
+          grace_days: 30,
+          scan_interval_mins: 60,
+          initial_delay_secs: 15,
+          kicks_per_second: 2,
+          max_kicks_per_run: 25,
+          exempt_role_ids: ["role-guard"],
+          exempt_role_count: 1,
+          dry_run: true,
+        },
+        editable_fields: [
+          "enabled",
+          "config_enabled",
+          "grace_days",
+          "scan_interval_mins",
+          "initial_delay_secs",
+          "kicks_per_second",
+          "max_kicks_per_run",
+          "exempt_role_ids",
+          "dry_run",
+        ],
       },
       {
         id: "stats_channels",
@@ -725,6 +821,57 @@ function createFetchMock() {
           {
             code: "missing_channels",
             message: "Stats channels need at least one configured target.",
+          },
+        ];
+        return;
+      }
+    }
+
+    if (feature.id === "backfill.enabled") {
+      const startDay =
+        typeof feature.details?.start_day === "string"
+          ? feature.details.start_day.trim()
+          : "";
+      const initialDate =
+        typeof feature.details?.initial_date === "string"
+          ? feature.details.initial_date.trim()
+          : "";
+
+      if (channelId === "") {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "missing_channel",
+            message: "Backfill needs a configured source channel.",
+            field: "channel_id",
+          },
+        ];
+        return;
+      }
+
+      if (startDay === "" && initialDate === "") {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "missing_schedule_seed",
+            message: "Backfill needs start_day or initial_date configured.",
+            field: "start_day",
+          },
+        ];
+        return;
+      }
+    }
+
+    if (feature.id === "user_prune") {
+      const configEnabled = feature.details?.config_enabled === true;
+
+      if (!configEnabled) {
+        feature.readiness = "blocked";
+        feature.blockers = [
+          {
+            code: "config_disabled",
+            message: "User prune config is disabled.",
+            field: "config_enabled",
           },
         ];
         return;
@@ -974,6 +1121,86 @@ function createFetchMock() {
             };
           }
 
+          if (Object.prototype.hasOwnProperty.call(payload, "start_day")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              start_day: String(payload.start_day ?? ""),
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "initial_date")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              initial_date: String(payload.initial_date ?? ""),
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "grace_days")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              grace_days: Number(payload.grace_days ?? 0),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "scan_interval_mins")
+          ) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              scan_interval_mins: Number(payload.scan_interval_mins ?? 0),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "initial_delay_secs")
+          ) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              initial_delay_secs: Number(payload.initial_delay_secs ?? 0),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "kicks_per_second")
+          ) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              kicks_per_second: Number(payload.kicks_per_second ?? 0),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "max_kicks_per_run")
+          ) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              max_kicks_per_run: Number(payload.max_kicks_per_run ?? 0),
+            };
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(payload, "exempt_role_ids")
+          ) {
+            const exemptRoleIDs = Array.isArray(payload.exempt_role_ids)
+              ? payload.exempt_role_ids
+                  .filter((value): value is string => typeof value === "string")
+                  .map((value) => value.trim())
+                  .filter((value) => value !== "")
+              : [];
+            feature.details = {
+              ...(feature.details ?? {}),
+              exempt_role_ids: exemptRoleIDs,
+              exempt_role_count: exemptRoleIDs.length,
+            };
+          }
+
+          if (Object.prototype.hasOwnProperty.call(payload, "dry_run")) {
+            feature.details = {
+              ...(feature.details ?? {}),
+              dry_run: Boolean(payload.dry_run),
+            };
+          }
+
           if (Object.prototype.hasOwnProperty.call(payload, "target_role_id")) {
             feature.details = {
               ...(feature.details ?? {}),
@@ -1158,7 +1385,7 @@ describe("dashboard routing and workspace", () => {
       screen.queryByRole("link", { name: "Activity Log" }),
     ).not.toBeInTheDocument();
     expect(
-      await screen.findByRole("heading", { name: "Commands", level: 2 }),
+      await screen.findByRole("heading", { name: "Main modules", level: 2 }),
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/dashboard/home");
   });
@@ -1350,7 +1577,7 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByRole("button", { name: "Confirm" })).toBeVisible();
   });
 
-  it("shows Home as the operational landing page with area blocks and planned modules", async () => {
+  it("shows Home as the operational landing page with main modules, blockers, shortcuts, and planned modules", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", "/dashboard/home");
@@ -1359,22 +1586,19 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
     expect(
-      screen.getByRole("heading", { name: "Partner Board", level: 2 }),
+      screen.getByRole("heading", { name: "Main modules", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Commands", level: 2 }),
+      screen.getByRole("heading", { name: "Current blockers", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Moderation", level: 2 }),
+      screen.getByRole("heading", { name: "Quick shortcuts", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Roles", level: 2 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Settings", level: 2 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Maintenance", level: 2 }),
+      screen.getByRole("heading", {
+        name: "Advanced stays in Settings",
+        level: 2,
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("link", { name: "Open Partner Board" }).length,
@@ -1383,8 +1607,29 @@ describe("dashboard routing and workspace", () => {
       screen.getByRole("link", { name: "Open Commands" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open Maintenance" }),
+      screen.getByRole("link", { name: "Command setup" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open Settings > Advanced" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("link", { name: "Finish destination" }),
+      ).not.toBeInTheDocument();
+    });
+    const blockersCard = screen
+      .getByRole("heading", { name: "Current blockers", level: 2 })
+      .closest(".surface-card");
+    expect(blockersCard).not.toBeNull();
+    expect(
+      within(blockersCard!).getByRole("link", { name: "Open Moderation" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Settings", level: 2 }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Maintenance", level: 2 }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Tickets")).toBeInTheDocument();
   });
 
@@ -1744,6 +1989,199 @@ describe("dashboard routing and workspace", () => {
       screen.queryByRole("dialog", { name: "Configure Member join logging" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("#join-channel")).toBeInTheDocument();
+  });
+
+  it("moves advanced maintenance controls into Settings and configures backfill and user prune through dedicated drawers", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", "/dashboard/maintenance");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Settings", level: 1 });
+    expect(window.location.pathname).toBe("/dashboard/settings");
+    expect(window.location.hash).toBe("#advanced");
+    expect(
+      screen.getByRole("heading", {
+        name: "Runtime and maintenance controls",
+        level: 2,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Message cache cleanup"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Configure backfill" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Configure user prune" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Enable Message cache cleanup" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure backfill" }),
+    );
+
+    const backfillDialog = screen.getByRole("dialog", {
+      name: "Configure entry and exit backfill",
+    });
+    expect(backfillDialog).toBeVisible();
+    expect(within(backfillDialog).getByLabelText("Source channel")).toHaveValue(
+      "",
+    );
+
+    await userEvent.selectOptions(
+      within(backfillDialog).getByLabelText("Source channel"),
+      "ops-commands",
+    );
+    await userEvent.type(
+      within(backfillDialog).getByLabelText("Start day"),
+      "2026-03-01",
+    );
+    await userEvent.click(
+      within(backfillDialog).getByRole("button", { name: "Save backfill" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "backfill.enabled",
+          payload: {
+            channel_id: "ops-commands",
+            start_day: "2026-03-01",
+            initial_date: "",
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", {
+        name: "Configure entry and exit backfill",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("#ops-commands").length).toBeGreaterThan(0);
+    expect(screen.getByText("2026-03-01")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Configure user prune" }),
+    );
+
+    const pruneDialog = screen.getByRole("dialog", {
+      name: "Configure user prune",
+    });
+    const exemptRolesGroup = within(pruneDialog).getByRole("group", {
+      name: "Exempt roles",
+    });
+    const moderatorsOption = within(exemptRolesGroup)
+      .getByText("Moderators")
+      .closest("label");
+    const membersOption = within(exemptRolesGroup)
+      .getByText("Members")
+      .closest("label");
+    expect(moderatorsOption).not.toBeNull();
+    expect(membersOption).not.toBeNull();
+    const moderatorsCheckbox = moderatorsOption?.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement | null;
+    const membersCheckbox = membersOption?.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement | null;
+    expect(moderatorsCheckbox).not.toBeNull();
+    expect(membersCheckbox).not.toBeNull();
+    expect(pruneDialog).toBeVisible();
+    expect(moderatorsCheckbox).toBeChecked();
+    expect(membersCheckbox).not.toBeChecked();
+
+    await userEvent.selectOptions(
+      within(pruneDialog).getByLabelText("Prune rule"),
+      "disabled",
+    );
+    await userEvent.clear(
+      within(pruneDialog).getByLabelText("Grace period (days)"),
+    );
+    await userEvent.type(
+      within(pruneDialog).getByLabelText("Grace period (days)"),
+      "45",
+    );
+    await userEvent.clear(
+      within(pruneDialog).getByLabelText("Scan interval (minutes)"),
+    );
+    await userEvent.type(
+      within(pruneDialog).getByLabelText("Scan interval (minutes)"),
+      "90",
+    );
+    await userEvent.selectOptions(
+      within(pruneDialog).getByLabelText("Run mode"),
+      "live",
+    );
+    await userEvent.click(membersCheckbox!);
+    await userEvent.click(
+      within(pruneDialog).getByText("Advanced", { selector: "summary" }),
+    );
+    await userEvent.clear(
+      within(pruneDialog).getByLabelText("Initial delay (seconds)"),
+    );
+    await userEvent.type(
+      within(pruneDialog).getByLabelText("Initial delay (seconds)"),
+      "20",
+    );
+    await userEvent.clear(
+      within(pruneDialog).getByLabelText("Kicks per second"),
+    );
+    await userEvent.type(
+      within(pruneDialog).getByLabelText("Kicks per second"),
+      "3",
+    );
+    await userEvent.clear(
+      within(pruneDialog).getByLabelText("Max kicks per run"),
+    );
+    await userEvent.type(
+      within(pruneDialog).getByLabelText("Max kicks per run"),
+      "40",
+    );
+    await userEvent.click(
+      within(pruneDialog).getByRole("button", { name: "Save user prune" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "backfill.enabled",
+          payload: {
+            channel_id: "ops-commands",
+            start_day: "2026-03-01",
+            initial_date: "",
+          },
+        },
+        {
+          guildID: "guild-1",
+          featureID: "user_prune",
+          payload: {
+            config_enabled: false,
+            grace_days: 45,
+            scan_interval_mins: 90,
+            initial_delay_secs: 20,
+            kicks_per_second: 3,
+            max_kicks_per_run: 40,
+            exempt_role_ids: ["role-guard", "role-target"],
+            dry_run: false,
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure user prune" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("45 days")).toBeInTheDocument();
+    expect(screen.getByText("90 minutes")).toBeInTheDocument();
+    expect(screen.getAllByText("2 exempt roles").length).toBeGreaterThan(0);
+    expect(screen.getByText("Live run")).toBeInTheDocument();
   });
 
   it("opens the dedicated Stats workspace and replaces the generic feature table with a schedule-focused workspace", async () => {

@@ -424,4 +424,124 @@ describe("feature hooks", () => {
     expect(response).toEqual(updatedFeature);
     expect(result.current.notice).toBeNull();
   });
+
+  it("patches a guild backfill feature with channel_id and schedule seed", async () => {
+    const updatedFeature = buildFeatureRecord({
+      id: "backfill.enabled",
+      category: "backfill",
+      label: "Entry/exit backfill",
+      description: "Backfill entry and exit metrics",
+      details: {
+        channel_id: "ops-commands",
+        start_day: "2026-03-01",
+        initial_date: "",
+      },
+      editable_fields: ["enabled", "channel_id", "start_day", "initial_date"],
+    });
+    mockDashboardSession.client.patchGuildFeature.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      feature: updatedFeature,
+    });
+
+    const { result } = renderHook(() =>
+      useFeatureMutation({
+        scope: "guild",
+      }),
+    );
+
+    let response: FeatureRecord | null = null;
+    await act(async () => {
+      response = await result.current.patchFeature("backfill.enabled", {
+        channel_id: "ops-commands",
+        start_day: "2026-03-01",
+        initial_date: "",
+      });
+    });
+
+    expect(mockDashboardSession.client.patchGuildFeature).toHaveBeenCalledWith(
+      "guild-1",
+      "backfill.enabled",
+      {
+        channel_id: "ops-commands",
+        start_day: "2026-03-01",
+        initial_date: "",
+      },
+    );
+    expect(response).toEqual(updatedFeature);
+    expect(result.current.notice).toBeNull();
+  });
+
+  it("patches a guild user prune feature with prune config details", async () => {
+    const updatedFeature = buildFeatureRecord({
+      id: "user_prune",
+      category: "maintenance",
+      label: "User prune",
+      description: "Periodic user prune workflow",
+      details: {
+        config_enabled: false,
+        grace_days: 45,
+        scan_interval_mins: 90,
+        initial_delay_secs: 20,
+        kicks_per_second: 3,
+        max_kicks_per_run: 40,
+        exempt_role_ids: ["role-guard", "role-target"],
+        exempt_role_count: 2,
+        dry_run: false,
+      },
+      editable_fields: [
+        "enabled",
+        "config_enabled",
+        "grace_days",
+        "scan_interval_mins",
+        "initial_delay_secs",
+        "kicks_per_second",
+        "max_kicks_per_run",
+        "exempt_role_ids",
+        "dry_run",
+      ],
+    });
+    mockDashboardSession.client.patchGuildFeature.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      feature: updatedFeature,
+    });
+
+    const { result } = renderHook(() =>
+      useFeatureMutation({
+        scope: "guild",
+      }),
+    );
+
+    let response: FeatureRecord | null = null;
+    await act(async () => {
+      response = await result.current.patchFeature("user_prune", {
+        config_enabled: false,
+        grace_days: 45,
+        scan_interval_mins: 90,
+        initial_delay_secs: 20,
+        kicks_per_second: 3,
+        max_kicks_per_run: 40,
+        exempt_role_ids: ["role-guard", "role-target"],
+        dry_run: false,
+      });
+    });
+
+    expect(mockDashboardSession.client.patchGuildFeature).toHaveBeenCalledWith(
+      "guild-1",
+      "user_prune",
+      {
+        config_enabled: false,
+        grace_days: 45,
+        scan_interval_mins: 90,
+        initial_delay_secs: 20,
+        kicks_per_second: 3,
+        max_kicks_per_run: 40,
+        exempt_role_ids: ["role-guard", "role-target"],
+        dry_run: false,
+      },
+    );
+    expect(response).toEqual(updatedFeature);
+    expect(result.current.notice).toBeNull();
+  });
 });
