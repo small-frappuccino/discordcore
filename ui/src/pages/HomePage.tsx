@@ -47,6 +47,8 @@ interface HomeBlocker {
   actionLabel: string;
 }
 
+type HomeShortcutItems = Parameters<typeof KeyValueList>[0]["items"];
+
 export function HomePage() {
   const location = useLocation();
   const {
@@ -170,6 +172,11 @@ export function HomePage() {
       ),
     },
   ];
+  const homeStatusTone = getHomeOperationalTone(
+    authState,
+    selectedGuild !== null,
+    blockers.length,
+  );
   const mainModulesLabel =
     authState !== "signed_in"
       ? "Sign in required"
@@ -241,51 +248,6 @@ export function HomePage() {
     await Promise.all([featureWorkspace.refresh(), refreshBoardSummary()]);
   }
 
-  function renderPrimaryAction() {
-    if (authState !== "signed_in") {
-      return (
-        <button
-          className="button-primary"
-          type="button"
-          onClick={() => void beginLogin(nextPath)}
-        >
-          Sign in with Discord
-        </button>
-      );
-    }
-
-    if (selectedGuild === null) {
-      return (
-        <span className="meta-note">
-          Choose a server from the sidebar to load server-scoped categories.
-        </span>
-      );
-    }
-
-    return (
-      <Link className="button-primary" to={appRoutes.partnerBoardEntries}>
-        Open Partner Board
-      </Link>
-    );
-  }
-
-  function renderSecondaryAction() {
-    if (authState !== "signed_in" || selectedGuild === null) {
-      return null;
-    }
-
-    return (
-      <button
-        className="button-secondary"
-        type="button"
-        disabled={homeLoading}
-        onClick={() => void handleRefreshHome()}
-      >
-        Refresh home
-      </button>
-    );
-  }
-
   return (
     <section className="page-shell">
       <PageHeader
@@ -304,10 +266,13 @@ export function HomePage() {
           </>
         }
         actions={
-          <>
-            {renderSecondaryAction()}
-            {renderPrimaryAction()}
-          </>
+          <HomeHeaderActions
+            authState={authState}
+            homeLoading={homeLoading}
+            selectedGuildPresent={selectedGuild !== null}
+            onLogin={() => void beginLogin(nextPath)}
+            onRefresh={() => void handleRefreshHome()}
+          />
         }
       />
 
@@ -323,215 +288,354 @@ export function HomePage() {
         ))}
       </section>
 
-      <SurfaceCard className="home-area-card">
-        <div className="home-area-card-header">
-          <div className="card-copy">
-            <p className="section-label">Workspace</p>
-            <h2>Main modules</h2>
-            <p className="section-description">
-              Start from the main operator workspaces and use the signal column
-              to decide which module needs attention first.
-            </p>
-          </div>
-          <StatusBadge
-            tone={
-              authState === "signed_in" && selectedGuild !== null
-                ? blockers.length > 0
-                  ? "error"
-                  : "success"
-                : "info"
-            }
-          >
-            {mainModulesLabel}
-          </StatusBadge>
-        </div>
+      <HomeMainModulesCard
+        mainModules={mainModules}
+        mainModulesLabel={mainModulesLabel}
+        statusTone={homeStatusTone}
+      />
 
-        <div className="table-wrap">
-          <table className="data-table feature-table">
-            <thead>
-              <tr>
-                <th scope="col">Module</th>
-                <th scope="col">Status</th>
-                <th scope="col">Signal</th>
-                <th scope="col">Shortcut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mainModules.map((module) => (
-                <tr key={module.id}>
-                  <td>
-                    <div className="feature-table-copy">
-                      <strong>{module.label}</strong>
-                      <p>{module.description}</p>
-                      <span className="meta-note">{module.meta}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="feature-status-cell">
-                      <StatusBadge tone={module.tone}>
-                        {module.statusLabel}
-                      </StatusBadge>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="feature-table-copy">
-                      <p>{module.signal}</p>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="feature-row-actions">
-                      <Link className="button-secondary" to={module.primaryTo}>
-                        {module.primaryLabel}
-                      </Link>
-                      {module.secondaryTo && module.secondaryLabel ? (
-                        <Link className="button-ghost" to={module.secondaryTo}>
-                          {module.secondaryLabel}
-                        </Link>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SurfaceCard>
+      <HomeContextCards
+        authState={authState}
+        blockers={blockers}
+        blockersLabel={blockersLabel}
+        homeLoading={homeLoading}
+        quickShortcutItems={quickShortcutItems}
+        selectedGuildPresent={selectedGuild !== null}
+        statusTone={homeStatusTone}
+        onRefresh={() => void handleRefreshHome()}
+      />
 
-      <section className="home-area-grid" aria-label="Home context">
-        <SurfaceCard className="home-area-card">
-          <div className="home-area-card-header">
-            <div className="card-copy">
-              <p className="section-label">Focus</p>
-              <h2>Current blockers</h2>
-              <p className="section-description">
-                Keep the blocker list short and actionable so setup work starts
-                with the modules that are actually preventing use.
-              </p>
-            </div>
-            <StatusBadge
-              tone={
-                authState === "signed_in" && selectedGuild !== null
-                  ? blockers.length > 0
-                    ? "error"
-                    : "success"
-                  : "info"
-              }
-            >
-              {blockersLabel}
-            </StatusBadge>
-          </div>
-
-          {authState !== "signed_in" ? (
-            <p className="meta-note">
-              Sign in with Discord before reviewing server blockers.
-            </p>
-          ) : selectedGuild === null ? (
-            <p className="meta-note">
-              Choose a server from the sidebar before reviewing blockers.
-            </p>
-          ) : blockers.length === 0 ? (
-            <p className="meta-note">
-              No active blockers across Partner Board, commands, moderation,
-              logging, roles, or stats.
-            </p>
-          ) : (
-            <ul className="feature-guidance-list">
-              {blockers.map((blocker) => (
-                <li key={blocker.id}>
-                  <strong>{blocker.label}:</strong> {blocker.message}{" "}
-                  <Link to={blocker.to}>{blocker.actionLabel}</Link>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {authState === "signed_in" && selectedGuild !== null ? (
-            <div className="home-area-footer">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={homeLoading}
-                onClick={() => void handleRefreshHome()}
-              >
-                Refresh blockers
-              </button>
-            </div>
-          ) : null}
-        </SurfaceCard>
-
-        <SurfaceCard className="home-area-card">
-          <div className="home-area-card-header">
-            <div className="card-copy">
-              <p className="section-label">Shortcuts</p>
-              <h2>Quick shortcuts</h2>
-              <p className="section-description">
-                Jump straight into the most common setup tasks without scanning
-                the full navigation every time.
-              </p>
-            </div>
-          </div>
-
-          <KeyValueList
-            className="workspace-status-list"
-            items={quickShortcutItems}
-          />
-        </SurfaceCard>
-
-        <SurfaceCard className="home-area-card">
-          <div className="home-area-card-header">
-            <div className="card-copy">
-              <p className="section-label">Secondary</p>
-              <h2>Advanced stays in Settings</h2>
-              <p className="section-description">
-                Cleanup, backfill, prune, cache, and diagnostics remain outside
-                the main Home flow so they stay available without dominating the
-                landing page.
-              </p>
-            </div>
-          </div>
-
-          <p className="meta-note">
-            Use Settings for diagnostics and connection work. Use Settings &gt;
-            Advanced only when you are working on maintenance routines.
-          </p>
-
-          <div className="home-area-footer">
-            <Link className="button-secondary" to={appRoutes.settings}>
-              Open settings
-            </Link>
-            <Link className="button-secondary" to={appRoutes.settingsAdvanced}>
-              Open Settings &gt; Advanced
-            </Link>
-          </div>
-        </SurfaceCard>
-      </section>
-
-      <section
-        className="home-planned-grid"
-        id="planned"
-        aria-label="Planned modules"
-      >
-        {plannedModules.map((module) => (
-          <SurfaceCard
-            className="roadmap-card roadmap-card-muted home-planned-card"
-            key={module.id}
-          >
-            <div className="card-copy">
-              <p className="section-label">Planned module</p>
-              <h2>{module.label}</h2>
-              <p className="section-description">{module.description}</p>
-            </div>
-            <div className="home-area-footer">
-              <span className="meta-note">
-                This stays off the main navigation until the operator workflow
-                is intentionally designed.
-              </span>
-            </div>
-          </SurfaceCard>
-        ))}
-      </section>
+      <HomePlannedModulesSection />
     </section>
   );
+}
+
+interface HomeHeaderActionsProps {
+  authState: string;
+  homeLoading: boolean;
+  selectedGuildPresent: boolean;
+  onLogin: () => void;
+  onRefresh: () => void;
+}
+
+function HomeHeaderActions({
+  authState,
+  homeLoading,
+  selectedGuildPresent,
+  onLogin,
+  onRefresh,
+}: HomeHeaderActionsProps) {
+  return (
+    <>
+      {authState === "signed_in" && selectedGuildPresent ? (
+        <button
+          className="button-secondary"
+          type="button"
+          disabled={homeLoading}
+          onClick={onRefresh}
+        >
+          Refresh home
+        </button>
+      ) : null}
+
+      {authState !== "signed_in" ? (
+        <button className="button-primary" type="button" onClick={onLogin}>
+          Sign in with Discord
+        </button>
+      ) : !selectedGuildPresent ? (
+        <span className="meta-note">
+          Choose a server from the sidebar to load server-scoped categories.
+        </span>
+      ) : (
+        <Link className="button-primary" to={appRoutes.partnerBoardEntries}>
+          Open Partner Board
+        </Link>
+      )}
+    </>
+  );
+}
+
+interface HomeMainModulesCardProps {
+  mainModules: HomeModuleSummary[];
+  mainModulesLabel: string;
+  statusTone: HomeModuleSummary["tone"];
+}
+
+function HomeMainModulesCard({
+  mainModules,
+  mainModulesLabel,
+  statusTone,
+}: HomeMainModulesCardProps) {
+  return (
+    <SurfaceCard className="home-area-card">
+      <div className="home-area-card-header">
+        <div className="card-copy">
+          <p className="section-label">Workspace</p>
+          <h2>Main modules</h2>
+          <p className="section-description">
+            Start from the main operator workspaces and use the signal column
+            to decide which module needs attention first.
+          </p>
+        </div>
+        <StatusBadge tone={statusTone}>{mainModulesLabel}</StatusBadge>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table feature-table">
+          <thead>
+            <tr>
+              <th scope="col">Module</th>
+              <th scope="col">Status</th>
+              <th scope="col">Signal</th>
+              <th scope="col">Shortcut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mainModules.map((module) => (
+              <tr key={module.id}>
+                <td>
+                  <div className="feature-table-copy">
+                    <strong>{module.label}</strong>
+                    <p>{module.description}</p>
+                    <span className="meta-note">{module.meta}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="feature-status-cell">
+                    <StatusBadge tone={module.tone}>{module.statusLabel}</StatusBadge>
+                  </div>
+                </td>
+                <td>
+                  <div className="feature-table-copy">
+                    <p>{module.signal}</p>
+                  </div>
+                </td>
+                <td>
+                  <div className="feature-row-actions">
+                    <Link className="button-secondary" to={module.primaryTo}>
+                      {module.primaryLabel}
+                    </Link>
+                    {module.secondaryTo && module.secondaryLabel ? (
+                      <Link className="button-ghost" to={module.secondaryTo}>
+                        {module.secondaryLabel}
+                      </Link>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SurfaceCard>
+  );
+}
+
+interface HomeContextCardsProps {
+  authState: string;
+  blockers: HomeBlocker[];
+  blockersLabel: string;
+  homeLoading: boolean;
+  quickShortcutItems: HomeShortcutItems;
+  selectedGuildPresent: boolean;
+  statusTone: HomeModuleSummary["tone"];
+  onRefresh: () => void;
+}
+
+function HomeContextCards({
+  authState,
+  blockers,
+  blockersLabel,
+  homeLoading,
+  quickShortcutItems,
+  selectedGuildPresent,
+  statusTone,
+  onRefresh,
+}: HomeContextCardsProps) {
+  return (
+    <section className="home-area-grid" aria-label="Home context">
+      <HomeBlockersCard
+        authState={authState}
+        blockers={blockers}
+        blockersLabel={blockersLabel}
+        homeLoading={homeLoading}
+        selectedGuildPresent={selectedGuildPresent}
+        statusTone={statusTone}
+        onRefresh={onRefresh}
+      />
+      <HomeQuickShortcutsCard items={quickShortcutItems} />
+      <HomeSecondaryCard />
+    </section>
+  );
+}
+
+interface HomeBlockersCardProps {
+  authState: string;
+  blockers: HomeBlocker[];
+  blockersLabel: string;
+  homeLoading: boolean;
+  selectedGuildPresent: boolean;
+  statusTone: HomeModuleSummary["tone"];
+  onRefresh: () => void;
+}
+
+function HomeBlockersCard({
+  authState,
+  blockers,
+  blockersLabel,
+  homeLoading,
+  selectedGuildPresent,
+  statusTone,
+  onRefresh,
+}: HomeBlockersCardProps) {
+  return (
+    <SurfaceCard className="home-area-card">
+      <div className="home-area-card-header">
+        <div className="card-copy">
+          <p className="section-label">Focus</p>
+          <h2>Current blockers</h2>
+          <p className="section-description">
+            Keep the blocker list short and actionable so setup work starts
+            with the modules that are actually preventing use.
+          </p>
+        </div>
+        <StatusBadge tone={statusTone}>{blockersLabel}</StatusBadge>
+      </div>
+
+      {authState !== "signed_in" ? (
+        <p className="meta-note">
+          Sign in with Discord before reviewing server blockers.
+        </p>
+      ) : !selectedGuildPresent ? (
+        <p className="meta-note">
+          Choose a server from the sidebar before reviewing blockers.
+        </p>
+      ) : blockers.length === 0 ? (
+        <p className="meta-note">
+          No active blockers across Partner Board, commands, moderation,
+          logging, roles, or stats.
+        </p>
+      ) : (
+        <ul className="feature-guidance-list">
+          {blockers.map((blocker) => (
+            <li key={blocker.id}>
+              <strong>{blocker.label}:</strong> {blocker.message}{" "}
+              <Link to={blocker.to}>{blocker.actionLabel}</Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {authState === "signed_in" && selectedGuildPresent ? (
+        <div className="home-area-footer">
+          <button
+            className="button-secondary"
+            type="button"
+            disabled={homeLoading}
+            onClick={onRefresh}
+          >
+            Refresh blockers
+          </button>
+        </div>
+      ) : null}
+    </SurfaceCard>
+  );
+}
+
+interface HomeQuickShortcutsCardProps {
+  items: HomeShortcutItems;
+}
+
+function HomeQuickShortcutsCard({ items }: HomeQuickShortcutsCardProps) {
+  return (
+    <SurfaceCard className="home-area-card">
+      <div className="home-area-card-header">
+        <div className="card-copy">
+          <p className="section-label">Shortcuts</p>
+          <h2>Quick shortcuts</h2>
+          <p className="section-description">
+            Jump straight into the most common setup tasks without scanning
+            the full navigation every time.
+          </p>
+        </div>
+      </div>
+
+      <KeyValueList className="workspace-status-list" items={items} />
+    </SurfaceCard>
+  );
+}
+
+function HomeSecondaryCard() {
+  return (
+    <SurfaceCard className="home-area-card">
+      <div className="home-area-card-header">
+        <div className="card-copy">
+          <p className="section-label">Secondary</p>
+          <h2>Advanced stays in Settings</h2>
+          <p className="section-description">
+            Cleanup, backfill, prune, cache, and diagnostics remain outside
+            the main Home flow so they stay available without dominating the
+            landing page.
+          </p>
+        </div>
+      </div>
+
+      <p className="meta-note">
+        Use Settings for diagnostics and connection work. Use Settings &gt;
+        Advanced only when you are working on maintenance routines.
+      </p>
+
+      <div className="home-area-footer">
+        <Link className="button-secondary" to={appRoutes.settings}>
+          Open settings
+        </Link>
+        <Link className="button-secondary" to={appRoutes.settingsAdvanced}>
+          Open Settings &gt; Advanced
+        </Link>
+      </div>
+    </SurfaceCard>
+  );
+}
+
+function HomePlannedModulesSection() {
+  return (
+    <section
+      className="home-planned-grid"
+      id="planned"
+      aria-label="Planned modules"
+    >
+      {plannedModules.map((module) => (
+        <SurfaceCard
+          className="roadmap-card roadmap-card-muted home-planned-card"
+          key={module.id}
+        >
+          <div className="card-copy">
+            <p className="section-label">Planned module</p>
+            <h2>{module.label}</h2>
+            <p className="section-description">{module.description}</p>
+          </div>
+          <div className="home-area-footer">
+            <span className="meta-note">
+              This stays off the main navigation until the operator workflow
+              is intentionally designed.
+            </span>
+          </div>
+        </SurfaceCard>
+      ))}
+    </section>
+  );
+}
+
+function getHomeOperationalTone(
+  authState: string,
+  selectedGuildPresent: boolean,
+  blockerCount: number,
+): HomeModuleSummary["tone"] {
+  if (authState !== "signed_in" || !selectedGuildPresent) {
+    return "info";
+  }
+
+  return blockerCount > 0 ? "error" : "success";
 }
 
 function buildPartnerBoardModule({
@@ -547,7 +651,7 @@ function buildPartnerBoardModule({
 }: {
   authState: string;
   deliveryConfigured: boolean;
-  lastLoadedAt: string | null;
+  lastLoadedAt: number | null;
   layoutConfigured: boolean;
   partnerCount: number;
   postingMethodLabel: string;

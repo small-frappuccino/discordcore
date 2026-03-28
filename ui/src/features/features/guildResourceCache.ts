@@ -208,10 +208,10 @@ export function updateCachedGuildFeatureRecord(
 ) {
   const key = featureWorkspaceCacheKey(baseUrl, "guild", guildID);
   const entry = featureWorkspaceCache.get(key);
-  const response = entry?.value;
-  if (response === undefined || response === null) {
+  if (entry === undefined || entry.value === null) {
     return;
   }
+  const response = entry.value;
 
   const nextFeatures = response.workspace.features.map((currentFeature) =>
     currentFeature.id === feature.id ? feature : currentFeature,

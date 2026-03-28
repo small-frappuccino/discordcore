@@ -1645,16 +1645,22 @@ describe("dashboard routing and workspace", () => {
         screen.queryByRole("link", { name: "Finish destination" }),
       ).not.toBeInTheDocument();
     });
-    const blockersCard = screen
-      .getByRole("heading", { name: "Current blockers", level: 2 })
-      .closest(".surface-card");
-    expect(blockersCard).not.toBeNull();
-    expect(
-      within(blockersCard!).getByRole("link", { name: "Open Moderation" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Settings", level: 2 }),
-    ).not.toBeInTheDocument();
+      const blockersCard = screen
+        .getByRole("heading", { name: "Current blockers", level: 2 })
+        .closest(".surface-card") as HTMLElement | null;
+      expect(blockersCard).not.toBeNull();
+      expect(
+        within(blockersCard!).getByRole("link", { name: "Open Logging" }),
+      ).toBeInTheDocument();
+      expect(
+        within(blockersCard!).getByRole("link", { name: "Open Roles" }),
+      ).toBeInTheDocument();
+      expect(
+        within(blockersCard!).getByRole("link", { name: "Open Stats" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "Settings", level: 2 }),
+      ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Maintenance", level: 2 }),
     ).not.toBeInTheDocument();

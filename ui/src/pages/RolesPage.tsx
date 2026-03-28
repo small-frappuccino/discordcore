@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type {
   FeatureRecord,
@@ -10,6 +10,7 @@ import {
   AlertBanner,
   EmptyState,
   KeyValueList,
+  LookupNotice,
   MetricCard,
   PageHeader,
   StatusBadge,
@@ -56,6 +57,15 @@ type RolesDrawerKind =
 interface RolesDrawerState {
   featureId: RolesDrawerKind;
 }
+
+type RolesWorkspaceState = ReturnType<typeof useFeatureWorkspace>["workspaceState"];
+type RolesAreaSummary = ReturnType<typeof summarizeFeatureArea>;
+type AutoRoleDetails = ReturnType<typeof getAutoRoleFeatureDetails>;
+type PermissionMirrorDetails = ReturnType<typeof getPermissionMirrorDetails>;
+type DashboardNotice = {
+  tone: "info" | "success" | "error";
+  message: string;
+};
 
 export function RolesPage() {
   const definition = getFeatureAreaDefinition("roles");
@@ -111,10 +121,8 @@ export function RolesPage() {
   const localOverrides = areaFeatures.filter(
     (feature) => feature.override_state !== "inherit",
   ).length;
-  const firstBlockedFeature = useMemo(
-    () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
-    [areaFeatures],
-  );
+  const firstBlockedFeature =
+    areaFeatures.find((feature) => feature.readiness === "blocked") ?? null;
   const selectedFeature =
     drawerState === null
       ? null
@@ -304,24 +312,16 @@ export function RolesPage() {
     }
   }
 
-  function renderHeaderActions() {
-    if (authState !== "signed_in") {
-      return (
-        <button
-          className="button-primary"
-          type="button"
-          onClick={() => void beginLogin(nextPath)}
-        >
-          Sign in with Discord
-        </button>
-      );
-    }
-
-    if (selectedGuild === null) {
-      return null;
-    }
-
-    return (
+  const headerActions =
+    authState !== "signed_in" ? (
+      <button
+        className="button-primary"
+        type="button"
+        onClick={() => void beginLogin(nextPath)}
+      >
+        Sign in with Discord
+      </button>
+    ) : selectedGuild === null ? null : (
       <button
         className="button-secondary"
         type="button"
@@ -331,270 +331,6 @@ export function RolesPage() {
         Refresh roles
       </button>
     );
-  }
-
-  function renderPageState() {
-    if (workspace.workspaceState !== "ready") {
-      return (
-        <EmptyState
-          title={formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
-          description={formatWorkspaceStateDescription(
-            areaLabel,
-            workspace.workspaceState,
-          )}
-          action={
-            authState !== "signed_in" ? (
-              <button
-                className="button-primary"
-                type="button"
-                onClick={() => void beginLogin(nextPath)}
-              >
-                Sign in with Discord
-              </button>
-            ) : workspace.workspaceState === "unavailable" ? (
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={() => void handleRefreshRoles()}
-              >
-                Retry loading
-              </button>
-            ) : undefined
-          }
-        />
-      );
-    }
-
-    if (autoRoleFeature === null || autoRoleDetails === null) {
-      return (
-        <div className="table-empty-state table-empty-state-compact">
-          <div className="card-copy">
-            <p className="section-label">Workspace</p>
-            <h2>No role controls yet</h2>
-            <p className="section-description">
-              The selected server does not expose role controls in this workspace
-              yet.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <>
-        <div className="workspace-callout roles-primary-callout">
-          <div className="workspace-callout-copy">
-            <div className="card-copy">
-              <p className="section-label">Primary workflow</p>
-              <h2>Automatic role assignment</h2>
-              <p className="section-description">
-                Configure the role that should be assigned automatically and the
-                two role requirements that gate the assignment flow.
-              </p>
-            </div>
-
-            <div className="roles-primary-status">
-              <StatusBadge tone={getFeatureStatusTone(autoRoleFeature)}>
-                {formatFeatureStatusLabel(autoRoleFeature)}
-              </StatusBadge>
-              <span className="meta-note">
-                {summarizeAutoRoleSignal(autoRoleFeature)}
-              </span>
-            </div>
-
-            <div className="feature-row-actions roles-primary-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={roleOptions.loading || rolePickerUnavailable || !canEditAutoRole(autoRoleFeature)}
-                onClick={() => openDrawer(autoRoleFeature)}
-              >
-                Configure auto role
-              </button>
-              <button
-                className="button-ghost"
-                type="button"
-                disabled={mutation.saving}
-                aria-label={`${autoRoleFeature.effective_enabled ? "Disable" : "Enable"} ${autoRoleFeature.label}`}
-                onClick={() =>
-                  void handleSetFeatureEnabled(
-                    autoRoleFeature,
-                    !autoRoleFeature.effective_enabled,
-                  )
-                }
-              >
-                {mutation.saving && pendingFeatureId === autoRoleFeature.id
-                  ? "Saving..."
-                  : autoRoleFeature.effective_enabled
-                    ? "Disable"
-                    : "Enable"}
-              </button>
-              {autoRoleFeature.override_state !== "inherit" ? (
-                <button
-                  className="button-ghost"
-                  type="button"
-                  disabled={mutation.saving}
-                  onClick={() => void handleUseDefaultState(autoRoleFeature)}
-                >
-                  Use default
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <KeyValueList
-            className="workspace-status-list"
-            items={[
-              {
-                label: "Module state",
-                value: autoRoleFeature.effective_enabled ? "On" : "Off",
-              },
-              {
-                label: "Assignment rule",
-                value: autoRoleDetails.configEnabled ? "Enabled" : "Disabled",
-              },
-              {
-                label: "Target role",
-                value: formatRoleValue(
-                  autoRoleDetails.targetRoleId,
-                  roleOptions.roles,
-                ),
-              },
-              {
-                label: "Level role",
-                value: formatRoleValue(
-                  autoRoleDetails.levelRoleId,
-                  roleOptions.roles,
-                ),
-              },
-              {
-                label: "Booster role",
-                value: formatRoleValue(
-                  autoRoleDetails.boosterRoleId,
-                  roleOptions.roles,
-                ),
-              },
-            ]}
-          />
-        </div>
-
-        {roleOptions.notice ? (
-          <div className="surface-subsection">
-            <p className="section-label">Role lookup unavailable</p>
-            <p className="meta-note">
-              The dashboard could not load server roles right now. Refresh roles
-              before opening role-based editors.
-            </p>
-          </div>
-        ) : null}
-
-        {autoRoleFeature.readiness === "blocked" ? (
-          <div className="surface-subsection">
-            <p className="section-label">Needs setup</p>
-            <strong>{summarizeAutoRoleSignal(autoRoleFeature)}</strong>
-            <p className="meta-note">
-              Start by choosing the target role, then confirm the level and
-              booster requirements.
-            </p>
-          </div>
-        ) : null}
-
-        <details className="details-panel roles-advanced-details">
-          <summary>
-            <span>Advanced controls</span>
-            <span className="meta-pill subtle-pill">
-              {advancedEnabledCount}/{advancedFeatures.length} active
-            </span>
-          </summary>
-
-          <div className="details-content roles-advanced-content">
-            <p>
-              Keep the default workspace focused on automatic role assignment.
-              Open these controls only when you need presence watching or the
-              permission mirror guard.
-            </p>
-
-            <div className="roles-advanced-list">
-              {advancedFeatures.map((feature) => {
-                const isPending = mutation.saving && pendingFeatureId === feature.id;
-                const canOpenDrawer =
-                  feature.id === "presence_watch.user" ||
-                  feature.id === "presence_watch.bot" ||
-                  (feature.id === "safety.bot_role_perm_mirror" &&
-                    !roleOptions.loading &&
-                    !rolePickerUnavailable);
-
-                return (
-                  <div className="roles-advanced-row" key={feature.id}>
-                    <div className="roles-advanced-copy">
-                      <div className="roles-advanced-title-row">
-                        <strong>{feature.label}</strong>
-                        <StatusBadge tone={getFeatureStatusTone(feature)}>
-                          {formatFeatureStatusLabel(feature)}
-                        </StatusBadge>
-                      </div>
-                      <p>{feature.description}</p>
-                      <span className="meta-note">
-                        {summarizeAdvancedRoleSignal(feature)}
-                      </span>
-                    </div>
-
-                    <div className="feature-row-actions roles-advanced-actions">
-                      {canOpenDrawer ? (
-                        <button
-                          className="button-secondary"
-                          type="button"
-                          disabled={
-                            (feature.id === "presence_watch.bot" &&
-                              !canEditPresenceWatchBot(feature)) ||
-                            (feature.id === "presence_watch.user" &&
-                              !canEditPresenceWatchUser(feature)) ||
-                            (feature.id === "safety.bot_role_perm_mirror" &&
-                              !canEditPermissionMirror(feature))
-                          }
-                          onClick={() => openDrawer(feature)}
-                        >
-                          Configure
-                        </button>
-                      ) : null}
-                      <button
-                        className="button-ghost"
-                        type="button"
-                        disabled={mutation.saving}
-                        aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
-                        onClick={() =>
-                          void handleSetFeatureEnabled(
-                            feature,
-                            !feature.effective_enabled,
-                          )
-                        }
-                      >
-                        {isPending
-                          ? "Saving..."
-                          : feature.effective_enabled
-                            ? "Disable"
-                            : "Enable"}
-                      </button>
-                      {feature.override_state !== "inherit" ? (
-                        <button
-                          className="button-ghost"
-                          type="button"
-                          disabled={mutation.saving}
-                          onClick={() => void handleUseDefaultState(feature)}
-                        >
-                          Use default
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </details>
-      </>
-    );
-  }
 
   return (
     <>
@@ -620,7 +356,7 @@ export function RolesPage() {
               <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
             </>
           }
-          actions={renderHeaderActions()}
+          actions={headerActions}
         />
 
         {workspace.workspaceState === "ready" && autoRoleFeature !== null && autoRoleDetails !== null ? (
@@ -696,491 +432,1062 @@ export function RolesPage() {
                   }
                 />
 
-                {renderPageState()}
+                <RolesWorkspaceContent
+                  areaLabel={areaLabel}
+                  authState={authState}
+                  autoRoleDetails={autoRoleDetails}
+                  autoRoleFeature={autoRoleFeature}
+                  advancedEnabledCount={advancedEnabledCount}
+                  advancedFeatures={advancedFeatures}
+                  pendingFeatureId={pendingFeatureId}
+                  roleOptions={roleOptions.roles}
+                  roleLookupNotice={roleOptions.notice}
+                  rolePickerUnavailable={rolePickerUnavailable}
+                  roleOptionsLoading={roleOptions.loading}
+                  workspaceState={workspace.workspaceState}
+                  mutationSaving={mutation.saving}
+                  onLogin={() => void beginLogin(nextPath)}
+                  onOpenDrawer={openDrawer}
+                  onRefresh={() => void handleRefreshRoles()}
+                  onSetFeatureEnabled={(feature, enabled) => {
+                    void handleSetFeatureEnabled(feature, enabled);
+                  }}
+                  onUseDefaultState={(feature) => {
+                    void handleUseDefaultState(feature);
+                  }}
+                />
               </div>
             </SurfaceCard>
           </div>
 
-          <aside className="page-aside">
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Summary</p>
-                <h2>Current role setup</h2>
-                <p className="section-description">
-                  Use this panel to confirm the selected server, the current auto
-                  role target, and whether advanced controls are active.
-                </p>
-              </div>
-
-              <KeyValueList
-                items={[
-                  {
-                    label: "Server",
-                    value: selectedServerLabel,
-                  },
-                  {
-                    label: "Target role",
-                    value:
-                      autoRoleDetails === null
-                        ? "Not available"
-                        : formatRoleValue(autoRoleDetails.targetRoleId, roleOptions.roles),
-                  },
-                  {
-                    label: "Requirement roles",
-                    value:
-                      autoRoleFeature === null
-                        ? "Not available"
-                        : formatRequirementRolesValue(autoRoleFeature, roleOptions.roles),
-                  },
-                  {
-                    label: "Current signal",
-                    value:
-                      firstBlockedFeature === null
-                        ? areaSummary.signal
-                        : firstBlockedFeature.id === "auto_role_assignment"
-                          ? summarizeAutoRoleSignal(firstBlockedFeature)
-                          : summarizeAdvancedRoleSignal(firstBlockedFeature),
-                  },
-                ]}
-              />
-            </SurfaceCard>
-
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Guidance</p>
-                <h2>How this page works</h2>
-                <p className="section-description">
-                  The default view focuses on the task most admins come here to
-                  complete: automatic role assignment.
-                </p>
-              </div>
-
-              <ul className="feature-guidance-list">
-                <li>Choose the target role first, then set the level and booster requirements.</li>
-                <li>Use advanced controls only when you need presence watching or the permission mirror guard.</li>
-                <li>Runtime issues stay in Settings diagnostics instead of taking over the main roles workspace.</li>
-              </ul>
-
-              {firstBlockedFeature?.id === "safety.bot_role_perm_mirror" ? (
-                <div className="surface-subsection">
-                  <p className="section-label">Needs diagnostics</p>
-                  <p className="meta-note">
-                    Permission mirror blockers that come from runtime state are
-                    reviewed in Settings diagnostics.
-                  </p>
-                  <div className="sidebar-actions">
-                    <Link className="button-secondary" to={`${appRoutes.settings}#diagnostics`}>
-                      Open Settings diagnostics
-                    </Link>
-                  </div>
-                </div>
-              ) : null}
-            </SurfaceCard>
-          </aside>
+          <RolesAside
+            areaSummary={areaSummary}
+            autoRoleDetails={autoRoleDetails}
+            autoRoleFeature={autoRoleFeature}
+            firstBlockedFeature={firstBlockedFeature}
+            roleOptions={roleOptions.roles}
+            selectedServerLabel={selectedServerLabel}
+          />
         </section>
       </section>
 
-      {selectedFeature !== null ? (
-        <div className="drawer-backdrop" onClick={closeDrawer} role="presentation">
-          <aside
-            aria-label={getDrawerLabel(selectedFeature)}
-            aria-modal="true"
-            className="drawer-panel roles-drawer"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
-            <div className="card-copy">
-              <p className="section-label">Roles</p>
-              <div className="logging-drawer-title-row">
-                <h2>{selectedFeature.label}</h2>
-                <StatusBadge tone={getFeatureStatusTone(selectedFeature)}>
-                  {formatFeatureStatusLabel(selectedFeature)}
-                </StatusBadge>
-              </div>
-              <p className="section-description">{selectedFeature.description}</p>
-            </div>
-
-            {mutation.notice ? <AlertBanner notice={mutation.notice} /> : null}
-
-            {renderDrawerBody({
-              selectedFeature,
-              pendingFeatureId,
-              mutationSaving: mutation.saving,
-              roleOptions: roleOptions.roles,
-              configEnabledDraft,
-              targetRoleDraft,
-              levelRoleDraft,
-              boosterRoleDraft,
-              watchBotDraft,
-              userIdDraft,
-              memberSearchDraft,
-              actorRoleDraft,
-              memberOptions: memberOptions.members,
-              memberLookupLoading: memberOptions.loading,
-              memberLookupNotice: memberOptions.notice,
-              setConfigEnabledDraft,
-              setTargetRoleDraft,
-              setLevelRoleDraft,
-              setBoosterRoleDraft,
-              setWatchBotDraft,
-              setUserIdDraft,
-              setMemberSearchDraft,
-              setActorRoleDraft,
-              closeDrawer,
-              refreshMemberOptions: memberOptions.refresh,
-              handleSaveAutoRole,
-              handleSavePresenceWatchBot,
-              handleSavePresenceWatchUser,
-              handleSavePermissionMirror,
-            })}
-          </aside>
-        </div>
-      ) : null}
+      <RolesFeatureDrawer
+        actorRoleDraft={actorRoleDraft}
+        boosterRoleDraft={boosterRoleDraft}
+        closeDrawer={closeDrawer}
+        configEnabledDraft={configEnabledDraft}
+        levelRoleDraft={levelRoleDraft}
+        memberLookupLoading={memberOptions.loading}
+        memberLookupNotice={memberOptions.notice}
+        memberOptions={memberOptions.members}
+        memberSearchDraft={memberSearchDraft}
+        mutationNotice={mutation.notice}
+        mutationSaving={mutation.saving}
+        pendingFeatureId={pendingFeatureId}
+        roleOptions={roleOptions.roles}
+        selectedFeature={selectedFeature}
+        targetRoleDraft={targetRoleDraft}
+        userIdDraft={userIdDraft}
+        watchBotDraft={watchBotDraft}
+        refreshMemberOptions={memberOptions.refresh}
+        setActorRoleDraft={setActorRoleDraft}
+        setBoosterRoleDraft={setBoosterRoleDraft}
+        setConfigEnabledDraft={setConfigEnabledDraft}
+        setLevelRoleDraft={setLevelRoleDraft}
+        setMemberSearchDraft={setMemberSearchDraft}
+        setTargetRoleDraft={setTargetRoleDraft}
+        setUserIdDraft={setUserIdDraft}
+        setWatchBotDraft={setWatchBotDraft}
+        onSaveAutoRole={() => void handleSaveAutoRole()}
+        onSavePermissionMirror={() => void handleSavePermissionMirror()}
+        onSavePresenceWatchBot={() => void handleSavePresenceWatchBot()}
+        onSavePresenceWatchUser={() => void handleSavePresenceWatchUser()}
+      />
     </>
   );
 }
 
-interface RenderDrawerBodyProps {
-  selectedFeature: FeatureRecord;
+interface RolesWorkspaceContentProps {
+  areaLabel: string;
+  authState: string;
+  autoRoleDetails: AutoRoleDetails | null;
+  autoRoleFeature: FeatureRecord | null;
+  advancedEnabledCount: number;
+  advancedFeatures: FeatureRecord[];
   pendingFeatureId: string;
-  mutationSaving: boolean;
   roleOptions: GuildRoleOption[];
-  configEnabledDraft: string;
-  targetRoleDraft: string;
-  levelRoleDraft: string;
-  boosterRoleDraft: string;
-  watchBotDraft: string;
-  userIdDraft: string;
-  memberSearchDraft: string;
-  actorRoleDraft: string;
-  memberOptions: GuildMemberOption[];
-  memberLookupLoading: boolean;
-  memberLookupNotice: { tone: "info" | "success" | "error"; message: string } | null;
-  setConfigEnabledDraft: (value: string) => void;
-  setTargetRoleDraft: (value: string) => void;
-  setLevelRoleDraft: (value: string) => void;
-  setBoosterRoleDraft: (value: string) => void;
-  setWatchBotDraft: (value: string) => void;
-  setUserIdDraft: (value: string) => void;
-  setMemberSearchDraft: (value: string) => void;
-  setActorRoleDraft: (value: string) => void;
-  closeDrawer: () => void;
-  refreshMemberOptions: () => Promise<void>;
-  handleSaveAutoRole: () => Promise<void>;
-  handleSavePresenceWatchBot: () => Promise<void>;
-  handleSavePresenceWatchUser: () => Promise<void>;
-  handleSavePermissionMirror: () => Promise<void>;
+  roleLookupNotice: DashboardNotice | null;
+  rolePickerUnavailable: boolean;
+  roleOptionsLoading: boolean;
+  workspaceState: RolesWorkspaceState;
+  mutationSaving: boolean;
+  onLogin: () => void;
+  onOpenDrawer: (feature: FeatureRecord) => void;
+  onRefresh: () => void;
+  onSetFeatureEnabled: (feature: FeatureRecord, enabled: boolean) => void;
+  onUseDefaultState: (feature: FeatureRecord) => void;
 }
 
-function renderDrawerBody({
-  selectedFeature,
+function RolesWorkspaceContent({
+  areaLabel,
+  authState,
+  autoRoleDetails,
+  autoRoleFeature,
+  advancedEnabledCount,
+  advancedFeatures,
   pendingFeatureId,
-  mutationSaving,
   roleOptions,
-  configEnabledDraft,
-  targetRoleDraft,
-  levelRoleDraft,
-  boosterRoleDraft,
-  watchBotDraft,
-  userIdDraft,
-  memberSearchDraft,
-  actorRoleDraft,
-  memberOptions,
-  memberLookupLoading,
-  memberLookupNotice,
-  setConfigEnabledDraft,
-  setTargetRoleDraft,
-  setLevelRoleDraft,
-  setBoosterRoleDraft,
-  setWatchBotDraft,
-  setUserIdDraft,
-  setMemberSearchDraft,
-  setActorRoleDraft,
-  closeDrawer,
-  refreshMemberOptions,
-  handleSaveAutoRole,
-  handleSavePresenceWatchBot,
-  handleSavePresenceWatchUser,
-  handleSavePermissionMirror,
-}: RenderDrawerBodyProps) {
-  if (selectedFeature.id === "auto_role_assignment") {
+  roleLookupNotice,
+  rolePickerUnavailable,
+  roleOptionsLoading,
+  workspaceState,
+  mutationSaving,
+  onLogin,
+  onOpenDrawer,
+  onRefresh,
+  onSetFeatureEnabled,
+  onUseDefaultState,
+}: RolesWorkspaceContentProps) {
+  if (workspaceState !== "ready") {
     return (
-      <>
-        <KeyValueList
-          items={[
-            {
-              label: "Module state",
-              value: selectedFeature.effective_enabled ? "On" : "Off",
-            },
-            {
-              label: "Current signal",
-              value: summarizeAutoRoleSignal(selectedFeature),
-            },
-            {
-              label: "Server setting",
-              value:
-                selectedFeature.override_state === "inherit"
-                  ? "Using default"
-                  : "Configured here",
-            },
-          ]}
-        />
-
-        <div className="field-grid roles-form-grid">
-          <label className="field-stack">
-            <span className="field-label">Assignment rule</span>
-            <select
-              aria-label="Assignment rule"
-              value={configEnabledDraft}
-              onChange={(event) => setConfigEnabledDraft(event.target.value)}
-            >
-              <option value="enabled">Enabled</option>
-              <option value="disabled">Disabled</option>
-            </select>
-            <span className="meta-note">
-              Keep the module enabled but pause the assignment rule when you need
-              to preserve the rest of the setup.
-            </span>
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Target role</span>
-            <select
-              aria-label="Target role"
-              value={targetRoleDraft}
-              onChange={(event) => setTargetRoleDraft(event.target.value)}
-            >
-              <option value="">Select a target role</option>
-              {roleOptions.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {formatRoleOptionLabel(role)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Level role</span>
-            <select
-              aria-label="Level role"
-              value={levelRoleDraft}
-              onChange={(event) => setLevelRoleDraft(event.target.value)}
-            >
-              <option value="">Select the level role</option>
-              {roleOptions.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {formatRoleOptionLabel(role)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Booster role</span>
-            <select
-              aria-label="Booster role"
-              value={boosterRoleDraft}
-              onChange={(event) => setBoosterRoleDraft(event.target.value)}
-            >
-              <option value="">Select the booster role</option>
-              {roleOptions.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {formatRoleOptionLabel(role)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="surface-subsection">
-          <p className="section-label">What to configure</p>
-          <ul className="feature-guidance-list">
-            <li>Target role: the role granted automatically.</li>
-            <li>Level role: the first requirement checked before assignment.</li>
-            <li>Booster role: the second requirement that keeps the setup valid.</li>
-          </ul>
-        </div>
-
-        <div className="drawer-actions">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={mutationSaving}
-            onClick={() => void handleSaveAutoRole()}
-          >
-            {mutationSaving && pendingFeatureId === selectedFeature.id
-              ? "Saving..."
-              : "Save auto role"}
-          </button>
-          <button className="button-secondary" type="button" onClick={closeDrawer}>
-            Cancel
-          </button>
-        </div>
-      </>
+      <EmptyState
+        title={formatWorkspaceStateTitle(areaLabel, workspaceState)}
+        description={formatWorkspaceStateDescription(areaLabel, workspaceState)}
+        action={
+          authState !== "signed_in" ? (
+            <button className="button-primary" type="button" onClick={onLogin}>
+              Sign in with Discord
+            </button>
+          ) : workspaceState === "unavailable" ? (
+            <button className="button-secondary" type="button" onClick={onRefresh}>
+              Retry loading
+            </button>
+          ) : undefined
+        }
+      />
     );
   }
 
-  if (selectedFeature.id === "presence_watch.bot") {
+  if (autoRoleFeature === null || autoRoleDetails === null) {
     return (
-      <>
+      <div className="table-empty-state table-empty-state-compact">
+        <div className="card-copy">
+          <p className="section-label">Workspace</p>
+          <h2>No role controls yet</h2>
+          <p className="section-description">
+            The selected server does not expose role controls in this workspace
+            yet.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <RolesPrimaryWorkflow
+        autoRoleDetails={autoRoleDetails}
+        autoRoleFeature={autoRoleFeature}
+        mutationSaving={mutationSaving}
+        pendingFeatureId={pendingFeatureId}
+        roleOptions={roleOptions}
+        roleOptionsLoading={roleOptionsLoading}
+        rolePickerUnavailable={rolePickerUnavailable}
+        onOpenDrawer={onOpenDrawer}
+        onSetFeatureEnabled={onSetFeatureEnabled}
+        onUseDefaultState={onUseDefaultState}
+      />
+
+      {roleLookupNotice ? (
+        <LookupNotice
+          title="Role lookup unavailable"
+          message="The dashboard could not load server roles right now. Refresh roles before opening role-based editors."
+        />
+      ) : null}
+
+      {autoRoleFeature.readiness === "blocked" ? (
+        <div className="surface-subsection">
+          <p className="section-label">Needs setup</p>
+          <strong>{summarizeAutoRoleSignal(autoRoleFeature)}</strong>
+          <p className="meta-note">
+            Start by choosing the target role, then confirm the level and
+            booster requirements.
+          </p>
+        </div>
+      ) : null}
+
+      <RolesAdvancedControls
+        advancedEnabledCount={advancedEnabledCount}
+        advancedFeatures={advancedFeatures}
+        mutationSaving={mutationSaving}
+        pendingFeatureId={pendingFeatureId}
+        roleOptionsLoading={roleOptionsLoading}
+        rolePickerUnavailable={rolePickerUnavailable}
+        onOpenDrawer={onOpenDrawer}
+        onSetFeatureEnabled={onSetFeatureEnabled}
+        onUseDefaultState={onUseDefaultState}
+      />
+    </>
+  );
+}
+
+interface RolesPrimaryWorkflowProps {
+  autoRoleDetails: AutoRoleDetails;
+  autoRoleFeature: FeatureRecord;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  roleOptions: GuildRoleOption[];
+  roleOptionsLoading: boolean;
+  rolePickerUnavailable: boolean;
+  onOpenDrawer: (feature: FeatureRecord) => void;
+  onSetFeatureEnabled: (feature: FeatureRecord, enabled: boolean) => void;
+  onUseDefaultState: (feature: FeatureRecord) => void;
+}
+
+function RolesPrimaryWorkflow({
+  autoRoleDetails,
+  autoRoleFeature,
+  mutationSaving,
+  pendingFeatureId,
+  roleOptions,
+  roleOptionsLoading,
+  rolePickerUnavailable,
+  onOpenDrawer,
+  onSetFeatureEnabled,
+  onUseDefaultState,
+}: RolesPrimaryWorkflowProps) {
+  return (
+    <div className="workspace-callout roles-primary-callout">
+      <div className="workspace-callout-copy">
+        <div className="card-copy">
+          <p className="section-label">Primary workflow</p>
+          <h2>Automatic role assignment</h2>
+          <p className="section-description">
+            Configure the role that should be assigned automatically and the
+            two role requirements that gate the assignment flow.
+          </p>
+        </div>
+
+        <div className="roles-primary-status">
+          <StatusBadge tone={getFeatureStatusTone(autoRoleFeature)}>
+            {formatFeatureStatusLabel(autoRoleFeature)}
+          </StatusBadge>
+          <span className="meta-note">
+            {summarizeAutoRoleSignal(autoRoleFeature)}
+          </span>
+        </div>
+
+        <div className="feature-row-actions roles-primary-actions">
+          <button
+            className="button-secondary"
+            type="button"
+            disabled={
+              roleOptionsLoading ||
+              rolePickerUnavailable ||
+              !canEditAutoRole(autoRoleFeature)
+            }
+            onClick={() => onOpenDrawer(autoRoleFeature)}
+          >
+            Configure auto role
+          </button>
+          <button
+            className="button-ghost"
+            type="button"
+            disabled={mutationSaving}
+            aria-label={`${autoRoleFeature.effective_enabled ? "Disable" : "Enable"} ${autoRoleFeature.label}`}
+            onClick={() =>
+              onSetFeatureEnabled(
+                autoRoleFeature,
+                !autoRoleFeature.effective_enabled,
+              )
+            }
+          >
+            {mutationSaving && pendingFeatureId === autoRoleFeature.id
+              ? "Saving..."
+              : autoRoleFeature.effective_enabled
+                ? "Disable"
+                : "Enable"}
+          </button>
+          {autoRoleFeature.override_state !== "inherit" ? (
+            <button
+              className="button-ghost"
+              type="button"
+              disabled={mutationSaving}
+              onClick={() => onUseDefaultState(autoRoleFeature)}
+            >
+              Use default
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <KeyValueList
+        className="workspace-status-list"
+        items={[
+          {
+            label: "Module state",
+            value: autoRoleFeature.effective_enabled ? "On" : "Off",
+          },
+          {
+            label: "Assignment rule",
+            value: autoRoleDetails.configEnabled ? "Enabled" : "Disabled",
+          },
+          {
+            label: "Target role",
+            value: formatRoleValue(autoRoleDetails.targetRoleId, roleOptions),
+          },
+          {
+            label: "Level role",
+            value: formatRoleValue(autoRoleDetails.levelRoleId, roleOptions),
+          },
+          {
+            label: "Booster role",
+            value: formatRoleValue(autoRoleDetails.boosterRoleId, roleOptions),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+interface RolesAdvancedControlsProps {
+  advancedEnabledCount: number;
+  advancedFeatures: FeatureRecord[];
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  roleOptionsLoading: boolean;
+  rolePickerUnavailable: boolean;
+  onOpenDrawer: (feature: FeatureRecord) => void;
+  onSetFeatureEnabled: (feature: FeatureRecord, enabled: boolean) => void;
+  onUseDefaultState: (feature: FeatureRecord) => void;
+}
+
+function RolesAdvancedControls({
+  advancedEnabledCount,
+  advancedFeatures,
+  mutationSaving,
+  pendingFeatureId,
+  roleOptionsLoading,
+  rolePickerUnavailable,
+  onOpenDrawer,
+  onSetFeatureEnabled,
+  onUseDefaultState,
+}: RolesAdvancedControlsProps) {
+  return (
+    <details className="details-panel roles-advanced-details">
+      <summary>
+        <span>Advanced controls</span>
+        <span className="meta-pill subtle-pill">
+          {advancedEnabledCount}/{advancedFeatures.length} active
+        </span>
+      </summary>
+
+      <div className="details-content roles-advanced-content">
+        <p>
+          Keep the default workspace focused on automatic role assignment.
+          Open these controls only when you need presence watching or the
+          permission mirror guard.
+        </p>
+
+        <div className="roles-advanced-list">
+          {advancedFeatures.map((feature) => {
+            const isPending = mutationSaving && pendingFeatureId === feature.id;
+            const canOpenDrawer =
+              feature.id === "presence_watch.user" ||
+              feature.id === "presence_watch.bot" ||
+              (feature.id === "safety.bot_role_perm_mirror" &&
+                !roleOptionsLoading &&
+                !rolePickerUnavailable);
+
+            return (
+              <div className="roles-advanced-row" key={feature.id}>
+                <div className="roles-advanced-copy">
+                  <div className="roles-advanced-title-row">
+                    <strong>{feature.label}</strong>
+                    <StatusBadge tone={getFeatureStatusTone(feature)}>
+                      {formatFeatureStatusLabel(feature)}
+                    </StatusBadge>
+                  </div>
+                  <p>{feature.description}</p>
+                  <span className="meta-note">
+                    {summarizeAdvancedRoleSignal(feature)}
+                  </span>
+                </div>
+
+                <div className="feature-row-actions roles-advanced-actions">
+                  {canOpenDrawer ? (
+                    <button
+                      className="button-secondary"
+                      type="button"
+                      disabled={
+                        (feature.id === "presence_watch.bot" &&
+                          !canEditPresenceWatchBot(feature)) ||
+                        (feature.id === "presence_watch.user" &&
+                          !canEditPresenceWatchUser(feature)) ||
+                        (feature.id === "safety.bot_role_perm_mirror" &&
+                          !canEditPermissionMirror(feature))
+                      }
+                      onClick={() => onOpenDrawer(feature)}
+                    >
+                      Configure
+                    </button>
+                  ) : null}
+                  <button
+                    className="button-ghost"
+                    type="button"
+                    disabled={mutationSaving}
+                    aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
+                    onClick={() =>
+                      onSetFeatureEnabled(feature, !feature.effective_enabled)
+                    }
+                  >
+                    {isPending
+                      ? "Saving..."
+                      : feature.effective_enabled
+                        ? "Disable"
+                        : "Enable"}
+                  </button>
+                  {feature.override_state !== "inherit" ? (
+                    <button
+                      className="button-ghost"
+                      type="button"
+                      disabled={mutationSaving}
+                      onClick={() => onUseDefaultState(feature)}
+                    >
+                      Use default
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+interface RolesAsideProps {
+  areaSummary: RolesAreaSummary;
+  autoRoleDetails: AutoRoleDetails | null;
+  autoRoleFeature: FeatureRecord | null;
+  firstBlockedFeature: FeatureRecord | null;
+  roleOptions: GuildRoleOption[];
+  selectedServerLabel: string;
+}
+
+function RolesAside({
+  areaSummary,
+  autoRoleDetails,
+  autoRoleFeature,
+  firstBlockedFeature,
+  roleOptions,
+  selectedServerLabel,
+}: RolesAsideProps) {
+  return (
+    <aside className="page-aside">
+      <SurfaceCard>
+        <div className="card-copy">
+          <p className="section-label">Summary</p>
+          <h2>Current role setup</h2>
+          <p className="section-description">
+            Use this panel to confirm the selected server, the current auto
+            role target, and whether advanced controls are active.
+          </p>
+        </div>
+
         <KeyValueList
           items={[
             {
-              label: "Module state",
-              value: selectedFeature.effective_enabled ? "On" : "Off",
+              label: "Server",
+              value: selectedServerLabel,
+            },
+            {
+              label: "Target role",
+              value:
+                autoRoleDetails === null
+                  ? "Not available"
+                  : formatRoleValue(autoRoleDetails.targetRoleId, roleOptions),
+            },
+            {
+              label: "Requirement roles",
+              value:
+                autoRoleFeature === null
+                  ? "Not available"
+                  : formatRequirementRolesValue(autoRoleFeature, roleOptions),
             },
             {
               label: "Current signal",
-              value: summarizeAdvancedRoleSignal(selectedFeature),
+              value:
+                firstBlockedFeature === null
+                  ? areaSummary.signal
+                  : firstBlockedFeature.id === "auto_role_assignment"
+                    ? summarizeAutoRoleSignal(firstBlockedFeature)
+                    : summarizeAdvancedRoleSignal(firstBlockedFeature),
             },
           ]}
         />
+      </SurfaceCard>
 
+      <SurfaceCard>
+        <div className="card-copy">
+          <p className="section-label">Guidance</p>
+          <h2>How this page works</h2>
+          <p className="section-description">
+            The default view focuses on the task most admins come here to
+            complete: automatic role assignment.
+          </p>
+        </div>
+
+        <ul className="feature-guidance-list">
+          <li>Choose the target role first, then set the level and booster requirements.</li>
+          <li>Use advanced controls only when you need presence watching or the permission mirror guard.</li>
+          <li>Runtime issues stay in Settings diagnostics instead of taking over the main roles workspace.</li>
+        </ul>
+
+        {firstBlockedFeature?.id === "safety.bot_role_perm_mirror" ? (
+          <div className="surface-subsection">
+            <p className="section-label">Needs diagnostics</p>
+            <p className="meta-note">
+              Permission mirror blockers that come from runtime state are
+              reviewed in Settings diagnostics.
+            </p>
+            <div className="sidebar-actions">
+              <Link className="button-secondary" to={`${appRoutes.settings}#diagnostics`}>
+                Open Settings diagnostics
+              </Link>
+            </div>
+          </div>
+        ) : null}
+      </SurfaceCard>
+    </aside>
+  );
+}
+
+interface RolesFeatureDrawerProps {
+  actorRoleDraft: string;
+  boosterRoleDraft: string;
+  closeDrawer: () => void;
+  configEnabledDraft: string;
+  levelRoleDraft: string;
+  memberLookupLoading: boolean;
+  memberLookupNotice: DashboardNotice | null;
+  memberOptions: GuildMemberOption[];
+  memberSearchDraft: string;
+  mutationNotice: DashboardNotice | null;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  roleOptions: GuildRoleOption[];
+  selectedFeature: FeatureRecord | null;
+  targetRoleDraft: string;
+  userIdDraft: string;
+  watchBotDraft: string;
+  refreshMemberOptions: () => Promise<void>;
+  setActorRoleDraft: (value: string) => void;
+  setBoosterRoleDraft: (value: string) => void;
+  setConfigEnabledDraft: (value: string) => void;
+  setLevelRoleDraft: (value: string) => void;
+  setMemberSearchDraft: (value: string) => void;
+  setTargetRoleDraft: (value: string) => void;
+  setUserIdDraft: (value: string) => void;
+  setWatchBotDraft: (value: string) => void;
+  onSaveAutoRole: () => void;
+  onSavePermissionMirror: () => void;
+  onSavePresenceWatchBot: () => void;
+  onSavePresenceWatchUser: () => void;
+}
+
+function RolesFeatureDrawer({
+  actorRoleDraft,
+  boosterRoleDraft,
+  closeDrawer,
+  configEnabledDraft,
+  levelRoleDraft,
+  memberLookupLoading,
+  memberLookupNotice,
+  memberOptions,
+  memberSearchDraft,
+  mutationNotice,
+  mutationSaving,
+  pendingFeatureId,
+  roleOptions,
+  selectedFeature,
+  targetRoleDraft,
+  userIdDraft,
+  watchBotDraft,
+  refreshMemberOptions,
+  setActorRoleDraft,
+  setBoosterRoleDraft,
+  setConfigEnabledDraft,
+  setLevelRoleDraft,
+  setMemberSearchDraft,
+  setTargetRoleDraft,
+  setUserIdDraft,
+  setWatchBotDraft,
+  onSaveAutoRole,
+  onSavePermissionMirror,
+  onSavePresenceWatchBot,
+  onSavePresenceWatchUser,
+}: RolesFeatureDrawerProps) {
+  if (selectedFeature === null) {
+    return null;
+  }
+
+  return (
+    <div className="drawer-backdrop" onClick={closeDrawer} role="presentation">
+      <aside
+        aria-label={getDrawerLabel(selectedFeature)}
+        aria-modal="true"
+        className="drawer-panel roles-drawer"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="card-copy">
+          <p className="section-label">Roles</p>
+          <div className="logging-drawer-title-row">
+            <h2>{selectedFeature.label}</h2>
+            <StatusBadge tone={getFeatureStatusTone(selectedFeature)}>
+              {formatFeatureStatusLabel(selectedFeature)}
+            </StatusBadge>
+          </div>
+          <p className="section-description">{selectedFeature.description}</p>
+        </div>
+
+        {mutationNotice ? <AlertBanner notice={mutationNotice} /> : null}
+
+        {selectedFeature.id === "auto_role_assignment" ? (
+          <AutoRoleDrawerBody
+            boosterRoleDraft={boosterRoleDraft}
+            closeDrawer={closeDrawer}
+            configEnabledDraft={configEnabledDraft}
+            levelRoleDraft={levelRoleDraft}
+            mutationSaving={mutationSaving}
+            pendingFeatureId={pendingFeatureId}
+            roleOptions={roleOptions}
+            selectedFeature={selectedFeature}
+            targetRoleDraft={targetRoleDraft}
+            setBoosterRoleDraft={setBoosterRoleDraft}
+            setConfigEnabledDraft={setConfigEnabledDraft}
+            setLevelRoleDraft={setLevelRoleDraft}
+            setTargetRoleDraft={setTargetRoleDraft}
+            onSave={onSaveAutoRole}
+          />
+        ) : selectedFeature.id === "presence_watch.bot" ? (
+          <PresenceWatchBotDrawerBody
+            closeDrawer={closeDrawer}
+            mutationSaving={mutationSaving}
+            pendingFeatureId={pendingFeatureId}
+            selectedFeature={selectedFeature}
+            watchBotDraft={watchBotDraft}
+            setWatchBotDraft={setWatchBotDraft}
+            onSave={onSavePresenceWatchBot}
+          />
+        ) : selectedFeature.id === "presence_watch.user" ? (
+          <PresenceWatchUserDrawerBody
+            closeDrawer={closeDrawer}
+            memberLookupLoading={memberLookupLoading}
+            memberLookupNotice={memberLookupNotice}
+            memberOptions={memberOptions}
+            memberSearchDraft={memberSearchDraft}
+            mutationSaving={mutationSaving}
+            pendingFeatureId={pendingFeatureId}
+            selectedFeature={selectedFeature}
+            userIdDraft={userIdDraft}
+            refreshMemberOptions={refreshMemberOptions}
+            setMemberSearchDraft={setMemberSearchDraft}
+            setUserIdDraft={setUserIdDraft}
+            onSave={onSavePresenceWatchUser}
+          />
+        ) : (
+          <PermissionMirrorDrawerBody
+            actorRoleDraft={actorRoleDraft}
+            closeDrawer={closeDrawer}
+            mutationSaving={mutationSaving}
+            pendingFeatureId={pendingFeatureId}
+            permissionMirrorDetails={getPermissionMirrorDetails(selectedFeature)}
+            roleOptions={roleOptions}
+            selectedFeature={selectedFeature}
+            setActorRoleDraft={setActorRoleDraft}
+            onSave={onSavePermissionMirror}
+          />
+        )}
+      </aside>
+    </div>
+  );
+}
+
+interface AutoRoleDrawerBodyProps {
+  boosterRoleDraft: string;
+  closeDrawer: () => void;
+  configEnabledDraft: string;
+  levelRoleDraft: string;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  roleOptions: GuildRoleOption[];
+  selectedFeature: FeatureRecord;
+  targetRoleDraft: string;
+  setBoosterRoleDraft: (value: string) => void;
+  setConfigEnabledDraft: (value: string) => void;
+  setLevelRoleDraft: (value: string) => void;
+  setTargetRoleDraft: (value: string) => void;
+  onSave: () => void;
+}
+
+function AutoRoleDrawerBody({
+  boosterRoleDraft,
+  closeDrawer,
+  configEnabledDraft,
+  levelRoleDraft,
+  mutationSaving,
+  pendingFeatureId,
+  roleOptions,
+  selectedFeature,
+  targetRoleDraft,
+  setBoosterRoleDraft,
+  setConfigEnabledDraft,
+  setLevelRoleDraft,
+  setTargetRoleDraft,
+  onSave,
+}: AutoRoleDrawerBodyProps) {
+  return (
+    <>
+      <KeyValueList
+        items={[
+          {
+            label: "Module state",
+            value: selectedFeature.effective_enabled ? "On" : "Off",
+          },
+          {
+            label: "Current signal",
+            value: summarizeAutoRoleSignal(selectedFeature),
+          },
+          {
+            label: "Server setting",
+            value:
+              selectedFeature.override_state === "inherit"
+                ? "Using default"
+                : "Configured here",
+          },
+        ]}
+      />
+
+      <div className="field-grid roles-form-grid">
         <label className="field-stack">
-          <span className="field-label">Watch bot presence</span>
+          <span className="field-label">Assignment rule</span>
           <select
-            aria-label="Watch bot presence"
-            value={watchBotDraft}
-            onChange={(event) => setWatchBotDraft(event.target.value)}
+            aria-label="Assignment rule"
+            value={configEnabledDraft}
+            onChange={(event) => setConfigEnabledDraft(event.target.value)}
           >
             <option value="enabled">Enabled</option>
             <option value="disabled">Disabled</option>
           </select>
           <span className="meta-note">
-            This advanced flag controls whether the runtime watches the bot
-            identity itself.
+            Keep the module enabled but pause the assignment rule when you need
+            to preserve the rest of the setup.
           </span>
         </label>
 
-        <div className="drawer-actions">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={mutationSaving}
-            onClick={() => void handleSavePresenceWatchBot()}
+        <label className="field-stack">
+          <span className="field-label">Target role</span>
+          <select
+            aria-label="Target role"
+            value={targetRoleDraft}
+            onChange={(event) => setTargetRoleDraft(event.target.value)}
           >
-            {mutationSaving && pendingFeatureId === selectedFeature.id
-              ? "Saving..."
-              : "Save presence watch"}
-          </button>
-          <button className="button-secondary" type="button" onClick={closeDrawer}>
-            Cancel
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  if (selectedFeature.id === "presence_watch.user") {
-    return (
-      <>
-        <KeyValueList
-          items={[
-            {
-              label: "Module state",
-              value: selectedFeature.effective_enabled ? "On" : "Off",
-            },
-            {
-              label: "Current signal",
-              value: summarizeAdvancedRoleSignal(selectedFeature),
-            },
-            {
-              label: "Current member",
-              value: formatMemberValue(userIdDraft, memberOptions),
-            },
-          ]}
-        />
-
-        <div className="field-grid roles-form-grid">
-          <label className="field-stack">
-            <span className="field-label">Search members</span>
-            <input
-              aria-label="Search members"
-              value={memberSearchDraft}
-              onChange={(event) => setMemberSearchDraft(event.target.value)}
-              placeholder="Search by username, nickname, or user ID"
-            />
-            <span className="meta-note">
-              Type to narrow the server member list without exposing raw IDs in
-              the primary control.
-            </span>
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Member</span>
-            <select
-              aria-label="Member"
-              value={userIdDraft}
-              disabled={memberLookupLoading || memberOptions.length === 0}
-              onChange={(event) => setUserIdDraft(event.target.value)}
-            >
-              <option value="">
-                {memberLookupLoading
-                  ? "Loading members..."
-                  : memberOptions.length === 0
-                    ? "No matching members"
-                    : "No member selected"}
+            <option value="">Select a target role</option>
+            {roleOptions.map((role) => (
+              <option key={role.id} value={role.id}>
+                {formatRoleOptionLabel(role)}
               </option>
-              {memberOptions.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {formatMemberOptionLabel(member)}
-                </option>
-              ))}
-            </select>
-            <span className="meta-note">
-              The selected member stays available while you refine the search.
-            </span>
-          </label>
-        </div>
+            ))}
+          </select>
+        </label>
 
-        {memberLookupNotice ? (
-          <div className="surface-subsection">
-            <p className="section-label">Member lookup unavailable</p>
-            <p className="meta-note">{memberLookupNotice.message}</p>
-            <div className="sidebar-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={memberLookupLoading}
-                onClick={() => void refreshMemberOptions()}
-              >
-                Retry member lookup
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {!memberLookupNotice && !memberLookupLoading && memberOptions.length === 0 ? (
-          <div className="surface-subsection">
-            <p className="section-label">No matches</p>
-            <p className="meta-note">
-              Adjust the search text to find a different member from the
-              selected server.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="drawer-actions">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={mutationSaving}
-            onClick={() => void handleSavePresenceWatchUser()}
+        <label className="field-stack">
+          <span className="field-label">Level role</span>
+          <select
+            aria-label="Level role"
+            value={levelRoleDraft}
+            onChange={(event) => setLevelRoleDraft(event.target.value)}
           >
-            {mutationSaving && pendingFeatureId === selectedFeature.id
-              ? "Saving..."
-              : "Save user watch"}
-          </button>
-          <button className="button-secondary" type="button" onClick={closeDrawer}>
-            Cancel
-          </button>
+            <option value="">Select the level role</option>
+            {roleOptions.map((role) => (
+              <option key={role.id} value={role.id}>
+                {formatRoleOptionLabel(role)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field-stack">
+          <span className="field-label">Booster role</span>
+          <select
+            aria-label="Booster role"
+            value={boosterRoleDraft}
+            onChange={(event) => setBoosterRoleDraft(event.target.value)}
+          >
+            <option value="">Select the booster role</option>
+            {roleOptions.map((role) => (
+              <option key={role.id} value={role.id}>
+                {formatRoleOptionLabel(role)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="surface-subsection">
+        <p className="section-label">What to configure</p>
+        <ul className="feature-guidance-list">
+          <li>Target role: the role granted automatically.</li>
+          <li>Level role: the first requirement checked before assignment.</li>
+          <li>Booster role: the second requirement that keeps the setup valid.</li>
+        </ul>
+      </div>
+
+      <div className="drawer-actions">
+        <button
+          className="button-primary"
+          type="button"
+          disabled={mutationSaving}
+          onClick={onSave}
+        >
+          {mutationSaving && pendingFeatureId === selectedFeature.id
+            ? "Saving..."
+            : "Save auto role"}
+        </button>
+        <button className="button-secondary" type="button" onClick={closeDrawer}>
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
+
+interface PresenceWatchBotDrawerBodyProps {
+  closeDrawer: () => void;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  selectedFeature: FeatureRecord;
+  watchBotDraft: string;
+  setWatchBotDraft: (value: string) => void;
+  onSave: () => void;
+}
+
+function PresenceWatchBotDrawerBody({
+  closeDrawer,
+  mutationSaving,
+  pendingFeatureId,
+  selectedFeature,
+  watchBotDraft,
+  setWatchBotDraft,
+  onSave,
+}: PresenceWatchBotDrawerBodyProps) {
+  return (
+    <>
+      <KeyValueList
+        items={[
+          {
+            label: "Module state",
+            value: selectedFeature.effective_enabled ? "On" : "Off",
+          },
+          {
+            label: "Current signal",
+            value: summarizeAdvancedRoleSignal(selectedFeature),
+          },
+        ]}
+      />
+
+      <label className="field-stack">
+        <span className="field-label">Watch bot presence</span>
+        <select
+          aria-label="Watch bot presence"
+          value={watchBotDraft}
+          onChange={(event) => setWatchBotDraft(event.target.value)}
+        >
+          <option value="enabled">Enabled</option>
+          <option value="disabled">Disabled</option>
+        </select>
+        <span className="meta-note">
+          This advanced flag controls whether the runtime watches the bot
+          identity itself.
+        </span>
+      </label>
+
+      <div className="drawer-actions">
+        <button
+          className="button-primary"
+          type="button"
+          disabled={mutationSaving}
+          onClick={onSave}
+        >
+          {mutationSaving && pendingFeatureId === selectedFeature.id
+            ? "Saving..."
+            : "Save presence watch"}
+        </button>
+        <button className="button-secondary" type="button" onClick={closeDrawer}>
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
+
+interface PresenceWatchUserDrawerBodyProps {
+  closeDrawer: () => void;
+  memberLookupLoading: boolean;
+  memberLookupNotice: DashboardNotice | null;
+  memberOptions: GuildMemberOption[];
+  memberSearchDraft: string;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  selectedFeature: FeatureRecord;
+  userIdDraft: string;
+  refreshMemberOptions: () => Promise<void>;
+  setMemberSearchDraft: (value: string) => void;
+  setUserIdDraft: (value: string) => void;
+  onSave: () => void;
+}
+
+function PresenceWatchUserDrawerBody({
+  closeDrawer,
+  memberLookupLoading,
+  memberLookupNotice,
+  memberOptions,
+  memberSearchDraft,
+  mutationSaving,
+  pendingFeatureId,
+  selectedFeature,
+  userIdDraft,
+  refreshMemberOptions,
+  setMemberSearchDraft,
+  setUserIdDraft,
+  onSave,
+}: PresenceWatchUserDrawerBodyProps) {
+  return (
+    <>
+      <KeyValueList
+        items={[
+          {
+            label: "Module state",
+            value: selectedFeature.effective_enabled ? "On" : "Off",
+          },
+          {
+            label: "Current signal",
+            value: summarizeAdvancedRoleSignal(selectedFeature),
+          },
+          {
+            label: "Current member",
+            value: formatMemberValue(userIdDraft, memberOptions),
+          },
+        ]}
+      />
+
+      <div className="field-grid roles-form-grid">
+        <label className="field-stack">
+          <span className="field-label">Search members</span>
+          <input
+            aria-label="Search members"
+            value={memberSearchDraft}
+            onChange={(event) => setMemberSearchDraft(event.target.value)}
+            placeholder="Search by username, nickname, or user ID"
+          />
+          <span className="meta-note">
+            Type to narrow the server member list without exposing raw IDs in
+            the primary control.
+          </span>
+        </label>
+
+        <label className="field-stack">
+          <span className="field-label">Member</span>
+          <select
+            aria-label="Member"
+            value={userIdDraft}
+            disabled={memberLookupLoading || memberOptions.length === 0}
+            onChange={(event) => setUserIdDraft(event.target.value)}
+          >
+            <option value="">
+              {memberLookupLoading
+                ? "Loading members..."
+                : memberOptions.length === 0
+                  ? "No matching members"
+                  : "No member selected"}
+            </option>
+            {memberOptions.map((member) => (
+              <option key={member.id} value={member.id}>
+                {formatMemberOptionLabel(member)}
+              </option>
+            ))}
+          </select>
+          <span className="meta-note">
+            The selected member stays available while you refine the search.
+          </span>
+        </label>
+      </div>
+
+      {memberLookupNotice ? (
+        <LookupNotice
+          title="Member lookup unavailable"
+          message={memberLookupNotice.message}
+          retryDisabled={memberLookupLoading}
+          retryLabel="Retry member lookup"
+          onRetry={refreshMemberOptions}
+        />
+      ) : null}
+
+      {!memberLookupNotice && !memberLookupLoading && memberOptions.length === 0 ? (
+        <div className="surface-subsection">
+          <p className="section-label">No matches</p>
+          <p className="meta-note">
+            Adjust the search text to find a different member from the
+            selected server.
+          </p>
         </div>
-      </>
-    );
-  }
+      ) : null}
 
-  const permissionMirrorDetails = getPermissionMirrorDetails(selectedFeature);
+      <div className="drawer-actions">
+        <button
+          className="button-primary"
+          type="button"
+          disabled={mutationSaving}
+          onClick={onSave}
+        >
+          {mutationSaving && pendingFeatureId === selectedFeature.id
+            ? "Saving..."
+            : "Save user watch"}
+        </button>
+        <button className="button-secondary" type="button" onClick={closeDrawer}>
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
 
+interface PermissionMirrorDrawerBodyProps {
+  actorRoleDraft: string;
+  closeDrawer: () => void;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  permissionMirrorDetails: PermissionMirrorDetails;
+  roleOptions: GuildRoleOption[];
+  selectedFeature: FeatureRecord;
+  setActorRoleDraft: (value: string) => void;
+  onSave: () => void;
+}
+
+function PermissionMirrorDrawerBody({
+  actorRoleDraft,
+  closeDrawer,
+  mutationSaving,
+  pendingFeatureId,
+  permissionMirrorDetails,
+  roleOptions,
+  selectedFeature,
+  setActorRoleDraft,
+  onSave,
+}: PermissionMirrorDrawerBodyProps) {
   return (
     <>
       <KeyValueList
@@ -1246,7 +1553,7 @@ function renderDrawerBody({
           className="button-primary"
           type="button"
           disabled={mutationSaving}
-          onClick={() => void handleSavePermissionMirror()}
+          onClick={onSave}
         >
           {mutationSaving && pendingFeatureId === selectedFeature.id
             ? "Saving..."

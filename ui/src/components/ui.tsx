@@ -30,6 +30,15 @@ interface AlertBannerProps {
   busyLabel?: string;
 }
 
+interface LookupNoticeProps {
+  title: string;
+  message: ReactNode;
+  retryLabel?: string;
+  onRetry?: (() => void | Promise<void>) | null;
+  retryDisabled?: boolean;
+  as?: SurfaceElement;
+}
+
 interface StatusBadgeProps {
   tone?: StatusTone;
   children: ReactNode;
@@ -91,6 +100,17 @@ interface EntityMultiPickerFieldProps {
   onToggle: (value: string) => void;
   note?: ReactNode;
   disabled?: boolean;
+}
+
+interface AdvancedTextInputProps {
+  label: string;
+  inputLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  note?: ReactNode;
+  summary?: string;
+  className?: string;
 }
 
 export function PageHeader({
@@ -296,6 +316,34 @@ export function AlertBanner({ notice, busyLabel }: AlertBannerProps) {
   );
 }
 
+export function LookupNotice({
+  title,
+  message,
+  retryLabel,
+  onRetry,
+  retryDisabled = false,
+  as: Component = "div",
+}: LookupNoticeProps) {
+  return (
+    <Component className="surface-subsection">
+      <p className="section-label">{title}</p>
+      <p className="meta-note">{message}</p>
+      {retryLabel && onRetry ? (
+        <div className="sidebar-actions">
+          <button
+            className="button-secondary"
+            type="button"
+            disabled={retryDisabled}
+            onClick={() => void onRetry()}
+          >
+            {retryLabel}
+          </button>
+        </div>
+      ) : null}
+    </Component>
+  );
+}
+
 export function EmptyState({
   title,
   description,
@@ -319,6 +367,35 @@ export function IdentityAvatar({
     <div className="identity-avatar" aria-hidden="true">
       {imageUrl ? <img src={imageUrl} alt="" /> : <span>{getInitials(label)}</span>}
     </div>
+  );
+}
+
+export function AdvancedTextInput({
+  label,
+  inputLabel,
+  value,
+  onChange,
+  placeholder,
+  note,
+  summary = "Advanced",
+  className,
+}: AdvancedTextInputProps) {
+  return (
+    <details className={joinClassNames("details-panel", className)}>
+      <summary>{summary}</summary>
+      <div className="details-content">
+        <label className="field-stack">
+          <span className="field-label">{label}</span>
+          <input
+            aria-label={inputLabel}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+          />
+          {note ? <span className="meta-note">{note}</span> : null}
+        </label>
+      </div>
+    </details>
   );
 }
 

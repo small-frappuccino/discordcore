@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
+  AdvancedTextInput,
   AlertBanner,
   EntityMultiPickerField,
   EntityPickerField,
   EmptyState,
   KeyValueList,
+  LookupNotice,
   MetricCard,
   PageHeader,
   StatusBadge,
@@ -877,16 +879,12 @@ export function SettingsPage() {
                             : "Use start day or initial date to define how far back the recovery should begin for this server."}
                         </p>
 
-                        {channelOptions.notice ? (
-                          <div className="surface-subsection">
-                            <p className="section-label">
-                              Channel references unavailable
-                            </p>
-                            <p className="meta-note">
-                              {channelOptions.notice.message}
-                            </p>
-                          </div>
-                        ) : null}
+                          {channelOptions.notice ? (
+                            <LookupNotice
+                              title="Channel references unavailable"
+                              message={channelOptions.notice.message}
+                            />
+                          ) : null}
 
                         <div className="inline-actions commands-module-actions">
                           <button
@@ -1003,16 +1001,12 @@ export function SettingsPage() {
                           )}
                         </p>
 
-                        {roleOptions.notice ? (
-                          <div className="surface-subsection">
-                            <p className="section-label">
-                              Role references unavailable
-                            </p>
-                            <p className="meta-note">
-                              {roleOptions.notice.message}
-                            </p>
-                          </div>
-                        ) : null}
+                          {roleOptions.notice ? (
+                            <LookupNotice
+                              title="Role references unavailable"
+                              message={roleOptions.notice.message}
+                            />
+                          ) : null}
 
                         <div className="inline-actions commands-module-actions">
                           <button
@@ -1260,46 +1254,55 @@ export function SettingsPage() {
               <AlertBanner notice={featureMutation.notice} />
             ) : null}
 
-            {renderAdvancedDrawerBody({
-              selectedFeature: selectedAdvancedFeature,
-              pendingFeatureId,
-              mutationSaving: featureMutation.saving,
-              availableChannels: channelOptions.channels,
-              channelOptions: backfillChannelPickerOptions,
-              channelOptionsLoading: channelOptions.loading,
-              channelOptionsNotice: channelOptions.notice,
-              roleOptions: roleOptions.roles,
-              roleOptionsLoading: roleOptions.loading,
-              roleOptionsNotice: roleOptions.notice,
-              backfillChannelDraft,
-              backfillStartDayDraft,
-              backfillInitialDateDraft,
-              pruneConfigEnabledDraft,
-              pruneGraceDaysDraft,
-              pruneScanIntervalDraft,
-              pruneInitialDelayDraft,
-              pruneKicksPerSecondDraft,
-              pruneMaxKicksPerRunDraft,
-              pruneExemptRoleIDsDraft,
-              pruneRunModeDraft,
-              canSaveUserPrune,
-              setBackfillChannelDraft,
-              setBackfillStartDayDraft,
-              setBackfillInitialDateDraft,
-              setPruneConfigEnabledDraft,
-              setPruneGraceDaysDraft,
-              setPruneScanIntervalDraft,
-              setPruneInitialDelayDraft,
-              setPruneKicksPerSecondDraft,
-              setPruneMaxKicksPerRunDraft,
-              setPruneExemptRoleIDsDraft,
-              setPruneRunModeDraft,
-              refreshChannelOptions: channelOptions.refresh,
-              refreshRoleOptions: roleOptions.refresh,
-              closeDrawer: closeAdvancedDrawer,
-              handleSaveBackfill,
-              handleSaveUserPrune,
-            })}
+            {selectedAdvancedFeature.id === "backfill.enabled" ? (
+              <BackfillDrawerBody
+                selectedFeature={selectedAdvancedFeature}
+                pendingFeatureId={pendingFeatureId}
+                mutationSaving={featureMutation.saving}
+                availableChannels={channelOptions.channels}
+                channelOptions={backfillChannelPickerOptions}
+                channelOptionsLoading={channelOptions.loading}
+                channelOptionsNotice={channelOptions.notice}
+                backfillChannelDraft={backfillChannelDraft}
+                backfillStartDayDraft={backfillStartDayDraft}
+                backfillInitialDateDraft={backfillInitialDateDraft}
+                setBackfillChannelDraft={setBackfillChannelDraft}
+                setBackfillStartDayDraft={setBackfillStartDayDraft}
+                setBackfillInitialDateDraft={setBackfillInitialDateDraft}
+                refreshChannelOptions={channelOptions.refresh}
+                closeDrawer={closeAdvancedDrawer}
+                handleSaveBackfill={handleSaveBackfill}
+              />
+            ) : selectedAdvancedFeature.id === "user_prune" ? (
+              <UserPruneDrawerBody
+                selectedFeature={selectedAdvancedFeature}
+                pendingFeatureId={pendingFeatureId}
+                mutationSaving={featureMutation.saving}
+                roleOptions={roleOptions.roles}
+                roleOptionsLoading={roleOptions.loading}
+                roleOptionsNotice={roleOptions.notice}
+                pruneConfigEnabledDraft={pruneConfigEnabledDraft}
+                pruneGraceDaysDraft={pruneGraceDaysDraft}
+                pruneScanIntervalDraft={pruneScanIntervalDraft}
+                pruneInitialDelayDraft={pruneInitialDelayDraft}
+                pruneKicksPerSecondDraft={pruneKicksPerSecondDraft}
+                pruneMaxKicksPerRunDraft={pruneMaxKicksPerRunDraft}
+                pruneExemptRoleIDsDraft={pruneExemptRoleIDsDraft}
+                pruneRunModeDraft={pruneRunModeDraft}
+                canSaveUserPrune={canSaveUserPrune}
+                setPruneConfigEnabledDraft={setPruneConfigEnabledDraft}
+                setPruneGraceDaysDraft={setPruneGraceDaysDraft}
+                setPruneScanIntervalDraft={setPruneScanIntervalDraft}
+                setPruneInitialDelayDraft={setPruneInitialDelayDraft}
+                setPruneKicksPerSecondDraft={setPruneKicksPerSecondDraft}
+                setPruneMaxKicksPerRunDraft={setPruneMaxKicksPerRunDraft}
+                setPruneExemptRoleIDsDraft={setPruneExemptRoleIDsDraft}
+                setPruneRunModeDraft={setPruneRunModeDraft}
+                refreshRoleOptions={roleOptions.refresh}
+                closeDrawer={closeAdvancedDrawer}
+                handleSaveUserPrune={handleSaveUserPrune}
+              />
+            ) : null}
           </aside>
         </div>
       ) : null}
@@ -1476,7 +1479,7 @@ export function SettingsPage() {
   );
 }
 
-interface RenderAdvancedDrawerBodyProps {
+interface BackfillDrawerBodyProps {
   selectedFeature: FeatureRecord;
   pendingFeatureId: string;
   mutationSaving: boolean;
@@ -1484,12 +1487,173 @@ interface RenderAdvancedDrawerBodyProps {
   channelOptions: Array<{ value: string; label: string; description?: string }>;
   channelOptionsLoading: boolean;
   channelOptionsNotice: Notice | null;
-  roleOptions: ReturnType<typeof useGuildRoleOptions>["roles"];
-  roleOptionsLoading: boolean;
-  roleOptionsNotice: Notice | null;
   backfillChannelDraft: string;
   backfillStartDayDraft: string;
   backfillInitialDateDraft: string;
+  setBackfillChannelDraft: (value: string) => void;
+  setBackfillStartDayDraft: (value: string) => void;
+  setBackfillInitialDateDraft: (value: string) => void;
+  refreshChannelOptions: () => Promise<void>;
+  closeDrawer: () => void;
+  handleSaveBackfill: () => Promise<void>;
+}
+
+function BackfillDrawerBody({
+  selectedFeature,
+  pendingFeatureId,
+  mutationSaving,
+  availableChannels,
+  channelOptions,
+  channelOptionsLoading,
+  channelOptionsNotice,
+  backfillChannelDraft,
+  backfillStartDayDraft,
+  backfillInitialDateDraft,
+  setBackfillChannelDraft,
+  setBackfillStartDayDraft,
+  setBackfillInitialDateDraft,
+  refreshChannelOptions,
+  closeDrawer,
+  handleSaveBackfill,
+}: BackfillDrawerBodyProps) {
+  const details = getBackfillFeatureDetails(selectedFeature);
+
+  return (
+    <>
+      <KeyValueList
+        items={[
+          {
+            label: "Module state",
+            value: selectedFeature.effective_enabled ? "On" : "Off",
+          },
+          {
+            label: "Current channel",
+            value: formatGuildChannelValue(
+              details.channelId,
+              availableChannels,
+              "Not configured",
+            ),
+          },
+          {
+            label: "Schedule seed",
+            value: formatBackfillScheduleValue(details),
+          },
+          {
+            label: "Current signal",
+            value: summarizeBackfillSignal(selectedFeature),
+          },
+        ]}
+      />
+
+      {channelOptionsNotice ? (
+        <LookupNotice
+          title="Channel references unavailable"
+          message={channelOptionsNotice.message}
+          retryLabel="Retry channel lookup"
+          retryDisabled={channelOptionsLoading}
+          onRetry={refreshChannelOptions}
+        />
+      ) : null}
+
+      <EntityPickerField
+        label="Source channel"
+        value={backfillChannelDraft}
+        disabled={channelOptionsLoading}
+        onChange={setBackfillChannelDraft}
+        options={channelOptions}
+        placeholder={
+          channelOptionsLoading
+            ? "Loading channels..."
+            : channelOptions.length === 0
+              ? "No channels available"
+              : "No source channel"
+        }
+        note="Choose the channel that should seed the historical entry and exit scan."
+      />
+
+      <div className="field-grid roles-form-grid">
+        <label className="field-stack">
+          <span className="field-label">Start day</span>
+          <input
+            aria-label="Start day"
+            type="date"
+            value={backfillStartDayDraft}
+            onChange={(event) => setBackfillStartDayDraft(event.target.value)}
+          />
+          <span className="meta-note">
+            Use this when backfill should begin from a calendar day.
+          </span>
+        </label>
+
+        <label className="field-stack">
+          <span className="field-label">Initial date</span>
+          <input
+            aria-label="Initial date"
+            type="date"
+            value={backfillInitialDateDraft}
+            onChange={(event) =>
+              setBackfillInitialDateDraft(event.target.value)
+            }
+          />
+          <span className="meta-note">
+            Keep this as the explicit seed date when you need a fixed start.
+          </span>
+        </label>
+      </div>
+
+      <AdvancedTextInput
+        label="Source channel ID fallback"
+        inputLabel="Source channel ID fallback"
+        value={backfillChannelDraft}
+        onChange={setBackfillChannelDraft}
+        placeholder="Discord channel ID"
+        note="Use this only when the channel picker is unavailable and you need to paste the channel ID directly."
+      />
+
+      <div className="surface-subsection">
+        <p className="section-label">Backfill guidance</p>
+        <ul className="feature-guidance-list">
+          <li>
+            Choose the source channel first so the backfill run knows where to
+            scan.
+          </li>
+          <li>
+            Set start day or initial date before enabling the module if you
+            want readiness to turn green.
+          </li>
+        </ul>
+      </div>
+
+      <div className="drawer-actions">
+        <button
+          className="button-primary"
+          type="button"
+          disabled={mutationSaving}
+          onClick={() => void handleSaveBackfill()}
+        >
+          {mutationSaving && pendingFeatureId === selectedFeature.id
+            ? "Saving..."
+            : "Save backfill"}
+        </button>
+        <button
+          className="button-secondary"
+          type="button"
+          onClick={closeDrawer}
+        >
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
+
+interface UserPruneDrawerBodyProps {
+  selectedFeature: FeatureRecord;
+  pendingFeatureId: string;
+  mutationSaving: boolean;
+  roleOptions: ReturnType<typeof useGuildRoleOptions>["roles"];
+  roleOptionsLoading: boolean;
+  roleOptionsNotice: Notice | null;
   pruneConfigEnabledDraft: string;
   pruneGraceDaysDraft: string;
   pruneScanIntervalDraft: string;
@@ -1499,9 +1663,6 @@ interface RenderAdvancedDrawerBodyProps {
   pruneExemptRoleIDsDraft: string[];
   pruneRunModeDraft: string;
   canSaveUserPrune: boolean;
-  setBackfillChannelDraft: (value: string) => void;
-  setBackfillStartDayDraft: (value: string) => void;
-  setBackfillInitialDateDraft: (value: string) => void;
   setPruneConfigEnabledDraft: (value: string) => void;
   setPruneGraceDaysDraft: (value: string) => void;
   setPruneScanIntervalDraft: (value: string) => void;
@@ -1512,27 +1673,18 @@ interface RenderAdvancedDrawerBodyProps {
     value: string[] | ((current: string[]) => string[]),
   ) => void;
   setPruneRunModeDraft: (value: string) => void;
-  refreshChannelOptions: () => Promise<void>;
   refreshRoleOptions: () => Promise<void>;
   closeDrawer: () => void;
-  handleSaveBackfill: () => Promise<void>;
   handleSaveUserPrune: () => Promise<void>;
 }
 
-function renderAdvancedDrawerBody({
+function UserPruneDrawerBody({
   selectedFeature,
   pendingFeatureId,
   mutationSaving,
-  availableChannels,
-  channelOptions,
-  channelOptionsLoading,
-  channelOptionsNotice,
   roleOptions,
   roleOptionsLoading,
   roleOptionsNotice,
-  backfillChannelDraft,
-  backfillStartDayDraft,
-  backfillInitialDateDraft,
   pruneConfigEnabledDraft,
   pruneGraceDaysDraft,
   pruneScanIntervalDraft,
@@ -1542,9 +1694,6 @@ function renderAdvancedDrawerBody({
   pruneExemptRoleIDsDraft,
   pruneRunModeDraft,
   canSaveUserPrune,
-  setBackfillChannelDraft,
-  setBackfillStartDayDraft,
-  setBackfillInitialDateDraft,
   setPruneConfigEnabledDraft,
   setPruneGraceDaysDraft,
   setPruneScanIntervalDraft,
@@ -1553,163 +1702,10 @@ function renderAdvancedDrawerBody({
   setPruneMaxKicksPerRunDraft,
   setPruneExemptRoleIDsDraft,
   setPruneRunModeDraft,
-  refreshChannelOptions,
   refreshRoleOptions,
   closeDrawer,
-  handleSaveBackfill,
   handleSaveUserPrune,
-}: RenderAdvancedDrawerBodyProps) {
-  if (selectedFeature.id === "backfill.enabled") {
-    const details = getBackfillFeatureDetails(selectedFeature);
-
-    return (
-      <>
-        <KeyValueList
-          items={[
-            {
-              label: "Module state",
-              value: selectedFeature.effective_enabled ? "On" : "Off",
-            },
-            {
-              label: "Current channel",
-              value: formatGuildChannelValue(
-                details.channelId,
-                availableChannels,
-                "Not configured",
-              ),
-            },
-            {
-              label: "Schedule seed",
-              value: formatBackfillScheduleValue(details),
-            },
-            {
-              label: "Current signal",
-              value: summarizeBackfillSignal(selectedFeature),
-            },
-          ]}
-        />
-
-        {channelOptionsNotice ? (
-          <div className="surface-subsection">
-            <p className="section-label">Channel references unavailable</p>
-            <p className="meta-note">{channelOptionsNotice.message}</p>
-            <div className="sidebar-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={channelOptionsLoading}
-                onClick={() => void refreshChannelOptions()}
-              >
-                Retry channel lookup
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <EntityPickerField
-          label="Source channel"
-          value={backfillChannelDraft}
-          disabled={channelOptionsLoading}
-          onChange={setBackfillChannelDraft}
-          options={channelOptions}
-          placeholder={
-            channelOptionsLoading
-              ? "Loading channels..."
-              : channelOptions.length === 0
-                ? "No channels available"
-                : "No source channel"
-          }
-          note="Choose the channel that should seed the historical entry and exit scan."
-        />
-
-        <div className="field-grid roles-form-grid">
-          <label className="field-stack">
-            <span className="field-label">Start day</span>
-            <input
-              aria-label="Start day"
-              type="date"
-              value={backfillStartDayDraft}
-              onChange={(event) => setBackfillStartDayDraft(event.target.value)}
-            />
-            <span className="meta-note">
-              Use this when backfill should begin from a calendar day.
-            </span>
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Initial date</span>
-            <input
-              aria-label="Initial date"
-              type="date"
-              value={backfillInitialDateDraft}
-              onChange={(event) =>
-                setBackfillInitialDateDraft(event.target.value)
-              }
-            />
-            <span className="meta-note">
-              Keep this as the explicit seed date when you need a fixed start.
-            </span>
-          </label>
-        </div>
-
-        <details className="details-panel">
-          <summary>Advanced</summary>
-          <div className="details-content">
-            <label className="field-stack">
-              <span className="field-label">Source channel ID fallback</span>
-              <input
-                aria-label="Source channel ID fallback"
-                value={backfillChannelDraft}
-                onChange={(event) =>
-                  setBackfillChannelDraft(event.target.value)
-                }
-                placeholder="Discord channel ID"
-              />
-              <span className="meta-note">
-                Use this only when the channel picker is unavailable and you
-                need to paste the channel ID directly.
-              </span>
-            </label>
-          </div>
-        </details>
-
-        <div className="surface-subsection">
-          <p className="section-label">Backfill guidance</p>
-          <ul className="feature-guidance-list">
-            <li>
-              Choose the source channel first so the backfill run knows where to
-              scan.
-            </li>
-            <li>
-              Set start day or initial date before enabling the module if you
-              want readiness to turn green.
-            </li>
-          </ul>
-        </div>
-
-        <div className="drawer-actions">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={mutationSaving}
-            onClick={() => void handleSaveBackfill()}
-          >
-            {mutationSaving && pendingFeatureId === selectedFeature.id
-              ? "Saving..."
-              : "Save backfill"}
-          </button>
-          <button
-            className="button-secondary"
-            type="button"
-            onClick={closeDrawer}
-          >
-            Cancel
-          </button>
-        </div>
-      </>
-    );
-  }
-
+}: UserPruneDrawerBodyProps) {
   const details = getUserPruneFeatureDetails(selectedFeature);
 
   return (
@@ -1792,20 +1788,13 @@ function renderAdvancedDrawerBody({
       </div>
 
       {roleOptionsNotice ? (
-        <div className="surface-subsection">
-          <p className="section-label">Role references unavailable</p>
-          <p className="meta-note">{roleOptionsNotice.message}</p>
-          <div className="sidebar-actions">
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={roleOptionsLoading}
-              onClick={() => void refreshRoleOptions()}
-            >
-              Retry role lookup
-            </button>
-          </div>
-        </div>
+        <LookupNotice
+          title="Role references unavailable"
+          message={roleOptionsNotice.message}
+          retryLabel="Retry role lookup"
+          retryDisabled={roleOptionsLoading}
+          onRetry={refreshRoleOptions}
+        />
       ) : roleOptionsLoading && roleOptions.length === 0 ? (
         <div className="surface-subsection">
           <p className="section-label">Loading roles</p>

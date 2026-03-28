@@ -14,7 +14,22 @@ const defaultBaseUrl =
   process.env.DASHBOARD_CAPTURE_BASE_URL ?? "https://alice.localhost:8443";
 
 const captureTargets = [
-  { id: "home", label: "Home", path: "/dashboard/home" },
+  {
+    id: "home",
+    label: "Home",
+    path: "/dashboard/home",
+    expectations: {
+      headings: [
+        { name: "Home", level: 1 },
+        { name: "Main modules", level: 2 },
+        { name: "Current blockers", level: 2 },
+        { name: "Quick shortcuts", level: 2 },
+        { name: "Advanced stays in Settings", level: 2 },
+      ],
+      absentHeadings: [{ name: "Maintenance", level: 2 }],
+      absentTexts: ["Advanced controls > Maintenance"],
+    },
+  },
   {
     id: "partner-board-entries",
     label: "Partner Board Entries",
@@ -157,6 +172,7 @@ async function main() {
 
       try {
         await navigate(page, url, options);
+        await verifyCaptureTarget(page, target);
         await page.screenshot({
           path: screenshotPath,
           fullPage: true,
@@ -203,6 +219,60 @@ async function navigate(page, url, options) {
 
   if (options.waitMs > 0) {
     await page.waitForTimeout(options.waitMs);
+  }
+}
+
+async function verifyCaptureTarget(page, target) {
+  if (!target.expectations) {
+    return;
+  }
+
+  await assertCurrentPath(page, target.path);
+
+  for (const heading of target.expectations.headings ?? []) {
+    await page
+      .getByRole("heading", {
+        name: heading.name,
+        level: heading.level,
+      })
+      .waitFor({
+        state: "visible",
+        timeout: 5_000,
+      });
+  }
+
+  for (const heading of target.expectations.absentHeadings ?? []) {
+    const count = await page
+      .getByRole("heading", {
+        name: heading.name,
+        level: heading.level,
+      })
+      .count();
+    if (count > 0) {
+      throw new Error(
+        `Capture verification failed for ${target.id}: unexpected heading "${heading.name}" is still visible.`,
+      );
+    }
+  }
+
+  for (const text of target.expectations.absentTexts ?? []) {
+    const count = await page.getByText(text, { exact: true }).count();
+    if (count > 0) {
+      throw new Error(
+        `Capture verification failed for ${target.id}: unexpected legacy text "${text}" is still visible.`,
+      );
+    }
+  }
+}
+
+async function assertCurrentPath(page, expectedPath) {
+  const currentUrl = new URL(page.url());
+  const currentPath = `${currentUrl.pathname}${currentUrl.hash}`;
+
+  if (currentPath !== expectedPath) {
+    throw new Error(
+      `Capture verification failed: expected route ${expectedPath}, but the browser is on ${currentPath}. Rebuild and restart the host if it is serving stale embedded assets.`,
+    );
   }
 }
 
@@ -481,6 +551,10 @@ Recommended first run:
   bun run capture:dashboard -- --interactive
 
 That stores the authenticated session in the persistent profile so later runs can stay fully automatic.
+
+If the capture host is Alicebot on https://alice.localhost:8443, rebuild ui/dist
+and restart Alicebot before capturing. The script verifies the expected Home
+surface and now fails fast when the host still serves stale embedded assets.
 `);
 }
 

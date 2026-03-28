@@ -32,10 +32,12 @@ import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
 import {
+  AdvancedTextInput,
   AlertBanner,
   EntityPickerField,
   EmptyState,
   KeyValueList,
+  LookupNotice,
   MetricCard,
   PageHeader,
   StatusBadge,
@@ -541,20 +543,13 @@ export function LoggingCategoryPage() {
               ) : null}
 
               {channelOptions.notice ? (
-                <div className="surface-subsection">
-                  <p className="section-label">Channel references unavailable</p>
-                  <p className="meta-note">{channelOptions.notice.message}</p>
-                  <div className="sidebar-actions">
-                    <button
-                      className="button-secondary"
-                      type="button"
-                      disabled={channelOptions.loading}
-                      onClick={() => void channelOptions.refresh()}
-                    >
-                      Retry channel lookup
-                    </button>
-                  </div>
-                </div>
+                <LookupNotice
+                  title="Channel references unavailable"
+                  message={channelOptions.notice.message}
+                  retryLabel="Retry channel lookup"
+                  retryDisabled={channelOptions.loading}
+                  onRetry={channelOptions.refresh}
+                />
               ) : null}
             </SurfaceCard>
           </aside>
@@ -622,40 +617,23 @@ export function LoggingCategoryPage() {
             />
 
             {channelOptions.notice ? (
-              <div className="surface-subsection">
-                <p className="section-label">Channel references unavailable</p>
-                <p className="meta-note">{channelOptions.notice.message}</p>
-                <div className="sidebar-actions">
-                  <button
-                    className="button-secondary"
-                    type="button"
-                    disabled={channelOptions.loading}
-                    onClick={() => void channelOptions.refresh()}
-                  >
-                    Retry channel lookup
-                  </button>
-                </div>
-              </div>
+              <LookupNotice
+                title="Channel references unavailable"
+                message={channelOptions.notice.message}
+                retryLabel="Retry channel lookup"
+                retryDisabled={channelOptions.loading}
+                onRetry={channelOptions.refresh}
+              />
             ) : null}
 
-            <details className="details-panel">
-              <summary>Advanced</summary>
-              <div className="details-content">
-                <label className="field-stack">
-                  <span className="field-label">Channel ID fallback</span>
-                  <input
-                    aria-label="Destination channel ID fallback"
-                    value={channelDraft}
-                    onChange={(event) => setChannelDraft(event.target.value)}
-                    placeholder="Discord channel ID"
-                  />
-                  <span className="meta-note">
-                    Use this only when the channel picker is unavailable or
-                    when you need to paste a channel ID directly.
-                  </span>
-                </label>
-              </div>
-            </details>
+            <AdvancedTextInput
+              label="Channel ID fallback"
+              inputLabel="Destination channel ID fallback"
+              value={channelDraft}
+              onChange={setChannelDraft}
+              placeholder="Discord channel ID"
+              note="Use this only when the channel picker is unavailable or when you need to paste a channel ID directly."
+            />
 
             <div className="surface-subsection">
               <p className="section-label">Requirements</p>

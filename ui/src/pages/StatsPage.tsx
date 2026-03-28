@@ -5,6 +5,7 @@ import {
   AlertBanner,
   EmptyState,
   KeyValueList,
+  LookupNotice,
   MetricCard,
   PageHeader,
   StatusBadge,
@@ -327,20 +328,14 @@ export function StatsPage() {
         ) : null}
 
         {channelOptions.notice ? (
-          <section className="surface-subsection">
-            <p className="section-label">Channel references unavailable</p>
-            <p className="meta-note">{channelOptions.notice.message}</p>
-            <div className="sidebar-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={channelOptions.loading}
-                onClick={() => void channelOptions.refresh()}
-              >
-                Retry channel lookup
-              </button>
-            </div>
-          </section>
+          <LookupNotice
+            as="section"
+            title="Channel references unavailable"
+            message={channelOptions.notice.message}
+            retryLabel="Retry channel lookup"
+            retryDisabled={channelOptions.loading}
+            onRetry={channelOptions.refresh}
+          />
         ) : null}
 
         <section className="surface-subsection">

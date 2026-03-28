@@ -38,11 +38,13 @@ import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 import {
+  AdvancedTextInput,
   AlertBanner,
   EntityMultiPickerField,
   EntityPickerField,
   EmptyState,
   KeyValueList,
+  LookupNotice,
   MetricCard,
   PageHeader,
   StatusBadge,
@@ -667,39 +669,25 @@ export function CommandsPage() {
                 <li>Runtime diagnostics stay in Settings instead of dominating the default commands workspace.</li>
               </ul>
 
-              {channelOptions.notice ? (
-                <div className="surface-subsection">
-                  <p className="section-label">Channel references unavailable</p>
-                  <p className="meta-note">{channelOptions.notice.message}</p>
-                  <div className="sidebar-actions">
-                    <button
-                      className="button-secondary"
-                      type="button"
-                      disabled={channelOptions.loading}
-                      onClick={() => void channelOptions.refresh()}
-                    >
-                      Retry channel lookup
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+                {channelOptions.notice ? (
+                  <LookupNotice
+                    title="Channel references unavailable"
+                    message={channelOptions.notice.message}
+                    retryLabel="Retry channel lookup"
+                    retryDisabled={channelOptions.loading}
+                    onRetry={channelOptions.refresh}
+                  />
+                ) : null}
 
-              {roleOptions.notice ? (
-                <div className="surface-subsection">
-                  <p className="section-label">Role references unavailable</p>
-                  <p className="meta-note">{roleOptions.notice.message}</p>
-                  <div className="sidebar-actions">
-                    <button
-                      className="button-secondary"
-                      type="button"
-                      disabled={roleOptions.loading}
-                      onClick={() => void roleOptions.refresh()}
-                    >
-                      Retry role lookup
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+                {roleOptions.notice ? (
+                  <LookupNotice
+                    title="Role references unavailable"
+                    message={roleOptions.notice.message}
+                    retryLabel="Retry role lookup"
+                    retryDisabled={roleOptions.loading}
+                    onRetry={roleOptions.refresh}
+                  />
+                ) : null}
             </SurfaceCard>
           </aside>
         </section>
@@ -837,22 +825,15 @@ function renderDrawerBody({
           ]}
         />
 
-        {channelOptionsNotice ? (
-          <div className="surface-subsection">
-            <p className="section-label">Channel references unavailable</p>
-            <p className="meta-note">{channelOptionsNotice.message}</p>
-            <div className="sidebar-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={channelOptionsLoading}
-                onClick={() => void refreshChannelOptions()}
-              >
-                Retry channel lookup
-              </button>
-            </div>
-          </div>
-        ) : null}
+          {channelOptionsNotice ? (
+            <LookupNotice
+              title="Channel references unavailable"
+              message={channelOptionsNotice.message}
+              retryLabel="Retry channel lookup"
+              retryDisabled={channelOptionsLoading}
+              onRetry={refreshChannelOptions}
+            />
+          ) : null}
 
         <EntityPickerField
           label="Command channel"
@@ -870,24 +851,14 @@ function renderDrawerBody({
           note="Leave this empty when you do not want a dedicated routing channel for command workflows."
         />
 
-        <details className="details-panel">
-          <summary>Advanced</summary>
-          <div className="details-content">
-            <label className="field-stack">
-              <span className="field-label">Channel ID fallback</span>
-              <input
-                aria-label="Command channel ID fallback"
-                value={channelDraft}
-                onChange={(event) => setChannelDraft(event.target.value)}
-                placeholder="Discord channel ID"
-              />
-              <span className="meta-note">
-                Use this only when the channel picker is unavailable or when you
-                need to paste a channel ID directly.
-              </span>
-            </label>
-          </div>
-        </details>
+          <AdvancedTextInput
+            label="Channel ID fallback"
+            inputLabel="Command channel ID fallback"
+            value={channelDraft}
+            onChange={setChannelDraft}
+            placeholder="Discord channel ID"
+            note="Use this only when the channel picker is unavailable or when you need to paste a channel ID directly."
+          />
 
         <div className="surface-subsection">
           <p className="section-label">Routing guidance</p>
@@ -937,22 +908,15 @@ function renderDrawerBody({
         ]}
       />
 
-      {roleOptionsNotice ? (
-        <div className="surface-subsection">
-          <p className="section-label">Role references unavailable</p>
-          <p className="meta-note">{roleOptionsNotice.message}</p>
-          <div className="sidebar-actions">
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={roleOptionsLoading}
-              onClick={() => void refreshRoleOptions()}
-            >
-              Retry role lookup
-            </button>
-          </div>
-        </div>
-      ) : roleOptionsLoading && roleOptions.length === 0 ? (
+        {roleOptionsNotice ? (
+          <LookupNotice
+            title="Role references unavailable"
+            message={roleOptionsNotice.message}
+            retryLabel="Retry role lookup"
+            retryDisabled={roleOptionsLoading}
+            onRetry={refreshRoleOptions}
+          />
+        ) : roleOptionsLoading && roleOptions.length === 0 ? (
         <div className="surface-subsection">
           <p className="section-label">Loading roles</p>
           <p className="meta-note">

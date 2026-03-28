@@ -430,20 +430,20 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 
 		response := decodeFeatureResponse[guildChannelOptionsResponse](t, rec)
-		if len(response.Channels) != 4 {
-			t.Fatalf("expected 4 channel options, got %+v", response.Channels)
+		if len(response.Channels) != 3 {
+			t.Fatalf("expected 3 channel options without categories, got %+v", response.Channels)
 		}
-		if response.Channels[0].ID != "cat-ops" || response.Channels[1].ID != "logs" || response.Channels[2].ID != "alerts" {
-			t.Fatalf("expected category-grouped channel ordering, got %+v", response.Channels)
+		if response.Channels[0].ID != "logs" || response.Channels[1].ID != "alerts" || response.Channels[2].ID != "voice-hub" {
+			t.Fatalf("expected channel-only ordering, got %+v", response.Channels)
 		}
-		if response.Channels[1].DisplayName != "Operations / #logs" {
-			t.Fatalf("expected display name for text channel, got %+v", response.Channels[1])
+		if response.Channels[0].DisplayName != "#logs" {
+			t.Fatalf("expected display name for text channel without category prefix, got %+v", response.Channels[0])
 		}
-		if !response.Channels[1].SupportsMessageRoute || !response.Channels[2].SupportsMessageRoute {
+		if !response.Channels[0].SupportsMessageRoute || !response.Channels[1].SupportsMessageRoute {
 			t.Fatalf("expected text and announcement channels to support message routes, got %+v", response.Channels)
 		}
-		if response.Channels[3].SupportsMessageRoute {
-			t.Fatalf("expected voice channel to be excluded from message routes, got %+v", response.Channels[3])
+		if response.Channels[2].SupportsMessageRoute {
+			t.Fatalf("expected voice channel to be excluded from message routes, got %+v", response.Channels[2])
 		}
 	})
 

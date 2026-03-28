@@ -189,8 +189,6 @@ export interface GuildChannelOption {
   name: string;
   display_name: string;
   kind: string;
-  parent_id?: string;
-  parent_name?: string;
   supports_message_route: boolean;
 }
 

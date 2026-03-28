@@ -14,11 +14,8 @@ type guildChannelOption struct {
 	Name                 string `json:"name"`
 	DisplayName          string `json:"display_name"`
 	Kind                 string `json:"kind"`
-	ParentID             string `json:"parent_id,omitempty"`
-	ParentName           string `json:"parent_name,omitempty"`
 	SupportsMessageRoute bool   `json:"supports_message_route"`
 	position             int    `json:"-"`
-	parentPosition       int    `json:"-"`
 }
 
 func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, guildID string) {
@@ -47,14 +44,6 @@ func buildGuildChannelOptions(session *discordgo.Session, guildID string) ([]gui
 		return nil, err
 	}
 
-	parentByID := make(map[string]*discordgo.Channel, len(guild.Channels))
-	for _, channel := range guild.Channels {
-		if channel == nil {
-			continue
-		}
-		parentByID[strings.TrimSpace(channel.ID)] = channel
-	}
-
 	options := make([]guildChannelOption, 0, len(guild.Channels))
 	for _, channel := range guild.Channels {
 		if channel == nil {
@@ -67,25 +56,18 @@ func buildGuildChannelOptions(session *discordgo.Session, guildID string) ([]gui
 			continue
 		}
 
-		parentID := strings.TrimSpace(channel.ParentID)
-		parentName := ""
-		parentPosition := -1
-		if parent := parentByID[parentID]; parent != nil {
-			parentName = strings.TrimSpace(parent.Name)
-			parentPosition = parent.Position
+		if channel.Type == discordgo.ChannelTypeGuildCategory {
+			continue
 		}
 
 		kind := guildChannelKind(channel.Type)
 		options = append(options, guildChannelOption{
 			ID:                   id,
 			Name:                 name,
-			DisplayName:          formatGuildChannelDisplayName(name, parentName, kind),
+			DisplayName:          formatGuildChannelDisplayName(name, kind),
 			Kind:                 kind,
-			ParentID:             parentID,
-			ParentName:           parentName,
 			SupportsMessageRoute: channelSupportsMessageRoute(channel.Type),
 			position:             channel.Position,
-			parentPosition:       parentPosition,
 		})
 	}
 
@@ -94,35 +76,6 @@ func buildGuildChannelOptions(session *discordgo.Session, guildID string) ([]gui
 }
 
 func compareGuildChannelOptions(left, right guildChannelOption) int {
-	leftGroupPosition := left.position
-	if left.Kind != "category" && left.parentPosition >= 0 {
-		leftGroupPosition = left.parentPosition
-	}
-	rightGroupPosition := right.position
-	if right.Kind != "category" && right.parentPosition >= 0 {
-		rightGroupPosition = right.parentPosition
-	}
-
-	if leftGroupPosition != rightGroupPosition {
-		if leftGroupPosition > rightGroupPosition {
-			return -1
-		}
-		return 1
-	}
-
-	if left.Kind == "category" && right.Kind != "category" {
-		return -1
-	}
-	if right.Kind == "category" && left.Kind != "category" {
-		return 1
-	}
-
-	leftParent := strings.ToLower(strings.TrimSpace(left.ParentName))
-	rightParent := strings.ToLower(strings.TrimSpace(right.ParentName))
-	if leftParent != rightParent {
-		return strings.Compare(leftParent, rightParent)
-	}
-
 	leftRank := guildChannelKindRank(left.Kind)
 	rightRank := guildChannelKindRank(right.Kind)
 	if leftRank != rightRank {
@@ -154,8 +107,6 @@ func guildChannelKind(channelType discordgo.ChannelType) string {
 		return "text"
 	case discordgo.ChannelTypeGuildVoice:
 		return "voice"
-	case discordgo.ChannelTypeGuildCategory:
-		return "category"
 	case discordgo.ChannelTypeGuildNews:
 		return "announcement"
 	case discordgo.ChannelTypeGuildStageVoice:
@@ -179,13 +130,13 @@ func guildChannelKind(channelType discordgo.ChannelType) string {
 
 func guildChannelKindRank(kind string) int {
 	switch kind {
-	case "category":
-		return 0
 	case "text":
-		return 1
+		return 0
 	case "announcement":
-		return 2
+		return 1
 	case "forum":
+		return 2
+	case "media":
 		return 3
 	case "voice":
 		return 4
@@ -205,19 +156,15 @@ func channelSupportsMessageRoute(channelType discordgo.ChannelType) bool {
 	}
 }
 
-func formatGuildChannelDisplayName(name, parentName, kind string) string {
+func formatGuildChannelDisplayName(name, kind string) string {
 	trimmedName := strings.TrimSpace(name)
-	trimmedParent := strings.TrimSpace(parentName)
 	if trimmedName == "" {
 		return ""
 	}
 
-	label := trimmedName
 	if kind == "text" || kind == "announcement" {
-		label = "#" + trimmedName
+		return "#" + trimmedName
 	}
-	if trimmedParent == "" {
-		return label
-	}
-	return trimmedParent + " / " + label
+
+	return trimmedName
 }
