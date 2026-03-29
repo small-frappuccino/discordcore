@@ -666,7 +666,7 @@ export function CommandsPage() {
               <ul className="feature-guidance-list">
                 <li>Set a command channel only when you want a dedicated destination for command workflows.</li>
                 <li>Review admin access roles whenever staff permissions change for the selected server.</li>
-                <li>Runtime diagnostics stay in Settings instead of dominating the default commands workspace.</li>
+                <li>Runtime blockers stay in signals and notices instead of dominating the default commands workspace.</li>
               </ul>
 
                 {channelOptions.notice ? (

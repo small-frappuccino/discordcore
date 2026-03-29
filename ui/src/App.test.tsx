@@ -38,6 +38,35 @@ function createFetchMock() {
     guildID: string;
     payload: Record<string, unknown>;
   }> = [];
+  const settingsUpdates: Array<{
+    guildID: string;
+    payload: Record<string, unknown>;
+  }> = [];
+  const guildSettingsByGuild: Record<
+    string,
+    {
+      roles: {
+        allowed: string[];
+        dashboard_read: string[];
+        dashboard_write: string[];
+      };
+    }
+  > = {
+    "guild-1": {
+      roles: {
+        allowed: ["role-guard"],
+        dashboard_read: ["role-target"],
+        dashboard_write: ["role-guard"],
+      },
+    },
+    "guild-2": {
+      roles: {
+        allowed: [],
+        dashboard_read: [],
+        dashboard_write: [],
+      },
+    },
+  };
   const roleOptionsByGuild: Record<string, GuildRoleOption[]> = {
     "guild-1": [
       {
@@ -931,6 +960,31 @@ function createFetchMock() {
     feature.blockers = [];
   }
 
+  function buildGuildSettingsWorkspace(guildID: string) {
+    const settings = guildSettingsByGuild[guildID] ?? {
+      roles: {
+        allowed: [],
+        dashboard_read: [],
+        dashboard_write: [],
+      },
+    };
+
+    return {
+      status: "ok",
+      workspace: {
+        scope: "guild",
+        guild_id: guildID,
+        sections: {
+          roles: {
+            allowed: [...settings.roles.allowed],
+            dashboard_read: [...settings.roles.dashboard_read],
+            dashboard_write: [...settings.roles.dashboard_write],
+          },
+        },
+      },
+    };
+  }
+
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
@@ -949,7 +1003,7 @@ function createFetchMock() {
         });
       }
 
-      if (url.endsWith("/auth/guilds/manageable")) {
+      if (url.endsWith("/auth/guilds/access")) {
         return jsonResponse({
           status: "ok",
           count: 2,
@@ -959,15 +1013,67 @@ function createFetchMock() {
               name: "Server One",
               owner: true,
               permissions: 8,
+              access_level: "write",
             },
             {
               id: "guild-2",
               name: "Server Two",
               owner: false,
               permissions: 32,
+              access_level: "read",
             },
           ],
         });
+      }
+
+      if (url.endsWith("/auth/guilds/manageable")) {
+        return jsonResponse({
+          status: "ok",
+          count: 1,
+          guilds: [
+            {
+              id: "guild-1",
+              name: "Server One",
+              owner: true,
+              permissions: 8,
+              access_level: "write",
+            },
+          ],
+        });
+      }
+
+      if (url.includes("/settings")) {
+        const match = url.match(/\/v1\/guilds\/([^/]+)\/settings$/);
+        if (match && (!init?.method || init.method === "GET")) {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          return jsonResponse(buildGuildSettingsWorkspace(guildID));
+        }
+
+        if (match && init?.method === "PUT") {
+          const guildID = decodeURIComponent(match[1] ?? "");
+          const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
+          settingsUpdates.push({ guildID, payload });
+          const rolesPayload =
+            typeof payload.roles === "object" && payload.roles !== null
+              ? (payload.roles as Record<string, unknown>)
+              : {};
+          guildSettingsByGuild[guildID] = {
+            roles: {
+              allowed: guildSettingsByGuild[guildID]?.roles.allowed ?? [],
+              dashboard_read: Array.isArray(rolesPayload.dashboard_read)
+                ? rolesPayload.dashboard_read.filter(
+                    (value): value is string => typeof value === "string",
+                  )
+                : [],
+              dashboard_write: Array.isArray(rolesPayload.dashboard_write)
+                ? rolesPayload.dashboard_write.filter(
+                    (value): value is string => typeof value === "string",
+                  )
+                : [],
+            },
+          };
+          return jsonResponse(buildGuildSettingsWorkspace(guildID));
+        }
       }
 
       if (url.includes("/role-options")) {
@@ -1341,6 +1447,7 @@ function createFetchMock() {
     featureCalls,
     fetchMock,
     featureUpdates,
+    settingsUpdates,
     targetUpdates,
   };
 }
@@ -1357,43 +1464,152 @@ describe("dashboard routing and workspace", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("renders the lean shell, preserves the legacy control-panel redirect, and keeps only real primary nav items", async () => {
+  it("renders the lean shell, preserves the legacy control-panel redirect, and keeps global context in the top bar", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Settings", level: 1 });
-    expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Control Panel", level: 1 });
+    expect(window.location.pathname).toBe(appRoutes.dashboardCoreControlPanel);
+    expect(document.querySelector("[data-shell-topbar]")).not.toBeNull();
+    expect(screen.getByLabelText("Server")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /alice/i })).toBeInTheDocument();
+    const sidebarNav = screen.getByRole("navigation", {
+      name: "Dashboard navigation",
+    });
+    expect(within(sidebarNav).getByRole("link", { name: "Home" })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Partner Board" }),
+      within(sidebarNav).getByText("Core", { selector: ".shell-nav-section-label" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Commands" })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Moderation" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Logging" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Autorole" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Level Roles" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Stats" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "Maintenance" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "Automations" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "Activity Log" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", {
-        name: "Access summary",
-        level: 2,
+      within(sidebarNav).getByText("Moderation", {
+        selector: ".shell-nav-section-label",
       }),
     ).toBeInTheDocument();
-    expect(window.location.pathname).toBe(appRoutes.settings);
-    expect(window.location.hash).toBe("#permissions");
+    expect(
+      within(sidebarNav).getByText("Partner Board", {
+        selector: ".shell-nav-section-label",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(sidebarNav).getByText("Roles", { selector: ".shell-nav-section-label" }),
+    ).toBeInTheDocument();
+    expect(
+      within(sidebarNav).getByRole("link", { name: "Control Panel" }),
+    ).toBeInTheDocument();
+    expect(within(sidebarNav).getByRole("link", { name: "Commands" })).toBeInTheDocument();
+    expect(within(sidebarNav).getByRole("link", { name: "Stats" })).toBeInTheDocument();
+    expect(within(sidebarNav).getByRole("link", { name: "Logging" })).toBeInTheDocument();
+    expect(within(sidebarNav).getByRole("link", { name: "Autorole" })).toBeInTheDocument();
+    expect(
+      within(sidebarNav).queryByRole("link", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reconnect" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders Home as a navigation index with category headings and route cards", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", appRoutes.dashboardHome);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    expect(screen.getByRole("link", { name: "Home" })).toHaveClass("is-active");
+    expect(screen.getByRole("heading", { name: "Core", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Partner Board", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Roles", level: 2 })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Control Panel" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Stats" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Commands" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Logging" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Partner Board" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Autorole" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Level Roles" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Current blockers", level: 2 }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Quick shortcuts", level: 2 }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Settings and diagnostics", level: 2 }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Refresh home" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves dashboard read/write access roles from the dedicated Control Panel page", async () => {
+    const { fetchMock, settingsUpdates } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", appRoutes.controlPanel);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Control Panel", level: 1 });
+    const writeAccessGroup = await screen.findByRole("group", {
+      name: "Write access roles",
+    });
+    const membersRoleToggle = await within(writeAccessGroup).findByRole("checkbox", {
+      name: /Members/i,
+    });
+
+    await userEvent.click(membersRoleToggle);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save access roles" }),
+    );
+
+    await waitFor(() => {
+      expect(settingsUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          payload: {
+            roles: {
+              dashboard_read: ["role-target"],
+              dashboard_write: ["role-guard", "role-target"],
+            },
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.getByText("Dashboard access roles updated."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Control Panel writes disabled when the selected server is read-only", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", appRoutes.dashboardCoreControlPanel);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Control Panel", level: 1 });
+    await userEvent.selectOptions(screen.getByLabelText("Server"), "guild-2");
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "You currently have read-only access to this server. Role changes are disabled.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    const readAccessGroup = await screen.findByRole("group", {
+      name: "Read access roles",
+    });
+    expect(
+      within(readAccessGroup).getByRole("checkbox", { name: /@everyone/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Save access roles" }),
+    ).toBeDisabled();
   });
 
   it("auto-loads Partner Board data again when the selected server changes", async () => {
@@ -1526,7 +1742,7 @@ describe("dashboard routing and workspace", () => {
   });
 
   it.each(["/dashboard/automations", "/dashboard/activity"])(
-    "redirects %s to the planned Home section instead of a placeholder page",
+    "redirects %s to Home instead of a placeholder page",
     async (path) => {
       const { fetchMock } = createFetchMock();
       vi.stubGlobal("fetch", fetchMock);
@@ -1536,8 +1752,10 @@ describe("dashboard routing and workspace", () => {
 
       await screen.findByRole("heading", { name: "Home", level: 1 });
       expect(window.location.pathname).toBe("/dashboard/home");
-      expect(window.location.hash).toBe("#planned");
-      expect(screen.getByText("Tickets")).toBeInTheDocument();
+      expect(window.location.hash).toBe("");
+      expect(
+        screen.getByRole("heading", { name: "Core", level: 2 }),
+      ).toBeInTheDocument();
     },
   );
 
@@ -1550,9 +1768,9 @@ describe("dashboard routing and workspace", () => {
     ],
     [
       "/dashboard/feature-areas/maintenance",
-      "Settings",
-      "/dashboard/settings",
-      "#advanced",
+      "Home",
+      appRoutes.dashboardHome,
+      "",
     ],
   ])(
     "keeps the generic feature workspace as fallback-only by redirecting %s",
@@ -1584,7 +1802,11 @@ describe("dashboard routing and workspace", () => {
       screen.queryByRole("link", { name: "Activity" }),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("link", { name: "Destination" }));
+    await userEvent.click(
+      within(
+        screen.getByRole("navigation", { name: "Partner Board sections" }),
+      ).getByRole("link", { name: "Destination" }),
+    );
 
     await screen.findByRole("heading", {
       name: "Set where the board is published",
@@ -1592,8 +1814,8 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryByRole("heading", { name: "Board text" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Board message ID")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Channel ID")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Board message ID")).toBeInTheDocument();
+    expect(screen.getByLabelText("Channel ID")).toBeInTheDocument();
     expect(screen.queryByLabelText("Webhook URL")).not.toBeInTheDocument();
   });
 
@@ -1619,7 +1841,7 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByRole("button", { name: "Confirm" })).toBeVisible();
   });
 
-  it("shows Home as the operational landing page with main modules, blockers, shortcuts, and planned modules", async () => {
+  it("shows Home as a card-based index without the old operational dashboard sections", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", appRoutes.dashboardHome);
@@ -1628,57 +1850,29 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
     expect(
-      screen.getByRole("heading", { name: "Main modules", level: 2 }),
+      screen.getByRole("heading", { name: "Core", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Current blockers", level: 2 }),
+      screen.getByRole("heading", { name: "Moderation", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Quick shortcuts", level: 2 }),
+      screen.getByRole("heading", { name: "Partner Board", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", {
-        name: "Settings and diagnostics",
-        level: 2,
-      }),
+      screen.getByRole("heading", { name: "Roles", level: 2 }),
     ).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Commands" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Logging" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open Control Panel" })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open Commands" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Command routing" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Open Advanced" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Access roles" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Open Control Panel" }),
-    ).toBeInTheDocument();
-    const blockersCard = screen
-      .getByRole("heading", { name: "Current blockers", level: 2 })
-      .closest(".surface-card") as HTMLElement | null;
-    expect(blockersCard).not.toBeNull();
-    await waitFor(() => {
-      expect(
-        within(blockersCard!).getByRole("link", { name: "Open Logging" }),
-      ).toBeInTheDocument();
-      expect(
-        within(blockersCard!).getByRole("link", { name: "Open Autorole" }),
-      ).toBeInTheDocument();
-      expect(
-        within(blockersCard!).getByRole("link", { name: "Open Stats" }),
-      ).toBeInTheDocument();
-    });
-    expect(
-      screen.queryByRole("heading", { name: "Settings", level: 2 }),
+      screen.queryByRole("heading", { name: "Current blockers", level: 2 }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: "Maintenance", level: 2 }),
+      screen.queryByRole("heading", { name: "Quick shortcuts", level: 2 }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Tickets")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Settings and diagnostics", level: 2 }),
+    ).not.toBeInTheDocument();
   });
 
   it("redirects the legacy roles-members route to the stable Roles workspace route", async () => {
@@ -1890,7 +2084,7 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
-    await userEvent.click(screen.getByRole("link", { name: "Commands" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Commands" }));
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
     await screen.findByRole("heading", { name: "Command routing", level: 2 });
@@ -2039,197 +2233,15 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByText("#join-channel")).toBeInTheDocument();
   });
 
-  it("moves advanced maintenance controls into Settings and configures backfill and user prune through dedicated drawers", async () => {
-    const { featureUpdates, fetchMock } = createFetchMock();
+  it("redirects the legacy maintenance route to Home", async () => {
+    const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", "/dashboard/maintenance");
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Settings", level: 1 });
-    expect(window.location.pathname).toBe("/dashboard/settings");
-    expect(window.location.hash).toBe("#advanced");
-    expect(
-      screen.getByRole("heading", {
-        name: "Runtime and maintenance controls",
-        level: 2,
-      }),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByText("Message cache cleanup"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Configure backfill" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Configure user prune" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Enable Message cache cleanup" }),
-    ).toBeInTheDocument();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure backfill" }),
-    );
-
-    const backfillDialog = screen.getByRole("dialog", {
-      name: "Configure entry and exit backfill",
-    });
-    expect(backfillDialog).toBeVisible();
-    expect(within(backfillDialog).getByLabelText("Source channel")).toHaveValue(
-      "",
-    );
-
-    await userEvent.selectOptions(
-      within(backfillDialog).getByLabelText("Source channel"),
-      "ops-commands",
-    );
-    await userEvent.type(
-      within(backfillDialog).getByLabelText("Start day"),
-      "2026-03-01",
-    );
-    await userEvent.click(
-      within(backfillDialog).getByRole("button", { name: "Save backfill" }),
-    );
-
-    await waitFor(() => {
-      expect(featureUpdates).toEqual([
-        {
-          guildID: "guild-1",
-          featureID: "backfill.enabled",
-          payload: {
-            channel_id: "ops-commands",
-            start_day: "2026-03-01",
-            initial_date: "",
-          },
-        },
-      ]);
-    });
-
-    expect(
-      screen.queryByRole("dialog", {
-        name: "Configure entry and exit backfill",
-      }),
-    ).not.toBeInTheDocument();
-    expect(screen.getAllByText("#ops-commands").length).toBeGreaterThan(0);
-    expect(screen.getByText("2026-03-01")).toBeInTheDocument();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure user prune" }),
-    );
-
-    const pruneDialog = screen.getByRole("dialog", {
-      name: "Configure user prune",
-    });
-    const exemptRolesGroup = within(pruneDialog).getByRole("group", {
-      name: "Exempt roles",
-    });
-    const moderatorsOption = within(exemptRolesGroup)
-      .getByText("Moderators")
-      .closest("label");
-    const membersOption = within(exemptRolesGroup)
-      .getByText("Members")
-      .closest("label");
-    expect(moderatorsOption).not.toBeNull();
-    expect(membersOption).not.toBeNull();
-    const moderatorsCheckbox = moderatorsOption?.querySelector(
-      'input[type="checkbox"]',
-    ) as HTMLInputElement | null;
-    const membersCheckbox = membersOption?.querySelector(
-      'input[type="checkbox"]',
-    ) as HTMLInputElement | null;
-    expect(moderatorsCheckbox).not.toBeNull();
-    expect(membersCheckbox).not.toBeNull();
-    expect(pruneDialog).toBeVisible();
-    expect(moderatorsCheckbox).toBeChecked();
-    expect(membersCheckbox).not.toBeChecked();
-
-    await userEvent.selectOptions(
-      within(pruneDialog).getByLabelText("Prune rule"),
-      "disabled",
-    );
-    await userEvent.clear(
-      within(pruneDialog).getByLabelText("Grace period (days)"),
-    );
-    await userEvent.type(
-      within(pruneDialog).getByLabelText("Grace period (days)"),
-      "45",
-    );
-    await userEvent.clear(
-      within(pruneDialog).getByLabelText("Scan interval (minutes)"),
-    );
-    await userEvent.type(
-      within(pruneDialog).getByLabelText("Scan interval (minutes)"),
-      "90",
-    );
-    await userEvent.selectOptions(
-      within(pruneDialog).getByLabelText("Run mode"),
-      "live",
-    );
-    await userEvent.click(membersCheckbox!);
-    await userEvent.click(
-      within(pruneDialog).getByText("Advanced", { selector: "summary" }),
-    );
-    await userEvent.clear(
-      within(pruneDialog).getByLabelText("Initial delay (seconds)"),
-    );
-    await userEvent.type(
-      within(pruneDialog).getByLabelText("Initial delay (seconds)"),
-      "20",
-    );
-    await userEvent.clear(
-      within(pruneDialog).getByLabelText("Kicks per second"),
-    );
-    await userEvent.type(
-      within(pruneDialog).getByLabelText("Kicks per second"),
-      "3",
-    );
-    await userEvent.clear(
-      within(pruneDialog).getByLabelText("Max kicks per run"),
-    );
-    await userEvent.type(
-      within(pruneDialog).getByLabelText("Max kicks per run"),
-      "40",
-    );
-    await userEvent.click(
-      within(pruneDialog).getByRole("button", { name: "Save user prune" }),
-    );
-
-    await waitFor(() => {
-      expect(featureUpdates).toEqual([
-        {
-          guildID: "guild-1",
-          featureID: "backfill.enabled",
-          payload: {
-            channel_id: "ops-commands",
-            start_day: "2026-03-01",
-            initial_date: "",
-          },
-        },
-        {
-          guildID: "guild-1",
-          featureID: "user_prune",
-          payload: {
-            config_enabled: false,
-            grace_days: 45,
-            scan_interval_mins: 90,
-            initial_delay_secs: 20,
-            kicks_per_second: 3,
-            max_kicks_per_run: 40,
-            exempt_role_ids: ["role-guard", "role-target"],
-            dry_run: false,
-          },
-        },
-      ]);
-    });
-
-    expect(
-      screen.queryByRole("dialog", { name: "Configure user prune" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("45 days")).toBeInTheDocument();
-    expect(screen.getByText("90 minutes")).toBeInTheDocument();
-    expect(screen.getAllByText("2 exempt roles").length).toBeGreaterThan(0);
-    expect(screen.getByText("Live run")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    expect(window.location.pathname).toBe(appRoutes.dashboardHome);
   });
 
   it("opens the dedicated Stats workspace and replaces the generic feature table with a schedule-focused workspace", async () => {
@@ -2332,8 +2344,8 @@ describe("dashboard routing and workspace", () => {
     ).toBeInTheDocument();
   });
 
-  it("hands off destination setup to Settings diagnostics with the requested posting method preselected", async () => {
-    const { fetchMock } = createFetchMock();
+  it("edits Partner Board delivery inline without handing off to Settings", async () => {
+    const { fetchMock, targetUpdates } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", "/dashboard/partner-board/delivery");
 
@@ -2342,42 +2354,6 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("heading", {
       name: "Set where the board is published",
     });
-
-    await userEvent.selectOptions(
-      screen.getByLabelText("Preferred posting method"),
-      "webhook_message",
-    );
-    await userEvent.click(
-      screen.getByRole("link", { name: "Finish destination in Settings" }),
-    );
-
-    await screen.findByRole("heading", { name: "Settings", level: 1 });
-    expect(window.location.pathname).toBe("/dashboard/settings");
-    expect(window.location.hash).toBe("#diagnostics");
-    expect(screen.getByText("Granted OAuth scopes")).toBeVisible();
-    expect(screen.getByLabelText("Posting method")).toHaveValue(
-      "webhook_message",
-    );
-    expect(screen.getByLabelText("Board message ID")).toBeVisible();
-  });
-
-  it("keeps raw technical details hidden until Diagnostics is opened and still saves the advanced destination editor", async () => {
-    const { fetchMock, targetUpdates } = createFetchMock();
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", "/dashboard/settings");
-
-    render(<App />);
-
-    await screen.findByRole("heading", { name: "Settings", level: 1 });
-
-    expect(screen.getByText("Granted OAuth scopes")).not.toBeVisible();
-    expect(screen.getByText("Board message ID")).not.toBeVisible();
-
-    await userEvent.click(
-      screen.getByText("Diagnostics", { selector: "summary" }),
-    );
-
-    expect(screen.getByText("Granted OAuth scopes")).toBeVisible();
     await userEvent.selectOptions(
       screen.getByLabelText("Posting method"),
       "webhook_message",
@@ -2409,8 +2385,6 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(
-      screen.getByText("Partner Board destination updated."),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Posting destination updated.").length).toBeGreaterThan(0);
   });
 });

@@ -221,7 +221,7 @@ export function formatWorkspaceStateDescription(
     case "auth_required":
       return `Sign in with Discord to load the ${areaLabel.toLowerCase()} workspace.`;
     case "server_required":
-      return "Choose a server from the sidebar before loading category settings.";
+      return "Choose a server from the top bar before loading category settings.";
     case "loading":
       return `The latest ${areaLabel.toLowerCase()} feature records are loading for the selected server.`;
     case "unavailable":

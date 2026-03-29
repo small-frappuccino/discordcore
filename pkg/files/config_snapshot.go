@@ -255,6 +255,8 @@ func cloneFeatureToggles(in FeatureToggles) FeatureToggles {
 func cloneRolesConfig(in RolesConfig) RolesConfig {
 	return RolesConfig{
 		Allowed:          cloneStringSlice(in.Allowed),
+		DashboardRead:    cloneStringSlice(in.DashboardRead),
+		DashboardWrite:   cloneStringSlice(in.DashboardWrite),
 		AutoAssignment:   cloneAutoAssignmentConfig(in.AutoAssignment),
 		VerificationRole: in.VerificationRole,
 		BoosterRole:      in.BoosterRole,

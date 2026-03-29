@@ -5,7 +5,6 @@ export const appRoutes = {
   dashboard: "/dashboard",
   dashboardHome: "/dashboard/home",
   dashboardOverview: "/dashboard/overview",
-  dashboardHomePlanned: "/dashboard/home#planned",
   dashboardCore: "/dashboard/core",
   dashboardCoreControlPanel: "/dashboard/core/control-panel",
   dashboardCoreStats: "/dashboard/core/stats",
@@ -32,106 +31,14 @@ export const appRoutes = {
   automations: "/dashboard/automations",
   activity: "/dashboard/activity",
   settings: "/dashboard/settings",
-  settingsPermissions: "/dashboard/settings#permissions",
-  settingsAdvanced: "/dashboard/settings#advanced",
 } as const;
-
-export interface SidebarNavItem {
-  label: string;
-  to: string;
-  activePath?: string;
-  hashes?: string[];
-  matchPrefix?: string;
-}
-
-export interface SidebarNavSection {
-  label: string;
-  items: SidebarNavItem[];
-}
-
-export const sidebarHomeItem: SidebarNavItem = {
-  label: "Home",
-  to: appRoutes.dashboardHome,
-  activePath: appRoutes.dashboardHome,
-};
-
-export const sidebarNavigationSections: SidebarNavSection[] = [
-  {
-    label: "Core",
-    items: [
-      {
-        label: "Control Panel",
-        to: appRoutes.dashboardCoreControlPanel,
-        activePath: appRoutes.settings,
-        hashes: ["#permissions"],
-      },
-      {
-        label: "Stats",
-        to: appRoutes.dashboardCoreStats,
-        activePath: appRoutes.dashboardCoreStats,
-      },
-      {
-        label: "Commands",
-        to: appRoutes.dashboardCoreCommands,
-        activePath: appRoutes.dashboardCoreCommands,
-      },
-    ],
-  },
-  {
-    label: "Moderation",
-    items: [
-      {
-        label: "Moderation",
-        to: appRoutes.dashboardModerationModeration,
-        activePath: appRoutes.dashboardModerationModeration,
-      },
-      {
-        label: "Logging",
-        to: appRoutes.dashboardModerationLogging,
-        activePath: appRoutes.dashboardModerationLogging,
-      },
-    ],
-  },
-  {
-    label: "Partner Board",
-    items: [
-      {
-        label: "Partner Board",
-        to: appRoutes.partnerBoardEntries,
-        activePath: appRoutes.partnerBoardEntries,
-        matchPrefix: appRoutes.partnerBoardBase,
-      },
-    ],
-  },
-  {
-    label: "Roles",
-    items: [
-      {
-        label: "Autorole",
-        to: appRoutes.dashboardRolesAutorole,
-        activePath: appRoutes.dashboardRolesAutorole,
-      },
-      {
-        label: "Level Roles",
-        to: appRoutes.dashboardRolesLevelRoles,
-        activePath: appRoutes.dashboardRolesLevelRoles,
-      },
-    ],
-  },
-];
-
-export const sidebarSettingsItem: SidebarNavItem = {
-  label: "Settings",
-  to: appRoutes.settings,
-  activePath: appRoutes.settings,
-};
 
 export const featureAreaRoutes = {
   commands: appRoutes.dashboardCoreCommands,
   moderation: appRoutes.dashboardModerationModeration,
   logging: appRoutes.dashboardModerationLogging,
   roles: appRoutes.dashboardRolesAutorole,
-  maintenance: appRoutes.settingsAdvanced,
+  maintenance: appRoutes.dashboardHome,
   stats: appRoutes.dashboardCoreStats,
 } as const satisfies Record<FeatureAreaID, string>;
 

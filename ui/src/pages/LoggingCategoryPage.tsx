@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
-import { appRoutes } from "../app/routes";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import {
   buildMessageRouteChannelPickerOptions,
@@ -529,7 +528,7 @@ export function LoggingCategoryPage() {
               <ul className="feature-guidance-list">
                 <li>Configure destination channels before enabling new logging routes that require them.</li>
                 <li>Use inherited when a server should fall back to the configured default instead of pinning a local override.</li>
-                <li>Runtime kill switches and missing gateway intents are resolved through Settings diagnostics, not in this workspace.</li>
+                <li>Runtime kill switches and missing gateway intents appear through blockers and notices, not a separate settings page.</li>
               </ul>
 
               {firstBlockedFeature ? (
@@ -650,16 +649,11 @@ export function LoggingCategoryPage() {
                 blocker.code === "missing_intent",
             ) ? (
               <div className="surface-subsection">
-                <p className="section-label">Needs diagnostics</p>
+                <p className="section-label">Runtime dependency</p>
                 <p className="meta-note">
-                  This route depends on runtime conditions that are reviewed in
-                  Settings diagnostics.
+                  This route depends on runtime conditions reported by the
+                  control server. Review the blocker message before saving.
                 </p>
-                <div className="sidebar-actions">
-                  <Link className="button-secondary" to={`${appRoutes.settings}#diagnostics`}>
-                    Open Settings diagnostics
-                  </Link>
-                </div>
               </div>
             ) : null}
 

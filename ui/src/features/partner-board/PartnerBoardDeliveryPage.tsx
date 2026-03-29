@@ -1,44 +1,34 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { appRoutes } from "../../app/routes";
-import type { SettingsNavigationState } from "../../app/types";
 import { KeyValueList, StatusBadge } from "../../components/ui";
-import { buildDeliveryPayload, formsFromBoard, getDeliveryChecklist, getDeliveryGuidance, isDeliveryConfigured, postingMethodLabel, type DeliveryFormState } from "./model";
+import { useDashboardSession } from "../../context/DashboardSessionContext";
+import {
+  buildDeliveryPayload,
+  getDeliveryChecklist,
+  getDeliveryGuidance,
+  isDeliveryConfigured,
+  postingMethodLabel,
+} from "./model";
 import { PartnerBoardWorkspaceState } from "./PartnerBoardWorkspaceState";
 import { usePartnerBoard } from "./PartnerBoardContext";
 
 export function PartnerBoardDeliveryPage() {
-  const { board, workspaceState } = usePartnerBoard();
-  const [desiredMethod, setDesiredMethod] =
-    useState<DeliveryFormState["type"]>("channel_message");
-
-  useEffect(() => {
-    const boardType =
-      formsFromBoard(board).deliveryForm.type === "webhook_message"
-        ? "webhook_message"
-        : "channel_message";
-    setDesiredMethod(boardType);
-  }, [board]);
+  const { canEditSelectedGuild } = useDashboardSession();
+  const {
+    deliveryForm,
+    loading,
+    notice,
+    saveDelivery,
+    setDeliveryFormField,
+    workspaceState,
+  } = usePartnerBoard();
 
   if (workspaceState !== "ready") {
     return <PartnerBoardWorkspaceState />;
   }
 
-  const currentDelivery = formsFromBoard(board).deliveryForm;
-  const nextDelivery = {
-    ...currentDelivery,
-    type: desiredMethod,
-  };
-  const currentMethodLabel = postingMethodLabel(currentDelivery.type);
-  const currentDestinationReady = isDeliveryConfigured(buildDeliveryPayload(currentDelivery));
-  const nextMethodLabel = postingMethodLabel(desiredMethod);
-  const destinationReady = isDeliveryConfigured(buildDeliveryPayload(nextDelivery));
-  const checklist = getDeliveryChecklist(nextDelivery);
-  const settingsState: SettingsNavigationState = {
-    diagnostics: {
-      partnerBoardTargetType: desiredMethod,
-    },
-  };
+  const currentPayload = buildDeliveryPayload(deliveryForm);
+  const destinationReady = isDeliveryConfigured(currentPayload);
+  const methodLabel = postingMethodLabel(deliveryForm.type);
+  const checklist = getDeliveryChecklist(deliveryForm);
 
   return (
     <section className="workspace-view">
@@ -47,7 +37,8 @@ export function PartnerBoardDeliveryPage() {
           <p className="section-label">Destination</p>
           <h2>Set where the board is published</h2>
           <p className="section-description">
-            Choose the publishing method here, then finish the advanced connection details in Settings.
+            Keep the posting method and raw destination identifiers in the same
+            page so the board can be fully configured without leaving this workspace.
           </p>
         </div>
         <div className="workspace-view-meta">
@@ -61,66 +52,111 @@ export function PartnerBoardDeliveryPage() {
         className="workspace-status-list"
         items={[
           {
-            label: "Current publishing method",
-            value: currentMethodLabel,
+            label: "Posting method",
+            value: methodLabel,
           },
           {
             label: "Current setup",
-            value: getDeliveryGuidance(currentDelivery, currentDestinationReady),
+            value: getDeliveryGuidance(deliveryForm, destinationReady),
           },
           {
-            label: "Selected workflow",
-            value:
-              desiredMethod === currentDelivery.type
-                ? "Using the saved method"
-                : `Switch to ${nextMethodLabel} in Diagnostics`,
+            label: "Access",
+            value: canEditSelectedGuild ? "Writable" : "Read-only",
           },
         ]}
       />
 
       <section className="workspace-callout">
         <div className="card-copy">
-          <p className="section-label">Delivery workflow</p>
-          <h3>{nextMethodLabel}</h3>
+          <p className="section-label">Posting method</p>
+          <h3>{methodLabel}</h3>
           <p className="section-description">
-            Pick the delivery style here, then finish the raw destination identifiers in Settings Diagnostics.
+            Choose the delivery style and fill the exact Discord identifiers used to publish the board.
           </p>
         </div>
-        <div className="workspace-callout-copy">
+
+        <div className="workspace-callout-copy partner-board-delivery-form">
           <label className="field-stack field-stack-compact">
-            <span className="field-label">Preferred posting method</span>
+            <span className="field-label">Posting method</span>
             <select
-              aria-label="Preferred posting method"
-              value={desiredMethod}
+              aria-label="Posting method"
+              value={deliveryForm.type}
+              disabled={!canEditSelectedGuild || loading}
               onChange={(event) =>
-                setDesiredMethod(event.target.value as DeliveryFormState["type"])
+                setDeliveryFormField("type", event.target.value)
               }
             >
               <option value="channel_message">Channel message</option>
               <option value="webhook_message">Webhook message</option>
             </select>
           </label>
+
+          <label className="field-stack field-stack-compact">
+            <span className="field-label">Board message ID</span>
+            <input
+              aria-label="Board message ID"
+              value={deliveryForm.messageID}
+              disabled={!canEditSelectedGuild || loading}
+              onChange={(event) => setDeliveryFormField("messageID", event.target.value)}
+              placeholder="Discord message ID"
+            />
+          </label>
+
+          {deliveryForm.type === "webhook_message" ? (
+            <label className="field-stack field-stack-compact">
+              <span className="field-label">Webhook URL</span>
+              <input
+                aria-label="Webhook URL"
+                value={deliveryForm.webhookURL}
+                disabled={!canEditSelectedGuild || loading}
+                onChange={(event) =>
+                  setDeliveryFormField("webhookURL", event.target.value)
+                }
+                placeholder="https://discord.com/api/webhooks/..."
+              />
+            </label>
+          ) : (
+            <label className="field-stack field-stack-compact">
+              <span className="field-label">Channel ID</span>
+              <input
+                aria-label="Channel ID"
+                value={deliveryForm.channelID}
+                disabled={!canEditSelectedGuild || loading}
+                onChange={(event) =>
+                  setDeliveryFormField("channelID", event.target.value)
+                }
+                placeholder="Discord channel ID"
+              />
+            </label>
+          )}
+
           <div className="workspace-toolbar-actions">
-            <Link
+            <button
               className="button-primary"
-              to={`${appRoutes.settings}#diagnostics`}
-              state={settingsState}
+              type="button"
+              disabled={!canEditSelectedGuild || loading}
+              onClick={() => void saveDelivery()}
             >
-              Finish destination in Settings
-            </Link>
+              {loading ? "Saving..." : "Save destination"}
+            </button>
           </div>
-          <p className="meta-note">
-            Raw Discord identifiers stay inside Diagnostics so the feature workspace stays task-focused.
-          </p>
+
+          {!canEditSelectedGuild ? (
+            <p className="meta-note">
+              This server is open in read-only mode. Destination changes are disabled.
+            </p>
+          ) : notice ? (
+            <p className="meta-note">{notice.message}</p>
+          ) : null}
         </div>
       </section>
 
       <section className="workspace-checklist-panel">
         <div className="card-copy">
           <p className="section-label">Setup checklist</p>
-          <h3>{nextMethodLabel}</h3>
+          <h3>{methodLabel}</h3>
           <p className="section-description">
-            {getDeliveryGuidance(nextDelivery, destinationReady)}
+            {getDeliveryGuidance(deliveryForm, destinationReady)}
           </p>
         </div>
         <ul className="checklist">

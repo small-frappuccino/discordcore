@@ -331,6 +331,8 @@ type AutoAssignmentConfig struct {
 // RolesConfig groups role-related settings per guild.
 type RolesConfig struct {
 	Allowed          []string             `json:"allowed,omitempty"`
+	DashboardRead    []string             `json:"dashboard_read,omitempty"`
+	DashboardWrite   []string             `json:"dashboard_write,omitempty"`
 	AutoAssignment   AutoAssignmentConfig `json:"auto_assignment,omitempty"`
 	VerificationRole string               `json:"verification_role,omitempty"`
 	BoosterRole      string               `json:"booster_role,omitempty"`

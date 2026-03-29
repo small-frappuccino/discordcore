@@ -17,7 +17,13 @@ export function useFeatureMutation({
   onSuccess,
   onError,
 }: UseFeatureMutationOptions) {
-  const { authState, baseUrl, client, selectedGuildID } = useDashboardSession();
+  const {
+    authState,
+    baseUrl,
+    canEditSelectedGuild,
+    client,
+    selectedGuildID,
+  } = useDashboardSession();
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -37,6 +43,16 @@ export function useFeatureMutation({
 
     if (scope === "guild" && selectedGuildID.trim() === "") {
       const message = "Select a server before updating guild feature settings.";
+      setNotice({
+        tone: "info",
+        message,
+      });
+      onError?.(message);
+      return null;
+    }
+
+    if (scope === "guild" && !canEditSelectedGuild) {
+      const message = "You have read-only access to this server.";
       setNotice({
         tone: "info",
         message,

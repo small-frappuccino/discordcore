@@ -24,8 +24,10 @@ import (
 const (
 	defaultMaxBodyBytes          = 64 * 1024
 	defaultSyncTimeout           = 20 * time.Second
-	defaultManageableGuildsQuery = 20 * time.Second
-	defaultManageableGuildsCache = 45 * time.Second
+	defaultAccessibleGuildsQuery = 20 * time.Second
+	defaultAccessibleGuildsCache = 45 * time.Second
+	defaultManageableGuildsQuery = defaultAccessibleGuildsQuery
+	defaultManageableGuildsCache = defaultAccessibleGuildsCache
 )
 
 var ErrControlServerBind = errors.New("control server bind failed")
@@ -74,9 +76,9 @@ type Server struct {
 	runtimeApplier       *runtimeapply.Manager
 	httpServer           *http.Server
 	listener             net.Listener
-	manageableGuildsTTL  time.Duration
-	manageableGuildsMu   sync.RWMutex
-	manageableGuilds     map[string]manageableGuildCacheEntry
+	accessibleGuildsTTL  time.Duration
+	accessibleGuildsMu   sync.RWMutex
+	accessibleGuilds     map[string]accessibleGuildCacheEntry
 }
 
 // NewServer returns nil if addr is empty.
@@ -92,8 +94,8 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		configManager:       configManager,
 		partnerBoardService: partners.NewBoardApplicationService(configManager, nil),
 		runtimeApplier:      runtimeApplier,
-		manageableGuildsTTL: defaultManageableGuildsCache,
-		manageableGuilds:    make(map[string]manageableGuildCacheEntry),
+		accessibleGuildsTTL: defaultAccessibleGuildsCache,
+		accessibleGuilds:    make(map[string]accessibleGuildCacheEntry),
 	}
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -106,6 +108,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux.HandleFunc("/auth/discord/callback", s.handleDiscordOAuthCallback)
 	mux.HandleFunc("/auth/me", s.handleDiscordOAuthMe)
 	mux.HandleFunc("/auth/logout", s.handleDiscordOAuthLogout)
+	mux.HandleFunc("/auth/guilds/access", s.handleDiscordOAuthAccessibleGuilds)
 	mux.HandleFunc("/auth/guilds/manageable", s.handleDiscordOAuthManageableGuilds)
 	mux.HandleFunc("/v1/features", s.handleFeatureRoutes)
 	mux.HandleFunc("/v1/features/", s.handleFeatureRoutes)

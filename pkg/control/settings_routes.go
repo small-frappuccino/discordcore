@@ -379,7 +379,7 @@ func (s *Server) resolveGuildRegistrySources(
 ) ([]guildRegistrySource, map[string]struct{}, error) {
 	switch auth.mode {
 	case requestAuthModeBearer:
-		ctx, cancel := context.WithTimeout(r.Context(), defaultManageableGuildsQuery)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
 		bindings, err := s.resolveBotGuildBindings(ctx)
@@ -388,10 +388,10 @@ func (s *Server) resolveGuildRegistrySources(
 		}
 		return guildRegistrySourcesFromBindings(bindings), nil, nil
 	case requestAuthModeDiscordOAuthSession:
-		ctx, cancel := context.WithTimeout(r.Context(), defaultManageableGuildsQuery)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
-		manageable, err := s.resolveManageableGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		accessible, err := s.resolveAccessibleGuilds(ctx, s.discordOAuth, auth.oauthSession)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -401,9 +401,9 @@ func (s *Server) resolveGuildRegistrySources(
 		}
 		botInstanceIDsByGuild := groupBotInstanceIDsByGuild(bindings)
 
-		out := make(map[string]struct{}, len(manageable))
-		sources := make([]guildRegistrySource, 0, len(manageable))
-		for _, guild := range manageable {
+		out := make(map[string]struct{}, len(accessible))
+		sources := make([]guildRegistrySource, 0, len(accessible))
+		for _, guild := range accessible {
 			guildID := strings.TrimSpace(guild.ID)
 			if guildID == "" {
 				continue
@@ -463,19 +463,19 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 	}
 	available := groupBotInstanceIDsByGuild(bindings)[guildID]
 	if auth.mode == requestAuthModeDiscordOAuthSession {
-		manageable, resolveErr := s.resolveManageableGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		accessible, resolveErr := s.resolveAccessibleGuilds(ctx, s.discordOAuth, auth.oauthSession)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
 		allowed := false
-		for _, guild := range manageable {
+		for _, guild := range accessible {
 			if strings.TrimSpace(guild.ID) == guildID {
 				allowed = true
 				break
 			}
 		}
 		if !allowed {
-			return nil, fmt.Errorf("guild %s is not manageable by the authenticated user", guildID)
+			return nil, fmt.Errorf("guild %s is not accessible by the authenticated user", guildID)
 		}
 	}
 	return available, nil

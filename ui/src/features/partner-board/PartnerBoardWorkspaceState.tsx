@@ -21,7 +21,7 @@ export function PartnerBoardWorkspaceState() {
     return (
       <WorkspaceStateMessage
         title="Sign in with Discord"
-        description="Partner Board uses the global dashboard session. Sign in first, then choose a server from the sidebar."
+        description="Partner Board uses the global dashboard session. Sign in first, then choose a server from the top bar."
         action={
           <button
             className="button-primary"
@@ -39,7 +39,7 @@ export function PartnerBoardWorkspaceState() {
     return (
       <WorkspaceStateMessage
         title="Choose a server"
-        description="Select a server from the sidebar to load its Partner Board settings."
+        description="Select a server from the top bar to load its Partner Board settings."
       />
     );
   }
@@ -56,14 +56,14 @@ export function PartnerBoardWorkspaceState() {
   return (
     <WorkspaceStateMessage
       title="Partner Board unavailable"
-      description="The dashboard could not load this server's Partner Board configuration. Refresh the data or verify the server has a board configuration."
+      description="The dashboard could not load this server's Partner Board configuration. Retry loading or verify the server has a board configuration."
       action={
         <button
           className="button-primary"
           type="button"
           onClick={() => void refreshBoard()}
         >
-          Refresh data
+          Retry loading
         </button>
       }
     />

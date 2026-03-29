@@ -15,20 +15,40 @@ import (
 
 var errBotGuildIDsProviderUnavailable = errors.New("bot guild ids provider unavailable")
 
-type manageableGuildCacheEntry struct {
-	guilds    []manageableGuildResponse
+type guildAccessLevel string
+
+const (
+	guildAccessLevelRead  guildAccessLevel = "read"
+	guildAccessLevelWrite guildAccessLevel = "write"
+)
+
+type accessibleGuildCacheEntry struct {
+	guilds    []accessibleGuildResponse
 	expiresAt time.Time
 }
 
-type manageableGuildResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Icon        string `json:"icon,omitempty"`
-	Owner       bool   `json:"owner"`
-	Permissions int64  `json:"permissions"`
+type accessibleGuildResponse struct {
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Icon        string           `json:"icon,omitempty"`
+	Owner       bool             `json:"owner"`
+	Permissions int64            `json:"permissions"`
+	AccessLevel guildAccessLevel `json:"access_level"`
+}
+
+func (s *Server) handleDiscordOAuthAccessibleGuilds(w http.ResponseWriter, r *http.Request) {
+	s.handleDiscordOAuthGuildAccessList(w, r, false)
 }
 
 func (s *Server) handleDiscordOAuthManageableGuilds(w http.ResponseWriter, r *http.Request) {
+	s.handleDiscordOAuthGuildAccessList(w, r, true)
+}
+
+func (s *Server) handleDiscordOAuthGuildAccessList(
+	w http.ResponseWriter,
+	r *http.Request,
+	writeOnly bool,
+) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -45,32 +65,37 @@ func (s *Server) handleDiscordOAuthManageableGuilds(w http.ResponseWriter, r *ht
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), defaultManageableGuildsQuery)
+	ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 	defer cancel()
 
-	manageable, err := s.resolveManageableGuilds(ctx, oauth, session)
+	accessible, err := s.resolveAccessibleGuilds(ctx, oauth, session)
 	if err != nil {
-		status := statusForManageableGuildsError(err)
-		message := "failed to resolve manageable guilds"
+		status := statusForAccessibleGuildsError(err)
+		message := "failed to resolve accessible guilds"
 		if status == http.StatusUnauthorized {
 			message = "oauth session requires re-authentication"
 		}
 		log.ApplicationLogger().Error(
-			"Failed to resolve manageable guilds",
-			"operation", "control.oauth.manageable_guilds.resolve",
+			"Failed to resolve accessible guilds",
+			"operation", "control.oauth.guild_access.resolve",
 			"userID", session.User.ID,
+			"writeOnly", writeOnly,
 			"err", err,
 		)
 		http.Error(w, message, status)
 		return
 	}
 
+	if writeOnly {
+		accessible = filterAccessibleGuildsByLevel(accessible, guildAccessLevelWrite)
+	}
+
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": "ok",
-		"guilds": manageable,
-		"count":  len(manageable),
+		"guilds": accessible,
+		"count":  len(accessible),
 	})
 }
 
@@ -91,12 +116,13 @@ func (s *Server) authorizeGuildAccess(
 		// Fixed bearer token remains available for trusted internal automation.
 		return true
 	case requestAuthModeDiscordOAuthSession:
-		ctx, cancel := context.WithTimeout(r.Context(), defaultManageableGuildsQuery)
+		requiredAccess := requiredGuildAccessLevel(r.Method)
+		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
-		manageable, err := s.resolveManageableGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		accessible, err := s.resolveAccessibleGuilds(ctx, s.discordOAuth, auth.oauthSession)
 		if err != nil {
-			status := statusForManageableGuildsError(err)
+			status := statusForAccessibleGuildsError(err)
 			message := "failed to authorize guild access"
 			if status == http.StatusUnauthorized {
 				message = "oauth session requires re-authentication"
@@ -106,16 +132,32 @@ func (s *Server) authorizeGuildAccess(
 				"operation", "control.guild_routes.authorize_guild",
 				"userID", auth.oauthSession.User.ID,
 				"guildID", guildID,
+				"requiredAccess", requiredAccess,
 				"err", err,
 			)
 			http.Error(w, message, status)
 			return false
 		}
 
-		for _, guild := range manageable {
-			if strings.TrimSpace(guild.ID) == guildID {
+		for _, guild := range accessible {
+			if strings.TrimSpace(guild.ID) != guildID {
+				continue
+			}
+			if guildAccessIncludes(guild.AccessLevel, requiredAccess) {
 				return true
 			}
+
+			log.ApplicationLogger().Warn(
+				"Guild route access denied",
+				"operation", "control.guild_routes.authorize_guild",
+				"userID", auth.oauthSession.User.ID,
+				"guildID", guildID,
+				"reason", "insufficient dashboard access level",
+				"requiredAccess", requiredAccess,
+				"actualAccess", guild.AccessLevel,
+			)
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return false
 		}
 
 		log.ApplicationLogger().Warn(
@@ -123,7 +165,8 @@ func (s *Server) authorizeGuildAccess(
 			"operation", "control.guild_routes.authorize_guild",
 			"userID", auth.oauthSession.User.ID,
 			"guildID", guildID,
-			"reason", "guild not manageable by authenticated user",
+			"reason", "guild not accessible by authenticated user",
+			"requiredAccess", requiredAccess,
 		)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return false
@@ -133,15 +176,31 @@ func (s *Server) authorizeGuildAccess(
 	}
 }
 
-func (s *Server) resolveManageableGuilds(
+func requiredGuildAccessLevel(method string) guildAccessLevel {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return guildAccessLevelRead
+	default:
+		return guildAccessLevelWrite
+	}
+}
+
+func guildAccessIncludes(actual, required guildAccessLevel) bool {
+	if required == guildAccessLevelRead {
+		return actual == guildAccessLevelRead || actual == guildAccessLevelWrite
+	}
+	return actual == guildAccessLevelWrite
+}
+
+func (s *Server) resolveAccessibleGuilds(
 	ctx context.Context,
 	oauth *discordOAuthProvider,
 	session discordOAuthSession,
-) ([]manageableGuildResponse, error) {
+) ([]accessibleGuildResponse, error) {
 	if oauth == nil {
-		return nil, fmt.Errorf("resolve manageable guilds: oauth provider is nil")
+		return nil, fmt.Errorf("resolve accessible guilds: oauth provider is nil")
 	}
-	if cached, ok := s.cachedManageableGuilds(session.ID, time.Now().UTC()); ok {
+	if cached, ok := s.cachedAccessibleGuilds(session.ID, time.Now().UTC()); ok {
 		return cached, nil
 	}
 
@@ -152,15 +211,15 @@ func (s *Server) resolveManageableGuilds(
 
 	freshSession, err := oauth.ensureFreshSessionAccessToken(ctx, session)
 	if err != nil {
-		return nil, fmt.Errorf("resolve manageable guilds: refresh oauth access token: %w", err)
+		return nil, fmt.Errorf("resolve accessible guilds: refresh oauth access token: %w", err)
 	}
 
 	userGuilds, err := oauth.fetchUserGuilds(ctx, freshSession.AccessToken, freshSession.TokenType)
 	if err != nil {
-		return nil, fmt.Errorf("resolve manageable guilds: fetch user guilds: %w", err)
+		return nil, fmt.Errorf("resolve accessible guilds: fetch user guilds: %w", err)
 	}
 
-	out := make([]manageableGuildResponse, 0, len(userGuilds))
+	out := make([]accessibleGuildResponse, 0, len(userGuilds))
 	for _, guild := range userGuilds {
 		guildID := strings.TrimSpace(guild.ID)
 		if guildID == "" {
@@ -169,16 +228,19 @@ func (s *Server) resolveManageableGuilds(
 		if _, ok := botGuildSet[guildID]; !ok {
 			continue
 		}
-		if !isGuildManageableByUser(guild) {
+
+		accessLevel, ok := s.resolveGuildAccessLevel(guild, session.User.ID)
+		if !ok {
 			continue
 		}
 
-		out = append(out, manageableGuildResponse{
+		out = append(out, accessibleGuildResponse{
 			ID:          guildID,
 			Name:        strings.TrimSpace(guild.Name),
 			Icon:        strings.TrimSpace(guild.Icon),
 			Owner:       guild.Owner,
 			Permissions: guild.Permissions,
+			AccessLevel: accessLevel,
 		})
 	}
 
@@ -191,15 +253,116 @@ func (s *Server) resolveManageableGuilds(
 		return li < lj
 	})
 
-	s.storeManageableGuilds(session, out, time.Now().UTC())
+	s.storeAccessibleGuilds(session, out, time.Now().UTC())
 	return out, nil
 }
 
-func (s *Server) cachedManageableGuilds(
+func (s *Server) resolveManageableGuilds(
+	ctx context.Context,
+	oauth *discordOAuthProvider,
+	session discordOAuthSession,
+) ([]accessibleGuildResponse, error) {
+	accessible, err := s.resolveAccessibleGuilds(ctx, oauth, session)
+	if err != nil {
+		return nil, err
+	}
+	return filterAccessibleGuildsByLevel(accessible, guildAccessLevelWrite), nil
+}
+
+func (s *Server) resolveGuildAccessLevel(
+	guild discordOAuthGuild,
+	userID string,
+) (guildAccessLevel, bool) {
+	if isGuildManageableByUser(guild) {
+		return guildAccessLevelWrite, true
+	}
+
+	if s == nil || s.configManager == nil {
+		return "", false
+	}
+
+	guildID := strings.TrimSpace(guild.ID)
+	userID = strings.TrimSpace(userID)
+	if guildID == "" || userID == "" {
+		return "", false
+	}
+
+	guildConfig := s.configManager.GuildConfig(guildID)
+	if guildConfig == nil {
+		return "", false
+	}
+	if len(guildConfig.Roles.DashboardRead) == 0 && len(guildConfig.Roles.DashboardWrite) == 0 {
+		return "", false
+	}
+
+	session, err := s.discordSessionForGuild(guildID)
+	if err != nil || session == nil {
+		return "", false
+	}
+
+	member, err := resolveGuildMemberFromDiscordSession(session, guildID, userID)
+	if err != nil || member == nil {
+		return "", false
+	}
+
+	memberRoleSet := make(map[string]struct{}, len(member.Roles))
+	for _, roleID := range member.Roles {
+		roleID = strings.TrimSpace(roleID)
+		if roleID == "" {
+			continue
+		}
+		memberRoleSet[roleID] = struct{}{}
+	}
+
+	if matchesAnyRole(memberRoleSet, guildConfig.Roles.DashboardWrite) {
+		return guildAccessLevelWrite, true
+	}
+	if matchesAnyRole(memberRoleSet, guildConfig.Roles.DashboardRead) {
+		return guildAccessLevelRead, true
+	}
+
+	return "", false
+}
+
+func matchesAnyRole(memberRoleSet map[string]struct{}, roleIDs []string) bool {
+	if len(memberRoleSet) == 0 || len(roleIDs) == 0 {
+		return false
+	}
+	for _, roleID := range roleIDs {
+		roleID = strings.TrimSpace(roleID)
+		if roleID == "" {
+			continue
+		}
+		if _, ok := memberRoleSet[roleID]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func filterAccessibleGuildsByLevel(
+	guilds []accessibleGuildResponse,
+	level guildAccessLevel,
+) []accessibleGuildResponse {
+	if len(guilds) == 0 {
+		return nil
+	}
+
+	filtered := make([]accessibleGuildResponse, 0, len(guilds))
+	for _, guild := range guilds {
+		if guild.AccessLevel != level {
+			continue
+		}
+		filtered = append(filtered, guild)
+	}
+	return filtered
+}
+
+func (s *Server) cachedAccessibleGuilds(
 	sessionID string,
 	now time.Time,
-) ([]manageableGuildResponse, bool) {
-	if s == nil || s.manageableGuildsTTL <= 0 {
+) ([]accessibleGuildResponse, bool) {
+	if s == nil || s.accessibleGuildsTTL <= 0 {
 		return nil, false
 	}
 
@@ -208,27 +371,27 @@ func (s *Server) cachedManageableGuilds(
 		return nil, false
 	}
 
-	s.manageableGuildsMu.RLock()
-	entry, ok := s.manageableGuilds[sessionID]
-	s.manageableGuildsMu.RUnlock()
+	s.accessibleGuildsMu.RLock()
+	entry, ok := s.accessibleGuilds[sessionID]
+	s.accessibleGuildsMu.RUnlock()
 	if !ok {
 		return nil, false
 	}
 	if !entry.expiresAt.IsZero() && !now.Before(entry.expiresAt) {
-		s.manageableGuildsMu.Lock()
-		delete(s.manageableGuilds, sessionID)
-		s.manageableGuildsMu.Unlock()
+		s.accessibleGuildsMu.Lock()
+		delete(s.accessibleGuilds, sessionID)
+		s.accessibleGuildsMu.Unlock()
 		return nil, false
 	}
-	return cloneManageableGuildResponses(entry.guilds), true
+	return cloneAccessibleGuildResponses(entry.guilds), true
 }
 
-func (s *Server) storeManageableGuilds(
+func (s *Server) storeAccessibleGuilds(
 	session discordOAuthSession,
-	guilds []manageableGuildResponse,
+	guilds []accessibleGuildResponse,
 	now time.Time,
 ) {
-	if s == nil || s.manageableGuildsTTL <= 0 {
+	if s == nil || s.accessibleGuildsTTL <= 0 {
 		return
 	}
 
@@ -237,27 +400,27 @@ func (s *Server) storeManageableGuilds(
 		return
 	}
 
-	expiresAt := now.Add(s.manageableGuildsTTL)
+	expiresAt := now.Add(s.accessibleGuildsTTL)
 	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Before(expiresAt) {
 		expiresAt = session.ExpiresAt
 	}
 
-	s.manageableGuildsMu.Lock()
-	s.manageableGuilds[sessionID] = manageableGuildCacheEntry{
-		guilds:    cloneManageableGuildResponses(guilds),
+	s.accessibleGuildsMu.Lock()
+	s.accessibleGuilds[sessionID] = accessibleGuildCacheEntry{
+		guilds:    cloneAccessibleGuildResponses(guilds),
 		expiresAt: expiresAt,
 	}
-	s.manageableGuildsMu.Unlock()
+	s.accessibleGuildsMu.Unlock()
 }
 
-func cloneManageableGuildResponses(
-	guilds []manageableGuildResponse,
-) []manageableGuildResponse {
+func cloneAccessibleGuildResponses(
+	guilds []accessibleGuildResponse,
+) []accessibleGuildResponse {
 	if len(guilds) == 0 {
 		return nil
 	}
 
-	out := make([]manageableGuildResponse, len(guilds))
+	out := make([]accessibleGuildResponse, len(guilds))
 	copy(out, guilds)
 	return out
 }
@@ -315,7 +478,7 @@ func isGuildManageableByUser(guild discordOAuthGuild) bool {
 	return false
 }
 
-func statusForManageableGuildsError(err error) int {
+func statusForAccessibleGuildsError(err error) int {
 	switch {
 	case errors.Is(err, errBotGuildIDsProviderUnavailable):
 		return http.StatusServiceUnavailable
@@ -328,4 +491,8 @@ func statusForManageableGuildsError(err error) int {
 	default:
 		return http.StatusBadGateway
 	}
+}
+
+func statusForManageableGuildsError(err error) int {
+	return statusForAccessibleGuildsError(err)
 }

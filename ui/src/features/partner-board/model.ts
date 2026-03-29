@@ -198,8 +198,8 @@ export function getDeliveryGuidance(
   }
 
   return form.type === "webhook_message"
-    ? "Finish the webhook connection in Diagnostics before relying on this board."
-    : "Finish the channel destination in Diagnostics before relying on this board.";
+    ? "Finish the webhook connection before relying on this board."
+    : "Finish the channel destination before relying on this board.";
 }
 
 export function validateEntryForm(form: EntryFormState): string | null {
@@ -287,7 +287,7 @@ export function getPartnerBoardShellStatus(input: {
 
   if (input.selectedGuildID.trim() === "") {
     return {
-      description: "Choose a server from the sidebar to load its board settings.",
+      description: "Choose a server from the top bar to load its board settings.",
       label: "Choose a server",
       tone: "info",
     };

@@ -84,7 +84,13 @@ const PartnerBoardContext =
   createContext<PartnerBoardContextValue | null>(null);
 
 export function PartnerBoardProvider({ children }: { children: ReactNode }) {
-  const { authState, canManageGuild, client, selectedGuildID } =
+  const {
+    authState,
+    canEditSelectedGuild,
+    canReadSelectedGuild,
+    client,
+    selectedGuildID,
+  } =
     useDashboardSession();
   const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
   const [deliveryForm, setDeliveryForm] = useState(initialDeliveryForm);
@@ -175,12 +181,12 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function loadBoardData(successMessage?: string) {
-    if (!canManageGuild) {
+    if (!canReadSelectedGuild) {
       return;
     }
 
     setLoading(true);
-    setBusyLabel("Refreshing board data");
+    setBusyLabel("");
 
     try {
       const response = await client.getPartnerBoard(selectedGuildID.trim());
@@ -216,7 +222,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
 
     async function autoLoadBoard() {
       setLoading(true);
-      setBusyLabel("Loading board data");
+      setBusyLabel("");
 
       try {
         const response = await client.getPartnerBoard(selectedGuildID.trim());
@@ -300,7 +306,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function saveDelivery() {
-    if (!canManageGuild) {
+    if (!canEditSelectedGuild) {
       return;
     }
 
@@ -330,7 +336,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function saveLayout() {
-    if (!canManageGuild) {
+    if (!canEditSelectedGuild) {
       return;
     }
 
@@ -351,7 +357,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function saveEntry() {
-    if (!canManageGuild) {
+    if (!canEditSelectedGuild) {
       return;
     }
 
@@ -397,7 +403,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function confirmDeleteEntry(partnerName: string) {
-    if (!canManageGuild) {
+    if (!canEditSelectedGuild) {
       return;
     }
 
@@ -426,7 +432,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function syncBoard() {
-    if (!canManageGuild) {
+    if (!canEditSelectedGuild) {
       return;
     }
 

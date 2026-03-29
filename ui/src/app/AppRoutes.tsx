@@ -8,8 +8,8 @@ import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
 import { ModerationPage } from "../pages/ModerationPage";
 import { HomePage } from "../pages/HomePage";
 import { RolesPage } from "../pages/RolesPage";
-import { SettingsPage } from "../pages/SettingsPage";
 import { StatsPage } from "../pages/StatsPage";
+import { ControlPanelPage } from "../pages/ControlPanelPage";
 import { PartnerBoardProvider } from "../features/partner-board/PartnerBoardContext";
 import { PartnerBoardLayout } from "../features/partner-board/PartnerBoardLayout";
 import { PartnerBoardEntriesPage } from "../features/partner-board/PartnerBoardEntriesPage";
@@ -45,7 +45,7 @@ export function AppRoutes() {
         />
         <Route
           path="maintenance"
-          element={<Navigate replace to={appRoutes.settingsAdvanced} />}
+          element={<Navigate replace to={appRoutes.dashboardHome} />}
         />
         <Route
           path="roles-members"
@@ -53,21 +53,21 @@ export function AppRoutes() {
         />
         <Route
           path="automations"
-          element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}
+          element={<Navigate replace to={appRoutes.dashboardHome} />}
         />
         <Route
           path="activity"
-          element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}
+          element={<Navigate replace to={appRoutes.dashboardHome} />}
         />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route
+          path="settings"
+          element={<Navigate replace to={appRoutes.dashboardHome} />}
+        />
         <Route path="feature-areas/:areaId" element={<FeatureCategoryPage />} />
 
         <Route path="core">
           <Route index element={<Navigate replace to="control-panel" />} />
-          <Route
-            path="control-panel"
-            element={<Navigate replace to={appRoutes.settingsPermissions} />}
-          />
+          <Route path="control-panel" element={<ControlPanelPage />} />
           <Route path="stats" element={<StatsPage />} />
           <Route path="commands" element={<CommandsPage />} />
         </Route>

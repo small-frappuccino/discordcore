@@ -505,7 +505,7 @@ function getDedicatedAreaRoute(areaId: FeatureAreaID | "") {
     case "stats":
       return appRoutes.stats;
     case "maintenance":
-      return appRoutes.settingsAdvanced;
+      return appRoutes.dashboardHome;
     default:
       return null;
   }

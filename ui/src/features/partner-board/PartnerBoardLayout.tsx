@@ -19,10 +19,8 @@ export function PartnerBoardLayout() {
     loading,
     notice,
     partners,
-    refreshBoard,
     shellStatus,
     summarizePostingDestination,
-    syncBoard,
   } = usePartnerBoard();
   const methodLabel =
     deliveryForm.type === "webhook_message" ? "Webhook message" : "Channel message";
@@ -46,32 +44,10 @@ export function PartnerBoardLayout() {
             <span className="meta-pill subtle-pill">{summarizePostingDestination}</span>
           </>
         }
-        actions={
-          <>
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={loading}
-              onClick={() => void refreshBoard()}
-            >
-              Refresh data
-            </button>
-            <button
-              className="button-primary"
-              type="button"
-              disabled={loading}
-              onClick={() => void syncBoard()}
-            >
-              Sync to Discord
-            </button>
-          </>
-        }
       />
 
       {notice ? (
         <AlertBanner notice={notice} busyLabel={loading ? busyLabel : undefined} />
-      ) : loading ? (
-        <AlertBanner busyLabel={busyLabel} />
       ) : null}
 
       <section className="partner-board-summary-strip" aria-label="Partner Board setup summary">

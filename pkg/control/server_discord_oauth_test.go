@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func TestDiscordOAuthRoutesRequireConfig(t *testing.T) {
@@ -898,7 +899,127 @@ func TestGuildRoutesDenyOAuthSessionWithoutGuildAuthorization(t *testing.T) {
 	}
 }
 
-func TestDiscordOAuthManageableGuildsEndpoint(t *testing.T) {
+func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+		case "/users/@me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, cm := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		return newTestDiscordSessionWithGuildMembers("g1",
+			&discordgo.Member{
+				GuildID: "g1",
+				User: &discordgo.User{
+					ID:       "u1",
+					Username: "alice",
+				},
+				Roles: []string{"reader-role"},
+			},
+		)
+	})
+	if _, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		for index := range cfg.Guilds {
+			if strings.TrimSpace(cfg.Guilds[index].GuildID) != "g1" {
+				continue
+			}
+			cfg.Guilds[index].Roles.DashboardRead = []string{"reader-role"}
+			cfg.Guilds[index].Roles.DashboardWrite = nil
+			return nil
+		}
+		cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
+			GuildID: "g1",
+			Roles: files.RolesConfig{
+				DashboardRead: []string{"reader-role"},
+			},
+		})
+		return nil
+	}); err != nil {
+		t.Fatalf("seed dashboard read roles: %v", err)
+	}
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login", nil, "")
+	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/discord/callback?code=auth-code-123&state="+url.QueryEscape(state),
+		nil,
+	)
+	callbackReq.AddCookie(stateCookie)
+	callbackRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(callbackRec, callbackReq)
+	if callbackRec.Code != http.StatusOK {
+		t.Fatalf("expected oauth callback to succeed, got %d body=%q", callbackRec.Code, callbackRec.Body.String())
+	}
+
+	var callbackResp struct {
+		CSRFToken string `json:"csrf_token"`
+	}
+	if err := json.NewDecoder(callbackRec.Body).Decode(&callbackResp); err != nil {
+		t.Fatalf("decode callback response: %v body=%q", err, callbackRec.Body.String())
+	}
+	if strings.TrimSpace(callbackResp.CSRFToken) == "" {
+		t.Fatalf("expected csrf_token in callback response, got %+v", callbackResp)
+	}
+
+	sessionCookie := findCookie(callbackRec.Result().Cookies(), defaultDiscordOAuthSessionCookie)
+	if sessionCookie == nil {
+		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/settings", nil)
+	getReq.AddCookie(sessionCookie)
+	getRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected GET guild settings to allow read-only oauth access, got %d body=%q", getRec.Code, getRec.Body.String())
+	}
+
+	putReq := httptest.NewRequest(
+		http.MethodPut,
+		"/v1/guilds/g1/settings",
+		strings.NewReader(`{"roles":{"dashboard_read":["reader-role"]}}`),
+	)
+	putReq.AddCookie(sessionCookie)
+	putReq.Header.Set("Content-Type", "application/json")
+	putReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
+	putRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(putRec, putReq)
+	if putRec.Code != http.StatusForbidden {
+		t.Fatalf("expected PUT guild settings to reject read-only oauth access, got %d body=%q", putRec.Code, putRec.Body.String())
+	}
+}
+
+func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 	t.Parallel()
 
 	var (
@@ -969,10 +1090,33 @@ func TestDiscordOAuthManageableGuildsEndpoint(t *testing.T) {
 	}))
 	defer discordAPI.Close()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
-		return []string{"g-owner", "g-admin", "g-manage"}, nil
+		return []string{"g-owner", "g-admin", "g-manage", "g-read"}, nil
 	})
+	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		return newTestDiscordSessionWithGuildMembers("g-read",
+			&discordgo.Member{
+				GuildID: "g-read",
+				User: &discordgo.User{
+					ID:       "u1",
+					Username: "alice",
+				},
+				Roles: []string{"reader-role"},
+			},
+		)
+	})
+	if _, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
+			GuildID: "g-read",
+			Roles: files.RolesConfig{
+				DashboardRead: []string{"reader-role"},
+			},
+		})
+		return nil
+	}); err != nil {
+		t.Fatalf("seed readable guild config: %v", err)
+	}
 	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
 		ClientID:      "1234567890",
 		ClientSecret:  "super-secret",
@@ -1005,6 +1149,46 @@ func TestDiscordOAuthManageableGuildsEndpoint(t *testing.T) {
 		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
 	}
 
+	accessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	accessReq.AddCookie(sessionCookie)
+	accessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(accessRec, accessReq)
+	if accessRec.Code != http.StatusOK {
+		t.Fatalf("expected accessible guilds endpoint to succeed, got %d body=%q", accessRec.Code, accessRec.Body.String())
+	}
+
+	var accessResponse struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(accessRec.Body).Decode(&accessResponse); err != nil {
+		t.Fatalf("decode accessible guilds response: %v body=%q", err, accessRec.Body.String())
+	}
+	if accessResponse.Status != "ok" {
+		t.Fatalf("unexpected accessible response status: %+v", accessResponse)
+	}
+	if accessResponse.Count != 4 || len(accessResponse.Guilds) != 4 {
+		t.Fatalf("expected 4 accessible guilds, got count=%d guilds=%+v", accessResponse.Count, accessResponse.Guilds)
+	}
+
+	gotAccessIDs := []string{
+		accessResponse.Guilds[0].ID,
+		accessResponse.Guilds[1].ID,
+		accessResponse.Guilds[2].ID,
+		accessResponse.Guilds[3].ID,
+	}
+	wantAccessIDs := []string{"g-admin", "g-manage", "g-owner", "g-read"}
+	if strings.Join(gotAccessIDs, ",") != strings.Join(wantAccessIDs, ",") {
+		t.Fatalf("unexpected accessible guild IDs: got=%v want=%v", gotAccessIDs, wantAccessIDs)
+	}
+	if accessResponse.Guilds[0].AccessLevel != guildAccessLevelWrite ||
+		accessResponse.Guilds[1].AccessLevel != guildAccessLevelWrite ||
+		accessResponse.Guilds[2].AccessLevel != guildAccessLevelWrite ||
+		accessResponse.Guilds[3].AccessLevel != guildAccessLevelRead {
+		t.Fatalf("unexpected accessible guild access levels: %+v", accessResponse.Guilds)
+	}
+
 	manageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
 	manageableReq.AddCookie(sessionCookie)
 	manageableRec := httptest.NewRecorder()
@@ -1016,7 +1200,7 @@ func TestDiscordOAuthManageableGuildsEndpoint(t *testing.T) {
 	var response struct {
 		Status string                    `json:"status"`
 		Count  int                       `json:"count"`
-		Guilds []manageableGuildResponse `json:"guilds"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
 	}
 	if err := json.NewDecoder(manageableRec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode manageable guilds response: %v body=%q", err, manageableRec.Body.String())

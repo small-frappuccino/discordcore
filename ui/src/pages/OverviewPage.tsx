@@ -79,7 +79,7 @@ export function OverviewPage() {
     }
 
     if (selectedGuild === null) {
-      return <span className="meta-note">Choose a server from the sidebar to continue.</span>;
+      return <span className="meta-note">Choose a server from the top bar to continue.</span>;
     }
 
     if (!deliveryConfigured) {
@@ -146,7 +146,7 @@ export function OverviewPage() {
     if (selectedGuild === null) {
       return (
         <span className="meta-note">
-          Choose a server from the sidebar to continue.
+          Choose a server from the top bar to continue.
         </span>
       );
     }
@@ -194,7 +194,7 @@ export function OverviewPage() {
       value: selectedServerLabel,
       description:
         selectedGuild === null
-          ? "Select a server in the sidebar to load its workspace."
+          ? "Select a server in the top bar to load its workspace."
           : "The current scope applies across dashboard pages.",
       tone: selectedGuild === null ? "info" : "neutral",
     },

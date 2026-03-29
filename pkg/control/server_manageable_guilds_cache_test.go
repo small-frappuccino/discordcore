@@ -92,7 +92,7 @@ func TestResolveManageableGuildsCacheExpires(t *testing.T) {
 	defer discordAPI.Close()
 
 	srv, _ := newControlTestServer(t)
-	srv.manageableGuildsTTL = 5 * time.Millisecond
+	srv.accessibleGuildsTTL = 5 * time.Millisecond
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})

@@ -11,10 +11,23 @@ import {
   summarizePostingDestination,
 } from "./model";
 
+interface CachedPartnerBoardSummary {
+  board: PartnerBoardConfig;
+  fetchedAt: number;
+}
+
+const partnerBoardSummaryCache = new Map<string, CachedPartnerBoardSummary>();
+
 export function usePartnerBoardSummary() {
-  const { authState, canManageGuild, client, selectedGuildID } =
+  const { authState, baseUrl, canReadSelectedGuild, client, selectedGuildID } =
     useDashboardSession();
-  const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
+  const normalizedGuildID = selectedGuildID.trim();
+  const [board, setBoard] = useState<PartnerBoardConfig | null>(() => {
+    if (authState !== "signed_in" || normalizedGuildID === "") {
+      return null;
+    }
+    return peekPartnerBoardSummary(baseUrl, normalizedGuildID);
+  });
   const [hasLoadedAttempt, setHasLoadedAttempt] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,47 +57,59 @@ export function usePartnerBoardSummary() {
   }
 
   async function loadBoardSummary() {
-    if (!canManageGuild) {
+    if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
     }
 
-    setLoading(true);
+    const cachedBoard = peekPartnerBoardSummary(baseUrl, normalizedGuildID);
+    setLoading(cachedBoard === null);
 
     try {
-      const response = await client.getPartnerBoard(selectedGuildID.trim());
+      const response = await client.getPartnerBoard(normalizedGuildID);
+      writePartnerBoardSummaryCache(baseUrl, normalizedGuildID, response.partner_board);
       setBoard(response.partner_board);
       setHasLoadedAttempt(true);
       setLastLoadedAt(Date.now());
       setNotice(null);
     } catch (error) {
-      setBoard(null);
+      setBoard(cachedBoard);
       setHasLoadedAttempt(true);
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
+      if (cachedBoard === null) {
+        setNotice({
+          tone: "error",
+          message: formatError(error),
+        });
+      } else {
+        setNotice(null);
+      }
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
+    if (authState !== "signed_in" || normalizedGuildID === "") {
       resetSummary();
       return;
     }
 
+    const cachedBoard = peekPartnerBoardSummary(baseUrl, normalizedGuildID);
+    setBoard(cachedBoard);
+    setHasLoadedAttempt(cachedBoard !== null);
+    setNotice(null);
+
     let cancelled = false;
 
     async function autoLoadSummary() {
-      setLoading(true);
+      setLoading(cachedBoard === null);
 
       try {
-        const response = await client.getPartnerBoard(selectedGuildID.trim());
+        const response = await client.getPartnerBoard(normalizedGuildID);
         if (cancelled) {
           return;
         }
 
+        writePartnerBoardSummaryCache(baseUrl, normalizedGuildID, response.partner_board);
         setBoard(response.partner_board);
         setHasLoadedAttempt(true);
         setLastLoadedAt(Date.now());
@@ -94,12 +119,16 @@ export function usePartnerBoardSummary() {
           return;
         }
 
-        setBoard(null);
+        setBoard(cachedBoard);
         setHasLoadedAttempt(true);
-        setNotice({
-          tone: "error",
-          message: formatError(error),
-        });
+        if (cachedBoard === null) {
+          setNotice({
+            tone: "error",
+            message: formatError(error),
+          });
+        } else {
+          setNotice(null);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -112,7 +141,7 @@ export function usePartnerBoardSummary() {
     return () => {
       cancelled = true;
     };
-  }, [authState, client, selectedGuildID]);
+  }, [authState, baseUrl, client, normalizedGuildID]);
 
   return {
     board,
@@ -129,4 +158,24 @@ export function usePartnerBoardSummary() {
     shellStatus,
     summarizePostingDestination: summarizePostingDestination(board?.target),
   };
+}
+
+function peekPartnerBoardSummary(baseUrl: string, guildID: string) {
+  const entry = partnerBoardSummaryCache.get(buildPartnerBoardCacheKey(baseUrl, guildID));
+  return entry?.board ?? null;
+}
+
+function writePartnerBoardSummaryCache(
+  baseUrl: string,
+  guildID: string,
+  board: PartnerBoardConfig,
+) {
+  partnerBoardSummaryCache.set(buildPartnerBoardCacheKey(baseUrl, guildID), {
+    board,
+    fetchedAt: Date.now(),
+  });
+}
+
+function buildPartnerBoardCacheKey(baseUrl: string, guildID: string) {
+  return `${baseUrl}::${guildID.trim()}`;
 }

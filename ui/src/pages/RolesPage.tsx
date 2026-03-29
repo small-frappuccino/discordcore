@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type {
   FeatureRecord,
   GuildMemberOption,
   GuildRoleOption,
 } from "../api/control";
-import { appRoutes } from "../app/routes";
 import {
   AlertBanner,
   EmptyState,
@@ -942,21 +941,16 @@ function RolesAside({
         <ul className="feature-guidance-list">
           <li>Choose the target role first, then set the level and booster requirements.</li>
           <li>Use advanced controls only when you need presence watching or the permission mirror guard.</li>
-          <li>Runtime issues stay in Settings diagnostics instead of taking over the main roles workspace.</li>
+          <li>Runtime issues stay in blockers and notices instead of taking over the main roles workspace.</li>
         </ul>
 
         {firstBlockedFeature?.id === "safety.bot_role_perm_mirror" ? (
           <div className="surface-subsection">
-            <p className="section-label">Needs diagnostics</p>
+            <p className="section-label">Runtime dependency</p>
             <p className="meta-note">
-              Permission mirror blockers that come from runtime state are
-              reviewed in Settings diagnostics.
+              Permission mirror blockers from runtime state are reported by the
+              control server and should be reviewed before saving.
             </p>
-            <div className="sidebar-actions">
-              <Link className="button-secondary" to={`${appRoutes.settings}#diagnostics`}>
-                Open Settings diagnostics
-              </Link>
-            </div>
           </div>
         ) : null}
       </SurfaceCard>
@@ -1535,16 +1529,11 @@ function PermissionMirrorDrawerBody({
         (blocker) => blocker.code === "runtime_kill_switch",
       ) ? (
         <div className="surface-subsection">
-          <p className="section-label">Needs diagnostics</p>
+          <p className="section-label">Runtime dependency</p>
           <p className="meta-note">
-            Runtime permission mirror settings are reviewed in Settings
-            diagnostics.
+            Runtime permission mirror blockers are reported by the control
+            server and should be reviewed before saving.
           </p>
-          <div className="sidebar-actions">
-            <Link className="button-secondary" to={`${appRoutes.settings}#diagnostics`}>
-              Open Settings diagnostics
-            </Link>
-          </div>
         </div>
       ) : null}
 

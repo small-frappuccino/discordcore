@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
-import { appRoutes } from "../app/routes";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import {
   buildMessageRouteChannelPickerOptions,
@@ -1293,16 +1292,11 @@ function ModerationDestinationDrawerBody({
           blocker.code === "missing_intent",
       ) ? (
         <div className="surface-subsection">
-          <p className="section-label">Needs diagnostics</p>
+          <p className="section-label">Runtime dependency</p>
           <p className="meta-note">
-            This route depends on runtime conditions that are reviewed in
-            Settings diagnostics.
+            This route depends on runtime conditions reported by the control
+            server. Review the blocker message before saving.
           </p>
-          <div className="sidebar-actions">
-            <Link className="button-secondary" to={`${appRoutes.settings}#diagnostics`}>
-              Open Settings diagnostics
-            </Link>
-          </div>
         </div>
       ) : null}
     </>

@@ -9,8 +9,9 @@ import {
 } from "react";
 import {
   ControlApiClient,
+  type AccessibleGuild,
   type AuthSessionResponse,
-  type ManageableGuild,
+  type DashboardGuildAccessLevel,
 } from "../api/control";
 import { appRoutes } from "../app/routes";
 import type { DashboardAuthState, Notice } from "../app/types";
@@ -37,12 +38,16 @@ interface DashboardSessionContextValue {
   baseUrlDraft: string;
   baseUrlDirty: boolean;
   busyLabel: string;
+  accessibleGuilds: AccessibleGuild[];
+  canEditSelectedGuild: boolean;
+  canReadSelectedGuild: boolean;
   canManageGuild: boolean;
   client: ControlApiClient;
   currentOriginLabel: string;
-  manageableGuilds: ManageableGuild[];
+  manageableGuilds: AccessibleGuild[];
   notice: Notice | null;
-  selectedGuild: ManageableGuild | null;
+  selectedGuild: AccessibleGuild | null;
+  selectedGuildAccessLevel: DashboardGuildAccessLevel | null;
   selectedGuildIconURL: string | null;
   selectedGuildID: string;
   session: AuthSessionResponse | null;
@@ -69,7 +74,7 @@ export function DashboardSessionProvider({
   const [baseUrlDraft, setBaseUrlDraft] = useState(defaultBaseUrl);
   const [authState, setAuthState] = useState<DashboardAuthState>("checking");
   const [session, setSession] = useState<AuthSessionResponse | null>(null);
-  const [manageableGuilds, setManageableGuilds] = useState<ManageableGuild[]>([]);
+  const [accessibleGuilds, setAccessibleGuilds] = useState<AccessibleGuild[]>([]);
   const [selectedGuildID, setSelectedGuildID] = useState(preferredGuildID);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
@@ -84,12 +89,15 @@ export function DashboardSessionProvider({
   );
 
   const selectedGuild =
-    manageableGuilds.find((guild) => guild.id === selectedGuildID) ?? null;
+    accessibleGuilds.find((guild) => guild.id === selectedGuildID) ?? null;
+  const selectedGuildAccessLevel = selectedGuild?.access_level ?? null;
   const currentOriginLabel = baseUrl.trim() === "" ? "Same origin" : baseUrl;
   const baseUrlDirty =
     normalizeBaseUrlInput(baseUrlDraft) !== normalizeBaseUrlInput(baseUrl);
-  const canManageGuild =
-    authState === "signed_in" && selectedGuildID.trim() !== "";
+  const canReadSelectedGuild =
+    authState === "signed_in" && selectedGuild !== null;
+  const canEditSelectedGuild = selectedGuildAccessLevel === "write";
+  const canManageGuild = canEditSelectedGuild;
   const sessionAvatarURL = session ? buildUserAvatarURL(session.user) : null;
   const selectedGuildIconURL = selectedGuild
     ? buildGuildIconURL(selectedGuild)
@@ -97,7 +105,7 @@ export function DashboardSessionProvider({
 
   function clearSessionState() {
     setSession(null);
-    setManageableGuilds([]);
+    setAccessibleGuilds([]);
     setSelectedGuildID("");
     resetGuildResourceCache();
   }
@@ -131,13 +139,13 @@ export function DashboardSessionProvider({
       setAuthState("signed_in");
       setSession(probe.session);
 
-      const guildsResponse = await activeClient.listManageableGuilds();
+      const guildsResponse = await activeClient.listAccessibleGuilds();
       const nextGuildID = resolveGuildSelection(
         selectedGuildID,
         preferredGuildID,
         guildsResponse.guilds,
       );
-      setManageableGuilds(guildsResponse.guilds);
+      setAccessibleGuilds(guildsResponse.guilds);
       setSelectedGuildID(nextGuildID);
       setNotice(null);
       if (nextGuildID !== "") {
@@ -175,7 +183,7 @@ export function DashboardSessionProvider({
     await performSessionRefresh(client);
   }
 
-  async function beginLogin(nextPath: string = appRoutes.dashboardOverview) {
+  async function beginLogin(nextPath: string = appRoutes.dashboardHome) {
     try {
       const oauthStatus = await client.getDiscordOAuthStatus(nextPath);
       const loginURL = oauthStatus.login_url?.trim() ?? "";
@@ -247,13 +255,17 @@ export function DashboardSessionProvider({
         baseUrl,
         baseUrlDraft,
         baseUrlDirty,
+        accessibleGuilds,
         busyLabel,
+        canEditSelectedGuild,
+        canReadSelectedGuild,
         canManageGuild,
         client,
         currentOriginLabel,
-        manageableGuilds,
+        manageableGuilds: accessibleGuilds,
         notice,
         selectedGuild,
+        selectedGuildAccessLevel,
         selectedGuildIconURL,
         selectedGuildID,
         session,

@@ -27,10 +27,10 @@ The dashboard is not a marketing site, not a consumer social app, and not a gene
 ### 2.1 Show the state directly
 Users should be able to tell, at a glance:
 
-- whether a module is enabled
-- whether it is actually ready
-- what is blocking it
-- what action is available next
+- what area they are in
+- what action or page is available next
+- whether the selected server is readable or writable when that matters
+- what is blocking a workflow when something is actually broken
 
 ### 2.2 Prefer inline configuration
 Do not hide primary controls behind extra views, drawers, accordions, or modal chains when the controls can reasonably be shown on the page.
@@ -233,11 +233,12 @@ Avoid oversized text inside dense tables. Avoid tiny text for critical controls.
 
 The dashboard shell must contain:
 
+- sticky top bar
 - left sidebar
-- top page header/context region
 - main content area
 
-Sidebar stays structurally stable across modules.
+The top bar owns product identity, selected server, and account controls.
+The sidebar stays structurally stable across modules and contains navigation only.
 
 ## 5.2 Content width
 
@@ -280,7 +281,10 @@ Do not place diagnostics before the primary configuration surface.
 
 ---
 
-## 6. Sidebar architecture
+## 6. Navigation architecture
+
+Sidebar and Home may both render navigation, but they must derive from one shared registry.
+Duplicated navigation is acceptable only as a duplicated view, never as duplicated structure.
 
 Sidebar order is fixed unless a future navigation redesign explicitly replaces it.
 
@@ -301,8 +305,8 @@ Roles
 Rules:
 
 - preserve order
-- use collapsible groups only when the group contains subitems
-- top-level items must not duplicate subitem names unless functionally distinct
+- sidebar stays route-focused and visually light
+- Home may mirror these areas as cards, but card order and labels must come from the same registry
 - do not place Settings-like diagnostics in the primary workflow cluster unless the page’s purpose is diagnostics
 
 ---
@@ -320,8 +324,8 @@ Must include:
 - eyebrow label or area label
 - page title
 - 1–2 sentence description
-- context chips for selected server / URL / status
-- top-right actions
+- optional context chips for selected server / access level
+- optional top-right actions
 
 Must not include:
 
@@ -529,22 +533,21 @@ Not allowed for the primary happy-path configuration.
 
 ## 9.1 Home
 
-Home is the operational dashboard, not a dumping ground.
+Home is the visual index of the product areas.
 
 Must include:
 
-- top context bar
-- overview cards
-- module table
-- blockers panel
-- quick shortcuts
-- secondary guidance
+- section titles that match the sidebar groups
+- one card per sub-area
+- short, relevant facts per card
+- one direct CTA per card
 
 Must not include:
 
-- full diagnostic dumps
-- duplicated module configuration controls from deep pages
-- decorative metrics without action relevance
+- debug strips
+- quick shortcuts that drift from the sidebar
+- module tables or blocker panels from the old operational dashboard
+- duplicate navigation definitions outside the shared registry
 
 ## 9.2 Core > Control Panel
 
@@ -1016,4 +1019,3 @@ choose:
 - legible
 
 The Discordcore dashboard should feel like a reliable control surface, not a concept showcase.
-

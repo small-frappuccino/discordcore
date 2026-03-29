@@ -15,7 +15,7 @@ export function LandingPage() {
   const {
     authState,
     beginLogin,
-    manageableGuilds,
+    accessibleGuilds,
     session,
     sessionAvatarURL,
     sessionLoading,
@@ -37,7 +37,7 @@ export function LandingPage() {
 
         <div className="landing-actions">
           {authState === "signed_in" ? (
-            <Link className="button-primary" to={appRoutes.dashboardOverview}>
+            <Link className="button-primary" to={appRoutes.dashboardHome}>
               Open dashboard
             </Link>
           ) : (
@@ -69,7 +69,7 @@ export function LandingPage() {
                 : formatAuthStateLabel(authState)}
             </StatusBadge>
             <span className="meta-pill">
-              {formatAuthSupportText(authState, manageableGuilds.length)}
+              {formatAuthSupportText(authState, accessibleGuilds.length)}
             </span>
           </div>
         </div>
@@ -92,7 +92,7 @@ export function LandingPage() {
                   : formatAuthStateLabel(authState)}
               </strong>
               <small>
-                {formatAuthSupportText(authState, manageableGuilds.length)}
+                {formatAuthSupportText(authState, accessibleGuilds.length)}
               </small>
             </div>
           </div>
@@ -105,12 +105,12 @@ export function LandingPage() {
 
       <section className="landing-grid">
         <article className="surface-card landing-card">
-          <p className="section-label">Global navigation</p>
-          <h2>Persistent sidebar</h2>
+          <p className="section-label">Global shell</p>
+          <h2>Top bar and sidebar</h2>
           <p>
-            The dashboard shell keeps feature navigation, server selection, and
-            account actions in a durable location instead of repeating them inside
-            every feature page.
+            The dashboard shell keeps server selection in the top bar and
+            product navigation in the sidebar instead of repeating global
+            context inside each page.
           </p>
         </article>
         <article className="surface-card landing-card">

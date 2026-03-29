@@ -335,10 +335,7 @@ Secondary context
 Contains:
 
 ```
-product identity
 navigation
-server selection
-account controls
 ```
 
 Rules:
@@ -350,12 +347,30 @@ Rules:
 Example:
 
 ```
-Overview
-Partner Board
+Home
+Core
 Moderation
-Automations
-Settings
+Partner Board
+Roles
 ```
+
+---
+
+## Top bar
+
+Contains:
+
+```
+product identity
+server selection
+account controls
+```
+
+Rules:
+
+* top bar stays visible and compact
+* global session/server context belongs here, not in the sidebar
+* account actions live in the avatar dropdown, not in the main navigation
 
 ---
 

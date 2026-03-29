@@ -69,19 +69,25 @@ export interface SyncResponse {
   synced: boolean;
 }
 
-export interface ManageableGuild {
+export type DashboardGuildAccessLevel = "read" | "write";
+
+export interface AccessibleGuild {
   id: string;
   name: string;
   icon?: string;
   owner: boolean;
   permissions: number;
+  access_level: DashboardGuildAccessLevel;
 }
 
-export interface ManageableGuildsResponse {
+export interface AccessibleGuildsResponse {
   status: string;
   count: number;
-  guilds: ManageableGuild[];
+  guilds: AccessibleGuild[];
 }
+
+export type ManageableGuild = AccessibleGuild;
+export type ManageableGuildsResponse = AccessibleGuildsResponse;
 
 export interface DiscordOAuthUser {
   id: string;
@@ -217,6 +223,25 @@ export interface GuildMemberOptionsResponse {
   members: GuildMemberOption[];
 }
 
+export interface GuildRolesSettingsSection {
+  allowed?: string[];
+  dashboard_read?: string[];
+  dashboard_write?: string[];
+}
+
+export interface GuildSettingsWorkspace {
+  scope: string;
+  guild_id: string;
+  sections: {
+    roles: GuildRolesSettingsSection;
+  };
+}
+
+export interface GuildSettingsWorkspaceResponse {
+  status: string;
+  workspace: GuildSettingsWorkspace;
+}
+
 export interface DiscordOAuthStatusResponse {
   status: string;
   oauth_configured: boolean;
@@ -326,10 +351,33 @@ export class ControlApiClient {
     );
   }
 
+  async listAccessibleGuilds(): Promise<AccessibleGuildsResponse> {
+    return this.request<AccessibleGuildsResponse>("GET", "/auth/guilds/access");
+  }
+
   async listManageableGuilds(): Promise<ManageableGuildsResponse> {
-    return this.request<ManageableGuildsResponse>(
+    return this.request<ManageableGuildsResponse>("GET", "/auth/guilds/manageable");
+  }
+
+  async getGuildSettings(
+    guildId: string,
+  ): Promise<GuildSettingsWorkspaceResponse> {
+    return this.request<GuildSettingsWorkspaceResponse>(
       "GET",
-      "/auth/guilds/manageable",
+      `/v1/guilds/${encodeURIComponent(guildId)}/settings`,
+    );
+  }
+
+  async updateGuildSettings(
+    guildId: string,
+    payload: {
+      roles?: GuildRolesSettingsSection;
+    },
+  ): Promise<GuildSettingsWorkspaceResponse> {
+    return this.request<GuildSettingsWorkspaceResponse>(
+      "PUT",
+      `/v1/guilds/${encodeURIComponent(guildId)}/settings`,
+      payload,
     );
   }
 

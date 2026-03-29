@@ -1,7 +1,7 @@
 import type {
+  AccessibleGuild,
   AuthSessionResponse,
   DiscordOAuthUser,
-  ManageableGuild,
 } from "../api/control";
 import type { DashboardAuthState } from "./types";
 
@@ -41,17 +41,17 @@ export function formatAuthStateLabel(authState: DashboardAuthState): string {
 
 export function formatAuthSupportText(
   authState: DashboardAuthState,
-  manageableGuildCount: number,
+  accessibleGuildCount: number,
 ): string {
   switch (authState) {
     case "checking":
       return "Checking your Discord session.";
     case "signed_out":
-      return "Sign in with Discord to manage server settings.";
+      return "Sign in with Discord to access your dashboard servers.";
     case "oauth_unavailable":
       return "Discord OAuth is not configured on this control server.";
     case "signed_in":
-      return `${manageableGuildCount} server${manageableGuildCount === 1 ? "" : "s"} available.`;
+      return `${accessibleGuildCount} server${accessibleGuildCount === 1 ? "" : "s"} available.`;
     default:
       return "Session state unavailable.";
   }
@@ -76,7 +76,7 @@ export function formatTimestamp(
 export function resolveGuildSelection(
   currentGuildID: string,
   preferredGuildID: string,
-  guilds: ManageableGuild[],
+  guilds: AccessibleGuild[],
 ): string {
   const availableGuildIDs = new Set(guilds.map((guild) => guild.id));
   if (currentGuildID.trim() !== "" && availableGuildIDs.has(currentGuildID.trim())) {
@@ -111,7 +111,7 @@ export function isValidBaseUrl(raw: string): boolean {
   }
 }
 
-export function buildGuildIconURL(guild: ManageableGuild): string | null {
+export function buildGuildIconURL(guild: AccessibleGuild): string | null {
   if (!guild.icon) {
     return null;
   }
