@@ -75,7 +75,7 @@ export function DashboardLayout() {
   }
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-layout-shell">
       <header className="shell-topbar" data-shell-topbar>
         <Link className="shell-brand" to={appRoutes.dashboardHome}>
           <span className="shell-brand-mark" aria-hidden="true">
@@ -174,7 +174,10 @@ export function DashboardLayout() {
       </header>
 
       <div className="shell-body">
-        <aside className="shell-sidebar" aria-label="Dashboard navigation">
+        <aside
+          className="dashboard-layout-sidebar"
+          aria-label="Dashboard navigation"
+        >
           <nav className="shell-nav" aria-label="Dashboard navigation">
             <Link
               className={`shell-nav-link shell-nav-link-root${

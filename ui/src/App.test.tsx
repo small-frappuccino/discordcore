@@ -1472,6 +1472,8 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Control Panel", level: 1 });
     expect(window.location.pathname).toBe(appRoutes.dashboardCoreControlPanel);
+    expect(document.querySelector("main.dashboard-layout-shell")).not.toBeNull();
+    expect(document.querySelector("aside.dashboard-layout-sidebar")).not.toBeNull();
     expect(document.querySelector("[data-shell-topbar]")).not.toBeNull();
     expect(screen.getByLabelText("Server")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /alice/i })).toBeInTheDocument();

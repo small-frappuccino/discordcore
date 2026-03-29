@@ -1,9 +1,11 @@
-.dashboard-shell {
+.dashboard-layout-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   min-height: 100vh;
   padding: var(--space-4);
+  position: relative;
+  z-index: 1;
 }
 
 .shell-topbar {
@@ -199,7 +201,7 @@
   min-width: 0;
 }
 
-.shell-sidebar {
+.dashboard-layout-sidebar {
   min-width: 0;
   display: grid;
   align-content: start;
@@ -312,7 +314,7 @@
 }
 
 @media (max-width: 1080px) {
-  .dashboard-shell {
+  .dashboard-layout-shell {
     padding: var(--space-4);
   }
 
@@ -339,19 +341,19 @@
     grid-template-columns: 1fr;
   }
 
-  .shell-sidebar {
+  .dashboard-layout-sidebar {
     position: static;
     top: auto;
   }
 }
 
 @media (max-width: 720px) {
-  .dashboard-shell {
+  .dashboard-layout-shell {
     padding: var(--space-3);
   }
 
   .shell-topbar,
-  .shell-sidebar {
+  .dashboard-layout-sidebar {
     padding: var(--space-3);
   }
 
