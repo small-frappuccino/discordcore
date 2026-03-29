@@ -1,5 +1,10 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { appRoutes, sidebarItems } from "../app/routes";
+import {
+  appRoutes,
+  sidebarHomeItem,
+  sidebarNavigationSections,
+  sidebarSettingsItem,
+} from "../app/routes";
 import {
   formatAuthStateLabel,
   formatAuthSupportText,
@@ -46,10 +51,10 @@ export function DashboardLayout() {
   const accountSupport = formatAuthSupportText(authState, manageableGuilds.length);
   const serverDescription =
     authState !== "signed_in"
-      ? "Sign in to load manageable servers."
+      ? "Sign in to load available servers."
       : selectedGuild === null
-        ? "Choose the active workspace scope."
-        : "Current workspace scope for every feature area.";
+        ? "Choose the active server."
+        : "Current server for every feature area.";
 
   return (
     <main className="dashboard-shell">
@@ -96,25 +101,62 @@ export function DashboardLayout() {
           </SidebarSection>
 
           <nav className="sidebar-nav" aria-label="Dashboard navigation">
-            {sidebarItems.map((item) => {
-              const isActive = isSidebarItemActive(
-                location.pathname,
-                location.hash,
-                item.path,
-                item.hashes,
-                item.matchPrefix,
-              );
+            <Link
+              className={`sidebar-link${
+                isSidebarItemActive(
+                  location.pathname,
+                  location.hash,
+                  sidebarHomeItem,
+                )
+                  ? " is-active"
+                  : ""
+              }`}
+              to={sidebarHomeItem.to}
+            >
+              <span>{sidebarHomeItem.label}</span>
+            </Link>
 
-              return (
-                <Link
-                  key={item.label}
-                  className={`sidebar-link${isActive ? " is-active" : ""}`}
-                  to={item.to}
-                >
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
+            {sidebarNavigationSections.map((section) => (
+              <section className="sidebar-nav-section" key={section.label}>
+                {section.label !== "Partner Board" ? (
+                  <p className="section-label">{section.label}</p>
+                ) : null}
+                {section.items.map((item) => {
+                  const isActive = isSidebarItemActive(
+                    location.pathname,
+                    location.hash,
+                    item,
+                  );
+
+                  return (
+                    <Link
+                      key={item.label}
+                      className={`sidebar-link${isActive ? " is-active" : ""}`}
+                      to={item.to}
+                    >
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </section>
+            ))}
+
+            <div className="sidebar-divider sidebar-divider-spacer" />
+
+            <Link
+              className={`sidebar-link${
+                isSidebarItemActive(
+                  location.pathname,
+                  location.hash,
+                  sidebarSettingsItem,
+                )
+                  ? " is-active"
+                  : ""
+              }`}
+              to={sidebarSettingsItem.to}
+            >
+              <span>{sidebarSettingsItem.label}</span>
+            </Link>
           </nav>
 
           <div className="sidebar-divider sidebar-divider-spacer" />
@@ -161,7 +203,10 @@ export function DashboardLayout() {
 
       <section className="shell-content">
         {notice ? (
-          <AlertBanner notice={notice} busyLabel={sessionLoading ? busyLabel : undefined} />
+          <AlertBanner
+            notice={notice}
+            busyLabel={sessionLoading ? busyLabel : undefined}
+          />
         ) : sessionLoading ? (
           <AlertBanner busyLabel={busyLabel} />
         ) : null}
@@ -175,13 +220,20 @@ export function DashboardLayout() {
 function isSidebarItemActive(
   pathname: string,
   hash: string,
-  path: string,
-  hashes?: string[],
-  matchPrefix?: string,
+  item: {
+    activePath?: string;
+    hashes?: string[];
+    matchPrefix?: string;
+    to: string;
+  },
 ) {
-  if (hashes !== undefined) {
-    return pathname === path && hashes.includes(hash);
+  const activePath = item.activePath ?? item.to;
+
+  if (item.hashes !== undefined) {
+    return pathname === activePath && item.hashes.includes(hash);
   }
 
-  return pathname === path || (matchPrefix !== undefined && pathname.startsWith(matchPrefix));
+  return pathname === activePath || (
+    item.matchPrefix !== undefined && pathname.startsWith(item.matchPrefix)
+  );
 }

@@ -765,6 +765,58 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.home-context-bar {
+  gap: var(--space-4);
+}
+
+.home-context-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.home-context-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  gap: var(--space-4);
+  flex: 1 1 auto;
+}
+
+.home-context-copy {
+  min-width: 0;
+}
+
+.home-context-server-field {
+  min-width: 0;
+}
+
+.home-context-actions {
+  align-items: center;
+}
+
+.home-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.home-summary-card-blockers,
+.home-blockers-card {
+  border-color: rgba(217, 108, 108, 0.24);
+  background:
+    linear-gradient(180deg, rgba(217, 108, 108, 0.08), rgba(217, 108, 108, 0)),
+    var(--bg-surface);
+}
+
+.home-module-table td:nth-child(2) {
+  width: 144px;
+}
+
+.home-module-status {
+  min-width: 120px;
+}
+
 .feature-category-panel {
   display: grid;
   gap: var(--space-4);
@@ -1690,6 +1742,10 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .home-context-identity {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar-frame {
     position: static;
     min-height: auto;
@@ -1738,6 +1794,8 @@ textarea:focus {
   .landing-topbar,
   .landing-hero,
   .page-header-main,
+  .home-context-top,
+  .home-context-identity,
   .card-header,
   .identity-row,
   .sidebar-account-row,

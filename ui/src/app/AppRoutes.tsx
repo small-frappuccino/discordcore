@@ -3,10 +3,10 @@ import { appRoutes } from "./routes";
 import { DashboardLayout } from "../pages/DashboardLayout";
 import { CommandsPage } from "../pages/CommandsPage";
 import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
-import { HomePage } from "../pages/HomePage";
 import { LandingPage } from "../pages/LandingPage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
 import { ModerationPage } from "../pages/ModerationPage";
+import { HomePage } from "../pages/HomePage";
 import { RolesPage } from "../pages/RolesPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { StatsPage } from "../pages/StatsPage";
@@ -20,17 +20,64 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path={appRoutes.landing} element={<LandingPage />} />
-      <Route path="/dashboard" element={<DashboardLayout />}>
+      <Route path={appRoutes.dashboard} element={<DashboardLayout />}>
         <Route index element={<Navigate replace to="home" />} />
-        <Route
-          path="control-panel"
-          element={<Navigate replace to={appRoutes.dashboardHome} />}
-        />
         <Route path="home" element={<HomePage />} />
         <Route
           path="overview"
           element={<Navigate replace to={appRoutes.dashboardHome} />}
         />
+        <Route
+          path="control-panel"
+          element={<Navigate replace to={appRoutes.dashboardCoreControlPanel} />}
+        />
+        <Route
+          path="commands"
+          element={<Navigate replace to={appRoutes.dashboardCoreCommands} />}
+        />
+        <Route
+          path="logging"
+          element={<Navigate replace to={appRoutes.dashboardModerationLogging} />}
+        />
+        <Route
+          path="stats"
+          element={<Navigate replace to={appRoutes.dashboardCoreStats} />}
+        />
+        <Route
+          path="maintenance"
+          element={<Navigate replace to={appRoutes.settingsAdvanced} />}
+        />
+        <Route
+          path="roles-members"
+          element={<Navigate replace to={appRoutes.dashboardRolesAutorole} />}
+        />
+        <Route
+          path="automations"
+          element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}
+        />
+        <Route
+          path="activity"
+          element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}
+        />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="feature-areas/:areaId" element={<FeatureCategoryPage />} />
+
+        <Route path="core">
+          <Route index element={<Navigate replace to="control-panel" />} />
+          <Route
+            path="control-panel"
+            element={<Navigate replace to={appRoutes.settingsPermissions} />}
+          />
+          <Route path="stats" element={<StatsPage />} />
+          <Route path="commands" element={<CommandsPage />} />
+        </Route>
+
+        <Route path="moderation">
+          <Route index element={<Navigate replace to="moderation" />} />
+          <Route path="moderation" element={<ModerationPage />} />
+          <Route path="logging" element={<LoggingCategoryPage />} />
+        </Route>
+
         <Route
           path="partner-board"
           element={
@@ -48,29 +95,12 @@ export function AppRoutes() {
             element={<Navigate replace to={appRoutes.partnerBoardEntries} />}
           />
         </Route>
-        <Route path="commands" element={<CommandsPage />} />
-        <Route path="moderation" element={<ModerationPage />} />
-        <Route path="logging" element={<LoggingCategoryPage />} />
-        <Route path="roles" element={<RolesPage />} />
-        <Route path="feature-areas/:areaId" element={<FeatureCategoryPage />} />
-        <Route
-          path="roles-members"
-          element={<Navigate replace to={appRoutes.roles} />}
-        />
-        <Route
-          path="maintenance"
-          element={<Navigate replace to={appRoutes.settingsAdvanced} />}
-        />
-        <Route path="stats" element={<StatsPage />} />
-        <Route
-          path="automations"
-          element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}
-        />
-        <Route
-          path="activity"
-          element={<Navigate replace to={appRoutes.dashboardHomePlanned} />}
-        />
-        <Route path="settings" element={<SettingsPage />} />
+
+        <Route path="roles">
+          <Route index element={<Navigate replace to="autorole" />} />
+          <Route path="autorole" element={<RolesPage />} />
+          <Route path="level-roles" element={<RolesPage />} />
+        </Route>
       </Route>
       <Route
         path="*"

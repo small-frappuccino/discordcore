@@ -1,632 +1,1019 @@
-This file is designed to be **read by coding agents before writing or modifying any frontend code**.
-It enforces a **deterministic dashboard design system** so AI agents consistently produce **high-quality developer tooling UI**, not consumer SaaS layouts.
-
-It complements the existing `AGENTS.md` (referenced here: ).
-
----
-
 # UI_RULES.md
 
-Dashboard UI Rules for Coding Agents
+## Purpose
 
-Version: **v1**
+This file defines the non-negotiable UI implementation rules for the Discordcore dashboard refactor. It is intended for coding agents and engineers working on the frontend. Read this before writing or modifying any dashboard UI.
 
-This file defines **mandatory UI rules** for any frontend code written in this workspace.
-
-Coding agents **must read and follow this file before generating UI code**.
-
-These rules exist to ensure the dashboard behaves like a **professional developer control panel**, not a consumer SaaS interface.
+These rules exist to keep the interface operational, scannable, consistent, and easy to maintain. When a proposed implementation conflicts with these rules, follow this file unless an explicit exception is documented.
 
 ---
 
-# 1. Core philosophy
+## 1. Product intent
 
-The dashboard is an **operational control interface** for managing a Discord system.
+Discordcore is a server-scoped bot dashboard. The UI must optimize for:
 
-The UI must prioritize:
+- fast status comprehension
+- direct configuration
+- low navigation depth
+- operational clarity
+- low-friction maintenance
 
-* clarity
-* predictability
-* information density
-* operational efficiency
-
-The UI must resemble modern developer dashboards such as:
-
-* GitHub
-* Vercel
-* Stripe Dashboard
-* Linear
-* Raycast settings panels
-
-The UI must **not resemble**:
-
-* marketing websites
-* consumer SaaS onboarding flows
-* landing pages
-* mobile-first card layouts
+The dashboard is not a marketing site, not a consumer social app, and not a generic admin template. Avoid decorative complexity that weakens legibility or hides state.
 
 ---
 
-# 2. Absolute UI constraints
+## 2. Core principles
 
-These rules are **mandatory**.
+### 2.1 Show the state directly
+Users should be able to tell, at a glance:
 
-Coding agents must **never violate them**.
+- whether a module is enabled
+- whether it is actually ready
+- what is blocking it
+- what action is available next
+
+### 2.2 Prefer inline configuration
+Do not hide primary controls behind extra views, drawers, accordions, or modal chains when the controls can reasonably be shown on the page.
+
+### 2.3 Keep one page focused on one operational job
+Each page should support one primary administrative workflow. Secondary diagnostics may appear on the same page, but they must not dominate the layout.
+
+### 2.4 Use consistent semantic patterns
+Similar concepts must be rendered the same way everywhere:
+
+- toggles behave identically
+- status badges use the same meanings
+- cards use the same structure
+- tables use the same spacing and typography
+
+### 2.5 Explain machine state in human language
+Every critical status must expose a short signal message that explains why the state exists.
+
+Bad: `Blocked`
+
+Good: `Channel details missing`
 
 ---
 
-## 2.1 No business logic in the frontend
+## 3. Information hierarchy
 
-Frontend code must **never implement domain logic**.
+All pages must follow this hierarchy:
 
-Forbidden responsibilities:
+### Primary information
+Actionable controls and current operational state.
 
+Examples:
+
+- module enabled state
+- selected server
+- configured channels
+- role access
+- current blockers
+
+### Secondary information
+Supportive context that helps the user understand the current setup.
+
+Examples:
+
+- status summaries
+- scope explanations
+- inheritance markers
+- usage notes
+
+### Tertiary information
+Diagnostics, advanced controls, maintenance notes, and edge-case explanations.
+
+Examples:
+
+- cache/connection tools
+- low-level runtime notes
+- advanced permission caveats
+
+Tertiary information must not compete visually with primary workflows.
+
+---
+
+## 4. Design tokens
+
+Use tokens only. Do not hardcode raw values in components.
+
+## 4.1 Color tokens
+
+```css
+:root {
+  --bg-canvas: #08111f;
+  --bg-app: #0b1423;
+  --bg-surface-1: #101a2b;
+  --bg-surface-2: #132033;
+  --bg-surface-3: #17263a;
+  --bg-elevated: #1b2b40;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-tertiary: rgba(255, 255, 255, 0.48);
+  --text-disabled: rgba(255, 255, 255, 0.34);
+
+  --accent-primary: #d6a58a;
+  --accent-primary-hover: #e0b096;
+  --accent-primary-muted: rgba(214, 165, 138, 0.18);
+
+  --status-success: #57c084;
+  --status-success-bg: rgba(87, 192, 132, 0.16);
+  --status-danger: #ef6b6b;
+  --status-danger-bg: rgba(239, 107, 107, 0.16);
+  --status-warning: #d8b15d;
+  --status-warning-bg: rgba(216, 177, 93, 0.16);
+  --status-info: #78a8ff;
+  --status-info-bg: rgba(120, 168, 255, 0.16);
+
+  --focus-ring: rgba(120, 168, 255, 0.45);
+  --overlay-scrim: rgba(5, 10, 18, 0.72);
+}
 ```
-permission logic
-rule evaluation
-moderation decisions
-derived domain state
-persistence logic
+
+## 4.2 Color semantics
+
+Use colors by meaning, not preference.
+
+- Success = functional and ready
+- Danger = disabled, broken, or blocked
+- Warning = partial/incomplete/needs attention
+- Info = neutral metadata or secondary emphasis
+- Accent = primary product action
+
+Never use success green for a decorative highlight unrelated to success.
+Never use red merely for visual balance.
+
+## 4.3 Toggle colors
+
+Toggle behavior is mandatory:
+
+- Enabled: green track, knob on the right
+- Disabled: red track, knob on the left
+
+There is no alternate toggle style.
+
+## 4.4 Spacing tokens
+
+```css
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+}
 ```
 
-The UI must call backend services and render results.
+## 4.5 Radius tokens
 
-If the UI requires derived data, the backend must expose it.
+```css
+:root {
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+}
+```
+
+## 4.6 Shadow tokens
+
+```css
+:root {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+```
+
+## 4.7 Typography tokens
+
+```css
+:root {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-3xl: 40px;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.6;
+}
+```
+
+## 4.8 Typography rules
+
+- Page title: `--text-2xl` or `--text-3xl`
+- Card title: `--text-xl`
+- Body copy: `--text-md`
+- Supporting copy: `--text-sm`
+- Labels, eyebrow text, column headers: `--text-xs`
+
+Avoid oversized text inside dense tables. Avoid tiny text for critical controls.
 
 ---
 
-## 2.2 Navigation represents product areas
+## 5. Layout rules
 
-Navigation must represent **product areas**, not actions.
+## 5.1 App shell
 
-Correct:
+The dashboard shell must contain:
 
-```
-Overview
-Partner Board
+- left sidebar
+- top page header/context region
+- main content area
+
+Sidebar stays structurally stable across modules.
+
+## 5.2 Content width
+
+Use full-width desktop layouts, but constrain inner readability.
+
+Recommended max widths:
+
+- main page body: 1440px
+- dense form content: 1280px
+- reading-heavy panels: 960px where appropriate
+
+## 5.3 Grid rules
+
+Preferred desktop grids:
+
+- overview cards: 4-column grid
+- content + summary rail: 8/4 or 9/3 split
+- dense table pages: full-width main panel plus summary side rail
+
+Avoid arbitrary one-off grid fractions unless the page has a documented reason.
+
+## 5.4 Panel spacing
+
+- card internal padding: 20–24px
+- page section gap: 16–24px
+- card-to-card gap: 16px
+- grouped form rows: 12–16px
+
+## 5.5 Page rhythm
+
+Each page should visually read in this order:
+
+1. page header/context
+2. overview/status strip
+3. main workspace surface
+4. summary/guidance rail
+5. secondary sections
+
+Do not place diagnostics before the primary configuration surface.
+
+---
+
+## 6. Sidebar architecture
+
+Sidebar order is fixed unless a future navigation redesign explicitly replaces it.
+
+```txt
+Core
+  - Control Panel
+  - Stats
+  - Commands
 Moderation
-Automations
-Settings
-```
-
-Incorrect:
-
-```
-Add Partner
-Create Rule
-Run Sync
-Delete Entry
-```
-
-Actions belong inside pages.
-
----
-
-## 2.3 Only one primary workflow per page
-
-Each page must answer a single question:
-
-> What did the user come here to do?
-
-Examples:
-
-```
-manage partner entries
-configure posting destination
-review moderation actions
-view automation rules
-```
-
-Do not mix multiple unrelated workflows on a page.
-
----
-
-## 2.4 Pages must be task-oriented
-
-Design pages around **tasks**, not backend data structures.
-
-Bad:
-
-```
-raw API field editors
-scope configuration panels
-internal storage identifiers
-```
-
-Good:
-
-```
-Choose posting channel
-Add partner server
-Manage moderation rules
-```
-
----
-
-# 3. Layout architecture
-
-All pages must follow this layout.
-
-```
-Sidebar
-Header
-Workspace
-Secondary context
-```
-
----
-
-## 3.1 Sidebar
-
-Sidebar contains:
-
-```
-product identity
-navigation
-server/guild context
-account controls
-```
-
-Sidebar rules:
-
-```
-width: 220–240px
-persistent across pages
-no feature configuration controls
-```
-
-Sidebar navigation items represent **product areas**.
-
----
-
-## 3.2 Header
-
-Page headers contain:
-
-```
-page title
-optional status
-primary action
+  - Moderation
+  - Logging
+Partner Board
+Roles
+  - Autorole
+  - Level Roles
 ```
 
 Rules:
 
-```
-compact height
-no long paragraphs
-no cards inside header
-```
-
-Headers exist to **orient the user**, not explain the system.
+- preserve order
+- use collapsible groups only when the group contains subitems
+- top-level items must not duplicate subitem names unless functionally distinct
+- do not place Settings-like diagnostics in the primary workflow cluster unless the page’s purpose is diagnostics
 
 ---
 
-## 3.3 Workspace
+## 7. Component contracts
 
-The workspace contains the **primary feature UI**.
+The following components are required patterns. Their contract must remain stable.
 
-Examples:
+## 7.1 PageHeader
 
-```
-entity tables
-configuration editors
-rule lists
-activity panels
-```
+Purpose: establish page identity and operational scope.
 
-This area must dominate the page.
+Must include:
 
----
+- eyebrow label or area label
+- page title
+- 1–2 sentence description
+- context chips for selected server / URL / status
+- top-right actions
 
-## 3.4 Secondary context
+Must not include:
 
-Secondary areas contain:
+- dense form controls
+- redundant data already repeated in overview cards
 
-```
-summaries
-diagnostics
-recent activity
-debug tools
-```
+## 7.2 ContextChip
 
-These must **never dominate the page**.
+Use for compact metadata such as:
 
----
-
-# 4. Entity management pattern
-
-All entities must follow this structure.
-
-```
-Table / List
-Row actions
-Drawer or modal editor
-```
-
-Example:
-
-```
-Partner entries table
-Edit button on each row
-Drawer editor for editing entry
-```
-
-Do not build pages like:
-
-```
-Add form
-Edit form
-Delete form
-```
-
-as separate sections.
-
-Entities are managed **from the list itself**.
-
----
-
-# 5. Tabs and sub-navigation
-
-Tabs must represent **real sub-areas**.
-
-Example:
-
-```
-Entries
-Layout
-Destination
-```
-
-Tabs must change:
-
-```
-route
-data context
-visible UI
-```
-
-Tabs must not be used as visual separators.
-
----
-
-# 6. UI design tokens
-
-All UI must use these tokens.
-
----
-
-## Typography
-
-```
-PageTitle      40px   weight 600
-SectionTitle   28px   weight 600
-CardTitle      18px   weight 600
-Body           15px   weight 400
-Secondary      13px   weight 400
-Meta           11px   weight 500
-```
+- selected server
+- connection URL
+- signed-in state
+- workspace scope
 
 Rules:
 
-* Only one `PageTitle` per page
-* Avoid large paragraph headers
+- visually subdued
+- horizontally compact
+- not used as primary actions unless explicitly clickable and styled as action chips
 
----
+## 7.3 OverviewCard
 
-## Spacing
-
-Only these spacing values are allowed.
-
-```
-4
-8
-12
-16
-24
-32
-48
-```
-
-Agents must **not invent new spacing values**.
-
----
-
-## Border radius
-
-```
-Cards      12px
-Inputs      8px
-Buttons     8px
-Badges      6px
-Dialogs    16px
-```
-
-Avoid pill-shaped UI components.
-
----
-
-## Surface layers
-
-Dark theme surfaces:
-
-```
-background     #0f1115
-surface        #161a20
-card           #1c2128
-elevated       #232a33
-```
-
-Surfaces must be visually distinct.
-
----
-
-## Accent colors
-
-Accent color is reserved for:
-
-```
-primary actions
-selected navigation
-critical state indicators
-```
-
-Accent colors must not be decorative.
-
----
-
-# 7. Density rules
-
-The dashboard must prioritize **information density**.
-
-Avoid:
-
-```
-large hero sections
-oversized cards
-excessive whitespace
-card-heavy layouts
-```
-
-Cards should exist only when representing **separate surfaces**.
-
----
-
-# 8. Progressive disclosure
-
-Technical data must not dominate the default UI.
-
-Default UI shows:
-
-```
-tasks
-entities
-actions
-user-facing labels
-```
-
-Advanced UI contains:
-
-```
-IDs
-internal metadata
-debug information
-backend identifiers
-```
-
-Expose through:
-
-```
-Advanced panels
-Diagnostics sections
-Debug views
-```
-
----
-
-# 9. Terminology rules
-
-UI must use **product language**, not internal system language.
-
-Forbidden terms:
-
-```
-origin
-scope
-snapshot
-storage identifiers
-internal enum values
-```
-
-Preferred:
-
-```
-Server
-Destination
-Posting channel
-Partner group
-```
-
-The backend may expose internal names; the UI must map them.
-
----
-
-# 10. Empty state rules
-
-Empty states must be compact.
+Purpose: summarize one operational dimension.
 
 Structure:
 
-```
-title
-short explanation
-primary action
-```
+- eyebrow
+- primary value or state
+- short explanatory line
+- optional semantic indicator dot or badge
 
-Avoid giant empty containers.
+Examples:
+
+- Ready
+- 4 channels
+- 2/2 routes configured
+- 1 active blocker
+
+Rules:
+
+- keep copy concise
+- avoid long paragraphs
+- do not embed multiple unrelated controls
+
+## 7.4 StatusBadge
+
+Purpose: normalize visible state language.
+
+Allowed statuses:
+
+- Operational
+- Ready
+- Needs setup
+- Incomplete
+- Disabled
+- Blocked
+
+Each badge must map to a semantic token pair:
+
+- label
+- foreground/background colors
+
+Do not invent new status words casually.
+
+## 7.5 SignalText
+
+Purpose: explain state in plain language.
+
+Examples:
+
+- `Everything mapped to this module is ready.`
+- `Channel details missing.`
+- `At least one route is disabled.`
+
+Rules:
+
+- max 1 sentence in dense views
+- avoid raw internal jargon unless unavoidable
+- must not repeat badge text verbatim
+
+## 7.6 ToggleField
+
+Purpose: control an enabled/disabled behavior.
+
+Contract:
+
+- label
+- current boolean state
+- optional supporting text
+- optional dependency explanation
+
+Behavior:
+
+- enabled = green + knob right
+- disabled = red + knob left
+- immediate visual feedback
+- keyboard accessible
+- click target must include label area where appropriate
+
+Do not create custom toggle semantics per module.
+
+## 7.7 SelectField
+
+Use for:
+
+- role selection
+- channel selection
+- server-bound entity selection
+
+Rules:
+
+- clear placeholder
+- show selected count for multi-select
+- allow empty state where valid
+- support long labels gracefully
+
+## 7.8 DataTable
+
+Purpose: manage repeatable operational rows.
+
+Requirements:
+
+- sticky headers when height is constrained
+- clear row dividers
+- dense but readable spacing
+- actions aligned consistently
+- no hidden critical status
+
+Each row should make these obvious:
+
+- subject
+- current state
+- explanation
+- action
+
+## 7.9 SummaryRail
+
+Purpose: provide compact confirmation and guidance.
+
+May include:
+
+- selected server
+- key configured entities
+- current signal
+- guidance bullets
+
+Must not become the primary place where the user configures the feature.
+
+## 7.10 EmptyState
+
+Use when a module or table has no data.
+
+Must include:
+
+- title
+- explanation
+- obvious next action
+
+Avoid passive wording like `No data found` without guidance.
 
 ---
 
-# 11. Component rules
+## 8. Control visibility rules
+
+## 8.1 Direct controls first
+
+If a user can reasonably operate a setting directly on the page, show it directly.
+
+Examples:
+
+- module enable/disable
+- route activation
+- role selection
+- access settings
+- channel mapping
+
+## 8.2 Remove redundant configure loops
+
+Do not implement this pattern:
+
+1. card shows summary
+2. user clicks Configure
+3. separate view repeats same summary
+4. user finally sees actual controls
+
+Replace with:
+
+- summary plus controls on one page
+- or summary above an immediately visible control surface
+
+## 8.3 Use detail drawers sparingly
+
+Allowed only for:
+
+- advanced diagnostics
+- verbose audit detail
+- row-level detail too large for the main surface
+
+Not allowed for the primary happy-path configuration.
 
 ---
 
-## Buttons
+## 9. Page-specific implementation rules
 
-Button hierarchy:
+## 9.1 Home
 
-```
-Primary
-Secondary
-Danger
-Ghost
-```
+Home is the operational dashboard, not a dumping ground.
 
-Only one primary button per section.
+Must include:
+
+- top context bar
+- overview cards
+- module table
+- blockers panel
+- quick shortcuts
+- secondary guidance
+
+Must not include:
+
+- full diagnostic dumps
+- duplicated module configuration controls from deep pages
+- decorative metrics without action relevance
+
+## 9.2 Core > Control Panel
+
+Must expose directly on page:
+
+- read access roles
+- write access roles
+- admin override note
+
+Contract:
+
+- multi-select role input for read
+- multi-select role input for write
+- explanation that Discord administrators remain implicitly allowed
+
+## 9.3 Core > Commands
+
+Must focus on:
+
+- command channel configuration
+- admin access roles
+- enabled/disabled state
+- current signal
+
+Do not bury the module state in a deep panel.
+
+## 9.4 Core > Stats
+
+Must focus on:
+
+- enabled state
+- update rule
+- update interval
+- configured channels inventory
+
+Configured channels should appear in a readable table.
+
+## 9.5 Moderation > Moderation
+
+Must group controls by workflow:
+
+- general moderation
+- timeout
+- mute
+- kick
+- ban
+- warnings
+
+Use visible toggles and direct fields. Follow reference screenshots structurally, but keep Discordcore’s visual system.
+
+## 9.6 Moderation > Logging
+
+Must present route-level configuration in one visible table.
+
+Each row should expose:
+
+- route name
+- destination
+- status badge
+- signal
+- actions/toggle
+
+## 9.7 Partner Board
+
+Must center on publish readiness.
+
+Keep separate but visible sections for:
+
+- entries
+n- layout
+- destination
+
+Use blockers and readiness clearly.
+
+## 9.8 Roles > Autorole
+
+Feature contract:
+
+- target role: single-select
+- required roles: multi-select
+- match mode toggle
+
+Match mode toggle behavior:
+
+- OFF by default = requires any selected role
+- ON = requires all selected roles
+
+Label the toggle explicitly. Do not rely on implied logic.
+
+Recommended label:
+
+- `Require all selected roles`
+
+Supporting text when off:
+
+- `When disabled, any selected role can trigger the assignment.`
+
+Supporting text when on:
+
+- `When enabled, the user must have every selected role.`
+
+## 9.9 Roles > Level Roles
+
+Must use a table-based editor.
+
+Columns:
+
+- Role
+- Level
+- Active
+
+Rules:
+
+- rows editable inline
+- add-entry button below table
+- only one row may be active at a time
+- enabling one active toggle must disable the previously active row automatically
+
+Validation:
+
+- no duplicate active rows
+- role cannot be empty if row is saved
+- level must be numeric and within allowed bounds
 
 ---
 
-## Tables
+## 10. State modeling rules
 
-Tables must include:
+Every module page must distinguish these concepts explicitly:
 
-```
-primary column
-secondary information
-status indicator
-row actions
-```
+- enabled state
+- configured state
+- ready state
+- blocked state
 
-Rows must remain compact.
+These are not interchangeable.
 
----
+Example:
 
-## Forms
+- enabled = true
+- configured = partial
+- ready = false
+- blocked = true
+- signal = `Mute role missing.`
 
-Forms must:
-
-```
-group related fields
-validate via backend
-avoid large mega-forms
-```
-
-Large features should use **multiple screens**, not one giant form.
+Do not compress all state into a single boolean.
 
 ---
 
-# 12. Anti-pattern detection
+## 11. Copywriting rules
 
-Coding agents must detect and avoid these patterns.
+## 11.1 Tone
 
----
+Use concise operational language.
 
-## Mega-form pages
+Good:
+
+- `Mute role is ready for role-based mute actions.`
+- `Command channel is configured for this server.`
 
 Bad:
 
-```
-entire feature implemented as one giant form
-```
+- `Everything should be working now.`
+- `Looks good.`
 
-Fix:
+## 11.2 Labels
 
-```
-split into sections or multiple pages
-```
+Use domain-accurate labels.
 
----
+Prefer:
 
-## Navigation actions
+- `Configured role`
+- `Current signal`
+- `Allowed roles`
+- `Destination channel`
 
-Bad:
+Avoid vague labels like:
 
-```
-navigation items that trigger actions
-```
+- `Details`
+- `Info`
+- `Stuff`
 
-Navigation represents **product areas**, not actions.
+## 11.3 Help text
 
----
-
-## Diagnostic-first UI
+Help text should explain behavior, not restate the label.
 
 Bad:
 
-```
-IDs
-raw JSON
-debug metadata
-```
+- Label: `Update interval`
+- Help: `Set the update interval`
 
-These must be hidden behind **Advanced / Diagnostics**.
+Good:
+
+- `Controls how often the bot updates configured stats channels.`
 
 ---
 
-## Card explosion
+## 12. Accessibility rules
+
+Minimum requirements:
+
+- all interactive controls keyboard accessible
+- focus visible with consistent focus ring
+- color not the only state indicator
+- toggle labels always present
+- semantic headings in page order
+- table headers associated correctly
+- body text contrast must remain readable on dark surfaces
+
+Do not rely on tiny color dots as the only status signal.
+
+---
+
+## 13. Responsive behavior
+
+## 13.1 Desktop-first, tablet-safe
+
+This dashboard is primarily desktop-oriented, but it must collapse cleanly.
+
+## 13.2 Breakpoint behavior
+
+Recommended:
+
+- `>= 1280px`: full desktop layout with summary rail
+- `>= 1024px and < 1280px`: reduce column counts, preserve page hierarchy
+- `< 1024px`: stack rails below main workspace
+
+## 13.3 On smaller widths
+
+- keep primary actions visible
+- avoid horizontal overflow for core controls
+- allow tables to scroll only when unavoidable
+- do not hide status meaning behind icons
+
+---
+
+## 14. Anti-pattern detection
+
+The following patterns are prohibited unless explicitly justified.
+
+## 14.1 Hidden critical controls
 
 Bad:
 
-```
-every section wrapped in a card
-```
+- primary setup hidden behind `Configure`
+- row state only visible after expansion
+- important toggle only shown in modal
 
-Use cards only for **separate conceptual surfaces**.
+## 14.2 Redundant summary repetition
+
+Bad:
+
+- card says `2 roles`
+- next panel headline says `2 roles`
+- summary rail again says `2 roles`
+
+Each layer should add information, not repeat it.
+
+## 14.3 State ambiguity
+
+Bad:
+
+- green card with text saying incomplete
+- enabled toggle with blocker hidden elsewhere
+- one label used for both runtime health and config completeness
+
+## 14.4 Overloaded cards
+
+Bad:
+
+- one card contains metrics, toggles, help text, audit notes, and actions together
+
+Cards should have one clear responsibility.
+
+## 14.5 Decorative density
+
+Bad:
+
+- too many gradients
+- too many highlight colors
+- too many pill chips without hierarchy
+- visual noise that competes with data
+
+## 14.6 Underspecified tables
+
+Bad:
+
+- row has item name only
+- no visible status
+- no visible explanation
+- actions inconsistent per row
+
+## 14.7 Action vagueness
+
+Bad CTA labels:
+
+- `Manage`
+- `Open`
+- `Do action`
+
+Prefer task-specific labels:
+
+- `Configure command channel`
+- `Add entry`
+- `Select mute role`
+
+## 14.8 Multiple interaction patterns for the same concept
+
+Bad:
+
+- one module uses checkbox for enable
+- another uses toggle
+- another uses dropdown state selector
+
+Use one consistent interaction model.
 
 ---
 
-# 13. Visual restraint rules
+## 15. Engineering rules
 
-Agents must avoid:
+## 15.1 Separate domain state from presentation state
 
+Maintain separate layers for:
+
+- API/domain entities
+- page view models
+- component UI state
+
+Do not push raw API response shapes directly into components when the UI needs normalized state.
+
+## 15.2 Normalize module status
+
+Create a shared status adapter or utility that converts module data into a standard UI shape:
+
+```ts
+interface ModuleUiState {
+  enabled: boolean;
+  configured: boolean;
+  ready: boolean;
+  blocked: boolean;
+  badge: "Operational" | "Ready" | "Needs setup" | "Incomplete" | "Disabled" | "Blocked";
+  signal: string;
+}
 ```
-heavy gradients
-blur-heavy backgrounds
-glassmorphism
-decorative backgrounds
-oversized rounded UI
-```
 
-The design must remain **functional and restrained**.
+## 15.3 Component APIs must be stable
+
+Design shared components with explicit props and avoid one-off optional prop sprawl.
+
+## 15.4 Do not encode business logic only in the UI
+
+Rules such as:
+
+- admins implicitly allowed
+- only one level-role row may be active
+- autorole any/all matching
+
+must exist in domain-safe logic, not merely visual state.
+
+## 15.5 Form state must support optimistic clarity
+
+Users should immediately understand what changed, what is unsaved, and what failed.
+
+Minimum patterns:
+
+- dirty state detection
+- inline validation
+- save feedback
+- failure feedback tied to the affected control or section
 
 ---
 
-# 14. UI change reporting
+## 16. Suggested shared TypeScript contracts
 
-When modifying UI, agents must report:
+```ts
+export type StatusBadgeKind =
+  | "operational"
+  | "ready"
+  | "needs-setup"
+  | "incomplete"
+  | "disabled"
+  | "blocked";
 
+export interface StatusSignal {
+  kind: StatusBadgeKind;
+  label: string;
+  message: string;
+}
+
+export interface OverviewCardData {
+  eyebrow: string;
+  value: string;
+  description: string;
+  indicator?: "success" | "danger" | "warning" | "info";
+}
+
+export interface ToggleFieldProps {
+  id: string;
+  label: string;
+  checked: boolean;
+  description?: string;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+export interface LevelRoleRow {
+  id: string;
+  roleId: string | null;
+  level: number | null;
+  active: boolean;
+}
 ```
-previous UI behavior
-new UI behavior
-reason for change
-```
-
-UI changes must maintain established patterns.
 
 ---
 
-# 15. When rules conflict
+## 17. Review checklist for coding agents
 
-When rules conflict, prioritize:
+Before shipping a UI change, verify all of the following:
 
-```
-clarity
-predictability
-density
-developer-tool aesthetics
-```
+### Structure
+- Is the page centered on one primary administrative job?
+- Is the page header clear and scoped?
+- Is the information hierarchy obvious?
 
-Avoid:
+### Controls
+- Are primary controls directly visible?
+- Are toggles standardized green/red with right/left knob behavior?
+- Are labels explicit and unambiguous?
 
-```
-visual novelty
-decorative UI
-marketing layouts
-```
+### State
+- Can the user distinguish enabled vs ready vs blocked?
+- Is every major status accompanied by a signal message?
+- Are blockers visible without extra clicks?
+
+### Redundancy
+- Did we remove repeated summaries?
+- Did we avoid configure loops?
+- Did we avoid duplicate navigation paths for the same action?
+
+### Roles-specific behavior
+- Does autorole support multi-select required roles?
+- Does autorole correctly support any vs all matching?
+- Does level roles enforce a single active row?
+
+### Accessibility
+- Can everything be used with keyboard navigation?
+- Is focus visible?
+- Is color supplemented by text/state labels?
+
+### Engineering
+- Are tokens used instead of hardcoded values?
+- Is domain logic separated from view logic?
+- Are component contracts reusable rather than page-specific hacks?
 
 ---
 
-# End of UI rules
+## 18. Final rule
 
-Any UI generated in this workspace **must conform to these rules**.
+When uncertain between:
 
-Agents must treat these rules as **design constraints**, not suggestions.
+- more visually impressive vs more operationally clear
+- more abstract vs more direct
+- more compact vs more legible
+
+choose:
+
+- operationally clear
+- direct
+- legible
+
+The Discordcore dashboard should feel like a reliable control surface, not a concept showcase.
+
