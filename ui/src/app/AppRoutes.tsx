@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { appRoutes } from "./routes";
 import { DashboardLayout } from "../pages/DashboardLayout";
 import { CommandsPage } from "../pages/CommandsPage";
-import { FeatureCategoryPage } from "../pages/FeatureCategoryPage";
 import { LandingPage } from "../pages/LandingPage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
 import { ModerationPage } from "../pages/ModerationPage";
@@ -24,10 +23,6 @@ export function AppRoutes() {
         <Route index element={<Navigate replace to="home" />} />
         <Route path="home" element={<HomePage />} />
         <Route
-          path="overview"
-          element={<Navigate replace to={appRoutes.dashboardHome} />}
-        />
-        <Route
           path="control-panel"
           element={<Navigate replace to={appRoutes.dashboardCoreControlPanel} />}
         />
@@ -44,26 +39,9 @@ export function AppRoutes() {
           element={<Navigate replace to={appRoutes.dashboardCoreStats} />}
         />
         <Route
-          path="maintenance"
-          element={<Navigate replace to={appRoutes.dashboardHome} />}
-        />
-        <Route
           path="roles-members"
           element={<Navigate replace to={appRoutes.dashboardRolesAutorole} />}
         />
-        <Route
-          path="automations"
-          element={<Navigate replace to={appRoutes.dashboardHome} />}
-        />
-        <Route
-          path="activity"
-          element={<Navigate replace to={appRoutes.dashboardHome} />}
-        />
-        <Route
-          path="settings"
-          element={<Navigate replace to={appRoutes.dashboardHome} />}
-        />
-        <Route path="feature-areas/:areaId" element={<FeatureCategoryPage />} />
 
         <Route path="core">
           <Route index element={<Navigate replace to="control-panel" />} />

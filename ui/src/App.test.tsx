@@ -1759,34 +1759,6 @@ describe("dashboard routing and workspace", () => {
     },
   );
 
-  it.each([
-    [
-      "/dashboard/feature-areas/commands",
-      "Commands",
-      appRoutes.dashboardCoreCommands,
-      "",
-    ],
-    [
-      "/dashboard/feature-areas/maintenance",
-      "Home",
-      appRoutes.dashboardHome,
-      "",
-    ],
-  ])(
-    "keeps the generic feature workspace as fallback-only by redirecting %s",
-    async (path, heading, pathname, hash) => {
-      const { fetchMock } = createFetchMock();
-      vi.stubGlobal("fetch", fetchMock);
-      window.history.replaceState({}, "", path);
-
-      render(<App />);
-
-      await screen.findByRole("heading", { name: heading, level: 1 });
-      expect(window.location.pathname).toBe(pathname);
-      expect(window.location.hash).toBe(hash);
-    },
-  );
-
   it("keeps Entries, Layout, and Destination on separate routes and removes the placeholder Activity tab", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);

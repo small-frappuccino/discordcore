@@ -1419,32 +1419,6 @@ textarea:focus {
   background: transparent;
 }
 
-.settings-diagnostics {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.settings-diagnostics-content {
-  gap: var(--space-4);
-}
-
-.settings-diagnostics-copy {
-  padding-bottom: var(--space-2);
-}
-
-.settings-diagnostics-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
-  gap: var(--space-4);
-  align-items: start;
-}
-
-.settings-diagnostics-editor,
-.settings-diagnostics-state {
-  display: grid;
-  gap: var(--space-4);
-}
-
 .overview-status-card,
 .feature-status-card,
 .roadmap-card {
@@ -1829,20 +1803,6 @@ textarea:focus {
   border-color: var(--border-accent);
 }
 
-.diagnostics-panel,
-.diagnostics-content {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.diagnostics-alert {
-  margin-top: var(--space-3);
-}
-
-.diagnostics-editor {
-  background: var(--bg-surface-muted);
-}
-
 .roadmap-card-muted {
   background: rgba(255, 255, 255, 0.015);
 }
@@ -1969,7 +1929,6 @@ textarea:focus {
   .content-grid-with-aside,
   .workspace-callout,
   .workspace-checklist-panel,
-  .settings-diagnostics-grid,
   .landing-hero,
   .landing-grid,
   .tile-grid {
