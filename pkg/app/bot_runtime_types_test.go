@@ -195,6 +195,32 @@ func TestResolveBotInstancesSkipsOptionalInstancesWithoutToken(t *testing.T) {
 	}
 }
 
+func TestResolveBotInstancesUsesFirstAvailableOptionalBotAsDefault(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("ALICE_TOKEN", "")
+	t.Setenv("YUZUHA_TOKEN", "yuzuha-token")
+
+	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
+		BotCatalog: []BotInstanceDefinition{
+			{ID: "alice", TokenEnv: "ALICE_TOKEN", Optional: true},
+			{ID: "yuzuha", TokenEnv: "YUZUHA_TOKEN", Optional: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("resolve bot instances: %v", err)
+	}
+	if defaultBotInstanceID != "yuzuha" {
+		t.Fatalf("expected yuzuha to become the default bot instance, got %q", defaultBotInstanceID)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("expected only yuzuha to resolve, got %+v", resolved)
+	}
+	if resolved[0].ID != "yuzuha" || resolved[0].TokenEnv != "YUZUHA_TOKEN" || resolved[0].Token != "yuzuha-token" {
+		t.Fatalf("unexpected resolved instance: %+v", resolved[0])
+	}
+}
+
 func TestResolveBotInstancesRejectsMissingRequiredToken(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
