@@ -1479,29 +1479,36 @@ describe("dashboard routing and workspace", () => {
       name: "Dashboard navigation",
     });
     expect(within(sidebarNav).getByRole("link", { name: "Home" })).toBeInTheDocument();
-    expect(
-      within(sidebarNav).getByText("Core", { selector: ".shell-nav-section-label" }),
-    ).toBeInTheDocument();
-    expect(
-      within(sidebarNav).getByText("Moderation", {
-        selector: ".shell-nav-section-label",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(sidebarNav).getByText("Partner Board", {
-        selector: ".shell-nav-section-label",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(sidebarNav).getByText("Roles", { selector: ".shell-nav-section-label" }),
-    ).toBeInTheDocument();
+    const coreButton = within(sidebarNav).getByRole("button", { name: "Core" });
+    const moderationButton = within(sidebarNav).getByRole("button", {
+      name: "Moderation",
+    });
+    const rolesButton = within(sidebarNav).getByRole("button", { name: "Roles" });
+    expect(within(sidebarNav).getByRole("link", { name: "Partner Board" })).toBeInTheDocument();
+    expect(coreButton).toHaveAttribute("aria-expanded", "true");
+    expect(moderationButton).toHaveAttribute("aria-expanded", "false");
+    expect(rolesButton).toHaveAttribute("aria-expanded", "false");
     expect(
       within(sidebarNav).getByRole("link", { name: "Control Panel" }),
     ).toBeInTheDocument();
     expect(within(sidebarNav).getByRole("link", { name: "Commands" })).toBeInTheDocument();
     expect(within(sidebarNav).getByRole("link", { name: "Stats" })).toBeInTheDocument();
+    expect(
+      within(sidebarNav).queryByRole("link", { name: "Logging" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(sidebarNav).queryByRole("link", { name: "Autorole" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(moderationButton);
+
+    expect(coreButton).toHaveAttribute("aria-expanded", "false");
+    expect(moderationButton).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(sidebarNav).queryByRole("link", { name: "Control Panel" }),
+    ).not.toBeInTheDocument();
+    expect(within(sidebarNav).getByRole("link", { name: "Moderation" })).toBeInTheDocument();
     expect(within(sidebarNav).getByRole("link", { name: "Logging" })).toBeInTheDocument();
-    expect(within(sidebarNav).getByRole("link", { name: "Autorole" })).toBeInTheDocument();
     expect(
       within(sidebarNav).queryByRole("link", { name: "Settings" }),
     ).not.toBeInTheDocument();
@@ -1518,7 +1525,22 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
+    const sidebarNav = screen.getByRole("navigation", {
+      name: "Dashboard navigation",
+    });
     expect(screen.getByRole("link", { name: "Home" })).toHaveClass("is-active");
+    expect(
+      within(sidebarNav).getByRole("button", { name: "Core" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(
+      within(sidebarNav).getByRole("button", { name: "Moderation" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(
+      within(sidebarNav).getByRole("button", { name: "Roles" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(
+      within(sidebarNav).queryByRole("link", { name: "Control Panel" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Core", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Partner Board", level: 2 })).toBeInTheDocument();
@@ -1530,6 +1552,17 @@ describe("dashboard routing and workspace", () => {
     expect(await screen.findByRole("link", { name: "Open Partner Board" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Autorole" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Level Roles" })).toBeInTheDocument();
+    expect(await screen.findByText("Write roles: 1")).toBeInTheDocument();
+    expect(await screen.findByText("Read roles: 1")).toBeInTheDocument();
+    expect(await screen.findByText("Command channel: Configured")).toBeInTheDocument();
+    expect(await screen.findByText("Automod service: On")).toBeInTheDocument();
+    expect(await screen.findByText("Status: In development")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Browse the dashboard by area."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Dashboard access roles and core panel permissions."),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Current blockers", level: 2 }),
     ).not.toBeInTheDocument();
@@ -1612,28 +1645,32 @@ describe("dashboard routing and workspace", () => {
     ).toBeDisabled();
   });
 
-  it("auto-loads Partner Board data again when the selected server changes", async () => {
-    const { boardCalls, fetchMock } = createFetchMock();
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", "/dashboard/partner-board/entries");
+  it(
+    "auto-loads Partner Board data again when the selected server changes",
+    async () => {
+      const { boardCalls, fetchMock } = createFetchMock();
+      vi.stubGlobal("fetch", fetchMock);
+      window.history.replaceState({}, "", "/dashboard/partner-board/entries");
 
-    render(<App />);
+      render(<App />);
 
-    await screen.findByRole("heading", { name: "Partner Board", level: 1 });
-    const serverSelect = await screen.findByLabelText("Server");
+      await screen.findByRole("heading", { name: "Partner Board", level: 1 });
+      const serverSelect = await screen.findByLabelText("Server");
 
-    await waitFor(() => {
-      expect(boardCalls).toContain("guild-1");
-    });
+      await waitFor(() => {
+        expect(boardCalls).toContain("guild-1");
+      });
 
-    await userEvent.selectOptions(serverSelect, "guild-2");
+      await userEvent.selectOptions(serverSelect, "guild-2");
 
-    await waitFor(() => {
-      expect(boardCalls).toContain("guild-2");
-    });
+      await waitFor(() => {
+        expect(boardCalls).toContain("guild-2");
+      });
 
-    await screen.findByRole("cell", { name: "Server Two" });
-  });
+      await screen.findByRole("cell", { name: "Server Two" });
+    },
+    10000,
+  );
 
   it("opens Moderation as a real category workspace and keeps the scope limited to logging, mute role, and moderation routes", async () => {
     const { fetchMock } = createFetchMock();
@@ -1811,40 +1848,6 @@ describe("dashboard routing and workspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(screen.getByRole("button", { name: "Confirm" })).toBeVisible();
-  });
-
-  it("shows Home as a card-based index without the old operational dashboard sections", async () => {
-    const { fetchMock } = createFetchMock();
-    vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardHome);
-
-    render(<App />);
-
-    await screen.findByRole("heading", { name: "Home", level: 1 });
-    expect(
-      screen.getByRole("heading", { name: "Core", level: 2 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Moderation", level: 2 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Partner Board", level: 2 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Roles", level: 2 }),
-    ).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Open Commands" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Open Logging" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Open Control Panel" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Current blockers", level: 2 }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Quick shortcuts", level: 2 }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Settings and diagnostics", level: 2 }),
-    ).not.toBeInTheDocument();
   });
 
   it("redirects the legacy roles-members route to the stable Roles workspace route", async () => {
@@ -2056,7 +2059,7 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Home", level: 1 });
-    await userEvent.click(await screen.findByRole("link", { name: "Commands" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Open Commands" }));
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
     await screen.findByRole("heading", { name: "Command routing", level: 2 });

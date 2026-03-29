@@ -563,6 +563,20 @@ textarea:focus {
   gap: var(--space-6);
 }
 
+.home-page-header {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.home-page-header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 48px;
+  font-weight: 600;
+}
+
 .page-header {
   display: grid;
   gap: var(--space-4);
@@ -935,12 +949,12 @@ textarea:focus {
 .home-nav-card {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: var(--space-4);
-  min-height: 280px;
+  gap: var(--space-3);
+  min-height: 220px;
 }
 
 .home-nav-card .card-copy {
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .home-nav-facts {
@@ -960,7 +974,7 @@ textarea:focus {
   align-items: flex-end;
 }
 
-.home-nav-card-footer .button-primary {
+.home-nav-link {
   width: auto;
 }
 

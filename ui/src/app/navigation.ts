@@ -6,8 +6,6 @@ export interface NavigationItem {
   to: string;
   activePath?: string;
   matchPrefix?: string;
-  homeTitle?: string;
-  homeDescription?: string;
   homeActionLabel?: string;
 }
 
@@ -24,107 +22,103 @@ export const dashboardHomeNavigationItem: NavigationItem = {
   activePath: appRoutes.dashboardHome,
 };
 
-export const dashboardNavigationSections: NavigationSection[] = [
-  {
-    id: "core",
-    label: "Core",
-    items: [
-      {
-        id: "control-panel",
-        label: "Control Panel",
-        to: appRoutes.dashboardCoreControlPanel,
-        activePath: appRoutes.dashboardCoreControlPanel,
-        homeTitle: "Control Panel",
-        homeDescription: "Dashboard access roles and core panel permissions.",
-        homeActionLabel: "Open Control Panel",
-      },
-      {
-        id: "stats",
-        label: "Stats",
-        to: appRoutes.dashboardCoreStats,
-        activePath: appRoutes.dashboardCoreStats,
-        homeTitle: "Stats",
-        homeDescription: "Stats channels, update interval, and posting coverage.",
-        homeActionLabel: "Open Stats",
-      },
-      {
-        id: "commands",
-        label: "Commands",
-        to: appRoutes.dashboardCoreCommands,
-        activePath: appRoutes.dashboardCoreCommands,
-        homeTitle: "Commands",
-        homeDescription: "Command routing and privileged command access.",
-        homeActionLabel: "Open Commands",
-      },
-    ],
-  },
-  {
-    id: "moderation",
-    label: "Moderation",
-    items: [
-      {
-        id: "moderation",
-        label: "Moderation",
-        to: appRoutes.dashboardModerationModeration,
-        activePath: appRoutes.dashboardModerationModeration,
-        homeTitle: "Moderation",
-        homeDescription: "Kick, ban, mute, timeout, and enforcement controls.",
-        homeActionLabel: "Open Moderation",
-      },
-      {
-        id: "logging",
-        label: "Logging",
-        to: appRoutes.dashboardModerationLogging,
-        activePath: appRoutes.dashboardModerationLogging,
-        homeTitle: "Logging",
-        homeDescription: "Moderation and event log destinations for this server.",
-        homeActionLabel: "Open Logging",
-      },
-    ],
-  },
+export const dashboardPartnerBoardNavigationItem: NavigationItem = {
+  id: "partner-board",
+  label: "Partner Board",
+  to: appRoutes.partnerBoardBase,
+  activePath: appRoutes.partnerBoardBase,
+  matchPrefix: appRoutes.partnerBoardBase,
+  homeActionLabel: "Open Partner Board",
+};
+
+const coreNavigationSection: NavigationSection = {
+  id: "core",
+  label: "Core",
+  items: [
+    {
+      id: "control-panel",
+      label: "Control Panel",
+      to: appRoutes.dashboardCoreControlPanel,
+      activePath: appRoutes.dashboardCoreControlPanel,
+      homeActionLabel: "Open Control Panel",
+    },
+    {
+      id: "stats",
+      label: "Stats",
+      to: appRoutes.dashboardCoreStats,
+      activePath: appRoutes.dashboardCoreStats,
+      homeActionLabel: "Open Stats",
+    },
+    {
+      id: "commands",
+      label: "Commands",
+      to: appRoutes.dashboardCoreCommands,
+      activePath: appRoutes.dashboardCoreCommands,
+      homeActionLabel: "Open Commands",
+    },
+  ],
+};
+
+const moderationNavigationSection: NavigationSection = {
+  id: "moderation",
+  label: "Moderation",
+  items: [
+    {
+      id: "moderation",
+      label: "Moderation",
+      to: appRoutes.dashboardModerationModeration,
+      activePath: appRoutes.dashboardModerationModeration,
+      homeActionLabel: "Open Moderation",
+    },
+    {
+      id: "logging",
+      label: "Logging",
+      to: appRoutes.dashboardModerationLogging,
+      activePath: appRoutes.dashboardModerationLogging,
+      homeActionLabel: "Open Logging",
+    },
+  ],
+};
+
+const rolesNavigationSection: NavigationSection = {
+  id: "roles",
+  label: "Roles",
+  items: [
+    {
+      id: "autorole",
+      label: "Autorole",
+      to: appRoutes.dashboardRolesAutorole,
+      activePath: appRoutes.dashboardRolesAutorole,
+      homeActionLabel: "Open Autorole",
+    },
+    {
+      id: "level-roles",
+      label: "Level Roles",
+      to: appRoutes.dashboardRolesLevelRoles,
+      activePath: appRoutes.dashboardRolesLevelRoles,
+      homeActionLabel: "Open Level Roles",
+    },
+  ],
+};
+
+export const dashboardSidebarNavigationSections: NavigationSection[] = [
+  coreNavigationSection,
+  moderationNavigationSection,
+  rolesNavigationSection,
+];
+
+export const dashboardHomeNavigationSections: NavigationSection[] = [
+  coreNavigationSection,
+  moderationNavigationSection,
   {
     id: "partner-board",
     label: "Partner Board",
-    items: [
-      {
-        id: "partner-board",
-        label: "Partner Board",
-        to: appRoutes.partnerBoardBase,
-        activePath: appRoutes.partnerBoardBase,
-        matchPrefix: appRoutes.partnerBoardBase,
-        homeTitle: "Partner Board",
-        homeDescription: "Entries, layout, and destination for board publishing.",
-        homeActionLabel: "Open Partner Board",
-      },
-    ],
+    items: [dashboardPartnerBoardNavigationItem],
   },
-  {
-    id: "roles",
-    label: "Roles",
-    items: [
-      {
-        id: "autorole",
-        label: "Autorole",
-        to: appRoutes.dashboardRolesAutorole,
-        activePath: appRoutes.dashboardRolesAutorole,
-        homeTitle: "Autorole",
-        homeDescription: "Automatic role assignment based on selected requirements.",
-        homeActionLabel: "Open Autorole",
-      },
-      {
-        id: "level-roles",
-        label: "Level Roles",
-        to: appRoutes.dashboardRolesLevelRoles,
-        activePath: appRoutes.dashboardRolesLevelRoles,
-        homeTitle: "Level Roles",
-        homeDescription: "Reserved for the upcoming level-role table workflow.",
-        homeActionLabel: "Open Level Roles",
-      },
-    ],
-  },
+  rolesNavigationSection,
 ];
 
-export const dashboardNavigationItems = dashboardNavigationSections.flatMap(
+export const dashboardNavigationItems = dashboardHomeNavigationSections.flatMap(
   (section) => section.items,
 );
 
@@ -134,4 +128,12 @@ export function isNavigationItemActive(pathname: string, item: NavigationItem) {
     return pathname.startsWith(item.matchPrefix);
   }
   return pathname === activePath;
+}
+
+export function getActiveNavigationSection(pathname: string) {
+  return (
+    dashboardSidebarNavigationSections.find((section) =>
+      section.items.some((item) => isNavigationItemActive(pathname, item)),
+    ) ?? null
+  );
 }

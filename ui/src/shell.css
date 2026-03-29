@@ -1,5 +1,6 @@
 .dashboard-shell {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   min-height: 100vh;
   padding: var(--space-4);
@@ -190,10 +191,6 @@
   gap: var(--space-2);
 }
 
-.shell-notice {
-  display: grid;
-}
-
 .shell-body {
   display: grid;
   grid-template-columns: minmax(220px, 240px) minmax(0, 1fr);
@@ -204,21 +201,20 @@
 
 .shell-sidebar {
   min-width: 0;
-}
-
-.shell-sidebar-panel {
   display: grid;
-  gap: var(--space-4);
+  align-content: start;
   padding: var(--space-4);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
   box-shadow: var(--shadow-1);
+  position: sticky;
+  top: calc(72px + var(--space-6));
 }
 
 .shell-nav {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .shell-nav-link {
@@ -260,19 +256,43 @@
   gap: var(--space-2);
 }
 
-.shell-nav-section-label {
-  margin: 0;
+.shell-nav-section-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-dim);
   font-size: 11px;
   line-height: 16px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  box-shadow: none;
+}
+
+.shell-nav-section-trigger:hover:not(:disabled),
+.shell-nav-section-trigger.is-active {
+  color: var(--text-main);
+}
+
+.shell-nav-section-indicator {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 140ms ease;
+}
+
+.shell-nav-section-indicator.is-open {
+  transform: rotate(180deg);
 }
 
 .shell-nav-list {
   display: grid;
   gap: var(--space-1);
+  padding-left: var(--space-2);
 }
 
 .shell-nav-link-sub {
@@ -285,6 +305,10 @@
   min-width: 0;
   display: grid;
   gap: var(--space-4);
+}
+
+.shell-main-notice {
+  display: grid;
 }
 
 @media (max-width: 1080px) {
@@ -314,6 +338,11 @@
   .shell-body {
     grid-template-columns: 1fr;
   }
+
+  .shell-sidebar {
+    position: static;
+    top: auto;
+  }
 }
 
 @media (max-width: 720px) {
@@ -322,7 +351,7 @@
   }
 
   .shell-topbar,
-  .shell-sidebar-panel {
+  .shell-sidebar {
     padding: var(--space-3);
   }
 

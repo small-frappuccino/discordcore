@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
-import { dashboardNavigationSections, type NavigationItem } from "../app/navigation";
-import { AlertBanner, PageHeader, StatusBadge, SurfaceCard } from "../components/ui";
+import {
+  dashboardHomeNavigationSections,
+  type NavigationItem,
+} from "../app/navigation";
+import { AlertBanner, SurfaceCard } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import { useGuildRolesSettings } from "../features/control-panel/useGuildRolesSettings";
 import {
@@ -9,9 +12,8 @@ import {
   getCommandsFeatureDetails,
 } from "../features/features/commands";
 import { getFeatureAreaRecords } from "../features/features/areas";
-import { summarizeFeatureArea } from "../features/features/presentation";
-import { getAutoRoleFeatureDetails, summarizeAutoRoleSignal } from "../features/features/roles";
-import { getStatsFeatureDetails, summarizeStatsSignal } from "../features/features/stats";
+import { getAutoRoleFeatureDetails } from "../features/features/roles";
+import { getStatsFeatureDetails } from "../features/features/stats";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoardSummary";
 
@@ -22,7 +24,7 @@ interface HomeCardData {
 }
 
 export function HomePage() {
-  const { authState, selectedGuild, selectedGuildAccessLevel } = useDashboardSession();
+  const { authState, selectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -41,26 +43,17 @@ export function HomePage() {
     features.find((feature) => feature.id === "auto_role_assignment") ?? null;
 
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
 
   return (
     <section className="page-shell">
-      <PageHeader
-        eyebrow="Home"
-        title="Home"
-        description="Browse the dashboard by area. Each card summarizes one page and links directly to its workspace."
-        status={
-          <StatusBadge tone={selectedGuildAccessLevel === "read" ? "info" : "neutral"}>
-            {selectedGuildAccessLevel === "read" ? "Read-only access" : "Navigation index"}
-          </StatusBadge>
-        }
-        meta={<span className="meta-pill subtle-pill">{selectedServerLabel}</span>}
-      />
+      <header className="home-page-header">
+        <h1>Home</h1>
+      </header>
 
       <AlertBanner notice={homeNotice} />
 
       <div className="home-category-stack">
-        {dashboardNavigationSections.map((section) => (
+        {dashboardHomeNavigationSections.map((section) => (
           <section className="home-category-section" key={section.id}>
             <div className="home-category-header">
               <h2>{section.label}</h2>
@@ -71,7 +64,6 @@ export function HomePage() {
                 const card = buildHomeCardData(item, {
                   authState,
                   selectedGuildPresent: selectedGuild !== null,
-                  selectedGuildAccessLevel,
                   rolesSettings,
                   partnerBoard,
                   statsFeature,
@@ -95,11 +87,7 @@ export function HomePage() {
                     ) : (
                       <>
                         <div className="card-copy">
-                          <p className="section-label">{section.label}</p>
-                          <h3>{card.item.homeTitle ?? card.item.label}</h3>
-                          <p className="section-description">
-                            {card.item.homeDescription ?? "Open this area."}
-                          </p>
+                          <h3>{card.item.label}</h3>
                         </div>
 
                         <ul className="home-nav-facts">
@@ -109,7 +97,7 @@ export function HomePage() {
                         </ul>
 
                         <div className="home-nav-card-footer">
-                          <Link className="button-primary" to={card.item.to}>
+                          <Link className="button-secondary home-nav-link" to={card.item.to}>
                             {card.item.homeActionLabel ?? `Open ${card.item.label}`}
                           </Link>
                         </div>
@@ -131,7 +119,6 @@ function buildHomeCardData(
   context: {
     authState: string;
     selectedGuildPresent: boolean;
-    selectedGuildAccessLevel: string | null;
     rolesSettings: ReturnType<typeof useGuildRolesSettings>;
     partnerBoard: ReturnType<typeof usePartnerBoardSummary>;
     statsFeature: FeatureRecord | null;
@@ -147,10 +134,7 @@ function buildHomeCardData(
     return {
       item,
       loading: false,
-      facts: [
-        "Sign in with Discord to load this server workspace.",
-        "Home mirrors the navigation and opens the page directly.",
-      ],
+      facts: ["Status: Sign in required"],
     };
   }
 
@@ -158,10 +142,7 @@ function buildHomeCardData(
     return {
       item,
       loading: false,
-      facts: [
-        "Choose a server from the top bar to load this card.",
-        "Each summary is scoped to the selected server.",
-      ],
+      facts: ["Server: Select a server"],
     };
   }
 
@@ -173,9 +154,9 @@ function buildHomeCardData(
     case "commands":
       return buildCommandsCard(item, context);
     case "moderation":
-      return buildAreaCard(item, context.moderationFeatures, context.workspaceState);
+      return buildFeatureToggleCard(item, context.moderationFeatures, context.workspaceState);
     case "logging":
-      return buildAreaCard(item, context.loggingFeatures, context.workspaceState);
+      return buildFeatureToggleCard(item, context.loggingFeatures, context.workspaceState);
     case "partner-board":
       return buildPartnerBoardCard(item, context);
     case "autorole":
@@ -184,16 +165,13 @@ function buildHomeCardData(
       return {
         item,
         loading: false,
-        facts: [
-          "This workspace is reserved for the future level-role table.",
-          "The route already exists, but the editing flow is still pending.",
-        ],
+        facts: ["Status: In development", "Focus: Next page"],
       };
     default:
       return {
         item,
         loading: false,
-        facts: ["Open the page to review this workspace."],
+        facts: ["Status: Ready"],
       };
   }
 }
@@ -210,13 +188,7 @@ function buildControlPanelCard(
   return {
     item,
     loading,
-    facts: [
-      `${formatCount(readCount, "read access role")}`,
-      `${formatCount(writeCount, "write access role")}`,
-      context.selectedGuildAccessLevel === "read"
-        ? "Your current access to this server is read-only."
-        : "Discord administrators keep implicit write access.",
-    ],
+    facts: [`Write roles: ${writeCount}`, `Read roles: ${readCount}`],
   };
 }
 
@@ -228,7 +200,7 @@ function buildStatsCard(
     return {
       item,
       loading: context.workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(context.workspaceState, "Stats")],
+      facts: [summarizeWorkspaceGate(context.workspaceState)],
     };
   }
 
@@ -237,9 +209,9 @@ function buildStatsCard(
     item,
     loading: false,
     facts: [
-      `${formatCount(statsDetails.configuredChannelCount, "configured channel")}`,
-      `Update interval: ${statsDetails.updateIntervalMins} minute(s)`,
-      summarizeStatsSignal(context.statsFeature),
+      `Configured channels: ${statsDetails.configuredChannelCount}`,
+      `Update interval: ${statsDetails.updateIntervalMins} min`,
+      `Module: ${context.statsFeature.effective_enabled ? "On" : "Off"}`,
     ],
   };
 }
@@ -256,7 +228,7 @@ function buildCommandsCard(
     return {
       item,
       loading: context.workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(context.workspaceState, "Commands")],
+      facts: [summarizeWorkspaceGate(context.workspaceState)],
     };
   }
 
@@ -267,18 +239,14 @@ function buildCommandsCard(
     item,
     loading: false,
     facts: [
-      commandsDetails.channelId === ""
-        ? "Command channel not configured."
-        : "Command channel configured.",
-      `${formatCount(adminDetails.allowedRoleCount, "admin access role")}`,
-      context.commandsFeature.blockers?.[0]?.message ??
-        context.adminCommandsFeature.blockers?.[0]?.message ??
-        "Command routing and access are available for review.",
+      `Commands: ${context.commandsFeature.effective_enabled ? "On" : "Off"}`,
+      `Command channel: ${commandsDetails.channelId === "" ? "Not configured" : "Configured"}`,
+      `Admin roles: ${adminDetails.allowedRoleCount}`,
     ],
   };
 }
 
-function buildAreaCard(
+function buildFeatureToggleCard(
   item: NavigationItem,
   areaFeatures: FeatureRecord[],
   workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
@@ -287,7 +255,7 @@ function buildAreaCard(
     return {
       item,
       loading: workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(workspaceState, item.label)],
+      facts: [summarizeWorkspaceGate(workspaceState)],
     };
   }
 
@@ -295,21 +263,16 @@ function buildAreaCard(
     return {
       item,
       loading: false,
-      facts: ["No mapped controls are currently exposed for this area."],
+      facts: ["Status: Not available"],
     };
   }
-
-  const areaSummary = summarizeFeatureArea(areaFeatures);
-  const enabledCount = areaFeatures.filter((feature) => feature.effective_enabled).length;
 
   return {
     item,
     loading: false,
-    facts: [
-      `${enabledCount}/${areaFeatures.length} controls enabled`,
-      areaSummary.label,
-      areaSummary.signal,
-    ],
+    facts: areaFeatures.map(
+      (feature) => `${feature.label}: ${feature.effective_enabled ? "On" : "Off"}`,
+    ),
   };
 }
 
@@ -323,13 +286,9 @@ function buildPartnerBoardCard(
     item,
     loading,
     facts: [
-      `${formatCount(context.partnerBoard.partnerCount, "partner entry")}`,
-      context.partnerBoard.deliveryConfigured
-        ? context.partnerBoard.summarizePostingDestination
-        : "Destination not configured.",
-      context.partnerBoard.layoutConfigured
-        ? "Layout configured."
-        : "Layout still needs setup.",
+      `Partners: ${context.partnerBoard.partnerCount}`,
+      `Destination: ${context.partnerBoard.deliveryConfigured ? "Configured" : "Not configured"}`,
+      `Layout: ${context.partnerBoard.layoutConfigured ? "Configured" : "Pending"}`,
     ],
   };
 }
@@ -342,7 +301,7 @@ function buildAutoroleCard(
     return {
       item,
       loading: context.workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(context.workspaceState, "Autorole")],
+      facts: [summarizeWorkspaceGate(context.workspaceState)],
     };
   }
 
@@ -351,33 +310,28 @@ function buildAutoroleCard(
     item,
     loading: false,
     facts: [
-      details.targetRoleId === "" ? "Target role not configured." : "Target role configured.",
-      `${formatCount(details.requiredRoleCount, "required role")}`,
-      summarizeAutoRoleSignal(context.autoRoleFeature),
+      `Module: ${context.autoRoleFeature.effective_enabled ? "On" : "Off"}`,
+      `Target role: ${details.targetRoleId === "" ? "Not configured" : "Configured"}`,
+      `Required roles: ${details.requiredRoleCount}`,
     ],
   };
 }
 
 function summarizeWorkspaceGate(
   workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
-  label: string,
 ) {
   switch (workspaceState) {
     case "checking":
-      return "Checking your dashboard access for this area.";
+      return "Status: Checking access";
     case "auth_required":
-      return `Sign in with Discord before opening ${label.toLowerCase()}.`;
+      return "Status: Sign in required";
     case "server_required":
-      return "Choose a server to load this area.";
+      return "Server: Select a server";
     case "loading":
-      return `Loading ${label.toLowerCase()} summary.`;
+      return "Status: Loading";
     case "unavailable":
-      return `The ${label.toLowerCase()} summary could not be loaded.`;
+      return "Status: Unavailable";
     default:
-      return `${label} is ready to open.`;
+      return "Status: Ready";
   }
-}
-
-function formatCount(count: number, label: string) {
-  return `${count} ${label}${count === 1 ? "" : "s"}`;
 }

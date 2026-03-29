@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  dashboardPartnerBoardNavigationItem,
   dashboardHomeNavigationItem,
-  dashboardNavigationSections,
+  dashboardSidebarNavigationSections,
+  getActiveNavigationSection,
   isNavigationItemActive,
 } from "../app/navigation";
 import { appRoutes } from "../app/routes";
@@ -16,6 +18,7 @@ const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
 export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const activeSection = getActiveNavigationSection(location.pathname);
   const {
     authState,
     accessibleGuilds,
@@ -30,10 +33,17 @@ export function DashboardLayout() {
     logout,
   } = useDashboardSession();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [openSectionID, setOpenSectionID] = useState<string | null>(
+    activeSection?.id ?? null,
+  );
 
   useEffect(() => {
     setAccountMenuOpen(false);
   }, [location.pathname, location.search, location.hash, authState]);
+
+  useEffect(() => {
+    setOpenSectionID(activeSection?.id ?? null);
+  }, [activeSection?.id, location.pathname]);
 
   async function handleSignOut() {
     setAccountMenuOpen(false);
@@ -59,6 +69,10 @@ export function DashboardLayout() {
   const accountTone = authState === "signed_in" ? "success" : "info";
   const canSelectGuild =
     authState === "signed_in" && accessibleGuilds.length > 0;
+
+  function toggleSection(sectionID: string) {
+    setOpenSectionID((current) => (current === sectionID ? null : sectionID));
+  }
 
   return (
     <main className="dashboard-shell">
@@ -159,67 +173,117 @@ export function DashboardLayout() {
         </div>
       </header>
 
-      {notice ? (
-        <div className="shell-notice">
-          <AlertBanner
-            notice={notice}
-            busyLabel={sessionLoading ? busyLabel : undefined}
-          />
-        </div>
-      ) : sessionLoading ? (
-        <div className="shell-notice">
-          <AlertBanner busyLabel={busyLabel} />
-        </div>
-      ) : null}
-
       <div className="shell-body">
         <aside className="shell-sidebar" aria-label="Dashboard navigation">
-          <div className="shell-sidebar-panel">
-            <nav className="shell-nav" aria-label="Dashboard navigation">
-              <Link
-                className={`shell-nav-link shell-nav-link-root${
-                  isNavigationItemActive(location.pathname, dashboardHomeNavigationItem)
-                    ? " is-active"
-                    : ""
-                }`}
-                to={dashboardHomeNavigationItem.to}
-                aria-current={
-                  isNavigationItemActive(location.pathname, dashboardHomeNavigationItem)
-                    ? "page"
-                    : undefined
-                }
-              >
-                <span>{dashboardHomeNavigationItem.label}</span>
-              </Link>
+          <nav className="shell-nav" aria-label="Dashboard navigation">
+            <Link
+              className={`shell-nav-link shell-nav-link-root${
+                isNavigationItemActive(location.pathname, dashboardHomeNavigationItem)
+                  ? " is-active"
+                  : ""
+              }`}
+              to={dashboardHomeNavigationItem.to}
+              aria-current={
+                isNavigationItemActive(location.pathname, dashboardHomeNavigationItem)
+                  ? "page"
+                  : undefined
+              }
+            >
+              <span>{dashboardHomeNavigationItem.label}</span>
+            </Link>
 
-              {dashboardNavigationSections.map((section) => (
+            {dashboardSidebarNavigationSections.map((section) => {
+              const isOpen = openSectionID === section.id;
+              const hasActiveItem = activeSection?.id === section.id;
+
+              return (
                 <section className="shell-nav-section" key={section.id}>
-                  <p className="shell-nav-section-label">{section.label}</p>
-                  <div className="shell-nav-list">
-                    {section.items.map((item) => {
-                      const isActive = isNavigationItemActive(location.pathname, item);
+                  <button
+                    className={`shell-nav-section-trigger${
+                      hasActiveItem ? " is-active" : ""
+                    }`}
+                    type="button"
+                    aria-expanded={isOpen}
+                    aria-controls={`shell-nav-section-${section.id}`}
+                    onClick={() => toggleSection(section.id)}
+                  >
+                    <span>{section.label}</span>
+                    <span
+                      className={`shell-nav-section-indicator${
+                        isOpen ? " is-open" : ""
+                      }`}
+                      aria-hidden="true"
+                    >
+                      ▾
+                    </span>
+                  </button>
 
-                      return (
-                        <Link
-                          key={item.label}
-                          className={`shell-nav-link shell-nav-link-sub${
-                            isActive ? " is-active" : ""
-                          }`}
-                          to={item.to}
-                          aria-current={isActive ? "page" : undefined}
-                        >
-                          <span>{item.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
+                  {isOpen ? (
+                    <div
+                      className="shell-nav-list"
+                      id={`shell-nav-section-${section.id}`}
+                    >
+                      {section.items.map((item) => {
+                        const isActive = isNavigationItemActive(location.pathname, item);
+
+                        return (
+                          <Link
+                            key={item.label}
+                            className={`shell-nav-link shell-nav-link-sub${
+                              isActive ? " is-active" : ""
+                            }`}
+                            to={item.to}
+                            aria-current={isActive ? "page" : undefined}
+                          >
+                            <span>{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  {section.id === "moderation" ? (
+                    <Link
+                      className={`shell-nav-link shell-nav-link-root${
+                        isNavigationItemActive(
+                          location.pathname,
+                          dashboardPartnerBoardNavigationItem,
+                        )
+                          ? " is-active"
+                          : ""
+                      }`}
+                      to={dashboardPartnerBoardNavigationItem.to}
+                      aria-current={
+                        isNavigationItemActive(
+                          location.pathname,
+                          dashboardPartnerBoardNavigationItem,
+                        )
+                          ? "page"
+                          : undefined
+                      }
+                    >
+                      <span>{dashboardPartnerBoardNavigationItem.label}</span>
+                    </Link>
+                  ) : null}
                 </section>
-              ))}
-            </nav>
-          </div>
+              );
+            })}
+          </nav>
         </aside>
 
         <section className="shell-main">
+          {notice ? (
+            <div className="shell-main-notice">
+              <AlertBanner
+                notice={notice}
+                busyLabel={sessionLoading ? busyLabel : undefined}
+              />
+            </div>
+          ) : sessionLoading ? (
+            <div className="shell-main-notice">
+              <AlertBanner busyLabel={busyLabel} />
+            </div>
+          ) : null}
           <Outlet />
         </section>
       </div>
