@@ -177,6 +177,14 @@ function buildHomeCardData(
     workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"];
   },
 ): HomeCardData {
+  if (context.authState === "checking") {
+    return createHomeCardData(
+      item,
+      [createHomeCardFact("Status", "Loading")],
+      true,
+    );
+  }
+
   if (context.authState !== "signed_in") {
     return createHomeCardData(item, [createHomeCardFact("Status", "Sign in required")]);
   }

@@ -138,15 +138,14 @@ export function DashboardSessionProvider({
           return;
         }
 
-        setAuthState("signed_in");
-        setSession(probe.session);
-
         const guildsResponse = await activeClient.listAccessibleGuilds();
         const nextGuildID = resolveGuildSelection(
           selectedGuildID,
           preferredGuildID,
           guildsResponse.guilds,
         );
+        setAuthState("signed_in");
+        setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);
         setSelectedGuildID(nextGuildID);
         setNotice(null);
