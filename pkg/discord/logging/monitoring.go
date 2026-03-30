@@ -29,7 +29,10 @@ var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
 const (
 	monitoringGuildMembersPageSize   = 1000
 	monitoringMaxConcurrentGuildScan = 4
+	taskTypeStartupWarmupMembers     = "monitor.startup_warmup_members"
 )
+
+var monitoringWarmupTaskFn = cache.IntelligentWarmupContext
 
 func stopMonitoringSubService(ctx context.Context, operation, serviceName string, stopFn func() error) error {
 	if stopFn == nil {
@@ -562,15 +565,6 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		ms.rebuildTaskPipeline()
 	}
 
-	// Unified cache warmup is performed in app runner; skipping here to prevent duplicate work
-	if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
-		ms.ensureGuildsListed()
-		return nil
-	}); err != nil {
-		cancelLifecycle()
-		ms.recordLifecycleErrorLocked()
-		return fmt.Errorf("ensure guilds listed: %w", err)
-	}
 	if err := ms.handleStartupDowntimeAndMaybeRefresh(ctx); err != nil {
 		cancelLifecycle()
 		ms.recordLifecycleErrorLocked()
@@ -685,6 +679,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
 	serviceCtx := lifecycleCtx
 
+	ms.registerStartupWarmupHandler(serviceCtx)
 	ms.syncSchedulesLocked(serviceCtx, workload)
 
 	if workload.backfill {
@@ -1152,6 +1147,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	ms.startTime = &now
 	ms.stopTime = nil
 
+	ms.scheduleEnsureGuildsListed(serviceCtx)
 	log.ApplicationLogger().Info("All monitoring services started successfully")
 	return nil
 }
@@ -1740,18 +1736,75 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 	}
 }
 
-func (ms *MonitoringService) dispatchMonitorTaskLocked(runCtx context.Context, taskType string) {
-	if ms.router == nil || runCtx == nil || strings.TrimSpace(taskType) == "" {
+func (ms *MonitoringService) registerStartupWarmupHandler(runCtx context.Context) {
+	if ms == nil || ms.router == nil || runCtx == nil {
 		return
+	}
+
+	ms.router.RegisterHandler(taskTypeStartupWarmupMembers, func(ctx context.Context, payload any) error {
+		if err := runCtx.Err(); err != nil {
+			return err
+		}
+
+		config, ok := payload.(cache.WarmupConfig)
+		if !ok {
+			config = cache.DefaultWarmupConfig()
+			config.FetchMissingGuilds = false
+			config.FetchMissingRoles = false
+			config.FetchMissingChannels = false
+			config.MaxMembersPerGuild = 500
+		}
+		return monitoringWarmupTaskFn(runCtx, ms.session, ms.unifiedCache, ms.store, config)
+	})
+}
+
+func (ms *MonitoringService) scheduleEnsureGuildsListed(runCtx context.Context) {
+	if ms == nil || runCtx == nil {
+		return
+	}
+
+	ms.startOwnedWorker(runCtx, func(ctx context.Context) {
+		if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
+			ms.ensureGuildsListed()
+			return nil
+		}); err != nil && ctx.Err() == nil {
+			log.ApplicationLogger().Warn("Ensure guilds listed task failed", "err", err)
+		}
+	})
+}
+
+func (ms *MonitoringService) dispatchMonitorTaskLocked(runCtx context.Context, taskType string) {
+	ms.dispatchMonitorTaskWithPayloadLocked(runCtx, task.Task{Type: taskType})
+}
+
+func (ms *MonitoringService) dispatchMonitorTaskWithPayloadLocked(runCtx context.Context, dispatchTask task.Task) bool {
+	if ms.router == nil || runCtx == nil || strings.TrimSpace(dispatchTask.Type) == "" {
+		return false
 	}
 
 	router := ms.router
 	ms.startOwnedWorker(runCtx, func(workerCtx context.Context) {
 		dispatchCtx, cancel := context.WithTimeout(workerCtx, monitoringStartupDispatchLimit)
 		defer cancel()
-		if err := router.Dispatch(dispatchCtx, task.Task{Type: taskType}); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", taskType, "err", err)
+		if err := router.Dispatch(dispatchCtx, dispatchTask); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", dispatchTask.Type, "err", err)
 		}
+	})
+	return true
+}
+
+func (ms *MonitoringService) ScheduleStartupMemberWarmup(config cache.WarmupConfig) bool {
+	if ms == nil {
+		return false
+	}
+
+	ms.runMu.RLock()
+	runCtx := ms.runCtx
+	ms.runMu.RUnlock()
+
+	return ms.dispatchMonitorTaskWithPayloadLocked(runCtx, task.Task{
+		Type:    taskTypeStartupWarmupMembers,
+		Payload: config,
 	})
 }
 

@@ -71,6 +71,24 @@ func TestResolveRuntimeBackgroundParallelism(t *testing.T) {
 	}
 }
 
+func TestResolveStartupLightParallelism(t *testing.T) {
+	tests := []struct {
+		runtimeCount int
+		want         int
+	}{
+		{runtimeCount: 0, want: 2},
+		{runtimeCount: 1, want: 2},
+		{runtimeCount: 2, want: 3},
+		{runtimeCount: 4, want: 4},
+	}
+
+	for _, tt := range tests {
+		if got := resolveStartupLightParallelism(tt.runtimeCount); got != tt.want {
+			t.Fatalf("resolveStartupLightParallelism(%d)=%d want %d", tt.runtimeCount, got, tt.want)
+		}
+	}
+}
+
 func TestOpenBotRuntimesAppliesParallelLimit(t *testing.T) {
 	origOpenBotRuntime := openBotRuntimeFn
 	t.Cleanup(func() {

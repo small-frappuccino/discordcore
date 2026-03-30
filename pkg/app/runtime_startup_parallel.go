@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	stdErrors "errors"
+	"fmt"
 	"sync"
 
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -30,6 +33,28 @@ func resolveRuntimeBackgroundParallelism(runtimeCount int) int {
 		return 1
 	default:
 		return 2
+	}
+}
+
+func resolveStartupLightParallelism(runtimeCount int) int {
+	switch {
+	case runtimeCount <= 1:
+		return 2
+	case runtimeCount == 2:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func resolveStartupLightQueueSize(runtimeCount int) int {
+	switch {
+	case runtimeCount <= 1:
+		return 4
+	case runtimeCount == 2:
+		return 6
+	default:
+		return runtimeCount * 2
 	}
 }
 
@@ -95,11 +120,20 @@ type runtimeStartupBackgroundWorker struct {
 }
 
 func newRuntimeStartupBackgroundWorker(runtimeCount int) *runtimeStartupBackgroundWorker {
+	return newRuntimeStartupBackgroundWorkerWithLimits(
+		resolveRuntimeBackgroundParallelism(runtimeCount),
+		runtimeCount,
+	)
+}
+
+func newRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *runtimeStartupBackgroundWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	group, groupCtx := errgroup.WithContext(ctx)
-	group.SetLimit(resolveRuntimeBackgroundParallelism(runtimeCount))
+	if parallelism <= 0 {
+		parallelism = 1
+	}
+	group.SetLimit(parallelism)
 
-	queueSize := runtimeCount
 	if queueSize <= 0 {
 		queueSize = 1
 	}
@@ -114,6 +148,69 @@ func newRuntimeStartupBackgroundWorker(runtimeCount int) *runtimeStartupBackgrou
 	}
 	go worker.dispatch()
 	return worker
+}
+
+type startupTaskOrchestrator struct {
+	light *runtimeStartupBackgroundWorker
+	heavy *runtimeStartupBackgroundWorker
+}
+
+func newStartupTaskOrchestrator(runtimeCount int) *startupTaskOrchestrator {
+	return &startupTaskOrchestrator{
+		light: newRuntimeStartupBackgroundWorkerWithLimits(
+			resolveStartupLightParallelism(runtimeCount),
+			resolveStartupLightQueueSize(runtimeCount),
+		),
+		heavy: newRuntimeStartupBackgroundWorker(runtimeCount),
+	}
+}
+
+func (o *startupTaskOrchestrator) GoLight(name string, fn func(context.Context) error) {
+	o.goTask(o.light, name, "light", fn)
+}
+
+func (o *startupTaskOrchestrator) GoHeavy(name string, fn func(context.Context) error) {
+	o.goTask(o.heavy, name, "heavy", fn)
+}
+
+func (o *startupTaskOrchestrator) goTask(worker *runtimeStartupBackgroundWorker, name, kind string, fn func(context.Context) error) {
+	if o == nil || worker == nil || fn == nil {
+		return
+	}
+
+	worker.Go(func(ctx context.Context) error {
+		if err := fn(ctx); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			log.ApplicationLogger().Warn(
+				"Startup background task failed",
+				"task", name,
+				"kind", kind,
+				"err", err,
+			)
+		}
+		return nil
+	})
+}
+
+func (o *startupTaskOrchestrator) Shutdown(ctx context.Context) error {
+	if o == nil {
+		return nil
+	}
+
+	var errs []error
+	if o.light != nil {
+		if err := o.light.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+			errs = append(errs, fmt.Errorf("shutdown light startup tasks: %w", err))
+		}
+	}
+	if o.heavy != nil {
+		if err := o.heavy.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+			errs = append(errs, fmt.Errorf("shutdown heavy startup tasks: %w", err))
+		}
+	}
+	return stdErrors.Join(errs...)
 }
 
 func (w *runtimeStartupBackgroundWorker) Go(fn func(context.Context) error) {

@@ -13,7 +13,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
-	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -234,6 +233,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	runtimes := make(map[string]*botRuntime, len(botInstances))
 	runtimeCapabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
+	controlServerRegistry := &controlServerHolder{}
 	cleanupRuntimesOnReturn := true
 	defer func() {
 		if !cleanupRuntimesOnReturn {
@@ -263,12 +263,15 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 			}
 		}
 	}()
-	startupBackgroundWorker := newRuntimeStartupBackgroundWorker(len(botInstances))
+	startupTasks := newStartupTaskOrchestrator(len(botInstances))
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := startupBackgroundWorker.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-			log.ApplicationLogger().Warn("Runtime startup background tasks did not finish cleanly", "err", err)
+		if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+			log.ApplicationLogger().Warn("Startup background tasks did not finish cleanly", "err", err)
+		}
+		if err := controlServerRegistry.Stop(ctx); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
 		}
 	}()
 
@@ -291,35 +294,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	defaultSession, err := runtimeResolver.sessionForGuild("")
 	if err != nil {
 		return fmt.Errorf("resolve default discord session: %w", err)
-	}
-	if cfg := configManager.Config(); cfg != nil && defaultSession != nil {
-		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
-			operation := fmt.Sprintf(
-				"runtime_config.webhook_embed_updates[%s:%d]",
-				item.scope,
-				item.index,
-			)
-			if err := webhook.PatchMessageEmbed(defaultSession, webhook.MessageEmbedPatch{
-				MessageID:  item.update.MessageID,
-				WebhookURL: item.update.WebhookURL,
-				Embed:      item.update.Embed,
-			}); err != nil {
-				log.ApplicationLogger().Warn(
-					"Webhook embed patch failed",
-					"operation", operation,
-					"scope", item.scope,
-					"messageID", strings.TrimSpace(item.update.MessageID),
-					"error", err,
-				)
-			} else {
-				log.ApplicationLogger().Info(
-					"Webhook embed patch applied",
-					"operation", operation,
-					"scope", item.scope,
-					"messageID", strings.TrimSpace(item.update.MessageID),
-				)
-			}
-		}
 	}
 
 	partnerSyncService := partners.NewBoardSyncService(configManager)
@@ -346,90 +320,24 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		runtimeApplier:       runtimeApplier,
 		partnerBoardService:  partnerBoardAppService,
 		partnerSyncExecutor:  partnerSyncDispatcher,
-		startupBackground:    startupBackgroundWorker,
+		startupTasks:         startupTasks,
 	}); err != nil {
 		return err
 	}
 
 	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
-	controlRuntime, err := resolveControlRuntime(context.Background(), opts)
-	if err != nil && stdErrors.Is(err, errControlLocalTLSUnavailable) {
-		log.ApplicationLogger().Warn(
-			"Embedded local control HTTPS is unavailable; continuing without control server",
-			"err", err,
-		)
-		controlRuntime = resolvedControlRuntime{}
-	} else if err != nil {
-		return err
-	}
-
-	var controlServer *control.Server
-	controlServer = control.NewServer(controlRuntime.bindAddr, configManager, runtimeApplier)
-	if controlServer == nil {
-		log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
-	} else {
-		if controlBearerToken == "" && controlRuntime.oauthConfig == nil {
-			log.ApplicationLogger().Info(
-				"Control server authentication is not configured",
-				"addr", controlRuntime.bindAddr,
-				"dashboard_only", true,
-			)
-		}
-		if controlBearerToken != "" {
-			controlServer.SetBearerToken(controlBearerToken)
-		}
-		controlServer.SetDefaultBotInstanceID(defaultBotInstanceID)
-		controlServer.SetPartnerBoardService(partnerBoardAppService)
-		controlServer.SetPartnerBoardSyncExecutor(partnerSyncDispatcher)
-		controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
-			return runtimeResolver.sessionForGuild(guildID)
-		})
-		controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
-			return runtimeResolver.guildBindings(ctx)
-		})
-		controlServer.SetGuildRegistrationResolver(func(ctx context.Context, guildID, botInstanceID string) error {
-			return runtimeResolver.registerGuild(ctx, guildID, botInstanceID)
-		})
-		if err := controlServer.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
-			return fmt.Errorf("configure control public origin: %w", err)
-		}
-		if controlRuntime.tlsCertFile != "" || controlRuntime.tlsKeyFile != "" {
-			if err := controlServer.SetTLSCertificates(controlRuntime.tlsCertFile, controlRuntime.tlsKeyFile); err != nil {
-				return fmt.Errorf("configure control tls certificates: %w", err)
-			}
-		}
-		if controlRuntime.oauthConfig != nil {
-			if err := controlServer.SetDiscordOAuthConfig(*controlRuntime.oauthConfig); err != nil {
-				return fmt.Errorf("configure control discord oauth: %w", err)
-			}
-			log.ApplicationLogger().Info(
-				"Control server Discord OAuth enabled",
-				"scopes", strings.Join(control.DiscordOAuthScopes(controlRuntime.oauthConfig.IncludeGuildsMembersRead), " "),
-			)
-			if controlRuntime.tlsCertFile == "" || controlRuntime.tlsKeyFile == "" {
-				log.ApplicationLogger().Warn("Discord OAuth is enabled but control TLS certificate/key are not configured; ensure HTTPS termination in front of control server so Secure cookies persist")
-			}
-		}
-		if err := controlServer.Start(); err != nil {
-			if stdErrors.Is(err, control.ErrControlServerBind) {
-				log.ApplicationLogger().Warn(
-					"Control server unavailable; continuing without dashboard listener",
-					"addr", controlRuntime.bindAddr,
-					"err", err,
-				)
-			} else {
-				return fmt.Errorf("start control server: %w", err)
-			}
-		} else {
-			defer func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := controlServer.Stop(ctx); err != nil {
-					log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
-				}
-			}()
-		}
-	}
+	scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), defaultSession)
+	scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
+		runOptions:            opts,
+		configManager:         configManager,
+		runtimeApplier:        runtimeApplier,
+		controlBearerToken:    controlBearerToken,
+		defaultBotInstanceID:  defaultBotInstanceID,
+		runtimeResolver:       runtimeResolver,
+		partnerBoardService:   partnerBoardAppService,
+		partnerSyncExecutor:   partnerSyncDispatcher,
+		controlServerRegistry: controlServerRegistry,
+	})
 
 	log.ApplicationLogger().Info("🔗 Slash commands sync completed")
 	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
@@ -441,8 +349,11 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	log.GlobalLogger.Sync()
 
 	backgroundShutdownCtx, backgroundShutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if err := startupBackgroundWorker.Shutdown(backgroundShutdownCtx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-		log.ApplicationLogger().Warn("Runtime startup background tasks did not finish before shutdown", "err", err)
+	if err := startupTasks.Shutdown(backgroundShutdownCtx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+		log.ApplicationLogger().Warn("Startup background tasks did not finish before shutdown", "err", err)
+	}
+	if err := controlServerRegistry.Stop(backgroundShutdownCtx); err != nil {
+		log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
 	}
 	backgroundShutdownCancel()
 
