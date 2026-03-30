@@ -8,8 +8,14 @@ import {
   FeatureWorkspaceLayout,
   PageHeader,
   StatusBadge,
-  SurfaceCard,
 } from "../components/ui";
+import {
+  OverviewCard,
+  OverviewStatRow,
+  SectionBlock,
+  type OverviewTone,
+  type SemanticValueKind,
+} from "../components/overview";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import { useGuildRolesSettings } from "../features/control-panel/useGuildRolesSettings";
 import {
@@ -24,18 +30,17 @@ import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoar
 
 interface HomeCardData {
   item: NavigationItem;
-  facts: HomeCardFact[];
+  sectionLabel: string;
+  rows: HomeCardRow[];
   loading: boolean;
-  tone: HomeFactTone;
+  state: OverviewTone;
 }
 
-type HomeFactTone = "neutral" | "info" | "success" | "error";
-type HomeCardTier = "primary" | "secondary";
-
-interface HomeCardFact {
+interface HomeCardRow {
   label: string;
   value: string;
-  tone: HomeFactTone;
+  valueKind: SemanticValueKind;
+  state: OverviewTone;
 }
 
 export function HomePage() {
@@ -67,7 +72,7 @@ export function HomePage() {
   const homeStatus = getHomeStatus(authState, workspace.workspaceState, selectedGuild !== null);
 
   return (
-    <section className="page-shell">
+    <section className="page-shell home-page">
       <PageHeader
         eyebrow="Overview"
         title="Home"
@@ -100,23 +105,25 @@ export function HomePage() {
             : undefined
         }
         workspaceTitle="Product areas"
-        workspaceDescription="Open the area that matches the task at hand and confirm its current status before drilling into configuration."
+        workspaceDescription="Scan the current state of each area, then open the workspace that needs action."
         workspaceMeta={
           <span className="meta-pill subtle-pill">
             {dashboardHomeNavigationSections.length} product areas
           </span>
         }
+        workspaceClassName="home-workspace-panel"
         workspaceContent={
           <div className="home-category-stack">
             {dashboardHomeNavigationSections.map((section) => (
-              <section className="home-category-section" key={section.id}>
-                <div className="home-category-header">
-                  <h2>{section.label}</h2>
-                </div>
-
+              <SectionBlock
+                className="home-category-section"
+                key={section.id}
+                title={section.label}
+              >
                 <div className="home-card-grid">
-                  {section.items.map((item, index) => {
+                  {section.items.map((item) => {
                     const card = buildHomeCardData(item, {
+                      sectionLabel: section.label,
                       authState,
                       selectedGuildPresent: selectedGuild !== null,
                       rolesSettings,
@@ -129,20 +136,19 @@ export function HomePage() {
                       autoRoleFeature,
                       workspaceState: workspace.workspaceState,
                     });
-                    const tier = getHomeCardTier(section.items.length, index);
 
                     return (
-                      <SurfaceCard
-                        as="article"
+                      <OverviewCard
                         aria-busy={card.loading}
-                        className={[
-                          "home-nav-card",
-                          "surface-card-accent",
-                          card.tone !== "neutral"
-                            ? `surface-card-accent-${card.tone}`
-                            : "",
-                          `home-nav-card-${tier}`,
-                        ].join(" ")}
+                        className="home-nav-card"
+                        tone={card.state}
+                        sectionLabel={card.sectionLabel}
+                        title={card.item.label}
+                        action={card.loading ? null : (
+                          <Link className="button-secondary home-nav-link" to={card.item.to}>
+                            {card.item.homeActionLabel ?? `Open ${card.item.label}`}
+                          </Link>
+                        )}
                         key={item.id}
                       >
                         {card.loading ? (
@@ -153,47 +159,24 @@ export function HomePage() {
                             <span className="home-nav-skeleton home-nav-skeleton-button" />
                           </div>
                         ) : (
-                          <>
-                            <div className="home-nav-card-header">
-                              <h3>{card.item.label}</h3>
-                            </div>
-
-                            <ul className="home-nav-facts">
-                              {card.facts.map((fact) => (
-                                <li
-                                  className="home-nav-fact-row"
-                                  data-tone={fact.tone}
-                                  key={fact.label}
-                                >
-                                  <span className="sr-only">{`${fact.label}: ${fact.value}`}</span>
-                                  <div className="home-nav-fact-key" aria-hidden="true">
-                                    <span className="home-nav-fact-label">{fact.label}: </span>
-                                  </div>
-                                  <div className="home-nav-fact-value-wrap" aria-hidden="true">
-                                    {fact.tone !== "neutral" ? (
-                                      <span
-                                        className={`home-nav-fact-dot tone-${fact.tone}`}
-                                        aria-hidden="true"
-                                      />
-                                    ) : null}
-                                    <strong className="home-nav-fact-value">{fact.value}</strong>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-
-                            <div className="home-nav-card-footer">
-                              <Link className="button-secondary home-nav-link" to={card.item.to}>
-                                {card.item.homeActionLabel ?? `Open ${card.item.label}`}
-                              </Link>
-                            </div>
-                          </>
+                          <ul className="home-nav-facts overview-card-list">
+                            {card.rows.map((row) => (
+                              <OverviewStatRow
+                                key={`${row.label}-${row.value}`}
+                                label={row.label}
+                                value={row.value}
+                                kind={row.valueKind}
+                                tone={row.state}
+                                screenReaderLabel={`${row.label}: ${row.value}`}
+                              />
+                            ))}
+                          </ul>
                         )}
-                      </SurfaceCard>
+                      </OverviewCard>
                     );
                   })}
                 </div>
-              </section>
+              </SectionBlock>
             ))}
           </div>
         }
@@ -251,6 +234,7 @@ function getHomeStatus(
 function buildHomeCardData(
   item: NavigationItem,
   context: {
+    sectionLabel: string;
     authState: string;
     selectedGuildPresent: boolean;
     rolesSettings: ReturnType<typeof useGuildRolesSettings>;
@@ -267,17 +251,22 @@ function buildHomeCardData(
   if (context.authState === "checking") {
     return createHomeCardData(
       item,
-      [createHomeCardFact("Status", "Loading")],
+      context.sectionLabel,
+      [createMetaCardRow("Status", "Loading", "attention")],
       true,
     );
   }
 
   if (context.authState !== "signed_in") {
-    return createHomeCardData(item, [createHomeCardFact("Status", "Sign in required")]);
+    return createHomeCardData(item, context.sectionLabel, [
+      createMetaCardRow("Status", "Sign in required", "attention"),
+    ]);
   }
 
   if (!context.selectedGuildPresent) {
-    return createHomeCardData(item, [createHomeCardFact("Server", "Select a server")]);
+    return createHomeCardData(item, context.sectionLabel, [
+      createMetaCardRow("Server", "Select a server", "attention"),
+    ]);
   }
 
   switch (item.id) {
@@ -288,20 +277,32 @@ function buildHomeCardData(
     case "commands":
       return buildCommandsCard(item, context);
     case "moderation":
-      return buildFeatureToggleCard(item, context.moderationFeatures, context.workspaceState);
+      return buildFeatureToggleCard(
+        item,
+        context.sectionLabel,
+        context.moderationFeatures,
+        context.workspaceState,
+      );
     case "logging":
-      return buildFeatureToggleCard(item, context.loggingFeatures, context.workspaceState);
+      return buildFeatureToggleCard(
+        item,
+        context.sectionLabel,
+        context.loggingFeatures,
+        context.workspaceState,
+      );
     case "partner-board":
       return buildPartnerBoardCard(item, context);
     case "autorole":
       return buildAutoroleCard(item, context);
     case "level-roles":
-      return createHomeCardData(item, [
-        createHomeCardFact("Status", "In development"),
-        createHomeCardFact("Focus", "Next page"),
+      return createHomeCardData(item, context.sectionLabel, [
+        createMetaCardRow("Status", "In development", "attention"),
+        createMetaCardRow("Scope", "Planned page"),
       ]);
     default:
-      return createHomeCardData(item, [createHomeCardFact("Status", "Ready")]);
+      return createHomeCardData(item, context.sectionLabel, [
+        createMetaCardRow("Status", "Ready"),
+      ]);
   }
 }
 
@@ -316,9 +317,10 @@ function buildControlPanelCard(
 
   return createHomeCardData(
     item,
+    context.sectionLabel,
     [
-      createHomeCardFact("Write roles", String(writeCount)),
-      createHomeCardFact("Read roles", String(readCount)),
+      createNumericCardRow("Write roles", String(writeCount)),
+      createNumericCardRow("Read roles", String(readCount)),
     ],
     loading,
   );
@@ -331,16 +333,20 @@ function buildStatsCard(
   if (context.workspaceState !== "ready" || context.statsFeature === null) {
     return createHomeCardData(
       item,
-      [buildWorkspaceGateFact(context.workspaceState)],
+      context.sectionLabel,
+      [buildWorkspaceGateRow(context.workspaceState)],
       context.workspaceState === "loading",
     );
   }
 
   const statsDetails = getStatsFeatureDetails(context.statsFeature);
-  return createHomeCardData(item, [
-    createHomeCardFact("Configured channels", String(statsDetails.configuredChannelCount)),
-    createHomeCardFact("Update interval", `${statsDetails.updateIntervalMins} min`),
-    createHomeCardFact("Module", context.statsFeature.effective_enabled ? "On" : "Off"),
+  return createHomeCardData(item, context.sectionLabel, [
+    createFeatureStateRow("Module", context.statsFeature.effective_enabled),
+    createNumericCardRow(
+      "Configured channels",
+      String(statsDetails.configuredChannelCount),
+    ),
+    createNumericCardRow("Update interval", `${statsDetails.updateIntervalMins} min`),
   ]);
 }
 
@@ -355,7 +361,8 @@ function buildCommandsCard(
   ) {
     return createHomeCardData(
       item,
-      [buildWorkspaceGateFact(context.workspaceState)],
+      context.sectionLabel,
+      [buildWorkspaceGateRow(context.workspaceState)],
       context.workspaceState === "loading",
     );
   }
@@ -363,37 +370,43 @@ function buildCommandsCard(
   const commandsDetails = getCommandsFeatureDetails(context.commandsFeature);
   const adminDetails = getAdminCommandsFeatureDetails(context.adminCommandsFeature);
 
-  return createHomeCardData(item, [
-    createHomeCardFact("Commands", context.commandsFeature.effective_enabled ? "On" : "Off"),
-    createHomeCardFact(
+  return createHomeCardData(item, context.sectionLabel, [
+    createFeatureStateRow("Commands", context.commandsFeature.effective_enabled),
+    createMetaCardRow(
       "Command channel",
-      commandsDetails.channelId === "" ? "Not configured" : "Configured",
+      commandsDetails.channelId === "" ? "Missing" : "Configured",
+      commandsDetails.channelId === "" ? "attention" : "neutral",
     ),
-    createHomeCardFact("Admin roles", String(adminDetails.allowedRoleCount)),
+    createNumericCardRow("Admin roles", String(adminDetails.allowedRoleCount)),
   ]);
 }
 
 function buildFeatureToggleCard(
   item: NavigationItem,
+  sectionLabel: string,
   areaFeatures: FeatureRecord[],
   workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
 ): HomeCardData {
   if (workspaceState !== "ready") {
     return createHomeCardData(
       item,
-      [buildWorkspaceGateFact(workspaceState)],
+      sectionLabel,
+      [buildWorkspaceGateRow(workspaceState)],
       workspaceState === "loading",
     );
   }
 
   if (areaFeatures.length === 0) {
-    return createHomeCardData(item, [createHomeCardFact("Status", "Not available")]);
+    return createHomeCardData(item, sectionLabel, [
+      createMetaCardRow("Status", "Not available", "attention"),
+    ]);
   }
 
   return createHomeCardData(
     item,
+    sectionLabel,
     areaFeatures.map((feature) =>
-      createHomeCardFact(feature.label, feature.effective_enabled ? "On" : "Off"),
+      createFeatureStateRow(feature.label, feature.effective_enabled),
     ),
   );
 }
@@ -406,15 +419,18 @@ function buildPartnerBoardCard(
 
   return createHomeCardData(
     item,
+    context.sectionLabel,
     [
-      createHomeCardFact("Partners", String(context.partnerBoard.partnerCount)),
-      createHomeCardFact(
+      createNumericCardRow("Partners", String(context.partnerBoard.partnerCount)),
+      createMetaCardRow(
         "Destination",
-        context.partnerBoard.deliveryConfigured ? "Configured" : "Not configured",
+        context.partnerBoard.deliveryConfigured ? "Configured" : "Missing",
+        context.partnerBoard.deliveryConfigured ? "neutral" : "attention",
       ),
-      createHomeCardFact(
+      createMetaCardRow(
         "Layout",
-        context.partnerBoard.layoutConfigured ? "Configured" : "Pending",
+        context.partnerBoard.layoutConfigured ? "Configured" : "Missing",
+        context.partnerBoard.layoutConfigured ? "neutral" : "attention",
       ),
     ],
     loading,
@@ -428,117 +444,101 @@ function buildAutoroleCard(
   if (context.workspaceState !== "ready" || context.autoRoleFeature === null) {
     return createHomeCardData(
       item,
-      [buildWorkspaceGateFact(context.workspaceState)],
+      context.sectionLabel,
+      [buildWorkspaceGateRow(context.workspaceState)],
       context.workspaceState === "loading",
     );
   }
 
   const details = getAutoRoleFeatureDetails(context.autoRoleFeature);
-  return createHomeCardData(item, [
-    createHomeCardFact("Module", context.autoRoleFeature.effective_enabled ? "On" : "Off"),
-    createHomeCardFact(
+  return createHomeCardData(item, context.sectionLabel, [
+    createFeatureStateRow("Module", context.autoRoleFeature.effective_enabled),
+    createMetaCardRow(
       "Target role",
-      details.targetRoleId === "" ? "Not configured" : "Configured",
+      details.targetRoleId === "" ? "Missing" : "Configured",
+      details.targetRoleId === "" ? "attention" : "neutral",
     ),
-    createHomeCardFact("Required roles", String(details.requiredRoleCount)),
+    createNumericCardRow("Required roles", String(details.requiredRoleCount)),
   ]);
 }
 
-function buildWorkspaceGateFact(
+function buildWorkspaceGateRow(
   workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
-): HomeCardFact {
+): HomeCardRow {
   switch (workspaceState) {
     case "checking":
-      return createHomeCardFact("Status", "Checking access");
+      return createMetaCardRow("Status", "Checking access", "attention");
     case "auth_required":
-      return createHomeCardFact("Status", "Sign in required");
+      return createMetaCardRow("Status", "Sign in required", "attention");
     case "server_required":
-      return createHomeCardFact("Server", "Select a server");
+      return createMetaCardRow("Server", "Select a server", "attention");
     case "loading":
-      return createHomeCardFact("Status", "Loading");
+      return createMetaCardRow("Status", "Loading", "attention");
     case "unavailable":
-      return createHomeCardFact("Status", "Unavailable");
+      return createMetaCardRow("Status", "Unavailable", "attention");
     default:
-      return createHomeCardFact("Status", "Ready");
+      return createMetaCardRow("Status", "Ready");
   }
 }
 
 function createHomeCardData(
   item: NavigationItem,
-  facts: HomeCardFact[],
+  sectionLabel: string,
+  rows: HomeCardRow[],
   loading = false,
 ): HomeCardData {
   return {
     item,
-    facts,
+    sectionLabel,
+    rows,
     loading,
-    tone: summarizeHomeCardTone(facts),
+    state: summarizeHomeCardState(rows),
   };
 }
 
-function createHomeCardFact(label: string, value: string): HomeCardFact {
+function createFeatureStateRow(label: string, enabled: boolean): HomeCardRow {
+  return {
+    label,
+    value: enabled ? "Enabled" : "Disabled",
+    valueKind: "status",
+    state: enabled ? "enabled" : "disabled",
+  };
+}
+
+function createNumericCardRow(label: string, value: string): HomeCardRow {
   return {
     label,
     value,
-    tone: inferHomeFactTone(value),
+    valueKind: "numeric",
+    state: "neutral",
   };
 }
 
-function inferHomeFactTone(value: string): HomeFactTone {
-  const normalizedValue = value.trim().toLowerCase();
+function createMetaCardRow(
+  label: string,
+  value: string,
+  state: OverviewTone = "neutral",
+): HomeCardRow {
+  return {
+    label,
+    value,
+    valueKind: "meta",
+    state,
+  };
+}
 
-  if (
-    normalizedValue === "on" ||
-    normalizedValue === "configured" ||
-    normalizedValue === "ready"
-  ) {
-    return "success";
+function summarizeHomeCardState(rows: HomeCardRow[]): OverviewTone {
+  if (rows.some((row) => row.state === "disabled")) {
+    return "disabled";
   }
 
-  if (
-    normalizedValue === "off" ||
-    normalizedValue === "not configured" ||
-    normalizedValue === "sign in required" ||
-    normalizedValue === "select a server" ||
-    normalizedValue === "unavailable" ||
-    normalizedValue === "not available"
-  ) {
-    return "error";
+  if (rows.some((row) => row.state === "attention")) {
+    return "attention";
   }
 
-  if (
-    normalizedValue === "checking access" ||
-    normalizedValue === "loading" ||
-    normalizedValue === "pending" ||
-    normalizedValue === "in development" ||
-    normalizedValue === "next page"
-  ) {
-    return "info";
+  if (rows.some((row) => row.state === "enabled")) {
+    return "enabled";
   }
 
   return "neutral";
-}
-
-function summarizeHomeCardTone(facts: HomeCardFact[]): HomeFactTone {
-  if (facts.some((fact) => fact.tone === "error")) {
-    return "error";
-  }
-
-  if (facts.some((fact) => fact.tone === "info")) {
-    return "info";
-  }
-
-  if (facts.some((fact) => fact.tone === "success")) {
-    return "success";
-  }
-
-  return "neutral";
-}
-
-function getHomeCardTier(itemCount: number, itemIndex: number): HomeCardTier {
-  if (itemCount === 1 || itemIndex === 0) {
-    return "primary";
-  }
-
-  return "secondary";
 }
