@@ -194,7 +194,7 @@ export async function prefetchGuildDashboardResources(
     return;
   }
 
-  await Promise.all([
+  await Promise.allSettled([
     loadFeatureWorkspace(client, baseUrl, "guild", normalizedGuildID),
     loadGuildChannelOptions(client, baseUrl, normalizedGuildID),
     loadGuildRoleOptions(client, baseUrl, normalizedGuildID),

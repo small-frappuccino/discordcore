@@ -9,7 +9,12 @@ import {
 import { appRoutes } from "../app/routes";
 import { formatAuthStateLabel, formatSessionTitle } from "../app/utils";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { AlertBanner, IdentityAvatar, StatusBadge } from "../components/ui";
+import {
+  AlertBanner,
+  IdentityAvatar,
+  PageContentSurface,
+  StatusBadge,
+} from "../components/ui";
 import "../shell.css";
 
 const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
@@ -68,6 +73,7 @@ export function DashboardLayout() {
   const accountTone = authState === "signed_in" ? "success" : "info";
   const canSelectGuild =
     authState === "signed_in" && accessibleGuilds.length > 0;
+  const showSessionHydrationState = authState === "checking";
 
   function toggleSection(sectionID: string) {
     setOpenSectionID((current) => (current === sectionID ? null : sectionID));
@@ -195,8 +201,9 @@ export function DashboardLayout() {
             </Link>
 
             {dashboardSidebarNavigationSections.map((section) => {
-              const isOpen = openSectionID === section.id;
               const hasActiveItem = activeSection?.id === section.id;
+              const isOpen =
+                openSectionID === null ? hasActiveItem : openSectionID === section.id;
 
               return (
                 <section className="shell-nav-section" key={section.id}>
@@ -258,12 +265,33 @@ export function DashboardLayout() {
                 busyLabel={sessionLoading ? busyLabel : undefined}
               />
             </div>
-          ) : sessionLoading ? (
+          ) : sessionLoading && !showSessionHydrationState ? (
             <div className="shell-main-notice">
               <AlertBanner busyLabel={busyLabel} />
             </div>
           ) : null}
-          <Outlet />
+          {showSessionHydrationState ? (
+            <PageContentSurface aria-busy="true">
+              <div className="workspace-state">
+                <div className="card-copy">
+                  <p className="section-label">Dashboard</p>
+                  <h2>Loading dashboard</h2>
+                  <p className="section-description">
+                    Checking your Discord session and preparing the selected
+                    server workspace before the page content renders.
+                  </p>
+                </div>
+
+                <div className="workspace-state-actions">
+                  <StatusBadge tone="info">
+                    {busyLabel || "Preparing dashboard"}
+                  </StatusBadge>
+                </div>
+              </div>
+            </PageContentSurface>
+          ) : (
+            <Outlet />
+          )}
         </section>
       </div>
     </main>

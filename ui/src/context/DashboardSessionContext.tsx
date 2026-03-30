@@ -144,16 +144,14 @@ export function DashboardSessionProvider({
           preferredGuildID,
           guildsResponse.guilds,
         );
+        if (nextGuildID !== "") {
+          await prefetchGuildDashboardResources(activeClient, baseUrl, nextGuildID);
+        }
         setAuthState("signed_in");
         setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);
         setSelectedGuildID(nextGuildID);
         setNotice(null);
-        if (nextGuildID !== "") {
-          void prefetchGuildDashboardResources(activeClient, baseUrl, nextGuildID).catch(
-            () => {},
-          );
-        }
       } catch (error) {
         setAuthState("signed_out");
         clearSessionState();
@@ -170,7 +168,7 @@ export function DashboardSessionProvider({
 
   useEffect(() => {
     void performSessionRefresh(client);
-  }, [client, performSessionRefresh]);
+  }, [client]);
 
   useEffect(() => {
     if (authState !== "signed_in" || selectedGuildID.trim() === "") {

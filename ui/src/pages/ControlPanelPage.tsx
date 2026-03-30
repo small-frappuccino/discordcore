@@ -104,6 +104,21 @@ export function ControlPanelPage() {
   }
 
   function renderBody() {
+    if (authState === "checking") {
+      return (
+        <div className="workspace-state" aria-busy="true">
+          <div className="card-copy">
+            <p className="section-label">Workspace</p>
+            <h2>Checking access</h2>
+            <p className="section-description">
+              The dashboard is checking your Discord session and preparing the
+              current server context.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     if (authState !== "signed_in") {
       return (
         <EmptyState
