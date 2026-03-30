@@ -4,6 +4,7 @@ import {
   EntityMultiPickerField,
   EmptyState,
   LookupNotice,
+  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -242,12 +243,14 @@ export function ControlPanelPage() {
         }
       />
 
-      <AlertBanner
-        notice={notice ?? rolesSettings.notice ?? roleOptions.notice}
-        busyLabel={rolesSettings.loading ? "Loading access roles..." : undefined}
-      />
+      <PageContentSurface>
+        <AlertBanner
+          notice={notice ?? rolesSettings.notice ?? roleOptions.notice}
+          busyLabel={rolesSettings.loading ? "Loading access roles..." : undefined}
+        />
 
-      {renderBody()}
+        {renderBody()}
+      </PageContentSurface>
     </section>
   );
 }

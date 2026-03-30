@@ -4,7 +4,11 @@ import {
   dashboardHomeNavigationSections,
   type NavigationItem,
 } from "../app/navigation";
-import { AlertBanner, SurfaceCard } from "../components/ui";
+import {
+  AlertBanner,
+  PageContentSurface,
+  SurfaceCard,
+} from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import { useGuildRolesSettings } from "../features/control-panel/useGuildRolesSettings";
 import {
@@ -60,91 +64,99 @@ export function HomePage() {
         <h1>Home</h1>
       </header>
 
-      <AlertBanner notice={homeNotice} />
+      <PageContentSurface>
+        <AlertBanner notice={homeNotice} />
 
-      <div className="home-category-stack">
-        {dashboardHomeNavigationSections.map((section) => (
-          <section className="home-category-section" key={section.id}>
-            <div className="home-category-header">
-              <h2>{section.label}</h2>
-            </div>
+        <div className="home-category-stack">
+          {dashboardHomeNavigationSections.map((section) => (
+            <section className="home-category-section" key={section.id}>
+              <div className="home-category-header">
+                <h2>{section.label}</h2>
+              </div>
 
-            <div className="home-card-grid">
-              {section.items.map((item, index) => {
-                const card = buildHomeCardData(item, {
-                  authState,
-                  selectedGuildPresent: selectedGuild !== null,
-                  rolesSettings,
-                  partnerBoard,
-                  statsFeature,
-                  commandsFeature,
-                  adminCommandsFeature,
-                  moderationFeatures,
-                  loggingFeatures,
-                  autoRoleFeature,
-                  workspaceState: workspace.workspaceState,
-                });
-                const tier = getHomeCardTier(section.items.length, index);
+              <div className="home-card-grid">
+                {section.items.map((item, index) => {
+                  const card = buildHomeCardData(item, {
+                    authState,
+                    selectedGuildPresent: selectedGuild !== null,
+                    rolesSettings,
+                    partnerBoard,
+                    statsFeature,
+                    commandsFeature,
+                    adminCommandsFeature,
+                    moderationFeatures,
+                    loggingFeatures,
+                    autoRoleFeature,
+                    workspaceState: workspace.workspaceState,
+                  });
+                  const tier = getHomeCardTier(section.items.length, index);
 
-                return (
-                  <SurfaceCard
-                    as="article"
-                    aria-busy={card.loading}
-                    className={[
-                      "home-nav-card",
-                      `home-nav-card-${tier}`,
-                      `home-nav-card-tone-${card.tone}`,
-                    ].join(" ")}
-                    key={item.id}
-                  >
-                    {card.loading ? (
-                      <div className="home-nav-card-skeleton" aria-hidden="true">
-                        <span className="home-nav-skeleton home-nav-skeleton-title" />
-                        <span className="home-nav-skeleton" />
-                        <span className="home-nav-skeleton" />
-                        <span className="home-nav-skeleton home-nav-skeleton-button" />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="home-nav-card-header">
-                          <h3>{card.item.label}</h3>
+                  return (
+                    <SurfaceCard
+                      as="article"
+                      aria-busy={card.loading}
+                      className={[
+                        "home-nav-card",
+                        "surface-card-accent",
+                        card.tone !== "neutral"
+                          ? `surface-card-accent-${card.tone}`
+                          : "",
+                        `home-nav-card-${tier}`,
+                      ].join(" ")}
+                      key={item.id}
+                    >
+                      {card.loading ? (
+                        <div className="home-nav-card-skeleton" aria-hidden="true">
+                          <span className="home-nav-skeleton home-nav-skeleton-title" />
+                          <span className="home-nav-skeleton" />
+                          <span className="home-nav-skeleton" />
+                          <span className="home-nav-skeleton home-nav-skeleton-button" />
                         </div>
+                      ) : (
+                        <>
+                          <div className="home-nav-card-header">
+                            <h3>{card.item.label}</h3>
+                          </div>
 
-                        <ul className="home-nav-facts">
-                          {card.facts.map((fact) => (
-                            <li
-                              className="home-nav-fact-row"
-                              data-tone={fact.tone}
-                              key={`${fact.label}:${fact.value}`}
-                            >
-                              <span className="sr-only">{`${fact.label}: ${fact.value}`}</span>
-                              <div className="home-nav-fact-key" aria-hidden="true">
-                                <span className="home-nav-fact-label">{fact.label}: </span>
-                              </div>
-                              <div className="home-nav-fact-value-wrap" aria-hidden="true">
-                                {fact.tone !== "neutral" ? (
-                                  <span className={`home-nav-fact-dot tone-${fact.tone}`} aria-hidden="true" />
-                                ) : null}
-                                <strong className="home-nav-fact-value">{fact.value}</strong>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
+                          <ul className="home-nav-facts">
+                            {card.facts.map((fact) => (
+                              <li
+                                className="home-nav-fact-row"
+                                data-tone={fact.tone}
+                                key={`${fact.label}:${fact.value}`}
+                              >
+                                <span className="sr-only">{`${fact.label}: ${fact.value}`}</span>
+                                <div className="home-nav-fact-key" aria-hidden="true">
+                                  <span className="home-nav-fact-label">{fact.label}: </span>
+                                </div>
+                                <div className="home-nav-fact-value-wrap" aria-hidden="true">
+                                  {fact.tone !== "neutral" ? (
+                                    <span
+                                      className={`home-nav-fact-dot tone-${fact.tone}`}
+                                      aria-hidden="true"
+                                    />
+                                  ) : null}
+                                  <strong className="home-nav-fact-value">{fact.value}</strong>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
 
-                        <div className="home-nav-card-footer">
-                          <Link className="button-secondary home-nav-link" to={card.item.to}>
-                            {card.item.homeActionLabel ?? `Open ${card.item.label}`}
-                          </Link>
-                        </div>
-                      </>
-                    )}
-                  </SurfaceCard>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+                          <div className="home-nav-card-footer">
+                            <Link className="button-secondary home-nav-link" to={card.item.to}>
+                              {card.item.homeActionLabel ?? `Open ${card.item.label}`}
+                            </Link>
+                          </div>
+                        </>
+                      )}
+                    </SurfaceCard>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </PageContentSurface>
     </section>
   );
 }

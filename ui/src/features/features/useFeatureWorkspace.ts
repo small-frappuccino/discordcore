@@ -19,6 +19,8 @@ interface UseFeatureWorkspaceOptions {
   scope: FeatureWorkspaceScope;
 }
 
+const EMPTY_FEATURES: FeatureRecord[] = [];
+
 export function useFeatureWorkspace({
   scope,
 }: UseFeatureWorkspaceOptions) {
@@ -39,7 +41,7 @@ export function useFeatureWorkspace({
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  const features = workspace?.features ?? [];
+  const features = workspace?.features ?? EMPTY_FEATURES;
   const groupedFeatures = useMemo(
     () => groupFeaturesByCategory(features),
     [features],

@@ -46,6 +46,7 @@ import {
   KeyValueList,
   LookupNotice,
   MetricCard,
+  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -74,11 +75,6 @@ export function CommandsPage() {
   const [channelDraft, setChannelDraft] = useState("");
   const [allowedRoleIdsDraft, setAllowedRoleIdsDraft] = useState<string[]>([]);
 
-  if (definition === null) {
-    return null;
-  }
-
-  const areaLabel = definition.label;
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "commands");
   const areaSummary = summarizeFeatureArea(areaFeatures);
@@ -123,6 +119,12 @@ export function CommandsPage() {
         return;
     }
   }, [selectedFeature]);
+
+  if (definition === null) {
+    return null;
+  }
+
+  const areaLabel = definition.label;
 
   function closeDrawer() {
     setSelectedFeatureId("");
@@ -516,158 +518,159 @@ export function CommandsPage() {
           actions={renderHeaderActions()}
         />
 
-        {workspace.workspaceState === "ready" &&
-        commandsFeature !== null &&
-        adminCommandsFeature !== null ? (
-          <section
-            className="overview-summary-strip"
-            aria-label="Commands summary"
-          >
-            <MetricCard
-              label="Commands"
-              value={formatFeatureStatusLabel(commandsFeature)}
-              description={summarizeCommandsSignal(commandsFeature)}
-              tone={getFeatureStatusTone(commandsFeature)}
-            />
-            <MetricCard
-              label="Command channel"
-              value={formatGuildChannelValue(
-                getCommandsFeatureDetails(commandsFeature).channelId,
-                channelOptions.channels,
-                "Not set",
-              )}
-              description="The optional routing destination used for command workflows."
-            />
-            <MetricCard
-              label="Admin access"
-              value={formatAllowedRoleCountValue(adminCommandsFeature)}
-              description={formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
-              tone={
-                getAdminCommandsFeatureDetails(adminCommandsFeature).allowedRoleCount > 0
-                  ? "info"
-                  : "neutral"
-              }
-            />
-            <MetricCard
-              label="Overrides"
-              value={String(localOverrides)}
-              description={`${enabledModules}/${areaFeatures.length} command modules enabled for this server.`}
-            />
-          </section>
-        ) : null}
+        <PageContentSurface>
+          <AlertBanner
+            notice={workspaceNotice}
+            busyLabel={
+              mutation.saving
+                ? "Saving command settings..."
+                : workspace.loading ||
+                    channelOptions.loading ||
+                    roleOptions.loading
+                  ? "Refreshing commands workspace..."
+                  : undefined
+            }
+          />
 
-        <section className="content-grid content-grid-with-aside">
-          <div className="page-main">
-            <SurfaceCard className="feature-category-panel">
-              <div className="workspace-view">
-                <div className="workspace-view-header">
-                  <div className="card-copy">
-                    <p className="section-label">Workspace</p>
-                    <h2>Command routing</h2>
-                    <p className="section-description">
-                      Keep command handling and privileged access in one place.
-                      The default workspace answers the two most common admin
-                      tasks here: where commands should route and which roles can
-                      use the privileged ones.
-                    </p>
+          {workspace.workspaceState === "ready" &&
+          commandsFeature !== null &&
+          adminCommandsFeature !== null ? (
+            <section
+              className="overview-summary-strip"
+              aria-label="Commands summary"
+            >
+              <MetricCard
+                label="Commands"
+                value={formatFeatureStatusLabel(commandsFeature)}
+                description={summarizeCommandsSignal(commandsFeature)}
+                tone={getFeatureStatusTone(commandsFeature)}
+              />
+              <MetricCard
+                label="Command channel"
+                value={formatGuildChannelValue(
+                  getCommandsFeatureDetails(commandsFeature).channelId,
+                  channelOptions.channels,
+                  "Not set",
+                )}
+                description="The optional routing destination used for command workflows."
+              />
+              <MetricCard
+                label="Admin access"
+                value={formatAllowedRoleCountValue(adminCommandsFeature)}
+                description={formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
+                tone={
+                  getAdminCommandsFeatureDetails(adminCommandsFeature).allowedRoleCount > 0
+                    ? "info"
+                    : "neutral"
+                }
+              />
+              <MetricCard
+                label="Overrides"
+                value={String(localOverrides)}
+                description={`${enabledModules}/${areaFeatures.length} command modules enabled for this server.`}
+              />
+            </section>
+          ) : null}
+
+          <section className="content-grid content-grid-with-aside">
+            <div className="page-main">
+              <SurfaceCard className="feature-category-panel">
+                <div className="workspace-view">
+                  <div className="workspace-view-header">
+                    <div className="card-copy">
+                      <p className="section-label">Workspace</p>
+                      <h2>Command routing</h2>
+                      <p className="section-description">
+                        Keep command handling and privileged access in one place.
+                        The default workspace answers the two most common admin
+                        tasks here: where commands should route and which roles can
+                        use the privileged ones.
+                      </p>
+                    </div>
+                    <div className="workspace-view-meta">
+                      {workspace.workspaceState === "ready" ? (
+                        <>
+                          <span className="meta-pill subtle-pill">
+                            {localOverrides} local overrides
+                          </span>
+                          <span className="meta-pill subtle-pill">
+                            {enabledModules}/{areaFeatures.length} enabled
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="workspace-view-meta">
-                    {workspace.workspaceState === "ready" ? (
-                      <>
-                        <span className="meta-pill subtle-pill">
-                          {localOverrides} local overrides
-                        </span>
-                        <span className="meta-pill subtle-pill">
-                          {enabledModules}/{areaFeatures.length} enabled
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
+
+                  {renderPageState()}
+                </div>
+              </SurfaceCard>
+            </div>
+
+            <aside className="page-aside">
+              <SurfaceCard>
+                <div className="card-copy">
+                  <p className="section-label">Summary</p>
+                  <h2>Current command setup</h2>
+                  <p className="section-description">
+                    Use this panel to confirm the selected server, the current
+                    command destination, and whether privileged access is already
+                    restricted by roles.
+                  </p>
                 </div>
 
-                <AlertBanner
-                  notice={workspaceNotice}
-                  busyLabel={
-                    mutation.saving
-                      ? "Saving command settings..."
-                      : workspace.loading ||
-                          channelOptions.loading ||
-                          roleOptions.loading
-                        ? "Refreshing commands workspace..."
-                        : undefined
-                  }
+                <KeyValueList
+                  items={[
+                    {
+                      label: "Server",
+                      value: selectedServerLabel,
+                    },
+                    {
+                      label: "Command channel",
+                      value:
+                        commandsFeature === null
+                          ? "Not available"
+                          : formatGuildChannelValue(
+                              getCommandsFeatureDetails(commandsFeature).channelId,
+                              channelOptions.channels,
+                              "No dedicated channel",
+                            ),
+                    },
+                    {
+                      label: "Admin access",
+                      value:
+                        adminCommandsFeature === null
+                          ? "Not available"
+                          : formatAllowedRoleCountValue(adminCommandsFeature),
+                    },
+                    {
+                      label: "Current signal",
+                      value:
+                        firstBlockedFeature !== null
+                          ? firstBlockedFeature.id === "services.commands"
+                            ? summarizeCommandsSignal(firstBlockedFeature)
+                            : summarizeAdminCommandsSignal(firstBlockedFeature)
+                          : areaSummary.signal,
+                    },
+                  ]}
                 />
+              </SurfaceCard>
 
-                {renderPageState()}
-              </div>
-            </SurfaceCard>
-          </div>
+              <SurfaceCard>
+                <div className="card-copy">
+                  <p className="section-label">Guidance</p>
+                  <h2>How this page works</h2>
+                  <p className="section-description">
+                    Keep the main workspace centered on the two command tasks an
+                    admin actually needs to complete: where commands should route
+                    and who can use the privileged ones.
+                  </p>
+                </div>
 
-          <aside className="page-aside">
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Summary</p>
-                <h2>Current command setup</h2>
-                <p className="section-description">
-                  Use this panel to confirm the selected server, the current
-                  command destination, and whether privileged access is already
-                  restricted by roles.
-                </p>
-              </div>
-
-              <KeyValueList
-                items={[
-                  {
-                    label: "Server",
-                    value: selectedServerLabel,
-                  },
-                  {
-                    label: "Command channel",
-                    value:
-                      commandsFeature === null
-                        ? "Not available"
-                        : formatGuildChannelValue(
-                            getCommandsFeatureDetails(commandsFeature).channelId,
-                            channelOptions.channels,
-                            "No dedicated channel",
-                          ),
-                  },
-                  {
-                    label: "Admin access",
-                    value:
-                      adminCommandsFeature === null
-                        ? "Not available"
-                        : formatAllowedRoleCountValue(adminCommandsFeature),
-                  },
-                  {
-                    label: "Current signal",
-                    value:
-                      firstBlockedFeature !== null
-                        ? firstBlockedFeature.id === "services.commands"
-                          ? summarizeCommandsSignal(firstBlockedFeature)
-                          : summarizeAdminCommandsSignal(firstBlockedFeature)
-                        : areaSummary.signal,
-                  },
-                ]}
-              />
-            </SurfaceCard>
-
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Guidance</p>
-                <h2>How this page works</h2>
-                <p className="section-description">
-                  Keep the main workspace centered on the two command tasks an
-                  admin actually needs to complete: where commands should route
-                  and who can use the privileged ones.
-                </p>
-              </div>
-
-              <ul className="feature-guidance-list">
-                <li>Set a command channel only when you want a dedicated destination for command workflows.</li>
-                <li>Review admin access roles whenever staff permissions change for the selected server.</li>
-                <li>Runtime blockers stay in signals and notices instead of dominating the default commands workspace.</li>
-              </ul>
+                <ul className="feature-guidance-list">
+                  <li>Set a command channel only when you want a dedicated destination for command workflows.</li>
+                  <li>Review admin access roles whenever staff permissions change for the selected server.</li>
+                  <li>Runtime blockers stay in signals and notices instead of dominating the default commands workspace.</li>
+                </ul>
 
                 {channelOptions.notice ? (
                   <LookupNotice
@@ -688,9 +691,10 @@ export function CommandsPage() {
                     onRetry={roleOptions.refresh}
                   />
                 ) : null}
-            </SurfaceCard>
-          </aside>
-        </section>
+              </SurfaceCard>
+            </aside>
+          </section>
+        </PageContentSurface>
       </section>
 
       {selectedFeature !== null ? (

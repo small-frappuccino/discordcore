@@ -49,6 +49,11 @@ interface SurfaceCardProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
 }
 
+interface PageContentSurfaceProps extends HTMLAttributes<HTMLElement> {
+  as?: SurfaceElement;
+  children: ReactNode;
+}
+
 interface SidebarSectionProps {
   eyebrow?: string;
   title?: ReactNode;
@@ -146,6 +151,22 @@ export function StatusBadge({
   return <span className={`status-badge status-${tone}`}>{children}</span>;
 }
 
+export function PageContentSurface({
+  as: Component = "section",
+  className,
+  children,
+  ...rest
+}: PageContentSurfaceProps) {
+  return (
+    <Component
+      className={joinClassNames("page-content-surface", className)}
+      {...rest}
+    >
+      {children}
+    </Component>
+  );
+}
+
 export function SurfaceCard({
   as: Component = "section",
   className,
@@ -192,11 +213,18 @@ export function MetricCard({
   className,
 }: MetricCardProps) {
   return (
-    <SurfaceCard as="article" className={joinClassNames("metric-card", className)}>
+    <SurfaceCard
+      as="article"
+      className={joinClassNames(
+        "metric-card",
+        tone !== "neutral" && "surface-card-accent",
+        tone !== "neutral" && `surface-card-accent-${tone}`,
+        className,
+      )}
+    >
       <p className="section-label">{label}</p>
       <div className="metric-card-value-row">
         <strong className="metric-card-value">{value}</strong>
-        {tone !== "neutral" ? <span className={`metric-card-dot tone-${tone}`} /> : null}
       </div>
       {description ? <p className="metric-card-description">{description}</p> : null}
     </SurfaceCard>

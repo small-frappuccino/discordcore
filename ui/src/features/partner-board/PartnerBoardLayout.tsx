@@ -4,6 +4,7 @@ import { formatTimestamp } from "../../app/utils";
 import {
   AlertBanner,
   MetricCard,
+  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -46,60 +47,60 @@ export function PartnerBoardLayout() {
         }
       />
 
-      {notice ? (
+      <PageContentSurface>
         <AlertBanner notice={notice} busyLabel={loading ? busyLabel : undefined} />
-      ) : null}
 
-      <section className="partner-board-summary-strip" aria-label="Partner Board setup summary">
-        <MetricCard
-          label="Setup"
-          value={shellStatus.label}
-          description={shellStatus.description}
-          tone={shellStatus.tone}
-        />
-        <MetricCard
-          label="Destination"
-          value={destinationValue}
-          description={summarizePostingDestination}
-          tone={destinationValue === "Configured" ? "success" : "info"}
-        />
-        <MetricCard
-          label="Partners"
-          value={String(partners.length)}
-          description={
-            partners.length > 0
-              ? "The board has real entries to manage."
-              : "Add the first entry to make the workspace actionable."
-          }
-          tone={partners.length > 0 ? "success" : "neutral"}
-        />
-        <MetricCard
-          label="Method"
-          value={methodLabel}
-          description={syncLabel}
-          tone="neutral"
-        />
-      </section>
+        <section className="partner-board-summary-strip" aria-label="Partner Board setup summary">
+          <MetricCard
+            label="Setup"
+            value={shellStatus.label}
+            description={shellStatus.description}
+            tone={shellStatus.tone}
+          />
+          <MetricCard
+            label="Destination"
+            value={destinationValue}
+            description={summarizePostingDestination}
+            tone={destinationValue === "Configured" ? "success" : "info"}
+          />
+          <MetricCard
+            label="Partners"
+            value={String(partners.length)}
+            description={
+              partners.length > 0
+                ? "The board has real entries to manage."
+                : "Add the first entry to make the workspace actionable."
+            }
+            tone={partners.length > 0 ? "success" : "neutral"}
+          />
+          <MetricCard
+            label="Method"
+            value={methodLabel}
+            description={syncLabel}
+            tone="neutral"
+          />
+        </section>
 
-      <SurfaceCard className="workspace-panel">
-        <nav className="subnav workspace-tabs" aria-label="Partner Board sections">
-          {partnerBoardTabs.map((item) => (
-            <NavLink
-              key={item.path}
-              className={({ isActive }) =>
-                `subnav-link${isActive ? " is-active" : ""}`
-              }
-              to={item.path}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        <SurfaceCard className="workspace-panel">
+          <nav className="subnav workspace-tabs" aria-label="Partner Board sections">
+            {partnerBoardTabs.map((item) => (
+              <NavLink
+                key={item.path}
+                className={({ isActive }) =>
+                  `subnav-link${isActive ? " is-active" : ""}`
+                }
+                to={item.path}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
 
-        <div className="workspace-panel-body">
-          <Outlet />
-        </div>
-      </SurfaceCard>
+          <div className="workspace-panel-body">
+            <Outlet />
+          </div>
+        </SurfaceCard>
+      </PageContentSurface>
     </section>
   );
 }

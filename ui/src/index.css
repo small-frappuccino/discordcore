@@ -363,7 +363,7 @@ textarea:focus {
 
 .surface-card,
 .sidebar-card {
-  padding: 18px;
+  padding: var(--space-4);
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
   background: var(--bg-surface-card);
@@ -572,7 +572,7 @@ textarea:focus {
 
 .page-shell {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .home-page-shell {
@@ -596,11 +596,26 @@ textarea:focus {
 .page-header {
   display: grid;
   gap: var(--space-4);
-  padding: 20px 24px;
+  padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
   background: var(--bg-surface);
   box-shadow: var(--shadow-1);
+}
+
+.page-content-surface {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+  padding: var(--space-6);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-1);
+}
+
+.page-content-surface > * {
+  min-width: 0;
 }
 
 .page-header-copy {
@@ -696,6 +711,31 @@ textarea:focus {
   gap: var(--space-2);
 }
 
+.surface-card-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.surface-card-accent::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--space-1);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.surface-card-accent-success::before {
+  background: var(--success);
+}
+
+.surface-card-accent-info::before {
+  background: var(--info);
+}
+
+.surface-card-accent-error::before {
+  background: var(--error);
+}
+
 .metric-card-value-row {
   display: flex;
   align-items: center;
@@ -745,10 +785,10 @@ textarea:focus {
   justify-content: space-between;
   gap: var(--space-4);
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-control);
   border: 1px solid var(--border-soft);
-  background: var(--bg-surface-muted);
+  background: var(--bg-surface-subtle);
 }
 
 .key-value-row dt,
@@ -967,43 +1007,19 @@ textarea:focus {
 }
 
 .home-nav-card {
-  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
   min-height: 188px;
   height: 100%;
   padding: var(--space-4);
-  overflow: hidden;
-}
-
-.home-nav-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.home-nav-card-tone-success::before {
-  background: rgba(87, 163, 110, 0.92);
-}
-
-.home-nav-card-tone-info::before {
-  background: rgba(111, 156, 255, 0.92);
-}
-
-.home-nav-card-tone-error::before {
-  background: rgba(217, 108, 108, 0.92);
 }
 
 .home-nav-card-primary {
   border-color: var(--border-strong);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
-    var(--bg-surface-elevated);
 }
 
+.home-nav-card-primary,
 .home-nav-card-secondary {
   background: var(--bg-surface-card);
 }
@@ -1033,9 +1049,7 @@ textarea:focus {
   list-style: none;
   border-radius: var(--radius-control);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0)),
-    var(--bg-surface-muted);
+  background: var(--bg-surface-subtle);
   overflow: hidden;
 }
 
@@ -1527,7 +1541,7 @@ textarea:focus {
   padding: 16px;
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
-  background: var(--bg-surface-muted);
+  background: var(--bg-surface-card);
 }
 
 .workspace-callout {
@@ -1669,10 +1683,10 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
-  background: var(--bg-surface);
+  background: var(--bg-surface-card);
 }
 
 .alert-info {
@@ -1746,7 +1760,7 @@ textarea:focus {
 }
 
 .field-stack-compact {
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .field-grid {
@@ -1792,7 +1806,7 @@ textarea:focus {
   padding: 16px;
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
-  background: var(--bg-surface-muted);
+  background: var(--bg-surface-card);
 }
 
 .checklist {
@@ -1844,7 +1858,7 @@ textarea:focus {
   overflow: auto;
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
-  background: var(--bg-input);
+  background: var(--bg-surface-card);
 }
 
 .data-table {
@@ -2105,6 +2119,7 @@ textarea:focus {
   .sidebar-frame,
   .surface-card,
   .sidebar-card,
+  .page-content-surface,
   .page-header,
   .landing-topbar,
   .landing-hero,

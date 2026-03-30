@@ -66,7 +66,8 @@ describe("ControlApiClient feature routes", () => {
       editable_fields: ["enabled", "channel_id"],
     };
     const fetchMock = vi.fn(
-      async (input: RequestInfo | URL, _init?: RequestInit) => {
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void init;
         const url = typeof input === "string" ? input : input.toString();
 
         if (url.endsWith("/auth/me")) {
@@ -141,7 +142,8 @@ describe("ControlApiClient feature routes", () => {
       editable_fields: ["enabled", "channel_id"],
     };
     const fetchMock = vi.fn(
-      async (input: RequestInfo | URL, _init?: RequestInit) => {
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void init;
         const url = typeof input === "string" ? input : input.toString();
 
         if (url.endsWith("/auth/me")) {
@@ -210,7 +212,8 @@ describe("ControlApiClient feature routes", () => {
       editable_fields: ["enabled", "allowed_role_ids"],
     };
     const fetchMock = vi.fn(
-      async (input: RequestInfo | URL, _init?: RequestInit) => {
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void init;
         const url = typeof input === "string" ? input : input.toString();
 
         if (url.endsWith("/auth/me")) {

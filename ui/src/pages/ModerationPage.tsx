@@ -53,6 +53,7 @@ import {
   KeyValueList,
   LookupNotice,
   MetricCard,
+  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -80,11 +81,6 @@ export function ModerationPage() {
   const [channelDraft, setChannelDraft] = useState("");
   const [roleDraft, setRoleDraft] = useState("");
 
-  if (definition === null) {
-    return null;
-  }
-
-  const areaLabel = definition.label;
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "moderation");
   const areaSummary = summarizeFeatureArea(areaFeatures);
@@ -149,6 +145,12 @@ export function ModerationPage() {
     setChannelDraft(getLoggingFeatureDetails(selectedFeature).channelId);
     setRoleDraft("");
   }, [selectedFeature]);
+
+  if (definition === null) {
+    return null;
+  }
+
+  const areaLabel = definition.label;
 
   async function handleRefreshModeration() {
     await Promise.all([
@@ -369,115 +371,117 @@ export function ModerationPage() {
           actions={renderHeaderActions()}
         />
 
-        {workspace.workspaceState === "ready" ? (
-          <section
-            className="overview-summary-strip"
-            aria-label="Moderation summary"
-          >
-            <MetricCard
-              label="AutoMod"
-              value={
-                automodFeature === null
-                  ? "Not available"
-                  : formatFeatureStatusLabel(automodFeature)
-              }
-              description={
-                automodFeature === null
-                  ? "This server does not expose the AutoMod listener record."
-                  : summarizeAutomodMode(automodFeature)
-              }
-              tone={
-                automodFeature === null
-                  ? "neutral"
-                  : getFeatureStatusTone(automodFeature)
-              }
-            />
-            <MetricCard
-              label="Mute role"
-              value={formatRoleValue(muteRoleId, roleOptions.roles)}
-              description={
-                muteRoleFeature === null
-                  ? "This server does not expose a mute role control."
-                  : summarizeMuteRoleSignal(muteRoleFeature)
-              }
-              tone={
-                muteRoleFeature === null
-                  ? "neutral"
-                  : getFeatureStatusTone(muteRoleFeature)
-              }
-            />
-            <MetricCard
-              label="Moderation logs"
-              value={formatModerationRouteCoverageValue(moderationLogFeatures)}
-              description="AutoMod action and moderation case routes configured in this workspace."
-              tone={configuredModerationRoutes > 0 ? "info" : "neutral"}
-            />
-            <MetricCard
-              label="Needs attention"
-              value={String(areaSummary.blocked)}
-              description="Enabled moderation controls still reporting blockers."
-              tone={areaSummary.blocked > 0 ? "error" : "neutral"}
+        <PageContentSurface>
+          <AlertBanner
+            notice={workspaceNotice}
+            busyLabel={
+              mutation.saving
+                ? "Saving moderation settings..."
+                : workspace.loading ||
+                    channelOptions.loading ||
+                    roleOptions.loading
+                  ? "Refreshing moderation workspace..."
+                  : undefined
+            }
+          />
+
+          {workspace.workspaceState === "ready" ? (
+            <section
+              className="overview-summary-strip"
+              aria-label="Moderation summary"
+            >
+              <MetricCard
+                label="AutoMod"
+                value={
+                  automodFeature === null
+                    ? "Not available"
+                    : formatFeatureStatusLabel(automodFeature)
+                }
+                description={
+                  automodFeature === null
+                    ? "This server does not expose the AutoMod listener record."
+                    : summarizeAutomodMode(automodFeature)
+                }
+                tone={
+                  automodFeature === null
+                    ? "neutral"
+                    : getFeatureStatusTone(automodFeature)
+                }
+              />
+              <MetricCard
+                label="Mute role"
+                value={formatRoleValue(muteRoleId, roleOptions.roles)}
+                description={
+                  muteRoleFeature === null
+                    ? "This server does not expose a mute role control."
+                    : summarizeMuteRoleSignal(muteRoleFeature)
+                }
+                tone={
+                  muteRoleFeature === null
+                    ? "neutral"
+                    : getFeatureStatusTone(muteRoleFeature)
+                }
+              />
+              <MetricCard
+                label="Moderation logs"
+                value={formatModerationRouteCoverageValue(moderationLogFeatures)}
+                description="AutoMod action and moderation case routes configured in this workspace."
+                tone={configuredModerationRoutes > 0 ? "info" : "neutral"}
+              />
+              <MetricCard
+                label="Needs attention"
+                value={String(areaSummary.blocked)}
+                description="Enabled moderation controls still reporting blockers."
+                tone={areaSummary.blocked > 0 ? "error" : "neutral"}
+              />
+            </section>
+          ) : null}
+
+          <section className="content-grid content-grid-with-aside">
+            <div className="page-main">
+              <SurfaceCard className="feature-category-panel">
+                <div className="workspace-view">
+                  <div className="workspace-view-header">
+                    <div className="card-copy">
+                      <p className="section-label">Workspace</p>
+                      <h2>Moderation controls</h2>
+                      <p className="section-description">
+                        Keep the moderation surface focused on the supported staff
+                        actions: log readiness, mute-role setup, and the listener
+                        state used alongside Discord native AutoMod.
+                      </p>
+                    </div>
+                    <div className="workspace-view-meta">
+                      {workspace.workspaceState === "ready" ? (
+                        <>
+                          <span className="meta-pill subtle-pill">
+                            {localOverrides} local overrides
+                          </span>
+                          <span className="meta-pill subtle-pill">
+                            {configuredModerationRoutes}/{moderationLogFeatures.length} routes configured
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {renderWorkspaceContent()}
+                </div>
+              </SurfaceCard>
+            </div>
+
+            <ModerationAside
+              selectedServerLabel={selectedServerLabel}
+              automodFeature={automodFeature}
+              muteRoleId={muteRoleId}
+              moderationLogFeatures={moderationLogFeatures}
+              firstBlockedFeature={firstBlockedFeature}
+              areaSummarySignal={areaSummary.signal}
+              channelOptions={channelOptions}
+              roleOptions={roleOptions}
             />
           </section>
-        ) : null}
-
-        <section className="content-grid content-grid-with-aside">
-          <div className="page-main">
-            <SurfaceCard className="feature-category-panel">
-              <div className="workspace-view">
-                <div className="workspace-view-header">
-                  <div className="card-copy">
-                    <p className="section-label">Workspace</p>
-                    <h2>Moderation controls</h2>
-                    <p className="section-description">
-                      Keep the moderation surface focused on the supported staff
-                      actions: log readiness, mute-role setup, and the listener
-                      state used alongside Discord native AutoMod.
-                    </p>
-                  </div>
-                  <div className="workspace-view-meta">
-                    {workspace.workspaceState === "ready" ? (
-                      <>
-                        <span className="meta-pill subtle-pill">
-                          {localOverrides} local overrides
-                        </span>
-                        <span className="meta-pill subtle-pill">
-                          {configuredModerationRoutes}/{moderationLogFeatures.length} routes configured
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-
-                <AlertBanner
-                  notice={workspaceNotice}
-                  busyLabel={
-                    mutation.saving
-                      ? "Saving moderation settings..."
-                      : workspace.loading ||
-                          channelOptions.loading ||
-                          roleOptions.loading
-                        ? "Refreshing moderation workspace..."
-                        : undefined
-                  }
-                />
-
-                {renderWorkspaceContent()}
-              </div>
-            </SurfaceCard>
-          </div>
-
-          <ModerationAside
-            selectedServerLabel={selectedServerLabel}
-            automodFeature={automodFeature}
-            muteRoleId={muteRoleId}
-            moderationLogFeatures={moderationLogFeatures}
-            firstBlockedFeature={firstBlockedFeature}
-            areaSummarySignal={areaSummary.signal}
-            channelOptions={channelOptions}
-            roleOptions={roleOptions}
-          />
-        </section>
+        </PageContentSurface>
       </section>
 
       {selectedFeature !== null ? (

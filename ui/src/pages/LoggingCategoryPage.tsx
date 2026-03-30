@@ -38,6 +38,7 @@ import {
   KeyValueList,
   LookupNotice,
   MetricCard,
+  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -63,11 +64,6 @@ export function LoggingCategoryPage() {
   const [selectedFeatureId, setSelectedFeatureId] = useState("");
   const [channelDraft, setChannelDraft] = useState("");
 
-  if (definition === null) {
-    return null;
-  }
-
-  const areaLabel = definition.label;
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "logging");
   const areaSummary = summarizeFeatureArea(areaFeatures);
@@ -110,6 +106,12 @@ export function LoggingCategoryPage() {
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
   );
+
+  if (definition === null) {
+    return null;
+  }
+
+  const areaLabel = definition.label;
 
   async function handleRefreshLogging() {
     await Promise.all([workspace.refresh(), channelOptions.refresh()]);
@@ -402,157 +404,159 @@ export function LoggingCategoryPage() {
           actions={renderHeaderActions()}
         />
 
-        {workspace.workspaceState === "ready" ? (
-          <section
-            className="overview-summary-strip"
-            aria-label="Logging summary"
-          >
-            <MetricCard
-              label="Log routes"
-              value={String(areaSummary.total)}
-              description="Mapped logging features available for this server."
-            />
-            <MetricCard
-              label="Destinations set"
-              value={`${configuredDestinations}/${featuresRequiringChannel.length}`}
-              description="Routes that already have a configured destination channel."
-              tone={
-                configuredDestinations === featuresRequiringChannel.length &&
-                featuresRequiringChannel.length > 0
-                  ? "success"
-                  : "neutral"
-              }
-            />
-            <MetricCard
-              label="Ready"
-              value={String(areaSummary.ready)}
-              description="Enabled log routes that are not reporting blockers."
-              tone={areaSummary.ready > 0 ? "success" : "neutral"}
-            />
-            <MetricCard
-              label="Needs attention"
-              value={String(areaSummary.blocked)}
-              description="Routes blocked by missing destinations or runtime prerequisites."
-              tone={areaSummary.blocked > 0 ? "error" : "neutral"}
-            />
-          </section>
-        ) : null}
+        <PageContentSurface>
+          <AlertBanner
+            notice={workspaceNotice}
+            busyLabel={
+              mutation.saving
+                ? "Saving logging settings..."
+                : workspace.loading || channelOptions.loading
+                  ? "Refreshing logging workspace..."
+                  : undefined
+            }
+          />
 
-        <section className="content-grid content-grid-with-aside">
-          <div className="page-main">
-            <SurfaceCard className="feature-category-panel">
-              <div className="workspace-view">
-                <div className="workspace-view-header">
-                  <div className="card-copy">
-                    <p className="section-label">Workspace</p>
-                    <h2>Manage logging routes</h2>
-                    <p className="section-description">
-                      Keep the main workspace focused on destinations and current
-                      readiness. Open a route to configure its destination without
-                      leaving the table.
-                    </p>
-                  </div>
-                  <div className="workspace-view-meta">
-                    {workspace.workspaceState === "ready" ? (
-                      <>
-                        <span className="meta-pill subtle-pill">
-                          {localOverrides} local overrides
-                        </span>
-                        <span className="meta-pill subtle-pill">
-                          {runtimeBlockedFeatures.length} runtime-blocked
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-
-                <AlertBanner
-                  notice={workspaceNotice}
-                  busyLabel={
-                    mutation.saving
-                      ? "Saving logging settings..."
-                      : workspace.loading || channelOptions.loading
-                        ? "Refreshing logging workspace..."
-                        : undefined
-                  }
-                />
-
-                {renderWorkspaceContent()}
-              </div>
-            </SurfaceCard>
-          </div>
-
-          <aside className="page-aside">
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Summary</p>
-                <h2>Category health</h2>
-                <p className="section-description">
-                  Logging becomes reliable only after routes, runtime prerequisites,
-                  and channel validation all line up.
-                </p>
-              </div>
-
-              <KeyValueList
-                items={[
-                  {
-                    label: "Server",
-                    value: selectedServerLabel,
-                  },
-                  {
-                    label: "Configured destinations",
-                    value: `${configuredDestinations}/${featuresRequiringChannel.length}`,
-                  },
-                  {
-                    label: "Blocked routes",
-                    value: String(areaSummary.blocked),
-                  },
-                  {
-                    label: "Current signal",
-                    value: areaSummary.signal,
-                  },
-                ]}
+          {workspace.workspaceState === "ready" ? (
+            <section
+              className="overview-summary-strip"
+              aria-label="Logging summary"
+            >
+              <MetricCard
+                label="Log routes"
+                value={String(areaSummary.total)}
+                description="Mapped logging features available for this server."
               />
-            </SurfaceCard>
+              <MetricCard
+                label="Destinations set"
+                value={`${configuredDestinations}/${featuresRequiringChannel.length}`}
+                description="Routes that already have a configured destination channel."
+                tone={
+                  configuredDestinations === featuresRequiringChannel.length &&
+                  featuresRequiringChannel.length > 0
+                    ? "success"
+                    : "neutral"
+                }
+              />
+              <MetricCard
+                label="Ready"
+                value={String(areaSummary.ready)}
+                description="Enabled log routes that are not reporting blockers."
+                tone={areaSummary.ready > 0 ? "success" : "neutral"}
+              />
+              <MetricCard
+                label="Needs attention"
+                value={String(areaSummary.blocked)}
+                description="Routes blocked by missing destinations or runtime prerequisites."
+                tone={areaSummary.blocked > 0 ? "error" : "neutral"}
+              />
+            </section>
+          ) : null}
 
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Guidance</p>
-                <h2>Operational notes</h2>
-                <p className="section-description">
-                  Keep default logging routes visible in one list. Use the drawer
-                  only when a route needs a destination or backend requirement review.
-                </p>
-              </div>
+          <section className="content-grid content-grid-with-aside">
+            <div className="page-main">
+              <SurfaceCard className="feature-category-panel">
+                <div className="workspace-view">
+                  <div className="workspace-view-header">
+                    <div className="card-copy">
+                      <p className="section-label">Workspace</p>
+                      <h2>Manage logging routes</h2>
+                      <p className="section-description">
+                        Keep the main workspace focused on destinations and current
+                        readiness. Open a route to configure its destination without
+                        leaving the table.
+                      </p>
+                    </div>
+                    <div className="workspace-view-meta">
+                      {workspace.workspaceState === "ready" ? (
+                        <>
+                          <span className="meta-pill subtle-pill">
+                            {localOverrides} local overrides
+                          </span>
+                          <span className="meta-pill subtle-pill">
+                            {runtimeBlockedFeatures.length} runtime-blocked
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
 
-              <ul className="feature-guidance-list">
-                <li>Configure destination channels before enabling new logging routes that require them.</li>
-                <li>Use inherited when a server should fall back to the configured default instead of pinning a local override.</li>
-                <li>Runtime kill switches and missing gateway intents appear through blockers and notices, not a separate settings page.</li>
-              </ul>
+                  {renderWorkspaceContent()}
+                </div>
+              </SurfaceCard>
+            </div>
 
-              {firstBlockedFeature ? (
-                <div className="surface-subsection">
-                  <p className="section-label">Current blocker</p>
-                  <strong>{firstBlockedFeature.label}</strong>
-                  <p className="meta-note">
-                    {summarizeLoggingGuidance(firstBlockedFeature)}
+            <aside className="page-aside">
+              <SurfaceCard>
+                <div className="card-copy">
+                  <p className="section-label">Summary</p>
+                  <h2>Category health</h2>
+                  <p className="section-description">
+                    Logging becomes reliable only after routes, runtime prerequisites,
+                    and channel validation all line up.
                   </p>
                 </div>
-              ) : null}
 
-              {channelOptions.notice ? (
-                <LookupNotice
-                  title="Channel references unavailable"
-                  message={channelOptions.notice.message}
-                  retryLabel="Retry channel lookup"
-                  retryDisabled={channelOptions.loading}
-                  onRetry={channelOptions.refresh}
+                <KeyValueList
+                  items={[
+                    {
+                      label: "Server",
+                      value: selectedServerLabel,
+                    },
+                    {
+                      label: "Configured destinations",
+                      value: `${configuredDestinations}/${featuresRequiringChannel.length}`,
+                    },
+                    {
+                      label: "Blocked routes",
+                      value: String(areaSummary.blocked),
+                    },
+                    {
+                      label: "Current signal",
+                      value: areaSummary.signal,
+                    },
+                  ]}
                 />
-              ) : null}
-            </SurfaceCard>
-          </aside>
-        </section>
+              </SurfaceCard>
+
+              <SurfaceCard>
+                <div className="card-copy">
+                  <p className="section-label">Guidance</p>
+                  <h2>Operational notes</h2>
+                  <p className="section-description">
+                    Keep default logging routes visible in one list. Use the drawer
+                    only when a route needs a destination or backend requirement review.
+                  </p>
+                </div>
+
+                <ul className="feature-guidance-list">
+                  <li>Configure destination channels before enabling new logging routes that require them.</li>
+                  <li>Use inherited when a server should fall back to the configured default instead of pinning a local override.</li>
+                  <li>Runtime kill switches and missing gateway intents appear through blockers and notices, not a separate settings page.</li>
+                </ul>
+
+                {firstBlockedFeature ? (
+                  <div className="surface-subsection">
+                    <p className="section-label">Current blocker</p>
+                    <strong>{firstBlockedFeature.label}</strong>
+                    <p className="meta-note">
+                      {summarizeLoggingGuidance(firstBlockedFeature)}
+                    </p>
+                  </div>
+                ) : null}
+
+                {channelOptions.notice ? (
+                  <LookupNotice
+                    title="Channel references unavailable"
+                    message={channelOptions.notice.message}
+                    retryLabel="Retry channel lookup"
+                    retryDisabled={channelOptions.loading}
+                    onRetry={channelOptions.refresh}
+                  />
+                ) : null}
+              </SurfaceCard>
+            </aside>
+          </section>
+        </PageContentSurface>
       </section>
 
       {selectedFeature !== null && canEditLoggingChannel(selectedFeature) ? (

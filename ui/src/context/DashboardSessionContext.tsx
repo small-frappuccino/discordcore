@@ -3,6 +3,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useState,
   type ReactNode,
@@ -110,65 +111,67 @@ export function DashboardSessionProvider({
     resetGuildResourceCache();
   }
 
-  async function performSessionRefresh(activeClient: ControlApiClient) {
-    setSessionLoading(true);
-    setBusyLabel("Refreshing session");
+  const performSessionRefresh = useEffectEvent(
+    async (activeClient: ControlApiClient) => {
+      setSessionLoading(true);
+      setBusyLabel("Refreshing session");
 
-    try {
-      const probe = await activeClient.getSessionStatus();
-      if (probe.status === "oauth_unavailable") {
-        setAuthState("oauth_unavailable");
-        clearSessionState();
-        setNotice({
-          tone: "info",
-          message: "Discord OAuth is unavailable on this control server.",
-        });
-        return;
-      }
+      try {
+        const probe = await activeClient.getSessionStatus();
+        if (probe.status === "oauth_unavailable") {
+          setAuthState("oauth_unavailable");
+          clearSessionState();
+          setNotice({
+            tone: "info",
+            message: "Discord OAuth is unavailable on this control server.",
+          });
+          return;
+        }
 
-      if (probe.status === "unauthorized") {
+        if (probe.status === "unauthorized") {
+          setAuthState("signed_out");
+          clearSessionState();
+          setNotice({
+            tone: "info",
+            message: "Sign in with Discord to continue.",
+          });
+          return;
+        }
+
+        setAuthState("signed_in");
+        setSession(probe.session);
+
+        const guildsResponse = await activeClient.listAccessibleGuilds();
+        const nextGuildID = resolveGuildSelection(
+          selectedGuildID,
+          preferredGuildID,
+          guildsResponse.guilds,
+        );
+        setAccessibleGuilds(guildsResponse.guilds);
+        setSelectedGuildID(nextGuildID);
+        setNotice(null);
+        if (nextGuildID !== "") {
+          void prefetchGuildDashboardResources(activeClient, baseUrl, nextGuildID).catch(
+            () => {},
+          );
+        }
+      } catch (error) {
         setAuthState("signed_out");
         clearSessionState();
         setNotice({
-          tone: "info",
-          message: "Sign in with Discord to continue.",
+          tone: "error",
+          message: formatError(error),
         });
-        return;
+      } finally {
+        setSessionLoading(false);
+        setBusyLabel("");
       }
-
-      setAuthState("signed_in");
-      setSession(probe.session);
-
-      const guildsResponse = await activeClient.listAccessibleGuilds();
-      const nextGuildID = resolveGuildSelection(
-        selectedGuildID,
-        preferredGuildID,
-        guildsResponse.guilds,
-      );
-      setAccessibleGuilds(guildsResponse.guilds);
-      setSelectedGuildID(nextGuildID);
-      setNotice(null);
-      if (nextGuildID !== "") {
-        void prefetchGuildDashboardResources(activeClient, baseUrl, nextGuildID).catch(
-          () => {},
-        );
-      }
-    } catch (error) {
-      setAuthState("signed_out");
-      clearSessionState();
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setSessionLoading(false);
-      setBusyLabel("");
-    }
-  }
+    },
+  );
 
   useEffect(() => {
     void performSessionRefresh(client);
-  }, [client]);
+  }, [client, performSessionRefresh]);
 
   useEffect(() => {
     if (authState !== "signed_in" || selectedGuildID.trim() === "") {

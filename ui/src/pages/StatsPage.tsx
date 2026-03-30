@@ -7,6 +7,7 @@ import {
   KeyValueList,
   LookupNotice,
   MetricCard,
+  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -431,175 +432,177 @@ export function StatsPage() {
           actions={renderHeaderActions()}
         />
 
-        {workspace.workspaceState === "ready" &&
-        statsFeature !== null &&
-        statsDetails !== null ? (
-          <section
-            className="overview-summary-strip"
-            aria-label="Stats summary"
-          >
-            <MetricCard
-              label="Stats module"
-              value={formatFeatureStatusLabel(statsFeature)}
-              description={summarizeStatsSignal(statsFeature)}
-              tone={getFeatureStatusTone(statsFeature)}
-            />
-            <MetricCard
-              label="Update rule"
-              value={formatStatsConfigValue(statsDetails.configEnabled)}
-              description={
-                statsDetails.configEnabled
-                  ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
-                  : "Updates are paused until the server rule is enabled."
-              }
-              tone={statsDetails.configEnabled ? "info" : "neutral"}
-            />
-            <MetricCard
-              label="Stats channels"
-              value={formatStatsChannelCountValue(
-                statsDetails.configuredChannelCount,
-              )}
-              description="Configured channels currently reviewed in this workspace."
-              tone={
-                statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
-              }
-            />
-            <MetricCard
-              label="Overrides"
-              value={String(localOverrides)}
-              description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
-            />
-          </section>
-        ) : null}
+        <PageContentSurface>
+          <AlertBanner
+            notice={workspaceNotice}
+            busyLabel={
+              mutation.saving
+                ? "Saving stats settings..."
+                : workspace.loading || channelOptions.loading
+                  ? "Refreshing stats workspace..."
+                  : undefined
+            }
+          />
 
-        <section className="content-grid content-grid-with-aside">
-          <div className="page-main">
-            <SurfaceCard className="feature-category-panel">
-              <div className="workspace-view">
-                <div className="workspace-view-header">
-                  <div className="card-copy">
-                    <p className="section-label">Workspace</p>
-                    <h2>Stats configuration</h2>
-                    <p className="section-description">
-                      Keep the default workspace focused on the schedule admins
-                      actually need to verify here: whether stats updates should
-                      run, how often they run, and which channels the server
-                      will rename.
-                    </p>
+          {workspace.workspaceState === "ready" &&
+          statsFeature !== null &&
+          statsDetails !== null ? (
+            <section
+              className="overview-summary-strip"
+              aria-label="Stats summary"
+            >
+              <MetricCard
+                label="Stats module"
+                value={formatFeatureStatusLabel(statsFeature)}
+                description={summarizeStatsSignal(statsFeature)}
+                tone={getFeatureStatusTone(statsFeature)}
+              />
+              <MetricCard
+                label="Update rule"
+                value={formatStatsConfigValue(statsDetails.configEnabled)}
+                description={
+                  statsDetails.configEnabled
+                    ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
+                    : "Updates are paused until the server rule is enabled."
+                }
+                tone={statsDetails.configEnabled ? "info" : "neutral"}
+              />
+              <MetricCard
+                label="Stats channels"
+                value={formatStatsChannelCountValue(
+                  statsDetails.configuredChannelCount,
+                )}
+                description="Configured channels currently reviewed in this workspace."
+                tone={
+                  statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
+                }
+              />
+              <MetricCard
+                label="Overrides"
+                value={String(localOverrides)}
+                description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
+              />
+            </section>
+          ) : null}
+
+          <section className="content-grid content-grid-with-aside">
+            <div className="page-main">
+              <SurfaceCard className="feature-category-panel">
+                <div className="workspace-view">
+                  <div className="workspace-view-header">
+                    <div className="card-copy">
+                      <p className="section-label">Workspace</p>
+                      <h2>Stats configuration</h2>
+                      <p className="section-description">
+                        Keep the default workspace focused on the schedule admins
+                        actually need to verify here: whether stats updates should
+                        run, how often they run, and which channels the server
+                        will rename.
+                      </p>
+                    </div>
+                    <div className="workspace-view-meta">
+                      {workspace.workspaceState === "ready" ? (
+                        <>
+                          <span className="meta-pill subtle-pill">
+                            {localOverrides} local overrides
+                          </span>
+                          <span className="meta-pill subtle-pill">
+                            {enabledModules}/{areaFeatures.length} enabled
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="workspace-view-meta">
-                    {workspace.workspaceState === "ready" ? (
-                      <>
-                        <span className="meta-pill subtle-pill">
-                          {localOverrides} local overrides
-                        </span>
-                        <span className="meta-pill subtle-pill">
-                          {enabledModules}/{areaFeatures.length} enabled
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
+
+                  {renderPageState()}
+                </div>
+              </SurfaceCard>
+            </div>
+
+            <aside className="page-aside">
+              <SurfaceCard>
+                <div className="card-copy">
+                  <p className="section-label">Summary</p>
+                  <h2>Current stats setup</h2>
+                  <p className="section-description">
+                    Use this panel to confirm the selected server, the active
+                    schedule, and the current signal reported by the control
+                    server.
+                  </p>
                 </div>
 
-                <AlertBanner
-                  notice={workspaceNotice}
-                  busyLabel={
-                    mutation.saving
-                      ? "Saving stats settings..."
-                      : workspace.loading || channelOptions.loading
-                        ? "Refreshing stats workspace..."
-                        : undefined
-                  }
+                <KeyValueList
+                  items={[
+                    {
+                      label: "Server",
+                      value: selectedServerLabel,
+                    },
+                    {
+                      label: "Module state",
+                      value:
+                        statsFeature === null
+                          ? "Not available"
+                          : statsFeature.effective_enabled
+                            ? "On"
+                            : "Off",
+                    },
+                    {
+                      label: "Update interval",
+                      value:
+                        statsDetails === null
+                          ? "Not available"
+                          : formatStatsIntervalValue(
+                              statsDetails.updateIntervalMins,
+                            ),
+                    },
+                    {
+                      label: "Configured channels",
+                      value:
+                        statsDetails === null
+                          ? "Not available"
+                          : formatStatsChannelCountValue(
+                              statsDetails.configuredChannelCount,
+                            ),
+                    },
+                    {
+                      label: "Current signal",
+                      value:
+                        statsFeature === null
+                          ? areaSummary.signal
+                          : summarizeStatsSignal(statsFeature),
+                    },
+                  ]}
                 />
+              </SurfaceCard>
 
-                {renderPageState()}
-              </div>
-            </SurfaceCard>
-          </div>
+              <SurfaceCard>
+                <div className="card-copy">
+                  <p className="section-label">Guidance</p>
+                  <h2>How this page works</h2>
+                  <p className="section-description">
+                    Keep the main workspace centered on the stats schedule and the
+                    current channel inventory instead of a generic feature row.
+                  </p>
+                </div>
 
-          <aside className="page-aside">
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Summary</p>
-                <h2>Current stats setup</h2>
-                <p className="section-description">
-                  Use this panel to confirm the selected server, the active
-                  schedule, and the current signal reported by the control
-                  server.
-                </p>
-              </div>
-
-              <KeyValueList
-                items={[
-                  {
-                    label: "Server",
-                    value: selectedServerLabel,
-                  },
-                  {
-                    label: "Module state",
-                    value:
-                      statsFeature === null
-                        ? "Not available"
-                        : statsFeature.effective_enabled
-                          ? "On"
-                          : "Off",
-                  },
-                  {
-                    label: "Update interval",
-                    value:
-                      statsDetails === null
-                        ? "Not available"
-                        : formatStatsIntervalValue(
-                            statsDetails.updateIntervalMins,
-                          ),
-                  },
-                  {
-                    label: "Configured channels",
-                    value:
-                      statsDetails === null
-                        ? "Not available"
-                        : formatStatsChannelCountValue(
-                            statsDetails.configuredChannelCount,
-                          ),
-                  },
-                  {
-                    label: "Current signal",
-                    value:
-                      statsFeature === null
-                        ? areaSummary.signal
-                        : summarizeStatsSignal(statsFeature),
-                  },
-                ]}
-              />
-            </SurfaceCard>
-
-            <SurfaceCard>
-              <div className="card-copy">
-                <p className="section-label">Guidance</p>
-                <h2>How this page works</h2>
-                <p className="section-description">
-                  Keep the main workspace centered on the stats schedule and the
-                  current channel inventory instead of a generic feature row.
-                </p>
-              </div>
-
-              <ul className="feature-guidance-list">
-                <li>
-                  Use the module toggle when stats renames should stop or resume
-                  for the selected server.
-                </li>
-                <li>
-                  Use the schedule editor to pause updates or change how often
-                  the configured channels refresh.
-                </li>
-                <li>
-                  Review the channel inventory here before changing the
-                  underlying stats channel definitions elsewhere.
-                </li>
-              </ul>
-            </SurfaceCard>
-          </aside>
-        </section>
+                <ul className="feature-guidance-list">
+                  <li>
+                    Use the module toggle when stats renames should stop or resume
+                    for the selected server.
+                  </li>
+                  <li>
+                    Use the schedule editor to pause updates or change how often
+                    the configured channels refresh.
+                  </li>
+                  <li>
+                    Review the channel inventory here before changing the
+                    underlying stats channel definitions elsewhere.
+                  </li>
+                </ul>
+              </SurfaceCard>
+            </aside>
+          </section>
+        </PageContentSurface>
       </section>
 
       {drawerOpen && statsFeature !== null ? (
