@@ -8,10 +8,10 @@ import type {
 import {
   AlertBanner,
   EmptyState,
+  FeatureWorkspaceLayout,
   KeyValueList,
   LookupNotice,
   MetricCard,
-  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -359,108 +359,93 @@ export function RolesPage() {
           actions={headerActions}
         />
 
-        <PageContentSurface>
-          <AlertBanner
-            notice={workspaceNotice}
-            busyLabel={
-              mutation.saving
-                ? "Saving role settings..."
-                : workspace.loading || roleOptions.loading
-                  ? "Refreshing roles workspace..."
-                  : undefined
-            }
-          />
-
-          {workspace.workspaceState === "ready" && autoRoleFeature !== null && autoRoleDetails !== null ? (
-            <section className="overview-summary-strip" aria-label="Roles summary">
-              <MetricCard
-                label="Auto role"
-                value={formatFeatureStatusLabel(autoRoleFeature)}
-                description={summarizeAutoRoleSignal(autoRoleFeature)}
-                tone={getFeatureStatusTone(autoRoleFeature)}
-              />
-              <MetricCard
-                label="Target role"
-                value={formatRoleValue(autoRoleDetails.targetRoleId, roleOptions.roles)}
-                description="The role that gets assigned automatically."
-              />
-              <MetricCard
-                label="Requirement roles"
-                value={formatRequirementRolesValue(autoRoleFeature, roleOptions.roles)}
-                description={
-                  autoRoleDetails.requiredRoleCount === 2
-                    ? "Both requirement roles are configured."
-                    : "Choose the level and booster roles that gate the assignment."
-                }
-                tone={
-                  autoRoleDetails.requiredRoleCount === 2 ? "success" : "neutral"
-                }
-              />
-              <MetricCard
-                label="Advanced controls"
-                value={`${advancedEnabledCount}/${advancedFeatures.length}`}
-                description="Presence watching and permission mirror controls kept behind disclosure."
-                tone={advancedEnabledCount > 0 ? "info" : "neutral"}
-              />
-            </section>
-          ) : null}
-
-          <section className="content-grid content-grid-with-aside">
-            <div className="page-main">
-              <SurfaceCard className="feature-category-panel">
-                <div className="workspace-view">
-                  <div className="workspace-view-header">
-                    <div className="card-copy">
-                      <p className="section-label">Workspace</p>
-                      <h2>Manage roles</h2>
-                      <p className="section-description">
-                        Keep the main workspace centered on auto role assignment.
-                        Advanced controls stay available, but they do not compete
-                        with the primary setup flow.
-                      </p>
-                    </div>
-                    <div className="workspace-view-meta">
-                      {workspace.workspaceState === "ready" ? (
-                        <>
-                          <span className="meta-pill subtle-pill">
-                            {localOverrides} local overrides
-                          </span>
-                          <span className="meta-pill subtle-pill">
-                            {advancedEnabledCount} advanced controls active
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <RolesWorkspaceContent
-                    areaLabel={areaLabel}
-                    authState={authState}
-                    autoRoleDetails={autoRoleDetails}
-                    autoRoleFeature={autoRoleFeature}
-                    advancedEnabledCount={advancedEnabledCount}
-                    advancedFeatures={advancedFeatures}
-                    pendingFeatureId={pendingFeatureId}
-                    roleOptions={roleOptions.roles}
-                    roleLookupNotice={roleOptions.notice}
-                    rolePickerUnavailable={rolePickerUnavailable}
-                    roleOptionsLoading={roleOptions.loading}
-                    workspaceState={workspace.workspaceState}
-                    mutationSaving={mutation.saving}
-                    onLogin={() => void beginLogin(nextPath)}
-                    onOpenDrawer={openDrawer}
-                    onRefresh={() => void handleRefreshRoles()}
-                    onSetFeatureEnabled={(feature, enabled) => {
-                      void handleSetFeatureEnabled(feature, enabled);
-                    }}
-                    onUseDefaultState={(feature) => {
-                      void handleUseDefaultState(feature);
-                    }}
-                  />
-                </div>
-              </SurfaceCard>
-            </div>
-
+        <FeatureWorkspaceLayout
+          notice={workspaceNotice}
+          busyLabel={
+            mutation.saving
+              ? "Saving role settings..."
+              : workspace.loading || roleOptions.loading
+                ? "Refreshing roles workspace..."
+                : undefined
+          }
+          summary={
+            workspace.workspaceState === "ready" &&
+            autoRoleFeature !== null &&
+            autoRoleDetails !== null ? (
+              <section className="overview-summary-strip" aria-label="Roles summary">
+                <MetricCard
+                  label="Auto role"
+                  value={formatFeatureStatusLabel(autoRoleFeature)}
+                  description={summarizeAutoRoleSignal(autoRoleFeature)}
+                  tone={getFeatureStatusTone(autoRoleFeature)}
+                />
+                <MetricCard
+                  label="Target role"
+                  value={formatRoleValue(autoRoleDetails.targetRoleId, roleOptions.roles)}
+                  description="The role that gets assigned automatically."
+                />
+                <MetricCard
+                  label="Requirement roles"
+                  value={formatRequirementRolesValue(autoRoleFeature, roleOptions.roles)}
+                  description={
+                    autoRoleDetails.requiredRoleCount === 2
+                      ? "Both requirement roles are configured."
+                      : "Choose the level and booster roles that gate the assignment."
+                  }
+                  tone={
+                    autoRoleDetails.requiredRoleCount === 2 ? "success" : "neutral"
+                  }
+                />
+                <MetricCard
+                  label="Advanced controls"
+                  value={`${advancedEnabledCount}/${advancedFeatures.length}`}
+                  description="Presence watching and permission mirror controls kept behind disclosure."
+                  tone={advancedEnabledCount > 0 ? "info" : "neutral"}
+                />
+              </section>
+            ) : null
+          }
+          workspaceTitle="Manage roles"
+          workspaceDescription="Keep the main workspace centered on auto role assignment. Advanced controls stay available, but they do not compete with the primary setup flow."
+          workspaceMeta={
+            workspace.workspaceState === "ready" ? (
+              <>
+                <span className="meta-pill subtle-pill">
+                  {localOverrides} local overrides
+                </span>
+                <span className="meta-pill subtle-pill">
+                  {advancedEnabledCount} advanced controls active
+                </span>
+              </>
+            ) : null
+          }
+          workspaceContent={
+            <RolesWorkspaceContent
+              areaLabel={areaLabel}
+              authState={authState}
+              autoRoleDetails={autoRoleDetails}
+              autoRoleFeature={autoRoleFeature}
+              advancedEnabledCount={advancedEnabledCount}
+              advancedFeatures={advancedFeatures}
+              pendingFeatureId={pendingFeatureId}
+              roleOptions={roleOptions.roles}
+              roleLookupNotice={roleOptions.notice}
+              rolePickerUnavailable={rolePickerUnavailable}
+              roleOptionsLoading={roleOptions.loading}
+              workspaceState={workspace.workspaceState}
+              mutationSaving={mutation.saving}
+              onLogin={() => void beginLogin(nextPath)}
+              onOpenDrawer={openDrawer}
+              onRefresh={() => void handleRefreshRoles()}
+              onSetFeatureEnabled={(feature, enabled) => {
+                void handleSetFeatureEnabled(feature, enabled);
+              }}
+              onUseDefaultState={(feature) => {
+                void handleUseDefaultState(feature);
+              }}
+            />
+          }
+          aside={
             <RolesAside
               areaSummary={areaSummary}
               autoRoleDetails={autoRoleDetails}
@@ -469,8 +454,8 @@ export function RolesPage() {
               roleOptions={roleOptions.roles}
               selectedServerLabel={selectedServerLabel}
             />
-          </section>
-        </PageContentSurface>
+          }
+        />
       </section>
 
       <RolesFeatureDrawer

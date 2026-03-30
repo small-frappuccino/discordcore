@@ -5,8 +5,9 @@ import {
   type NavigationItem,
 } from "../app/navigation";
 import {
-  AlertBanner,
-  PageContentSurface,
+  FeatureWorkspaceLayout,
+  PageHeader,
+  StatusBadge,
   SurfaceCard,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
@@ -38,7 +39,12 @@ interface HomeCardFact {
 }
 
 export function HomePage() {
-  const { authState, selectedGuild } = useDashboardSession();
+  const {
+    authState,
+    beginLogin,
+    currentOriginLabel,
+    selectedGuild,
+  } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -57,108 +63,189 @@ export function HomePage() {
     features.find((feature) => feature.id === "auto_role_assignment") ?? null;
 
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
+  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
+  const homeStatus = getHomeStatus(authState, workspace.workspaceState, selectedGuild !== null);
 
   return (
-    <section className="page-shell home-page-shell">
-      <header className="home-page-header">
-        <h1>Home</h1>
-      </header>
+    <section className="page-shell">
+      <PageHeader
+        eyebrow="Overview"
+        title="Home"
+        description="Review the main dashboard areas for the selected server and jump directly into the workspace that needs attention."
+        status={<StatusBadge tone={homeStatus.tone}>{homeStatus.label}</StatusBadge>}
+        meta={
+          <>
+            <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
+            <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+          </>
+        }
+        actions={
+          authState !== "signed_in" ? (
+            <button
+              className="button-primary"
+              type="button"
+              onClick={() => void beginLogin()}
+            >
+              Sign in with Discord
+            </button>
+          ) : null
+        }
+      />
 
-      <PageContentSurface>
-        <AlertBanner notice={homeNotice} />
+      <FeatureWorkspaceLayout
+        notice={homeNotice}
+        busyLabel={
+          workspace.loading || rolesSettings.loading || partnerBoard.loading
+            ? "Refreshing dashboard overview..."
+            : undefined
+        }
+        workspaceTitle="Product areas"
+        workspaceDescription="Open the area that matches the task at hand and confirm its current status before drilling into configuration."
+        workspaceMeta={
+          <span className="meta-pill subtle-pill">
+            {dashboardHomeNavigationSections.length} product areas
+          </span>
+        }
+        workspaceContent={
+          <div className="home-category-stack">
+            {dashboardHomeNavigationSections.map((section) => (
+              <section className="home-category-section" key={section.id}>
+                <div className="home-category-header">
+                  <h2>{section.label}</h2>
+                </div>
 
-        <div className="home-category-stack">
-          {dashboardHomeNavigationSections.map((section) => (
-            <section className="home-category-section" key={section.id}>
-              <div className="home-category-header">
-                <h2>{section.label}</h2>
-              </div>
+                <div className="home-card-grid">
+                  {section.items.map((item, index) => {
+                    const card = buildHomeCardData(item, {
+                      authState,
+                      selectedGuildPresent: selectedGuild !== null,
+                      rolesSettings,
+                      partnerBoard,
+                      statsFeature,
+                      commandsFeature,
+                      adminCommandsFeature,
+                      moderationFeatures,
+                      loggingFeatures,
+                      autoRoleFeature,
+                      workspaceState: workspace.workspaceState,
+                    });
+                    const tier = getHomeCardTier(section.items.length, index);
 
-              <div className="home-card-grid">
-                {section.items.map((item, index) => {
-                  const card = buildHomeCardData(item, {
-                    authState,
-                    selectedGuildPresent: selectedGuild !== null,
-                    rolesSettings,
-                    partnerBoard,
-                    statsFeature,
-                    commandsFeature,
-                    adminCommandsFeature,
-                    moderationFeatures,
-                    loggingFeatures,
-                    autoRoleFeature,
-                    workspaceState: workspace.workspaceState,
-                  });
-                  const tier = getHomeCardTier(section.items.length, index);
-
-                  return (
-                    <SurfaceCard
-                      as="article"
-                      aria-busy={card.loading}
-                      className={[
-                        "home-nav-card",
-                        "surface-card-accent",
-                        card.tone !== "neutral"
-                          ? `surface-card-accent-${card.tone}`
-                          : "",
-                        `home-nav-card-${tier}`,
-                      ].join(" ")}
-                      key={item.id}
-                    >
-                      {card.loading ? (
-                        <div className="home-nav-card-skeleton" aria-hidden="true">
-                          <span className="home-nav-skeleton home-nav-skeleton-title" />
-                          <span className="home-nav-skeleton" />
-                          <span className="home-nav-skeleton" />
-                          <span className="home-nav-skeleton home-nav-skeleton-button" />
-                        </div>
-                      ) : (
-                        <>
-                          <div className="home-nav-card-header">
-                            <h3>{card.item.label}</h3>
+                    return (
+                      <SurfaceCard
+                        as="article"
+                        aria-busy={card.loading}
+                        className={[
+                          "home-nav-card",
+                          "surface-card-accent",
+                          card.tone !== "neutral"
+                            ? `surface-card-accent-${card.tone}`
+                            : "",
+                          `home-nav-card-${tier}`,
+                        ].join(" ")}
+                        key={item.id}
+                      >
+                        {card.loading ? (
+                          <div className="home-nav-card-skeleton" aria-hidden="true">
+                            <span className="home-nav-skeleton home-nav-skeleton-title" />
+                            <span className="home-nav-skeleton" />
+                            <span className="home-nav-skeleton" />
+                            <span className="home-nav-skeleton home-nav-skeleton-button" />
                           </div>
+                        ) : (
+                          <>
+                            <div className="home-nav-card-header">
+                              <h3>{card.item.label}</h3>
+                            </div>
 
-                          <ul className="home-nav-facts">
-                            {card.facts.map((fact) => (
-                              <li
-                                className="home-nav-fact-row"
-                                data-tone={fact.tone}
-                                key={`${fact.label}:${fact.value}`}
-                              >
-                                <span className="sr-only">{`${fact.label}: ${fact.value}`}</span>
-                                <div className="home-nav-fact-key" aria-hidden="true">
-                                  <span className="home-nav-fact-label">{fact.label}: </span>
-                                </div>
-                                <div className="home-nav-fact-value-wrap" aria-hidden="true">
-                                  {fact.tone !== "neutral" ? (
-                                    <span
-                                      className={`home-nav-fact-dot tone-${fact.tone}`}
-                                      aria-hidden="true"
-                                    />
-                                  ) : null}
-                                  <strong className="home-nav-fact-value">{fact.value}</strong>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                            <ul className="home-nav-facts">
+                              {card.facts.map((fact) => (
+                                <li
+                                  className="home-nav-fact-row"
+                                  data-tone={fact.tone}
+                                  key={fact.label}
+                                >
+                                  <span className="sr-only">{`${fact.label}: ${fact.value}`}</span>
+                                  <div className="home-nav-fact-key" aria-hidden="true">
+                                    <span className="home-nav-fact-label">{fact.label}: </span>
+                                  </div>
+                                  <div className="home-nav-fact-value-wrap" aria-hidden="true">
+                                    {fact.tone !== "neutral" ? (
+                                      <span
+                                        className={`home-nav-fact-dot tone-${fact.tone}`}
+                                        aria-hidden="true"
+                                      />
+                                    ) : null}
+                                    <strong className="home-nav-fact-value">{fact.value}</strong>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
 
-                          <div className="home-nav-card-footer">
-                            <Link className="button-secondary home-nav-link" to={card.item.to}>
-                              {card.item.homeActionLabel ?? `Open ${card.item.label}`}
-                            </Link>
-                          </div>
-                        </>
-                      )}
-                    </SurfaceCard>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
-      </PageContentSurface>
+                            <div className="home-nav-card-footer">
+                              <Link className="button-secondary home-nav-link" to={card.item.to}>
+                                {card.item.homeActionLabel ?? `Open ${card.item.label}`}
+                              </Link>
+                            </div>
+                          </>
+                        )}
+                      </SurfaceCard>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        }
+      />
     </section>
   );
+}
+
+function getHomeStatus(
+  authState: string,
+  workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
+  selectedGuildPresent: boolean,
+) {
+  if (authState === "checking") {
+    return {
+      label: "Checking access",
+      tone: "info" as const,
+    };
+  }
+
+  if (authState !== "signed_in") {
+    return {
+      label: "Sign in required",
+      tone: "info" as const,
+    };
+  }
+
+  if (!selectedGuildPresent) {
+    return {
+      label: "Choose a server",
+      tone: "info" as const,
+    };
+  }
+
+  if (workspaceState === "unavailable") {
+    return {
+      label: "Workspace unavailable",
+      tone: "error" as const,
+    };
+  }
+
+  if (workspaceState === "loading") {
+    return {
+      label: "Refreshing overview",
+      tone: "info" as const,
+    };
+  }
+
+  return {
+    label: "Overview ready",
+    tone: "success" as const,
+  };
 }
 
 function buildHomeCardData(

@@ -4,19 +4,17 @@ import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import {
+  peekPartnerBoard,
+  readPartnerBoardCache,
+  writePartnerBoardCache,
+} from "./cache";
+import {
   getPartnerBoardShellStatus,
   isDeliveryConfigured,
   isLayoutConfigured,
   postingMethodLabel,
   summarizePostingDestination,
 } from "./model";
-
-interface CachedPartnerBoardSummary {
-  board: PartnerBoardConfig;
-  fetchedAt: number;
-}
-
-const partnerBoardSummaryCache = new Map<string, CachedPartnerBoardSummary>();
 
 export function usePartnerBoardSummary() {
   const { authState, baseUrl, canReadSelectedGuild, client, selectedGuildID } =
@@ -26,10 +24,12 @@ export function usePartnerBoardSummary() {
     if (authState !== "signed_in" || normalizedGuildID === "") {
       return null;
     }
-    return peekPartnerBoardSummary(baseUrl, normalizedGuildID);
+    return peekPartnerBoard(baseUrl, normalizedGuildID);
   });
-  const [hasLoadedAttempt, setHasLoadedAttempt] = useState(false);
-  const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
+  const [hasLoadedAttempt, setHasLoadedAttempt] = useState(board !== null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(() =>
+    readPartnerBoardCache(baseUrl, normalizedGuildID)?.fetchedAt ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -61,12 +61,16 @@ export function usePartnerBoardSummary() {
       return;
     }
 
-    const cachedBoard = peekPartnerBoardSummary(baseUrl, normalizedGuildID);
+    const cachedEntry = readPartnerBoardCache(baseUrl, normalizedGuildID);
+    const cachedBoard = cachedEntry?.board ?? null;
+    setBoard(cachedBoard);
+    setHasLoadedAttempt(cachedBoard !== null);
+    setLastLoadedAt(cachedEntry?.fetchedAt ?? null);
     setLoading(cachedBoard === null);
 
     try {
       const response = await client.getPartnerBoard(normalizedGuildID);
-      writePartnerBoardSummaryCache(baseUrl, normalizedGuildID, response.partner_board);
+      writePartnerBoardCache(baseUrl, normalizedGuildID, response.partner_board);
       setBoard(response.partner_board);
       setHasLoadedAttempt(true);
       setLastLoadedAt(Date.now());
@@ -93,9 +97,11 @@ export function usePartnerBoardSummary() {
       return;
     }
 
-    const cachedBoard = peekPartnerBoardSummary(baseUrl, normalizedGuildID);
+    const cachedEntry = readPartnerBoardCache(baseUrl, normalizedGuildID);
+    const cachedBoard = cachedEntry?.board ?? null;
     setBoard(cachedBoard);
     setHasLoadedAttempt(cachedBoard !== null);
+    setLastLoadedAt(cachedEntry?.fetchedAt ?? null);
     setNotice(null);
 
     let cancelled = false;
@@ -109,7 +115,7 @@ export function usePartnerBoardSummary() {
           return;
         }
 
-        writePartnerBoardSummaryCache(baseUrl, normalizedGuildID, response.partner_board);
+        writePartnerBoardCache(baseUrl, normalizedGuildID, response.partner_board);
         setBoard(response.partner_board);
         setHasLoadedAttempt(true);
         setLastLoadedAt(Date.now());
@@ -158,24 +164,4 @@ export function usePartnerBoardSummary() {
     shellStatus,
     summarizePostingDestination: summarizePostingDestination(board?.target),
   };
-}
-
-function peekPartnerBoardSummary(baseUrl: string, guildID: string) {
-  const entry = partnerBoardSummaryCache.get(buildPartnerBoardCacheKey(baseUrl, guildID));
-  return entry?.board ?? null;
-}
-
-function writePartnerBoardSummaryCache(
-  baseUrl: string,
-  guildID: string,
-  board: PartnerBoardConfig,
-) {
-  partnerBoardSummaryCache.set(buildPartnerBoardCacheKey(baseUrl, guildID), {
-    board,
-    fetchedAt: Date.now(),
-  });
-}
-
-function buildPartnerBoardCacheKey(baseUrl: string, guildID: string) {
-  return `${baseUrl}::${guildID.trim()}`;
 }

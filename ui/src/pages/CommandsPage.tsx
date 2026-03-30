@@ -43,10 +43,10 @@ import {
   EntityMultiPickerField,
   EntityPickerField,
   EmptyState,
+  FeatureWorkspaceLayout,
   KeyValueList,
   LookupNotice,
   MetricCard,
-  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -518,94 +518,74 @@ export function CommandsPage() {
           actions={renderHeaderActions()}
         />
 
-        <PageContentSurface>
-          <AlertBanner
-            notice={workspaceNotice}
-            busyLabel={
-              mutation.saving
-                ? "Saving command settings..."
-                : workspace.loading ||
-                    channelOptions.loading ||
-                    roleOptions.loading
-                  ? "Refreshing commands workspace..."
-                  : undefined
-            }
-          />
-
-          {workspace.workspaceState === "ready" &&
-          commandsFeature !== null &&
-          adminCommandsFeature !== null ? (
-            <section
-              className="overview-summary-strip"
-              aria-label="Commands summary"
-            >
-              <MetricCard
-                label="Commands"
-                value={formatFeatureStatusLabel(commandsFeature)}
-                description={summarizeCommandsSignal(commandsFeature)}
-                tone={getFeatureStatusTone(commandsFeature)}
-              />
-              <MetricCard
-                label="Command channel"
-                value={formatGuildChannelValue(
-                  getCommandsFeatureDetails(commandsFeature).channelId,
-                  channelOptions.channels,
-                  "Not set",
-                )}
-                description="The optional routing destination used for command workflows."
-              />
-              <MetricCard
-                label="Admin access"
-                value={formatAllowedRoleCountValue(adminCommandsFeature)}
-                description={formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
-                tone={
-                  getAdminCommandsFeatureDetails(adminCommandsFeature).allowedRoleCount > 0
-                    ? "info"
-                    : "neutral"
-                }
-              />
-              <MetricCard
-                label="Overrides"
-                value={String(localOverrides)}
-                description={`${enabledModules}/${areaFeatures.length} command modules enabled for this server.`}
-              />
-            </section>
-          ) : null}
-
-          <section className="content-grid content-grid-with-aside">
-            <div className="page-main">
-              <SurfaceCard className="feature-category-panel">
-                <div className="workspace-view">
-                  <div className="workspace-view-header">
-                    <div className="card-copy">
-                      <p className="section-label">Workspace</p>
-                      <h2>Command routing</h2>
-                      <p className="section-description">
-                        Keep command handling and privileged access in one place.
-                        The default workspace answers the two most common admin
-                        tasks here: where commands should route and which roles can
-                        use the privileged ones.
-                      </p>
-                    </div>
-                    <div className="workspace-view-meta">
-                      {workspace.workspaceState === "ready" ? (
-                        <>
-                          <span className="meta-pill subtle-pill">
-                            {localOverrides} local overrides
-                          </span>
-                          <span className="meta-pill subtle-pill">
-                            {enabledModules}/{areaFeatures.length} enabled
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {renderPageState()}
-                </div>
-              </SurfaceCard>
-            </div>
-
+        <FeatureWorkspaceLayout
+          notice={workspaceNotice}
+          busyLabel={
+            mutation.saving
+              ? "Saving command settings..."
+              : workspace.loading ||
+                  channelOptions.loading ||
+                  roleOptions.loading
+                ? "Refreshing commands workspace..."
+                : undefined
+          }
+          summary={
+            workspace.workspaceState === "ready" &&
+            commandsFeature !== null &&
+            adminCommandsFeature !== null ? (
+              <section
+                className="overview-summary-strip"
+                aria-label="Commands summary"
+              >
+                <MetricCard
+                  label="Commands"
+                  value={formatFeatureStatusLabel(commandsFeature)}
+                  description={summarizeCommandsSignal(commandsFeature)}
+                  tone={getFeatureStatusTone(commandsFeature)}
+                />
+                <MetricCard
+                  label="Command channel"
+                  value={formatGuildChannelValue(
+                    getCommandsFeatureDetails(commandsFeature).channelId,
+                    channelOptions.channels,
+                    "Not set",
+                  )}
+                  description="The optional routing destination used for command workflows."
+                />
+                <MetricCard
+                  label="Admin access"
+                  value={formatAllowedRoleCountValue(adminCommandsFeature)}
+                  description={formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
+                  tone={
+                    getAdminCommandsFeatureDetails(adminCommandsFeature).allowedRoleCount > 0
+                      ? "info"
+                      : "neutral"
+                  }
+                />
+                <MetricCard
+                  label="Overrides"
+                  value={String(localOverrides)}
+                  description={`${enabledModules}/${areaFeatures.length} command modules enabled for this server.`}
+                />
+              </section>
+            ) : null
+          }
+          workspaceTitle="Command routing"
+          workspaceDescription="Keep command handling and privileged access in one place. The default workspace answers the two most common admin tasks here: where commands should route and which roles can use the privileged ones."
+          workspaceMeta={
+            workspace.workspaceState === "ready" ? (
+              <>
+                <span className="meta-pill subtle-pill">
+                  {localOverrides} local overrides
+                </span>
+                <span className="meta-pill subtle-pill">
+                  {enabledModules}/{areaFeatures.length} enabled
+                </span>
+              </>
+            ) : null
+          }
+          workspaceContent={renderPageState()}
+          aside={
             <aside className="page-aside">
               <SurfaceCard>
                 <div className="card-copy">
@@ -693,8 +673,8 @@ export function CommandsPage() {
                 ) : null}
               </SurfaceCard>
             </aside>
-          </section>
-        </PageContentSurface>
+          }
+        />
       </section>
 
       {selectedFeature !== null ? (

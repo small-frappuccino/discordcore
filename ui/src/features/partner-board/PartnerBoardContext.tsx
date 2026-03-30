@@ -27,6 +27,10 @@ import {
   type EntryFormState,
   type LayoutFormState,
 } from "./model";
+import {
+  readPartnerBoardCache,
+  writePartnerBoardCache,
+} from "./cache";
 
 type EntryDrawerMode = "create" | "edit";
 type WorkspaceState =
@@ -86,15 +90,23 @@ const PartnerBoardContext =
 export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   const {
     authState,
+    baseUrl,
     canEditSelectedGuild,
     canReadSelectedGuild,
     client,
     selectedGuildID,
   } =
     useDashboardSession();
-  const [board, setBoard] = useState<PartnerBoardConfig | null>(null);
-  const [deliveryForm, setDeliveryForm] = useState(initialDeliveryForm);
-  const [layoutForm, setLayoutForm] = useState(initialLayoutForm);
+  const normalizedGuildID = selectedGuildID.trim();
+  const initialCachedEntry =
+    authState === "signed_in" && normalizedGuildID !== ""
+      ? readPartnerBoardCache(baseUrl, normalizedGuildID)
+      : null;
+  const initialCachedBoard = initialCachedEntry?.board ?? null;
+  const initialForms = formsFromBoard(initialCachedBoard);
+  const [board, setBoard] = useState<PartnerBoardConfig | null>(initialCachedBoard);
+  const [deliveryForm, setDeliveryForm] = useState(initialForms.deliveryForm);
+  const [layoutForm, setLayoutForm] = useState(initialForms.layoutForm);
   const [entryForm, setEntryForm] = useState(initialEntryForm);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingDeleteName, setPendingDeleteName] = useState<string | null>(null);
@@ -104,9 +116,11 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
-  const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(
+    initialCachedEntry?.fetchedAt ?? null,
+  );
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
-  const [hasLoadedAttempt, setHasLoadedAttempt] = useState(false);
+  const [hasLoadedAttempt, setHasLoadedAttempt] = useState(initialCachedBoard !== null);
 
   const partners = board?.partners ?? [];
   const deliveryDraft = buildDeliveryPayload(deliveryForm);
@@ -145,7 +159,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     workspaceState = "checking";
   } else if (authState !== "signed_in") {
     workspaceState = "auth_required";
-  } else if (selectedGuildID.trim() === "") {
+  } else if (normalizedGuildID === "") {
     workspaceState = "server_required";
   } else if (loading && board === null) {
     workspaceState = "loading";
@@ -153,16 +167,20 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     workspaceState = "unavailable";
   }
 
-  function resetWorkspace() {
-    setBoard(null);
-    setDeliveryForm(initialDeliveryForm);
-    setLayoutForm(initialLayoutForm);
+  function resetTransientWorkspaceState() {
     setEntryForm(initialEntryForm);
     setSearchQuery("");
     setPendingDeleteName(null);
     setEditingPartnerName("");
     setDrawerMode("create");
     setIsDrawerOpen(false);
+  }
+
+  function resetWorkspace() {
+    setBoard(null);
+    setDeliveryForm(initialDeliveryForm);
+    setLayoutForm(initialLayoutForm);
+    resetTransientWorkspaceState();
     setLoading(false);
     setBusyLabel("");
     setLastLoadedAt(null);
@@ -171,41 +189,72 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setNotice(null);
   }
 
-  function applyBoard(nextBoard: PartnerBoardConfig) {
+  function applyBoard(
+    nextBoard: PartnerBoardConfig,
+    options: { cache?: boolean; fetchedAt?: number } = {},
+  ) {
+    const fetchedAt = options.fetchedAt ?? Date.now();
     const nextForms = formsFromBoard(nextBoard);
+    if (options.cache !== false && normalizedGuildID !== "") {
+      writePartnerBoardCache(baseUrl, normalizedGuildID, nextBoard, fetchedAt);
+    }
     setBoard(nextBoard);
     setDeliveryForm(nextForms.deliveryForm);
     setLayoutForm(nextForms.layoutForm);
-    setLastLoadedAt(Date.now());
+    setLastLoadedAt(fetchedAt);
     setHasLoadedAttempt(true);
   }
 
-  async function loadBoardData(successMessage?: string) {
-    if (!canReadSelectedGuild) {
+  async function loadBoardData(options: {
+    preservePendingState?: boolean;
+    successMessage?: string;
+  } = {}) {
+    if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
     }
 
-    setLoading(true);
-    setBusyLabel("");
+    const preservePendingState = options.preservePendingState ?? false;
+    const cachedEntry = readPartnerBoardCache(baseUrl, normalizedGuildID);
+    if (!preservePendingState && cachedEntry !== null) {
+      applyBoard(cachedEntry.board, {
+        cache: false,
+        fetchedAt: cachedEntry.fetchedAt,
+      });
+      setLoading(false);
+    } else if (!preservePendingState) {
+      setLoading(true);
+    }
+    if (!preservePendingState) {
+      setBusyLabel("");
+    }
 
     try {
-      const response = await client.getPartnerBoard(selectedGuildID.trim());
+      const response = await client.getPartnerBoard(normalizedGuildID);
       applyBoard(response.partner_board);
-      if (successMessage) {
+      if (options.successMessage) {
         setNotice({
           tone: "success",
-          message: successMessage,
+          message: options.successMessage,
         });
       } else {
         setNotice(null);
       }
     } catch (error) {
-      setBoard(null);
-      setHasLoadedAttempt(true);
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
+      const fallbackEntry = readPartnerBoardCache(baseUrl, normalizedGuildID);
+      if (fallbackEntry !== null) {
+        applyBoard(fallbackEntry.board, {
+          cache: false,
+          fetchedAt: fallbackEntry.fetchedAt,
+        });
+        setNotice(null);
+      } else {
+        setBoard(null);
+        setHasLoadedAttempt(true);
+        setNotice({
+          tone: "error",
+          message: formatError(error),
+        });
+      }
     } finally {
       setLoading(false);
       setBusyLabel("");
@@ -213,19 +262,36 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
+    if (authState !== "signed_in" || normalizedGuildID === "") {
       resetWorkspace();
       return;
     }
 
+    resetTransientWorkspaceState();
+    const cachedEntry = readPartnerBoardCache(baseUrl, normalizedGuildID);
+    if (cachedEntry !== null) {
+      applyBoard(cachedEntry.board, {
+        cache: false,
+        fetchedAt: cachedEntry.fetchedAt,
+      });
+      setLoading(false);
+    } else {
+      setBoard(null);
+      setDeliveryForm(initialDeliveryForm);
+      setLayoutForm(initialLayoutForm);
+      setLastLoadedAt(null);
+      setHasLoadedAttempt(false);
+      setLoading(true);
+    }
+    setNotice(null);
+
     let cancelled = false;
 
     async function autoLoadBoard() {
-      setLoading(true);
       setBusyLabel("");
 
       try {
-        const response = await client.getPartnerBoard(selectedGuildID.trim());
+        const response = await client.getPartnerBoard(normalizedGuildID);
         if (cancelled) {
           return;
         }
@@ -235,12 +301,22 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
         if (cancelled) {
           return;
         }
-        setBoard(null);
-        setHasLoadedAttempt(true);
-        setNotice({
-          tone: "error",
-          message: formatError(error),
-        });
+
+        const fallbackEntry = readPartnerBoardCache(baseUrl, normalizedGuildID);
+        if (fallbackEntry !== null) {
+          applyBoard(fallbackEntry.board, {
+            cache: false,
+            fetchedAt: fallbackEntry.fetchedAt,
+          });
+          setNotice(null);
+        } else {
+          setBoard(null);
+          setHasLoadedAttempt(true);
+          setNotice({
+            tone: "error",
+            message: formatError(error),
+          });
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -254,7 +330,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [authState, client, selectedGuildID]);
+  }, [authState, baseUrl, client, normalizedGuildID]);
 
   function setDeliveryFormField(
     field: keyof DeliveryFormState,
@@ -323,8 +399,11 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setBusyLabel("Saving posting destination");
 
     try {
-      await client.setPartnerBoardTarget(selectedGuildID.trim(), deliveryDraft);
-      await loadBoardData("Posting destination updated.");
+      await client.setPartnerBoardTarget(normalizedGuildID, deliveryDraft);
+      await loadBoardData({
+        preservePendingState: true,
+        successMessage: "Posting destination updated.",
+      });
     } catch (error) {
       setNotice({
         tone: "error",
@@ -344,8 +423,11 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setBusyLabel("Saving layout settings");
 
     try {
-      await client.setPartnerBoardTemplate(selectedGuildID.trim(), layoutDraft);
-      await loadBoardData("Layout updated.");
+      await client.setPartnerBoardTemplate(normalizedGuildID, layoutDraft);
+      await loadBoardData({
+        preservePendingState: true,
+        successMessage: "Layout updated.",
+      });
     } catch (error) {
       setNotice({
         tone: "error",
@@ -375,23 +457,29 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
 
     try {
       if (drawerMode === "edit") {
-        await client.updatePartner(selectedGuildID.trim(), editingPartnerName, {
+        await client.updatePartner(normalizedGuildID, editingPartnerName, {
           fandom: entryForm.fandom.trim(),
           link: entryForm.link.trim(),
           name: entryForm.name.trim(),
         });
         closeEntryDrawer();
-        await loadBoardData("Partner entry updated.");
+        await loadBoardData({
+          preservePendingState: true,
+          successMessage: "Partner entry updated.",
+        });
         return;
       }
 
-      await client.createPartner(selectedGuildID.trim(), {
+      await client.createPartner(normalizedGuildID, {
         fandom: entryForm.fandom.trim(),
         link: entryForm.link.trim(),
         name: entryForm.name.trim(),
       });
       closeEntryDrawer();
-      await loadBoardData("Partner entry added.");
+      await loadBoardData({
+        preservePendingState: true,
+        successMessage: "Partner entry added.",
+      });
     } catch (error) {
       setNotice({
         tone: "error",
@@ -411,12 +499,15 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setBusyLabel("Removing partner entry");
 
     try {
-      await client.deletePartner(selectedGuildID.trim(), partnerName);
+      await client.deletePartner(normalizedGuildID, partnerName);
       setPendingDeleteName(null);
       if (editingPartnerName === partnerName) {
         closeEntryDrawer();
       }
-      await loadBoardData("Partner entry removed.");
+      await loadBoardData({
+        preservePendingState: true,
+        successMessage: "Partner entry removed.",
+      });
     } catch (error) {
       setNotice({
         tone: "error",
@@ -428,7 +519,12 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshBoard() {
-    await loadBoardData("Partner Board refreshed.");
+    setLoading(true);
+    setBusyLabel("Refreshing Partner Board");
+    await loadBoardData({
+      preservePendingState: true,
+      successMessage: "Partner Board refreshed.",
+    });
   }
 
   async function syncBoard() {
@@ -440,7 +536,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setBusyLabel("Syncing to Discord");
 
     try {
-      await client.syncPartnerBoard(selectedGuildID.trim());
+      await client.syncPartnerBoard(normalizedGuildID);
       setLastSyncedAt(Date.now());
       setNotice({
         tone: "success",

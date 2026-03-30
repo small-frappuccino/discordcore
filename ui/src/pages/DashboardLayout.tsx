@@ -230,7 +230,7 @@ export function DashboardLayout() {
 
                         return (
                           <Link
-                            key={item.label}
+                            key={item.id}
                             className={`shell-nav-link shell-nav-link-sub${
                               isActive ? " is-active" : ""
                             }`}

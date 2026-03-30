@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  AlertBanner,
   EntityMultiPickerField,
   EmptyState,
+  FeatureWorkspaceLayout,
   LookupNotice,
-  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -31,25 +30,23 @@ export function ControlPanelPage() {
   const rolesSettings = useGuildRolesSettings();
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [dashboardReadRoleIds, setDashboardReadRoleIds] = useState<string[]>([]);
-  const [dashboardWriteRoleIds, setDashboardWriteRoleIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
-      setDashboardReadRoleIds([]);
-      setDashboardWriteRoleIds([]);
-      return;
-    }
-    setDashboardReadRoleIds(rolesSettings.roles.dashboardReadRoleIds);
-    setDashboardWriteRoleIds(rolesSettings.roles.dashboardWriteRoleIds);
-  }, [
+  const {
+    dashboardReadRoleIds,
+    dashboardWriteRoleIds,
+    hasUnsavedChanges,
+    replaceDrafts,
+    toggleDashboardReadRole,
+    toggleDashboardWriteRole,
+  } = useDashboardAccessRoleDrafts({
     authState,
-    rolesSettings.roles.dashboardReadRoleIds,
-    rolesSettings.roles.dashboardWriteRoleIds,
     selectedGuildID,
-  ]);
+    dashboardReadRoleIds: rolesSettings.roles.dashboardReadRoleIds,
+    dashboardWriteRoleIds: rolesSettings.roles.dashboardWriteRoleIds,
+  });
 
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
+  const selectedGuildModeLabel =
+    selectedGuildAccessLevel === "read" ? "Read-only access" : "Writable access";
   const controlsDisabled =
     authState !== "signed_in" ||
     selectedGuild === null ||
@@ -86,8 +83,7 @@ export function ControlPanelPage() {
       const nextWriteRoles = normalizeRoleIds(
         response.workspace.sections.roles.dashboard_write,
       );
-      setDashboardReadRoleIds(nextReadRoles);
-      setDashboardWriteRoleIds(nextWriteRoles);
+      replaceDrafts(nextReadRoles, nextWriteRoles);
       rolesSettings.updateCachedRoles({
         ...rolesSettings.roles,
         dashboardReadRoleIds: nextReadRoles,
@@ -161,9 +157,7 @@ export function ControlPanelPage() {
             options={rolePickerOptions}
             selectedValues={dashboardReadRoleIds}
             disabled={controlsDisabled}
-            onToggle={(roleId) =>
-              setDashboardReadRoleIds((current) => toggleRole(current, roleId))
-            }
+            onToggle={toggleDashboardReadRole}
             note="Read access allows navigation and page inspection without enabling writes."
           />
         </SurfaceCard>
@@ -182,9 +176,7 @@ export function ControlPanelPage() {
             options={rolePickerOptions}
             selectedValues={dashboardWriteRoleIds}
             disabled={controlsDisabled}
-            onToggle={(roleId) =>
-              setDashboardWriteRoleIds((current) => toggleRole(current, roleId))
-            }
+            onToggle={toggleDashboardWriteRole}
             note="Write access also implies read access."
           />
         </SurfaceCard>
@@ -213,7 +205,7 @@ export function ControlPanelPage() {
             <button
               className="button-primary"
               type="button"
-              disabled={controlsDisabled || saving}
+              disabled={controlsDisabled || saving || !hasUnsavedChanges}
               onClick={() => void handleSave()}
             >
               {saving ? "Saving..." : "Save access roles"}
@@ -243,15 +235,174 @@ export function ControlPanelPage() {
         }
       />
 
-      <PageContentSurface>
-        <AlertBanner
-          notice={notice ?? rolesSettings.notice ?? roleOptions.notice}
-          busyLabel={rolesSettings.loading ? "Loading access roles..." : undefined}
-        />
-
-        {renderBody()}
-      </PageContentSurface>
+      <FeatureWorkspaceLayout
+        notice={notice ?? rolesSettings.notice ?? roleOptions.notice}
+        busyLabel={
+          saving
+            ? "Saving access roles..."
+            : rolesSettings.loading
+              ? "Loading access roles..."
+              : roleOptions.loading
+                ? "Loading role references..."
+                : undefined
+        }
+        workspaceTitle="Manage dashboard access"
+        workspaceDescription="Keep read and write dashboard access aligned with the selected server's operator roles without exposing raw settings fields in the main workspace."
+        workspaceMeta={
+          selectedGuild !== null ? (
+            <>
+              <span className="meta-pill subtle-pill">{selectedGuildModeLabel}</span>
+              <span className="meta-pill subtle-pill">
+                {hasUnsavedChanges ? "Unsaved changes" : "Saved"}
+              </span>
+            </>
+          ) : null
+        }
+        workspaceContent={renderBody()}
+      />
     </section>
+  );
+}
+
+interface DashboardAccessRoleDraftsArgs {
+  authState: string;
+  selectedGuildID: string;
+  dashboardReadRoleIds: string[];
+  dashboardWriteRoleIds: string[];
+}
+
+interface DashboardAccessRoleDraftsState {
+  guildID: string;
+  dashboardReadRoleIds: string[];
+  dashboardWriteRoleIds: string[];
+  hasUnsavedChanges: boolean;
+}
+
+function useDashboardAccessRoleDrafts({
+  authState,
+  selectedGuildID,
+  dashboardReadRoleIds,
+  dashboardWriteRoleIds,
+}: DashboardAccessRoleDraftsArgs) {
+  const normalizedGuildID = selectedGuildID.trim();
+  const [drafts, setDrafts] = useState<DashboardAccessRoleDraftsState>(() =>
+    createDashboardAccessRoleDraftsState(
+      authState,
+      normalizedGuildID,
+      dashboardReadRoleIds,
+      dashboardWriteRoleIds,
+    ),
+  );
+
+  useEffect(() => {
+    setDrafts((currentDrafts) => {
+      const nextDrafts = createDashboardAccessRoleDraftsState(
+        authState,
+        normalizedGuildID,
+        dashboardReadRoleIds,
+        dashboardWriteRoleIds,
+      );
+
+      if (
+        authState !== "signed_in" ||
+        normalizedGuildID === "" ||
+        currentDrafts.guildID !== normalizedGuildID ||
+        !currentDrafts.hasUnsavedChanges
+      ) {
+        return areDashboardAccessRoleDraftsEqual(currentDrafts, nextDrafts)
+          ? currentDrafts
+          : nextDrafts;
+      }
+
+      return currentDrafts;
+    });
+  }, [
+    authState,
+    dashboardReadRoleIds,
+    dashboardWriteRoleIds,
+    normalizedGuildID,
+  ]);
+
+  function replaceDrafts(nextReadRoleIds: string[], nextWriteRoleIds: string[]) {
+    setDrafts({
+      guildID: normalizedGuildID,
+      dashboardReadRoleIds: nextReadRoleIds,
+      dashboardWriteRoleIds: nextWriteRoleIds,
+      hasUnsavedChanges: false,
+    });
+  }
+
+  function toggleDashboardReadRole(roleId: string) {
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      dashboardReadRoleIds: toggleRole(currentDrafts.dashboardReadRoleIds, roleId),
+      hasUnsavedChanges: true,
+    }));
+  }
+
+  function toggleDashboardWriteRole(roleId: string) {
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      dashboardWriteRoleIds: toggleRole(currentDrafts.dashboardWriteRoleIds, roleId),
+      hasUnsavedChanges: true,
+    }));
+  }
+
+  return {
+    dashboardReadRoleIds: drafts.dashboardReadRoleIds,
+    dashboardWriteRoleIds: drafts.dashboardWriteRoleIds,
+    hasUnsavedChanges: drafts.hasUnsavedChanges,
+    replaceDrafts,
+    toggleDashboardReadRole,
+    toggleDashboardWriteRole,
+  };
+}
+
+function createDashboardAccessRoleDraftsState(
+  authState: string,
+  normalizedGuildID: string,
+  dashboardReadRoleIds: string[],
+  dashboardWriteRoleIds: string[],
+): DashboardAccessRoleDraftsState {
+  if (authState !== "signed_in" || normalizedGuildID === "") {
+    return {
+      guildID: "",
+      dashboardReadRoleIds: [],
+      dashboardWriteRoleIds: [],
+      hasUnsavedChanges: false,
+    };
+  }
+
+  return {
+    guildID: normalizedGuildID,
+    dashboardReadRoleIds,
+    dashboardWriteRoleIds,
+    hasUnsavedChanges: false,
+  };
+}
+
+function areDashboardAccessRoleDraftsEqual(
+  currentDrafts: DashboardAccessRoleDraftsState,
+  nextDrafts: DashboardAccessRoleDraftsState,
+) {
+  return (
+    currentDrafts.guildID === nextDrafts.guildID &&
+    currentDrafts.hasUnsavedChanges === nextDrafts.hasUnsavedChanges &&
+    areStringListsEqual(
+      currentDrafts.dashboardReadRoleIds,
+      nextDrafts.dashboardReadRoleIds,
+    ) &&
+    areStringListsEqual(
+      currentDrafts.dashboardWriteRoleIds,
+      nextDrafts.dashboardWriteRoleIds,
+    )
+  );
+}
+
+function areStringListsEqual(currentValues: string[], nextValues: string[]) {
+  return (
+    currentValues.length === nextValues.length &&
+    currentValues.every((value, index) => value === nextValues[index])
   );
 }
 

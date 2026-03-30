@@ -35,10 +35,10 @@ import {
   AlertBanner,
   EntityPickerField,
   EmptyState,
+  FeatureWorkspaceLayout,
   KeyValueList,
   LookupNotice,
   MetricCard,
-  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -404,87 +404,68 @@ export function LoggingCategoryPage() {
           actions={renderHeaderActions()}
         />
 
-        <PageContentSurface>
-          <AlertBanner
-            notice={workspaceNotice}
-            busyLabel={
-              mutation.saving
-                ? "Saving logging settings..."
-                : workspace.loading || channelOptions.loading
-                  ? "Refreshing logging workspace..."
-                  : undefined
-            }
-          />
-
-          {workspace.workspaceState === "ready" ? (
-            <section
-              className="overview-summary-strip"
-              aria-label="Logging summary"
-            >
-              <MetricCard
-                label="Log routes"
-                value={String(areaSummary.total)}
-                description="Mapped logging features available for this server."
-              />
-              <MetricCard
-                label="Destinations set"
-                value={`${configuredDestinations}/${featuresRequiringChannel.length}`}
-                description="Routes that already have a configured destination channel."
-                tone={
-                  configuredDestinations === featuresRequiringChannel.length &&
-                  featuresRequiringChannel.length > 0
-                    ? "success"
-                    : "neutral"
-                }
-              />
-              <MetricCard
-                label="Ready"
-                value={String(areaSummary.ready)}
-                description="Enabled log routes that are not reporting blockers."
-                tone={areaSummary.ready > 0 ? "success" : "neutral"}
-              />
-              <MetricCard
-                label="Needs attention"
-                value={String(areaSummary.blocked)}
-                description="Routes blocked by missing destinations or runtime prerequisites."
-                tone={areaSummary.blocked > 0 ? "error" : "neutral"}
-              />
-            </section>
-          ) : null}
-
-          <section className="content-grid content-grid-with-aside">
-            <div className="page-main">
-              <SurfaceCard className="feature-category-panel">
-                <div className="workspace-view">
-                  <div className="workspace-view-header">
-                    <div className="card-copy">
-                      <p className="section-label">Workspace</p>
-                      <h2>Manage logging routes</h2>
-                      <p className="section-description">
-                        Keep the main workspace focused on destinations and current
-                        readiness. Open a route to configure its destination without
-                        leaving the table.
-                      </p>
-                    </div>
-                    <div className="workspace-view-meta">
-                      {workspace.workspaceState === "ready" ? (
-                        <>
-                          <span className="meta-pill subtle-pill">
-                            {localOverrides} local overrides
-                          </span>
-                          <span className="meta-pill subtle-pill">
-                            {runtimeBlockedFeatures.length} runtime-blocked
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {renderWorkspaceContent()}
-                </div>
-              </SurfaceCard>
-            </div>
-
+        <FeatureWorkspaceLayout
+          notice={workspaceNotice}
+          busyLabel={
+            mutation.saving
+              ? "Saving logging settings..."
+              : workspace.loading || channelOptions.loading
+                ? "Refreshing logging workspace..."
+                : undefined
+          }
+          summary={
+            workspace.workspaceState === "ready" ? (
+              <section
+                className="overview-summary-strip"
+                aria-label="Logging summary"
+              >
+                <MetricCard
+                  label="Log routes"
+                  value={String(areaSummary.total)}
+                  description="Mapped logging features available for this server."
+                />
+                <MetricCard
+                  label="Destinations set"
+                  value={`${configuredDestinations}/${featuresRequiringChannel.length}`}
+                  description="Routes that already have a configured destination channel."
+                  tone={
+                    configuredDestinations === featuresRequiringChannel.length &&
+                    featuresRequiringChannel.length > 0
+                      ? "success"
+                      : "neutral"
+                  }
+                />
+                <MetricCard
+                  label="Ready"
+                  value={String(areaSummary.ready)}
+                  description="Enabled log routes that are not reporting blockers."
+                  tone={areaSummary.ready > 0 ? "success" : "neutral"}
+                />
+                <MetricCard
+                  label="Needs attention"
+                  value={String(areaSummary.blocked)}
+                  description="Routes blocked by missing destinations or runtime prerequisites."
+                  tone={areaSummary.blocked > 0 ? "error" : "neutral"}
+                />
+              </section>
+            ) : null
+          }
+          workspaceTitle="Manage logging routes"
+          workspaceDescription="Keep the main workspace focused on destinations and current readiness. Open a route to configure its destination without leaving the table."
+          workspaceMeta={
+            workspace.workspaceState === "ready" ? (
+              <>
+                <span className="meta-pill subtle-pill">
+                  {localOverrides} local overrides
+                </span>
+                <span className="meta-pill subtle-pill">
+                  {runtimeBlockedFeatures.length} runtime-blocked
+                </span>
+              </>
+            ) : null
+          }
+          workspaceContent={renderWorkspaceContent()}
+          aside={
             <aside className="page-aside">
               <SurfaceCard>
                 <div className="card-copy">
@@ -555,8 +536,8 @@ export function LoggingCategoryPage() {
                 ) : null}
               </SurfaceCard>
             </aside>
-          </section>
-        </PageContentSurface>
+          }
+        />
       </section>
 
       {selectedFeature !== null && canEditLoggingChannel(selectedFeature) ? (

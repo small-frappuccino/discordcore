@@ -2,9 +2,8 @@ import { NavLink, Outlet } from "react-router-dom";
 import { partnerBoardTabs } from "../../app/routes";
 import { formatTimestamp } from "../../app/utils";
 import {
-  AlertBanner,
+  DashboardPageSurface,
   MetricCard,
-  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -47,8 +46,10 @@ export function PartnerBoardLayout() {
         }
       />
 
-      <PageContentSurface>
-        <AlertBanner notice={notice} busyLabel={loading ? busyLabel : undefined} />
+      <DashboardPageSurface
+        notice={notice}
+        busyLabel={loading ? busyLabel : undefined}
+      >
 
         <section className="partner-board-summary-strip" aria-label="Partner Board setup summary">
           <MetricCard
@@ -100,7 +101,7 @@ export function PartnerBoardLayout() {
             <Outlet />
           </div>
         </SurfaceCard>
-      </PageContentSurface>
+      </DashboardPageSurface>
     </section>
   );
 }

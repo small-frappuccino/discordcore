@@ -4,10 +4,10 @@ import type { FeatureRecord } from "../api/control";
 import {
   AlertBanner,
   EmptyState,
+  FeatureWorkspaceLayout,
   KeyValueList,
   LookupNotice,
   MetricCard,
-  PageContentSurface,
   PageHeader,
   StatusBadge,
   SurfaceCard,
@@ -432,93 +432,73 @@ export function StatsPage() {
           actions={renderHeaderActions()}
         />
 
-        <PageContentSurface>
-          <AlertBanner
-            notice={workspaceNotice}
-            busyLabel={
-              mutation.saving
-                ? "Saving stats settings..."
-                : workspace.loading || channelOptions.loading
-                  ? "Refreshing stats workspace..."
-                  : undefined
-            }
-          />
-
-          {workspace.workspaceState === "ready" &&
-          statsFeature !== null &&
-          statsDetails !== null ? (
-            <section
-              className="overview-summary-strip"
-              aria-label="Stats summary"
-            >
-              <MetricCard
-                label="Stats module"
-                value={formatFeatureStatusLabel(statsFeature)}
-                description={summarizeStatsSignal(statsFeature)}
-                tone={getFeatureStatusTone(statsFeature)}
-              />
-              <MetricCard
-                label="Update rule"
-                value={formatStatsConfigValue(statsDetails.configEnabled)}
-                description={
-                  statsDetails.configEnabled
-                    ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
-                    : "Updates are paused until the server rule is enabled."
-                }
-                tone={statsDetails.configEnabled ? "info" : "neutral"}
-              />
-              <MetricCard
-                label="Stats channels"
-                value={formatStatsChannelCountValue(
-                  statsDetails.configuredChannelCount,
-                )}
-                description="Configured channels currently reviewed in this workspace."
-                tone={
-                  statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
-                }
-              />
-              <MetricCard
-                label="Overrides"
-                value={String(localOverrides)}
-                description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
-              />
-            </section>
-          ) : null}
-
-          <section className="content-grid content-grid-with-aside">
-            <div className="page-main">
-              <SurfaceCard className="feature-category-panel">
-                <div className="workspace-view">
-                  <div className="workspace-view-header">
-                    <div className="card-copy">
-                      <p className="section-label">Workspace</p>
-                      <h2>Stats configuration</h2>
-                      <p className="section-description">
-                        Keep the default workspace focused on the schedule admins
-                        actually need to verify here: whether stats updates should
-                        run, how often they run, and which channels the server
-                        will rename.
-                      </p>
-                    </div>
-                    <div className="workspace-view-meta">
-                      {workspace.workspaceState === "ready" ? (
-                        <>
-                          <span className="meta-pill subtle-pill">
-                            {localOverrides} local overrides
-                          </span>
-                          <span className="meta-pill subtle-pill">
-                            {enabledModules}/{areaFeatures.length} enabled
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {renderPageState()}
-                </div>
-              </SurfaceCard>
-            </div>
-
+        <FeatureWorkspaceLayout
+          notice={workspaceNotice}
+          busyLabel={
+            mutation.saving
+              ? "Saving stats settings..."
+              : workspace.loading || channelOptions.loading
+                ? "Refreshing stats workspace..."
+                : undefined
+          }
+          summary={
+            workspace.workspaceState === "ready" &&
+            statsFeature !== null &&
+            statsDetails !== null ? (
+              <section
+                className="overview-summary-strip"
+                aria-label="Stats summary"
+              >
+                <MetricCard
+                  label="Stats module"
+                  value={formatFeatureStatusLabel(statsFeature)}
+                  description={summarizeStatsSignal(statsFeature)}
+                  tone={getFeatureStatusTone(statsFeature)}
+                />
+                <MetricCard
+                  label="Update rule"
+                  value={formatStatsConfigValue(statsDetails.configEnabled)}
+                  description={
+                    statsDetails.configEnabled
+                      ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
+                      : "Updates are paused until the server rule is enabled."
+                  }
+                  tone={statsDetails.configEnabled ? "info" : "neutral"}
+                />
+                <MetricCard
+                  label="Stats channels"
+                  value={formatStatsChannelCountValue(
+                    statsDetails.configuredChannelCount,
+                  )}
+                  description="Configured channels currently reviewed in this workspace."
+                  tone={
+                    statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
+                  }
+                />
+                <MetricCard
+                  label="Overrides"
+                  value={String(localOverrides)}
+                  description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
+                />
+              </section>
+            ) : null
+          }
+          workspaceTitle="Stats configuration"
+          workspaceDescription="Keep the default workspace focused on the schedule admins actually need to verify here: whether stats updates should run, how often they run, and which channels the server will rename."
+          workspaceMeta={
+            workspace.workspaceState === "ready" ? (
+              <>
+                <span className="meta-pill subtle-pill">
+                  {localOverrides} local overrides
+                </span>
+                <span className="meta-pill subtle-pill">
+                  {enabledModules}/{areaFeatures.length} enabled
+                </span>
+              </>
+            ) : null
+          }
+          workspaceContent={renderPageState()}
+          aside={
             <aside className="page-aside">
               <SurfaceCard>
                 <div className="card-copy">
@@ -601,8 +581,8 @@ export function StatsPage() {
                 </ul>
               </SurfaceCard>
             </aside>
-          </section>
-        </PageContentSurface>
+          }
+        />
       </section>
 
       {drawerOpen && statsFeature !== null ? (

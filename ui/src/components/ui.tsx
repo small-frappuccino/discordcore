@@ -54,6 +54,25 @@ interface PageContentSurfaceProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
 }
 
+interface DashboardPageSurfaceProps {
+  notice?: Notice | null;
+  busyLabel?: string;
+  children: ReactNode;
+}
+
+interface FeatureWorkspaceLayoutProps {
+  notice?: Notice | null;
+  busyLabel?: string;
+  summary?: ReactNode;
+  workspaceEyebrow?: ReactNode;
+  workspaceTitle: ReactNode;
+  workspaceDescription: ReactNode;
+  workspaceMeta?: ReactNode;
+  workspaceContent: ReactNode;
+  aside?: ReactNode;
+  workspaceClassName?: string;
+}
+
 interface SidebarSectionProps {
   eyebrow?: string;
   title?: ReactNode;
@@ -164,6 +183,67 @@ export function PageContentSurface({
     >
       {children}
     </Component>
+  );
+}
+
+export function DashboardPageSurface({
+  notice,
+  busyLabel,
+  children,
+}: DashboardPageSurfaceProps) {
+  return (
+    <PageContentSurface>
+      <AlertBanner notice={notice} busyLabel={busyLabel} />
+      {children}
+    </PageContentSurface>
+  );
+}
+
+export function FeatureWorkspaceLayout({
+  notice,
+  busyLabel,
+  summary,
+  workspaceEyebrow = "Workspace",
+  workspaceTitle,
+  workspaceDescription,
+  workspaceMeta,
+  workspaceContent,
+  aside,
+  workspaceClassName,
+}: FeatureWorkspaceLayoutProps) {
+  return (
+    <DashboardPageSurface notice={notice} busyLabel={busyLabel}>
+      {summary}
+
+      <section
+        className={aside ? "content-grid content-grid-with-aside" : "content-grid"}
+      >
+        <div className="page-main">
+          <SurfaceCard
+            className={joinClassNames("feature-category-panel", workspaceClassName)}
+          >
+            <div className="workspace-view">
+              <div className="workspace-view-header">
+                <div className="card-copy">
+                  {workspaceEyebrow ? (
+                    <p className="section-label">{workspaceEyebrow}</p>
+                  ) : null}
+                  <h2>{workspaceTitle}</h2>
+                  <p className="section-description">{workspaceDescription}</p>
+                </div>
+                {workspaceMeta ? (
+                  <div className="workspace-view-meta">{workspaceMeta}</div>
+                ) : null}
+              </div>
+
+              {workspaceContent}
+            </div>
+          </SurfaceCard>
+        </div>
+
+        {aside}
+      </section>
+    </DashboardPageSurface>
   );
 }
 
