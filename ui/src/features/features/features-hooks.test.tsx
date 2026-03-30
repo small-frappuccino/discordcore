@@ -19,6 +19,7 @@ import { resetGuildResourceCache } from "./guildResourceCache";
 let mockDashboardSession: {
   authState: string;
   baseUrl: string;
+  canEditSelectedGuild: boolean;
   client: {
     getFeatureCatalog: ReturnType<typeof vi.fn>;
     listGlobalFeatures: ReturnType<typeof vi.fn>;
@@ -75,6 +76,7 @@ describe("feature hooks", () => {
     mockDashboardSession = {
       authState: "signed_in",
       baseUrl: "",
+      canEditSelectedGuild: true,
       client: {
         getFeatureCatalog: vi.fn(),
         listGlobalFeatures: vi.fn(),
@@ -424,6 +426,35 @@ describe("feature hooks", () => {
     expect(response).toEqual(updatedFeature);
     expect(onSuccess).toHaveBeenCalledWith(updatedFeature);
     expect(result.current.notice).toBeNull();
+  });
+
+  it("blocks guild feature patching when the selected server is read-only", async () => {
+    mockDashboardSession.canEditSelectedGuild = false;
+
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useFeatureMutation({
+        scope: "guild",
+        onError,
+      }),
+    );
+
+    let response: FeatureRecord | null = null;
+    await act(async () => {
+      response = await result.current.patchFeature("logging.member_join", {
+        enabled: true,
+      });
+    });
+
+    expect(response).toBeNull();
+    expect(mockDashboardSession.client.patchGuildFeature).not.toHaveBeenCalled();
+    expect(result.current.notice).toEqual({
+      tone: "info",
+      message: "You have read-only access to this server.",
+    });
+    expect(onError).toHaveBeenCalledWith(
+      "You have read-only access to this server.",
+    );
   });
 
   it("patches a guild feature with role_id details", async () => {

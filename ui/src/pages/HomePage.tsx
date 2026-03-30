@@ -19,8 +19,18 @@ import { usePartnerBoardSummary } from "../features/partner-board/usePartnerBoar
 
 interface HomeCardData {
   item: NavigationItem;
-  facts: string[];
+  facts: HomeCardFact[];
   loading: boolean;
+  tone: HomeFactTone;
+}
+
+type HomeFactTone = "neutral" | "info" | "success" | "error";
+type HomeCardTier = "primary" | "secondary";
+
+interface HomeCardFact {
+  label: string;
+  value: string;
+  tone: HomeFactTone;
 }
 
 export function HomePage() {
@@ -45,7 +55,7 @@ export function HomePage() {
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
 
   return (
-    <section className="page-shell">
+    <section className="page-shell home-page-shell">
       <header className="home-page-header">
         <h1>Home</h1>
       </header>
@@ -60,7 +70,7 @@ export function HomePage() {
             </div>
 
             <div className="home-card-grid">
-              {section.items.map((item) => {
+              {section.items.map((item, index) => {
                 const card = buildHomeCardData(item, {
                   authState,
                   selectedGuildPresent: selectedGuild !== null,
@@ -74,9 +84,19 @@ export function HomePage() {
                   autoRoleFeature,
                   workspaceState: workspace.workspaceState,
                 });
+                const tier = getHomeCardTier(section.items.length, index);
 
                 return (
-                  <SurfaceCard className="home-nav-card" key={item.id}>
+                  <SurfaceCard
+                    as="article"
+                    aria-busy={card.loading}
+                    className={[
+                      "home-nav-card",
+                      `home-nav-card-${tier}`,
+                      `home-nav-card-tone-${card.tone}`,
+                    ].join(" ")}
+                    key={item.id}
+                  >
                     {card.loading ? (
                       <div className="home-nav-card-skeleton" aria-hidden="true">
                         <span className="home-nav-skeleton home-nav-skeleton-title" />
@@ -86,13 +106,28 @@ export function HomePage() {
                       </div>
                     ) : (
                       <>
-                        <div className="card-copy">
+                        <div className="home-nav-card-header">
                           <h3>{card.item.label}</h3>
                         </div>
 
                         <ul className="home-nav-facts">
                           {card.facts.map((fact) => (
-                            <li key={fact}>{fact}</li>
+                            <li
+                              className="home-nav-fact-row"
+                              data-tone={fact.tone}
+                              key={`${fact.label}:${fact.value}`}
+                            >
+                              <span className="sr-only">{`${fact.label}: ${fact.value}`}</span>
+                              <div className="home-nav-fact-key" aria-hidden="true">
+                                <span className="home-nav-fact-label">{fact.label}: </span>
+                              </div>
+                              <div className="home-nav-fact-value-wrap" aria-hidden="true">
+                                {fact.tone !== "neutral" ? (
+                                  <span className={`home-nav-fact-dot tone-${fact.tone}`} aria-hidden="true" />
+                                ) : null}
+                                <strong className="home-nav-fact-value">{fact.value}</strong>
+                              </div>
+                            </li>
                           ))}
                         </ul>
 
@@ -131,19 +166,11 @@ function buildHomeCardData(
   },
 ): HomeCardData {
   if (context.authState !== "signed_in") {
-    return {
-      item,
-      loading: false,
-      facts: ["Status: Sign in required"],
-    };
+    return createHomeCardData(item, [createHomeCardFact("Status", "Sign in required")]);
   }
 
   if (!context.selectedGuildPresent) {
-    return {
-      item,
-      loading: false,
-      facts: ["Server: Select a server"],
-    };
+    return createHomeCardData(item, [createHomeCardFact("Server", "Select a server")]);
   }
 
   switch (item.id) {
@@ -162,17 +189,12 @@ function buildHomeCardData(
     case "autorole":
       return buildAutoroleCard(item, context);
     case "level-roles":
-      return {
-        item,
-        loading: false,
-        facts: ["Status: In development", "Focus: Next page"],
-      };
+      return createHomeCardData(item, [
+        createHomeCardFact("Status", "In development"),
+        createHomeCardFact("Focus", "Next page"),
+      ]);
     default:
-      return {
-        item,
-        loading: false,
-        facts: ["Status: Ready"],
-      };
+      return createHomeCardData(item, [createHomeCardFact("Status", "Ready")]);
   }
 }
 
@@ -185,11 +207,14 @@ function buildControlPanelCard(
   const loading =
     context.rolesSettings.loading && readCount === 0 && writeCount === 0;
 
-  return {
+  return createHomeCardData(
     item,
+    [
+      createHomeCardFact("Write roles", String(writeCount)),
+      createHomeCardFact("Read roles", String(readCount)),
+    ],
     loading,
-    facts: [`Write roles: ${writeCount}`, `Read roles: ${readCount}`],
-  };
+  );
 }
 
 function buildStatsCard(
@@ -197,23 +222,19 @@ function buildStatsCard(
   context: Parameters<typeof buildHomeCardData>[1],
 ): HomeCardData {
   if (context.workspaceState !== "ready" || context.statsFeature === null) {
-    return {
+    return createHomeCardData(
       item,
-      loading: context.workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(context.workspaceState)],
-    };
+      [buildWorkspaceGateFact(context.workspaceState)],
+      context.workspaceState === "loading",
+    );
   }
 
   const statsDetails = getStatsFeatureDetails(context.statsFeature);
-  return {
-    item,
-    loading: false,
-    facts: [
-      `Configured channels: ${statsDetails.configuredChannelCount}`,
-      `Update interval: ${statsDetails.updateIntervalMins} min`,
-      `Module: ${context.statsFeature.effective_enabled ? "On" : "Off"}`,
-    ],
-  };
+  return createHomeCardData(item, [
+    createHomeCardFact("Configured channels", String(statsDetails.configuredChannelCount)),
+    createHomeCardFact("Update interval", `${statsDetails.updateIntervalMins} min`),
+    createHomeCardFact("Module", context.statsFeature.effective_enabled ? "On" : "Off"),
+  ]);
 }
 
 function buildCommandsCard(
@@ -225,25 +246,24 @@ function buildCommandsCard(
     context.commandsFeature === null ||
     context.adminCommandsFeature === null
   ) {
-    return {
+    return createHomeCardData(
       item,
-      loading: context.workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(context.workspaceState)],
-    };
+      [buildWorkspaceGateFact(context.workspaceState)],
+      context.workspaceState === "loading",
+    );
   }
 
   const commandsDetails = getCommandsFeatureDetails(context.commandsFeature);
   const adminDetails = getAdminCommandsFeatureDetails(context.adminCommandsFeature);
 
-  return {
-    item,
-    loading: false,
-    facts: [
-      `Commands: ${context.commandsFeature.effective_enabled ? "On" : "Off"}`,
-      `Command channel: ${commandsDetails.channelId === "" ? "Not configured" : "Configured"}`,
-      `Admin roles: ${adminDetails.allowedRoleCount}`,
-    ],
-  };
+  return createHomeCardData(item, [
+    createHomeCardFact("Commands", context.commandsFeature.effective_enabled ? "On" : "Off"),
+    createHomeCardFact(
+      "Command channel",
+      commandsDetails.channelId === "" ? "Not configured" : "Configured",
+    ),
+    createHomeCardFact("Admin roles", String(adminDetails.allowedRoleCount)),
+  ]);
 }
 
 function buildFeatureToggleCard(
@@ -252,28 +272,23 @@ function buildFeatureToggleCard(
   workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
 ): HomeCardData {
   if (workspaceState !== "ready") {
-    return {
+    return createHomeCardData(
       item,
-      loading: workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(workspaceState)],
-    };
+      [buildWorkspaceGateFact(workspaceState)],
+      workspaceState === "loading",
+    );
   }
 
   if (areaFeatures.length === 0) {
-    return {
-      item,
-      loading: false,
-      facts: ["Status: Not available"],
-    };
+    return createHomeCardData(item, [createHomeCardFact("Status", "Not available")]);
   }
 
-  return {
+  return createHomeCardData(
     item,
-    loading: false,
-    facts: areaFeatures.map(
-      (feature) => `${feature.label}: ${feature.effective_enabled ? "On" : "Off"}`,
+    areaFeatures.map((feature) =>
+      createHomeCardFact(feature.label, feature.effective_enabled ? "On" : "Off"),
     ),
-  };
+  );
 }
 
 function buildPartnerBoardCard(
@@ -282,15 +297,21 @@ function buildPartnerBoardCard(
 ): HomeCardData {
   const loading = context.partnerBoard.loading && context.partnerBoard.board === null;
 
-  return {
+  return createHomeCardData(
     item,
-    loading,
-    facts: [
-      `Partners: ${context.partnerBoard.partnerCount}`,
-      `Destination: ${context.partnerBoard.deliveryConfigured ? "Configured" : "Not configured"}`,
-      `Layout: ${context.partnerBoard.layoutConfigured ? "Configured" : "Pending"}`,
+    [
+      createHomeCardFact("Partners", String(context.partnerBoard.partnerCount)),
+      createHomeCardFact(
+        "Destination",
+        context.partnerBoard.deliveryConfigured ? "Configured" : "Not configured",
+      ),
+      createHomeCardFact(
+        "Layout",
+        context.partnerBoard.layoutConfigured ? "Configured" : "Pending",
+      ),
     ],
-  };
+    loading,
+  );
 }
 
 function buildAutoroleCard(
@@ -298,40 +319,119 @@ function buildAutoroleCard(
   context: Parameters<typeof buildHomeCardData>[1],
 ): HomeCardData {
   if (context.workspaceState !== "ready" || context.autoRoleFeature === null) {
-    return {
+    return createHomeCardData(
       item,
-      loading: context.workspaceState === "loading",
-      facts: [summarizeWorkspaceGate(context.workspaceState)],
-    };
+      [buildWorkspaceGateFact(context.workspaceState)],
+      context.workspaceState === "loading",
+    );
   }
 
   const details = getAutoRoleFeatureDetails(context.autoRoleFeature);
+  return createHomeCardData(item, [
+    createHomeCardFact("Module", context.autoRoleFeature.effective_enabled ? "On" : "Off"),
+    createHomeCardFact(
+      "Target role",
+      details.targetRoleId === "" ? "Not configured" : "Configured",
+    ),
+    createHomeCardFact("Required roles", String(details.requiredRoleCount)),
+  ]);
+}
+
+function buildWorkspaceGateFact(
+  workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
+): HomeCardFact {
+  switch (workspaceState) {
+    case "checking":
+      return createHomeCardFact("Status", "Checking access");
+    case "auth_required":
+      return createHomeCardFact("Status", "Sign in required");
+    case "server_required":
+      return createHomeCardFact("Server", "Select a server");
+    case "loading":
+      return createHomeCardFact("Status", "Loading");
+    case "unavailable":
+      return createHomeCardFact("Status", "Unavailable");
+    default:
+      return createHomeCardFact("Status", "Ready");
+  }
+}
+
+function createHomeCardData(
+  item: NavigationItem,
+  facts: HomeCardFact[],
+  loading = false,
+): HomeCardData {
   return {
     item,
-    loading: false,
-    facts: [
-      `Module: ${context.autoRoleFeature.effective_enabled ? "On" : "Off"}`,
-      `Target role: ${details.targetRoleId === "" ? "Not configured" : "Configured"}`,
-      `Required roles: ${details.requiredRoleCount}`,
-    ],
+    facts,
+    loading,
+    tone: summarizeHomeCardTone(facts),
   };
 }
 
-function summarizeWorkspaceGate(
-  workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
-) {
-  switch (workspaceState) {
-    case "checking":
-      return "Status: Checking access";
-    case "auth_required":
-      return "Status: Sign in required";
-    case "server_required":
-      return "Server: Select a server";
-    case "loading":
-      return "Status: Loading";
-    case "unavailable":
-      return "Status: Unavailable";
-    default:
-      return "Status: Ready";
+function createHomeCardFact(label: string, value: string): HomeCardFact {
+  return {
+    label,
+    value,
+    tone: inferHomeFactTone(value),
+  };
+}
+
+function inferHomeFactTone(value: string): HomeFactTone {
+  const normalizedValue = value.trim().toLowerCase();
+
+  if (
+    normalizedValue === "on" ||
+    normalizedValue === "configured" ||
+    normalizedValue === "ready"
+  ) {
+    return "success";
   }
+
+  if (
+    normalizedValue === "off" ||
+    normalizedValue === "not configured" ||
+    normalizedValue === "sign in required" ||
+    normalizedValue === "select a server" ||
+    normalizedValue === "unavailable" ||
+    normalizedValue === "not available"
+  ) {
+    return "error";
+  }
+
+  if (
+    normalizedValue === "checking access" ||
+    normalizedValue === "loading" ||
+    normalizedValue === "pending" ||
+    normalizedValue === "in development" ||
+    normalizedValue === "next page"
+  ) {
+    return "info";
+  }
+
+  return "neutral";
+}
+
+function summarizeHomeCardTone(facts: HomeCardFact[]): HomeFactTone {
+  if (facts.some((fact) => fact.tone === "error")) {
+    return "error";
+  }
+
+  if (facts.some((fact) => fact.tone === "info")) {
+    return "info";
+  }
+
+  if (facts.some((fact) => fact.tone === "success")) {
+    return "success";
+  }
+
+  return "neutral";
+}
+
+function getHomeCardTier(itemCount: number, itemIndex: number): HomeCardTier {
+  if (itemCount === 1 || itemIndex === 0) {
+    return "primary";
+  }
+
+  return "secondary";
 }

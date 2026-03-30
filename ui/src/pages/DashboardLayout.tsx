@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  dashboardPartnerBoardNavigationItem,
   dashboardHomeNavigationItem,
   dashboardSidebarNavigationSections,
   getActiveNavigationSection,
@@ -245,29 +244,6 @@ export function DashboardLayout() {
                     </div>
                   ) : null}
 
-                  {section.id === "moderation" ? (
-                    <Link
-                      className={`shell-nav-link shell-nav-link-root${
-                        isNavigationItemActive(
-                          location.pathname,
-                          dashboardPartnerBoardNavigationItem,
-                        )
-                          ? " is-active"
-                          : ""
-                      }`}
-                      to={dashboardPartnerBoardNavigationItem.to}
-                      aria-current={
-                        isNavigationItemActive(
-                          location.pathname,
-                          dashboardPartnerBoardNavigationItem,
-                        )
-                          ? "page"
-                          : undefined
-                      }
-                    >
-                      <span>{dashboardPartnerBoardNavigationItem.label}</span>
-                    </Link>
-                  ) : null}
                 </section>
               );
             })}

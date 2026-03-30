@@ -80,6 +80,12 @@ const moderationNavigationSection: NavigationSection = {
   ],
 };
 
+const partnersNavigationSection: NavigationSection = {
+  id: "partners",
+  label: "Partners",
+  items: [dashboardPartnerBoardNavigationItem],
+};
+
 const rolesNavigationSection: NavigationSection = {
   id: "roles",
   label: "Roles",
@@ -104,17 +110,14 @@ const rolesNavigationSection: NavigationSection = {
 export const dashboardSidebarNavigationSections: NavigationSection[] = [
   coreNavigationSection,
   moderationNavigationSection,
+  partnersNavigationSection,
   rolesNavigationSection,
 ];
 
 export const dashboardHomeNavigationSections: NavigationSection[] = [
   coreNavigationSection,
   moderationNavigationSection,
-  {
-    id: "partner-board",
-    label: "Partner Board",
-    items: [dashboardPartnerBoardNavigationItem],
-  },
+  partnersNavigationSection,
   rolesNavigationSection,
 ];
 
