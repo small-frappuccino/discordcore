@@ -45,14 +45,20 @@ export function useGuildRolesSettings() {
       return;
     }
 
-    const cachedRoles = peekGuildRolesSettings(baseUrl, normalizedGuildID);
+    const cachedRolesEntry = readGuildRolesSettingsCache(baseUrl, normalizedGuildID);
+    const cachedRoles = cachedRolesEntry?.roles ?? emptySnapshot;
     setRoles(cachedRoles);
     setNotice(null);
 
     let cancelled = false;
 
     async function loadRoles() {
-      setLoading(isRolesSettingsEmpty(cachedRoles));
+      if (cachedRolesEntry !== null) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
 
       try {
         const nextRoles = await loadGuildRolesSettings(client, baseUrl, normalizedGuildID);
@@ -148,9 +154,9 @@ export async function loadGuildRolesSettings(
   }
 
   if (!options.force) {
-    const cached = peekGuildRolesSettings(baseUrl, normalizedGuildID);
-    if (!isRolesSettingsEmpty(cached)) {
-      return cached;
+    const cachedEntry = readGuildRolesSettingsCache(baseUrl, normalizedGuildID);
+    if (cachedEntry !== null) {
+      return cachedEntry.roles;
     }
   }
 
@@ -161,8 +167,8 @@ export async function loadGuildRolesSettings(
 }
 
 export function peekGuildRolesSettings(baseUrl: string, guildID: string) {
-  const entry = guildRolesSettingsCache.get(buildCacheKey(baseUrl, guildID));
-  if (entry === undefined) {
+  const entry = readGuildRolesSettingsCache(baseUrl, guildID);
+  if (entry === null) {
     return emptySnapshot;
   }
   return entry.roles;
@@ -181,6 +187,10 @@ export function writeGuildRolesSettingsCache(
 
 function buildCacheKey(baseUrl: string, guildID: string) {
   return `${baseUrl}::${guildID.trim()}`;
+}
+
+function readGuildRolesSettingsCache(baseUrl: string, guildID: string) {
+  return guildRolesSettingsCache.get(buildCacheKey(baseUrl, guildID)) ?? null;
 }
 
 function mapGuildRolesSettings(roles: GuildRolesSettingsSection) {
