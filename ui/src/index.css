@@ -989,6 +989,11 @@ textarea:focus {
   box-shadow: none;
 }
 
+.home-page .page-content-surface {
+  border: 0;
+  border-radius: 0;
+}
+
 .home-workspace-panel {
   padding: 0;
   border: 0;
