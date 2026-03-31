@@ -92,13 +92,13 @@ export function DashboardLayout() {
       }`}
     >
       <header className="shell-topbar" data-shell-topbar>
-        <Link className="shell-brand" to={appRoutes.dashboardHome}>
+        <Link
+          className="shell-brand"
+          to={appRoutes.dashboardHome}
+          aria-label="Open dashboard home"
+        >
           <span className="shell-brand-mark" aria-hidden="true">
             <img src={siteBrandIconSrc} alt="" />
-          </span>
-          <span className="shell-brand-copy">
-            <strong>Discordcore</strong>
-            <small>Dashboard</small>
           </span>
         </Link>
 

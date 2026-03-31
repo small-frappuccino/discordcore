@@ -1,6 +1,6 @@
 .dashboard-layout-shell {
-  --shell-sidebar-width: 236px;
-  --shell-sidebar-collapsed-width: 72px;
+  --shell-sidebar-width: 272px;
+  --shell-sidebar-collapsed-width: 88px;
   --shell-chrome-surface:
     linear-gradient(180deg, rgba(21, 27, 38, 0.96), rgba(14, 18, 26, 0.96));
   --shell-chrome-border: rgba(42, 49, 64, 0.92);
@@ -40,18 +40,17 @@
 .shell-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
   min-width: 0;
 }
 
 .shell-brand-mark {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 50%;
   border: 1px solid var(--border-soft);
   background: var(--bg-surface-elevated);
 }
@@ -60,25 +59,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.shell-brand-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.shell-brand-copy strong {
-  font-family: var(--font-display);
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 600;
-}
-
-.shell-brand-copy small {
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 18px;
 }
 
 .shell-server-select {
@@ -228,7 +208,7 @@
   display: grid;
   grid-template-columns: minmax(0, var(--shell-sidebar-width)) minmax(0, 1fr);
   min-width: 0;
-  padding: 0 var(--space-4);
+  padding: 0;
   border-bottom: 1px solid var(--border-soft);
   background: transparent;
 }
@@ -243,12 +223,12 @@
 }
 
 .shell-context-pane-nav {
-  padding-right: var(--space-4);
+  padding: 0 var(--space-4);
   border-right: 1px solid var(--shell-chrome-border);
 }
 
 .shell-context-pane-content {
-  padding-left: var(--space-4);
+  padding: 0 var(--space-4);
 }
 
 .shell-context-label {
@@ -434,10 +414,11 @@
 .shell-nav-list {
   display: grid;
   gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-4);
-  border: 0;
+  padding: var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
   border-radius: 0;
-  background: transparent;
+  background: rgba(17, 22, 31, 0.54);
 }
 
 .shell-nav-link-sub {
@@ -484,13 +465,13 @@
   }
 
   .shell-context-pane-nav {
-    padding-right: 0;
+    padding: 0;
     border-right: 0;
     border-bottom: 1px solid var(--border-soft);
   }
 
   .shell-context-pane-content {
-    padding-left: 0;
+    padding: 0;
   }
 
   .shell-body {
