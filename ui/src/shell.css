@@ -366,7 +366,8 @@
 
 .shell-nav-link-root.is-active {
   color: var(--text-main);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 3px 0 0 var(--bg-accent);
 }
 
 .shell-nav-section {
@@ -399,7 +400,11 @@
 .shell-nav-section-trigger:hover:not(:disabled),
 .shell-nav-section-trigger.is-active {
   color: var(--text-main);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.shell-nav-section-trigger.is-active {
+  box-shadow: inset 3px 0 0 var(--bg-accent);
 }
 
 .shell-nav-section-indicator {
@@ -441,6 +446,7 @@
 .shell-nav-link-sub.is-active {
   color: var(--text-main);
   background: rgba(215, 161, 132, 0.08);
+  box-shadow: inset 3px 0 0 var(--bg-accent);
 }
 
 .shell-main {

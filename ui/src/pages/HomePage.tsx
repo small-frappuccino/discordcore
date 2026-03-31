@@ -1,10 +1,15 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
   dashboardHomeNavigationSections,
   type NavigationItem,
 } from "../app/navigation";
-import { FeatureWorkspaceLayout } from "../components/ui";
+import { appRoutes } from "../app/routes";
+import {
+  FeatureWorkspaceLayout,
+  PageHeader,
+  StatusBadge,
+} from "../components/ui";
 import {
   OverviewCard,
   OverviewStatRow,
@@ -40,7 +45,9 @@ interface HomeCardRow {
 }
 
 export function HomePage() {
-  const { authState, selectedGuild } = useDashboardSession();
+  const location = useLocation();
+  const { authState, beginLogin, currentOriginLabel, selectedGuild } =
+    useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -59,10 +66,55 @@ export function HomePage() {
     features.find((feature) => feature.id === "auto_role_assignment") ?? null;
 
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
+  const nextPath = `${location.pathname}${location.search}${location.hash}`;
+  const homeHeaderStatus = summarizeHomeHeaderStatus(
+    authState,
+    selectedGuild !== null,
+  );
+  const homeHeaderDescription = getHomeHeaderDescription(
+    authState,
+    selectedGuild !== null,
+  );
 
   return (
     <section className="page-shell home-page">
-      <h1 className="sr-only">Overview</h1>
+      <PageHeader
+        eyebrow="Dashboard"
+        title="Overview"
+        description={homeHeaderDescription}
+        status={
+          <StatusBadge tone={homeHeaderStatus.tone}>
+            {homeHeaderStatus.label}
+          </StatusBadge>
+        }
+        meta={
+          <>
+            <span className="meta-pill subtle-pill">
+              {selectedGuild?.name ?? "No server selected"}
+            </span>
+            <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+          </>
+        }
+        actions={
+          authState === "checking" ? (
+            <button className="button-primary" type="button" disabled>
+              Preparing dashboard
+            </button>
+          ) : authState !== "signed_in" ? (
+            <button
+              className="button-primary"
+              type="button"
+              onClick={() => void beginLogin(nextPath)}
+            >
+              Sign in with Discord
+            </button>
+          ) : (
+            <Link className="button-primary" to={appRoutes.dashboardCoreControlPanel}>
+              Open Core workspace
+            </Link>
+          )
+        }
+      />
 
       <FeatureWorkspaceLayout
         notice={homeNotice}
@@ -215,7 +267,7 @@ function buildHomeCardData(
     case "level-roles":
       return createHomeCardData(item, context.sectionLabel, [
         createMetaCardRow("Status", "In development", "attention"),
-        createMetaCardRow("Scope", "Planned page"),
+        createMetaCardRow("Availability", "Planned page"),
       ]);
     default:
       return createHomeCardData(item, context.sectionLabel, [
@@ -459,4 +511,50 @@ function summarizeHomeCardState(rows: HomeCardRow[]): OverviewTone {
   }
 
   return "neutral";
+}
+
+function summarizeHomeHeaderStatus(
+  authState: string,
+  selectedGuildPresent: boolean,
+) {
+  if (authState === "checking") {
+    return {
+      tone: "info" as const,
+      label: "Preparing workspace",
+    };
+  }
+
+  if (authState !== "signed_in") {
+    return {
+      tone: "info" as const,
+      label: "Sign in required",
+    };
+  }
+
+  if (!selectedGuildPresent) {
+    return {
+      tone: "info" as const,
+      label: "Select a server",
+    };
+  }
+
+  return {
+    tone: "success" as const,
+    label: "Overview ready",
+  };
+}
+
+function getHomeHeaderDescription(
+  authState: string,
+  selectedGuildPresent: boolean,
+) {
+  if (authState !== "signed_in") {
+    return "Sign in to review module readiness and open the main dashboard workspaces.";
+  }
+
+  if (!selectedGuildPresent) {
+    return "Choose a server to review module readiness and move into the area that needs changes next.";
+  }
+
+  return "Scan module readiness for the selected server and jump directly into the workspace that needs attention.";
 }

@@ -970,6 +970,7 @@ textarea:focus {
   --home-row-label-size: 13px;
   --home-row-value-size: 15px;
   --home-meta-size: 11px;
+  --home-card-title-color: #d9e1ea;
   --home-enabled-rail: #4faa71;
   --home-enabled-title: #74cc96;
   --home-enabled-dot: #3f9460;
@@ -979,7 +980,7 @@ textarea:focus {
   --home-attention-rail: #b98b4a;
   --home-attention-title: #e0b26e;
   --home-attention-dot: #c59452;
-  --home-numeric-value: #ff7b83;
+  --home-numeric-value: #b9ccef;
 }
 
 .home-page .page-header,
@@ -1059,6 +1060,7 @@ textarea:focus {
   font-size: var(--home-section-title-size);
   line-height: 1.12;
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .overview-section-body {
@@ -1132,18 +1134,7 @@ textarea:focus {
   font-size: var(--home-card-title-size);
   line-height: 1.25;
   font-weight: 600;
-}
-
-.overview-card-tone-enabled .overview-card-title {
-  color: var(--home-enabled-title);
-}
-
-.overview-card-tone-disabled .overview-card-title {
-  color: var(--home-disabled-title);
-}
-
-.overview-card-tone-attention .overview-card-title {
-  color: var(--home-attention-title);
+  color: var(--home-card-title-color);
 }
 
 .overview-card-list,
@@ -1160,17 +1151,17 @@ textarea:focus {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
+  min-height: 44px;
+  padding: var(--space-3);
   border-radius: var(--radius-control);
   border: 1px solid var(--home-row-border);
   background: var(--home-row-surface);
 }
 
 .overview-stat-label {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-size: var(--home-row-label-size);
-  line-height: 1.35;
+  line-height: 1.5;
 }
 
 .semantic-value {
@@ -1186,7 +1177,7 @@ textarea:focus {
   text-align: right;
   word-break: break-word;
   font-size: var(--home-row-value-size);
-  line-height: 1.35;
+  line-height: 1.5;
   font-weight: 600;
 }
 
@@ -1207,10 +1198,7 @@ textarea:focus {
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  display: none;
 }
 
 .status-dot-enabled {
@@ -1223,6 +1211,30 @@ textarea:focus {
 
 .status-dot-attention {
   background: var(--home-attention-dot);
+}
+
+.semantic-value-tone-enabled:not(.semantic-value-kind-numeric),
+.semantic-value-tone-disabled:not(.semantic-value-kind-numeric),
+.semantic-value-tone-attention:not(.semantic-value-kind-numeric) {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.semantic-value-tone-enabled:not(.semantic-value-kind-numeric) {
+  background: rgba(87, 163, 110, 0.14);
+  border-color: rgba(87, 163, 110, 0.24);
+}
+
+.semantic-value-tone-disabled:not(.semantic-value-kind-numeric) {
+  background: rgba(217, 108, 108, 0.14);
+  border-color: rgba(217, 108, 108, 0.24);
+}
+
+.semantic-value-tone-attention:not(.semantic-value-kind-numeric) {
+  background: rgba(210, 162, 92, 0.14);
+  border-color: rgba(210, 162, 92, 0.22);
 }
 
 .overview-card-action {
