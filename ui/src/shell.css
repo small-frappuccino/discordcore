@@ -215,9 +215,7 @@
   min-width: 0;
   padding: 0;
   border-bottom: 1px solid var(--border-soft);
-  background: var(--shell-chrome-surface);
-  position: relative;
-  z-index: 20;
+  background: transparent;
 }
 
 .shell-context-pane {
@@ -450,11 +448,10 @@
   display: grid;
   gap: var(--space-4);
   min-height: 0;
-  padding: 0 0 var(--space-4);
+  padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   position: relative;
   z-index: 1;
 }
