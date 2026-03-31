@@ -77,7 +77,9 @@ export function DashboardLayout() {
     authState === "signed_in" && accessibleGuilds.length > 0;
   const showSessionHydrationState = authState === "checking";
   const currentContextLabel = getDashboardContextLabel(location.pathname);
-  const sidebarToggleLabel = sidebarCollapsed ? "Expandir" : "Esconder";
+  const sidebarToggleLabel = sidebarCollapsed
+    ? "Expandir navegação"
+    : "Esconder navegação";
 
   function toggleSection(sectionID: string) {
     setOpenSectionID((current) => (current === sectionID ? null : sectionID));
@@ -194,9 +196,16 @@ export function DashboardLayout() {
             type="button"
             aria-controls="dashboard-layout-sidebar"
             aria-expanded={!sidebarCollapsed}
+            aria-label={sidebarToggleLabel}
+            title={sidebarToggleLabel}
             onClick={() => setSidebarCollapsed((current) => !current)}
           >
-            {sidebarToggleLabel}
+            <span className="sr-only">{sidebarToggleLabel}</span>
+            <span className="shell-sidebar-toggle-bars" aria-hidden="true">
+              <span className="shell-sidebar-toggle-line" />
+              <span className="shell-sidebar-toggle-line" />
+              <span className="shell-sidebar-toggle-line" />
+            </span>
           </button>
         </div>
 

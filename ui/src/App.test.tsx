@@ -1605,10 +1605,14 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("heading", { name: "Overview", level: 1 });
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Esconder" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Esconder navegação" }),
+    );
     expect(screen.queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Expandir" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Expandir navegação" }),
+    );
     expect(await screen.findByRole("link", { name: "Home" })).toBeInTheDocument();
   });
 
