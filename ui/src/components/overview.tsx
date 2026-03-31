@@ -62,7 +62,7 @@ export function SectionBlock({
     <section className={joinClassNames("overview-section-block", className)} {...rest}>
       <div className="overview-section-header">
         <div className="overview-section-copy">
-          <p className="section-label">{eyebrow}</p>
+          {eyebrow ? <p className="section-label">{eyebrow}</p> : null}
           <h2>{title}</h2>
         </div>
       </div>
@@ -104,7 +104,9 @@ export function OverviewCardHeader({
   return (
     <div className="overview-card-header">
       <div className="overview-card-copy">
-        <p className="section-label overview-card-section-label">{sectionLabel}</p>
+        {sectionLabel ? (
+          <p className="section-label overview-card-section-label">{sectionLabel}</p>
+        ) : null}
         <h3 className="overview-card-title">{title}</h3>
       </div>
     </div>

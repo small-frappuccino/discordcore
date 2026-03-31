@@ -71,13 +71,9 @@ export function HomePage() {
             ? "Refreshing dashboard overview..."
             : undefined
         }
-        workspaceTitle="Product areas"
-        workspaceDescription="Scan the current state of each area, then open the workspace that needs action."
-        workspaceMeta={
-          <span className="meta-pill subtle-pill">
-            {dashboardHomeNavigationSections.length} product areas
-          </span>
-        }
+        workspaceEyebrow={null}
+        workspaceTitle={null}
+        workspaceDescription={null}
         workspaceClassName="home-workspace-panel"
         workspaceContent={
           <div className="home-category-stack">
@@ -85,6 +81,7 @@ export function HomePage() {
               <SectionBlock
                 className="home-category-section"
                 key={section.id}
+                eyebrow={null}
                 title={section.label}
               >
                 <div className="home-card-grid">
@@ -109,7 +106,7 @@ export function HomePage() {
                         aria-busy={card.loading}
                         className="home-nav-card"
                         tone={card.state}
-                        sectionLabel={card.sectionLabel}
+                        sectionLabel={null}
                         title={card.item.label}
                         action={card.loading ? null : (
                           <Link className="button-secondary home-nav-link" to={card.item.to}>

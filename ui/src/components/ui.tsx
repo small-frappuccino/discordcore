@@ -211,6 +211,12 @@ export function FeatureWorkspaceLayout({
   aside,
   workspaceClassName,
 }: FeatureWorkspaceLayoutProps) {
+  const hasWorkspaceHeader =
+    workspaceEyebrow !== null ||
+    workspaceTitle !== null ||
+    workspaceDescription !== null ||
+    workspaceMeta !== undefined;
+
   return (
     <DashboardPageSurface notice={notice} busyLabel={busyLabel}>
       {summary}
@@ -223,18 +229,22 @@ export function FeatureWorkspaceLayout({
             className={joinClassNames("feature-category-panel", workspaceClassName)}
           >
             <div className="workspace-view">
-              <div className="workspace-view-header">
-                <div className="card-copy">
-                  {workspaceEyebrow ? (
-                    <p className="section-label">{workspaceEyebrow}</p>
+              {hasWorkspaceHeader ? (
+                <div className="workspace-view-header">
+                  <div className="card-copy">
+                    {workspaceEyebrow ? (
+                      <p className="section-label">{workspaceEyebrow}</p>
+                    ) : null}
+                    {workspaceTitle ? <h2>{workspaceTitle}</h2> : null}
+                    {workspaceDescription ? (
+                      <p className="section-description">{workspaceDescription}</p>
+                    ) : null}
+                  </div>
+                  {workspaceMeta ? (
+                    <div className="workspace-view-meta">{workspaceMeta}</div>
                   ) : null}
-                  <h2>{workspaceTitle}</h2>
-                  <p className="section-description">{workspaceDescription}</p>
                 </div>
-                {workspaceMeta ? (
-                  <div className="workspace-view-meta">{workspaceMeta}</div>
-                ) : null}
-              </div>
+              ) : null}
 
               {workspaceContent}
             </div>

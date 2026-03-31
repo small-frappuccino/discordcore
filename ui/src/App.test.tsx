@@ -1575,6 +1575,8 @@ describe("dashboard routing and workspace", () => {
     expect(await screen.findByText("Command channel: Configured")).toBeInTheDocument();
     expect(await screen.findByText("Automod service: Enabled")).toBeInTheDocument();
     expect(await screen.findByText("Status: In development")).toBeInTheDocument();
+    expect(screen.queryByText("Product areas")).not.toBeInTheDocument();
+    expect(screen.queryByText("Product area")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Browse the dashboard by area."),
     ).not.toBeInTheDocument();
