@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   dashboardHomeNavigationItem,
+  dashboardNavigationItems,
   dashboardSidebarNavigationSections,
   getActiveNavigationSection,
   isNavigationItemActive,
@@ -40,6 +41,7 @@ export function DashboardLayout() {
   const [openSectionID, setOpenSectionID] = useState<string | null>(
     activeSection?.id ?? null,
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     setAccountMenuOpen(false);
@@ -74,13 +76,19 @@ export function DashboardLayout() {
   const canSelectGuild =
     authState === "signed_in" && accessibleGuilds.length > 0;
   const showSessionHydrationState = authState === "checking";
+  const currentContextLabel = getDashboardContextLabel(location.pathname);
+  const sidebarToggleLabel = sidebarCollapsed ? "Expandir" : "Esconder";
 
   function toggleSection(sectionID: string) {
     setOpenSectionID((current) => (current === sectionID ? null : sectionID));
   }
 
   return (
-    <main className="dashboard-layout-shell">
+    <main
+      className={`dashboard-layout-shell${
+        sidebarCollapsed ? " is-sidebar-collapsed" : ""
+      }`}
+    >
       <header className="shell-topbar" data-shell-topbar>
         <Link className="shell-brand" to={appRoutes.dashboardHome}>
           <span className="shell-brand-mark" aria-hidden="true">
@@ -178,12 +186,40 @@ export function DashboardLayout() {
         </div>
       </header>
 
+      <div className="shell-context-strip" aria-label="Dashboard chrome">
+        <div className="shell-context-pane shell-context-pane-nav">
+          <span className="shell-context-label">Navegação</span>
+          <button
+            className="shell-sidebar-toggle button-ghost"
+            type="button"
+            aria-controls="dashboard-layout-sidebar"
+            aria-expanded={!sidebarCollapsed}
+            onClick={() => setSidebarCollapsed((current) => !current)}
+          >
+            {sidebarToggleLabel}
+          </button>
+        </div>
+
+        <div className="shell-context-pane shell-context-pane-content">
+          <span className="shell-context-tab shell-context-tab-active">
+            {currentContextLabel}
+          </span>
+        </div>
+      </div>
+
       <div className="shell-body">
         <aside
-          className="dashboard-layout-sidebar"
+          className={`dashboard-layout-sidebar${
+            sidebarCollapsed ? " is-collapsed" : ""
+          }`}
+          id="dashboard-layout-sidebar"
           aria-label="Dashboard navigation"
         >
-          <nav className="shell-nav" aria-label="Dashboard navigation">
+          <nav
+            className="shell-nav"
+            aria-label="Dashboard navigation"
+            hidden={sidebarCollapsed}
+          >
             <Link
               className={`shell-nav-link shell-nav-link-root${
                 isNavigationItemActive(location.pathname, dashboardHomeNavigationItem)
@@ -300,4 +336,16 @@ export function DashboardLayout() {
 
 function getNextPath(location: ReturnType<typeof useLocation>) {
   return `${location.pathname}${location.search}${location.hash}`;
+}
+
+function getDashboardContextLabel(pathname: string) {
+  if (isNavigationItemActive(pathname, dashboardHomeNavigationItem)) {
+    return "Overview";
+  }
+
+  const activeItem = dashboardNavigationItems.find((item) =>
+    isNavigationItemActive(pathname, item),
+  );
+
+  return activeItem?.label ?? "Workspace";
 }

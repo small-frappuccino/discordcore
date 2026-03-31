@@ -1539,7 +1539,7 @@ describe("dashboard routing and workspace", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Home", level: 1 });
+    await screen.findByRole("heading", { name: "Overview", level: 1 });
     const sidebarNav = screen.getByRole("navigation", {
       name: "Dashboard navigation",
     });
@@ -1593,6 +1593,23 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryByRole("button", { name: "Refresh home" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("collapses and expands the sidebar from the navigation chrome", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", appRoutes.dashboardHome);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Overview", level: 1 });
+    expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Esconder" }));
+    expect(screen.queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Expandir" }));
+    expect(await screen.findByRole("link", { name: "Home" })).toBeInTheDocument();
   });
 
   it("saves dashboard read/write access roles from the dedicated Control Panel page", async () => {
@@ -1805,7 +1822,7 @@ describe("dashboard routing and workspace", () => {
 
       render(<App />);
 
-      await screen.findByRole("heading", { name: "Home", level: 1 });
+      await screen.findByRole("heading", { name: "Overview", level: 1 });
       expect(window.location.pathname).toBe("/dashboard/home");
       expect(window.location.hash).toBe("");
       expect(
@@ -2076,7 +2093,7 @@ describe("dashboard routing and workspace", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Home", level: 1 });
+    await screen.findByRole("heading", { name: "Overview", level: 1 });
     await userEvent.click(await screen.findByRole("link", { name: "Open Commands" }));
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
@@ -2233,7 +2250,7 @@ describe("dashboard routing and workspace", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Home", level: 1 });
+    await screen.findByRole("heading", { name: "Overview", level: 1 });
     expect(window.location.pathname).toBe(appRoutes.dashboardHome);
   });
 

@@ -94,7 +94,7 @@ describe("HomePage", () => {
   it("keeps cards in loading state while the session is still checking", () => {
     renderHomePage();
 
-    expect(screen.getByRole("heading", { name: "Home", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Overview", level: 1 })).toBeInTheDocument();
     expect(screen.queryAllByText("Status: Sign in required")).toHaveLength(0);
     expect(screen.queryAllByText("Server: Select a server")).toHaveLength(0);
     expect(document.querySelectorAll('.home-nav-card[aria-busy="true"]')).not.toHaveLength(0);

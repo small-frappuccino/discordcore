@@ -20,14 +20,16 @@ const captureTargets = [
     path: "/dashboard/home",
     expectations: {
       headings: [
-        { name: "Home", level: 1 },
-        { name: "Main modules", level: 2 },
-        { name: "Current blockers", level: 2 },
-        { name: "Quick shortcuts", level: 2 },
-        { name: "Advanced stays in Settings", level: 2 },
+        { name: "Overview", level: 1 },
+        { name: "Product areas", level: 2 },
+        { name: "Core", level: 2 },
+        { name: "Moderation", level: 2 },
+        { name: "Partners", level: 2 },
+        { name: "Roles", level: 2 },
       ],
-      absentHeadings: [{ name: "Maintenance", level: 2 }],
-      absentTexts: ["Advanced controls > Maintenance"],
+      absentTexts: [
+        "Review the main dashboard areas for the selected server and jump directly into the workspace that needs attention.",
+      ],
     },
   },
   {

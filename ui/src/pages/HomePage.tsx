@@ -4,11 +4,7 @@ import {
   dashboardHomeNavigationSections,
   type NavigationItem,
 } from "../app/navigation";
-import {
-  FeatureWorkspaceLayout,
-  PageHeader,
-  StatusBadge,
-} from "../components/ui";
+import { FeatureWorkspaceLayout } from "../components/ui";
 import {
   OverviewCard,
   OverviewStatRow,
@@ -44,12 +40,7 @@ interface HomeCardRow {
 }
 
 export function HomePage() {
-  const {
-    authState,
-    beginLogin,
-    currentOriginLabel,
-    selectedGuild,
-  } = useDashboardSession();
+  const { authState, selectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -68,34 +59,10 @@ export function HomePage() {
     features.find((feature) => feature.id === "auto_role_assignment") ?? null;
 
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
-  const homeStatus = getHomeStatus(authState, workspace.workspaceState, selectedGuild !== null);
 
   return (
     <section className="page-shell home-page">
-      <PageHeader
-        eyebrow="Overview"
-        title="Home"
-        description="Review the main dashboard areas for the selected server and jump directly into the workspace that needs attention."
-        status={<StatusBadge tone={homeStatus.tone}>{homeStatus.label}</StatusBadge>}
-        meta={
-          <>
-            <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
-            <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
-          </>
-        }
-        actions={
-          authState !== "signed_in" ? (
-            <button
-              className="button-primary"
-              type="button"
-              onClick={() => void beginLogin()}
-            >
-              Sign in with Discord
-            </button>
-          ) : null
-        }
-      />
+      <h1 className="sr-only">Overview</h1>
 
       <FeatureWorkspaceLayout
         notice={homeNotice}
@@ -183,52 +150,6 @@ export function HomePage() {
       />
     </section>
   );
-}
-
-function getHomeStatus(
-  authState: string,
-  workspaceState: ReturnType<typeof useFeatureWorkspace>["workspaceState"],
-  selectedGuildPresent: boolean,
-) {
-  if (authState === "checking") {
-    return {
-      label: "Checking access",
-      tone: "info" as const,
-    };
-  }
-
-  if (authState !== "signed_in") {
-    return {
-      label: "Sign in required",
-      tone: "info" as const,
-    };
-  }
-
-  if (!selectedGuildPresent) {
-    return {
-      label: "Choose a server",
-      tone: "info" as const,
-    };
-  }
-
-  if (workspaceState === "unavailable") {
-    return {
-      label: "Workspace unavailable",
-      tone: "error" as const,
-    };
-  }
-
-  if (workspaceState === "loading") {
-    return {
-      label: "Refreshing overview",
-      tone: "info" as const,
-    };
-  }
-
-  return {
-    label: "Overview ready",
-    tone: "success" as const,
-  };
 }
 
 function buildHomeCardData(
