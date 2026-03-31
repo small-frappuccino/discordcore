@@ -1024,11 +1024,23 @@ textarea:focus {
   background: var(--home-section-surface);
 }
 
+.home-category-section {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .overview-section-header {
   display: grid;
   gap: var(--space-2);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--home-row-border);
+}
+
+.home-category-section .overview-section-header {
+  padding-bottom: var(--space-4);
+  border-bottom-color: var(--home-section-border);
 }
 
 .overview-section-copy {
