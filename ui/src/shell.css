@@ -10,9 +10,12 @@
   --shell-nav-hover: rgba(255, 255, 255, 0.035);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 100vh;
+  height: 100dvh;
   padding: 0;
   position: relative;
+  overflow: hidden;
   z-index: 1;
 }
 
@@ -190,7 +193,8 @@
   gap: 0;
   align-items: stretch;
   min-width: 0;
-  padding: 0 0 var(--space-4);
+  min-height: 0;
+  overflow: hidden;
   position: relative;
 }
 
@@ -211,7 +215,9 @@
   min-width: 0;
   padding: 0;
   border-bottom: 1px solid var(--border-soft);
-  background: transparent;
+  background: var(--shell-chrome-surface);
+  position: relative;
+  z-index: 20;
 }
 
 .shell-context-pane {
@@ -298,8 +304,9 @@
   align-content: start;
   padding: 0 0 var(--space-6);
   background: transparent;
-  position: sticky;
-  top: 89px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 1;
 }
 
@@ -442,7 +449,12 @@
   min-width: 0;
   display: grid;
   gap: var(--space-4);
-  padding: 0;
+  min-height: 0;
+  padding: 0 0 var(--space-4);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   position: relative;
   z-index: 1;
 }
@@ -487,6 +499,7 @@
 
   .shell-body {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .shell-body::before {
@@ -494,11 +507,10 @@
   }
 
   .dashboard-layout-sidebar {
-    position: static;
-    top: auto;
     padding: 0 0 var(--space-4);
     border-bottom: 1px solid var(--shell-chrome-border);
     background: var(--shell-chrome-surface);
+    overflow-y: visible;
   }
 
   .dashboard-layout-sidebar.is-collapsed {
@@ -522,7 +534,7 @@
   }
 
   .shell-body {
-    padding-bottom: var(--space-3);
+    min-height: 0;
   }
 
   .shell-context-pane {
