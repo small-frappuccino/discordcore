@@ -19,6 +19,10 @@
   z-index: 1;
 }
 
+.landing-dashboard-shell {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .dashboard-layout-shell.is-sidebar-collapsed {
   --shell-sidebar-width: var(--shell-sidebar-collapsed-width);
 }
@@ -41,10 +45,44 @@
   min-width: 0;
 }
 
+.landing-shell-topbar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .shell-brand {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+}
+
+.landing-shell-brand {
+  gap: var(--space-3);
+}
+
+.landing-shell-brand-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.landing-shell-brand-copy strong,
+.landing-shell-brand-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing-shell-brand-copy strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.landing-shell-brand-copy span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .shell-brand-mark {
@@ -529,7 +567,7 @@
   display: grid;
   gap: var(--space-4);
   min-height: 0;
-  padding: 0;
+  padding: var(--space-6);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -539,6 +577,42 @@
 
 .shell-main-notice {
   display: grid;
+}
+
+.shell-main > .page-shell,
+.shell-main > .page-content-surface,
+.shell-main > .shell-main-notice {
+  width: min(100%, var(--dashboard-content-max-width));
+  margin-inline: auto;
+}
+
+.landing-dashboard-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  overflow-y: auto;
+}
+
+.landing-dashboard-notice {
+  width: min(100%, var(--dashboard-content-max-width));
+  margin-inline: auto;
+}
+
+.landing-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.landing-topbar-button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 var(--space-4);
 }
 
 @media (max-width: 1080px) {
@@ -596,8 +670,8 @@
     display: none;
   }
 
-  .shell-main {
-    padding-left: 0;
+  .landing-dashboard-main {
+    padding: var(--space-4);
   }
 }
 
@@ -614,6 +688,10 @@
 
   .shell-body {
     min-height: 0;
+  }
+
+  .shell-main {
+    padding: var(--space-4);
   }
 
   .shell-context-pane {
@@ -640,5 +718,17 @@
   .shell-nav-link-root,
   .shell-nav-link-sub {
     min-height: 38px;
+  }
+
+  .landing-shell-brand-copy {
+    display: none;
+  }
+
+  .landing-topbar-actions {
+    width: 100%;
+  }
+
+  .landing-topbar-button {
+    width: 100%;
   }
 }

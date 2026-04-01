@@ -29,6 +29,7 @@
   --radius-card: 12px;
   --radius-control: 8px;
   --radius-pill: 999px;
+  --dashboard-content-max-width: 1520px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -573,6 +574,55 @@ textarea:focus {
 .page-shell {
   display: grid;
   gap: var(--space-4);
+}
+
+.landing-page-shell {
+  --landing-workspace-surface: #10151e;
+  --landing-section-surface: #141b25;
+  --landing-section-border: #283243;
+  width: min(100%, var(--dashboard-content-max-width));
+  margin: 0 auto;
+}
+
+.landing-page-surface {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.landing-page-panel {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 360px);
+  align-items: start;
+  border-color: var(--landing-section-border);
+  background: var(--landing-section-surface);
+}
+
+.landing-page-copy {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.landing-page-copy h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+}
+
+.landing-session-card {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  border-color: var(--landing-section-border);
+  background: var(--landing-workspace-surface);
+  box-shadow: none;
+}
+
+.landing-session-stats .key-value-row {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .page-header {
@@ -2234,6 +2284,7 @@ textarea:focus {
   .control-panel-grid,
   .home-area-grid,
   .home-planned-grid,
+  .landing-page-panel,
   .partner-board-summary-strip,
   .settings-summary-strip,
   .settings-summary-strip-compact,
@@ -2328,6 +2379,11 @@ textarea:focus {
   .workspace-form-grid,
   .status-strip {
     grid-template-columns: 1fr;
+  }
+
+  .landing-page-copy h2 {
+    font-size: 24px;
+    line-height: 30px;
   }
 
   .search-field,

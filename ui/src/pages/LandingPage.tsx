@@ -1,134 +1,185 @@
 import { Link } from "react-router-dom";
+import type { AccessibleGuild } from "../api/control";
 import { appRoutes } from "../app/routes";
 import {
   formatAuthStateLabel,
   formatAuthSupportText,
   formatSessionTitle,
 } from "../app/utils";
+import {
+  IdentityAvatar,
+  PageContentSurface,
+  StatusBadge,
+  AlertBanner,
+} from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { IdentityAvatar, StatusBadge } from "../components/ui";
+import "../shell.css";
 
 const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
+const signedOutNotice = "Sign in with Discord to continue.";
+const signedOutConfirmationNotice = "Signed out.";
 
 export function LandingPage() {
   const {
+    accessibleGuilds,
     authState,
     beginLogin,
-    accessibleGuilds,
+    busyLabel,
+    manageableGuilds,
+    notice,
+    logout,
+    selectedGuildID,
     session,
     sessionAvatarURL,
     sessionLoading,
   } = useDashboardSession();
+  const sessionTitle =
+    session !== null ? formatSessionTitle(session) : formatAuthStateLabel(authState);
+  const sessionSupportText = formatAuthSupportText(
+    authState,
+    accessibleGuilds.length,
+  );
+  const controlPanelPath = getControlPanelPath(selectedGuildID, manageableGuilds);
+  const landingNotice =
+    notice?.message === signedOutNotice ||
+    notice?.message === signedOutConfirmationNotice
+      ? null
+      : notice;
+  const statusTone =
+    authState === "signed_in"
+      ? "success"
+      : authState === "oauth_unavailable"
+        ? "error"
+        : "info";
+  const summaryTitle =
+    authState === "signed_in"
+      ? "Authentication complete"
+      : "Authentication required";
+  const summaryDescription =
+    authState === "signed_in"
+      ? "Keep this page as the entry point, then open the dashboard shell only when you want to manage a server."
+      : "Use Discord authentication here, then continue into the dashboard shell without forcing a redirect away from the landing page.";
 
   return (
-    <main className="landing-shell">
-      <header className="landing-topbar">
-        <Link className="brand-card brand-card-landing" to={appRoutes.landing}>
-          <span className="brand-mark" aria-hidden="true">
+    <main className="dashboard-layout-shell landing-dashboard-shell">
+      <h1 className="sr-only">Discordcore Dashboard</h1>
+
+      <header className="shell-topbar landing-shell-topbar" data-shell-topbar>
+        <Link
+          className="shell-brand landing-shell-brand"
+          to={appRoutes.landing}
+          aria-label="Open landing page"
+        >
+          <span className="shell-brand-mark" aria-hidden="true">
             <img src={siteBrandIconSrc} alt="" />
           </span>
-          <span className="brand-copy">
-            <span className="section-label">Discord bot admin</span>
+          <span className="landing-shell-brand-copy">
             <strong>Discordcore Dashboard</strong>
-            <small>Keep the public site separate from the admin workspace.</small>
+            <span>Discord bot control surface</span>
           </span>
         </Link>
 
-        <div className="landing-actions">
+        <div className="shell-topbar-spacer" aria-hidden="true" />
+
+        <div className="landing-topbar-actions">
           {authState === "signed_in" ? (
-            <Link className="button-primary" to={appRoutes.manage}>
-              Open manage workspace
-            </Link>
+            <>
+              <Link
+                className="button-primary landing-topbar-button"
+                to={controlPanelPath}
+              >
+                Control Panel
+              </Link>
+              <button
+                className="button-primary landing-topbar-button"
+                type="button"
+                disabled={sessionLoading}
+                onClick={() => void logout()}
+              >
+                Logout
+              </button>
+            </>
           ) : (
             <button
-              className="button-primary"
+              className="button-primary landing-topbar-button"
               type="button"
               disabled={sessionLoading}
-              onClick={() => void beginLogin(appRoutes.manage)}
+              onClick={() => void beginLogin(appRoutes.landing)}
             >
-              Sign in with Discord
+              Login with Discord
             </button>
           )}
         </div>
       </header>
 
-      <section className="landing-hero">
-        <div className="landing-copy">
-          <p className="page-eyebrow">Public landing</p>
-          <h1>Admin workflows belong in the dashboard, not in the homepage.</h1>
-          <p className="page-description">
-            The public surface handles onboarding and context. Server selection,
-            Partner Board management, and technical settings stay in the authenticated
-            dashboard shell.
-          </p>
-          <div className="landing-meta">
-            <StatusBadge tone={authState === "signed_in" ? "success" : "info"}>
-              {session !== null
-                ? `Signed in as ${formatSessionTitle(session)}`
-                : formatAuthStateLabel(authState)}
-            </StatusBadge>
-            <span className="meta-pill">
-              {formatAuthSupportText(authState, accessibleGuilds.length)}
-            </span>
-          </div>
-        </div>
-
-        <section className="landing-profile-card surface-card">
-          <div className="identity-row">
-            <IdentityAvatar
-              imageUrl={sessionAvatarURL}
-              label={
-                session !== null
-                  ? formatSessionTitle(session)
-                  : formatAuthStateLabel(authState)
-              }
+      <section className="landing-dashboard-main">
+        {landingNotice || sessionLoading ? (
+          <div className="landing-dashboard-notice">
+            <AlertBanner
+              notice={landingNotice}
+              busyLabel={sessionLoading ? busyLabel : undefined}
             />
-            <div className="identity-copy">
-              <p className="section-label">Dashboard access</p>
-              <strong>
-                {session !== null
-                  ? formatSessionTitle(session)
-                  : formatAuthStateLabel(authState)}
-              </strong>
-              <small>
-                {formatAuthSupportText(authState, accessibleGuilds.length)}
-              </small>
-            </div>
           </div>
-          <p className="section-description">
-            Once you enter the dashboard, the shell holds global navigation,
-            server context, and product workspaces separately.
-          </p>
-        </section>
-      </section>
+        ) : null}
 
-      <section className="landing-grid">
-        <article className="surface-card landing-card">
-          <p className="section-label">Global shell</p>
-          <h2>Top bar and sidebar</h2>
-          <p>
-            The dashboard shell keeps server selection in the top bar and
-            product navigation in the sidebar instead of repeating global
-            context inside each page.
-          </p>
-        </article>
-        <article className="surface-card landing-card">
-          <p className="section-label">Feature workspace</p>
-          <h2>Task-first pages</h2>
-          <p>
-            Partner Board is organized around entries, layout, posting destination,
-            and future activity, instead of mirroring raw backend objects.
-          </p>
-        </article>
-        <article className="surface-card landing-card">
-          <p className="section-label">Technical details</p>
-          <h2>Progressive disclosure</h2>
-          <p>
-            Connection URLs, permissions, IDs, and troubleshooting details stay
-            behind Advanced panels so the default workspace remains readable.
-          </p>
-        </article>
+        <section className="page-shell landing-page-shell">
+          <PageContentSurface className="landing-page-surface">
+            <section className="overview-section-block landing-page-panel">
+              <div className="landing-page-copy">
+                <div className="card-copy">
+                  <p className="section-label">Dashboard access</p>
+                  <h2>{summaryTitle}</h2>
+                  <p className="section-description">{summaryDescription}</p>
+                </div>
+
+                <div className="landing-meta">
+                  <StatusBadge tone={statusTone}>{sessionTitle}</StatusBadge>
+                  <span className="meta-pill subtle-pill">{sessionSupportText}</span>
+                </div>
+              </div>
+
+              <aside className="surface-card landing-session-card">
+                <div className="identity-row">
+                  <IdentityAvatar imageUrl={sessionAvatarURL} label={sessionTitle} />
+                  <div className="identity-copy">
+                    <p className="section-label">Session</p>
+                    <strong>{sessionTitle}</strong>
+                    <small>{sessionSupportText}</small>
+                  </div>
+                </div>
+
+                <dl className="key-value-list landing-session-stats">
+                  <div className="key-value-row">
+                    <dt>Available servers</dt>
+                    <dd>{accessibleGuilds.length}</dd>
+                  </div>
+                  <div className="key-value-row">
+                    <dt>Manageable servers</dt>
+                    <dd>{manageableGuilds.length}</dd>
+                  </div>
+                </dl>
+              </aside>
+            </section>
+          </PageContentSurface>
+        </section>
       </section>
     </main>
   );
+}
+
+function getControlPanelPath(
+  selectedGuildID: string,
+  manageableGuilds: AccessibleGuild[],
+) {
+  const preferredGuildID = selectedGuildID.trim();
+  if (preferredGuildID !== "") {
+    return appRoutes.dashboardHome(preferredGuildID);
+  }
+
+  const fallbackGuildID = manageableGuilds[0]?.id?.trim() ?? "";
+  if (fallbackGuildID !== "") {
+    return appRoutes.dashboardHome(fallbackGuildID);
+  }
+
+  return appRoutes.manage;
 }

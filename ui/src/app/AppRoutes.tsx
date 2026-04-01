@@ -14,6 +14,7 @@ import { PartnerBoardLayoutPage } from "../features/partner-board/PartnerBoardLa
 import { PartnerBoardDeliveryPage } from "../features/partner-board/PartnerBoardDeliveryPage";
 import { appRoutes, mapLegacyDashboardPathForGuild } from "./routes";
 import { ManageIndexPage } from "../pages/ManageIndexPage";
+import { LandingPage } from "../pages/LandingPage";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 
 export function AppRoutes() {
@@ -68,7 +69,7 @@ export function AppRoutes() {
 
       <Route path="/dashboard" element={<LegacyDashboardRedirect />} />
       <Route path="/dashboard/*" element={<LegacyDashboardRedirect />} />
-      <Route path="/" element={<Navigate replace to={appRoutes.manage} />} />
+      <Route path={appRoutes.landing} element={<LandingPage />} />
       <Route path="*" element={<Navigate replace to={appRoutes.manage} />} />
     </Routes>
   );

@@ -664,6 +664,9 @@ function normalizeBaseUrl(raw: string): string {
 
 function normalizeDashboardNextPath(raw: string): string {
   const trimmed = raw.trim();
+  if (trimmed === "/") {
+    return "/";
+  }
   if (trimmed === "" || trimmed === "/manage") {
     return "/manage/";
   }

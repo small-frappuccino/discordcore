@@ -412,4 +412,29 @@ describe("ControlApiClient feature routes", () => {
       },
     );
   });
+
+  it("preserves the landing page as the OAuth return target when requested", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: "ok",
+        oauth_configured: true,
+        authenticated: false,
+        dashboard_url: "/manage/",
+        login_url: "/auth/discord/login?next=%2F",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const response = await client.getDiscordOAuthStatus("/");
+
+    expect(response.login_url).toBe("/auth/discord/login?next=%2F");
+    expect(fetchMock).toHaveBeenCalledWith("/auth/discord/status?next=%2F", {
+      method: "GET",
+      credentials: "include",
+    });
+  });
 });
