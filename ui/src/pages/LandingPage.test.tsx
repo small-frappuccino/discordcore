@@ -131,6 +131,36 @@ describe("LandingPage", () => {
 
     expect(dashboardSessionMock.logout).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the first accessible server when no administrative server is available", () => {
+    dashboardSessionMock.authState = "signed_in";
+    dashboardSessionMock.accessibleGuilds = [
+      createGuild({
+        id: "guild-read",
+        name: "Read Only",
+        owner: false,
+        access_level: "read",
+      }),
+    ];
+    dashboardSessionMock.manageableGuilds = [];
+    dashboardSessionMock.session = {
+      status: "ok",
+      user: {
+        id: "user-1",
+        username: "alice",
+      },
+      scopes: ["identify"],
+      csrf_token: "csrf-token",
+      expires_at: "2099-01-01T00:00:00Z",
+    };
+
+    renderLandingPage();
+
+    expect(screen.getByRole("link", { name: "Control Panel" })).toHaveAttribute(
+      "href",
+      appRoutes.dashboardHome("guild-read"),
+    );
+  });
 });
 
 function createGuild(overrides: Partial<AccessibleGuild>): AccessibleGuild {

@@ -1744,6 +1744,37 @@ describe("dashboard routing and workspace", () => {
     ).toBeDisabled();
   });
 
+  it("includes read-only accessible servers in the server picker", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState(
+      {},
+      "",
+      appRoutes.dashboardCoreControlPanel("guild-1"),
+    );
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Control Panel", level: 1 });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Server" }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: /Server Two/i }),
+    );
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(
+        appRoutes.dashboardCoreControlPanel("guild-2"),
+      );
+    });
+
+    expect(
+      await screen.findByText(
+        "You currently have read-only access to this server. Role changes are disabled.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it(
     "auto-loads Partner Board data again when the selected server changes",
     async () => {

@@ -107,21 +107,21 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	manageReq := httptest.NewRequest(http.MethodGet, dashboardRoutePrefix, nil)
 	manageRec := httptest.NewRecorder()
 	handler.ServeHTTP(manageRec, manageReq)
-	if manageRec.Code != http.StatusOK {
-		t.Fatalf("expected %s to serve the embedded dashboard, got %d body=%q", dashboardRoutePrefix, manageRec.Code, manageRec.Body.String())
+	if manageRec.Code != http.StatusFound {
+		t.Fatalf("expected %s to redirect to landing when dashboard auth is unavailable, got %d body=%q", dashboardRoutePrefix, manageRec.Code, manageRec.Body.String())
 	}
-	if contentType := manageRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
-		t.Fatalf("expected %s content-type to include text/html, got %q", dashboardRoutePrefix, contentType)
+	if location := strings.TrimSpace(manageRec.Header().Get("Location")); location != "/" {
+		t.Fatalf("expected %s redirect location %q, got %q", dashboardRoutePrefix, "/", location)
 	}
 
 	dashboardReq := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
 	dashboardRec := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardRec, dashboardReq)
-	if dashboardRec.Code != http.StatusOK {
-		t.Fatalf("expected legacy /dashboard/ to keep serving the embedded dashboard, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
+	if dashboardRec.Code != http.StatusFound {
+		t.Fatalf("expected legacy /dashboard/ to redirect to landing when dashboard auth is unavailable, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
 	}
-	if contentType := dashboardRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
-		t.Fatalf("expected legacy /dashboard/ content-type to include text/html, got %q", contentType)
+	if location := strings.TrimSpace(dashboardRec.Header().Get("Location")); location != "/" {
+		t.Fatalf("expected legacy /dashboard/ redirect location %q, got %q", "/", location)
 	}
 
 	apiRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/runtime-config", nil)
@@ -135,7 +135,7 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	}
 }
 
-func TestDashboardRoutesRemainPublicWhenOAuthConfigured(t *testing.T) {
+func TestDashboardRoutesRequireAuthenticatedSessionWhenOAuthConfigured(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
@@ -166,11 +166,11 @@ func TestDashboardRoutesRemainPublicWhenOAuthConfigured(t *testing.T) {
 		spaReq := httptest.NewRequest(http.MethodGet, route, nil)
 		spaRec := httptest.NewRecorder()
 		handler.ServeHTTP(spaRec, spaReq)
-		if spaRec.Code != http.StatusOK {
-			t.Fatalf("expected dashboard SPA route %q to remain public, got %d body=%q", route, spaRec.Code, spaRec.Body.String())
+		if spaRec.Code != http.StatusFound {
+			t.Fatalf("expected dashboard SPA route %q to require an authenticated session, got %d body=%q", route, spaRec.Code, spaRec.Body.String())
 		}
-		if contentType := spaRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
-			t.Fatalf("expected dashboard SPA route %q to serve html, got %q", route, contentType)
+		if location := strings.TrimSpace(spaRec.Header().Get("Location")); location != "http://127.0.0.1:8080/" {
+			t.Fatalf("expected dashboard SPA route %q to redirect to the public landing page, got %q", route, location)
 		}
 	}
 }
@@ -285,8 +285,11 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected %s over live server to return 200 without configured auth, got %d", dashboardRoutePrefix, resp.StatusCode)
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected %s over live server to redirect without configured dashboard auth, got %d", dashboardRoutePrefix, resp.StatusCode)
+	}
+	if location := strings.TrimSpace(resp.Header.Get("Location")); location != "/" {
+		t.Fatalf("expected %s over live server to redirect to %q, got %q", dashboardRoutePrefix, "/", location)
 	}
 
 	apiResp, err := http.Get("http://" + srv.listener.Addr().String() + "/v1/runtime-config")

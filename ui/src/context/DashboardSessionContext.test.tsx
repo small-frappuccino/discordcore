@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { appRoutes } from "../app/routes";
 import {
   DashboardSessionProvider,
   useDashboardSession,
@@ -9,6 +11,7 @@ const mockClient = {
   getDiscordOAuthStatus: vi.fn(),
   getSessionStatus: vi.fn(),
   listAccessibleGuilds: vi.fn(),
+  listManageableGuilds: vi.fn(),
   logout: vi.fn(),
 };
 
@@ -24,6 +27,7 @@ vi.mock("../api/control", async () => {
     getDiscordOAuthStatus = mockClient.getDiscordOAuthStatus;
     getSessionStatus = mockClient.getSessionStatus;
     listAccessibleGuilds = mockClient.listAccessibleGuilds;
+    listManageableGuilds = mockClient.listManageableGuilds;
     logout = mockClient.logout;
 
     constructor(config: unknown) {
@@ -75,7 +79,6 @@ function SessionProbe() {
 describe("DashboardSessionProvider", () => {
   afterEach(() => {
     vi.clearAllMocks();
-    vi.restoreAllMocks();
   });
 
   it("keeps authState checking until the accessible guild list resolves", async () => {
@@ -107,11 +110,26 @@ describe("DashboardSessionProvider", () => {
 
     mockClient.getSessionStatus.mockReturnValue(sessionDeferred.promise);
     mockClient.listAccessibleGuilds.mockReturnValue(guildsDeferred.promise);
+    mockClient.listManageableGuilds.mockResolvedValue({
+      status: "ok",
+      count: 1,
+      guilds: [
+        {
+          id: "guild-1",
+          name: "Server One",
+          owner: true,
+          permissions: 8,
+          access_level: "write",
+        },
+      ],
+    });
 
     render(
-      <DashboardSessionProvider>
-        <SessionProbe />
-      </DashboardSessionProvider>,
+      <MemoryRouter initialEntries={[appRoutes.dashboardHome("guild-1")]}>
+        <DashboardSessionProvider>
+          <SessionProbe />
+        </DashboardSessionProvider>
+      </MemoryRouter>,
     );
 
     expect(screen.getByTestId("auth-state")).toHaveTextContent("checking");
@@ -136,6 +154,7 @@ describe("DashboardSessionProvider", () => {
     await waitFor(() => {
       expect(mockClient.listAccessibleGuilds).toHaveBeenCalled();
     });
+    expect(mockClient.listManageableGuilds).toHaveBeenCalled();
 
     expect(screen.getByTestId("auth-state")).toHaveTextContent("checking");
     expect(screen.getByTestId("selected-guild")).toHaveTextContent("(none)");

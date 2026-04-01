@@ -39,7 +39,9 @@ export function LandingPage() {
     authState,
     accessibleGuilds.length,
   );
-  const controlPanelPath = getControlPanelPath(selectedGuildID, manageableGuilds);
+  const navigableGuilds =
+    accessibleGuilds.length > 0 ? accessibleGuilds : manageableGuilds;
+  const controlPanelPath = getControlPanelPath(selectedGuildID, navigableGuilds);
   const landingNotice =
     notice?.message === signedOutNotice ||
     notice?.message === signedOutConfirmationNotice
@@ -170,14 +172,14 @@ export function LandingPage() {
 
 function getControlPanelPath(
   selectedGuildID: string,
-  manageableGuilds: AccessibleGuild[],
+  navigableGuilds: AccessibleGuild[],
 ) {
   const preferredGuildID = selectedGuildID.trim();
   if (preferredGuildID !== "") {
     return appRoutes.dashboardHome(preferredGuildID);
   }
 
-  const fallbackGuildID = manageableGuilds[0]?.id?.trim() ?? "";
+  const fallbackGuildID = navigableGuilds[0]?.id?.trim() ?? "";
   if (fallbackGuildID !== "") {
     return appRoutes.dashboardHome(fallbackGuildID);
   }

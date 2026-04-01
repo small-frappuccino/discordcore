@@ -34,7 +34,7 @@ func (s *Server) registerAPIRoutes(mux *http.ServeMux) {
 func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {
 	mux.Handle("/", newLandingHandler())
 	mux.HandleFunc("/manage", s.handleManageRoot)
-	mux.Handle(dashboardRoutePrefix, newEmbeddedDashboardHandler())
+	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
 	mux.HandleFunc("/dashboard", s.handleDashboardRoot)
 	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
 }

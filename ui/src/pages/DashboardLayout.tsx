@@ -31,6 +31,7 @@ export function DashboardLayout() {
   const { guildId } = useParams();
   const routeGuildID = guildId?.trim() ?? "";
   const {
+    accessibleGuilds,
     authState,
     beginLogin,
     busyLabel,
@@ -44,6 +45,8 @@ export function DashboardLayout() {
     setSelectedGuildID,
     logout,
   } = useDashboardSession();
+  const serverMenuGuilds =
+    accessibleGuilds.length > 0 ? accessibleGuilds : manageableGuilds;
   const navigationSections = useMemo(
     () =>
       routeGuildID === ""
@@ -133,7 +136,9 @@ export function DashboardLayout() {
       : selectedGuild !== null
         ? selectedGuild.bot_present === false
           ? "Bot not connected"
-          : "Change server"
+          : selectedGuild.access_level === "read"
+            ? "Read-only access"
+            : "Change server"
         : "Choose workspace";
 
   function toggleSection(sectionID: string) {
@@ -168,7 +173,7 @@ export function DashboardLayout() {
             aria-haspopup="menu"
             aria-expanded={serverMenuOpen}
             aria-controls="shell-server-menu"
-            disabled={authState !== "signed_in" || manageableGuilds.length === 0}
+            disabled={authState !== "signed_in" || serverMenuGuilds.length === 0}
             onClick={() => setServerMenuOpen((current) => !current)}
           >
             {selectedGuild !== null && selectedGuildIconURL ? (
@@ -191,7 +196,7 @@ export function DashboardLayout() {
 
           {serverMenuOpen ? (
             <div className="shell-server-menu-panel" id="shell-server-menu" role="menu">
-              {manageableGuilds.map((guild) => {
+              {serverMenuGuilds.map((guild) => {
                 const guildIconURL = buildGuildIconURL(guild);
                 const isActive = guild.id === selectedGuildID;
 
@@ -219,7 +224,9 @@ export function DashboardLayout() {
                       <span>
                         {guild.bot_present === false
                           ? "Bot not connected"
-                          : guild.owner
+                          : guild.access_level === "read"
+                            ? "Read-only access"
+                            : guild.owner
                             ? "Owner access"
                             : "Administrative access"}
                       </span>
