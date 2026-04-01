@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { appRoutes } from "../app/routes";
 import {
   formatAuthStateLabel,
@@ -11,7 +11,6 @@ import { IdentityAvatar, StatusBadge } from "../components/ui";
 const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
 
 export function LandingPage() {
-  const location = useLocation();
   const {
     authState,
     beginLogin,
@@ -37,15 +36,15 @@ export function LandingPage() {
 
         <div className="landing-actions">
           {authState === "signed_in" ? (
-            <Link className="button-primary" to={appRoutes.dashboardHome}>
-              Open dashboard
+            <Link className="button-primary" to={appRoutes.manage}>
+              Open manage workspace
             </Link>
           ) : (
             <button
               className="button-primary"
               type="button"
               disabled={sessionLoading}
-              onClick={() => void beginLogin(location.pathname)}
+              onClick={() => void beginLogin(appRoutes.manage)}
             >
               Sign in with Discord
             </button>

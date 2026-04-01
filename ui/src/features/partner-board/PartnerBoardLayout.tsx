@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { partnerBoardTabs } from "../../app/routes";
+import { buildPartnerBoardTabs } from "../../app/routes";
 import { formatTimestamp } from "../../app/utils";
 import {
   DashboardPageSurface,
@@ -8,9 +8,11 @@ import {
   StatusBadge,
   SurfaceCard,
 } from "../../components/ui";
+import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { usePartnerBoard } from "./PartnerBoardContext";
 
 export function PartnerBoardLayout() {
+  const { selectedGuildID } = useDashboardSession();
   const {
     busyLabel,
     deliveryForm,
@@ -30,6 +32,7 @@ export function PartnerBoardLayout() {
       : `Last checked ${formatTimestamp(lastLoadedAt, "Not yet")}`;
   const destinationValue =
     summarizePostingDestination === "Not set" ? "Not set" : "Configured";
+  const partnerBoardTabs = buildPartnerBoardTabs(selectedGuildID);
 
   return (
     <section className="page-shell">

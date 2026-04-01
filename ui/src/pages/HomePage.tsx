@@ -1,15 +1,10 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
-  dashboardHomeNavigationSections,
+  getDashboardHomeNavigationSections,
   type NavigationItem,
 } from "../app/navigation";
-import { appRoutes } from "../app/routes";
-import {
-  FeatureWorkspaceLayout,
-  PageHeader,
-  StatusBadge,
-} from "../components/ui";
+import { FeatureWorkspaceLayout } from "../components/ui";
 import {
   OverviewCard,
   OverviewStatRow,
@@ -45,9 +40,7 @@ interface HomeCardRow {
 }
 
 export function HomePage() {
-  const location = useLocation();
-  const { authState, beginLogin, currentOriginLabel, selectedGuild } =
-    useDashboardSession();
+  const { authState, selectedGuild, selectedGuildID } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -66,55 +59,13 @@ export function HomePage() {
     features.find((feature) => feature.id === "auto_role_assignment") ?? null;
 
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
-  const nextPath = `${location.pathname}${location.search}${location.hash}`;
-  const homeHeaderStatus = summarizeHomeHeaderStatus(
-    authState,
-    selectedGuild !== null,
-  );
-  const homeHeaderDescription = getHomeHeaderDescription(
-    authState,
-    selectedGuild !== null,
-  );
+  const activeGuildID = selectedGuildID?.trim() ?? "";
+  const navigationSections =
+    activeGuildID === "" ? [] : getDashboardHomeNavigationSections(activeGuildID);
 
   return (
     <section className="page-shell home-page">
-      <PageHeader
-        eyebrow="Dashboard"
-        title="Overview"
-        description={homeHeaderDescription}
-        status={
-          <StatusBadge tone={homeHeaderStatus.tone}>
-            {homeHeaderStatus.label}
-          </StatusBadge>
-        }
-        meta={
-          <>
-            <span className="meta-pill subtle-pill">
-              {selectedGuild?.name ?? "No server selected"}
-            </span>
-            <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
-          </>
-        }
-        actions={
-          authState === "checking" ? (
-            <button className="button-primary" type="button" disabled>
-              Preparing dashboard
-            </button>
-          ) : authState !== "signed_in" ? (
-            <button
-              className="button-primary"
-              type="button"
-              onClick={() => void beginLogin(nextPath)}
-            >
-              Sign in with Discord
-            </button>
-          ) : (
-            <Link className="button-primary" to={appRoutes.dashboardCoreControlPanel}>
-              Open Core workspace
-            </Link>
-          )
-        }
-      />
+      <h1 className="sr-only">Home</h1>
 
       <FeatureWorkspaceLayout
         notice={homeNotice}
@@ -128,73 +79,95 @@ export function HomePage() {
         workspaceDescription={null}
         workspaceClassName="home-workspace-panel"
         workspaceContent={
-          <div className="home-category-stack">
-            {dashboardHomeNavigationSections.map((section) => (
-              <SectionBlock
-                className="home-category-section"
-                key={section.id}
-                eyebrow={null}
-                title={section.label}
-              >
-                <div className="home-card-grid">
-                  {section.items.map((item) => {
-                    const card = buildHomeCardData(item, {
-                      sectionLabel: section.label,
-                      authState,
-                      selectedGuildPresent: selectedGuild !== null,
-                      rolesSettings,
-                      partnerBoard,
-                      statsFeature,
-                      commandsFeature,
-                      adminCommandsFeature,
-                      moderationFeatures,
-                      loggingFeatures,
-                      autoRoleFeature,
-                      workspaceState: workspace.workspaceState,
-                    });
+          navigationSections.length === 0 ? (
+            <div className="table-empty-state table-empty-state-compact">
+              <div className="card-copy">
+                <p className="section-label">Workspace</p>
+                <h2>
+                  {authState === "signed_in" ? "Select a server" : "Sign in to continue"}
+                </h2>
+                <p className="section-description">
+                  {authState === "signed_in"
+                    ? "Choose a server from the top bar to open its management workspace."
+                    : "Use Discord sign-in to load the servers you can manage here."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="home-category-stack">
+              {navigationSections.map((section) => (
+                <SectionBlock
+                  className="home-category-section"
+                  key={section.id}
+                  eyebrow={null}
+                  title={section.label}
+                >
+                  <div className="home-card-grid">
+                    {section.items.map((item) => {
+                      const card = buildHomeCardData(item, {
+                        sectionLabel: section.label,
+                        authState,
+                        selectedGuildPresent: selectedGuild !== null,
+                        rolesSettings,
+                        partnerBoard,
+                        statsFeature,
+                        commandsFeature,
+                        adminCommandsFeature,
+                        moderationFeatures,
+                        loggingFeatures,
+                        autoRoleFeature,
+                        workspaceState: workspace.workspaceState,
+                      });
 
-                    return (
-                      <OverviewCard
-                        aria-busy={card.loading}
-                        className="home-nav-card"
-                        tone={card.state}
-                        sectionLabel={null}
-                        title={card.item.label}
-                        action={card.loading ? null : (
-                          <Link className="button-secondary home-nav-link" to={card.item.to}>
-                            {card.item.homeActionLabel ?? `Open ${card.item.label}`}
-                          </Link>
-                        )}
-                        key={item.id}
-                      >
-                        {card.loading ? (
-                          <div className="home-nav-card-skeleton" aria-hidden="true">
-                            <span className="home-nav-skeleton home-nav-skeleton-title" />
-                            <span className="home-nav-skeleton" />
-                            <span className="home-nav-skeleton" />
-                            <span className="home-nav-skeleton home-nav-skeleton-button" />
-                          </div>
-                        ) : (
-                          <ul className="home-nav-facts overview-card-list">
-                            {card.rows.map((row) => (
-                              <OverviewStatRow
-                                key={`${row.label}-${row.value}`}
-                                label={row.label}
-                                value={row.value}
-                                kind={row.valueKind}
-                                tone={row.state}
-                                screenReaderLabel={`${row.label}: ${row.value}`}
-                              />
-                            ))}
-                          </ul>
-                        )}
-                      </OverviewCard>
-                    );
-                  })}
-                </div>
-              </SectionBlock>
-            ))}
-          </div>
+                      return (
+                        <OverviewCard
+                          aria-busy={card.loading}
+                          className={`home-nav-card${
+                            item.id === "control-panel"
+                              ? " home-nav-card-control-panel"
+                              : ""
+                          }`}
+                          tone={card.state}
+                          sectionLabel={null}
+                          title={card.item.label}
+                          action={
+                            card.loading ? null : (
+                              <Link className="button-secondary home-nav-link" to={card.item.to}>
+                                {card.item.homeActionLabel ?? `Open ${card.item.label}`}
+                              </Link>
+                            )
+                          }
+                          key={item.id}
+                        >
+                          {card.loading ? (
+                            <div className="home-nav-card-skeleton" aria-hidden="true">
+                              <span className="home-nav-skeleton home-nav-skeleton-title" />
+                              <span className="home-nav-skeleton" />
+                              <span className="home-nav-skeleton" />
+                              <span className="home-nav-skeleton home-nav-skeleton-button" />
+                            </div>
+                          ) : (
+                            <ul className="home-nav-facts overview-card-list">
+                              {card.rows.map((row) => (
+                                <OverviewStatRow
+                                  key={`${row.label}-${row.value}`}
+                                  label={row.label}
+                                  value={row.value}
+                                  kind={row.valueKind}
+                                  tone={row.state}
+                                  screenReaderLabel={`${row.label}: ${row.value}`}
+                                />
+                              ))}
+                            </ul>
+                          )}
+                        </OverviewCard>
+                      );
+                    })}
+                  </div>
+                </SectionBlock>
+              ))}
+            </div>
+          )
         }
       />
     </section>
@@ -293,6 +266,7 @@ function buildControlPanelCard(
       createNumericCardRow("Read roles", String(readCount)),
     ],
     loading,
+    "enabled",
   );
 }
 
@@ -456,13 +430,14 @@ function createHomeCardData(
   sectionLabel: string,
   rows: HomeCardRow[],
   loading = false,
+  stateOverride?: OverviewTone,
 ): HomeCardData {
   return {
     item,
     sectionLabel,
     rows,
     loading,
-    state: summarizeHomeCardState(rows),
+    state: stateOverride ?? summarizeHomeCardState(rows),
   };
 }
 
@@ -511,50 +486,4 @@ function summarizeHomeCardState(rows: HomeCardRow[]): OverviewTone {
   }
 
   return "neutral";
-}
-
-function summarizeHomeHeaderStatus(
-  authState: string,
-  selectedGuildPresent: boolean,
-) {
-  if (authState === "checking") {
-    return {
-      tone: "info" as const,
-      label: "Preparing workspace",
-    };
-  }
-
-  if (authState !== "signed_in") {
-    return {
-      tone: "info" as const,
-      label: "Sign in required",
-    };
-  }
-
-  if (!selectedGuildPresent) {
-    return {
-      tone: "info" as const,
-      label: "Select a server",
-    };
-  }
-
-  return {
-    tone: "success" as const,
-    label: "Overview ready",
-  };
-}
-
-function getHomeHeaderDescription(
-  authState: string,
-  selectedGuildPresent: boolean,
-) {
-  if (authState !== "signed_in") {
-    return "Sign in to review module readiness and open the main dashboard workspaces.";
-  }
-
-  if (!selectedGuildPresent) {
-    return "Choose a server to review module readiness and move into the area that needs changes next.";
-  }
-
-  return "Scan module readiness for the selected server and jump directly into the workspace that needs attention.";
 }

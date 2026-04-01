@@ -88,10 +88,10 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	redirectRec := httptest.NewRecorder()
 	handler.ServeHTTP(redirectRec, redirectReq)
 	if redirectRec.Code != http.StatusFound {
-		t.Fatalf("expected /dashboard to redirect unauthenticated users, got %d body=%q", redirectRec.Code, redirectRec.Body.String())
+		t.Fatalf("expected /dashboard to redirect to /manage/, got %d body=%q", redirectRec.Code, redirectRec.Body.String())
 	}
-	if location := strings.TrimSpace(redirectRec.Header().Get("Location")); location != "/" {
-		t.Fatalf("expected redirect location %q, got %q", "/", location)
+	if location := strings.TrimSpace(redirectRec.Header().Get("Location")); location != dashboardRoutePrefix {
+		t.Fatalf("expected redirect location %q, got %q", dashboardRoutePrefix, location)
 	}
 
 	rootReq := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -104,14 +104,24 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 		t.Fatalf("expected landing page login button, got %q", body)
 	}
 
+	manageReq := httptest.NewRequest(http.MethodGet, dashboardRoutePrefix, nil)
+	manageRec := httptest.NewRecorder()
+	handler.ServeHTTP(manageRec, manageReq)
+	if manageRec.Code != http.StatusOK {
+		t.Fatalf("expected %s to serve the embedded dashboard, got %d body=%q", dashboardRoutePrefix, manageRec.Code, manageRec.Body.String())
+	}
+	if contentType := manageRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("expected %s content-type to include text/html, got %q", dashboardRoutePrefix, contentType)
+	}
+
 	dashboardReq := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
 	dashboardRec := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardRec, dashboardReq)
-	if dashboardRec.Code != http.StatusFound {
-		t.Fatalf("expected /dashboard/ to redirect unauthenticated users, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
+	if dashboardRec.Code != http.StatusOK {
+		t.Fatalf("expected legacy /dashboard/ to keep serving the embedded dashboard, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
 	}
-	if location := strings.TrimSpace(dashboardRec.Header().Get("Location")); location != "/" {
-		t.Fatalf("expected unauthenticated /dashboard/ redirect to root, got %q", location)
+	if contentType := dashboardRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("expected legacy /dashboard/ content-type to include text/html, got %q", contentType)
 	}
 
 	apiRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/runtime-config", nil)
@@ -125,7 +135,7 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	}
 }
 
-func TestDashboardRoutesRedirectToDiscordLoginWhenOAuthConfigured(t *testing.T) {
+func TestDashboardRoutesRemainPublicWhenOAuthConfigured(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
@@ -143,35 +153,24 @@ func TestDashboardRoutesRedirectToDiscordLoginWhenOAuthConfigured(t *testing.T) 
 	rootDashboardRec := httptest.NewRecorder()
 	handler.ServeHTTP(rootDashboardRec, rootDashboardReq)
 	if rootDashboardRec.Code != http.StatusFound {
-		t.Fatalf("expected /dashboard to redirect to oauth login, got %d body=%q", rootDashboardRec.Code, rootDashboardRec.Body.String())
+		t.Fatalf("expected /dashboard to redirect to /manage/, got %d body=%q", rootDashboardRec.Code, rootDashboardRec.Body.String())
 	}
-	if location := strings.TrimSpace(rootDashboardRec.Header().Get("Location")); location != "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2F" {
+	if location := strings.TrimSpace(rootDashboardRec.Header().Get("Location")); location != "http://127.0.0.1:8080/manage/" {
 		t.Fatalf("unexpected /dashboard redirect target: %q", location)
 	}
 
-	testCases := []struct {
-		path     string
-		location string
-	}{
-		{
-			path:     "/dashboard/settings/guilds?tab=access",
-			location: "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fsettings%2Fguilds%3Ftab%3Daccess",
-		},
-		{
-			path:     "/dashboard/partner-board/entries?view=compact",
-			location: "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fpartner-board%2Fentries%3Fview%3Dcompact",
-		},
-	}
-
-	for _, tc := range testCases {
-		spaReq := httptest.NewRequest(http.MethodGet, tc.path, nil)
+	for _, route := range []string{
+		"/manage/settings/guilds?tab=access",
+		"/dashboard/partner-board/entries?view=compact",
+	} {
+		spaReq := httptest.NewRequest(http.MethodGet, route, nil)
 		spaRec := httptest.NewRecorder()
 		handler.ServeHTTP(spaRec, spaReq)
-		if spaRec.Code != http.StatusFound {
-			t.Fatalf("expected dashboard SPA route %q to redirect to oauth login, got %d body=%q", tc.path, spaRec.Code, spaRec.Body.String())
+		if spaRec.Code != http.StatusOK {
+			t.Fatalf("expected dashboard SPA route %q to remain public, got %d body=%q", route, spaRec.Code, spaRec.Body.String())
 		}
-		if location := strings.TrimSpace(spaRec.Header().Get("Location")); location != tc.location {
-			t.Fatalf("unexpected dashboard SPA redirect target for %q: %q", tc.path, location)
+		if contentType := spaRec.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+			t.Fatalf("expected dashboard SPA route %q to serve html, got %q", route, contentType)
 		}
 	}
 }
@@ -237,20 +236,20 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 		_ = srv.Stop(ctx)
 	})
 
-	req, err := http.NewRequest(http.MethodGet, "http://"+srv.listener.Addr().String()+"/dashboard/", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://"+srv.listener.Addr().String()+dashboardRoutePrefix, nil)
 	if err != nil {
-		t.Fatalf("build GET /dashboard/ request: %v", err)
+		t.Fatalf("build GET %s request: %v", dashboardRoutePrefix, err)
 	}
 	req.AddCookie(sessionCookie)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("GET /dashboard/: %v", err)
+		t.Fatalf("GET %s: %v", dashboardRoutePrefix, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected /dashboard/ over live server to return 200, got %d", resp.StatusCode)
+		t.Fatalf("expected %s over live server to return 200, got %d", dashboardRoutePrefix, resp.StatusCode)
 	}
 	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(contentType, "text/html") {
 		t.Fatalf("expected live dashboard response to be html, got %q", contentType)
@@ -280,17 +279,14 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 		},
 	}
 
-	resp, err := client.Get("http://" + srv.listener.Addr().String() + "/dashboard/")
+	resp, err := client.Get("http://" + srv.listener.Addr().String() + dashboardRoutePrefix)
 	if err != nil {
-		t.Fatalf("GET /dashboard/: %v", err)
+		t.Fatalf("GET %s: %v", dashboardRoutePrefix, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("expected /dashboard/ over live server to redirect to root, got %d", resp.StatusCode)
-	}
-	if location := strings.TrimSpace(resp.Header.Get("Location")); location != "/" {
-		t.Fatalf("expected redirect to root, got %q", location)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected %s over live server to return 200 without configured auth, got %d", dashboardRoutePrefix, resp.StatusCode)
 	}
 
 	apiResp, err := http.Get("http://" + srv.listener.Addr().String() + "/v1/runtime-config")
@@ -317,6 +313,7 @@ func TestDashboardBrandAssetAccessibleWithoutSession(t *testing.T) {
 		path            string
 		expectedSubtype string
 	}{
+		{path: "/manage/brand/alicebot.webp", expectedSubtype: "image/webp"},
 		{path: "/dashboard/brand/alicebot.webp", expectedSubtype: "image/webp"},
 	}
 

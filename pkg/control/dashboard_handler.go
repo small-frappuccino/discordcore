@@ -13,7 +13,10 @@ import (
 	embeddedui "github.com/small-frappuccino/discordcore/ui"
 )
 
-const dashboardRoutePrefix = "/dashboard/"
+const (
+	dashboardRoutePrefix       = "/manage/"
+	dashboardLegacyRoutePrefix = "/dashboard/"
+)
 
 type dashboardHandler struct {
 	assets     fs.FS
@@ -124,15 +127,26 @@ func (h *dashboardHandler) assetKind(assetPath string) dashboardAssetKind {
 }
 
 func normalizeDashboardAssetPath(requestPath string) (string, bool) {
-	if !strings.HasPrefix(requestPath, dashboardRoutePrefix) {
+	trimmed, ok := trimDashboardRoutePrefix(requestPath)
+	if !ok {
 		return "", false
 	}
 
-	trimmed := strings.TrimPrefix(requestPath, dashboardRoutePrefix)
 	cleaned := path.Clean("/" + trimmed)
 	cleaned = strings.TrimPrefix(cleaned, "/")
 	if cleaned == "." {
 		return "", true
 	}
 	return cleaned, true
+}
+
+func trimDashboardRoutePrefix(requestPath string) (string, bool) {
+	switch {
+	case strings.HasPrefix(requestPath, dashboardRoutePrefix):
+		return strings.TrimPrefix(requestPath, dashboardRoutePrefix), true
+	case strings.HasPrefix(requestPath, dashboardLegacyRoutePrefix):
+		return strings.TrimPrefix(requestPath, dashboardLegacyRoutePrefix), true
+	default:
+		return "", false
+	}
 }

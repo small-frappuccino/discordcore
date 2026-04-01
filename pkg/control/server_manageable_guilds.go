@@ -31,6 +31,7 @@ type accessibleGuildResponse struct {
 	ID          string           `json:"id"`
 	Name        string           `json:"name"`
 	Icon        string           `json:"icon,omitempty"`
+	BotPresent  bool             `json:"bot_present"`
 	Owner       bool             `json:"owner"`
 	Permissions int64            `json:"permissions"`
 	AccessLevel guildAccessLevel `json:"access_level"`
@@ -206,7 +207,10 @@ func (s *Server) resolveAccessibleGuilds(
 
 	botGuildSet, err := s.resolveBotGuildIDSet(ctx)
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, errBotGuildIDsProviderUnavailable) {
+			return nil, err
+		}
+		botGuildSet = map[string]struct{}{}
 	}
 
 	freshSession, err := oauth.ensureFreshSessionAccessToken(ctx, session)
@@ -225,19 +229,23 @@ func (s *Server) resolveAccessibleGuilds(
 		if guildID == "" {
 			continue
 		}
-		if _, ok := botGuildSet[guildID]; !ok {
-			continue
-		}
+		_, botPresent := botGuildSet[guildID]
 
 		accessLevel, ok := s.resolveGuildAccessLevel(guild, session.User.ID)
 		if !ok {
 			continue
 		}
 
+		icon := strings.TrimSpace(guild.Icon)
+		if !botPresent {
+			icon = ""
+		}
+
 		out = append(out, accessibleGuildResponse{
 			ID:          guildID,
 			Name:        strings.TrimSpace(guild.Name),
-			Icon:        strings.TrimSpace(guild.Icon),
+			Icon:        icon,
+			BotPresent:  botPresent,
 			Owner:       guild.Owner,
 			Permissions: guild.Permissions,
 			AccessLevel: accessLevel,

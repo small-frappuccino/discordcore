@@ -12,11 +12,13 @@ const dashboardSessionMock: {
   beginLogin: ReturnType<typeof vi.fn>;
   currentOriginLabel: string;
   selectedGuild: AccessibleGuild | null;
+  selectedGuildID: string;
 } = {
   authState: "checking",
   beginLogin: vi.fn(),
   currentOriginLabel: "Local control server",
   selectedGuild: null,
+  selectedGuildID: "guild-1",
 };
 
 const featureWorkspaceMock: {
@@ -94,9 +96,7 @@ describe("HomePage", () => {
   it("keeps cards in loading state while the session is still checking", () => {
     renderHomePage();
 
-    expect(screen.getByRole("heading", { name: "Overview", level: 1 })).toBeInTheDocument();
-    expect(screen.queryByText("Product areas")).not.toBeInTheDocument();
-    expect(screen.queryByText("Product area")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Home", level: 1 })).toBeInTheDocument();
     expect(screen.queryAllByText("Status: Sign in required")).toHaveLength(0);
     expect(screen.queryAllByText("Server: Select a server")).toHaveLength(0);
     expect(document.querySelectorAll('.home-nav-card[aria-busy="true"]')).not.toHaveLength(0);
@@ -112,6 +112,7 @@ describe("HomePage", () => {
       permissions: 0,
       access_level: "write",
     };
+    dashboardSessionMock.selectedGuildID = "guild-1";
 
     featureWorkspaceMock.workspaceState = "ready";
     featureWorkspaceMock.features = [
@@ -155,6 +156,7 @@ beforeEach(() => {
   dashboardSessionMock.authState = "checking";
   dashboardSessionMock.currentOriginLabel = "Local control server";
   dashboardSessionMock.selectedGuild = null;
+  dashboardSessionMock.selectedGuildID = "guild-1";
 
   featureWorkspaceMock.features = [];
   featureWorkspaceMock.loading = false;

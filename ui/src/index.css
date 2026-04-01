@@ -1120,6 +1120,10 @@ textarea:focus {
   background: var(--home-card-surface-hover);
 }
 
+.home-nav-card-control-panel {
+  border-color: color-mix(in srgb, var(--home-enabled-rail) 42%, var(--home-card-border));
+}
+
 .overview-card-header,
 .overview-card-copy,
 .overview-card-body {

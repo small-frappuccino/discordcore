@@ -47,7 +47,7 @@ func TestDiscordOAuthStatusReportsUnavailableWithoutConfig(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	rec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/status?next=%2Fdashboard%2F", nil, "")
+	rec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/status?next=%2Fmanage%2F", nil, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 from oauth status without config, got %d body=%q", rec.Code, rec.Body.String())
 	}
@@ -131,7 +131,7 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 		t,
 		srv.httpServer.Handler,
 		http.MethodGet,
-		"/auth/discord/status?next=%2Fdashboard%2Fsettings%3Ftab%3Dmoderation",
+		"/auth/discord/status?next=%2Fmanage%2Fsettings%3Ftab%3Dmoderation",
 		nil,
 		"",
 	)
@@ -154,15 +154,15 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	if signedOut.Authenticated {
 		t.Fatalf("expected authenticated=false without session, got %+v", signedOut)
 	}
-	if signedOut.DashboardURL != "http://127.0.0.1:8080/dashboard/" {
+	if signedOut.DashboardURL != "http://127.0.0.1:8080/manage/" {
 		t.Fatalf("unexpected dashboard_url for signed-out status: %+v", signedOut)
 	}
-	if signedOut.LoginURL != "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fsettings%3Ftab%3Dmoderation" {
+	if signedOut.LoginURL != "http://127.0.0.1:8080/auth/discord/login?next=%2Fmanage%2Fsettings%3Ftab%3Dmoderation" {
 		t.Fatalf("unexpected login_url for signed-out status: %+v", signedOut)
 	}
 
 	sessionCookie := configureDashboardSession(t, srv)
-	req := httptest.NewRequest(http.MethodGet, "/auth/discord/status?next=%2Fdashboard%2Fcontrol-panel", nil)
+	req := httptest.NewRequest(http.MethodGet, "/auth/discord/status?next=%2Fmanage%2Fcontrol-panel", nil)
 	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(rec, req)
@@ -190,10 +190,10 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	if strings.TrimSpace(signedIn.CSRFToken) == "" {
 		t.Fatalf("expected csrf token in signed-in oauth status, got %+v", signedIn)
 	}
-	if signedIn.DashboardURL != "http://127.0.0.1:8080/dashboard/" {
+	if signedIn.DashboardURL != "http://127.0.0.1:8080/manage/" {
 		t.Fatalf("unexpected dashboard_url for signed-in status: %+v", signedIn)
 	}
-	if signedIn.LoginURL != "http://127.0.0.1:8080/auth/discord/login?next=%2Fdashboard%2Fcontrol-panel" {
+	if signedIn.LoginURL != "http://127.0.0.1:8080/auth/discord/login?next=%2Fmanage%2Fcontrol-panel" {
 		t.Fatalf("unexpected login_url for signed-in status: %+v", signedIn)
 	}
 }
@@ -215,7 +215,7 @@ func TestDiscordOAuthStatusPrefersServerPublicOrigin(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"https://alice.localhost:8443/auth/discord/status?next=%2Fdashboard%2Fcontrol-panel",
+		"https://alice.localhost:8443/auth/discord/status?next=%2Fmanage%2Fcontrol-panel",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -231,10 +231,10 @@ func TestDiscordOAuthStatusPrefersServerPublicOrigin(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode oauth status payload: %v body=%q", err, rec.Body.String())
 	}
-	if payload.DashboardURL != "https://alice.localhost:8443/dashboard/" {
+	if payload.DashboardURL != "https://alice.localhost:8443/manage/" {
 		t.Fatalf("unexpected public dashboard url: %+v", payload)
 	}
-	if payload.LoginURL != "https://alice.localhost:8443/auth/discord/login?next=%2Fdashboard%2Fcontrol-panel" {
+	if payload.LoginURL != "https://alice.localhost:8443/auth/discord/login?next=%2Fmanage%2Fcontrol-panel" {
 		t.Fatalf("unexpected public login url: %+v", payload)
 	}
 }
@@ -321,7 +321,7 @@ func TestDiscordOAuthLoginRedirectIncludesGuildMembersScope(t *testing.T) {
 	}
 }
 
-func TestDiscordOAuthCallbackRedirectsToDashboardWhenRequested(t *testing.T) {
+func TestDiscordOAuthCallbackRedirectsToManageWhenRequested(t *testing.T) {
 	t.Parallel()
 
 	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -357,7 +357,7 @@ func TestDiscordOAuthCallbackRedirectsToDashboardWhenRequested(t *testing.T) {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
-	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login?next=%2Fdashboard%2F", nil, "")
+	loginRec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/auth/discord/login?next=%2Fmanage%2F", nil, "")
 	state, stateCookie, _ := parseOAuthLoginRedirect(t, loginRec)
 	nextCookie := findCookie(loginRec.Result().Cookies(), defaultDiscordOAuthNextCookieName)
 	if nextCookie == nil {
@@ -377,8 +377,8 @@ func TestDiscordOAuthCallbackRedirectsToDashboardWhenRequested(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("expected 302 callback redirect, got %d body=%q", rec.Code, rec.Body.String())
 	}
-	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "/dashboard/" {
-		t.Fatalf("expected callback redirect to /dashboard/, got %q", location)
+	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "/manage/" {
+		t.Fatalf("expected callback redirect to /manage/, got %q", location)
 	}
 }
 
@@ -1168,8 +1168,8 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 	if accessResponse.Status != "ok" {
 		t.Fatalf("unexpected accessible response status: %+v", accessResponse)
 	}
-	if accessResponse.Count != 4 || len(accessResponse.Guilds) != 4 {
-		t.Fatalf("expected 4 accessible guilds, got count=%d guilds=%+v", accessResponse.Count, accessResponse.Guilds)
+	if accessResponse.Count != 5 || len(accessResponse.Guilds) != 5 {
+		t.Fatalf("expected 5 accessible guilds, got count=%d guilds=%+v", accessResponse.Count, accessResponse.Guilds)
 	}
 
 	gotAccessIDs := []string{
@@ -1177,16 +1177,24 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 		accessResponse.Guilds[1].ID,
 		accessResponse.Guilds[2].ID,
 		accessResponse.Guilds[3].ID,
+		accessResponse.Guilds[4].ID,
 	}
-	wantAccessIDs := []string{"g-admin", "g-manage", "g-owner", "g-read"}
+	wantAccessIDs := []string{"g-admin", "g-manage", "g-other", "g-owner", "g-read"}
 	if strings.Join(gotAccessIDs, ",") != strings.Join(wantAccessIDs, ",") {
 		t.Fatalf("unexpected accessible guild IDs: got=%v want=%v", gotAccessIDs, wantAccessIDs)
 	}
 	if accessResponse.Guilds[0].AccessLevel != guildAccessLevelWrite ||
 		accessResponse.Guilds[1].AccessLevel != guildAccessLevelWrite ||
 		accessResponse.Guilds[2].AccessLevel != guildAccessLevelWrite ||
-		accessResponse.Guilds[3].AccessLevel != guildAccessLevelRead {
+		accessResponse.Guilds[3].AccessLevel != guildAccessLevelWrite ||
+		accessResponse.Guilds[4].AccessLevel != guildAccessLevelRead {
 		t.Fatalf("unexpected accessible guild access levels: %+v", accessResponse.Guilds)
+	}
+	if accessResponse.Guilds[2].BotPresent {
+		t.Fatalf("expected guild without the bot to report bot_present=false, got %+v", accessResponse.Guilds[2])
+	}
+	if accessResponse.Guilds[2].Icon != "" {
+		t.Fatalf("expected guild without the bot to hide the icon, got %+v", accessResponse.Guilds[2])
 	}
 
 	manageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
@@ -1208,12 +1216,17 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 	if response.Status != "ok" {
 		t.Fatalf("unexpected response status: %+v", response)
 	}
-	if response.Count != 3 || len(response.Guilds) != 3 {
-		t.Fatalf("expected 3 manageable guilds, got count=%d guilds=%+v", response.Count, response.Guilds)
+	if response.Count != 4 || len(response.Guilds) != 4 {
+		t.Fatalf("expected 4 manageable guilds, got count=%d guilds=%+v", response.Count, response.Guilds)
 	}
 
-	gotIDs := []string{response.Guilds[0].ID, response.Guilds[1].ID, response.Guilds[2].ID}
-	wantIDs := []string{"g-admin", "g-manage", "g-owner"}
+	gotIDs := []string{
+		response.Guilds[0].ID,
+		response.Guilds[1].ID,
+		response.Guilds[2].ID,
+		response.Guilds[3].ID,
+	}
+	wantIDs := []string{"g-admin", "g-manage", "g-other", "g-owner"}
 	if strings.Join(gotIDs, ",") != strings.Join(wantIDs, ",") {
 		t.Fatalf("unexpected manageable guild IDs: got=%v want=%v", gotIDs, wantIDs)
 	}
@@ -1231,7 +1244,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 	}
 }
 
-func TestDiscordOAuthManageableGuildsEndpointRequiresBotGuildProvider(t *testing.T) {
+func TestDiscordOAuthManageableGuildsEndpointDoesNotRequireBotGuildProvider(t *testing.T) {
 	t.Parallel()
 
 	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1242,6 +1255,9 @@ func TestDiscordOAuthManageableGuildsEndpointRequiresBotGuildProvider(t *testing
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","icon":"guild-icon","owner":true,"permissions":"0"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1285,8 +1301,29 @@ func TestDiscordOAuthManageableGuildsEndpointRequiresBotGuildProvider(t *testing
 	manageableReq.AddCookie(sessionCookie)
 	manageableRec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(manageableRec, manageableReq)
-	if manageableRec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected manageable guilds endpoint to fail without bot guild provider, got %d body=%q", manageableRec.Code, manageableRec.Body.String())
+	if manageableRec.Code != http.StatusOK {
+		t.Fatalf("expected manageable guilds endpoint to succeed without bot guild provider, got %d body=%q", manageableRec.Code, manageableRec.Body.String())
+	}
+
+	var response struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(manageableRec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode manageable guilds response: %v body=%q", err, manageableRec.Body.String())
+	}
+	if response.Status != "ok" || response.Count != 1 || len(response.Guilds) != 1 {
+		t.Fatalf("unexpected manageable guild response without bot provider: %+v", response)
+	}
+	if response.Guilds[0].ID != "g1" || response.Guilds[0].AccessLevel != guildAccessLevelWrite {
+		t.Fatalf("unexpected manageable guild payload without bot provider: %+v", response.Guilds[0])
+	}
+	if response.Guilds[0].BotPresent {
+		t.Fatalf("expected bot_present=false without bot guild provider, got %+v", response.Guilds[0])
+	}
+	if response.Guilds[0].Icon != "" {
+		t.Fatalf("expected icon to be hidden when bot is not present, got %+v", response.Guilds[0])
 	}
 }
 

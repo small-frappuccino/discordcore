@@ -33,18 +33,16 @@ func (s *Server) registerAPIRoutes(mux *http.ServeMux) {
 
 func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {
 	mux.Handle("/", newLandingHandler())
+	mux.HandleFunc("/manage", s.handleManageRoot)
+	mux.Handle(dashboardRoutePrefix, newEmbeddedDashboardHandler())
 	mux.HandleFunc("/dashboard", s.handleDashboardRoot)
-	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
+	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
+}
+
+func (s *Server) handleManageRoot(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, s.publicDashboardURL(dashboardRoutePrefix), http.StatusFound)
 }
 
 func (s *Server) handleDashboardRoot(w http.ResponseWriter, r *http.Request) {
-	if !s.hasAuthenticatedDashboardSession(r) {
-		if s.discordOAuthConfigured() {
-			http.Redirect(w, r, s.publicDiscordOAuthLoginURL(dashboardRoutePrefix), http.StatusFound)
-			return
-		}
-		http.Redirect(w, r, "/", http.StatusFound)
-		return
-	}
 	http.Redirect(w, r, s.publicDashboardURL(dashboardRoutePrefix), http.StatusFound)
 }

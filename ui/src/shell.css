@@ -65,12 +65,13 @@
   object-fit: cover;
 }
 
-.shell-server-select {
+.shell-server-menu {
+  position: relative;
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
   justify-self: end;
-  width: min(100%, 320px);
+  width: min(100%, 360px);
 }
 
 .shell-field-label {
@@ -87,6 +88,7 @@
   justify-self: end;
 }
 
+.shell-server-trigger,
 .shell-account-trigger {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -94,30 +96,67 @@
   gap: var(--space-3);
   min-width: 0;
   min-height: 56px;
-  padding: 10px 12px;
+  padding: var(--space-3);
   border-radius: var(--radius-card);
   border: 1px solid var(--border-soft);
   background: var(--bg-surface-card);
   box-shadow: var(--shadow-1);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
+.shell-server-trigger {
+  text-align: left;
+}
+
+.shell-server-trigger:hover:not(:disabled),
 .shell-account-trigger:hover:not(:disabled) {
   border-color: var(--border-strong);
   background: var(--bg-surface-elevated);
 }
 
+.shell-server-trigger:disabled,
 .shell-account-trigger:disabled {
   opacity: 0.72;
 }
 
-.shell-account-trigger-copy {
+.shell-server-trigger-mark,
+.shell-server-option-mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-surface-elevated);
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.shell-server-trigger-mark img,
+.shell-server-option-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shell-server-trigger-copy,
+.shell-account-trigger-copy,
+.shell-server-option-copy {
   display: grid;
   gap: 2px;
   min-width: 0;
   text-align: left;
 }
 
-.shell-account-trigger-copy strong {
+.shell-server-trigger-copy strong,
+.shell-account-trigger-copy strong,
+.shell-server-option-copy strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -127,7 +166,9 @@
   font-weight: 600;
 }
 
-.shell-account-trigger-copy span {
+.shell-server-trigger-copy span,
+.shell-account-trigger-copy span,
+.shell-server-option-copy span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -136,18 +177,13 @@
   line-height: 16px;
 }
 
-.shell-account-trigger-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 .shell-account-trigger-caret {
   color: var(--text-dim);
   font-size: 10px;
   line-height: 1;
 }
 
+.shell-server-menu-panel,
 .shell-account-menu {
   position: absolute;
   right: 0;
@@ -161,6 +197,14 @@
   border-radius: var(--radius-card);
   background: var(--bg-surface-elevated);
   box-shadow: var(--shadow-2);
+}
+
+.shell-server-menu-panel {
+  gap: var(--space-2);
+  width: min(360px, 92vw);
+  max-height: min(420px, 70vh);
+  padding: var(--space-3);
+  overflow-y: auto;
 }
 
 .shell-account-menu-header {
@@ -185,6 +229,37 @@
 .shell-account-menu-actions {
   display: grid;
   gap: var(--space-2);
+}
+
+.shell-account-menu-actions > * {
+  width: 100%;
+}
+
+.shell-server-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  box-shadow: none;
+}
+
+.shell-server-option:hover {
+  border-color: var(--border-soft);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.shell-server-option.is-active {
+  border-color: rgba(215, 161, 132, 0.2);
+  background: rgba(215, 161, 132, 0.08);
+  box-shadow: inset 3px 0 0 var(--bg-accent);
 }
 
 .shell-body {
@@ -476,12 +551,13 @@
   }
 
   .shell-brand,
-  .shell-server-select,
+  .shell-server-menu,
   .shell-account {
     justify-self: stretch;
     width: 100%;
   }
 
+  .shell-server-menu-panel,
   .shell-account-menu {
     width: 100%;
   }
@@ -551,6 +627,7 @@
     line-height: 20px;
   }
 
+  .shell-server-trigger,
   .shell-account-trigger {
     min-height: 52px;
   }

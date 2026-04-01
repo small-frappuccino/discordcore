@@ -7,7 +7,7 @@ export default defineConfig(({ mode, command }) => {
     env.VITE_CONTROL_API_PROXY_TARGET ?? "http://127.0.0.1:8080";
 
   return {
-    base: command === "build" ? "/dashboard/" : "/",
+    base: command === "build" ? "/manage/" : "/",
     plugins: [
       react({
         babel: {

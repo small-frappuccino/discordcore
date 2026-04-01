@@ -112,7 +112,7 @@ export function isValidBaseUrl(raw: string): boolean {
 }
 
 export function buildGuildIconURL(guild: AccessibleGuild): string | null {
-  if (!guild.icon) {
+  if (guild.bot_present === false || !guild.icon) {
     return null;
   }
   return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.webp?size=128`;

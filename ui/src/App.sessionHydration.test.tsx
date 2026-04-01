@@ -3,6 +3,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 import { appRoutes } from "./app/routes";
 
+const testGuildID = "guild-1";
+const testRoutes = {
+  coreCommands: appRoutes.dashboardCoreCommands(testGuildID),
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -50,6 +55,10 @@ describe("dashboard session hydration", () => {
         return guildsDeferred.promise.then((body) => jsonResponse(body));
       }
 
+      if (url.endsWith("/auth/guilds/manageable")) {
+        return guildsDeferred.promise.then((body) => jsonResponse(body));
+      }
+
       if (url.endsWith("/v1/guilds/guild-1/features")) {
         return featuresDeferred.promise.then((body) => jsonResponse(body));
       }
@@ -66,7 +75,7 @@ describe("dashboard session hydration", () => {
     });
 
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreCommands);
+    window.history.replaceState({}, "", testRoutes.coreCommands);
 
     render(<App />);
 

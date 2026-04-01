@@ -30,7 +30,7 @@ func TestDistFSIncludesPlaceholderIndex(t *testing.T) {
 	if !strings.Contains(content, `data-dashboard-shell="embed-loader-v1"`) {
 		t.Fatalf("embedded index.html missing embed shell sentinel: %q", content)
 	}
-	if !strings.Contains(content, `var dashboardBase = "/dashboard/";`) ||
+	if !strings.Contains(content, `var dashboardBase = "/manage/";`) ||
 		!strings.Contains(content, `.vite/manifest.json`) {
 		t.Fatalf("embedded index.html missing dashboard manifest loader: %q", content)
 	}

@@ -195,7 +195,7 @@ const controlLandingHTML = `<!doctype html>
     <header class="shell">
       <div class="topbar">
         <div class="brand" aria-hidden="true">
-          <img src="/dashboard/brand/alicebot.webp" alt="" />
+          <img src="/manage/brand/alicebot.webp" alt="" />
         </div>
 
         <div class="session-panel">
@@ -203,7 +203,7 @@ const controlLandingHTML = `<!doctype html>
             <button id="login-button" class="button button-primary" type="button">
               Login com Discord
             </button>
-            <button id="dashboard-button" class="button button-secondary is-hidden" type="button">
+            <button id="dashboard-button" class="button button-secondary" type="button">
               Dashboard
             </button>
             <button id="logout-button" class="button button-ghost is-hidden" type="button">
@@ -220,8 +220,8 @@ const controlLandingHTML = `<!doctype html>
         const dashboardButton = document.getElementById("dashboard-button");
         const logoutButton = document.getElementById("logout-button");
         let csrfToken = "";
-        let loginURL = "/auth/discord/login?next=%2Fdashboard%2F";
-        let dashboardURL = "/dashboard/";
+        let loginURL = "/auth/discord/login?next=%2Fmanage%2F";
+        let dashboardURL = "/manage/";
 
         function hide(element, hidden) {
           element.classList.toggle("is-hidden", hidden);
@@ -229,10 +229,10 @@ const controlLandingHTML = `<!doctype html>
 
         function showSignedOut(oauthAvailable, nextLoginURL, nextDashboardURL) {
           csrfToken = "";
-          loginURL = nextLoginURL || "/auth/discord/login?next=%2Fdashboard%2F";
-          dashboardURL = nextDashboardURL || "/dashboard/";
+          loginURL = nextLoginURL || "/auth/discord/login?next=%2Fmanage%2F";
+          dashboardURL = nextDashboardURL || "/manage/";
           hide(loginButton, false);
-          hide(dashboardButton, true);
+          hide(dashboardButton, false);
           hide(logoutButton, true);
           loginButton.disabled = !oauthAvailable;
           loginButton.textContent = oauthAvailable ? "Login com Discord" : "Discord indisponível";
@@ -240,7 +240,7 @@ const controlLandingHTML = `<!doctype html>
 
         function showSignedIn(token, nextDashboardURL) {
           csrfToken = token;
-          dashboardURL = nextDashboardURL || "/dashboard/";
+          dashboardURL = nextDashboardURL || "/manage/";
           hide(loginButton, true);
           hide(dashboardButton, false);
           hide(logoutButton, false);
@@ -250,7 +250,7 @@ const controlLandingHTML = `<!doctype html>
 
         async function refreshSession() {
           try {
-            const response = await fetch("/auth/discord/status?next=%2Fdashboard%2F", {
+            const response = await fetch("/auth/discord/status?next=%2Fmanage%2F", {
               method: "GET",
               credentials: "include"
             });

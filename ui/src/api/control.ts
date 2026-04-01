@@ -75,6 +75,7 @@ export interface AccessibleGuild {
   id: string;
   name: string;
   icon?: string;
+  bot_present?: boolean;
   owner: boolean;
   permissions: number;
   access_level: DashboardGuildAccessLevel;
@@ -519,7 +520,7 @@ export class ControlApiClient {
   }
 
   async getDiscordOAuthStatus(
-    nextPath = "/dashboard/",
+    nextPath = "/manage/",
   ): Promise<DiscordOAuthStatusResponse> {
     const next = normalizeDashboardNextPath(nextPath);
     const suffix = next === "" ? "" : `?next=${encodeURIComponent(next)}`;
@@ -663,8 +664,11 @@ function normalizeBaseUrl(raw: string): string {
 
 function normalizeDashboardNextPath(raw: string): string {
   const trimmed = raw.trim();
-  if (trimmed === "" || !trimmed.startsWith("/dashboard/")) {
-    return "/dashboard/";
+  if (trimmed === "" || trimmed === "/manage") {
+    return "/manage/";
+  }
+  if (!trimmed.startsWith("/manage/")) {
+    return "/manage/";
   }
   return trimmed;
 }

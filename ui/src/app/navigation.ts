@@ -15,115 +15,130 @@ export interface NavigationSection {
   items: NavigationItem[];
 }
 
-export const dashboardHomeNavigationItem: NavigationItem = {
-  id: "home",
-  label: "Home",
-  to: appRoutes.dashboardHome,
-  activePath: appRoutes.dashboardHome,
-};
+export function getDashboardHomeNavigationItem(
+  guildId: string,
+): NavigationItem {
+  return {
+    id: "home",
+    label: "Home",
+    to: appRoutes.dashboardHome(guildId),
+    activePath: appRoutes.dashboardHome(guildId),
+  };
+}
 
-export const dashboardPartnerBoardNavigationItem: NavigationItem = {
-  id: "partner-board",
-  label: "Partner Board",
-  to: appRoutes.partnerBoardBase,
-  activePath: appRoutes.partnerBoardBase,
-  matchPrefix: appRoutes.partnerBoardBase,
-  homeActionLabel: "Open Partner Board",
-};
+export function getDashboardPartnerBoardNavigationItem(
+  guildId: string,
+): NavigationItem {
+  const partnerBoardBase = appRoutes.partnerBoardBase(guildId);
 
-const coreNavigationSection: NavigationSection = {
-  id: "core",
-  label: "Core",
-  items: [
-    {
-      id: "control-panel",
-      label: "Control Panel",
-      to: appRoutes.dashboardCoreControlPanel,
-      activePath: appRoutes.dashboardCoreControlPanel,
-      homeActionLabel: "Open Control Panel",
-    },
-    {
-      id: "stats",
-      label: "Stats",
-      to: appRoutes.dashboardCoreStats,
-      activePath: appRoutes.dashboardCoreStats,
-      homeActionLabel: "Open Stats",
-    },
-    {
-      id: "commands",
-      label: "Commands",
-      to: appRoutes.dashboardCoreCommands,
-      activePath: appRoutes.dashboardCoreCommands,
-      homeActionLabel: "Open Commands",
-    },
-  ],
-};
+  return {
+    id: "partner-board",
+    label: "Partner Board",
+    to: partnerBoardBase,
+    activePath: partnerBoardBase,
+    matchPrefix: partnerBoardBase,
+    homeActionLabel: "Open Partner Board",
+  };
+}
 
-const moderationNavigationSection: NavigationSection = {
-  id: "moderation",
-  label: "Moderation",
-  items: [
-    {
-      id: "moderation",
-      label: "Moderation",
-      to: appRoutes.dashboardModerationModeration,
-      activePath: appRoutes.dashboardModerationModeration,
-      homeActionLabel: "Open Moderation",
-    },
-    {
-      id: "logging",
-      label: "Logging",
-      to: appRoutes.dashboardModerationLogging,
-      activePath: appRoutes.dashboardModerationLogging,
-      homeActionLabel: "Open Logging",
-    },
-  ],
-};
+export function getDashboardSidebarNavigationSections(
+  guildId: string,
+): NavigationSection[] {
+  const coreNavigationSection: NavigationSection = {
+    id: "core",
+    label: "Core",
+    items: [
+      {
+        id: "control-panel",
+        label: "Control Panel",
+        to: appRoutes.dashboardCoreControlPanel(guildId),
+        activePath: appRoutes.dashboardCoreControlPanel(guildId),
+        homeActionLabel: "Open Control Panel",
+      },
+      {
+        id: "stats",
+        label: "Stats",
+        to: appRoutes.dashboardCoreStats(guildId),
+        activePath: appRoutes.dashboardCoreStats(guildId),
+        homeActionLabel: "Open Stats",
+      },
+      {
+        id: "commands",
+        label: "Commands",
+        to: appRoutes.dashboardCoreCommands(guildId),
+        activePath: appRoutes.dashboardCoreCommands(guildId),
+        homeActionLabel: "Open Commands",
+      },
+    ],
+  };
 
-const partnersNavigationSection: NavigationSection = {
-  id: "partners",
-  label: "Partners",
-  items: [dashboardPartnerBoardNavigationItem],
-};
+  const moderationNavigationSection: NavigationSection = {
+    id: "moderation",
+    label: "Moderation",
+    items: [
+      {
+        id: "moderation",
+        label: "Moderation",
+        to: appRoutes.dashboardModerationModeration(guildId),
+        activePath: appRoutes.dashboardModerationModeration(guildId),
+        homeActionLabel: "Open Moderation",
+      },
+      {
+        id: "logging",
+        label: "Logging",
+        to: appRoutes.dashboardModerationLogging(guildId),
+        activePath: appRoutes.dashboardModerationLogging(guildId),
+        homeActionLabel: "Open Logging",
+      },
+    ],
+  };
 
-const rolesNavigationSection: NavigationSection = {
-  id: "roles",
-  label: "Roles",
-  items: [
-    {
-      id: "autorole",
-      label: "Autorole",
-      to: appRoutes.dashboardRolesAutorole,
-      activePath: appRoutes.dashboardRolesAutorole,
-      homeActionLabel: "Open Autorole",
-    },
-    {
-      id: "level-roles",
-      label: "Level Roles",
-      to: appRoutes.dashboardRolesLevelRoles,
-      activePath: appRoutes.dashboardRolesLevelRoles,
-      homeActionLabel: "Open Level Roles",
-    },
-  ],
-};
+  const partnersNavigationSection: NavigationSection = {
+    id: "partners",
+    label: "Partners",
+    items: [getDashboardPartnerBoardNavigationItem(guildId)],
+  };
 
-export const dashboardSidebarNavigationSections: NavigationSection[] = [
-  coreNavigationSection,
-  moderationNavigationSection,
-  partnersNavigationSection,
-  rolesNavigationSection,
-];
+  const rolesNavigationSection: NavigationSection = {
+    id: "roles",
+    label: "Roles",
+    items: [
+      {
+        id: "autorole",
+        label: "Autorole",
+        to: appRoutes.dashboardRolesAutorole(guildId),
+        activePath: appRoutes.dashboardRolesAutorole(guildId),
+        homeActionLabel: "Open Autorole",
+      },
+      {
+        id: "level-roles",
+        label: "Level Roles",
+        to: appRoutes.dashboardRolesLevelRoles(guildId),
+        activePath: appRoutes.dashboardRolesLevelRoles(guildId),
+        homeActionLabel: "Open Level Roles",
+      },
+    ],
+  };
 
-export const dashboardHomeNavigationSections: NavigationSection[] = [
-  coreNavigationSection,
-  moderationNavigationSection,
-  partnersNavigationSection,
-  rolesNavigationSection,
-];
+  return [
+    coreNavigationSection,
+    moderationNavigationSection,
+    partnersNavigationSection,
+    rolesNavigationSection,
+  ];
+}
 
-export const dashboardNavigationItems = dashboardHomeNavigationSections.flatMap(
-  (section) => section.items,
-);
+export function getDashboardHomeNavigationSections(
+  guildId: string,
+): NavigationSection[] {
+  return getDashboardSidebarNavigationSections(guildId);
+}
+
+export function getDashboardNavigationItems(guildId: string) {
+  return getDashboardHomeNavigationSections(guildId).flatMap(
+    (section) => section.items,
+  );
+}
 
 export function isNavigationItemActive(pathname: string, item: NavigationItem) {
   const activePath = item.activePath ?? item.to;
@@ -133,9 +148,9 @@ export function isNavigationItemActive(pathname: string, item: NavigationItem) {
   return pathname === activePath;
 }
 
-export function getActiveNavigationSection(pathname: string) {
+export function getActiveNavigationSection(pathname: string, guildId: string) {
   return (
-    dashboardSidebarNavigationSections.find((section) =>
+    getDashboardSidebarNavigationSections(guildId).find((section) =>
       section.items.some((item) => isNavigationItemActive(pathname, item)),
     ) ?? null
   );

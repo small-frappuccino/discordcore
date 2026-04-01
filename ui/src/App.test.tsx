@@ -17,6 +17,26 @@ import type {
   PartnerBoardConfig,
 } from "./api/control";
 
+const testGuildID = "guild-1";
+const testRoutes = {
+  home: appRoutes.dashboardHome(testGuildID),
+  coreControlPanel: appRoutes.dashboardCoreControlPanel(testGuildID),
+  moderation: appRoutes.dashboardModerationModeration(testGuildID),
+  rolesAutorole: appRoutes.dashboardRolesAutorole(testGuildID),
+  coreCommands: appRoutes.dashboardCoreCommands(testGuildID),
+  moderationLogging: appRoutes.dashboardModerationLogging(testGuildID),
+  coreStats: appRoutes.dashboardCoreStats(testGuildID),
+};
+
+async function selectServerOption(name: string) {
+  await userEvent.click(await screen.findByRole("button", { name: "Server" }));
+  await userEvent.click(
+    await screen.findByRole("menuitem", {
+      name: new RegExp(name, "i"),
+    }),
+  );
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -274,6 +294,27 @@ function createFetchMock() {
           fandom: "Puzzle",
           name: "Server Two",
           link: "https://discord.gg/server-two",
+        },
+      ],
+    },
+    "guild-3": {
+      target: {
+        type: "channel_message",
+        message_id: "444444444444444444",
+        channel_id: "555555555555555555",
+      },
+      template: {
+        title: "Partner Board",
+        intro: "Server three intro",
+        section_header_template: "Section header",
+        line_template: "Partner row",
+        empty_state_text: "No partners yet",
+      },
+      partners: [
+        {
+          fandom: "Rhythm",
+          name: "Server Three",
+          link: "https://discord.gg/server-three",
         },
       ],
     },
@@ -1006,7 +1047,7 @@ function createFetchMock() {
       if (url.endsWith("/auth/guilds/access")) {
         return jsonResponse({
           status: "ok",
-          count: 2,
+          count: 3,
           guilds: [
             {
               id: "guild-1",
@@ -1022,6 +1063,13 @@ function createFetchMock() {
               permissions: 32,
               access_level: "read",
             },
+            {
+              id: "guild-3",
+              name: "Server Three",
+              owner: false,
+              permissions: 32,
+              access_level: "write",
+            },
           ],
         });
       }
@@ -1029,13 +1077,20 @@ function createFetchMock() {
       if (url.endsWith("/auth/guilds/manageable")) {
         return jsonResponse({
           status: "ok",
-          count: 1,
+          count: 2,
           guilds: [
             {
               id: "guild-1",
               name: "Server One",
               owner: true,
               permissions: 8,
+              access_level: "write",
+            },
+            {
+              id: "guild-3",
+              name: "Server Three",
+              owner: false,
+              permissions: 32,
               access_level: "write",
             },
           ],
@@ -1471,7 +1526,7 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Control Panel", level: 1 });
-    expect(window.location.pathname).toBe(appRoutes.dashboardCoreControlPanel);
+    expect(window.location.pathname).toBe(testRoutes.coreControlPanel);
     expect(document.querySelector("main.dashboard-layout-shell")).not.toBeNull();
     expect(document.querySelector("aside.dashboard-layout-sidebar")).not.toBeNull();
     expect(document.querySelector("[data-shell-topbar]")).not.toBeNull();
@@ -1535,11 +1590,11 @@ describe("dashboard routing and workspace", () => {
   it("renders Home as a navigation index with category headings and route cards", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardHome);
+    window.history.replaceState({}, "", testRoutes.home);
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
+    await screen.findByRole("heading", { name: "Home", level: 1 });
     const sidebarNav = screen.getByRole("navigation", {
       name: "Dashboard navigation",
     });
@@ -1600,20 +1655,20 @@ describe("dashboard routing and workspace", () => {
   it("collapses and expands the sidebar from the navigation chrome", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardHome);
+    window.history.replaceState({}, "", testRoutes.home);
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
+    await screen.findByRole("heading", { name: "Home", level: 1 });
     expect(screen.getByRole("link", { name: "Home" })).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Esconder navegação" }),
+      screen.getByRole("button", { name: "Collapse navigation" }),
     );
     expect(screen.queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Expandir navegação" }),
+      screen.getByRole("button", { name: "Expand navigation" }),
     );
     expect(await screen.findByRole("link", { name: "Home" })).toBeInTheDocument();
   });
@@ -1660,12 +1715,15 @@ describe("dashboard routing and workspace", () => {
   it("keeps Control Panel writes disabled when the selected server is read-only", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreControlPanel);
+    window.history.replaceState(
+      {},
+      "",
+      appRoutes.dashboardCoreControlPanel("guild-2"),
+    );
 
     render(<App />);
 
     await screen.findByRole("heading", { name: "Control Panel", level: 1 });
-    await userEvent.selectOptions(screen.getByLabelText("Server"), "guild-2");
 
     await waitFor(() => {
       expect(
@@ -1696,19 +1754,17 @@ describe("dashboard routing and workspace", () => {
       render(<App />);
 
       await screen.findByRole("heading", { name: "Partner Board", level: 1 });
-      const serverSelect = await screen.findByLabelText("Server");
-
       await waitFor(() => {
         expect(boardCalls).toContain("guild-1");
       });
 
-      await userEvent.selectOptions(serverSelect, "guild-2");
+      await selectServerOption("Server Three");
 
       await waitFor(() => {
-        expect(boardCalls).toContain("guild-2");
+        expect(boardCalls).toContain("guild-3");
       });
 
-      await screen.findByRole("cell", { name: "Server Two" });
+      await screen.findByRole("cell", { name: "Server Three" });
     },
     10000,
   );
@@ -1719,7 +1775,7 @@ describe("dashboard routing and workspace", () => {
     window.history.replaceState(
       {},
       "",
-      appRoutes.dashboardModerationModeration,
+      testRoutes.moderation,
     );
 
     render(<App />);
@@ -1727,7 +1783,7 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
     await screen.findByRole("button", { name: "Disable Automod service" });
 
-    expect(window.location.pathname).toBe(appRoutes.dashboardModerationModeration);
+    expect(window.location.pathname).toBe(testRoutes.moderation);
     expect(window.location.hash).toBe("");
     expect(screen.getAllByText("Logging only").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mute role").length).toBeGreaterThan(0);
@@ -1747,7 +1803,7 @@ describe("dashboard routing and workspace", () => {
     window.history.replaceState(
       {},
       "",
-      appRoutes.dashboardModerationModeration,
+      testRoutes.moderation,
     );
 
     render(<App />);
@@ -1828,11 +1884,11 @@ describe("dashboard routing and workspace", () => {
 
       render(<App />);
 
-      await screen.findByRole("heading", { name: "Overview", level: 1 });
-      expect(window.location.pathname).toBe("/dashboard/home");
+      await screen.findByRole("heading", { name: "Home", level: 1 });
+      expect(window.location.pathname).toBe(testRoutes.home);
       expect(window.location.hash).toBe("");
       expect(
-        screen.getByRole("heading", { name: "Core", level: 2 }),
+        await screen.findByRole("heading", { name: "Core", level: 2 }),
       ).toBeInTheDocument();
     },
   );
@@ -1899,13 +1955,13 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Roles", level: 1 });
-    expect(window.location.pathname).toBe(appRoutes.dashboardRolesAutorole);
+    expect(window.location.pathname).toBe(testRoutes.rolesAutorole);
   });
 
   it("opens the dedicated Roles workspace and saves auto role configuration through the drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardRolesAutorole);
+    window.history.replaceState({}, "", testRoutes.rolesAutorole);
 
     render(<App />);
 
@@ -1974,7 +2030,7 @@ describe("dashboard routing and workspace", () => {
   it("uses a member picker for presence watch user instead of a raw user ID field", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardRolesAutorole);
+    window.history.replaceState({}, "", testRoutes.rolesAutorole);
 
     render(<App />);
 
@@ -2037,14 +2093,14 @@ describe("dashboard routing and workspace", () => {
   it("opens Commands on a dedicated route and keeps the primary workspace focused on the two command tasks", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreCommands);
+    window.history.replaceState({}, "", testRoutes.coreCommands);
 
     render(<App />);
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
     await screen.findByRole("heading", { name: "Command routing", level: 2 });
 
-    expect(window.location.pathname).toBe(appRoutes.dashboardCoreCommands);
+    expect(window.location.pathname).toBe(testRoutes.coreCommands);
     expect(
       await screen.findByRole("button", { name: "Configure command channel" }),
     ).toBeInTheDocument();
@@ -2060,7 +2116,7 @@ describe("dashboard routing and workspace", () => {
   it("keeps command setup inside a drawer with pickers first and raw IDs behind Advanced", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreCommands);
+    window.history.replaceState({}, "", testRoutes.coreCommands);
 
     render(<App />);
 
@@ -2095,16 +2151,16 @@ describe("dashboard routing and workspace", () => {
   it("opens the dedicated commands workspace and saves a command channel through the drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardHome);
+    window.history.replaceState({}, "", testRoutes.home);
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
+    await screen.findByRole("heading", { name: "Home", level: 1 });
     await userEvent.click(await screen.findByRole("link", { name: "Open Commands" }));
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
     await screen.findByRole("heading", { name: "Command routing", level: 2 });
-    expect(window.location.pathname).toBe(appRoutes.dashboardCoreCommands);
+    expect(window.location.pathname).toBe(testRoutes.coreCommands);
     expect(screen.queryByText("Monitoring")).not.toBeInTheDocument();
     expect(screen.getAllByText("#bot-commands").length).toBeGreaterThan(0);
 
@@ -2148,7 +2204,7 @@ describe("dashboard routing and workspace", () => {
   it("saves admin command access through the dedicated commands drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreCommands);
+    window.history.replaceState({}, "", testRoutes.coreCommands);
 
     render(<App />);
 
@@ -2194,7 +2250,7 @@ describe("dashboard routing and workspace", () => {
   it("opens the dedicated logging workspace and saves a destination through the drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardModerationLogging);
+    window.history.replaceState({}, "", testRoutes.moderationLogging);
 
     render(<App />);
 
@@ -2256,21 +2312,21 @@ describe("dashboard routing and workspace", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
-    expect(window.location.pathname).toBe(appRoutes.dashboardHome);
+    await screen.findByRole("heading", { name: "Home", level: 1 });
+    expect(window.location.pathname).toBe(testRoutes.home);
   });
 
   it("opens the dedicated Stats workspace and replaces the generic feature table with a schedule-focused workspace", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreStats);
+    window.history.replaceState({}, "", testRoutes.coreStats);
 
     render(<App />);
 
     await screen.findByRole("heading", { name: "Stats", level: 1 });
     await screen.findByRole("heading", { name: "Stats updates", level: 2 });
 
-    expect(window.location.pathname).toBe(appRoutes.dashboardCoreStats);
+    expect(window.location.pathname).toBe(testRoutes.coreStats);
     expect(
       screen.getByRole("button", { name: "Configure stats schedule" }),
     ).toBeInTheDocument();
@@ -2285,7 +2341,7 @@ describe("dashboard routing and workspace", () => {
   it("saves stats activation and interval from the dedicated Stats workspace", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.dashboardCoreStats);
+    window.history.replaceState({}, "", testRoutes.coreStats);
 
     render(<App />);
 

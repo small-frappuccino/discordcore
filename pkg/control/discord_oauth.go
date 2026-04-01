@@ -710,8 +710,14 @@ func sanitizeControlRedirectTarget(raw string) string {
 		}
 		return cleanPath
 	}
+	if cleanPath == "/manage" {
+		cleanPath = dashboardRoutePrefix
+	}
 	if cleanPath == "/dashboard" {
 		cleanPath = dashboardRoutePrefix
+	}
+	if strings.HasPrefix(cleanPath, dashboardLegacyRoutePrefix) {
+		cleanPath = dashboardRoutePrefix + strings.TrimPrefix(cleanPath, dashboardLegacyRoutePrefix)
 	}
 	if !strings.HasPrefix(cleanPath, dashboardRoutePrefix) {
 		return ""
