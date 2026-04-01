@@ -47,6 +47,11 @@
 
 .landing-shell-topbar {
   grid-template-columns: auto minmax(0, 1fr) auto;
+  position: static;
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-shell);
+  backdrop-filter: none;
 }
 
 .shell-brand {
@@ -730,5 +735,10 @@
 
   .landing-topbar-button {
     width: 100%;
+  }
+
+  .landing-shell-topbar {
+    padding-right: var(--space-3);
+    padding-left: var(--space-3);
   }
 }

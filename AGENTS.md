@@ -74,7 +74,97 @@ Never duplicate business logic across the two repositories.
 
 ---
 
-# 3) Build expectations
+# 3) Required use of `discordcore-mcp`
+
+`discordcore-mcp` is the default repository exploration tool for this workspace.
+
+Agents working in `discordcore` must use it first for:
+
+* codebase orientation
+* symbol discovery
+* route/feature lookup
+* dependency and relationship tracing
+* hotspot and invariant recovery
+* scoped impact analysis before edits
+
+Do not treat raw file grep as the only source of truth for discovery.
+Use `discordcore-mcp` to narrow the search space first, then verify by reading source files directly.
+
+---
+
+## Index discipline
+
+At the start of a new chat or when repository state is unclear:
+
+1. run `discordcore_repo_overview`
+2. if the index is `unindexed`, stale, or clearly missing recent files, run `discordcore_reindex`
+3. only trust negative search results after confirming the index is healthy
+
+If a search returns no result but the symbol likely exists, reindex before concluding that it is absent.
+
+---
+
+## Tool usage
+
+Use the MCP tools intentionally:
+
+* `discordcore_repo_overview`
+  * use first to understand indexed coverage, domains, hotspots, and whether the graph is usable
+* `discordcore_task_context`
+  * use when starting implementation, review, debugging, or refactor work to pack the highest-value local context into the session
+* `discordcore_find_nodes`
+  * use to find symbols, routes, feature IDs, domains, and documents before opening files
+* `discordcore_get_subgraph`
+  * use after finding a stable key to inspect nearby dependencies, ownership boundaries, and adjacent components
+* `discordcore_list_observations`
+  * use to recover prior notes about invariants, drift, hotspots, and code-linked risks before making changes
+* `discordcore_put_observation`
+  * use to store durable observations when you discover non-obvious architecture rules, risk areas, or important invariants that future chats should preserve
+
+---
+
+## Required workflows
+
+For implementation work:
+
+1. `discordcore_repo_overview`
+2. `discordcore_task_context`
+3. `discordcore_find_nodes`
+4. `discordcore_get_subgraph` for the chosen stable keys
+5. read the exact files and edit only after the graph-guided pass
+
+For code review or debugging:
+
+1. `discordcore_repo_overview`
+2. `discordcore_find_nodes` for the relevant feature, route, package, or symbol
+3. `discordcore_get_subgraph` to identify related callers/callees and boundaries
+4. `discordcore_list_observations` to recover known risks or invariants
+5. confirm findings against source
+
+For architecture questions:
+
+1. prefer `discordcore_task_context` over broad manual browsing
+2. use `discordcore_find_nodes` + `discordcore_get_subgraph` to answer ownership and dependency questions
+3. cite the concrete files and symbols after verifying them in source
+
+---
+
+## Full-use expectations
+
+To utilize `discordcore-mcp` fully:
+
+* prefer stable keys returned by `discordcore_find_nodes` when drilling deeper
+* use graph results to identify the minimal file set before reading code
+* consult observations before changing sensitive areas
+* add observations for architectural constraints that were not obvious from code alone
+* reindex after large structural changes when continued MCP usage is expected in the same chat
+
+`discordcore-mcp` improves navigation and context packing.
+It does not replace source verification, tests, or direct reasoning about behavior.
+
+---
+
+# 4) Build expectations
 
 ### Go builds
 
@@ -118,7 +208,7 @@ The SPA must never intercept:
 
 ---
 
-# 4) Change discipline
+# 5) Change discipline
 
 Prioritize fixes in this order:
 
@@ -139,7 +229,7 @@ validation method
 
 ---
 
-# 5) Go engineering standards
+# 6) Go engineering standards
 
 Prefer:
 
@@ -157,7 +247,7 @@ fmt.Errorf("fetch partners: %w", err)
 
 ---
 
-# 6) Logging
+# 7) Logging
 
 Logs must include:
 
@@ -179,7 +269,7 @@ private message content
 
 ---
 
-# 7) Observability
+# 8) Observability
 
 Critical flows must log:
 
@@ -191,7 +281,7 @@ Critical flows must log:
 
 ---
 
-# 8) Testing expectations
+# 9) Testing expectations
 
 Non-trivial changes require tests.
 
@@ -206,7 +296,7 @@ Tests must **not require real Discord connections**.
 
 ---
 
-# 9) Dashboard architecture
+# 10) Dashboard architecture
 
 The dashboard is a **control panel for the system**, not a marketing UI.
 
@@ -232,7 +322,7 @@ Avoid consumer SaaS aesthetics.
 
 ---
 
-# 10) UI design tokens (strict system)
+# 11) UI design tokens (strict system)
 
 All UI must use these tokens.
 
@@ -317,7 +407,7 @@ Never use accent colors for decoration.
 
 ---
 
-# 11) Layout constraints
+# 12) Layout constraints
 
 Every page must follow this structure:
 
@@ -424,7 +514,7 @@ Must not dominate the page.
 
 ---
 
-# 12) Component rules
+# 13) Component rules
 
 ---
 
@@ -516,7 +606,7 @@ Large features must use **multiple screens**, not giant forms.
 
 ---
 
-# 13) Progressive disclosure
+# 14) Progressive disclosure
 
 Technical information must not dominate default UI.
 
@@ -547,7 +637,7 @@ Diagnostics panels
 
 ---
 
-# 14) Terminology rules
+# 15) Terminology rules
 
 The UI must not expose internal terminology.
 
@@ -572,7 +662,7 @@ Partner group
 
 ---
 
-# 15) Density rules
+# 16) Density rules
 
 Avoid:
 
@@ -588,7 +678,7 @@ Do not wrap everything in cards.
 
 ---
 
-# 16) Empty states
+# 17) Empty states
 
 Empty states must be compact.
 
@@ -604,7 +694,7 @@ Avoid large empty containers.
 
 ---
 
-# 17) UI anti-pattern detection
+# 18) UI anti-pattern detection
 
 Agents must detect and prevent the following:
 
@@ -685,7 +775,7 @@ All rules belong in `discordcore`.
 
 ---
 
-# 18) UI change discipline
+# 19) UI change discipline
 
 When modifying UI, the agent must report:
 
@@ -699,7 +789,7 @@ UI changes must not break established patterns.
 
 ---
 
-# 19) Boundary between repositories
+# 20) Boundary between repositories
 
 `discordcore` is the **product**.
 
@@ -737,12 +827,14 @@ alicebot
 
 ---
 
-# 20) Pre-merge checklist
+# 21) Pre-merge checklist
 
 Before merging changes:
 
 ```
 [ ] correct repository used
+[ ] `discordcore-mcp` repo overview/task context used where applicable
+[ ] index refreshed if MCP results were stale or empty unexpectedly
 [ ] go test ./... passes
 [ ] no circular dependencies
 [ ] errors logged with context
@@ -759,7 +851,7 @@ Before merging changes:
 
 ---
 
-# 21) Work reporting
+# 22) Work reporting
 
 Every change set must include:
 

@@ -577,9 +577,9 @@ textarea:focus {
 }
 
 .landing-page-shell {
-  --landing-workspace-surface: #10151e;
-  --landing-section-surface: #141b25;
-  --landing-section-border: #283243;
+  --landing-workspace-surface: var(--bg-surface);
+  --landing-section-surface: var(--bg-surface-card);
+  --landing-section-border: var(--border-soft);
   width: min(100%, var(--dashboard-content-max-width));
   margin: 0 auto;
 }

@@ -59,6 +59,7 @@ export function LandingPage() {
     authState === "signed_in"
       ? "Keep this page as the entry point, then open the dashboard shell only when you want to manage a server."
       : "Use Discord authentication here, then continue into the dashboard shell without forcing a redirect away from the landing page.";
+  const canOpenDashboard = authState === "signed_in" && session !== null;
 
   return (
     <main className="dashboard-layout-shell landing-dashboard-shell">
@@ -82,7 +83,7 @@ export function LandingPage() {
         <div className="shell-topbar-spacer" aria-hidden="true" />
 
         <div className="landing-topbar-actions">
-          {authState === "signed_in" ? (
+          {canOpenDashboard ? (
             <>
               <Link
                 className="button-primary landing-topbar-button"

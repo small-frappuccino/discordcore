@@ -58,6 +58,9 @@ describe("LandingPage", () => {
   it("uses the landing page as the Discord login return target", async () => {
     renderLandingPage();
 
+    expect(
+      screen.queryByRole("link", { name: "Control Panel" }),
+    ).not.toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", { name: "Login with Discord" }),
     );
