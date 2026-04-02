@@ -23,8 +23,13 @@ const (
 )
 
 type accessibleGuildCacheEntry struct {
-	guilds    []accessibleGuildResponse
+	guilds    []cachedAccessibleGuild
 	expiresAt time.Time
+}
+
+type cachedAccessibleGuild struct {
+	guild      discordOAuthGuild
+	botPresent bool
 }
 
 type accessibleGuildResponse struct {
@@ -69,7 +74,12 @@ func (s *Server) handleDiscordOAuthGuildAccessList(
 	ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 	defer cancel()
 
-	accessible, err := s.resolveAccessibleGuilds(ctx, oauth, session)
+	resolveAccessible := s.resolveAccessibleGuilds
+	if requestWantsFreshGuildAccess(r) {
+		resolveAccessible = s.resolveAccessibleGuildsRefreshed
+	}
+
+	accessible, err := resolveAccessible(ctx, oauth, session)
 	if err != nil {
 		status := statusForAccessibleGuildsError(err)
 		message := "failed to resolve accessible guilds"
@@ -121,7 +131,12 @@ func (s *Server) authorizeGuildAccess(
 		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
-		accessible, err := s.resolveAccessibleGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		resolveAccessible := s.resolveAccessibleGuilds
+		if requiredAccess == guildAccessLevelWrite {
+			resolveAccessible = s.resolveAccessibleGuildsFresh
+		}
+
+		accessible, err := resolveAccessible(ctx, s.discordOAuth, auth.oauthSession)
 		if err != nil {
 			status := statusForAccessibleGuildsError(err)
 			message := "failed to authorize guild access"
@@ -198,11 +213,39 @@ func (s *Server) resolveAccessibleGuilds(
 	oauth *discordOAuthProvider,
 	session discordOAuthSession,
 ) ([]accessibleGuildResponse, error) {
+	return s.resolveAccessibleGuildsWithCache(ctx, oauth, session, true, true)
+}
+
+func (s *Server) resolveAccessibleGuildsFresh(
+	ctx context.Context,
+	oauth *discordOAuthProvider,
+	session discordOAuthSession,
+) ([]accessibleGuildResponse, error) {
+	return s.resolveAccessibleGuildsWithCache(ctx, oauth, session, false, false)
+}
+
+func (s *Server) resolveAccessibleGuildsRefreshed(
+	ctx context.Context,
+	oauth *discordOAuthProvider,
+	session discordOAuthSession,
+) ([]accessibleGuildResponse, error) {
+	return s.resolveAccessibleGuildsWithCache(ctx, oauth, session, false, true)
+}
+
+func (s *Server) resolveAccessibleGuildsWithCache(
+	ctx context.Context,
+	oauth *discordOAuthProvider,
+	session discordOAuthSession,
+	useCache bool,
+	storeCache bool,
+) ([]accessibleGuildResponse, error) {
 	if oauth == nil {
 		return nil, fmt.Errorf("resolve accessible guilds: oauth provider is nil")
 	}
-	if cached, ok := s.cachedAccessibleGuilds(session.ID, time.Now().UTC()); ok {
-		return cached, nil
+	if useCache {
+		if cached, ok := s.cachedAccessibleGuilds(session.ID, time.Now().UTC()); ok {
+			return s.materializeAccessibleGuilds(cached, session.User.ID), nil
+		}
 	}
 
 	botGuildSet, err := s.resolveBotGuildIDSet(ctx)
@@ -223,7 +266,7 @@ func (s *Server) resolveAccessibleGuilds(
 		return nil, fmt.Errorf("resolve accessible guilds: fetch user guilds: %w", err)
 	}
 
-	out := make([]accessibleGuildResponse, 0, len(userGuilds))
+	cachedGuilds := make([]cachedAccessibleGuild, 0, len(userGuilds))
 	for _, guild := range userGuilds {
 		guildID := strings.TrimSpace(guild.ID)
 		if guildID == "" {
@@ -231,38 +274,16 @@ func (s *Server) resolveAccessibleGuilds(
 		}
 		_, botPresent := botGuildSet[guildID]
 
-		accessLevel, ok := s.resolveGuildAccessLevel(guild, session.User.ID)
-		if !ok {
-			continue
-		}
-
-		icon := strings.TrimSpace(guild.Icon)
-		if !botPresent {
-			icon = ""
-		}
-
-		out = append(out, accessibleGuildResponse{
-			ID:          guildID,
-			Name:        strings.TrimSpace(guild.Name),
-			Icon:        icon,
-			BotPresent:  botPresent,
-			Owner:       guild.Owner,
-			Permissions: guild.Permissions,
-			AccessLevel: accessLevel,
+		cachedGuilds = append(cachedGuilds, cachedAccessibleGuild{
+			guild:      guild,
+			botPresent: botPresent,
 		})
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		li := strings.ToLower(strings.TrimSpace(out[i].Name))
-		lj := strings.ToLower(strings.TrimSpace(out[j].Name))
-		if li == lj {
-			return out[i].ID < out[j].ID
-		}
-		return li < lj
-	})
-
-	s.storeAccessibleGuilds(session, out, time.Now().UTC())
-	return out, nil
+	if useCache || storeCache {
+		s.storeAccessibleGuilds(session, cachedGuilds, time.Now().UTC())
+	}
+	return s.materializeAccessibleGuilds(cachedGuilds, session.User.ID), nil
 }
 
 func (s *Server) resolveManageableGuilds(
@@ -348,6 +369,19 @@ func matchesAnyRole(memberRoleSet map[string]struct{}, roleIDs []string) bool {
 	return false
 }
 
+func requestWantsFreshGuildAccess(r *http.Request) bool {
+	if r == nil || r.URL == nil {
+		return false
+	}
+
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("fresh"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func filterAccessibleGuildsByLevel(
 	guilds []accessibleGuildResponse,
 	level guildAccessLevel,
@@ -366,10 +400,53 @@ func filterAccessibleGuildsByLevel(
 	return filtered
 }
 
+func (s *Server) materializeAccessibleGuilds(
+	guilds []cachedAccessibleGuild,
+	userID string,
+) []accessibleGuildResponse {
+	if len(guilds) == 0 {
+		return nil
+	}
+
+	out := make([]accessibleGuildResponse, 0, len(guilds))
+	for _, cached := range guilds {
+		accessLevel, ok := s.resolveGuildAccessLevel(cached.guild, userID)
+		if !ok {
+			continue
+		}
+
+		icon := strings.TrimSpace(cached.guild.Icon)
+		if !cached.botPresent {
+			icon = ""
+		}
+
+		out = append(out, accessibleGuildResponse{
+			ID:          strings.TrimSpace(cached.guild.ID),
+			Name:        strings.TrimSpace(cached.guild.Name),
+			Icon:        icon,
+			BotPresent:  cached.botPresent,
+			Owner:       cached.guild.Owner,
+			Permissions: cached.guild.Permissions,
+			AccessLevel: accessLevel,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		li := strings.ToLower(strings.TrimSpace(out[i].Name))
+		lj := strings.ToLower(strings.TrimSpace(out[j].Name))
+		if li == lj {
+			return out[i].ID < out[j].ID
+		}
+		return li < lj
+	})
+
+	return out
+}
+
 func (s *Server) cachedAccessibleGuilds(
 	sessionID string,
 	now time.Time,
-) ([]accessibleGuildResponse, bool) {
+) ([]cachedAccessibleGuild, bool) {
 	if s == nil || s.accessibleGuildsTTL <= 0 {
 		return nil, false
 	}
@@ -391,12 +468,12 @@ func (s *Server) cachedAccessibleGuilds(
 		s.accessibleGuildsMu.Unlock()
 		return nil, false
 	}
-	return cloneAccessibleGuildResponses(entry.guilds), true
+	return cloneCachedAccessibleGuilds(entry.guilds), true
 }
 
 func (s *Server) storeAccessibleGuilds(
 	session discordOAuthSession,
-	guilds []accessibleGuildResponse,
+	guilds []cachedAccessibleGuild,
 	now time.Time,
 ) {
 	if s == nil || s.accessibleGuildsTTL <= 0 {
@@ -415,10 +492,30 @@ func (s *Server) storeAccessibleGuilds(
 
 	s.accessibleGuildsMu.Lock()
 	s.accessibleGuilds[sessionID] = accessibleGuildCacheEntry{
-		guilds:    cloneAccessibleGuildResponses(guilds),
+		guilds:    cloneCachedAccessibleGuilds(guilds),
 		expiresAt: expiresAt,
 	}
 	s.accessibleGuildsMu.Unlock()
+}
+
+func (s *Server) invalidateAccessibleGuildsCache() {
+	if s == nil {
+		return
+	}
+
+	s.accessibleGuildsMu.Lock()
+	s.accessibleGuilds = make(map[string]accessibleGuildCacheEntry)
+	s.accessibleGuildsMu.Unlock()
+}
+
+func cloneCachedAccessibleGuilds(guilds []cachedAccessibleGuild) []cachedAccessibleGuild {
+	if len(guilds) == 0 {
+		return nil
+	}
+
+	out := make([]cachedAccessibleGuild, len(guilds))
+	copy(out, guilds)
+	return out
 }
 
 func cloneAccessibleGuildResponses(

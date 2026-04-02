@@ -726,29 +726,52 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
 	}
 
-	targetPayload := strings.NewReader(`{"type":"channel_message","message_id":"123456789012345678","channel_id":"223456789012345678"}`)
-
-	noCSRFReq := httptest.NewRequest(http.MethodPut, "/v1/guilds/g1/partner-board/target", targetPayload)
-	noCSRFReq.AddCookie(sessionCookie)
-	noCSRFReq.Header.Set("Content-Type", "application/json")
-	noCSRFRec := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(noCSRFRec, noCSRFReq)
-	if noCSRFRec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without csrf token on mutable guild route, got %d body=%q", noCSRFRec.Code, noCSRFRec.Body.String())
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{
+			name:   "partner board target put",
+			method: http.MethodPut,
+			path:   "/v1/guilds/g1/partner-board/target",
+			body:   `{"type":"channel_message","message_id":"123456789012345678","channel_id":"223456789012345678"}`,
+		},
+		{
+			name:   "guild feature patch",
+			method: http.MethodPatch,
+			path:   "/v1/guilds/g1/features/services.monitoring",
+			body:   `{"enabled":false}`,
+		},
 	}
 
-	withCSRFReq := httptest.NewRequest(http.MethodPut, "/v1/guilds/g1/partner-board/target", strings.NewReader(`{"type":"channel_message","message_id":"123456789012345678","channel_id":"223456789012345678"}`))
-	withCSRFReq.AddCookie(sessionCookie)
-	withCSRFReq.Header.Set("Content-Type", "application/json")
-	withCSRFReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
-	withCSRFRec := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(withCSRFRec, withCSRFReq)
-	if withCSRFRec.Code != http.StatusOK {
-		t.Fatalf("expected mutable guild route with csrf token to succeed, got %d body=%q", withCSRFRec.Code, withCSRFRec.Body.String())
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			noCSRFReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			noCSRFReq.AddCookie(sessionCookie)
+			noCSRFReq.Header.Set("Content-Type", "application/json")
+			noCSRFRec := httptest.NewRecorder()
+			srv.httpServer.Handler.ServeHTTP(noCSRFRec, noCSRFReq)
+			if noCSRFRec.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 without csrf token on mutable guild route, route=%s %s got %d body=%q", tc.method, tc.path, noCSRFRec.Code, noCSRFRec.Body.String())
+			}
+
+			withCSRFReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			withCSRFReq.AddCookie(sessionCookie)
+			withCSRFReq.Header.Set("Content-Type", "application/json")
+			withCSRFReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
+			withCSRFRec := httptest.NewRecorder()
+			srv.httpServer.Handler.ServeHTTP(withCSRFRec, withCSRFReq)
+			if withCSRFRec.Code != http.StatusOK {
+				t.Fatalf("expected mutable guild route with csrf token to succeed, route=%s %s got %d body=%q", tc.method, tc.path, withCSRFRec.Code, withCSRFRec.Body.String())
+			}
+		})
 	}
 }
 
-func TestRuntimeConfigRouteRequiresCSRFForOAuthSessionMutations(t *testing.T) {
+func TestGlobalRoutesDenyOAuthSessionMutations(t *testing.T) {
 	t.Parallel()
 
 	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -814,23 +837,58 @@ func TestRuntimeConfigRouteRequiresCSRFForOAuthSessionMutations(t *testing.T) {
 		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
 	}
 
-	noCSRFReq := httptest.NewRequest(http.MethodPost, "/v1/runtime-config", strings.NewReader(`{"bot_theme":"default"}`))
-	noCSRFReq.AddCookie(sessionCookie)
-	noCSRFReq.Header.Set("Content-Type", "application/json")
-	noCSRFRec := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(noCSRFRec, noCSRFReq)
-	if noCSRFRec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without csrf token on runtime-config mutation, got %d body=%q", noCSRFRec.Code, noCSRFRec.Body.String())
+	tests := []struct {
+		name        string
+		method      string
+		path        string
+		body        string
+		includeCSRF bool
+	}{
+		{
+			name:   "runtime config without csrf",
+			method: http.MethodPost,
+			path:   "/v1/runtime-config",
+			body:   `{"bot_theme":"default"}`,
+		},
+		{
+			name:        "runtime config with csrf",
+			method:      http.MethodPost,
+			path:        "/v1/runtime-config",
+			body:        `{"bot_theme":"default"}`,
+			includeCSRF: true,
+		},
+		{
+			name:        "global settings with csrf",
+			method:      http.MethodPut,
+			path:        "/v1/settings/global",
+			body:        `{"runtime":{"appearance":{"bot_theme":"soft-oat"}}}`,
+			includeCSRF: true,
+		},
+		{
+			name:        "global feature patch with csrf",
+			method:      http.MethodPatch,
+			path:        "/v1/features/services.monitoring",
+			body:        `{"enabled":false}`,
+			includeCSRF: true,
+		},
 	}
 
-	withCSRFReq := httptest.NewRequest(http.MethodPost, "/v1/runtime-config", strings.NewReader(`{"bot_theme":"default"}`))
-	withCSRFReq.AddCookie(sessionCookie)
-	withCSRFReq.Header.Set("Content-Type", "application/json")
-	withCSRFReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
-	withCSRFRec := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(withCSRFRec, withCSRFReq)
-	if withCSRFRec.Code != http.StatusOK {
-		t.Fatalf("expected runtime-config mutation with csrf token to succeed, got %d body=%q", withCSRFRec.Code, withCSRFRec.Body.String())
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.AddCookie(sessionCookie)
+			req.Header.Set("Content-Type", "application/json")
+			if tc.includeCSRF {
+				req.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)
+			}
+
+			rec := httptest.NewRecorder()
+			srv.httpServer.Handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("expected global mutation to be forbidden for oauth session, route=%s %s status=%d body=%q", tc.method, tc.path, rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 
@@ -1016,6 +1074,390 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 	srv.httpServer.Handler.ServeHTTP(putRec, putReq)
 	if putRec.Code != http.StatusForbidden {
 		t.Fatalf("expected PUT guild settings to reject read-only oauth access, got %d body=%q", putRec.Code, putRec.Body.String())
+	}
+}
+
+func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
+	t.Parallel()
+
+	var guildRequests atomic.Int32
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/@me/guilds":
+			guildRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		return newTestDiscordSessionWithGuildMembers("g1",
+			&discordgo.Member{
+				GuildID: "g1",
+				User: &discordgo.User{
+					ID:       "u1",
+					Username: "alice",
+				},
+				Roles: []string{"reader-role"},
+			},
+		)
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	session, err := srv.discordOAuth.sessions.Create(
+		discordOAuthUser{ID: "u1", Username: "alice"},
+		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		"access-token",
+		"refresh-token",
+		"Bearer",
+		time.Hour,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("create oauth session: %v", err)
+	}
+	sessionCookie := &http.Cookie{Name: defaultDiscordOAuthSessionCookie, Value: session.ID}
+
+	firstAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	firstAccessReq.AddCookie(sessionCookie)
+	firstAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(firstAccessRec, firstAccessReq)
+	if firstAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected initial accessible guilds request to succeed, got %d body=%q", firstAccessRec.Code, firstAccessRec.Body.String())
+	}
+
+	var firstAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(firstAccessRec.Body).Decode(&firstAccess); err != nil {
+		t.Fatalf("decode initial accessible guilds response: %v body=%q", err, firstAccessRec.Body.String())
+	}
+	if firstAccess.Count != 0 || len(firstAccess.Guilds) != 0 {
+		t.Fatalf("expected no accessible guilds before dashboard role update, got %+v", firstAccess)
+	}
+	if got := guildRequests.Load(); got != 1 {
+		t.Fatalf("expected one guild lookup before cache invalidation, got %d", got)
+	}
+
+	updateRec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", updateGuildSettingsRequest{
+		Roles: &files.RolesConfig{
+			DashboardRead: []string{"reader-role"},
+		},
+	})
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected guild settings update to succeed, got %d body=%q", updateRec.Code, updateRec.Body.String())
+	}
+
+	secondAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	secondAccessReq.AddCookie(sessionCookie)
+	secondAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(secondAccessRec, secondAccessReq)
+	if secondAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected accessible guilds request after role update to succeed, got %d body=%q", secondAccessRec.Code, secondAccessRec.Body.String())
+	}
+
+	var secondAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(secondAccessRec.Body).Decode(&secondAccess); err != nil {
+		t.Fatalf("decode accessible guilds response after role update: %v body=%q", err, secondAccessRec.Body.String())
+	}
+	if secondAccess.Count != 1 || len(secondAccess.Guilds) != 1 {
+		t.Fatalf("expected one accessible guild after dashboard role update, got %+v", secondAccess)
+	}
+	if secondAccess.Guilds[0].ID != "g1" || secondAccess.Guilds[0].AccessLevel != guildAccessLevelRead {
+		t.Fatalf("unexpected accessible guild after dashboard role update: %+v", secondAccess.Guilds)
+	}
+	if got := guildRequests.Load(); got != 2 {
+		t.Fatalf("expected cache invalidation to trigger a second guild lookup, got %d", got)
+	}
+}
+
+func TestGuildWriteAuthorizationBypassesAccessibleGuildCache(t *testing.T) {
+	t.Parallel()
+
+	var guildRequests atomic.Int32
+	var guildVisible atomic.Bool
+	guildVisible.Store(true)
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/@me/guilds":
+			guildRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			if guildVisible.Load() {
+				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+				return
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	session, err := srv.discordOAuth.sessions.Create(
+		discordOAuthUser{ID: "u1", Username: "alice"},
+		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		"access-token",
+		"refresh-token",
+		"Bearer",
+		time.Hour,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("create oauth session: %v", err)
+	}
+	sessionCookie := &http.Cookie{Name: defaultDiscordOAuthSessionCookie, Value: session.ID}
+
+	firstAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	firstAccessReq.AddCookie(sessionCookie)
+	firstAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(firstAccessRec, firstAccessReq)
+	if firstAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected initial accessible guilds request to succeed, got %d body=%q", firstAccessRec.Code, firstAccessRec.Body.String())
+	}
+
+	var firstAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(firstAccessRec.Body).Decode(&firstAccess); err != nil {
+		t.Fatalf("decode first accessible guilds response: %v body=%q", err, firstAccessRec.Body.String())
+	}
+	if firstAccess.Count != 1 || len(firstAccess.Guilds) != 1 || firstAccess.Guilds[0].ID != "g1" {
+		t.Fatalf("expected cached accessible guild list to contain g1, got %+v", firstAccess)
+	}
+	if got := guildRequests.Load(); got != 1 {
+		t.Fatalf("expected first accessible guild request to call discord once, got %d", got)
+	}
+
+	guildVisible.Store(false)
+
+	patchReq := httptest.NewRequest(
+		http.MethodPatch,
+		"/v1/guilds/g1/features/services.monitoring",
+		strings.NewReader(`{"enabled":false}`),
+	)
+	patchReq.AddCookie(sessionCookie)
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchReq.Header.Set(discordOAuthCSRFHeaderName, session.CSRFToken)
+	patchRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(patchRec, patchReq)
+	if patchRec.Code != http.StatusForbidden {
+		t.Fatalf("expected guild write route to revalidate oauth guild access and reject stale cache, got %d body=%q", patchRec.Code, patchRec.Body.String())
+	}
+	if got := guildRequests.Load(); got != 2 {
+		t.Fatalf("expected guild write authorization to bypass cache and refetch discord guilds, got %d requests", got)
+	}
+
+	secondAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	secondAccessReq.AddCookie(sessionCookie)
+	secondAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(secondAccessRec, secondAccessReq)
+	if secondAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected cached accessible guilds request to keep succeeding, got %d body=%q", secondAccessRec.Code, secondAccessRec.Body.String())
+	}
+
+	var secondAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(secondAccessRec.Body).Decode(&secondAccess); err != nil {
+		t.Fatalf("decode second accessible guilds response: %v body=%q", err, secondAccessRec.Body.String())
+	}
+	if secondAccess.Count != 1 || len(secondAccess.Guilds) != 1 || secondAccess.Guilds[0].ID != "g1" {
+		t.Fatalf("expected list endpoint to continue serving cached accessible guilds, got %+v", secondAccess)
+	}
+	if got := guildRequests.Load(); got != 2 {
+		t.Fatalf("expected cached list endpoint not to refetch discord guilds, got %d requests", got)
+	}
+}
+
+func TestDiscordOAuthGuildAccessFreshQueryRefreshesCachedGuilds(t *testing.T) {
+	t.Parallel()
+
+	var guildRequests atomic.Int32
+	var guildVisible atomic.Bool
+	guildVisible.Store(true)
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/@me/guilds":
+			guildRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			if guildVisible.Load() {
+				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+				return
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
+		return []string{"g1"}, nil
+	})
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	session, err := srv.discordOAuth.sessions.Create(
+		discordOAuthUser{ID: "u1", Username: "alice"},
+		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		"access-token",
+		"refresh-token",
+		"Bearer",
+		time.Hour,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("create oauth session: %v", err)
+	}
+	sessionCookie := &http.Cookie{Name: defaultDiscordOAuthSessionCookie, Value: session.ID}
+
+	firstAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	firstAccessReq.AddCookie(sessionCookie)
+	firstAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(firstAccessRec, firstAccessReq)
+	if firstAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected initial accessible guilds request to succeed, got %d body=%q", firstAccessRec.Code, firstAccessRec.Body.String())
+	}
+
+	var firstAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(firstAccessRec.Body).Decode(&firstAccess); err != nil {
+		t.Fatalf("decode first accessible guilds response: %v body=%q", err, firstAccessRec.Body.String())
+	}
+	if firstAccess.Count != 1 || len(firstAccess.Guilds) != 1 || firstAccess.Guilds[0].ID != "g1" {
+		t.Fatalf("expected initial accessible guild list to contain g1, got %+v", firstAccess)
+	}
+	if got := guildRequests.Load(); got != 1 {
+		t.Fatalf("expected one discord guild lookup after initial request, got %d", got)
+	}
+
+	guildVisible.Store(false)
+
+	staleAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	staleAccessReq.AddCookie(sessionCookie)
+	staleAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(staleAccessRec, staleAccessReq)
+	if staleAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected cached accessible guilds request to succeed, got %d body=%q", staleAccessRec.Code, staleAccessRec.Body.String())
+	}
+
+	var staleAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(staleAccessRec.Body).Decode(&staleAccess); err != nil {
+		t.Fatalf("decode cached accessible guilds response: %v body=%q", err, staleAccessRec.Body.String())
+	}
+	if staleAccess.Count != 1 || len(staleAccess.Guilds) != 1 || staleAccess.Guilds[0].ID != "g1" {
+		t.Fatalf("expected cached accessible guild list to remain stale before fresh refresh, got %+v", staleAccess)
+	}
+	if got := guildRequests.Load(); got != 1 {
+		t.Fatalf("expected cached accessible guild request not to refetch discord guilds, got %d", got)
+	}
+
+	freshAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access?fresh=1", nil)
+	freshAccessReq.AddCookie(sessionCookie)
+	freshAccessRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(freshAccessRec, freshAccessReq)
+	if freshAccessRec.Code != http.StatusOK {
+		t.Fatalf("expected fresh accessible guilds request to succeed, got %d body=%q", freshAccessRec.Code, freshAccessRec.Body.String())
+	}
+
+	var freshAccess struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(freshAccessRec.Body).Decode(&freshAccess); err != nil {
+		t.Fatalf("decode fresh accessible guilds response: %v body=%q", err, freshAccessRec.Body.String())
+	}
+	if freshAccess.Count != 0 || len(freshAccess.Guilds) != 0 {
+		t.Fatalf("expected fresh accessible guild request to reflect discord removal immediately, got %+v", freshAccess)
+	}
+	if got := guildRequests.Load(); got != 2 {
+		t.Fatalf("expected fresh accessible guild request to refetch discord guilds, got %d", got)
+	}
+
+	manageableReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/manageable", nil)
+	manageableReq.AddCookie(sessionCookie)
+	manageableRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(manageableRec, manageableReq)
+	if manageableRec.Code != http.StatusOK {
+		t.Fatalf("expected manageable guilds request to succeed after fresh refresh, got %d body=%q", manageableRec.Code, manageableRec.Body.String())
+	}
+
+	var manageable struct {
+		Status string                    `json:"status"`
+		Count  int                       `json:"count"`
+		Guilds []accessibleGuildResponse `json:"guilds"`
+	}
+	if err := json.NewDecoder(manageableRec.Body).Decode(&manageable); err != nil {
+		t.Fatalf("decode manageable guilds response after fresh refresh: %v body=%q", err, manageableRec.Body.String())
+	}
+	if manageable.Count != 0 || len(manageable.Guilds) != 0 {
+		t.Fatalf("expected manageable guild cache to reflect fresh accessible guild refresh, got %+v", manageable)
+	}
+	if got := guildRequests.Load(); got != 2 {
+		t.Fatalf("expected manageable guild list to reuse refreshed cache, got %d discord guild requests", got)
 	}
 }
 

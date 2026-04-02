@@ -58,7 +58,7 @@ func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 		case http.MethodGet:
 			s.handleGlobalSettingsGet(w, r)
 		case http.MethodPut:
-			s.handleGlobalSettingsPut(w, r)
+			s.handleGlobalSettingsPut(w, r, auth)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -107,7 +107,11 @@ func (s *Server) handleGlobalSettingsGet(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request, auth requestAuthorization) {
+	if !s.authorizeGlobalMutation(w, r, auth) {
+		return
+	}
+
 	var payload updateGlobalSettingsRequest
 	if err := decodeJSONBody(w, r, &payload); err != nil {
 		return
@@ -261,6 +265,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	var (
 		availableBotInstanceIDs []string
 		nextBotInstanceID       string
+		invalidateAccessCache   bool
 	)
 	if payload.BotInstanceID != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
@@ -292,6 +297,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			guild.Channels = *payload.Channels
 		}
 		if payload.Roles != nil {
+			invalidateAccessCache = dashboardAccessRolesChanged(guild.Roles, *payload.Roles)
 			guild.Roles = *payload.Roles
 		}
 		if payload.Stats != nil {
@@ -326,6 +332,9 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, fmt.Sprintf("failed to update guild settings: %v", err), statusForSettingsMutationError(err))
 		return
 	}
+	if invalidateAccessCache {
+		s.invalidateAccessibleGuildsCache()
+	}
 
 	guild, ok := findGuildSettings(updated, guildID)
 	if !ok {
@@ -351,11 +360,13 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 		return
 	}
+	invalidateAccessCache := false
 	_, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID != guildID {
 				continue
 			}
+			invalidateAccessCache = dashboardAccessRolesConfigured(cfg.Guilds[idx].Roles)
 			cfg.Guilds = slices.Delete(cfg.Guilds, idx, idx+1)
 			return nil
 		}
@@ -364,6 +375,9 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to delete guild settings: %v", err), statusForSettingsMutationError(err))
 		return
+	}
+	if invalidateAccessCache {
+		s.invalidateAccessibleGuildsCache()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -442,6 +456,37 @@ func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 		payload.UserPrune == nil &&
 		payload.PartnerBoard == nil &&
 		payload.Runtime == nil
+}
+
+func dashboardAccessRolesChanged(before, after files.RolesConfig) bool {
+	return !slices.Equal(normalizeDashboardAccessRoleIDs(before.DashboardRead), normalizeDashboardAccessRoleIDs(after.DashboardRead)) ||
+		!slices.Equal(normalizeDashboardAccessRoleIDs(before.DashboardWrite), normalizeDashboardAccessRoleIDs(after.DashboardWrite))
+}
+
+func dashboardAccessRolesConfigured(roles files.RolesConfig) bool {
+	return len(normalizeDashboardAccessRoleIDs(roles.DashboardRead)) > 0 ||
+		len(normalizeDashboardAccessRoleIDs(roles.DashboardWrite)) > 0
+}
+
+func normalizeDashboardAccessRoleIDs(roleIDs []string) []string {
+	if len(roleIDs) == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, len(roleIDs))
+	for _, roleID := range roleIDs {
+		roleID = strings.TrimSpace(roleID)
+		if roleID == "" {
+			continue
+		}
+		out = append(out, roleID)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+
+	sort.Strings(out)
+	return slices.Compact(out)
 }
 
 func (s *Server) resolveAvailableBotInstanceIDsForGuild(

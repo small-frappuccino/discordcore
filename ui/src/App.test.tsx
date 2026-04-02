@@ -46,6 +46,11 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function getURLPath(input: RequestInfo | URL) {
+  const url = typeof input === "string" ? input : input.toString();
+  return new URL(url, "https://dashboard.test").pathname;
+}
+
 function createFetchMock() {
   const boardCalls: string[] = [];
   const featureCalls: string[] = [];
@@ -1029,8 +1034,9 @@ function createFetchMock() {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
+      const pathname = getURLPath(input);
 
-      if (url.endsWith("/auth/me")) {
+      if (pathname === "/auth/me") {
         return jsonResponse({
           status: "ok",
           user: {
@@ -1044,7 +1050,7 @@ function createFetchMock() {
         });
       }
 
-      if (url.endsWith("/auth/guilds/access")) {
+      if (pathname === "/auth/guilds/access") {
         return jsonResponse({
           status: "ok",
           count: 3,
@@ -1074,7 +1080,7 @@ function createFetchMock() {
         });
       }
 
-      if (url.endsWith("/auth/guilds/manageable")) {
+      if (pathname === "/auth/guilds/manageable") {
         return jsonResponse({
           status: "ok",
           count: 2,
@@ -1504,6 +1510,66 @@ function createFetchMock() {
     featureUpdates,
     settingsUpdates,
     targetUpdates,
+  };
+}
+
+function createReadOnlySelectedGuildFetchMock() {
+  const base = createFetchMock();
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const pathname = getURLPath(input);
+
+    if (pathname === "/auth/guilds/access") {
+      return jsonResponse({
+        status: "ok",
+        count: 3,
+        guilds: [
+          {
+            id: "guild-1",
+            name: "Server One",
+            owner: false,
+            permissions: 32,
+            access_level: "read",
+          },
+          {
+            id: "guild-2",
+            name: "Server Two",
+            owner: false,
+            permissions: 32,
+            access_level: "read",
+          },
+          {
+            id: "guild-3",
+            name: "Server Three",
+            owner: false,
+            permissions: 32,
+            access_level: "write",
+          },
+        ],
+      });
+    }
+
+    if (pathname === "/auth/guilds/manageable") {
+      return jsonResponse({
+        status: "ok",
+        count: 1,
+        guilds: [
+          {
+            id: "guild-3",
+            name: "Server Three",
+            owner: false,
+            permissions: 32,
+            access_level: "write",
+          },
+        ],
+      });
+    }
+
+    return base.fetchMock(input, init);
+  });
+
+  return {
+    ...base,
+    fetchMock,
   };
 }
 
@@ -2278,6 +2344,45 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getAllByText("2 roles").length).toBeGreaterThan(0);
   });
 
+  it("keeps command workspace affordances disabled for read-only servers", async () => {
+    const { featureUpdates, fetchMock } = createReadOnlySelectedGuildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.coreCommands);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Commands", level: 1 });
+
+    const configureChannelButton = screen.getByRole("button", {
+      name: "Configure command channel",
+    });
+    const configureAdminButton = screen.getByRole("button", {
+      name: "Configure admin access",
+    });
+    const disableCommandsButton = screen.getByRole("button", {
+      name: "Disable commands",
+    });
+    const disableAdminCommandsButton = screen.getByRole("button", {
+      name: "Disable admin commands",
+    });
+
+    expect(configureChannelButton).toBeDisabled();
+    expect(configureAdminButton).toBeDisabled();
+    expect(disableCommandsButton).toBeDisabled();
+    expect(disableAdminCommandsButton).toBeDisabled();
+
+    await userEvent.click(configureChannelButton);
+    await userEvent.click(configureAdminButton);
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure commands" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Configure admin commands" }),
+    ).not.toBeInTheDocument();
+    expect(featureUpdates).toEqual([]);
+  });
+
   it("opens the dedicated logging workspace and saves a destination through the drawer", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -2334,6 +2439,35 @@ describe("dashboard routing and workspace", () => {
       screen.queryByRole("dialog", { name: "Configure Member join logging" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("#join-channel")).toBeInTheDocument();
+  });
+
+  it("keeps logging workspace affordances disabled for read-only servers", async () => {
+    const { featureUpdates, fetchMock } = createReadOnlySelectedGuildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.moderationLogging);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Logging", level: 1 });
+
+    expect(
+      screen.queryByRole("button", { name: "Configure" }),
+    ).not.toBeInTheDocument();
+
+    const disableAvatarLoggingButton = screen.getByRole("button", {
+      name: "Disable Avatar logging",
+    });
+    const disableMemberJoinLoggingButton = screen.getByRole("button", {
+      name: "Disable Member join logging",
+    });
+
+    expect(disableAvatarLoggingButton).toBeDisabled();
+    expect(disableMemberJoinLoggingButton).toBeDisabled();
+
+    await userEvent.click(disableAvatarLoggingButton);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(featureUpdates).toEqual([]);
   });
 
   it("redirects the legacy maintenance route to Home", async () => {
@@ -2445,6 +2579,33 @@ describe("dashboard routing and workspace", () => {
     expect(
       await screen.findByRole("button", { name: "Enable stats module" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps stats workspace affordances disabled for read-only servers", async () => {
+    const { featureUpdates, fetchMock } = createReadOnlySelectedGuildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.coreStats);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Stats", level: 1 });
+
+    const configureStatsButton = screen.getByRole("button", {
+      name: "Configure stats schedule",
+    });
+    const statsToggleButton = screen.getByRole("button", {
+      name: /stats module/i,
+    });
+
+    expect(configureStatsButton).toBeDisabled();
+    expect(statsToggleButton).toBeDisabled();
+
+    await userEvent.click(configureStatsButton);
+
+    expect(
+      screen.queryByRole("dialog", { name: "Configure Stats channels" }),
+    ).not.toBeInTheDocument();
+    expect(featureUpdates).toEqual([]);
   });
 
   it("edits Partner Board delivery inline without handing off to Settings", async () => {

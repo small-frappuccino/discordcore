@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 import { appRoutes } from "./app/routes";
 
@@ -15,6 +15,12 @@ function jsonResponse(body: unknown, status = 200) {
       "Content-Type": "application/json",
     },
   });
+}
+
+function getURLPath(input: RequestInfo | URL) {
+  const url =
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  return new URL(url, "https://dashboard.test").pathname;
 }
 
 function createDeferred<T>() {
@@ -34,7 +40,11 @@ function createDeferred<T>() {
 
 describe("dashboard session hydration", () => {
   afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/");
   });
 
   it("keeps the routed dashboard content gated until auth, guild access, and the first guild workspace are ready", async () => {
@@ -46,28 +56,29 @@ describe("dashboard session hydration", () => {
 
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const pathname = getURLPath(input);
 
-      if (url.endsWith("/auth/me")) {
+      if (pathname === "/auth/me") {
         return authDeferred.promise.then((body) => jsonResponse(body));
       }
 
-      if (url.endsWith("/auth/guilds/access")) {
+      if (pathname === "/auth/guilds/access") {
         return guildsDeferred.promise.then((body) => jsonResponse(body));
       }
 
-      if (url.endsWith("/auth/guilds/manageable")) {
+      if (pathname === "/auth/guilds/manageable") {
         return guildsDeferred.promise.then((body) => jsonResponse(body));
       }
 
-      if (url.endsWith("/v1/guilds/guild-1/features")) {
+      if (pathname === "/v1/guilds/guild-1/features") {
         return featuresDeferred.promise.then((body) => jsonResponse(body));
       }
 
-      if (url.endsWith("/v1/guilds/guild-1/role-options")) {
+      if (pathname === "/v1/guilds/guild-1/role-options") {
         return rolesDeferred.promise.then((body) => jsonResponse(body));
       }
 
-      if (url.endsWith("/v1/guilds/guild-1/channel-options")) {
+      if (pathname === "/v1/guilds/guild-1/channel-options") {
         return channelsDeferred.promise.then((body) => jsonResponse(body));
       }
 
@@ -232,5 +243,139 @@ describe("dashboard session hydration", () => {
       screen.getByRole("heading", { name: "Command routing", level: 2 }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Sign in required")).not.toBeInTheDocument();
+  });
+
+  it("redirects back to /manage when a focused refresh removes access to the routed guild", async () => {
+    let now = new Date("2026-04-01T00:00:00Z").getTime();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+
+    let accessibleGuilds = [
+      {
+        id: "guild-1",
+        name: "Server One",
+        owner: true,
+        permissions: 8,
+        access_level: "write",
+      },
+    ];
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = getURLPath(input);
+
+      if (pathname === "/auth/me") {
+        return jsonResponse({
+          status: "ok",
+          user: {
+            id: "user-1",
+            username: "alice",
+            global_name: "Alice",
+          },
+          scopes: ["identify", "guilds"],
+          csrf_token: "csrf-token",
+          expires_at: "2099-01-01T00:00:00Z",
+        });
+      }
+
+      if (pathname === "/auth/guilds/access") {
+        return jsonResponse({
+          status: "ok",
+          count: accessibleGuilds.length,
+          guilds: accessibleGuilds,
+        });
+      }
+
+      if (pathname === "/auth/guilds/manageable") {
+        const manageableGuilds = accessibleGuilds.filter(
+          (guild) => guild.access_level === "write",
+        );
+        return jsonResponse({
+          status: "ok",
+          count: manageableGuilds.length,
+          guilds: manageableGuilds,
+        });
+      }
+
+      if (pathname === "/v1/guilds/guild-1/features") {
+        return jsonResponse({
+          status: "ok",
+          workspace: {
+            scope: "guild",
+            guild_id: "guild-1",
+            features: [
+              {
+                id: "services.commands",
+                category: "services",
+                label: "Commands",
+                description: "Commands",
+                scope: "guild",
+                supports_guild_override: true,
+                override_state: "enabled",
+                effective_enabled: true,
+                effective_source: "guild",
+                readiness: "ready",
+                details: {
+                  channel_id: "bot-commands",
+                },
+                editable_fields: ["enabled", "channel_id"],
+              },
+            ],
+          },
+        });
+      }
+
+      if (pathname === "/v1/guilds/guild-1/role-options") {
+        return jsonResponse({
+          status: "ok",
+          guild_id: "guild-1",
+          roles: [
+            {
+              id: "guild-1",
+              name: "@everyone",
+              position: 0,
+              managed: false,
+              is_default: true,
+            },
+          ],
+        });
+      }
+
+      if (pathname === "/v1/guilds/guild-1/channel-options") {
+        return jsonResponse({
+          status: "ok",
+          guild_id: "guild-1",
+          channels: [
+            {
+              id: "bot-commands",
+              name: "bot-commands",
+              display_name: "#bot-commands",
+              kind: "text",
+              supports_message_route: true,
+            },
+          ],
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${pathname}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.coreCommands);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Commands", level: 1 });
+    expect(window.location.pathname).toBe(testRoutes.coreCommands);
+
+    accessibleGuilds = [];
+    now = new Date("2026-04-01T00:00:20Z").getTime();
+
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(appRoutes.manage);
+    });
+    expect(
+      screen.getByRole("heading", { name: "Select a server", level: 2 }),
+    ).toBeInTheDocument();
   });
 });

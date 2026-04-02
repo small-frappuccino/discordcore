@@ -5,6 +5,7 @@ import {
   useEffect,
   useEffectEvent,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -31,6 +32,7 @@ import {
 
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
+const sessionRevalidationThrottleMs = 15_000;
 
 interface DashboardSessionContextValue {
   authState: DashboardAuthState;
@@ -81,6 +83,8 @@ export function DashboardSessionProvider({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
+  const lastFreshSessionRefreshAtRef = useRef(0);
+  const freshSessionRefreshRef = useRef<Promise<void> | null>(null);
 
   const client = useMemo(
     () =>
@@ -116,7 +120,13 @@ export function DashboardSessionProvider({
   }
 
   const performSessionRefresh = useEffectEvent(
-    async (activeClient: ControlApiClient) => {
+    async (
+      activeClient: ControlApiClient,
+      options: {
+        freshGuilds?: boolean;
+      } = {},
+    ) => {
+      const freshGuilds = options.freshGuilds ?? false;
       setSessionLoading(true);
       setBusyLabel("Refreshing session");
 
@@ -142,15 +152,15 @@ export function DashboardSessionProvider({
           return;
         }
 
-        const [guildsResponse, manageableGuildsResponse] = await Promise.all([
-          activeClient.listAccessibleGuilds(),
-          activeClient.listManageableGuilds(),
-        ]);
+        const guildsResponse = await activeClient.listAccessibleGuilds({
+          fresh: freshGuilds,
+        });
+        const manageableGuildsResponse = await activeClient.listManageableGuilds();
         const availableGuildIDs = new Set([
           ...guildsResponse.guilds.map((guild) => guild.id),
           ...manageableGuildsResponse.guilds.map((guild) => guild.id),
         ]);
-        const routedGuildID = getRoutedGuildID(window.location.pathname);
+        const routedGuildID = getRoutedGuildID(location.pathname);
         const preferredGuildID =
           selectedGuildID.trim() !== "" ? selectedGuildID.trim() : routedGuildID;
         const nextGuildID =
@@ -180,9 +190,79 @@ export function DashboardSessionProvider({
     },
   );
 
+  const startSessionRefresh = useEffectEvent(
+    (
+      activeClient: ControlApiClient,
+      options: {
+        freshGuilds?: boolean;
+      } = {},
+    ) => {
+      const freshGuilds = options.freshGuilds ?? false;
+      if (freshGuilds) {
+        lastFreshSessionRefreshAtRef.current = Date.now();
+      }
+
+      const refreshPromise = performSessionRefresh(activeClient, options).finally(() => {
+        if (freshSessionRefreshRef.current === refreshPromise) {
+          freshSessionRefreshRef.current = null;
+        }
+      });
+
+      if (freshGuilds) {
+        freshSessionRefreshRef.current = refreshPromise;
+      }
+
+      return refreshPromise;
+    },
+  );
+
+  const triggerFreshSessionRefresh = useEffectEvent(() => {
+    if (authState === "checking" || authState === "oauth_unavailable") {
+      return;
+    }
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
+    if (freshSessionRefreshRef.current !== null) {
+      return;
+    }
+    if (
+      Date.now() - lastFreshSessionRefreshAtRef.current <
+      sessionRevalidationThrottleMs
+    ) {
+      return;
+    }
+
+    void startSessionRefresh(client, {
+      freshGuilds: true,
+    });
+  });
+
   useEffect(() => {
-    void performSessionRefresh(client);
+    void startSessionRefresh(client, {
+      freshGuilds: true,
+    });
   }, [client]);
+
+  useEffect(() => {
+    function handleFocus() {
+      triggerFreshSessionRefresh();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      triggerFreshSessionRefresh();
+    }
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (authState !== "signed_in" || selectedGuildID.trim() === "") {
@@ -221,7 +301,9 @@ export function DashboardSessionProvider({
   ]);
 
   async function refreshSession() {
-    await performSessionRefresh(client);
+    await startSessionRefresh(client, {
+      freshGuilds: true,
+    });
   }
 
   async function beginLogin(nextPath: string = `${appRoutes.manage}/`) {

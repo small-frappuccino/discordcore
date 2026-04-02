@@ -264,6 +264,10 @@ export interface ControlApiClientConfig {
   baseUrl: string;
 }
 
+interface GuildListRequestOptions {
+  fresh?: boolean;
+}
+
 const transientGetRetryStatuses = new Set([502, 504]);
 const transientGetRetryDelaysMs = [80, 160];
 
@@ -352,12 +356,22 @@ export class ControlApiClient {
     );
   }
 
-  async listAccessibleGuilds(): Promise<AccessibleGuildsResponse> {
-    return this.request<AccessibleGuildsResponse>("GET", "/auth/guilds/access");
+  async listAccessibleGuilds(
+    options: GuildListRequestOptions = {},
+  ): Promise<AccessibleGuildsResponse> {
+    return this.request<AccessibleGuildsResponse>(
+      "GET",
+      buildGuildListPath("/auth/guilds/access", options),
+    );
   }
 
-  async listManageableGuilds(): Promise<ManageableGuildsResponse> {
-    return this.request<ManageableGuildsResponse>("GET", "/auth/guilds/manageable");
+  async listManageableGuilds(
+    options: GuildListRequestOptions = {},
+  ): Promise<ManageableGuildsResponse> {
+    return this.request<ManageableGuildsResponse>(
+      "GET",
+      buildGuildListPath("/auth/guilds/manageable", options),
+    );
   }
 
   async getGuildSettings(
@@ -691,4 +705,11 @@ function delay(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function buildGuildListPath(path: string, options: GuildListRequestOptions) {
+  if (!options.fresh) {
+    return path;
+  }
+  return `${path}?fresh=1`;
 }

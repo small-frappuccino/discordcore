@@ -119,7 +119,8 @@ var featureDefinitionsByID = func() map[string]featureDefinition {
 }()
 
 func (s *Server) handleFeatureRoutes(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authorizeRequest(w, r); !ok {
+	auth, ok := s.authorizeRequest(w, r)
+	if !ok {
 		return
 	}
 	if s.configManager == nil {
@@ -151,7 +152,7 @@ func (s *Server) handleFeatureRoutes(w http.ResponseWriter, r *http.Request) {
 		case http.MethodGet:
 			s.handleGlobalFeatureGet(w, featureID)
 		case http.MethodPatch:
-			s.handleGlobalFeaturePatch(w, r, featureID)
+			s.handleGlobalFeaturePatch(w, r, auth, featureID)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -219,7 +220,11 @@ func (s *Server) handleGlobalFeatureGet(w http.ResponseWriter, featureID string)
 	})
 }
 
-func (s *Server) handleGlobalFeaturePatch(w http.ResponseWriter, r *http.Request, featureID string) {
+func (s *Server) handleGlobalFeaturePatch(w http.ResponseWriter, r *http.Request, auth requestAuthorization, featureID string) {
+	if !s.authorizeGlobalMutation(w, r, auth) {
+		return
+	}
+
 	updated, err := s.applyFeaturePatch(r, "", featureID)
 	if err != nil {
 		status := statusForFeatureMutationError(err)

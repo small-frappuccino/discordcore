@@ -47,6 +47,14 @@ export function DashboardLayout() {
   } = useDashboardSession();
   const serverMenuGuilds =
     accessibleGuilds.length > 0 ? accessibleGuilds : manageableGuilds;
+  const availableGuildIDs = useMemo(
+    () =>
+      new Set([
+        ...accessibleGuilds.map((guild) => guild.id),
+        ...manageableGuilds.map((guild) => guild.id),
+      ]),
+    [accessibleGuilds, manageableGuilds],
+  );
   const navigationSections = useMemo(
     () =>
       routeGuildID === ""
@@ -79,8 +87,31 @@ export function DashboardLayout() {
   }, [activeSection?.id, location.pathname]);
 
   useEffect(() => {
+    if (authState === "signed_in") {
+      return;
+    }
     setSelectedGuildID(routeGuildID);
-  }, [routeGuildID, setSelectedGuildID]);
+  }, [authState, routeGuildID, setSelectedGuildID]);
+
+  useEffect(() => {
+    if (authState !== "signed_in" || routeGuildID === "" || sessionLoading) {
+      return;
+    }
+    if (availableGuildIDs.has(routeGuildID)) {
+      return;
+    }
+
+    setServerMenuOpen(false);
+    setSelectedGuildID("");
+    navigate(appRoutes.manage, { replace: true });
+  }, [
+    authState,
+    availableGuildIDs,
+    navigate,
+    routeGuildID,
+    sessionLoading,
+    setSelectedGuildID,
+  ]);
 
   async function handleSignOut() {
     setAccountMenuOpen(false);

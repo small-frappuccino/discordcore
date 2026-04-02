@@ -1481,7 +1481,7 @@ func generateRandomToken(length int) (string, error) {
 
 func requiresSessionCSRFToken(method string) bool {
 	switch strings.ToUpper(strings.TrimSpace(method)) {
-	case http.MethodPost, http.MethodPut, http.MethodDelete:
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		return true
 	default:
 		return false

@@ -59,6 +59,7 @@ export function CommandsPage() {
   const {
     authState,
     beginLogin,
+    canEditSelectedGuild,
     currentOriginLabel,
     selectedGuild,
   } = useDashboardSession();
@@ -102,6 +103,13 @@ export function CommandsPage() {
   );
 
   useEffect(() => {
+    if (canEditSelectedGuild) {
+      return;
+    }
+    closeDrawer();
+  }, [canEditSelectedGuild]);
+
+  useEffect(() => {
     if (selectedFeature === null) {
       return;
     }
@@ -133,6 +141,9 @@ export function CommandsPage() {
   }
 
   function openDrawer(feature: FeatureRecord) {
+    if (!canEditSelectedGuild) {
+      return;
+    }
     if (
       feature.id === "services.commands" &&
       !canEditCommandsChannel(feature)
@@ -369,6 +380,11 @@ export function CommandsPage() {
             <button
               className="button-primary"
               type="button"
+              disabled={
+                !canEditSelectedGuild ||
+                !canEditCommandsChannel(commandsFeature) ||
+                mutation.saving
+              }
               onClick={() => openDrawer(commandsFeature)}
             >
               Configure command channel
@@ -376,7 +392,7 @@ export function CommandsPage() {
             <button
               className="button-secondary"
               type="button"
-              disabled={mutation.saving}
+              disabled={mutation.saving || !canEditSelectedGuild}
               onClick={() =>
                 void handleSetFeatureEnabled(
                   commandsFeature,
@@ -394,7 +410,7 @@ export function CommandsPage() {
               <button
                 className="button-ghost"
                 type="button"
-                disabled={mutation.saving}
+                disabled={mutation.saving || !canEditSelectedGuild}
                 onClick={() => void handleUseDefault(commandsFeature)}
               >
                 Use default
@@ -451,6 +467,11 @@ export function CommandsPage() {
             <button
               className="button-primary"
               type="button"
+              disabled={
+                !canEditSelectedGuild ||
+                !canEditAdminCommands(adminCommandsFeature) ||
+                mutation.saving
+              }
               onClick={() => openDrawer(adminCommandsFeature)}
             >
               Configure admin access
@@ -458,7 +479,7 @@ export function CommandsPage() {
             <button
               className="button-secondary"
               type="button"
-              disabled={mutation.saving}
+              disabled={mutation.saving || !canEditSelectedGuild}
               onClick={() =>
                 void handleSetFeatureEnabled(
                   adminCommandsFeature,
@@ -476,7 +497,7 @@ export function CommandsPage() {
               <button
                 className="button-ghost"
                 type="button"
-                disabled={mutation.saving}
+                disabled={mutation.saving || !canEditSelectedGuild}
                 onClick={() => void handleUseDefault(adminCommandsFeature)}
               >
                 Use default

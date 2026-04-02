@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
@@ -43,8 +43,13 @@ import { useGuildChannelOptions } from "../features/features/useGuildChannelOpti
 export function StatsPage() {
   const definition = getFeatureAreaDefinition("stats");
   const location = useLocation();
-  const { authState, beginLogin, currentOriginLabel, selectedGuild } =
-    useDashboardSession();
+  const {
+    authState,
+    beginLogin,
+    canEditSelectedGuild,
+    currentOriginLabel,
+    selectedGuild,
+  } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -85,6 +90,13 @@ export function StatsPage() {
   const canSaveStatsSettings =
     Number.isFinite(parsedUpdateIntervalMins) && parsedUpdateIntervalMins > 0;
 
+  useEffect(() => {
+    if (canEditSelectedGuild) {
+      return;
+    }
+    closeDrawer();
+  }, [canEditSelectedGuild]);
+
   async function handleRefreshStats() {
     await Promise.all([workspace.refresh(), channelOptions.refresh()]);
   }
@@ -123,6 +135,9 @@ export function StatsPage() {
   }
 
   function openDrawer(feature: FeatureRecord) {
+    if (!canEditSelectedGuild || !canEditStatsSettings(feature)) {
+      return;
+    }
     const details = getStatsFeatureDetails(feature);
     setConfigEnabledDraft(details.configEnabled ? "enabled" : "disabled");
     setUpdateIntervalDraft(String(details.updateIntervalMins));
@@ -282,7 +297,11 @@ export function StatsPage() {
             <button
               className="button-primary"
               type="button"
-              disabled={!canEditStatsSettings(statsFeature)}
+              disabled={
+                mutation.saving ||
+                !canEditSelectedGuild ||
+                !canEditStatsSettings(statsFeature)
+              }
               onClick={() => openDrawer(statsFeature)}
             >
               Configure stats schedule
@@ -290,7 +309,7 @@ export function StatsPage() {
             <button
               className="button-secondary"
               type="button"
-              disabled={mutation.saving}
+              disabled={mutation.saving || !canEditSelectedGuild}
               onClick={() =>
                 void handleSetFeatureEnabled(
                   statsFeature,
@@ -308,7 +327,7 @@ export function StatsPage() {
               <button
                 className="button-ghost"
                 type="button"
-                disabled={mutation.saving}
+                disabled={mutation.saving || !canEditSelectedGuild}
                 onClick={() => void handleUseDefault(statsFeature)}
               >
                 Use default
@@ -585,7 +604,7 @@ export function StatsPage() {
         />
       </section>
 
-      {drawerOpen && statsFeature !== null ? (
+      {drawerOpen && statsFeature !== null && canEditSelectedGuild ? (
         <div
           className="drawer-backdrop"
           onClick={closeDrawer}
@@ -686,7 +705,11 @@ export function StatsPage() {
               <button
                 className="button-primary"
                 type="button"
-                disabled={mutation.saving || !canSaveStatsSettings}
+                disabled={
+                  mutation.saving ||
+                  !canEditSelectedGuild ||
+                  !canSaveStatsSettings
+                }
                 onClick={() => void handleSaveStatsSettings()}
               >
                 {mutation.saving && pendingFeatureId === statsFeature.id

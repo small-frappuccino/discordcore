@@ -365,12 +365,17 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authorizeRequest(w, r); !ok {
+	auth, ok := s.authorizeRequest(w, r)
+	if !ok {
 		return
 	}
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !s.authorizeGlobalMutation(w, r, auth) {
 		return
 	}
 
@@ -645,4 +650,27 @@ func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) (reque
 
 	http.Error(w, "missing authorization", http.StatusUnauthorized)
 	return requestAuthorization{}, false
+}
+
+func (s *Server) authorizeGlobalMutation(w http.ResponseWriter, r *http.Request, auth requestAuthorization) bool {
+	switch auth.mode {
+	case requestAuthModeBearer:
+		return true
+	case requestAuthModeDiscordOAuthSession:
+		log.ApplicationLogger().Warn(
+			"Global control mutation denied",
+			"operation", "control.global_mutation.authorize",
+			"guildID", "",
+			"channelID", "",
+			"userID", auth.oauthSession.User.ID,
+			"reason", "global mutations require bearer authentication",
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	default:
+		http.Error(w, "missing authorization", http.StatusUnauthorized)
+		return false
+	}
 }

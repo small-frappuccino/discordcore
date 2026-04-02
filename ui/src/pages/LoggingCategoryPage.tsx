@@ -50,6 +50,7 @@ export function LoggingCategoryPage() {
   const {
     authState,
     beginLogin,
+    canEditSelectedGuild,
     currentOriginLabel,
     selectedGuild,
   } = useDashboardSession();
@@ -85,6 +86,13 @@ export function LoggingCategoryPage() {
   const localOverrides = areaFeatures.filter(
     (feature) => feature.override_state !== "inherit",
   ).length;
+
+  useEffect(() => {
+    if (canEditSelectedGuild) {
+      return;
+    }
+    closeDrawer();
+  }, [canEditSelectedGuild]);
 
   useEffect(() => {
     if (selectedFeature === null) {
@@ -171,7 +179,7 @@ export function LoggingCategoryPage() {
   }
 
   function openDrawer(feature: FeatureRecord) {
-    if (!canEditLoggingChannel(feature)) {
+    if (!canEditSelectedGuild || !canEditLoggingChannel(feature)) {
       return;
     }
     setSelectedFeatureId(feature.id);
@@ -325,10 +333,11 @@ export function LoggingCategoryPage() {
                   </td>
                   <td>
                     <div className="feature-row-actions">
-                      {canEditLoggingChannel(feature) ? (
+                      {canEditSelectedGuild && canEditLoggingChannel(feature) ? (
                         <button
                           className="button-secondary"
                           type="button"
+                          disabled={mutation.saving}
                           onClick={() => openDrawer(feature)}
                         >
                           Configure
@@ -337,7 +346,7 @@ export function LoggingCategoryPage() {
                       <button
                         className="button-ghost"
                         type="button"
-                        disabled={mutation.saving}
+                        disabled={mutation.saving || !canEditSelectedGuild}
                         aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
                         onClick={() =>
                           void handleSetFeatureEnabled(
@@ -356,7 +365,7 @@ export function LoggingCategoryPage() {
                         <button
                           className="button-ghost"
                           type="button"
-                          disabled={mutation.saving}
+                          disabled={mutation.saving || !canEditSelectedGuild}
                           aria-label={`Use inherited setting for ${feature.label}`}
                           onClick={() => void handleUseInherited(feature)}
                         >
@@ -540,7 +549,9 @@ export function LoggingCategoryPage() {
         />
       </section>
 
-      {selectedFeature !== null && canEditLoggingChannel(selectedFeature) ? (
+      {selectedFeature !== null &&
+      canEditSelectedGuild &&
+      canEditLoggingChannel(selectedFeature) ? (
         <div className="drawer-backdrop" onClick={closeDrawer} role="presentation">
           <aside
             aria-label={`Configure ${selectedFeature.label}`}
@@ -646,7 +657,7 @@ export function LoggingCategoryPage() {
               <button
                 className="button-primary"
                 type="button"
-                disabled={mutation.saving}
+                disabled={mutation.saving || !canEditSelectedGuild}
                 onClick={() => void handleSaveDestination()}
               >
                 {mutation.saving && pendingFeatureId === selectedFeature.id
