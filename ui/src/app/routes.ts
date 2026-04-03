@@ -19,6 +19,9 @@ export const appRoutes = {
   partnerBoardEntriesPattern: "/manage/:guildId/partner-board/entries",
   partnerBoardLayoutPattern: "/manage/:guildId/partner-board/layout",
   partnerBoardDeliveryPattern: "/manage/:guildId/partner-board/delivery",
+  dashboardQOTDPattern: "/manage/:guildId/qotd",
+  qotdSettingsPattern: "/manage/:guildId/qotd/settings",
+  qotdQuestionsPattern: "/manage/:guildId/qotd/questions",
   dashboardRolesPattern: "/manage/:guildId/roles",
   dashboardRolesAutorolePattern: "/manage/:guildId/roles/autorole",
   dashboardRolesLevelRolesPattern: "/manage/:guildId/roles/level-roles",
@@ -46,6 +49,12 @@ export const appRoutes = {
     `/manage/${encodeGuildID(guildId)}/partner-board/layout`,
   partnerBoardDelivery: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/partner-board/delivery`,
+  dashboardQOTD: (guildId: string) => `/manage/${encodeGuildID(guildId)}/qotd`,
+  qotdBase: (guildId: string) => `/manage/${encodeGuildID(guildId)}/qotd`,
+  qotdSettings: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/qotd/settings`,
+  qotdQuestions: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/qotd/questions`,
   dashboardRoles: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/roles`,
   dashboardRolesAutorole: (guildId: string) =>
@@ -65,6 +74,13 @@ export function buildPartnerBoardTabs(guildId: string) {
     { label: "Entries", path: appRoutes.partnerBoardEntries(guildId) },
     { label: "Layout", path: appRoutes.partnerBoardLayout(guildId) },
     { label: "Destination", path: appRoutes.partnerBoardDelivery(guildId) },
+  ] as const;
+}
+
+export function buildQOTDTabs(guildId: string) {
+  return [
+    { label: "Settings", path: appRoutes.qotdSettings(guildId) },
+    { label: "Question Bank", path: appRoutes.qotdQuestions(guildId) },
   ] as const;
 }
 
@@ -132,6 +148,11 @@ export function mapLegacyDashboardPathForGuild(pathname: string, guildId: string
       return appRoutes.partnerBoardLayout(normalizedGuildID);
     case "partner-board/delivery":
       return appRoutes.partnerBoardDelivery(normalizedGuildID);
+    case "qotd":
+    case "qotd/settings":
+      return appRoutes.qotdSettings(normalizedGuildID);
+    case "qotd/questions":
+      return appRoutes.qotdQuestions(normalizedGuildID);
     case "roles":
     case "roles-members":
       return appRoutes.dashboardRolesAutorole(normalizedGuildID);

@@ -13,6 +13,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
@@ -55,6 +56,7 @@ type controlStartupTaskOptions struct {
 	runtimeResolver       *botRuntimeResolver
 	partnerBoardService   partners.BoardService
 	partnerSyncExecutor   partners.GuildSyncExecutor
+	qotdService           *qotd.Service
 	controlServerRegistry *controlServerHolder
 }
 
@@ -185,6 +187,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	controlServer.SetDefaultBotInstanceID(opts.defaultBotInstanceID)
 	controlServer.SetPartnerBoardService(opts.partnerBoardService)
 	controlServer.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
+	controlServer.SetQOTDService(opts.qotdService)
 	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
 		return opts.runtimeResolver.sessionForGuild(guildID)
 	})

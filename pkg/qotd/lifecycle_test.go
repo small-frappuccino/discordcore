@@ -46,3 +46,24 @@ func TestShouldArchiveHonorsExistingArchivedTimestamp(t *testing.T) {
 		t.Fatal("expected already-archived post to skip archive work")
 	}
 }
+
+func TestEvaluateManualOfficialPostUsesIndependentWindow(t *testing.T) {
+	t.Parallel()
+
+	publishedAt := time.Date(2026, 4, 3, 9, 15, 0, 0, time.UTC)
+
+	current := EvaluateManualOfficialPost(publishedAt, time.Date(2026, 4, 4, 9, 14, 59, 0, time.UTC))
+	if current.State != OfficialPostStateCurrent || !current.AnswerWindow.IsOpen {
+		t.Fatalf("expected manual lifecycle to stay current for the first 24 hours, got %+v", current)
+	}
+
+	previous := EvaluateManualOfficialPost(publishedAt, time.Date(2026, 4, 4, 9, 15, 1, 0, time.UTC))
+	if previous.State != OfficialPostStatePrevious || !previous.AnswerWindow.IsOpen {
+		t.Fatalf("expected manual lifecycle to move to previous after 24 hours, got %+v", previous)
+	}
+
+	archived := EvaluateManualOfficialPost(publishedAt, time.Date(2026, 4, 5, 9, 15, 1, 0, time.UTC))
+	if archived.State != OfficialPostStateArchived || archived.AnswerWindow.IsOpen {
+		t.Fatalf("expected manual lifecycle to archive after 48 hours, got %+v", archived)
+	}
+}

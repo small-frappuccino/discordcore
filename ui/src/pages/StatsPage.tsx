@@ -62,6 +62,16 @@ export function StatsPage() {
   const [configEnabledDraft, setConfigEnabledDraft] = useState("enabled");
   const [updateIntervalDraft, setUpdateIntervalDraft] = useState("30");
 
+  useEffect(() => {
+    if (canEditSelectedGuild) {
+      return;
+    }
+    setDrawerOpen(false);
+    setConfigEnabledDraft("enabled");
+    setUpdateIntervalDraft("30");
+    mutation.clearNotice();
+  }, [canEditSelectedGuild, mutation]);
+
   if (definition === null) {
     return null;
   }
@@ -89,13 +99,6 @@ export function StatsPage() {
   );
   const canSaveStatsSettings =
     Number.isFinite(parsedUpdateIntervalMins) && parsedUpdateIntervalMins > 0;
-
-  useEffect(() => {
-    if (canEditSelectedGuild) {
-      return;
-    }
-    closeDrawer();
-  }, [canEditSelectedGuild]);
 
   async function handleRefreshStats() {
     await Promise.all([workspace.refresh(), channelOptions.refresh()]);

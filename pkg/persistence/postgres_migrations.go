@@ -326,4 +326,24 @@ var postgresMigrations = []migration{
 			`DROP TABLE IF EXISTS qotd_questions`,
 		},
 	},
+	{
+		Version: 8,
+		UpSQL: []string{
+			`ALTER TABLE qotd_official_posts ADD COLUMN IF NOT EXISTS publish_mode TEXT`,
+			`UPDATE qotd_official_posts
+			 SET publish_mode = 'scheduled'
+			 WHERE publish_mode IS NULL OR publish_mode = ''`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN publish_mode SET DEFAULT 'scheduled'`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN publish_mode SET NOT NULL`,
+			`DROP INDEX IF EXISTS idx_qotd_official_posts_publish_date`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_official_posts_scheduled_publish_date
+			 ON qotd_official_posts(guild_id, publish_date_utc)
+			 WHERE publish_mode = 'scheduled'`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_official_posts_scheduled_publish_date`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_official_posts_publish_date ON qotd_official_posts(guild_id, publish_date_utc)`,
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS publish_mode`,
+		},
+	},
 }

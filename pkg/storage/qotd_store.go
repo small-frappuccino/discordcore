@@ -206,6 +206,45 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID string) ([]QOTDQu
 	return records, nil
 }
 
+func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID int64) (*QOTDQuestionRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" || questionID <= 0 {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	row := s.queryRowContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			body,
+			status,
+			queue_position,
+			created_by,
+			scheduled_for_date_utc,
+			used_at,
+			created_at,
+			updated_at
+		FROM qotd_questions
+		WHERE guild_id = ? AND id = ?`,
+		guildID,
+		questionID,
+	)
+	record, err := scanQOTDQuestionRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get qotd question: %w", err)
+	}
+	return record, nil
+}
+
 func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID string, orderedIDs []int64) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
@@ -354,6 +393,82 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID string, pub
 	return record, nil
 }
 
+func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID string) (*QOTDQuestionRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, fmt.Errorf("reserve ready qotd question: guild_id is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := txQueryRow(tx,
+		`SELECT
+			id,
+			guild_id,
+			body,
+			status,
+			queue_position,
+			created_by,
+			scheduled_for_date_utc,
+			used_at,
+			created_at,
+			updated_at
+		FROM qotd_questions
+		WHERE guild_id = ?
+		  AND status = 'ready'
+		  AND scheduled_for_date_utc IS NULL
+		ORDER BY queue_position ASC, id ASC
+		FOR UPDATE SKIP LOCKED
+		LIMIT 1`,
+		guildID,
+	)
+	record, err := scanQOTDQuestionRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+	}
+
+	row = txQueryRow(tx,
+		`UPDATE qotd_questions
+		SET
+			status = 'reserved',
+			updated_at = NOW()
+		WHERE id = ?
+		RETURNING
+			id,
+			guild_id,
+			body,
+			status,
+			queue_position,
+			created_by,
+			scheduled_for_date_utc,
+			used_at,
+			created_at,
+			updated_at`,
+		record.ID,
+	)
+	record, err = scanQOTDQuestionRecord(row)
+	if err != nil {
+		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+	}
+	return record, nil
+}
+
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -373,6 +488,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 		`INSERT INTO qotd_official_posts (
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -387,11 +503,12 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			archived_at,
 			last_reconciled_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -409,6 +526,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			updated_at`,
 		normalized.GuildID,
 		normalized.QuestionID,
+		normalized.PublishMode,
 		normalized.PublishDateUTC,
 		normalized.State,
 		normalized.ForumChannelID,
@@ -461,6 +579,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, discordT
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -488,6 +607,22 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, discordT
 	return updated, nil
 }
 
+func (s *Store) DeleteQOTDOfficialPost(ctx context.Context, id int64) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	if id <= 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, err := s.execContext(ctx, `DELETE FROM qotd_official_posts WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete qotd official post: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -505,6 +640,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -521,7 +657,9 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ? AND publish_date_utc = ?`,
+		WHERE guild_id = ?
+		  AND publish_mode = 'scheduled'
+		  AND publish_date_utc = ?`,
 		guildID,
 		publishDateUTC,
 	)
@@ -551,6 +689,7 @@ func (s *Store) GetQOTDOfficialPostByThreadID(ctx context.Context, discordThread
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -602,6 +741,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -619,6 +759,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			updated_at
 		FROM qotd_official_posts
 		WHERE guild_id = ?
+		  AND publish_mode = 'scheduled'
 		  AND archived_at IS NULL
 		  AND archive_at > ?
 		ORDER BY publish_date_utc DESC
@@ -663,6 +804,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -732,6 +874,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 			id,
 			guild_id,
 			question_id,
+			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
@@ -1124,6 +1267,42 @@ func (s *Store) HasQOTDArchiveForThread(ctx context.Context, discordThreadID str
 	return exists, nil
 }
 
+func (s *Store) GetQOTDThreadArchiveByThreadID(ctx context.Context, discordThreadID string) (*QOTDThreadArchiveRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	discordThreadID = strings.TrimSpace(discordThreadID)
+	if discordThreadID == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	row := s.queryRowContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			official_post_id,
+			reply_thread_id,
+			source_kind,
+			discord_thread_id,
+			archived_at,
+			created_at
+		FROM qotd_thread_archives
+		WHERE discord_thread_id = ?`,
+		discordThreadID,
+	)
+	record, err := scanQOTDThreadArchiveRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get qotd thread archive by thread: %w", err)
+	}
+	return record, nil
+}
+
 func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, error) {
 	rec.GuildID = strings.TrimSpace(rec.GuildID)
 	rec.Body = strings.TrimSpace(rec.Body)
@@ -1147,6 +1326,7 @@ func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, er
 
 func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPostRecord, error) {
 	rec.GuildID = strings.TrimSpace(rec.GuildID)
+	rec.PublishMode = strings.TrimSpace(rec.PublishMode)
 	rec.State = strings.TrimSpace(rec.State)
 	rec.ForumChannelID = strings.TrimSpace(rec.ForumChannelID)
 	rec.DiscordThreadID = strings.TrimSpace(rec.DiscordThreadID)
@@ -1160,11 +1340,18 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 	rec.GraceUntil = normalizeQOTDRequiredTime(rec.GraceUntil)
 	rec.ArchiveAt = normalizeQOTDRequiredTime(rec.ArchiveAt)
 
+	if rec.PublishMode == "" {
+		rec.PublishMode = "scheduled"
+	}
+
 	if rec.GuildID == "" {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("guild_id is required")
 	}
 	if rec.QuestionID <= 0 {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("question_id is required")
+	}
+	if rec.PublishMode == "" {
+		return QOTDOfficialPostRecord{}, fmt.Errorf("publish_mode is required")
 	}
 	if rec.PublishDateUTC.IsZero() {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("publish_date_utc is required")
@@ -1344,6 +1531,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 		&record.ID,
 		&record.GuildID,
 		&record.QuestionID,
+		&record.PublishMode,
 		&record.PublishDateUTC,
 		&record.State,
 		&record.ForumChannelID,
@@ -1368,6 +1556,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	record.ClosedAt = timePtrFromNull(closedAt)
 	record.ArchivedAt = timePtrFromNull(archivedAt)
 	record.LastReconciledAt = timePtrFromNull(reconciledAt)
+	record.PublishMode = strings.TrimSpace(record.PublishMode)
 	record.PublishDateUTC = normalizeQOTDDateUTC(record.PublishDateUTC)
 	record.GraceUntil = record.GraceUntil.UTC()
 	record.ArchiveAt = record.ArchiveAt.UTC()

@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
+	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	coreerrors "github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -28,6 +29,8 @@ type botRuntimeOptions struct {
 	runtimeApplier       *runtimeapply.Manager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
+	qotdReplyService     discordqotd.ReplyThreadService
+	qotdLifecycleService discordqotd.GuildLifecycleService
 	startupTasks         *startupTaskOrchestrator
 }
 
@@ -167,6 +170,29 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
 	}
 
+	if runtime.capabilities.qotd && opts.qotdLifecycleService != nil {
+		qotdRuntimeService := discordqotd.NewRuntimeServiceForBot(
+			runtime.session,
+			opts.configManager,
+			opts.qotdLifecycleService,
+			runtime.instanceID,
+			opts.defaultBotInstanceID,
+		)
+		qotdWrapper := service.NewServiceWrapper(
+			"qotd",
+			service.TypeMonitoring,
+			service.PriorityNormal,
+			[]string{},
+			func(context.Context) error { qotdRuntimeService.Start(); return nil },
+			func(context.Context) error { qotdRuntimeService.Stop(); return nil },
+			func() bool { return qotdRuntimeService.IsRunning() },
+		)
+		if err := runtime.serviceManager.Register(qotdWrapper); err != nil {
+			return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
+		}
+		log.ApplicationLogger().Info("QOTD runtime enabled", "botInstanceID", runtime.instanceID)
+	}
+
 	log.ApplicationLogger().Info("Starting runtime services", "botInstanceID", runtime.instanceID)
 	if err := runtime.serviceManager.StartAll(); err != nil {
 		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
@@ -176,6 +202,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
 		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
+		commandHandler.SetQOTDReplyService(opts.qotdReplyService)
 		if err := setupCommandHandler(commandHandler); err != nil {
 			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
 		}

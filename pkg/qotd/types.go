@@ -12,6 +12,13 @@ const (
 	QuestionStatusDisabled QuestionStatus = "disabled"
 )
 
+type PublishMode string
+
+const (
+	PublishModeScheduled PublishMode = "scheduled"
+	PublishModeManual    PublishMode = "manual"
+)
+
 type OfficialPostState string
 
 const (

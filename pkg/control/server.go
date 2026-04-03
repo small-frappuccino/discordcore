@@ -17,6 +17,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
@@ -65,6 +66,7 @@ type Server struct {
 	configManager        *files.ConfigManager
 	partnerBoardService  partners.BoardService
 	partnerBoardSyncer   partners.GuildSyncExecutor
+	qotdService          *qotd.Service
 	botGuildIDsProvider  botGuildIDsProvider
 	botGuildBindings     botGuildBindingsProvider
 	guildRegistration    guildRegistrationFunc
@@ -120,6 +122,14 @@ func (s *Server) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor
 		return
 	}
 	s.partnerBoardSyncer = executor
+}
+
+// SetQOTDService overrides the QOTD application service used by QOTD routes.
+func (s *Server) SetQOTDService(service *qotd.Service) {
+	if s == nil || service == nil {
+		return
+	}
+	s.qotdService = service
 }
 
 // SetBearerToken configures bearer token authentication for control routes.

@@ -267,6 +267,89 @@ describe("ControlApiClient feature routes", () => {
     );
   });
 
+  it("loads and mutates qotd routes with the expected guild-scoped paths", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        if (url.endsWith("/auth/me")) {
+          return jsonResponse({
+            status: "ok",
+            user: {
+              id: "user-1",
+              username: "alice",
+            },
+            scopes: ["identify"],
+            csrf_token: "csrf-token",
+            expires_at: "2099-01-01T00:00:00Z",
+          });
+        }
+
+        if (url.endsWith("/qotd")) {
+          return jsonResponse({
+            status: "ok",
+            guild_id: "guild-1",
+            summary: {
+              settings: {
+                enabled: true,
+              },
+              counts: {
+                total: 1,
+                draft: 0,
+                ready: 1,
+                reserved: 0,
+                used: 0,
+                disabled: 0,
+              },
+              current_publish_date_utc: "2026-04-03T00:00:00Z",
+              published_for_current_slot: false,
+            },
+          });
+        }
+
+        return jsonResponse({
+          status: "ok",
+          guild_id: "guild-1",
+          questions: [],
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    const summary = await client.getQOTDSummary("guild-1");
+    await client.reorderQOTDQuestions("guild-1", [3, 1, 2]);
+
+    expect(summary.summary.settings.enabled).toBe(true);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/v1/guilds/guild-1/qotd",
+      {
+        method: "GET",
+        headers: expect.any(Headers),
+        credentials: "include",
+        body: undefined,
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/v1/guilds/guild-1/qotd/questions/reorder",
+      {
+        method: "POST",
+        headers: expect.objectContaining({
+          get: expect.any(Function),
+        }),
+        credentials: "include",
+        body: JSON.stringify({
+          ordered_ids: [3, 1, 2],
+        }),
+      },
+    );
+  });
+
   it("loads guild role options from /v1/guilds/{guild_id}/role-options", async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({

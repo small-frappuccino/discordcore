@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -73,5 +74,77 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	}
 	if reserved.ScheduledForDateUTC == nil || !reserved.ScheduledForDateUTC.Equal(publishDate) {
 		t.Fatalf("expected scheduled publish date %s, got %+v", publishDate.Format(time.RFC3339), reserved.ScheduledForDateUTC)
+	}
+}
+
+func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		Body:    "Question one",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
+	}
+	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		Body:    "Question two",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	graceUntil := time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC)
+	archiveAt := time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
+
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(scheduled) failed: %v", err)
+	}
+
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		QuestionID:           second.ID,
+		PublishMode:          "manual",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		QuestionTextSnapshot: second.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
+	}
+
+	_, err = store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		QuestionID:           second.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		QuestionTextSnapshot: second.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	})
+	if err == nil {
+		t.Fatal("expected duplicate scheduled publish date to remain unique")
+	}
+	if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "unique") {
+		t.Fatalf("expected unique-constraint error for duplicate scheduled publish date, got %v", err)
 	}
 }

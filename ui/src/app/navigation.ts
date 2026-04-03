@@ -41,6 +41,21 @@ export function getDashboardPartnerBoardNavigationItem(
   };
 }
 
+export function getDashboardQOTDNavigationItem(
+  guildId: string,
+): NavigationItem {
+  const qotdBase = appRoutes.qotdBase(guildId);
+
+  return {
+    id: "qotd",
+    label: "QOTD",
+    to: qotdBase,
+    activePath: qotdBase,
+    matchPrefix: qotdBase,
+    homeActionLabel: "Open QOTD",
+  };
+}
+
 export function getDashboardSidebarNavigationSections(
   guildId: string,
 ): NavigationSection[] {
@@ -99,6 +114,12 @@ export function getDashboardSidebarNavigationSections(
     items: [getDashboardPartnerBoardNavigationItem(guildId)],
   };
 
+  const engagementNavigationSection: NavigationSection = {
+    id: "engagement",
+    label: "Engagement",
+    items: [getDashboardQOTDNavigationItem(guildId)],
+  };
+
   const rolesNavigationSection: NavigationSection = {
     id: "roles",
     label: "Roles",
@@ -124,6 +145,7 @@ export function getDashboardSidebarNavigationSections(
     coreNavigationSection,
     moderationNavigationSection,
     partnersNavigationSection,
+    engagementNavigationSection,
     rolesNavigationSection,
   ];
 }

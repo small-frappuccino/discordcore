@@ -22,6 +22,7 @@ type QOTDOfficialPostRecord struct {
 	ID                      int64
 	GuildID                 string
 	QuestionID              int64
+	PublishMode             string
 	PublishDateUTC          time.Time
 	State                   string
 	ForumChannelID          string

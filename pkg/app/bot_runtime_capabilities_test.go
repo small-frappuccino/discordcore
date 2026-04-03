@@ -53,6 +53,10 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 						Commands: boolPtr(true),
 					},
 				},
+				QOTD: files.QOTDConfig{
+					Enabled:        true,
+					ForumChannelID: "forum-alice",
+				},
 			},
 			{
 				GuildID:       "yuzuha-guild",
@@ -69,6 +73,10 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 					UserPrune: boolPtr(true),
 				},
 				UserPrune: files.UserPruneConfig{Enabled: true},
+				QOTD: files.QOTDConfig{
+					Enabled:        true,
+					ForumChannelID: "forum-yuzuha",
+				},
 			},
 		},
 	}
@@ -85,6 +93,9 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 	}
 	if !capabilities.userPrune {
 		t.Fatal("expected user prune capability for yuzuha runtime")
+	}
+	if !capabilities.qotd {
+		t.Fatal("expected qotd capability for yuzuha runtime")
 	}
 
 	required := discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessageReactions
@@ -106,7 +117,7 @@ func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
 	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "yuzuha", "alice")
-	if capabilities.monitoring || capabilities.commands || capabilities.admin || capabilities.automod || capabilities.userPrune {
+	if capabilities.monitoring || capabilities.commands || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotd {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
 	if capabilities.intents != discordgo.IntentsGuilds {
@@ -137,6 +148,10 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 						Commands: boolPtr(true),
 					},
 				},
+				QOTD: files.QOTDConfig{
+					Enabled:        true,
+					ForumChannelID: "forum-1",
+				},
 			},
 			{
 				GuildID:       "g2",
@@ -149,6 +164,9 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 						ReactionMetric: boolPtr(true),
 					},
 				},
+				QOTD: files.QOTDConfig{
+					ForumChannelID: "forum-2",
+				},
 			},
 		},
 	}
@@ -159,6 +177,9 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 	}
 	if !capabilities.monitoring {
 		t.Fatal("expected monitoring capability to include any guild assigned to alice")
+	}
+	if !capabilities.qotd {
+		t.Fatal("expected qotd capability to include any configured guild assigned to alice")
 	}
 	if capabilities.intents&discordgo.IntentsGuildMessageReactions == 0 {
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)

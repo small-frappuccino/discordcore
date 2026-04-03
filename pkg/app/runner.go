@@ -19,6 +19,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/util"
@@ -310,6 +311,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	}()
 
 	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerSyncDispatcher)
+	qotdService := qotd.NewService(configManager, store, nil)
 
 	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
 		defaultBotInstanceID: defaultBotInstanceID,
@@ -320,6 +322,8 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		runtimeApplier:       runtimeApplier,
 		partnerBoardService:  partnerBoardAppService,
 		partnerSyncExecutor:  partnerSyncDispatcher,
+		qotdReplyService:     qotdService,
+		qotdLifecycleService: qotdService,
 		startupTasks:         startupTasks,
 	}); err != nil {
 		return err
@@ -336,6 +340,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		runtimeResolver:       runtimeResolver,
 		partnerBoardService:   partnerBoardAppService,
 		partnerSyncExecutor:   partnerSyncDispatcher,
+		qotdService:           qotdService,
 		controlServerRegistry: controlServerRegistry,
 	})
 

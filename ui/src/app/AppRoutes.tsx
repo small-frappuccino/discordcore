@@ -12,6 +12,10 @@ import { PartnerBoardLayout } from "../features/partner-board/PartnerBoardLayout
 import { PartnerBoardEntriesPage } from "../features/partner-board/PartnerBoardEntriesPage";
 import { PartnerBoardLayoutPage } from "../features/partner-board/PartnerBoardLayoutPage";
 import { PartnerBoardDeliveryPage } from "../features/partner-board/PartnerBoardDeliveryPage";
+import { QOTDProvider } from "../features/qotd/QOTDContext";
+import { QOTDLayout } from "../features/qotd/QOTDLayout";
+import { QOTDSettingsPage } from "../features/qotd/QOTDSettingsPage";
+import { QOTDQuestionsPage } from "../features/qotd/QOTDQuestionsPage";
 import { appRoutes, mapLegacyDashboardPathForGuild } from "./routes";
 import { ManageIndexPage } from "../pages/ManageIndexPage";
 import { LandingPage } from "../pages/LandingPage";
@@ -57,6 +61,19 @@ export function AppRoutes() {
             <Route path="layout" element={<PartnerBoardLayoutPage />} />
             <Route path="delivery" element={<PartnerBoardDeliveryPage />} />
             <Route path="activity" element={<Navigate replace to="../entries" />} />
+          </Route>
+
+          <Route
+            path="qotd"
+            element={
+              <QOTDProvider>
+                <QOTDLayout />
+              </QOTDProvider>
+            }
+          >
+            <Route index element={<Navigate replace to="settings" />} />
+            <Route path="settings" element={<QOTDSettingsPage />} />
+            <Route path="questions" element={<QOTDQuestionsPage />} />
           </Route>
 
           <Route path="roles">

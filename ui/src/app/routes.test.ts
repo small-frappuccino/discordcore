@@ -13,6 +13,9 @@ describe("app route contracts", () => {
     expect(appRoutes.dashboardCoreControlPanel("guild-1")).toBe(
       "/manage/guild-1/core/control-panel",
     );
+    expect(appRoutes.qotdSettings("guild-1")).toBe(
+      "/manage/guild-1/qotd/settings",
+    );
     expect(appRoutes.dashboardModerationLogging("guild-1")).toBe(
       "/manage/guild-1/moderation/logging",
     );
@@ -38,6 +41,9 @@ describe("app route contracts", () => {
     );
     expect(mapLegacyDashboardPathForGuild("/dashboard/logging/", "guild-1")).toBe(
       appRoutes.dashboardModerationLogging("guild-1"),
+    );
+    expect(mapLegacyDashboardPathForGuild("/dashboard/qotd/questions", "guild-1")).toBe(
+      appRoutes.qotdQuestions("guild-1"),
     );
     expect(mapLegacyDashboardPathForGuild("/dashboard/roles-members", "guild-1")).toBe(
       appRoutes.dashboardRolesAutorole("guild-1"),

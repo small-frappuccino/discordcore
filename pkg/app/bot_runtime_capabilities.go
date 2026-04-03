@@ -13,6 +13,7 @@ type botRuntimeCapabilities struct {
 	admin      bool
 	automod    bool
 	userPrune  bool
+	qotd       bool
 	warmup     bool
 	intents    discordgo.Intent
 }
@@ -43,6 +44,10 @@ func resolveBotRuntimeCapabilities(
 			if features.Services.AdminCommands {
 				capabilities.admin = true
 			}
+		}
+
+		if !guild.QOTD.IsZero() {
+			capabilities.qotd = true
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {

@@ -20,21 +20,88 @@ func ArchiveAt(publishDate time.Time) time.Time {
 	return PublishTimeUTC(date.AddDate(0, 0, 2))
 }
 
+// ManualBecomesPreviousAt returns when an independently published manual QOTD
+// leaves its first 24-hour answer window.
+func ManualBecomesPreviousAt(publishedAt time.Time) time.Time {
+	publishedAt = normalizeClockInput(publishedAt)
+	if publishedAt.IsZero() {
+		return time.Time{}
+	}
+	return publishedAt.Add(24 * time.Hour)
+}
+
+// ManualArchiveAt returns when an independently published manual QOTD ages out
+// of its two-day answer window.
+func ManualArchiveAt(publishedAt time.Time) time.Time {
+	publishedAt = normalizeClockInput(publishedAt)
+	if publishedAt.IsZero() {
+		return time.Time{}
+	}
+	return publishedAt.Add(48 * time.Hour)
+}
+
+// StateWithinWindow returns the lifecycle state for any official post whose
+// current/previous/archive boundaries are already stored.
+func StateWithinWindow(graceUntil, archiveAt, now time.Time) OfficialPostState {
+	if graceUntil.IsZero() || archiveAt.IsZero() {
+		return OfficialPostStateArchived
+	}
+	now = normalizeClockInput(now)
+	graceUntil = normalizeClockInput(graceUntil)
+	archiveAt = normalizeClockInput(archiveAt)
+
+	switch {
+	case now.Before(graceUntil):
+		return OfficialPostStateCurrent
+	case now.Before(archiveAt):
+		return OfficialPostStatePrevious
+	default:
+		return OfficialPostStateArchived
+	}
+}
+
 // StateAt returns the lifecycle state for an official QOTD post at a given time.
 func StateAt(publishDate, now time.Time) OfficialPostState {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
 		return OfficialPostStateArchived
 	}
-	now = normalizeClockInput(now)
+	return StateWithinWindow(BecomesPreviousAt(date), ArchiveAt(date), now)
+}
 
-	switch {
-	case now.Before(BecomesPreviousAt(date)):
-		return OfficialPostStateCurrent
-	case now.Before(ArchiveAt(date)):
-		return OfficialPostStatePrevious
-	default:
-		return OfficialPostStateArchived
+// EvaluateOfficialPostWindow returns the pure lifecycle view for any post whose
+// current/previous/archive boundaries are already known.
+func EvaluateOfficialPostWindow(publishDate, publishAt, graceUntil, archiveAt, now time.Time) OfficialPostLifecycle {
+	publishDate = NormalizePublishDateUTC(publishDate)
+	if publishDate.IsZero() {
+		publishDate = NormalizePublishDateUTC(publishAt)
+	}
+	if publishDate.IsZero() || graceUntil.IsZero() || archiveAt.IsZero() {
+		return OfficialPostLifecycle{}
+	}
+	now = normalizeClockInput(now)
+	if publishAt.IsZero() {
+		publishAt = PublishTimeUTC(publishDate)
+	} else {
+		publishAt = publishAt.UTC()
+	}
+	graceUntil = graceUntil.UTC()
+	archiveAt = archiveAt.UTC()
+
+	state := StateWithinWindow(graceUntil, archiveAt, now)
+	answerWindow := AnswerWindow{
+		IsOpen:   state == OfficialPostStateCurrent || state == OfficialPostStatePrevious,
+		State:    state,
+		ClosesAt: archiveAt,
+	}
+
+	return OfficialPostLifecycle{
+		PublishDateUTC:    publishDate,
+		PublishAt:         publishAt,
+		BecomesPreviousAt: graceUntil,
+		ArchiveAt:         archiveAt,
+		State:             state,
+		AnswerWindow:      answerWindow,
 	}
 }
 
@@ -44,24 +111,23 @@ func EvaluateOfficialPost(publishDate, now time.Time) OfficialPostLifecycle {
 	if date.IsZero() {
 		return OfficialPostLifecycle{}
 	}
-	now = normalizeClockInput(now)
+	return EvaluateOfficialPostWindow(date, PublishTimeUTC(date), BecomesPreviousAt(date), ArchiveAt(date), now)
+}
 
-	state := StateAt(date, now)
-	archiveAt := ArchiveAt(date)
-	answerWindow := AnswerWindow{
-		IsOpen:   state == OfficialPostStateCurrent || state == OfficialPostStatePrevious,
-		State:    state,
-		ClosesAt: archiveAt,
+// EvaluateManualOfficialPost returns the lifecycle view for a manually
+// published official post whose window is anchored to its publish timestamp.
+func EvaluateManualOfficialPost(publishedAt, now time.Time) OfficialPostLifecycle {
+	publishedAt = normalizeClockInput(publishedAt)
+	if publishedAt.IsZero() {
+		return OfficialPostLifecycle{}
 	}
-
-	return OfficialPostLifecycle{
-		PublishDateUTC:    date,
-		PublishAt:         PublishTimeUTC(date),
-		BecomesPreviousAt: BecomesPreviousAt(date),
-		ArchiveAt:         archiveAt,
-		State:             state,
-		AnswerWindow:      answerWindow,
-	}
+	return EvaluateOfficialPostWindow(
+		NormalizePublishDateUTC(publishedAt),
+		publishedAt,
+		ManualBecomesPreviousAt(publishedAt),
+		ManualArchiveAt(publishedAt),
+		now,
+	)
 }
 
 // CanAnswer reports whether new reply threads may still be created for a post.

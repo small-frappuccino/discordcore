@@ -69,6 +69,118 @@ export interface SyncResponse {
   synced: boolean;
 }
 
+export type QOTDQuestionStatus =
+  | "draft"
+  | "ready"
+  | "reserved"
+  | "used"
+  | "disabled";
+
+export interface QOTDConfig {
+  enabled?: boolean;
+  forum_channel_id?: string;
+  question_tag_id?: string;
+  reply_tag_id?: string;
+  staff_role_ids?: string[];
+}
+
+export interface QOTDQuestion {
+  id: number;
+  body: string;
+  status: QOTDQuestionStatus;
+  queue_position: number;
+  created_by?: string;
+  scheduled_for_date_utc?: string;
+  used_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QOTDQuestionCounts {
+  total: number;
+  draft: number;
+  ready: number;
+  reserved: number;
+  used: number;
+  disabled: number;
+}
+
+export interface QOTDOfficialPost {
+  id: number;
+  question_id: number;
+  publish_mode: string;
+  publish_date_utc: string;
+  state: string;
+  forum_channel_id: string;
+  discord_thread_id?: string;
+  discord_starter_message_id?: string;
+  question_text_snapshot: string;
+  is_pinned: boolean;
+  published_at?: string;
+  grace_until: string;
+  archive_at: string;
+  closed_at?: string;
+  archived_at?: string;
+  thread_url?: string;
+}
+
+export interface QOTDSummary {
+  settings: QOTDConfig;
+  counts: QOTDQuestionCounts;
+  current_publish_date_utc: string;
+  published_for_current_slot: boolean;
+  current_post?: QOTDOfficialPost;
+  previous_post?: QOTDOfficialPost;
+}
+
+export interface QOTDSettingsResponse {
+  status: string;
+  guild_id: string;
+  settings: QOTDConfig;
+}
+
+export interface QOTDQuestionsResponse {
+  status: string;
+  guild_id: string;
+  questions: QOTDQuestion[];
+}
+
+export interface QOTDQuestionResponse {
+  status: string;
+  guild_id: string;
+  question: QOTDQuestion;
+}
+
+export interface QOTDSummaryResponse {
+  status: string;
+  guild_id: string;
+  summary: QOTDSummary;
+}
+
+export interface QOTDForumTagOption {
+  id: string;
+  name: string;
+  moderated: boolean;
+}
+
+export interface QOTDForumTagsResponse {
+  status: string;
+  guild_id: string;
+  tags: QOTDForumTagOption[];
+}
+
+export interface QOTDPublishResult {
+  thread_url?: string;
+  question: QOTDQuestion;
+  official_post: QOTDOfficialPost;
+}
+
+export interface QOTDPublishResponse {
+  status: string;
+  guild_id: string;
+  result: QOTDPublishResult;
+}
+
 export type DashboardGuildAccessLevel = "read" | "write";
 
 export interface AccessibleGuild {
@@ -353,6 +465,108 @@ export class ControlApiClient {
     return this.request<SyncResponse>(
       "POST",
       `/v1/guilds/${encodeURIComponent(guildId)}/partner-board/sync`,
+    );
+  }
+
+  async getQOTDSummary(guildId: string): Promise<QOTDSummaryResponse> {
+    return this.request<QOTDSummaryResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd`,
+    );
+  }
+
+  async getQOTDSettings(guildId: string): Promise<QOTDSettingsResponse> {
+    return this.request<QOTDSettingsResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/settings`,
+    );
+  }
+
+  async updateQOTDSettings(
+    guildId: string,
+    payload: QOTDConfig,
+  ): Promise<QOTDSettingsResponse> {
+    return this.request<QOTDSettingsResponse>(
+      "PUT",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/settings`,
+      payload,
+    );
+  }
+
+  async listQOTDQuestions(guildId: string): Promise<QOTDQuestionsResponse> {
+    return this.request<QOTDQuestionsResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions`,
+    );
+  }
+
+  async createQOTDQuestion(
+    guildId: string,
+    payload: Pick<QOTDQuestion, "body" | "status">,
+  ): Promise<QOTDQuestionResponse> {
+    return this.request<QOTDQuestionResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions`,
+      payload,
+    );
+  }
+
+  async updateQOTDQuestion(
+    guildId: string,
+    questionId: number,
+    payload: Pick<QOTDQuestion, "body" | "status">,
+  ): Promise<QOTDQuestionResponse> {
+    return this.request<QOTDQuestionResponse>(
+      "PUT",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/${questionId}`,
+      payload,
+    );
+  }
+
+  async deleteQOTDQuestion(
+    guildId: string,
+    questionId: number,
+  ): Promise<void> {
+    await this.request<Record<string, unknown>>(
+      "DELETE",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/${questionId}`,
+    );
+  }
+
+  async reorderQOTDQuestions(
+    guildId: string,
+    orderedIDs: number[],
+  ): Promise<QOTDQuestionsResponse> {
+    return this.request<QOTDQuestionsResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/reorder`,
+      {
+        ordered_ids: orderedIDs,
+      },
+    );
+  }
+
+  async listQOTDForumTags(
+    guildId: string,
+    channelId: string,
+  ): Promise<QOTDForumTagsResponse> {
+    return this.request<QOTDForumTagsResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/forum-tags?channel_id=${encodeURIComponent(channelId)}`,
+    );
+  }
+
+  async publishQOTDNow(guildId: string): Promise<QOTDPublishResponse> {
+    return this.request<QOTDPublishResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/publish-now`,
+    );
+  }
+
+  async reconcileQOTD(guildId: string): Promise<QOTDSummaryResponse> {
+    return this.request<QOTDSummaryResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/reconcile`,
     );
   }
 

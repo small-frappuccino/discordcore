@@ -83,6 +83,9 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 	case len(tail) >= 1 && tail[0] == "partner-board":
 		s.handleGuildPartnerBoardRoutes(w, r, guildID, tail)
 		return
+	case len(tail) >= 1 && tail[0] == "qotd":
+		s.handleGuildQOTDRoutes(w, r, guildID, tail, auth)
+		return
 	default:
 		http.NotFound(w, r)
 		return
@@ -178,5 +181,14 @@ func (s *Server) requirePartnerBoardService(w http.ResponseWriter) bool {
 	}
 
 	http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
+	return false
+}
+
+func (s *Server) requireQOTDService(w http.ResponseWriter) bool {
+	if s.qotdService != nil {
+		return true
+	}
+
+	http.Error(w, "qotd service unavailable", http.StatusInternalServerError)
 	return false
 }

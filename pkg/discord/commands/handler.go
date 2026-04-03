@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
+	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
@@ -26,8 +27,10 @@ type CommandHandler struct {
 	defaultBotInstanceID string
 	commandManager       *core.CommandManager
 	runtimeHandlerCancel func()
+	qotdHandlerCancel    func()
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
+	qotdReplyService     discordqotd.ReplyThreadService
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -58,7 +61,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	log.ApplicationLogger().Info("Setting up bot commands...")
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
-	if ch.commandManager != nil || ch.runtimeHandlerCancel != nil {
+	if ch.commandManager != nil || ch.runtimeHandlerCancel != nil || ch.qotdHandlerCancel != nil {
 		log.ApplicationLogger().Warn("Command setup called with active handlers; cleaning previous registrations first")
 		if err := ch.Shutdown(); err != nil {
 			return fmt.Errorf("cleanup previous command handlers: %w", err)
@@ -95,12 +98,25 @@ func (ch *CommandHandler) SetupCommands() error {
 		}
 		runtimeHandler(s, i)
 	})
+	if ch.qotdReplyService != nil {
+		qotdHandler := discordqotd.HandleAnswerButtonInteractions(ch.qotdReplyService)
+		ch.qotdHandlerCancel = ch.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+			if i == nil || !ch.handlesGuild(i.GuildID) {
+				return
+			}
+			qotdHandler(s, i)
+		})
+	}
 
 	// Configure commands on Discord
 	if err := ch.commandManager.SetupCommands(); err != nil {
 		if ch.runtimeHandlerCancel != nil {
 			ch.runtimeHandlerCancel()
 			ch.runtimeHandlerCancel = nil
+		}
+		if ch.qotdHandlerCancel != nil {
+			ch.qotdHandlerCancel()
+			ch.qotdHandlerCancel = nil
 		}
 		if ch.commandManager != nil {
 			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
@@ -128,6 +144,10 @@ func (ch *CommandHandler) SetPartnerBoardService(service partners.BoardService) 
 // SetPartnerBoardSyncExecutor injects a sync executor used by /partner sync.
 func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor) {
 	ch.partnerSyncExecutor = executor
+}
+
+func (ch *CommandHandler) SetQOTDReplyService(service discordqotd.ReplyThreadService) {
+	ch.qotdReplyService = service
 }
 
 // registerConfigCommands registers configuration-related commands
@@ -167,6 +187,10 @@ func (ch *CommandHandler) Shutdown() error {
 	if ch.runtimeHandlerCancel != nil {
 		ch.runtimeHandlerCancel()
 		ch.runtimeHandlerCancel = nil
+	}
+	if ch.qotdHandlerCancel != nil {
+		ch.qotdHandlerCancel()
+		ch.qotdHandlerCancel = nil
 	}
 
 	if ch.commandManager != nil {

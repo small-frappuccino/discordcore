@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -167,16 +168,16 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     workspaceState = "unavailable";
   }
 
-  function resetTransientWorkspaceState() {
+  const resetTransientWorkspaceState = useCallback(() => {
     setEntryForm(initialEntryForm);
     setSearchQuery("");
     setPendingDeleteName(null);
     setEditingPartnerName("");
     setDrawerMode("create");
     setIsDrawerOpen(false);
-  }
+  }, []);
 
-  function resetWorkspace() {
+  const resetWorkspace = useCallback(() => {
     setBoard(null);
     setDeliveryForm(initialDeliveryForm);
     setLayoutForm(initialLayoutForm);
@@ -187,12 +188,12 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setLastSyncedAt(null);
     setHasLoadedAttempt(false);
     setNotice(null);
-  }
+  }, [resetTransientWorkspaceState]);
 
-  function applyBoard(
+  const applyBoard = useCallback((
     nextBoard: PartnerBoardConfig,
     options: { cache?: boolean; fetchedAt?: number } = {},
-  ) {
+  ) => {
     const fetchedAt = options.fetchedAt ?? Date.now();
     const nextForms = formsFromBoard(nextBoard);
     if (options.cache !== false && normalizedGuildID !== "") {
@@ -203,7 +204,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setLayoutForm(nextForms.layoutForm);
     setLastLoadedAt(fetchedAt);
     setHasLoadedAttempt(true);
-  }
+  }, [baseUrl, normalizedGuildID]);
 
   async function loadBoardData(options: {
     preservePendingState?: boolean;
@@ -330,7 +331,15 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [authState, baseUrl, client, normalizedGuildID]);
+  }, [
+    applyBoard,
+    authState,
+    baseUrl,
+    client,
+    normalizedGuildID,
+    resetTransientWorkspaceState,
+    resetWorkspace,
+  ]);
 
   function setDeliveryFormField(
     field: keyof DeliveryFormState,

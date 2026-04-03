@@ -238,22 +238,33 @@ export function DashboardSessionProvider({
     });
   });
 
+  const startSessionRefreshRef = useRef(startSessionRefresh);
+  const triggerFreshSessionRefreshRef = useRef(triggerFreshSessionRefresh);
+
   useEffect(() => {
-    void startSessionRefresh(client, {
+    startSessionRefreshRef.current = startSessionRefresh;
+  }, [startSessionRefresh]);
+
+  useEffect(() => {
+    triggerFreshSessionRefreshRef.current = triggerFreshSessionRefresh;
+  }, [triggerFreshSessionRefresh]);
+
+  useEffect(() => {
+    void startSessionRefreshRef.current(client, {
       freshGuilds: true,
     });
   }, [client]);
 
   useEffect(() => {
     function handleFocus() {
-      triggerFreshSessionRefresh();
+      triggerFreshSessionRefreshRef.current();
     }
 
     function handleVisibilityChange() {
       if (document.visibilityState !== "visible") {
         return;
       }
-      triggerFreshSessionRefresh();
+      triggerFreshSessionRefreshRef.current();
     }
 
     window.addEventListener("focus", handleFocus);
