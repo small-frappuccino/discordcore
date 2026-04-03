@@ -2,6 +2,7 @@ package files
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 )
@@ -68,6 +69,51 @@ func NormalizePartnerBoardConfig(in PartnerBoardConfig) (PartnerBoardConfig, err
 		Template: normalizePartnerBoardTemplate(in.Template),
 		Partners: clonePartnerEntries(partners),
 	}, nil
+}
+
+// NormalizeQOTDConfig canonicalizes guild QOTD settings so dedicated routes and
+// broad config writes can share the same validation behavior.
+func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
+	out := QOTDConfig{
+		Enabled:        in.Enabled,
+		ForumChannelID: strings.TrimSpace(in.ForumChannelID),
+		QuestionTagID:  strings.TrimSpace(in.QuestionTagID),
+		ReplyTagID:     strings.TrimSpace(in.ReplyTagID),
+	}
+
+	var err error
+	if out.StaffRoleIDs, err = normalizeQOTDStaffRoleIDs(in.StaffRoleIDs); err != nil {
+		return QOTDConfig{}, err
+	}
+
+	if out.IsZero() {
+		return QOTDConfig{}, nil
+	}
+	if out.ForumChannelID != "" && !isAllDigits(out.ForumChannelID) {
+		return QOTDConfig{}, invalidQOTDInput("forum_channel_id must be numeric")
+	}
+	if out.QuestionTagID != "" && !isAllDigits(out.QuestionTagID) {
+		return QOTDConfig{}, invalidQOTDInput("question_tag_id must be numeric")
+	}
+	if out.ReplyTagID != "" && !isAllDigits(out.ReplyTagID) {
+		return QOTDConfig{}, invalidQOTDInput("reply_tag_id must be numeric")
+	}
+	if out.QuestionTagID != "" && out.QuestionTagID == out.ReplyTagID {
+		return QOTDConfig{}, invalidQOTDInput("question_tag_id and reply_tag_id must differ")
+	}
+	if out.Enabled {
+		if out.ForumChannelID == "" {
+			return QOTDConfig{}, invalidQOTDInput("forum_channel_id is required when enabled")
+		}
+		if out.QuestionTagID == "" {
+			return QOTDConfig{}, invalidQOTDInput("question_tag_id is required when enabled")
+		}
+		if out.ReplyTagID == "" {
+			return QOTDConfig{}, invalidQOTDInput("reply_tag_id is required when enabled")
+		}
+	}
+
+	return out, nil
 }
 
 func normalizeRuntimeDatabaseConfig(in DatabaseRuntimeConfig) (DatabaseRuntimeConfig, bool, error) {

@@ -173,6 +173,7 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		ChannelCacheTTL: in.ChannelCacheTTL,
 		UserPrune:       cloneUserPruneConfig(in.UserPrune),
 		PartnerBoard:    clonePartnerBoardConfig(in.PartnerBoard),
+		QOTD:            cloneQOTDConfig(in.QOTD),
 		RuntimeConfig:   cloneRuntimeConfig(in.RuntimeConfig),
 	}
 }
@@ -307,6 +308,16 @@ func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 		Target:   in.Target,
 		Template: in.Template,
 		Partners: clonePartnerEntries(in.Partners),
+	}
+}
+
+func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
+	return QOTDConfig{
+		Enabled:        in.Enabled,
+		ForumChannelID: in.ForumChannelID,
+		QuestionTagID:  in.QuestionTagID,
+		ReplyTagID:     in.ReplyTagID,
+		StaffRoleIDs:   cloneStringSlice(in.StaffRoleIDs),
 	}
 }
 

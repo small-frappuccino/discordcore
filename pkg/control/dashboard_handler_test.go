@@ -13,7 +13,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-func TestDashboardHandlerServesStaticAsset(t *testing.T) {
+func TestDashboardHandlerServesStaticAssetUnderCanonicalAndLegacyPrefixes(t *testing.T) {
 	t.Parallel()
 
 	handler := mustNewDashboardTestHandler(t, fstest.MapFS{
@@ -22,19 +22,24 @@ func TestDashboardHandlerServesStaticAsset(t *testing.T) {
 		"assets/app.css": &fstest.MapFile{Data: []byte("body{background:#fff;}")},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/app.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	for _, route := range []string{
+		"/manage/assets/app.js",
+		"/dashboard/assets/app.js",
+	} {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected asset request to succeed, got %d body=%q", rec.Code, rec.Body.String())
-	}
-	if body := rec.Body.String(); body != "console.log('dashboard');" {
-		t.Fatalf("unexpected asset body: %q", body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected asset request %q to succeed, got %d body=%q", route, rec.Code, rec.Body.String())
+		}
+		if body := rec.Body.String(); body != "console.log('dashboard');" {
+			t.Fatalf("unexpected asset body for %q: %q", route, body)
+		}
 	}
 }
 
-func TestDashboardHandlerFallsBackToIndexForSPARoute(t *testing.T) {
+func TestDashboardHandlerFallsBackToIndexForCanonicalAndLegacySPARoutes(t *testing.T) {
 	t.Parallel()
 
 	handler := mustNewDashboardTestHandler(t, fstest.MapFS{
@@ -43,6 +48,9 @@ func TestDashboardHandlerFallsBackToIndexForSPARoute(t *testing.T) {
 	})
 
 	testCases := []string{
+		"/manage/settings/guilds",
+		"/manage/partner-board/entries",
+		"/manage/partner-board/delivery",
 		"/dashboard/settings/guilds",
 		"/dashboard/partner-board/entries",
 		"/dashboard/partner-board/delivery",
@@ -69,12 +77,17 @@ func TestDashboardHandlerMissingAssetWithExtensionReturnsNotFound(t *testing.T) 
 		"index.html": &fstest.MapFile{Data: []byte("<!doctype html><html><body>spa index</body></html>")},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/missing.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	for _, route := range []string{
+		"/manage/assets/missing.js",
+		"/dashboard/assets/missing.js",
+	} {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected missing asset path to return 404, got %d body=%q", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected missing asset path %q to return 404, got %d body=%q", route, rec.Code, rec.Body.String())
+		}
 	}
 }
 
@@ -210,15 +223,31 @@ func TestControlServerCanonicalizesDashboardRequestsToPublicOrigin(t *testing.T)
 		t.Fatalf("configure oauth: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "https://localhost:8443/dashboard/settings/guilds?tab=access", nil)
-	rec := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected canonical redirect, got %d body=%q", rec.Code, rec.Body.String())
+	testCases := []struct {
+		requestURL string
+		wantURL    string
+	}{
+		{
+			requestURL: "https://localhost:8443/manage/settings/guilds?tab=access",
+			wantURL:    "https://alice.localhost:8443/manage/settings/guilds?tab=access",
+		},
+		{
+			requestURL: "https://localhost:8443/dashboard/settings/guilds?tab=access",
+			wantURL:    "https://alice.localhost:8443/dashboard/settings/guilds?tab=access",
+		},
 	}
-	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "https://alice.localhost:8443/dashboard/settings/guilds?tab=access" {
-		t.Fatalf("unexpected canonical dashboard redirect: %q", location)
+
+	for _, tc := range testCases {
+		req := httptest.NewRequest(http.MethodGet, tc.requestURL, nil)
+		rec := httptest.NewRecorder()
+		srv.httpServer.Handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusFound {
+			t.Fatalf("expected canonical redirect for %q, got %d body=%q", tc.requestURL, rec.Code, rec.Body.String())
+		}
+		if location := strings.TrimSpace(rec.Header().Get("Location")); location != tc.wantURL {
+			t.Fatalf("unexpected canonical dashboard redirect for %q: %q", tc.requestURL, location)
+		}
 	}
 }
 

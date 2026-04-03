@@ -228,7 +228,7 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 ## Control API (Bearer + OAuth session)
 
-When the shared runner is used via `Run`, the Control API starts on the default listener `127.0.0.1:8376`. Hosts can override the listener and public origin through `RunWithOptions`; `alicebot` uses that path to expose embedded local HTTPS on `127.0.0.1:8443` with canonical public origin `https://alice.localhost:8443`. The control server serves a minimal landing page at `/`, while the embedded dashboard remains mounted under `/dashboard/`.
+When the shared runner is used via `Run`, the Control API starts on the default listener `127.0.0.1:8376`. Hosts can override the listener and public origin through `RunWithOptions`; `alicebot` uses that path to expose embedded local HTTPS on `127.0.0.1:8443` with canonical public origin `https://alice.localhost:8443`. The control server serves a minimal landing page at `/`, while the embedded dashboard is mounted canonically under `/manage/` with `/dashboard/` retained only as a legacy compatibility alias.
 
 - `ALICE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
 - `ALICE_CONTROL_PUBLIC_ORIGIN` (optional; absolute canonical browser origin such as `https://alice.localhost:8443`)
@@ -239,7 +239,8 @@ When the shared runner is used via `Run`, the Control API starts on the default 
 Behavior summary:
 
 - `/` serves the minimal control landing page with Discord login and dashboard entry actions.
-- `/dashboard/` requires a valid Discord OAuth session cookie; unauthenticated requests are redirected back to `/`.
+- `/manage/` is the canonical authenticated dashboard base path.
+- `/dashboard/` remains supported as a legacy compatibility alias and resolves into the same authenticated dashboard shell.
 - Guild-specific web configuration uses Discord OAuth session auth and is limited to guilds returned by `/auth/guilds/manageable`.
 - When bearer auth is configured without Discord OAuth, the control API remains available for trusted automation, but the browser dashboard stays gated because no Discord session can be established.
 - If the fixed listener `127.0.0.1:8376` cannot be bound, startup continues without the control server and the failure is logged as degraded control-plane availability.
@@ -260,7 +261,8 @@ Discord OAuth2 endpoints (optional, same control server):
 - `GET /auth/discord/login` redirects to Discord OAuth authorize URL and emits anti-CSRF `state` cookie.
 - `GET /auth/discord/callback` validates `state`, exchanges `code` at Discord token endpoint, resolves `/users/@me`, creates server-side session, and sets session cookie.
 - `GET /auth/discord/login?next=/` stores the post-login landing redirect, and the callback redirects back to `/` after the session cookie is issued.
-- `GET /auth/discord/login?next=/dashboard/` remains valid for returning directly to the authenticated dashboard shell when needed.
+- `GET /auth/discord/login?next=/manage/` is the canonical way to return directly to the authenticated dashboard shell.
+- `GET /auth/discord/login?next=/dashboard/` remains valid as a legacy compatibility alias when older callers still send it.
 - `GET /auth/me` returns current authenticated session user.
 - `GET /auth/me` also returns `csrf_token` for explicit CSRF header usage.
 - OAuth status/login/dashboard URLs are emitted against the configured public origin when available, so browser flows do not start on one host and callback on another.
@@ -361,7 +363,8 @@ Local dev contract:
 - `VITE_CONTROL_API_BASE_URL` defaults to current origin
 - Dashboard requests use OAuth session cookie auth (`credentials: include`); bearer tokens are not stored in browser code.
 - `VITE_CONTROL_API_GUILD_ID` can prefill the guild selector
-- Production builds use Vite `base: "/dashboard/"`, and the embedded dashboard is served by the control server under `/dashboard/`
+- Production builds use Vite `base: "/manage/"`, and the embedded dashboard is served by the control server under `/manage/`
+- `/dashboard/` remains available only as a legacy compatibility alias
 - The public landing page is served by the Go control server at `/`; the React bundle remains dashboard-only.
 
 Quick start:
@@ -384,7 +387,7 @@ go build -o alicebot ./cmd/alicebot
 Build behavior:
 
 - `ui/dist/index.html` remains the tracked shell used by `//go:embed`
-- when `.vite/manifest.json` and hashed assets are present, the shell loads the built React entrypoint from `/dashboard/`
+- when `.vite/manifest.json` and hashed assets are present, the shell loads the built React entrypoint from `/manage/`
 - when frontend assets are absent, the shell stays in placeholder mode with a clear message instead of embedding broken hashed paths
 
 `discordcore` owns the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend. The final executable remains the `alicebot` binary, which embeds the assets produced in `discordcore/ui/dist`.

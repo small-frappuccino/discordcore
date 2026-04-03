@@ -1575,7 +1575,7 @@ function createReadOnlySelectedGuildFetchMock() {
 
 describe("dashboard routing and workspace", () => {
   beforeEach(() => {
-    window.history.replaceState({}, "", appRoutes.controlPanel);
+    window.history.replaceState({}, "", appRoutes.legacyControlPanel);
   });
 
   afterEach(() => {
@@ -1742,7 +1742,7 @@ describe("dashboard routing and workspace", () => {
   it("saves dashboard read/write access roles from the dedicated Control Panel page", async () => {
     const { fetchMock, settingsUpdates } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
-    window.history.replaceState({}, "", appRoutes.controlPanel);
+    window.history.replaceState({}, "", appRoutes.legacyControlPanel);
 
     render(<App />);
 

@@ -89,10 +89,11 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     anchor: "maintenance",
     label: "Maintenance",
     description:
-      "Advanced cleanup, backfill, pruning, and scheduled data routines that now live under Settings > Advanced.",
+      "Advanced monitoring, cleanup, backfill, pruning, and scheduled data routines that now live under Settings > Advanced.",
     homeShortcutLabel: "Advanced routines",
     navigation: "advanced",
     featureIDs: [
+      "services.monitoring",
       "message_cache.cleanup_on_startup",
       "message_cache.delete_on_log",
       "maintenance.db_cleanup",

@@ -394,6 +394,15 @@ type PartnerBoardConfig struct {
 	Partners []PartnerEntryConfig       `json:"partners,omitempty"`
 }
 
+// QOTDConfig stores per-guild question-of-the-day forum settings.
+type QOTDConfig struct {
+	Enabled        bool     `json:"enabled,omitempty"`
+	ForumChannelID string   `json:"forum_channel_id,omitempty"`
+	QuestionTagID  string   `json:"question_tag_id,omitempty"`
+	ReplyTagID     string   `json:"reply_tag_id,omitempty"`
+	StaffRoleIDs   []string `json:"staff_role_ids,omitempty"`
+}
+
 // UserPruneConfig controls periodic user pruning per guild.
 type UserPruneConfig struct {
 	// Enabled toggles the automatic monthly prune.
@@ -435,6 +444,7 @@ type GuildConfig struct {
 	UserPrune UserPruneConfig `json:"user_prune,omitempty"`
 
 	PartnerBoard PartnerBoardConfig `json:"partner_board,omitempty"`
+	QOTD         QOTDConfig         `json:"qotd,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`

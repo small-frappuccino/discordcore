@@ -1,0 +1,48 @@
+package qotd
+
+import (
+	"testing"
+	"time"
+)
+
+func TestCurrentPublishDateUTCBeforeDailyBoundaryUsesPreviousDay(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 3, 12, 42, 59, 0, time.UTC)
+	got := CurrentPublishDateUTC(now)
+	want := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("expected current publish date %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
+	}
+}
+
+func TestEvaluateOfficialPostTransitionsCurrentPreviousArchived(t *testing.T) {
+	t.Parallel()
+
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+
+	current := EvaluateOfficialPost(publishDate, time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC))
+	if current.State != OfficialPostStateCurrent || !current.AnswerWindow.IsOpen {
+		t.Fatalf("expected current/open lifecycle, got %+v", current)
+	}
+
+	previous := EvaluateOfficialPost(publishDate, time.Date(2026, 4, 4, 13, 0, 0, 0, time.UTC))
+	if previous.State != OfficialPostStatePrevious || !previous.AnswerWindow.IsOpen {
+		t.Fatalf("expected previous/open lifecycle, got %+v", previous)
+	}
+
+	archived := EvaluateOfficialPost(publishDate, time.Date(2026, 4, 5, 13, 0, 0, 0, time.UTC))
+	if archived.State != OfficialPostStateArchived || archived.AnswerWindow.IsOpen {
+		t.Fatalf("expected archived/closed lifecycle, got %+v", archived)
+	}
+}
+
+func TestShouldArchiveHonorsExistingArchivedTimestamp(t *testing.T) {
+	t.Parallel()
+
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	archivedAt := time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
+	if ShouldArchive(publishDate, time.Date(2026, 4, 6, 12, 43, 0, 0, time.UTC), &archivedAt) {
+		t.Fatal("expected already-archived post to skip archive work")
+	}
+}

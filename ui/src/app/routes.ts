@@ -52,12 +52,12 @@ export const appRoutes = {
     `/manage/${encodeGuildID(guildId)}/roles/autorole`,
   dashboardRolesLevelRoles: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/roles/level-roles`,
-  controlPanel: "/dashboard/control-panel",
-  commands: "/dashboard/commands",
-  moderation: "/dashboard/moderation",
-  logging: "/dashboard/logging",
-  roles: "/dashboard/roles",
-  stats: "/dashboard/stats",
+  legacyControlPanel: "/dashboard/control-panel",
+  legacyCommands: "/dashboard/commands",
+  legacyModeration: "/dashboard/moderation",
+  legacyLogging: "/dashboard/logging",
+  legacyRoles: "/dashboard/roles",
+  legacyStats: "/dashboard/stats",
 } as const;
 
 export function buildPartnerBoardTabs(guildId: string) {
@@ -100,7 +100,7 @@ export function mapLegacyDashboardPathForGuild(pathname: string, guildId: string
     return appRoutes.manage;
   }
 
-  if (pathname === "/dashboard" || pathname === "/dashboard/") {
+  if (pathname === appRoutes.manageLegacy || pathname === `${appRoutes.manageLegacy}/`) {
     return appRoutes.dashboardHome(normalizedGuildID);
   }
 
@@ -109,7 +109,7 @@ export function mapLegacyDashboardPathForGuild(pathname: string, guildId: string
     return appRoutes.manage;
   }
 
-  const rest = match[1]?.replace(/^\/+/, "") ?? "";
+  const rest = normalizeLegacyDashboardSubpath(match[1] ?? "");
   switch (rest) {
     case "":
     case "home":
@@ -138,4 +138,8 @@ export function mapLegacyDashboardPathForGuild(pathname: string, guildId: string
     default:
       return appRoutes.dashboardHome(normalizedGuildID);
   }
+}
+
+function normalizeLegacyDashboardSubpath(pathname: string) {
+  return pathname.replace(/^\/+/, "").replace(/\/+$/, "");
 }
