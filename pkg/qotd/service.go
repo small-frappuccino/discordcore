@@ -2,6 +2,8 @@ package qotd
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -30,9 +32,12 @@ var (
 	ErrReplyThreadUnavailable  = discordqotd.ErrReplyThreadUnavailable
 )
 
+var replyThreadProvisioningTTL = 10 * time.Minute
+
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
 	CreateReplyPost(ctx context.Context, session *discordgo.Session, params discordqotd.CreateReplyPostParams) (*discordqotd.CreatedReplyPost, error)
+	FindReplyPostByNonce(ctx context.Context, session *discordgo.Session, params discordqotd.FindReplyPostByNonceParams) (*discordqotd.FoundReplyPost, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 	FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error)
 }
@@ -399,6 +404,30 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 	}
 
 	record := existing
+	now := s.clock()
+	if record != nil {
+		if recovered, err := s.recoverProvisioningReplyThread(ctx, session, officialPost.GuildID, record); err != nil {
+			return nil, err
+		} else if result, ok := buildExistingReplyThreadResult(officialPost.GuildID, recovered); ok {
+			return result, nil
+		}
+
+		if strings.TrimSpace(record.State) == string(ReplyThreadStateProvisioning) && !replyThreadProvisioningExpired(*record, now) {
+			return nil, ErrReplyThreadProvisioning
+		}
+
+		if strings.TrimSpace(record.State) == string(ReplyThreadStateProvisioning) {
+			if _, err := s.store.UpdateQOTDReplyThreadState(ctx, record.ID, string(ReplyThreadStateFailed), nil, nil); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	provisioningNonce, err := generateProvisioningNonce()
+	if err != nil {
+		return nil, err
+	}
+
 	if record == nil {
 		record, err = s.store.CreateQOTDReplyThreadProvisioning(ctx, storage.QOTDReplyThreadRecord{
 			GuildID:                 officialPost.GuildID,
@@ -407,6 +436,7 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 			State:                   string(ReplyThreadStateProvisioning),
 			ForumChannelID:          forumChannelID,
 			CreatedViaInteractionID: normalized.InteractionID,
+			ProvisioningNonce:       provisioningNonce,
 		})
 		if err != nil {
 			if !isQOTDUniqueConstraintError(err) {
@@ -421,18 +451,24 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 			}
 			return nil, ErrReplyThreadProvisioning
 		}
+	} else {
+		record, err = s.store.PrepareQOTDReplyThreadProvisioning(ctx, record.ID, forumChannelID, normalized.InteractionID, provisioningNonce)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	created, err := s.publisher.CreateReplyPost(ctx, session, discordqotd.CreateReplyPostParams{
-		GuildID:          officialPost.GuildID,
-		OfficialPostID:   officialPost.ID,
-		OfficialThreadID: officialPost.DiscordThreadID,
-		ForumChannelID:   forumChannelID,
-		ReplyTagID:       replyTagID,
-		QuestionText:     officialPost.QuestionTextSnapshot,
-		PublishDateUTC:   officialPost.PublishDateUTC,
-		UserID:           normalized.UserID,
-		UserDisplayName:  normalized.UserDisplayName,
+		GuildID:           officialPost.GuildID,
+		OfficialPostID:    officialPost.ID,
+		OfficialThreadID:  officialPost.DiscordThreadID,
+		ForumChannelID:    forumChannelID,
+		ReplyTagID:        replyTagID,
+		QuestionText:      officialPost.QuestionTextSnapshot,
+		PublishDateUTC:    officialPost.PublishDateUTC,
+		UserID:            normalized.UserID,
+		UserDisplayName:   normalized.UserDisplayName,
+		ProvisioningNonce: record.ProvisioningNonce,
 	})
 	if err != nil {
 		if record != nil {
@@ -461,6 +497,10 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 }
 
 func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {
+	if err := s.reconcileProvisioningReplyThreads(ctx, guildID, session, now); err != nil {
+		return err
+	}
+
 	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
 	if err != nil {
 		return err
@@ -726,4 +766,22 @@ func isQOTDUniqueConstraintError(err error) bool {
 	}
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
+}
+
+func generateProvisioningNonce() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("generate qotd provisioning nonce: %w", err)
+	}
+	return hex.EncodeToString(raw[:]), nil
+}
+
+func replyThreadProvisioningExpired(record storage.QOTDReplyThreadRecord, now time.Time) bool {
+	if strings.TrimSpace(record.State) != string(ReplyThreadStateProvisioning) {
+		return false
+	}
+	if record.UpdatedAt.IsZero() {
+		return true
+	}
+	return !now.UTC().Before(record.UpdatedAt.UTC().Add(replyThreadProvisioningTTL))
 }

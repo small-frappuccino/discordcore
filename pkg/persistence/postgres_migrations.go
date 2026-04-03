@@ -346,4 +346,17 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS publish_mode`,
 		},
 	},
+	{
+		Version: 9,
+		UpSQL: []string{
+			`ALTER TABLE qotd_reply_threads ADD COLUMN IF NOT EXISTS provisioning_nonce TEXT`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_reply_threads_provisioning_recovery
+			 ON qotd_reply_threads(guild_id, state, updated_at)
+			 WHERE discord_thread_id IS NULL`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_reply_threads_provisioning_recovery`,
+			`ALTER TABLE qotd_reply_threads DROP COLUMN IF EXISTS provisioning_nonce`,
+		},
+	},
 }

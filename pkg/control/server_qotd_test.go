@@ -43,6 +43,10 @@ func (routeFakePublisher) CreateReplyPost(_ context.Context, _ *discordgo.Sessio
 	}, nil
 }
 
+func (routeFakePublisher) FindReplyPostByNonce(context.Context, *discordgo.Session, discordqotd.FindReplyPostByNonceParams) (*discordqotd.FoundReplyPost, error) {
+	return nil, nil
+}
+
 func (routeFakePublisher) SetThreadState(context.Context, *discordgo.Session, string, discordqotd.ThreadState) error {
 	return nil
 }

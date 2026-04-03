@@ -21,6 +21,8 @@ type fakePublisher struct {
 	fetchCalls      []string
 	threadMessages  map[string][]discordqotd.ArchivedMessage
 	fetchErrs       map[string]error
+	foundReplies    map[string]*discordqotd.FoundReplyPost
+	findReplyCalls  []discordqotd.FindReplyPostByNonceParams
 }
 
 func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
@@ -135,6 +137,18 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 	if questions[0].ID != third.ID || questions[1].ID != first.ID || questions[2].ID != second.ID {
 		t.Fatalf("unexpected order after reorder: %+v", questions)
 	}
+}
+
+func (p *fakePublisher) FindReplyPostByNonce(_ context.Context, _ *discordgo.Session, params discordqotd.FindReplyPostByNonceParams) (*discordqotd.FoundReplyPost, error) {
+	p.findReplyCalls = append(p.findReplyCalls, params)
+	if p.foundReplies == nil {
+		return nil, nil
+	}
+	if found := p.foundReplies[params.ProvisioningNonce]; found != nil {
+		copyFound := *found
+		return &copyFound, nil
+	}
+	return nil, nil
 }
 
 func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
@@ -339,6 +353,201 @@ func TestServiceEnsureReplyThreadCreatesAndReusesPerUserThread(t *testing.T) {
 	}
 }
 
+func TestServiceEnsureReplyThreadRecoversProvisioningByNonce(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		Enabled:        true,
+		ForumChannelID: "forum-1",
+		QuestionTagID:  "question-tag-1",
+		ReplyTagID:     "reply-tag-1",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Recover my reply",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	lifecycle := EvaluateManualOfficialPost(service.clock(), service.clock())
+	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeManual),
+		PublishDateUTC:       service.clock(),
+		State:                string(OfficialPostStateProvisioning),
+		ForumChannelID:       "forum-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "official-thread-1", "official-message-1", service.clock())
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStateCurrent), false, nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
+	}
+
+	const provisioningNonce = "recovernonce1234567890"
+	_, err = store.CreateQOTDReplyThreadProvisioning(context.Background(), storage.QOTDReplyThreadRecord{
+		GuildID:                 "g1",
+		OfficialPostID:          official.ID,
+		UserID:                  "user-7",
+		State:                   string(ReplyThreadStateProvisioning),
+		ForumChannelID:          "forum-1",
+		CreatedViaInteractionID: "interaction-1",
+		ProvisioningNonce:       provisioningNonce,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDReplyThreadProvisioning() failed: %v", err)
+	}
+
+	fake.foundReplies = map[string]*discordqotd.FoundReplyPost{
+		provisioningNonce: {
+			ThreadID:         "reply-thread-recovered",
+			StarterMessageID: "reply-message-recovered",
+			ThreadURL:        discordqotd.BuildThreadJumpURL("g1", "reply-thread-recovered"),
+		},
+	}
+
+	result, err := service.EnsureReplyThread(context.Background(), &discordgo.Session{}, discordqotd.EnsureReplyThreadParams{
+		GuildID:          "g1",
+		OfficialPostID:   official.ID,
+		OfficialThreadID: "official-thread-1",
+		UserID:           "user-7",
+		UserDisplayName:  "Answerer",
+		InteractionID:    "interaction-2",
+	})
+	if err != nil {
+		t.Fatalf("EnsureReplyThread() failed: %v", err)
+	}
+	if !result.Reused || result.ThreadID != "reply-thread-recovered" {
+		t.Fatalf("expected provisioning recovery to reuse recovered thread, got %+v", result)
+	}
+	if len(fake.replyParams) != 0 {
+		t.Fatalf("expected no new reply-thread creation after recovery, got %d calls", len(fake.replyParams))
+	}
+	if len(fake.findReplyCalls) != 1 || fake.findReplyCalls[0].ProvisioningNonce != provisioningNonce {
+		t.Fatalf("expected nonce recovery lookup, got %+v", fake.findReplyCalls)
+	}
+
+	stored, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-7")
+	if err != nil {
+		t.Fatalf("GetQOTDReplyThreadByOfficialPostAndUser() failed: %v", err)
+	}
+	if stored == nil || stored.State != string(ReplyThreadStateActive) || stored.DiscordThreadID != "reply-thread-recovered" {
+		t.Fatalf("expected recovered reply thread to be active in storage, got %+v", stored)
+	}
+}
+
+func TestServiceEnsureReplyThreadRetriesExpiredProvisioning(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		Enabled:        true,
+		ForumChannelID: "forum-1",
+		QuestionTagID:  "question-tag-1",
+		ReplyTagID:     "reply-tag-1",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Retry my reply",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	lifecycle := EvaluateManualOfficialPost(service.clock(), service.clock())
+	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeManual),
+		PublishDateUTC:       service.clock(),
+		State:                string(OfficialPostStateProvisioning),
+		ForumChannelID:       "forum-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "official-thread-1", "official-message-1", service.clock())
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStateCurrent), false, nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
+	}
+
+	const oldNonce = "stalenonce1234567890"
+	_, err = store.CreateQOTDReplyThreadProvisioning(context.Background(), storage.QOTDReplyThreadRecord{
+		GuildID:                 "g1",
+		OfficialPostID:          official.ID,
+		UserID:                  "user-7",
+		State:                   string(ReplyThreadStateProvisioning),
+		ForumChannelID:          "forum-1",
+		CreatedViaInteractionID: "interaction-old",
+		ProvisioningNonce:       oldNonce,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDReplyThreadProvisioning() failed: %v", err)
+	}
+
+	oldTTL := replyThreadProvisioningTTL
+	replyThreadProvisioningTTL = 0
+	defer func() { replyThreadProvisioningTTL = oldTTL }()
+
+	result, err := service.EnsureReplyThread(context.Background(), &discordgo.Session{}, discordqotd.EnsureReplyThreadParams{
+		GuildID:          "g1",
+		OfficialPostID:   official.ID,
+		OfficialThreadID: "official-thread-1",
+		UserID:           "user-7",
+		UserDisplayName:  "Answerer",
+		InteractionID:    "interaction-new",
+	})
+	if err != nil {
+		t.Fatalf("EnsureReplyThread() failed: %v", err)
+	}
+	if result.Reused {
+		t.Fatalf("expected expired provisioning to create a fresh thread, got %+v", result)
+	}
+	if len(fake.findReplyCalls) != 1 || fake.findReplyCalls[0].ProvisioningNonce != oldNonce {
+		t.Fatalf("expected stale provisioning to attempt recovery before retry, got %+v", fake.findReplyCalls)
+	}
+	if len(fake.replyParams) != 1 {
+		t.Fatalf("expected one fresh reply-thread creation after stale provisioning, got %d", len(fake.replyParams))
+	}
+	if fake.replyParams[0].ProvisioningNonce == oldNonce || fake.replyParams[0].ProvisioningNonce == "" {
+		t.Fatalf("expected retry to use a fresh provisioning nonce, got %+v", fake.replyParams[0])
+	}
+
+	stored, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-7")
+	if err != nil {
+		t.Fatalf("GetQOTDReplyThreadByOfficialPostAndUser() failed: %v", err)
+	}
+	if stored == nil || stored.State != string(ReplyThreadStateActive) || stored.ProvisioningNonce != fake.replyParams[0].ProvisioningNonce {
+		t.Fatalf("expected retried reply thread to be active with the new nonce, got %+v", stored)
+	}
+}
+
 func TestServiceEnsureReplyThreadRejectsClosedAnswerWindow(t *testing.T) {
 	service, store, _ := newTestQOTDService(t)
 	service.now = func() time.Time {
@@ -393,6 +602,89 @@ func TestServiceEnsureReplyThreadRejectsClosedAnswerWindow(t *testing.T) {
 		InteractionID:    "interaction-closed",
 	}); !errors.Is(err, ErrAnswerWindowClosed) {
 		t.Fatalf("expected ErrAnswerWindowClosed, got %v", err)
+	}
+}
+
+func TestServiceReconcileGuildRecoversProvisioningReplyThreads(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		Enabled:        true,
+		ForumChannelID: "forum-1",
+		QuestionTagID:  "question-tag-1",
+		ReplyTagID:     "reply-tag-1",
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Reconcile me",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
+	publishedAt := time.Date(2026, 4, 2, 12, 43, 0, 0, time.UTC)
+	lifecycle := EvaluateOfficialPost(publishDate, service.clock())
+	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeScheduled),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStateCurrent),
+		ForumChannelID:       "forum-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "official-thread-1", "official-message-1", publishedAt)
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStateCurrent), true, nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
+	}
+
+	const provisioningNonce = "reconcile-nonce-123456"
+	_, err = store.CreateQOTDReplyThreadProvisioning(context.Background(), storage.QOTDReplyThreadRecord{
+		GuildID:                 "g1",
+		OfficialPostID:          official.ID,
+		UserID:                  "user-8",
+		State:                   string(ReplyThreadStateProvisioning),
+		ForumChannelID:          "forum-1",
+		CreatedViaInteractionID: "interaction-1",
+		ProvisioningNonce:       provisioningNonce,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDReplyThreadProvisioning() failed: %v", err)
+	}
+
+	fake.foundReplies = map[string]*discordqotd.FoundReplyPost{
+		provisioningNonce: {
+			ThreadID:         "reply-thread-reconcile",
+			StarterMessageID: "reply-message-reconcile",
+			ThreadURL:        discordqotd.BuildThreadJumpURL("g1", "reply-thread-reconcile"),
+		},
+	}
+
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() failed: %v", err)
+	}
+
+	stored, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-8")
+	if err != nil {
+		t.Fatalf("GetQOTDReplyThreadByOfficialPostAndUser() failed: %v", err)
+	}
+	if stored == nil || stored.State != string(ReplyThreadStateActive) || stored.DiscordThreadID != "reply-thread-reconcile" {
+		t.Fatalf("expected reconcile to recover provisioning reply thread, got %+v", stored)
 	}
 }
 

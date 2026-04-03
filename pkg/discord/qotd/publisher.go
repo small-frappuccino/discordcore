@@ -12,6 +12,8 @@ import (
 const (
 	answerButtonLabel    = "Answer"
 	answerButtonCustomID = "qotd:answer:%d"
+	replyNonceFooterKey  = "QOTD reply ref:"
+	replyNonceNamePrefix = "qrp-"
 )
 
 type PublishOfficialPostParams struct {
@@ -33,18 +35,32 @@ type PublishedOfficialPost struct {
 }
 
 type CreateReplyPostParams struct {
-	GuildID          string
-	OfficialPostID   int64
-	OfficialThreadID string
-	ForumChannelID   string
-	ReplyTagID       string
-	QuestionText     string
-	PublishDateUTC   time.Time
-	UserID           string
-	UserDisplayName  string
+	GuildID           string
+	OfficialPostID    int64
+	OfficialThreadID  string
+	ForumChannelID    string
+	ReplyTagID        string
+	QuestionText      string
+	PublishDateUTC    time.Time
+	UserID            string
+	UserDisplayName   string
+	ProvisioningNonce string
 }
 
 type CreatedReplyPost struct {
+	ThreadID         string
+	StarterMessageID string
+	ThreadURL        string
+}
+
+type FindReplyPostByNonceParams struct {
+	GuildID           string
+	ForumChannelID    string
+	ProvisioningNonce string
+	Since             time.Time
+}
+
+type FoundReplyPost struct {
 	ThreadID         string
 	StarterMessageID string
 	ThreadURL        string
@@ -149,13 +165,13 @@ func (p *Publisher) CreateReplyPost(ctx context.Context, session *discordgo.Sess
 	thread, err := session.ForumThreadStartComplex(
 		normalized.ForumChannelID,
 		&discordgo.ThreadStart{
-			Name:                buildReplyThreadName(normalized.PublishDateUTC, normalized.UserDisplayName, normalized.UserID),
+			Name:                buildReplyThreadName(normalized.PublishDateUTC, normalized.UserDisplayName, normalized.UserID, normalized.ProvisioningNonce),
 			AutoArchiveDuration: 4320,
 			AppliedTags:         []string{normalized.ReplyTagID},
 		},
 		&discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{
-				buildReplyThreadEmbed(normalized.QuestionText, BuildThreadJumpURL(normalized.GuildID, normalized.OfficialThreadID)),
+				buildReplyThreadEmbed(normalized.QuestionText, BuildThreadJumpURL(normalized.GuildID, normalized.OfficialThreadID), normalized.ProvisioningNonce),
 			},
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		},
@@ -186,6 +202,51 @@ func (p *Publisher) CreateReplyPost(ctx context.Context, session *discordgo.Sess
 		StarterMessageID: starterMessageID,
 		ThreadURL:        BuildThreadJumpURL(normalized.GuildID, threadID),
 	}, nil
+}
+
+func (p *Publisher) FindReplyPostByNonce(ctx context.Context, session *discordgo.Session, params FindReplyPostByNonceParams) (*FoundReplyPost, error) {
+	if session == nil {
+		return nil, fmt.Errorf("find qotd reply post by nonce: discord session is required")
+	}
+	normalized, err := normalizeFindReplyPostByNonceParams(params)
+	if err != nil {
+		return nil, fmt.Errorf("find qotd reply post by nonce: %w", err)
+	}
+
+	candidates, err := listRecoveryCandidateThreads(ctx, session, normalized.ForumChannelID, normalized.Since, replyNonceNameFragment(normalized.ProvisioningNonce))
+	if err != nil {
+		return nil, err
+	}
+	footerMarker := replyNonceFooterText(normalized.ProvisioningNonce)
+	for _, thread := range candidates {
+		if thread == nil {
+			continue
+		}
+		messages, err := fetchThreadMessagesRaw(ctx, session, thread.ID)
+		if err != nil {
+			if isNotFoundRESTError(err) {
+				continue
+			}
+			return nil, fmt.Errorf("find qotd reply post by nonce: fetch thread %s: %w", strings.TrimSpace(thread.ID), err)
+		}
+		for idx := range messages {
+			message := messages[idx]
+			if starterMessageMatchesReplyNonce(message, footerMarker) {
+				threadID := strings.TrimSpace(thread.ID)
+				starterMessageID := strings.TrimSpace(message.ID)
+				if threadID == "" || starterMessageID == "" {
+					continue
+				}
+				return &FoundReplyPost{
+					ThreadID:         threadID,
+					StarterMessageID: starterMessageID,
+					ThreadURL:        BuildThreadJumpURL(normalized.GuildID, threadID),
+				}, nil
+			}
+		}
+	}
+
+	return nil, nil
 }
 
 func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) error {
@@ -236,11 +297,14 @@ func buildOfficialQuestionEmbed(questionText string, publishDateUTC time.Time) *
 	}
 }
 
-func buildReplyThreadEmbed(questionText, officialPostURL string) *discordgo.MessageEmbed {
+func buildReplyThreadEmbed(questionText, officialPostURL, provisioningNonce string) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Your QOTD Reply Thread",
 		Description: fmt.Sprintf("Write your answer in this thread.\n\n%s", questionText),
 		Color:       0x3BA55D,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: replyNonceFooterText(provisioningNonce),
+		},
 	}
 	if officialPostURL != "" {
 		embed.Fields = []*discordgo.MessageEmbedField{{
@@ -260,7 +324,7 @@ func buildOfficialPostName(publishDateUTC time.Time, explicitName string) string
 	return fmt.Sprintf("QOTD - %s", publishDateUTC.UTC().Format("2006-01-02"))
 }
 
-func buildReplyThreadName(publishDateUTC time.Time, userDisplayName, userID string) string {
+func buildReplyThreadName(publishDateUTC time.Time, userDisplayName, userID, provisioningNonce string) string {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -273,10 +337,15 @@ func buildReplyThreadName(publishDateUTC time.Time, userDisplayName, userID stri
 	if !publishDateUTC.IsZero() {
 		base = fmt.Sprintf("Reply - %s - %s", publishDateUTC.UTC().Format("2006-01-02"), userDisplayName)
 	}
-	if len(base) <= 100 {
-		return base
+	suffix := replyNonceNameSuffix(provisioningNonce)
+	maxLen := 100 - len(suffix)
+	if maxLen < 1 {
+		maxLen = 100
 	}
-	return strings.TrimSpace(base[:100])
+	if len(base) > maxLen {
+		base = strings.TrimSpace(base[:maxLen])
+	}
+	return strings.TrimSpace(base) + suffix
 }
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {
@@ -313,6 +382,7 @@ func normalizeCreateReplyPostParams(params CreateReplyPostParams) (CreateReplyPo
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.UserID = strings.TrimSpace(params.UserID)
 	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
+	params.ProvisioningNonce = strings.TrimSpace(params.ProvisioningNonce)
 	params.PublishDateUTC = params.PublishDateUTC.UTC()
 
 	switch {
@@ -330,7 +400,70 @@ func normalizeCreateReplyPostParams(params CreateReplyPostParams) (CreateReplyPo
 		return CreateReplyPostParams{}, fmt.Errorf("question text is required")
 	case params.UserID == "":
 		return CreateReplyPostParams{}, fmt.Errorf("user id is required")
+	case params.ProvisioningNonce == "":
+		return CreateReplyPostParams{}, fmt.Errorf("provisioning nonce is required")
 	default:
 		return params, nil
 	}
+}
+
+func normalizeFindReplyPostByNonceParams(params FindReplyPostByNonceParams) (FindReplyPostByNonceParams, error) {
+	params.GuildID = strings.TrimSpace(params.GuildID)
+	params.ForumChannelID = strings.TrimSpace(params.ForumChannelID)
+	params.ProvisioningNonce = strings.TrimSpace(params.ProvisioningNonce)
+	if params.GuildID == "" {
+		return FindReplyPostByNonceParams{}, fmt.Errorf("guild id is required")
+	}
+	if params.ForumChannelID == "" {
+		return FindReplyPostByNonceParams{}, fmt.Errorf("forum channel id is required")
+	}
+	if params.ProvisioningNonce == "" {
+		return FindReplyPostByNonceParams{}, fmt.Errorf("provisioning nonce is required")
+	}
+	if !params.Since.IsZero() {
+		params.Since = params.Since.UTC()
+	}
+	return params, nil
+}
+
+func replyNonceFooterText(provisioningNonce string) string {
+	provisioningNonce = strings.TrimSpace(provisioningNonce)
+	if provisioningNonce == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s %s", replyNonceFooterKey, provisioningNonce)
+}
+
+func replyNonceNameSuffix(provisioningNonce string) string {
+	fragment := replyNonceNameFragment(provisioningNonce)
+	if fragment == "" {
+		return ""
+	}
+	return " [" + fragment + "]"
+}
+
+func replyNonceNameFragment(provisioningNonce string) string {
+	provisioningNonce = strings.TrimSpace(strings.ToLower(provisioningNonce))
+	if provisioningNonce == "" {
+		return ""
+	}
+	if len(provisioningNonce) > 8 {
+		provisioningNonce = provisioningNonce[:8]
+	}
+	return replyNonceNamePrefix + provisioningNonce
+}
+
+func starterMessageMatchesReplyNonce(message *discordgo.Message, footerMarker string) bool {
+	if message == nil || footerMarker == "" {
+		return false
+	}
+	for _, embed := range message.Embeds {
+		if embed == nil || embed.Footer == nil {
+			continue
+		}
+		if strings.TrimSpace(embed.Footer.Text) == footerMarker {
+			return true
+		}
+	}
+	return false
 }

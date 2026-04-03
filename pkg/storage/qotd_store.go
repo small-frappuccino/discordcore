@@ -928,10 +928,11 @@ func (s *Store) CreateQOTDReplyThreadProvisioning(ctx context.Context, rec QOTDR
 			discord_thread_id,
 			discord_starter_message_id,
 			created_via_interaction_id,
+			provisioning_nonce,
 			closed_at,
 			archived_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING
 			id,
 			guild_id,
@@ -942,6 +943,7 @@ func (s *Store) CreateQOTDReplyThreadProvisioning(ctx context.Context, rec QOTDR
 			discord_thread_id,
 			discord_starter_message_id,
 			created_via_interaction_id,
+			provisioning_nonce,
 			created_at,
 			updated_at,
 			closed_at,
@@ -954,6 +956,7 @@ func (s *Store) CreateQOTDReplyThreadProvisioning(ctx context.Context, rec QOTDR
 		zeroEmptyString(normalized.DiscordThreadID),
 		zeroEmptyString(normalized.DiscordStarterMessageID),
 		zeroEmptyString(normalized.CreatedViaInteractionID),
+		zeroEmptyString(normalized.ProvisioningNonce),
 		nullableTime(normalized.ClosedAt),
 		nullableTime(normalized.ArchivedAt),
 	)
@@ -997,6 +1000,7 @@ func (s *Store) FinalizeQOTDReplyThread(ctx context.Context, id int64, discordTh
 			discord_thread_id,
 			discord_starter_message_id,
 			created_via_interaction_id,
+			provisioning_nonce,
 			created_at,
 			updated_at,
 			closed_at,
@@ -1034,6 +1038,7 @@ func (s *Store) GetQOTDReplyThreadByOfficialPostAndUser(ctx context.Context, off
 			discord_thread_id,
 			discord_starter_message_id,
 			created_via_interaction_id,
+			provisioning_nonce,
 			created_at,
 			updated_at,
 			closed_at,
@@ -1074,6 +1079,7 @@ func (s *Store) ListQOTDReplyThreadsByOfficialPost(ctx context.Context, official
 			discord_thread_id,
 			discord_starter_message_id,
 			created_via_interaction_id,
+			provisioning_nonce,
 			created_at,
 			updated_at,
 			closed_at,
@@ -1134,6 +1140,7 @@ func (s *Store) UpdateQOTDReplyThreadState(ctx context.Context, id int64, state 
 			discord_thread_id,
 			discord_starter_message_id,
 			created_via_interaction_id,
+			provisioning_nonce,
 			created_at,
 			updated_at,
 			closed_at,
@@ -1148,6 +1155,120 @@ func (s *Store) UpdateQOTDReplyThreadState(ctx context.Context, id int64, state 
 		return nil, fmt.Errorf("update qotd reply thread state: %w", err)
 	}
 	return record, nil
+}
+
+func (s *Store) PrepareQOTDReplyThreadProvisioning(ctx context.Context, id int64, forumChannelID, interactionID, provisioningNonce string) (*QOTDReplyThreadRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	if id <= 0 {
+		return nil, fmt.Errorf("prepare qotd reply thread provisioning: id is required")
+	}
+	forumChannelID = strings.TrimSpace(forumChannelID)
+	interactionID = strings.TrimSpace(interactionID)
+	provisioningNonce = strings.TrimSpace(provisioningNonce)
+	if forumChannelID == "" {
+		return nil, fmt.Errorf("prepare qotd reply thread provisioning: forum_channel_id is required")
+	}
+	if provisioningNonce == "" {
+		return nil, fmt.Errorf("prepare qotd reply thread provisioning: provisioning_nonce is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	row := s.queryRowContext(ctx,
+		`UPDATE qotd_reply_threads
+		SET
+			state = 'provisioning',
+			forum_channel_id = ?,
+			discord_thread_id = NULL,
+			discord_starter_message_id = NULL,
+			created_via_interaction_id = ?,
+			provisioning_nonce = ?,
+			closed_at = NULL,
+			archived_at = NULL,
+			updated_at = NOW()
+		WHERE id = ?
+		RETURNING
+			id,
+			guild_id,
+			official_post_id,
+			user_id,
+			state,
+			forum_channel_id,
+			discord_thread_id,
+			discord_starter_message_id,
+			created_via_interaction_id,
+			provisioning_nonce,
+			created_at,
+			updated_at,
+			closed_at,
+			archived_at`,
+		forumChannelID,
+		zeroEmptyString(interactionID),
+		provisioningNonce,
+		id,
+	)
+	record, err := scanQOTDReplyThreadRecord(row)
+	if err != nil {
+		return nil, fmt.Errorf("prepare qotd reply thread provisioning: %w", err)
+	}
+	return record, nil
+}
+
+func (s *Store) ListQOTDReplyThreadsPendingRecovery(ctx context.Context, guildID string) ([]QOTDReplyThreadRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	rows, err := s.queryContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			official_post_id,
+			user_id,
+			state,
+			forum_channel_id,
+			discord_thread_id,
+			discord_starter_message_id,
+			created_via_interaction_id,
+			provisioning_nonce,
+			created_at,
+			updated_at,
+			closed_at,
+			archived_at
+		FROM qotd_reply_threads
+		WHERE guild_id = ?
+		  AND state = 'provisioning'
+		  AND discord_thread_id IS NULL
+		ORDER BY updated_at ASC, id ASC`,
+		guildID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list qotd reply threads pending recovery: %w", err)
+	}
+	defer rows.Close()
+
+	records := make([]QOTDReplyThreadRecord, 0, 8)
+	for rows.Next() {
+		record, err := scanQOTDReplyThreadRecord(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list qotd reply threads pending recovery: %w", err)
+		}
+		records = append(records, *record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list qotd reply threads pending recovery: %w", err)
+	}
+	return records, nil
 }
 
 func (s *Store) CreateQOTDThreadArchive(ctx context.Context, rec QOTDThreadArchiveRecord) (*QOTDThreadArchiveRecord, error) {
@@ -1379,6 +1500,7 @@ func normalizeQOTDReplyThreadRecord(rec QOTDReplyThreadRecord) (QOTDReplyThreadR
 	rec.DiscordThreadID = strings.TrimSpace(rec.DiscordThreadID)
 	rec.DiscordStarterMessageID = strings.TrimSpace(rec.DiscordStarterMessageID)
 	rec.CreatedViaInteractionID = strings.TrimSpace(rec.CreatedViaInteractionID)
+	rec.ProvisioningNonce = strings.TrimSpace(rec.ProvisioningNonce)
 	rec.ClosedAt = normalizeQOTDTimePtr(rec.ClosedAt)
 	rec.ArchivedAt = normalizeQOTDTimePtr(rec.ArchivedAt)
 
@@ -1568,6 +1690,7 @@ func scanQOTDReplyThreadRecord(scanner qotdRowScanner) (*QOTDReplyThreadRecord, 
 	var threadID sql.NullString
 	var starterMessageID sql.NullString
 	var interactionID sql.NullString
+	var provisioningNonce sql.NullString
 	var closedAt sql.NullTime
 	var archivedAt sql.NullTime
 	if err := scanner.Scan(
@@ -1580,6 +1703,7 @@ func scanQOTDReplyThreadRecord(scanner qotdRowScanner) (*QOTDReplyThreadRecord, 
 		&threadID,
 		&starterMessageID,
 		&interactionID,
+		&provisioningNonce,
 		&record.CreatedAt,
 		&record.UpdatedAt,
 		&closedAt,
@@ -1590,6 +1714,7 @@ func scanQOTDReplyThreadRecord(scanner qotdRowScanner) (*QOTDReplyThreadRecord, 
 	record.DiscordThreadID = threadID.String
 	record.DiscordStarterMessageID = starterMessageID.String
 	record.CreatedViaInteractionID = interactionID.String
+	record.ProvisioningNonce = provisioningNonce.String
 	record.ClosedAt = timePtrFromNull(closedAt)
 	record.ArchivedAt = timePtrFromNull(archivedAt)
 	return &record, nil

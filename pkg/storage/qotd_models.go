@@ -50,6 +50,7 @@ type QOTDReplyThreadRecord struct {
 	DiscordThreadID         string
 	DiscordStarterMessageID string
 	CreatedViaInteractionID string
+	ProvisioningNonce       string
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 	ClosedAt                *time.Time
