@@ -1159,12 +1159,10 @@ textarea:focus {
 
 .home-card-grid {
   display: grid;
-  grid-template-columns: repeat(
-    auto-fit,
-    minmax(min(100%, var(--home-card-min-width)), 1fr)
-  );
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--home-card-gap);
   align-items: start;
+  justify-content: start;
 }
 
 .home-page .overview-card,
@@ -2325,6 +2323,10 @@ textarea:focus {
 @media (max-width: 1180px) {
   .home-page {
     --home-card-min-width: 17.5rem;
+  }
+
+  .home-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dashboard-shell {
