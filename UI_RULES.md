@@ -186,6 +186,9 @@ Background work should stay visually quiet unless the user must wait, decide, re
 Rules:
 
 - Silent background refresh should usually remain silent
+- Do not expose manual `Refresh` buttons for normal page loading, workspace revalidation, or routine data sync
+- Manual refresh controls imply unstable or stale software and should be treated as a UX smell in normal dashboard flows
+- Only use a manual refresh or retry control when the user is explicitly recovering from a failed load, a degraded dependency, or a diagnostic workflow
 - Do not mount empty notice wrappers that create layout shift
 - Avoid page jumps caused by transient banners or refresh chrome
 - Loading states should preserve the final layout footprint where possible
@@ -213,8 +216,14 @@ Rules:
 - In cards and single-page sections, action alignment should be consistent
 - Do not make non-interactive tags or status pills look clickable
 - Use color to support affordance, not replace it
+- For selectable item lists, default to a compact collapsed picker or disclosure that opens only on user intent
+- Do not render large checkbox lists fully expanded by default when they can grow the page or distort the layout
+- The closed state of a multi-select should summarize the current selection compactly instead of exposing the whole option set
 
 If a control needs a paragraph to explain what it is, the control, grouping, or labeling is probably wrong.
+
+Do not use a page-level `Refresh` button as a default affordance for keeping data current.
+If the product depends on frequent manual refresh to feel correct, fix the data flow or state model instead.
 
 ---
 
@@ -245,7 +254,9 @@ Do not introduce:
 - floating inner canvases when the page should feel continuous
 - default gradient chrome or gradient cards
 - equal-height card stretching that distorts proportions
+- routine page-level `Refresh` buttons for normal data loading or revalidation
 - transient refresh text for routine background work
+- always-expanded multi-select or checkbox lists that can make a page suddenly grow in height
 - duplicated context across section title, card title, and button label
 - decorative use of semantic colors
 - non-semantic shadows or elevation used as a crutch

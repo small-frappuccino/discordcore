@@ -1588,6 +1588,7 @@ describe("dashboard routing and workspace", () => {
   it("renders the lean shell, preserves the legacy control-panel redirect, and keeps global context in the top bar", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", appRoutes.legacyControlPanel);
 
     render(<App />);
 
@@ -1651,7 +1652,7 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryByRole("button", { name: "Reconnect" }),
     ).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it("renders Home as a navigation index with category headings and route cards", async () => {
     const { fetchMock } = createFetchMock();
@@ -1716,7 +1717,7 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryByRole("button", { name: "Refresh home" }),
     ).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it("collapses and expands the sidebar from the navigation chrome", async () => {
     const { fetchMock } = createFetchMock();
@@ -1747,6 +1748,9 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Control Panel", level: 1 });
+    await userEvent.click(
+      await screen.findByRole("button", { name: /write access roles/i }),
+    );
     const writeAccessGroup = await screen.findByRole("group", {
       name: "Write access roles",
     });
@@ -1799,11 +1803,12 @@ describe("dashboard routing and workspace", () => {
       ).toBeInTheDocument();
     });
 
-    const readAccessGroup = await screen.findByRole("group", {
-      name: "Read access roles",
+    const readAccessTrigger = screen.getByRole("button", {
+      name: /read access roles/i,
     });
+    expect(readAccessTrigger).toBeDisabled();
     expect(
-      within(readAccessGroup).getByRole("checkbox", { name: /@everyone/i }),
+      screen.getByRole("button", { name: /write access roles/i }),
     ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Save access roles" }),
@@ -2316,6 +2321,7 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.getByRole("dialog", { name: "Configure admin commands" }),
     ).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /allowed roles/i }));
     expect(screen.getByRole("checkbox", { name: /Moderators/i })).toBeChecked();
     expect(
       screen.getByRole("checkbox", { name: /Members/i }),

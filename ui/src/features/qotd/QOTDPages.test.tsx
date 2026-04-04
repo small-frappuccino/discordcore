@@ -159,7 +159,7 @@ describe("QOTD UI", () => {
     qotdMock.workspaceState = "ready";
   });
 
-  it("keeps refresh feedback out of the workspace status banner", () => {
+  it("keeps refresh actions out of the ready settings shell", () => {
     qotdMock.loading = true;
     qotdMock.busyLabel = "Refreshing QOTD workspace...";
 
@@ -174,22 +174,25 @@ describe("QOTD UI", () => {
     );
 
     expect(screen.getByRole("heading", { name: "QOTD", level: 1 })).toBeInTheDocument();
-    expect(screen.getByText("Setup readiness")).toBeInTheDocument();
+    expect(screen.getByText("Current slot")).toBeInTheDocument();
+    expect(screen.getByText("Queue")).toBeInTheDocument();
     expect(screen.getByText("Settings body")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish manual QOTD" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace status")).not.toBeInTheDocument();
     expect(screen.queryByText("Refreshing QOTD workspace...")).not.toBeInTheDocument();
   });
 
-  it("renders the QOTD settings in dedicated setup cards", () => {
+  it("renders the QOTD settings as flat configuration sections", () => {
     render(
       <MemoryRouter>
         <QOTDSettingsPage />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Workflow routing")).toBeInTheDocument();
-    expect(screen.getByText("Forum routing tags")).toBeInTheDocument();
-    expect(screen.getByText("Moderation coverage")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Workflow settings", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Staff roles", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh tags/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 
@@ -201,9 +204,25 @@ describe("QOTD UI", () => {
     );
 
     expect(screen.getByText("Add a question")).toBeInTheDocument();
-    expect(screen.getByText("Ordered questions")).toBeInTheDocument();
+    expect(screen.getByText("Question order")).toBeInTheDocument();
     expect(screen.getByText("What is one thing you shipped this week?")).toBeInTheDocument();
+    expect(screen.queryByText("Queue total")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Move up" })).not.toHaveLength(0);
+  });
+
+  it("keeps manual publish on the questions route only", () => {
+    render(
+      <MemoryRouter initialEntries={[appRoutes.qotdQuestions("guild-1")]}>
+        <Routes>
+          <Route path="/manage/:guildId/qotd" element={<QOTDLayout />}>
+            <Route path="questions" element={<div>Questions body</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "Publish manual QOTD" })).toBeInTheDocument();
+    expect(screen.getByText("Questions body")).toBeInTheDocument();
   });
 });
 

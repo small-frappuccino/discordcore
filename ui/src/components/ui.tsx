@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import { useId, useState, type HTMLAttributes, type ReactNode } from "react";
 import { getInitials } from "../app/utils";
 import type { Notice } from "../app/types";
 
@@ -392,37 +392,79 @@ export function EntityMultiPickerField({
   note,
   disabled = false,
 }: EntityMultiPickerFieldProps) {
+  const fieldId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const panelId = `${fieldId}-panel`;
+  const labelId = `${fieldId}-label`;
+  const valueId = `${fieldId}-value`;
   const selectedSet = new Set(
     selectedValues
       .map((value) => value.trim())
       .filter((value) => value !== ""),
   );
+  const selectedOptions = options.filter((option) => selectedSet.has(option.value));
+  const selectedCount = selectedSet.size;
+  const summaryText =
+    selectedCount === 0
+      ? options.length === 0
+        ? "No options available"
+        : "Select one or more"
+      : selectedCount === 1
+        ? selectedOptions[0]?.label ?? "1 selected"
+        : `${selectedCount} selected`;
 
   return (
-    <div className="entity-multi-picker">
-      <p className="section-label">{label}</p>
-      <div className="entity-option-list" role="group" aria-label={label}>
-        {options.map((option) => {
-          const checked = selectedSet.has(option.value);
+    <div className="field-stack entity-multi-picker">
+      <span className="field-label" id={labelId}>
+        {label}
+      </span>
+      <button
+        type="button"
+        className="entity-multi-picker-trigger"
+        aria-labelledby={`${labelId} ${valueId}`}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        disabled={disabled || options.length === 0}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="entity-multi-picker-trigger-copy">
+          <strong className="entity-multi-picker-trigger-value" id={valueId}>
+            {summaryText}
+          </strong>
+          <span className="meta-note">
+            {selectedCount === 0 ? "Click to choose items" : "Click to review selections"}
+          </span>
+        </span>
+        <span className="entity-multi-picker-trigger-indicator" aria-hidden="true">
+          {expanded ? "▲" : "▼"}
+        </span>
+      </button>
+      {expanded ? (
+        <div className="entity-multi-picker-panel">
+          <div className="entity-option-list" id={panelId} role="group" aria-label={label}>
+            {options.map((option) => {
+              const checked = selectedSet.has(option.value);
 
-          return (
-            <label className="entity-option-card" key={option.value}>
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabled || option.disabled}
-                onChange={() => onToggle(option.value)}
-              />
-              <span className="entity-option-copy">
-                <strong>{option.label}</strong>
-                {option.description ? (
-                  <span className="meta-note">{option.description}</span>
-                ) : null}
-              </span>
-            </label>
-          );
-        })}
-      </div>
+              return (
+                <label className="entity-option-card" key={option.value}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled || option.disabled}
+                    onChange={() => onToggle(option.value)}
+                  />
+                  <span className="entity-option-copy">
+                    <strong>{option.label}</strong>
+                    {option.description ? (
+                      <span className="meta-note">{option.description}</span>
+                    ) : null}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       {note ? <p className="meta-note">{note}</p> : null}
     </div>
   );

@@ -122,7 +122,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setForumTags(response.tags);
   }
 
-  async function loadWorkspace(successMessage?: string) {
+  async function loadWorkspace() {
     if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
     }
@@ -154,14 +154,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         setForumTags([]);
       }
 
-      if (successMessage) {
-        setNotice({
-          tone: "success",
-          message: successMessage,
-        });
-      } else {
-        setNotice(null);
-      }
+      setNotice(null);
     } catch (error) {
       setHasLoadedAttempt(true);
       setSummary(null);
@@ -293,7 +286,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       } else {
         setForumTags([]);
       }
-      await loadWorkspace("QOTD settings saved.");
+      await loadWorkspace();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -312,7 +305,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.createQuestion);
     try {
       await client.createQOTDQuestion(normalizedGuildID, payload);
-      await loadWorkspace("Question added to the QOTD bank.");
+      await loadWorkspace();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -334,7 +327,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.updateQuestion);
     try {
       await client.updateQOTDQuestion(normalizedGuildID, questionId, payload);
-      await loadWorkspace("Question updated.");
+      await loadWorkspace();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -353,7 +346,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.deleteQuestion);
     try {
       await client.deleteQOTDQuestion(normalizedGuildID, questionId);
-      await loadWorkspace("Question removed.");
+      await loadWorkspace();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -373,7 +366,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     try {
       const response = await client.reorderQOTDQuestions(normalizedGuildID, orderedIDs);
       setQuestions(response.questions);
-      await loadWorkspace("Question order updated.");
+      await loadWorkspace();
     } catch (error) {
       setNotice({
         tone: "error",
@@ -392,13 +385,13 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.publishNow);
     try {
       const response = await client.publishQOTDNow(normalizedGuildID);
-      await loadWorkspace("Manual QOTD published to Discord.");
-      if (response.result.thread_url) {
-        setNotice({
-          tone: "success",
-          message: "Manual QOTD published to Discord. Use the returned thread link to verify it.",
-        });
-      }
+      await loadWorkspace();
+      setNotice({
+        tone: "success",
+        message: response.result.thread_url
+          ? "Manual QOTD published to Discord. Use the thread link to verify it."
+          : "Manual QOTD published to Discord.",
+      });
     } catch (error) {
       setNotice({
         tone: "error",

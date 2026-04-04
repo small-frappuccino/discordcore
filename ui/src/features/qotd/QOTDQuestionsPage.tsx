@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { QOTDQuestion, QOTDQuestionStatus } from "../../api/control";
-import { SurfaceCard } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useQOTD } from "./QOTDContext";
 
@@ -118,14 +117,14 @@ export function QOTDQuestionsPage() {
   }
 
   return (
-    <div className="qotd-questions-layout">
-      <SurfaceCard className="qotd-panel-card">
-        <div className="qotd-card-head">
+    <div className="workspace-view qotd-workspace">
+      <section className="qotd-flat-section">
+        <div className="qotd-section-header">
           <div className="card-copy">
             <p className="section-label">Question bank</p>
-            <h3>Add a question</h3>
+            <h2>Add a question</h2>
             <p className="section-description">
-              New items join the ordered queue and stay editable while they are draft, ready, or disabled.
+              New items enter the queue in the selected starting state.
             </p>
           </div>
           <div className="qotd-chip-row">
@@ -165,15 +164,7 @@ export function QOTDQuestionsPage() {
               </select>
             </label>
 
-            <div className="qotd-support-card">
-              <p className="section-label">Queue total</p>
-              <strong>{orderedQuestions.length}</strong>
-              <p className="meta-note">
-                Reserved and used items stay visible so the queue keeps its full audit trail.
-              </p>
-            </div>
-
-            <div className="inline-actions">
+            <div className="workspace-footer">
               <button
                 className="button-primary"
                 type="button"
@@ -185,24 +176,24 @@ export function QOTDQuestionsPage() {
             </div>
           </div>
         </div>
-      </SurfaceCard>
+      </section>
 
-      <SurfaceCard className="qotd-panel-card">
-        <div className="qotd-card-head">
+      <section className="qotd-flat-section">
+        <div className="qotd-section-header">
           <div className="card-copy">
             <p className="section-label">Queue</p>
-            <h3>Ordered questions</h3>
+            <h2>Question order</h2>
             <p className="section-description">
-              Keep ready items near the front and preserve reserved or used history for auditability.
+              Keep ready items near the front and preserve reserved or used history.
             </p>
           </div>
-          <div className="qotd-card-meta">
+          <div className="inline-actions">
             <span className="meta-pill subtle-pill">{orderedQuestions.length} total</span>
           </div>
         </div>
 
         {orderedQuestions.length === 0 ? (
-          <div className="qotd-inline-note">
+          <div className="qotd-flat-inline-message">
             <p className="meta-note">No questions have been added yet.</p>
           </div>
         ) : (
@@ -335,7 +326,7 @@ export function QOTDQuestionsPage() {
             })}
           </div>
         )}
-      </SurfaceCard>
+      </section>
     </div>
   );
 }
