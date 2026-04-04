@@ -59,7 +59,51 @@ export function getDashboardQOTDNavigationItem(
 export function getDashboardSidebarNavigationSections(
   guildId: string,
 ): NavigationSection[] {
-  const coreNavigationSection: NavigationSection = {
+  return [
+    getDashboardCoreNavigationSection(guildId),
+    getDashboardModerationNavigationSection(guildId),
+    getDashboardPartnersNavigationSection(guildId),
+    getDashboardEngagementNavigationSection(guildId),
+    getDashboardRolesNavigationSection(guildId),
+  ];
+}
+
+export function getDashboardHomeNavigationSections(
+  guildId: string,
+): NavigationSection[] {
+  return [
+    getDashboardCoreNavigationSection(guildId),
+    getDashboardModerationNavigationSection(guildId),
+    getDashboardPartnersNavigationSection(guildId),
+    getDashboardEngagementNavigationSection(guildId),
+    getDashboardRolesNavigationSection(guildId),
+  ];
+}
+
+export function getDashboardNavigationItems(guildId: string) {
+  return getDashboardHomeNavigationSections(guildId).flatMap(
+    (section) => section.items,
+  );
+}
+
+export function isNavigationItemActive(pathname: string, item: NavigationItem) {
+  const activePath = item.activePath ?? item.to;
+  if (item.matchPrefix !== undefined) {
+    return pathname.startsWith(item.matchPrefix);
+  }
+  return pathname === activePath;
+}
+
+export function getActiveNavigationSection(pathname: string, guildId: string) {
+  return (
+    getDashboardSidebarNavigationSections(guildId).find((section) =>
+      section.items.some((item) => isNavigationItemActive(pathname, item)),
+    ) ?? null
+  );
+}
+
+function getDashboardCoreNavigationSection(guildId: string): NavigationSection {
+  return {
     id: "core",
     label: "Core",
     items: [
@@ -86,8 +130,12 @@ export function getDashboardSidebarNavigationSections(
       },
     ],
   };
+}
 
-  const moderationNavigationSection: NavigationSection = {
+function getDashboardModerationNavigationSection(
+  guildId: string,
+): NavigationSection {
+  return {
     id: "moderation",
     label: "Moderation",
     items: [
@@ -107,20 +155,30 @@ export function getDashboardSidebarNavigationSections(
       },
     ],
   };
+}
 
-  const partnersNavigationSection: NavigationSection = {
+function getDashboardPartnersNavigationSection(
+  guildId: string,
+): NavigationSection {
+  return {
     id: "partners",
     label: "Partners",
     items: [getDashboardPartnerBoardNavigationItem(guildId)],
   };
+}
 
-  const engagementNavigationSection: NavigationSection = {
+function getDashboardEngagementNavigationSection(
+  guildId: string,
+): NavigationSection {
+  return {
     id: "engagement",
     label: "Engagement",
     items: [getDashboardQOTDNavigationItem(guildId)],
   };
+}
 
-  const rolesNavigationSection: NavigationSection = {
+function getDashboardRolesNavigationSection(guildId: string): NavigationSection {
+  return {
     id: "roles",
     label: "Roles",
     items: [
@@ -140,40 +198,4 @@ export function getDashboardSidebarNavigationSections(
       },
     ],
   };
-
-  return [
-    coreNavigationSection,
-    moderationNavigationSection,
-    partnersNavigationSection,
-    engagementNavigationSection,
-    rolesNavigationSection,
-  ];
-}
-
-export function getDashboardHomeNavigationSections(
-  guildId: string,
-): NavigationSection[] {
-  return getDashboardSidebarNavigationSections(guildId);
-}
-
-export function getDashboardNavigationItems(guildId: string) {
-  return getDashboardHomeNavigationSections(guildId).flatMap(
-    (section) => section.items,
-  );
-}
-
-export function isNavigationItemActive(pathname: string, item: NavigationItem) {
-  const activePath = item.activePath ?? item.to;
-  if (item.matchPrefix !== undefined) {
-    return pathname.startsWith(item.matchPrefix);
-  }
-  return pathname === activePath;
-}
-
-export function getActiveNavigationSection(pathname: string, guildId: string) {
-  return (
-    getDashboardSidebarNavigationSections(guildId).find((section) =>
-      section.items.some((item) => isNavigationItemActive(pathname, item)),
-    ) ?? null
-  );
 }

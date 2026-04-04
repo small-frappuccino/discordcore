@@ -80,7 +80,7 @@ export function HomePage() {
         workspaceClassName="home-workspace-panel"
         workspaceContent={
           navigationSections.length === 0 ? (
-            <div className="table-empty-state table-empty-state-compact">
+            <div className="table-empty-state table-empty-state-compact home-empty-state">
               <div className="card-copy">
                 <p className="section-label">Workspace</p>
                 <h2>
@@ -88,8 +88,8 @@ export function HomePage() {
                 </h2>
                 <p className="section-description">
                   {authState === "signed_in"
-                    ? "Choose a server from the top bar to open its management workspace."
-                    : "Use Discord sign-in to load the servers you can manage here."}
+                    ? "Choose a server from the top bar."
+                    : "Sign in with Discord to load your servers."}
                 </p>
               </div>
             </div>
@@ -118,6 +118,8 @@ export function HomePage() {
                         autoRoleFeature,
                         workspaceState: workspace.workspaceState,
                       });
+                      const actionLabel =
+                        card.item.homeActionLabel ?? `Open ${card.item.label}`;
 
                       return (
                         <OverviewCard
@@ -132,8 +134,12 @@ export function HomePage() {
                           title={card.item.label}
                           action={
                             card.loading ? null : (
-                              <Link className="button-secondary home-nav-link" to={card.item.to}>
-                                {card.item.homeActionLabel ?? `Open ${card.item.label}`}
+                              <Link
+                                aria-label={actionLabel}
+                                className="button-secondary home-nav-link"
+                                to={card.item.to}
+                              >
+                                Open
                               </Link>
                             )
                           }
