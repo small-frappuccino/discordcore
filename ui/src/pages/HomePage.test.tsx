@@ -150,6 +150,29 @@ describe("HomePage", () => {
     expect(screen.queryByText("On")).not.toBeInTheDocument();
     expect(screen.queryByText("Off")).not.toBeInTheDocument();
   });
+
+  it("keeps refresh loading at card level without mounting a workspace status banner", () => {
+    dashboardSessionMock.authState = "signed_in";
+    dashboardSessionMock.selectedGuild = {
+      id: "guild-1",
+      name: "Test Guild",
+      icon: undefined,
+      owner: true,
+      permissions: 0,
+      access_level: "write",
+    };
+    dashboardSessionMock.selectedGuildID = "guild-1";
+
+    featureWorkspaceMock.loading = true;
+    featureWorkspaceMock.workspaceState = "loading";
+
+    renderHomePage();
+
+    expect(screen.queryByText("Workspace status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Refreshing dashboard overview..."),
+    ).not.toBeInTheDocument();
+  });
 });
 
 beforeEach(() => {

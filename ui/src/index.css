@@ -3,6 +3,7 @@
 
   --bg-page: #0b0d12;
   --bg-shell: #10141b;
+  --bg-home-dashboard-canvas: #121822;
   --bg-surface: #141922;
   --bg-surface-card: #1a202a;
   --bg-surface-elevated: #212938;
@@ -1007,7 +1008,7 @@ textarea:focus {
   --home-section-gap: clamp(1.5rem, 2.2vw, var(--space-6));
   --home-card-gap: clamp(1rem, 1.8vw, 1.25rem);
   --home-card-min-width: 19.25rem;
-  --home-workspace-surface: #121822;
+  --home-workspace-surface: var(--bg-home-dashboard-canvas);
   --home-section-surface: transparent;
   --home-card-surface: #202b3a;
   --home-card-surface-hover: #243041;
@@ -1031,20 +1032,14 @@ textarea:focus {
   --home-attention-title: #e0b26e;
   --home-attention-dot: #c59452;
   --home-numeric-value: #b9ccef;
-  background: var(--home-workspace-surface);
 }
 
-.home-page .page-header,
-.home-page .page-content-surface {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.home-page .page-content-surface {
+.home-page-surface {
+  min-height: 100%;
   padding: clamp(var(--space-5), 2.6vw, var(--space-6));
   border: 0;
   border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 

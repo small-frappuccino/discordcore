@@ -57,12 +57,15 @@ interface PageContentSurfaceProps extends HTMLAttributes<HTMLElement> {
 interface DashboardPageSurfaceProps {
   notice?: Notice | null;
   busyLabel?: string;
+  className?: string;
   children: ReactNode;
 }
 
 interface FeatureWorkspaceLayoutProps {
   notice?: Notice | null;
   busyLabel?: string;
+  surfaceClassName?: string;
+  contentGridClassName?: string;
   summary?: ReactNode;
   workspaceEyebrow?: ReactNode;
   workspaceTitle: ReactNode;
@@ -189,10 +192,11 @@ export function PageContentSurface({
 export function DashboardPageSurface({
   notice,
   busyLabel,
+  className,
   children,
 }: DashboardPageSurfaceProps) {
   return (
-    <PageContentSurface>
+    <PageContentSurface className={className}>
       <AlertBanner notice={notice} busyLabel={busyLabel} />
       {children}
     </PageContentSurface>
@@ -202,6 +206,8 @@ export function DashboardPageSurface({
 export function FeatureWorkspaceLayout({
   notice,
   busyLabel,
+  surfaceClassName,
+  contentGridClassName,
   summary,
   workspaceEyebrow = "Workspace",
   workspaceTitle,
@@ -218,11 +224,18 @@ export function FeatureWorkspaceLayout({
     workspaceMeta !== undefined;
 
   return (
-    <DashboardPageSurface notice={notice} busyLabel={busyLabel}>
+    <DashboardPageSurface
+      className={surfaceClassName}
+      notice={notice}
+      busyLabel={busyLabel}
+    >
       {summary}
 
       <section
-        className={aside ? "content-grid content-grid-with-aside" : "content-grid"}
+        className={joinClassNames(
+          aside ? "content-grid content-grid-with-aside" : "content-grid",
+          contentGridClassName,
+        )}
       >
         <div className="page-main">
           <SurfaceCard

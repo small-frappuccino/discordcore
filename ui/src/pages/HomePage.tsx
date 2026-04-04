@@ -69,11 +69,8 @@ export function HomePage() {
 
       <FeatureWorkspaceLayout
         notice={homeNotice}
-        busyLabel={
-          workspace.loading || rolesSettings.loading || partnerBoard.loading
-            ? "Refreshing dashboard overview..."
-            : undefined
-        }
+        surfaceClassName="home-page-surface"
+        contentGridClassName="home-page-layout"
         workspaceEyebrow={null}
         workspaceTitle={null}
         workspaceDescription={null}

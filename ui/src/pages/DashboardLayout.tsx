@@ -64,6 +64,9 @@ export function DashboardLayout() {
   );
   const homeNavigationItem =
     routeGuildID === "" ? null : getDashboardHomeNavigationItem(routeGuildID);
+  const isHomeRoute =
+    homeNavigationItem !== null &&
+    isNavigationItemActive(location.pathname, homeNavigationItem);
   const activeSection =
     routeGuildID === ""
       ? null
@@ -144,6 +147,13 @@ export function DashboardLayout() {
         ? "OAuth unavailable"
         : "Sign in to continue";
   const showSessionHydrationState = authState === "checking";
+  const shellBusyLabel =
+    sessionLoading && busyLabel.trim() !== "" ? busyLabel : undefined;
+  const shellNotice = notice ? (
+    <AlertBanner notice={notice} busyLabel={shellBusyLabel} />
+  ) : !showSessionHydrationState && shellBusyLabel ? (
+    <AlertBanner busyLabel={shellBusyLabel} />
+  ) : null;
   const currentContextLabel = getDashboardContextLabel(
     location.pathname,
     routeGuildID,
@@ -445,19 +455,8 @@ export function DashboardLayout() {
           ) : null}
         </aside>
 
-        <section className="shell-main">
-          {notice ? (
-            <div className="shell-main-notice">
-              <AlertBanner
-                notice={notice}
-                busyLabel={sessionLoading ? busyLabel : undefined}
-              />
-            </div>
-          ) : sessionLoading && !showSessionHydrationState ? (
-            <div className="shell-main-notice">
-              <AlertBanner busyLabel={busyLabel} />
-            </div>
-          ) : null}
+        <section className={isHomeRoute ? "shell-main shell-main-home" : "shell-main"}>
+          {shellNotice ? <div className="shell-main-notice">{shellNotice}</div> : null}
           {showSessionHydrationState ? (
             <PageContentSurface aria-busy="true">
               <div className="workspace-state">

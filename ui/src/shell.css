@@ -591,9 +591,27 @@
   margin-inline: auto;
 }
 
-.shell-main > .home-page {
+.shell-main-home {
+  gap: 0;
+  padding: 0;
+  background: var(--bg-home-dashboard-canvas);
+}
+
+.shell-main-home > .home-page,
+.shell-main-home > .shell-main-notice {
   width: 100%;
   margin-inline: 0;
+}
+
+.shell-main-home > .home-page {
+  min-height: 100%;
+}
+
+.shell-main-home > .shell-main-notice {
+  padding:
+    clamp(var(--space-5), 2.6vw, var(--space-6))
+    clamp(var(--space-5), 2.6vw, var(--space-6))
+    0;
 }
 
 .landing-dashboard-main {
