@@ -1,13 +1,12 @@
 .dashboard-layout-shell {
   --shell-sidebar-width: 324px;
   --shell-sidebar-collapsed-width: 88px;
-  --shell-chrome-surface:
-    linear-gradient(180deg, rgba(21, 27, 38, 0.96), rgba(14, 18, 26, 0.96));
+  --shell-chrome-surface: rgba(20, 27, 35, 0.96);
   --shell-chrome-border: rgba(42, 49, 64, 0.92);
-  --shell-nav-panel: rgba(25, 31, 42, 0.68);
-  --shell-nav-panel-border: rgba(50, 61, 79, 0.72);
-  --shell-nav-submenu-surface: rgba(14, 17, 23, 0.94);
-  --shell-nav-hover: rgba(255, 255, 255, 0.035);
+  --shell-nav-panel: rgba(27, 35, 46, 0.72);
+  --shell-nav-panel-border: rgba(54, 67, 87, 0.74);
+  --shell-nav-submenu-surface: #111821;
+  --shell-nav-hover: rgba(255, 255, 255, 0.04);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -38,7 +37,7 @@
   padding: var(--space-4);
   border-bottom: 1px solid var(--border-soft);
   background: var(--shell-chrome-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
 }
 
 .shell-topbar-spacer {
