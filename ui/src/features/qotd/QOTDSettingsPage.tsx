@@ -10,7 +10,7 @@ import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useGuildChannelOptions } from "../features/useGuildChannelOptions";
 import { useGuildRoleOptions } from "../features/useGuildRoleOptions";
 import { formatRoleOptionLabel } from "../features/roles";
-import { useQOTD } from "./QOTDContext";
+import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
 interface SettingsDraft {
   enabled: boolean;
@@ -22,7 +22,7 @@ interface SettingsDraft {
 
 export function QOTDSettingsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
-  const { forumTags, refreshForumTags, saveSettings, settings, summary } = useQOTD();
+  const { busyLabel, forumTags, refreshForumTags, saveSettings, settings, summary } = useQOTD();
   const channelOptions = useGuildChannelOptions();
   const roleOptions = useGuildRoleOptions();
   const [draft, setDraft] = useState<SettingsDraft>(() => createSettingsDraft(settings));
@@ -58,6 +58,7 @@ export function QOTDSettingsPage() {
   const hasUnsavedChanges = settingsDraftChanged(settings, draft);
   const controlsDisabled = !canEditSelectedGuild || saving;
   const tagLookupAvailable = draft.forum_channel_id.trim() !== "";
+  const refreshingTags = busyLabel === QOTD_BUSY_LABELS.refreshForumTags;
 
   async function handleSave() {
     if (controlsDisabled) {
@@ -73,14 +74,24 @@ export function QOTDSettingsPage() {
   }
 
   return (
-    <div className="control-panel-grid">
-      <SurfaceCard className="control-panel-card">
-        <div className="card-copy">
-          <p className="section-label">Forum target</p>
-          <h2>Official QOTD forum</h2>
-          <p className="section-description">
-            Pick the Discord forum channel that will hold the official locked QOTD posts and member reply threads.
-          </p>
+    <div className="qotd-settings-grid">
+      <SurfaceCard className="qotd-panel-card qotd-settings-card-wide">
+        <div className="qotd-card-head">
+          <div className="card-copy">
+            <p className="section-label">Setup</p>
+            <h3>Workflow routing</h3>
+            <p className="section-description">
+              Choose the forum used by the official daily post and its linked answer threads.
+            </p>
+          </div>
+          <div className="qotd-card-meta">
+            <span className={`qotd-status-pill ${draft.enabled ? "qotd-status-success" : "qotd-status-neutral"}`}>
+              {draft.enabled ? "Enabled" : "Disabled"}
+            </span>
+            <span className="meta-pill subtle-pill">
+              {draft.forum_channel_id ? "Forum selected" : "Forum missing"}
+            </span>
+          </div>
         </div>
 
         {channelOptions.notice ? (
@@ -108,92 +119,114 @@ export function QOTDSettingsPage() {
           <span className="entity-option-copy">
             <strong>Enable QOTD workflow</strong>
             <span className="meta-note">
-              Requires a forum channel plus distinct Question and Reply tags before publish-now is allowed.
+              Keep this on when the forum and tag routing are ready for the daily publish flow.
             </span>
           </span>
         </label>
 
-        <EntityPickerField
-          label="Forum channel"
-          value={draft.forum_channel_id}
-          onChange={(value) => {
-            setDraft((current) => ({
-              ...current,
-              forum_channel_id: value,
-              question_tag_id: "",
-              reply_tag_id: "",
-            }));
-            void refreshForumTags(value);
-          }}
-          options={forumChannelOptions}
-          placeholder="Select a forum channel"
-          disabled={controlsDisabled || channelOptions.loading}
-          note="Use the same forum for official question posts and member reply posts."
-        />
+        <div className="qotd-form-grid">
+          <EntityPickerField
+            label="Forum channel"
+            value={draft.forum_channel_id}
+            onChange={(value) => {
+              setDraft((current) => ({
+                ...current,
+                forum_channel_id: value,
+                question_tag_id: "",
+                reply_tag_id: "",
+              }));
+              void refreshForumTags(value);
+            }}
+            options={forumChannelOptions}
+            placeholder="Select a forum channel"
+            disabled={controlsDisabled || channelOptions.loading}
+            note="Use one forum for both the official post and member-created answer threads."
+          />
+
+          <div className="qotd-support-card">
+            <p className="section-label">Current slot</p>
+            <strong>{summary?.current_publish_date_utc?.slice(0, 10) ?? "No active slot"}</strong>
+            <p className="meta-note">
+              {summary?.published_for_current_slot
+                ? "This slot already has an official QOTD post."
+                : "This slot is still waiting for an official post."}
+            </p>
+          </div>
+        </div>
       </SurfaceCard>
 
-      <SurfaceCard className="control-panel-card">
-        <div className="card-copy">
-          <p className="section-label">Forum tags</p>
-          <h2>Question and reply routing tags</h2>
-          <p className="section-description">
-            Map the existing forum tags that distinguish official QOTD posts from member-created reply threads.
-          </p>
+      <SurfaceCard className="qotd-panel-card">
+        <div className="qotd-card-head">
+          <div className="card-copy">
+            <p className="section-label">Tags</p>
+            <h3>Forum routing tags</h3>
+            <p className="section-description">
+              Map the official question tag and the member reply tag on the selected forum.
+            </p>
+          </div>
+          <div className="inline-actions">
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={controlsDisabled || !tagLookupAvailable}
+              onClick={() => void refreshForumTags(draft.forum_channel_id)}
+            >
+              {refreshingTags ? "Refreshing..." : "Refresh tags"}
+            </button>
+          </div>
         </div>
 
         {!tagLookupAvailable ? (
-          <p className="meta-note">Select a forum channel first to load its tags.</p>
+          <div className="qotd-inline-note">
+            <p className="meta-note">Select a forum channel first to load its tags.</p>
+          </div>
         ) : null}
 
-        <div className="inline-actions">
-          <button
-            className="button-secondary"
-            type="button"
+        <div className="qotd-settings-stack">
+          <EntityPickerField
+            label="Question tag"
+            value={draft.question_tag_id}
+            onChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                question_tag_id: value,
+              }))
+            }
+            options={tagOptions}
+            placeholder="Select the Question tag"
             disabled={controlsDisabled || !tagLookupAvailable}
-            onClick={() => void refreshForumTags(draft.forum_channel_id)}
-          >
-            Refresh tags
-          </button>
+            note="Applied to the locked daily QOTD post."
+          />
+
+          <EntityPickerField
+            label="Reply tag"
+            value={draft.reply_tag_id}
+            onChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                reply_tag_id: value,
+              }))
+            }
+            options={tagOptions}
+            placeholder="Select the Reply tag"
+            disabled={controlsDisabled || !tagLookupAvailable}
+            note="Applied to member-created answer threads."
+          />
         </div>
-
-        <EntityPickerField
-          label="Question tag"
-          value={draft.question_tag_id}
-          onChange={(value) =>
-            setDraft((current) => ({
-              ...current,
-              question_tag_id: value,
-            }))
-          }
-          options={tagOptions}
-          placeholder="Select the Question tag"
-          disabled={controlsDisabled || !tagLookupAvailable}
-          note="Apply this tag to the official locked daily QOTD posts."
-        />
-
-        <EntityPickerField
-          label="Reply tag"
-          value={draft.reply_tag_id}
-          onChange={(value) =>
-            setDraft((current) => ({
-              ...current,
-              reply_tag_id: value,
-            }))
-          }
-          options={tagOptions}
-          placeholder="Select the Reply tag"
-          disabled={controlsDisabled || !tagLookupAvailable}
-          note="Apply this tag to member reply threads created through the Answer button."
-        />
       </SurfaceCard>
 
-      <SurfaceCard className="control-panel-card control-panel-card-wide">
-        <div className="card-copy">
-          <p className="section-label">Staff handling</p>
-          <h2>Moderation roles for locked official posts</h2>
-          <p className="section-description">
-            These roles are reserved for direct moderation or bot-side handling in the official question posts.
-          </p>
+      <SurfaceCard className="qotd-panel-card">
+        <div className="qotd-card-head">
+          <div className="card-copy">
+            <p className="section-label">Staff</p>
+            <h3>Moderation coverage</h3>
+            <p className="section-description">
+              Roles stored here are reserved for backend enforcement and official post handling.
+            </p>
+          </div>
+          <div className="qotd-card-meta">
+            <span className="meta-pill subtle-pill">{draft.staff_role_ids.length} roles</span>
+          </div>
         </div>
 
         {roleOptions.notice ? (
@@ -217,16 +250,20 @@ export function QOTDSettingsPage() {
               staff_role_ids: toggleStringValue(current.staff_role_ids, roleId),
             }))
           }
-          note="This list is stored now for backend enforcement and moderation flows; it does not change Discord permissions directly."
+          note="This list is stored for backend moderation flows; it does not change Discord permissions directly."
         />
 
-        <div className="surface-subsection">
-          <p className="section-label">Current slot</p>
-          <p className="meta-note">
-            {summary?.published_for_current_slot
-              ? "The due UTC slot already has an official QOTD post."
-              : "The due UTC slot has not been published yet."}
-          </p>
+        <div className="qotd-settings-footer">
+          <div className="qotd-support-card">
+            <p className="section-label">Queue</p>
+            <strong>{summary?.counts.ready ?? 0} ready</strong>
+            <p className="meta-note">
+              {summary?.counts.ready
+                ? "The bank already has ready questions for future slots."
+                : "Add at least one ready question to cover the next slot."}
+            </p>
+          </div>
+
           <div className="inline-actions">
             <button
               className="button-primary"
@@ -234,7 +271,7 @@ export function QOTDSettingsPage() {
               disabled={controlsDisabled || !hasUnsavedChanges}
               onClick={() => void handleSave()}
             >
-              {saving ? "Saving..." : "Save QOTD settings"}
+              {saving ? "Saving..." : "Save changes"}
             </button>
           </div>
         </div>

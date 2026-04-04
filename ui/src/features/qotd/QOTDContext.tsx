@@ -24,6 +24,17 @@ type WorkspaceState =
   | "server_required"
   | "unavailable";
 
+export const QOTD_BUSY_LABELS = {
+  refreshWorkspace: "Refreshing QOTD workspace...",
+  refreshForumTags: "Refreshing forum tags...",
+  saveSettings: "Saving QOTD settings...",
+  createQuestion: "Creating question...",
+  updateQuestion: "Updating question...",
+  deleteQuestion: "Deleting question...",
+  reorderQuestions: "Reordering question bank...",
+  publishNow: "Publishing manual QOTD...",
+} as const;
+
 interface QOTDContextValue {
   busyLabel: string;
   forumTags: QOTDForumTagOption[];
@@ -240,12 +251,12 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
   }, [authState, client, normalizedGuildID]);
 
   async function refreshWorkspace() {
-    setBusyLabel("Refreshing QOTD workspace...");
+    setBusyLabel(QOTD_BUSY_LABELS.refreshWorkspace);
     await loadWorkspace();
   }
 
   async function refreshForumTags(channelId: string) {
-    setBusyLabel("Refreshing forum tags...");
+    setBusyLabel(QOTD_BUSY_LABELS.refreshForumTags);
     try {
       await loadForumTags(channelId);
       setNotice(null);
@@ -265,7 +276,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setBusyLabel("Saving QOTD settings...");
+    setBusyLabel(QOTD_BUSY_LABELS.saveSettings);
     try {
       const response = await client.updateQOTDSettings(normalizedGuildID, nextSettings);
       setSettings({
@@ -298,7 +309,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setBusyLabel("Creating question...");
+    setBusyLabel(QOTD_BUSY_LABELS.createQuestion);
     try {
       await client.createQOTDQuestion(normalizedGuildID, payload);
       await loadWorkspace("Question added to the QOTD bank.");
@@ -320,7 +331,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setBusyLabel("Updating question...");
+    setBusyLabel(QOTD_BUSY_LABELS.updateQuestion);
     try {
       await client.updateQOTDQuestion(normalizedGuildID, questionId, payload);
       await loadWorkspace("Question updated.");
@@ -339,7 +350,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setBusyLabel("Deleting question...");
+    setBusyLabel(QOTD_BUSY_LABELS.deleteQuestion);
     try {
       await client.deleteQOTDQuestion(normalizedGuildID, questionId);
       await loadWorkspace("Question removed.");
@@ -358,7 +369,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setBusyLabel("Reordering question bank...");
+    setBusyLabel(QOTD_BUSY_LABELS.reorderQuestions);
     try {
       const response = await client.reorderQOTDQuestions(normalizedGuildID, orderedIDs);
       setQuestions(response.questions);
@@ -378,7 +389,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setBusyLabel("Publishing manual QOTD...");
+    setBusyLabel(QOTD_BUSY_LABELS.publishNow);
     try {
       const response = await client.publishQOTDNow(normalizedGuildID);
       await loadWorkspace("Manual QOTD published to Discord.");
