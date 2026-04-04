@@ -1007,15 +1007,11 @@ textarea:focus {
   --home-section-gap: clamp(1.5rem, 2.2vw, var(--space-6));
   --home-card-gap: clamp(1rem, 1.8vw, 1.25rem);
   --home-card-min-width: 19.25rem;
-  --home-workspace-surface:
-    linear-gradient(180deg, rgba(18, 24, 34, 0.98), rgba(14, 20, 30, 0.99));
-  --home-section-surface:
-    linear-gradient(180deg, rgba(24, 32, 45, 0.96), rgba(18, 25, 36, 0.98));
-  --home-card-surface:
-    linear-gradient(180deg, rgba(29, 39, 53, 0.94), rgba(22, 30, 43, 0.98));
-  --home-card-surface-hover:
-    linear-gradient(180deg, rgba(34, 45, 61, 0.98), rgba(25, 34, 47, 1));
-  --home-row-surface: rgba(11, 16, 24, 0.34);
+  --home-workspace-surface: #121822;
+  --home-section-surface: transparent;
+  --home-card-surface: #202b3a;
+  --home-card-surface-hover: #243041;
+  --home-row-surface: #1a2431;
   --home-section-border: rgba(148, 168, 194, 0.16);
   --home-card-border: rgba(146, 167, 192, 0.18);
   --home-row-border: rgba(255, 255, 255, 0.06);
@@ -1035,12 +1031,13 @@ textarea:focus {
   --home-attention-title: #e0b26e;
   --home-attention-dot: #c59452;
   --home-numeric-value: #b9ccef;
+  background: var(--home-workspace-surface);
 }
 
 .home-page .page-header,
 .home-page .page-content-surface {
-  border-color: var(--home-section-border);
-  background: var(--home-workspace-surface);
+  border-color: transparent;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -1209,13 +1206,7 @@ textarea:focus {
 
 .home-nav-card-control-panel {
   border-color: color-mix(in srgb, var(--home-enabled-rail) 55%, var(--home-card-border));
-  background:
-    linear-gradient(
-      180deg,
-      rgba(58, 112, 80, 0.16),
-      rgba(29, 39, 53, 0.94) 34%,
-      rgba(22, 30, 43, 0.98)
-    );
+  background: color-mix(in srgb, var(--home-card-surface) 86%, #396d4f 14%);
 }
 
 .home-page .overview-card-header,
@@ -1258,9 +1249,7 @@ textarea:focus {
   padding: 12px 14px;
   border-radius: calc(var(--radius-control) + 2px);
   border: 1px solid var(--home-row-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)),
-    var(--home-row-surface);
+  background: var(--home-row-surface);
 }
 
 .home-page .overview-stat-label {
