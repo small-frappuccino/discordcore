@@ -128,7 +128,6 @@ export function DashboardSessionProvider({
     ) => {
       const freshGuilds = options.freshGuilds ?? false;
       setSessionLoading(true);
-      setBusyLabel("Refreshing session");
 
       try {
         const probe = await activeClient.getSessionStatus();
