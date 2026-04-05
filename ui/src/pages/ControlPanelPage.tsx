@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import {
+  DashboardPageSurface,
   EntityMultiPickerField,
   EmptyState,
-  FeatureWorkspaceLayout,
-  LookupNotice,
   PageHeader,
-  StatusBadge,
-  SurfaceCard,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
@@ -45,13 +42,13 @@ export function ControlPanelPage() {
   });
 
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
-  const selectedGuildModeLabel =
-    selectedGuildAccessLevel === "read" ? "Read-only access" : "Writable access";
   const controlsDisabled =
     authState !== "signed_in" ||
     selectedGuild === null ||
     !canEditSelectedGuild ||
-    roleOptions.loading;
+    roleOptions.loading ||
+    rolesSettings.loading ||
+    saving;
   const rolePickerOptions = roleOptions.roles.map((role) => ({
     value: role.id,
     label: formatRoleOptionLabel(role),
@@ -89,10 +86,7 @@ export function ControlPanelPage() {
         dashboardReadRoleIds: nextReadRoles,
         dashboardWriteRoleIds: nextWriteRoles,
       });
-      setNotice({
-        tone: "success",
-        message: "Dashboard access roles updated.",
-      });
+      setNotice(null);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -111,8 +105,7 @@ export function ControlPanelPage() {
             <p className="section-label">Workspace</p>
             <h2>Checking access</h2>
             <p className="section-description">
-              The dashboard is checking your Discord session and preparing the
-              current server context.
+              The dashboard is checking your Discord session and current server context.
             </p>
           </div>
         </div>
@@ -147,86 +140,88 @@ export function ControlPanelPage() {
     }
 
     return (
-      <div className="control-panel-grid">
-        <SurfaceCard className="control-panel-card">
-          <div className="card-copy">
-            <p className="section-label">Read access</p>
-            <h2>Dashboard read access roles</h2>
-            <p className="section-description">
-              Members with these roles can open the dashboard in read-only mode.
-            </p>
+      <div className="workspace-view control-panel-workspace">
+        <section className="control-panel-flat-section">
+          <div className="workspace-view-header">
+            <div className="card-copy">
+              <p className="section-label">Access roles</p>
+              <h2>Dashboard access</h2>
+              <p className="section-description">
+                Choose which roles can open the dashboard in read-only or writable mode.
+              </p>
+            </div>
+            <div className="workspace-view-meta">
+              <span className="meta-pill subtle-pill">
+                {hasUnsavedChanges ? "Unsaved changes" : "Saved"}
+              </span>
+            </div>
           </div>
 
           {roleOptions.notice ? (
-            <LookupNotice
-              title="Role references unavailable"
-              message={roleOptions.notice.message}
-              retryLabel="Retry role lookup"
-              retryDisabled={roleOptions.loading}
-              onRetry={roleOptions.refresh}
-            />
+            <div className="flat-inline-message">
+              <p className="meta-note">{roleOptions.notice.message}</p>
+              <div className="inline-actions">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={roleOptions.loading}
+                  onClick={() => void roleOptions.refresh()}
+                >
+                  Retry role lookup
+                </button>
+              </div>
+            </div>
           ) : null}
 
-          <EntityMultiPickerField
-            label="Read access roles"
-            options={rolePickerOptions}
-            selectedValues={dashboardReadRoleIds}
-            disabled={controlsDisabled}
-            onToggle={toggleDashboardReadRole}
-            note="Read access allows navigation and page inspection without enabling writes."
-          />
-        </SurfaceCard>
+          <div className="control-panel-grid">
+            <EntityMultiPickerField
+              label="Read access roles"
+              options={rolePickerOptions}
+              selectedValues={dashboardReadRoleIds}
+              disabled={controlsDisabled}
+              onToggle={toggleDashboardReadRole}
+              note="Read access allows navigation and inspection without writes."
+            />
 
-        <SurfaceCard className="control-panel-card">
-          <div className="card-copy">
-            <p className="section-label">Write access</p>
-            <h2>Dashboard write access roles</h2>
-            <p className="section-description">
-              Members with these roles can change settings across the dashboard.
-            </p>
+            <EntityMultiPickerField
+              label="Write access roles"
+              options={rolePickerOptions}
+              selectedValues={dashboardWriteRoleIds}
+              disabled={controlsDisabled}
+              onToggle={toggleDashboardWriteRole}
+              note="Write access also implies read access."
+            />
+          </div>
+        </section>
+
+        <section className="control-panel-flat-section">
+          <div className="workspace-view-header">
+            <div className="card-copy">
+              <p className="section-label">Access rules</p>
+              <h2>Implicit administrator access</h2>
+              <p className="section-description">
+                Discord server owners, administrators, and members with Manage Server remain implicitly allowed with write access.
+              </p>
+            </div>
           </div>
 
-          <EntityMultiPickerField
-            label="Write access roles"
-            options={rolePickerOptions}
-            selectedValues={dashboardWriteRoleIds}
-            disabled={controlsDisabled}
-            onToggle={toggleDashboardWriteRole}
-            note="Write access also implies read access."
-          />
-        </SurfaceCard>
+          <p className="meta-note">
+            {selectedGuildAccessLevel === "read"
+              ? "You currently have read-only access to this server. Role changes are disabled."
+              : "Save changes after reviewing both role lists. Existing admin command roles remain separate."}
+          </p>
 
-        <SurfaceCard className="control-panel-card control-panel-card-wide">
-          <div className="card-copy">
-            <p className="section-label">Access rules</p>
-            <h2>Implicit administrator access</h2>
-            <p className="section-description">
-              Discord server owners, administrators, and members with Manage Server
-              remain implicitly allowed with write access.
-            </p>
-          </div>
-
-          {selectedGuildAccessLevel === "read" ? (
-            <p className="meta-note">
-              You currently have read-only access to this server. Role changes are disabled.
-            </p>
-          ) : (
-            <p className="meta-note">
-              Save changes after reviewing both role lists. Existing admin command roles remain separate.
-            </p>
-          )}
-
-          <div className="inline-actions">
+          <div className="workspace-footer">
             <button
               className="button-primary"
               type="button"
-              disabled={controlsDisabled || saving || !hasUnsavedChanges}
+              disabled={controlsDisabled || !hasUnsavedChanges}
               onClick={() => void handleSave()}
             >
               {saving ? "Saving..." : "Save access roles"}
             </button>
           </div>
-        </SurfaceCard>
+        </section>
       </div>
     );
   }
@@ -237,11 +232,6 @@ export function ControlPanelPage() {
         eyebrow="Core"
         title="Control Panel"
         description="Configure which roles can read or write the dashboard for the selected server."
-        status={
-          <StatusBadge tone={selectedGuildAccessLevel === "read" ? "info" : "neutral"}>
-            {selectedGuildAccessLevel === "read" ? "Read-only access" : "Access roles"}
-          </StatusBadge>
-        }
         meta={
           <>
             <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
@@ -250,31 +240,9 @@ export function ControlPanelPage() {
         }
       />
 
-      <FeatureWorkspaceLayout
-        notice={notice ?? rolesSettings.notice ?? roleOptions.notice}
-        busyLabel={
-          saving
-            ? "Saving access roles..."
-            : rolesSettings.loading
-              ? "Loading access roles..."
-              : roleOptions.loading
-                ? "Loading role references..."
-                : undefined
-        }
-        workspaceTitle="Manage dashboard access"
-        workspaceDescription="Keep read and write dashboard access aligned with the selected server's operator roles without exposing raw settings fields in the main workspace."
-        workspaceMeta={
-          selectedGuild !== null ? (
-            <>
-              <span className="meta-pill subtle-pill">{selectedGuildModeLabel}</span>
-              <span className="meta-pill subtle-pill">
-                {hasUnsavedChanges ? "Unsaved changes" : "Saved"}
-              </span>
-            </>
-          ) : null
-        }
-        workspaceContent={renderBody()}
-      />
+      <DashboardPageSurface notice={notice ?? rolesSettings.notice}>
+        {renderBody()}
+      </DashboardPageSurface>
     </section>
   );
 }

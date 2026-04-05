@@ -20,7 +20,6 @@ import {
   formatAllowedRoleCountValue,
   formatAllowedRoleOptionLabel,
   formatAllowedRolesValue,
-  formatCommandServerSetting,
   getAdminCommandsFeatureDetails,
   getCommandsFeatureDetails,
   summarizeAdminCommandsSignal,
@@ -40,16 +39,13 @@ import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 import {
   AdvancedTextInput,
   AlertBanner,
+  DashboardPageSurface,
   EntityMultiPickerField,
   EntityPickerField,
   EmptyState,
-  FeatureWorkspaceLayout,
   KeyValueList,
-  LookupNotice,
-  MetricCard,
   PageHeader,
   StatusBadge,
-  SurfaceCard,
 } from "../components/ui";
 import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
 
@@ -93,10 +89,6 @@ export function CommandsPage() {
   const enabledModules = areaFeatures.filter(
     (feature) => feature.effective_enabled,
   ).length;
-  const firstBlockedFeature = useMemo(
-    () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
-    [areaFeatures],
-  );
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
@@ -254,25 +246,7 @@ export function CommandsPage() {
       );
     }
 
-    if (selectedGuild === null) {
-      return null;
-    }
-
-    return (
-      <button
-        className="button-secondary"
-        type="button"
-        disabled={
-          workspace.loading ||
-          mutation.saving ||
-          channelOptions.loading ||
-          roleOptions.loading
-        }
-        onClick={() => void handleRefreshCommands()}
-      >
-        Refresh commands
-      </button>
-    );
+    return null;
   }
 
   function renderPageState() {
@@ -326,34 +300,28 @@ export function CommandsPage() {
     const adminDetails = getAdminCommandsFeatureDetails(adminCommandsFeature);
 
     return (
-      <div className="commands-module-grid">
-        <section className="surface-subsection commands-module-panel">
+      <div className="workspace-view commands-workspace">
+        <section className="commands-flat-section">
           <div className="commands-module-head">
             <div className="card-copy commands-module-copy">
               <p className="section-label">Commands</p>
               <div className="commands-module-title-row">
-                <h3>{commandsFeature.label}</h3>
+                <h2>Command routing</h2>
                 <StatusBadge tone={getFeatureStatusTone(commandsFeature)}>
                   {formatFeatureStatusLabel(commandsFeature)}
                 </StatusBadge>
               </div>
               <p className="section-description">
-                Keep slash-command handling available for the selected server
-                and optionally route configuration through a dedicated command
-                channel.
+                Set the optional command destination and control whether command handling is enabled for this server.
               </p>
             </div>
-
-            <span className="meta-pill subtle-pill">
-              {formatCommandServerSetting(commandsFeature)}
-            </span>
           </div>
 
           <KeyValueList
             items={[
               {
                 label: "Module state",
-                value: commandsFeature.effective_enabled ? "On" : "Off",
+                value: commandsFeature.effective_enabled ? "Enabled" : "Disabled",
               },
               {
                 label: "Command channel",
@@ -370,10 +338,26 @@ export function CommandsPage() {
             ]}
           />
 
-          <p className="meta-note commands-module-note">
+          {channelOptions.notice ? (
+            <div className="flat-inline-message">
+              <p className="meta-note">{channelOptions.notice.message}</p>
+              <div className="inline-actions">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={channelOptions.loading}
+                  onClick={() => void channelOptions.refresh()}
+                >
+                  Retry channel lookup
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <p className="meta-note">
             {commandDetails.channelId === ""
-              ? "Leave the command channel empty when slash-command handling should stay available without a dedicated routing destination."
-              : "The configured command channel keeps command setup and related follow-up actions in one place."}
+              ? "Leave the command channel empty when command handling should stay available without a dedicated routing destination."
+              : "The configured command channel keeps command setup and follow-up actions in one place."}
           </p>
 
           <div className="inline-actions commands-module-actions">
@@ -419,32 +403,27 @@ export function CommandsPage() {
           </div>
         </section>
 
-        <section className="surface-subsection commands-module-panel">
+        <section className="commands-flat-section">
           <div className="commands-module-head">
             <div className="card-copy commands-module-copy">
               <p className="section-label">Admin access</p>
               <div className="commands-module-title-row">
-                <h3>{adminCommandsFeature.label}</h3>
+                <h2>Admin command access</h2>
                 <StatusBadge tone={getFeatureStatusTone(adminCommandsFeature)}>
                   {formatFeatureStatusLabel(adminCommandsFeature)}
                 </StatusBadge>
               </div>
               <p className="section-description">
-                Limit privileged command workflows to the roles configured for
-                this server.
+                Limit privileged command workflows to the roles configured for this server.
               </p>
             </div>
-
-            <span className="meta-pill subtle-pill">
-              {formatCommandServerSetting(adminCommandsFeature)}
-            </span>
           </div>
 
           <KeyValueList
             items={[
               {
                 label: "Module state",
-                value: adminCommandsFeature.effective_enabled ? "On" : "Off",
+                value: adminCommandsFeature.effective_enabled ? "Enabled" : "Disabled",
               },
               {
                 label: "Allowed roles",
@@ -457,7 +436,23 @@ export function CommandsPage() {
             ]}
           />
 
-          <p className="meta-note commands-module-note">
+          {roleOptions.notice ? (
+            <div className="flat-inline-message">
+              <p className="meta-note">{roleOptions.notice.message}</p>
+              <div className="inline-actions">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={roleOptions.loading}
+                  onClick={() => void roleOptions.refresh()}
+                >
+                  Retry role lookup
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <p className="meta-note">
             {adminDetails.allowedRoleCount === 0
               ? "Choose which server roles should be allowed to use admin-only command workflows."
               : "Review the selected roles whenever command privileges need to change for this server."}
@@ -539,163 +534,45 @@ export function CommandsPage() {
           actions={renderHeaderActions()}
         />
 
-        <FeatureWorkspaceLayout
-          notice={workspaceNotice}
-          busyLabel={
-            mutation.saving
-              ? "Saving command settings..."
-              : workspace.loading ||
-                  channelOptions.loading ||
-                  roleOptions.loading
-                ? "Refreshing commands workspace..."
-                : undefined
-          }
-          summary={
-            workspace.workspaceState === "ready" &&
-            commandsFeature !== null &&
-            adminCommandsFeature !== null ? (
-              <section
-                className="overview-summary-strip"
-                aria-label="Commands summary"
-              >
-                <MetricCard
-                  label="Commands"
-                  value={formatFeatureStatusLabel(commandsFeature)}
-                  description={summarizeCommandsSignal(commandsFeature)}
-                  tone={getFeatureStatusTone(commandsFeature)}
-                />
-                <MetricCard
-                  label="Command channel"
-                  value={formatGuildChannelValue(
+        <DashboardPageSurface notice={workspaceNotice}>
+          {workspace.workspaceState === "ready" &&
+          commandsFeature !== null &&
+          adminCommandsFeature !== null ? (
+            <section className="commands-context-strip" aria-label="Commands summary">
+              <div className="commands-context-item">
+                <p className="section-label">Command channel</p>
+                <strong>
+                  {formatGuildChannelValue(
                     getCommandsFeatureDetails(commandsFeature).channelId,
                     channelOptions.channels,
-                    "Not set",
+                    "No dedicated channel",
                   )}
-                  description="The optional routing destination used for command workflows."
-                />
-                <MetricCard
-                  label="Admin access"
-                  value={formatAllowedRoleCountValue(adminCommandsFeature)}
-                  description={formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
-                  tone={
-                    getAdminCommandsFeatureDetails(adminCommandsFeature).allowedRoleCount > 0
-                      ? "info"
-                      : "neutral"
-                  }
-                />
-                <MetricCard
-                  label="Overrides"
-                  value={String(localOverrides)}
-                  description={`${enabledModules}/${areaFeatures.length} command modules enabled for this server.`}
-                />
-              </section>
-            ) : null
-          }
-          workspaceTitle="Command routing"
-          workspaceDescription="Keep command handling and privileged access in one place. The default workspace answers the two most common admin tasks here: where commands should route and which roles can use the privileged ones."
-          workspaceMeta={
-            workspace.workspaceState === "ready" ? (
-              <>
-                <span className="meta-pill subtle-pill">
-                  {localOverrides} local overrides
-                </span>
-                <span className="meta-pill subtle-pill">
-                  {enabledModules}/{areaFeatures.length} enabled
-                </span>
-              </>
-            ) : null
-          }
-          workspaceContent={renderPageState()}
-          aside={
-            <aside className="page-aside">
-              <SurfaceCard>
-                <div className="card-copy">
-                  <p className="section-label">Summary</p>
-                  <h2>Current command setup</h2>
-                  <p className="section-description">
-                    Use this panel to confirm the selected server, the current
-                    command destination, and whether privileged access is already
-                    restricted by roles.
-                  </p>
-                </div>
+                </strong>
+                <p className="meta-note">
+                  {summarizeCommandsSignal(commandsFeature)}
+                </p>
+              </div>
 
-                <KeyValueList
-                  items={[
-                    {
-                      label: "Server",
-                      value: selectedServerLabel,
-                    },
-                    {
-                      label: "Command channel",
-                      value:
-                        commandsFeature === null
-                          ? "Not available"
-                          : formatGuildChannelValue(
-                              getCommandsFeatureDetails(commandsFeature).channelId,
-                              channelOptions.channels,
-                              "No dedicated channel",
-                            ),
-                    },
-                    {
-                      label: "Admin access",
-                      value:
-                        adminCommandsFeature === null
-                          ? "Not available"
-                          : formatAllowedRoleCountValue(adminCommandsFeature),
-                    },
-                    {
-                      label: "Current signal",
-                      value:
-                        firstBlockedFeature !== null
-                          ? firstBlockedFeature.id === "services.commands"
-                            ? summarizeCommandsSignal(firstBlockedFeature)
-                            : summarizeAdminCommandsSignal(firstBlockedFeature)
-                          : areaSummary.signal,
-                    },
-                  ]}
-                />
-              </SurfaceCard>
+              <div className="commands-context-item">
+                <p className="section-label">Admin access</p>
+                <strong>{formatAllowedRoleCountValue(adminCommandsFeature)}</strong>
+                <p className="meta-note">
+                  {formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
+                </p>
+              </div>
 
-              <SurfaceCard>
-                <div className="card-copy">
-                  <p className="section-label">Guidance</p>
-                  <h2>How this page works</h2>
-                  <p className="section-description">
-                    Keep the main workspace centered on the two command tasks an
-                    admin actually needs to complete: where commands should route
-                    and who can use the privileged ones.
-                  </p>
-                </div>
+              <div className="commands-context-item">
+                <p className="section-label">Overrides</p>
+                <strong>{localOverrides}</strong>
+                <p className="meta-note">
+                  {enabledModules}/{areaFeatures.length} modules enabled for this server.
+                </p>
+              </div>
+            </section>
+          ) : null}
 
-                <ul className="feature-guidance-list">
-                  <li>Set a command channel only when you want a dedicated destination for command workflows.</li>
-                  <li>Review admin access roles whenever staff permissions change for the selected server.</li>
-                  <li>Runtime blockers stay in signals and notices instead of dominating the default commands workspace.</li>
-                </ul>
-
-                {channelOptions.notice ? (
-                  <LookupNotice
-                    title="Channel references unavailable"
-                    message={channelOptions.notice.message}
-                    retryLabel="Retry channel lookup"
-                    retryDisabled={channelOptions.loading}
-                    onRetry={channelOptions.refresh}
-                  />
-                ) : null}
-
-                {roleOptions.notice ? (
-                  <LookupNotice
-                    title="Role references unavailable"
-                    message={roleOptions.notice.message}
-                    retryLabel="Retry role lookup"
-                    retryDisabled={roleOptions.loading}
-                    onRetry={roleOptions.refresh}
-                  />
-                ) : null}
-              </SurfaceCard>
-            </aside>
-          }
-        />
+          {renderPageState()}
+        </DashboardPageSurface>
       </section>
 
       {selectedFeature !== null ? (
@@ -830,15 +707,21 @@ function renderDrawerBody({
           ]}
         />
 
-          {channelOptionsNotice ? (
-            <LookupNotice
-              title="Channel references unavailable"
-              message={channelOptionsNotice.message}
-              retryLabel="Retry channel lookup"
-              retryDisabled={channelOptionsLoading}
-              onRetry={refreshChannelOptions}
-            />
-          ) : null}
+        {channelOptionsNotice ? (
+          <div className="flat-inline-message">
+            <p className="meta-note">{channelOptionsNotice.message}</p>
+            <div className="inline-actions">
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={channelOptionsLoading}
+                onClick={() => void refreshChannelOptions()}
+              >
+                Retry channel lookup
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <EntityPickerField
           label="Command channel"
@@ -865,13 +748,9 @@ function renderDrawerBody({
             note="Use this only when the channel picker is unavailable or when you need to paste a channel ID directly."
           />
 
-        <div className="surface-subsection">
-          <p className="section-label">Routing guidance</p>
-          <ul className="feature-guidance-list">
-            <li>Use one command channel when setup and follow-up actions should stay in a single place.</li>
-            <li>Leave the channel empty when command handling should stay available without a dedicated destination.</li>
-          </ul>
-        </div>
+        <p className="meta-note">
+          Use one command channel when setup and follow-up actions should stay in a single place.
+        </p>
 
         <div className="drawer-actions">
           <button
@@ -913,28 +792,30 @@ function renderDrawerBody({
         ]}
       />
 
-        {roleOptionsNotice ? (
-          <LookupNotice
-            title="Role references unavailable"
-            message={roleOptionsNotice.message}
-            retryLabel="Retry role lookup"
-            retryDisabled={roleOptionsLoading}
-            onRetry={refreshRoleOptions}
-          />
-        ) : roleOptionsLoading && roleOptions.length === 0 ? (
-        <div className="surface-subsection">
-          <p className="section-label">Loading roles</p>
+      {roleOptionsNotice ? (
+        <div className="flat-inline-message">
+          <p className="meta-note">{roleOptionsNotice.message}</p>
+          <div className="inline-actions">
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={roleOptionsLoading}
+              onClick={() => void refreshRoleOptions()}
+            >
+              Retry role lookup
+            </button>
+          </div>
+        </div>
+      ) : roleOptionsLoading && roleOptions.length === 0 ? (
+        <div className="flat-inline-message">
           <p className="meta-note">
-            Loading the current server roles before privileged access can be
-            updated.
+            Loading the current server roles before privileged access can be updated.
           </p>
         </div>
       ) : roleOptions.length === 0 ? (
-        <div className="surface-subsection">
-          <p className="section-label">No roles available</p>
+        <div className="flat-inline-message">
           <p className="meta-note">
-            This server did not return any selectable roles for privileged
-            command access.
+            This server did not return any selectable roles for privileged command access.
           </p>
         </div>
       ) : (
@@ -957,16 +838,11 @@ function renderDrawerBody({
         />
       )}
 
-      <div className="surface-subsection">
-        <p className="section-label">Access guidance</p>
-        <ul className="feature-guidance-list">
-          <li>Choose only the roles that should be able to run privileged command workflows.</li>
-          <li>Review these selections whenever staff permissions or trusted groups change.</li>
-          {adminDetails.allowedRoleCount > 0 ? (
-            <li>The current configuration already grants access to {formatAllowedRoleCountValue(selectedFeature).toLowerCase()}.</li>
-          ) : null}
-        </ul>
-      </div>
+      <p className="meta-note">
+        {adminDetails.allowedRoleCount > 0
+          ? `The current configuration already grants access to ${formatAllowedRoleCountValue(selectedFeature).toLowerCase()}.`
+          : "Choose only the roles that should be able to run privileged command workflows."}
+      </p>
 
       <div className="drawer-actions">
         <button

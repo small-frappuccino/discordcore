@@ -1385,6 +1385,28 @@ textarea:focus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
+  align-items: start;
+}
+
+.control-panel-workspace,
+.commands-workspace {
+  display: grid;
+  gap: 0;
+  align-items: start;
+}
+
+.control-panel-flat-section,
+.commands-flat-section {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.control-panel-workspace > .control-panel-flat-section:first-child,
+.commands-workspace > .commands-flat-section:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .control-panel-card {
@@ -1746,6 +1768,28 @@ textarea:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.commands-context-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-soft);
+  align-items: start;
+}
+
+.commands-context-item {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.commands-context-item strong {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 28px;
+  color: var(--text-main);
+}
+
 .commands-module-panel {
   display: grid;
   gap: var(--space-4);
@@ -1779,6 +1823,13 @@ textarea:focus {
 
 .commands-module-actions {
   justify-content: flex-start;
+}
+
+.flat-inline-message {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 .commands-drawer {
@@ -2582,6 +2633,7 @@ textarea:focus {
   .home-planned-grid,
   .landing-page-panel,
   .partner-board-summary-strip,
+  .commands-context-strip,
   .qotd-context-strip,
   .qotd-settings-fields,
   .qotd-summary-grid,
@@ -2639,6 +2691,7 @@ textarea:focus {
   .moderation-log-panel-header,
   .moderation-title-row,
   .commands-module-title-row,
+  .flat-inline-message,
   .qotd-section-header,
   .qotd-flat-inline-message,
   .qotd-card-head,

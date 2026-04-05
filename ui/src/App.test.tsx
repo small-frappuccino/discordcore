@@ -1778,8 +1778,11 @@ describe("dashboard routing and workspace", () => {
     });
 
     expect(
-      screen.getByText("Dashboard access roles updated."),
-    ).toBeInTheDocument();
+      screen.queryByText("Dashboard access roles updated."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Save access roles" }),
+    ).toBeDisabled();
   });
 
   it("keeps Control Panel writes disabled when the selected server is read-only", async () => {
@@ -2209,6 +2212,11 @@ describe("dashboard routing and workspace", () => {
     expect(
       await screen.findByRole("button", { name: "Configure admin access" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /refresh commands/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Current command setup")).not.toBeInTheDocument();
+    expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
     expect(screen.queryByText("Monitoring")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("columnheader", { name: "Feature" }),
