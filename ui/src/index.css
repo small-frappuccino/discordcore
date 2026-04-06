@@ -1723,6 +1723,38 @@ textarea:focus {
   gap: 0;
 }
 
+.moderation-page-intro {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.moderation-page-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.moderation-page-title-row h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 650;
+}
+
+.moderation-context-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0;
+  color: var(--text-dim);
+}
+
 .moderation-service-panel,
 .moderation-log-panel,
 .moderation-drawer {
@@ -2731,6 +2763,7 @@ textarea:focus {
   .overview-next-step,
   .home-area-card-header,
   .logging-drawer-title-row,
+  .moderation-page-title-row,
   .moderation-title-row,
   .commands-module-title-row,
   .flat-inline-message,

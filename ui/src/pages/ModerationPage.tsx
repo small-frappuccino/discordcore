@@ -44,12 +44,11 @@ import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 import {
   AdvancedTextInput,
   AlertBanner,
+  DashboardPageSurface,
   EntityPickerField,
   EmptyState,
-  FeatureWorkspaceLayout,
   KeyValueList,
   LookupNotice,
-  PageHeader,
   StatusBadge,
 } from "../components/ui";
 
@@ -225,22 +224,6 @@ export function ModerationPage() {
     setRoleDraft("");
   }
 
-  function renderHeaderActions() {
-    if (authState !== "signed_in") {
-      return (
-        <button
-          className="button-primary"
-          type="button"
-          onClick={() => void beginLogin(nextPath)}
-        >
-          Sign in with Discord
-        </button>
-      );
-    }
-
-    return null;
-  }
-
   function renderWorkspaceContent() {
     if (workspace.workspaceState !== "ready") {
       return (
@@ -312,42 +295,40 @@ export function ModerationPage() {
 
   return (
     <>
-      <section className="page-shell">
-        <PageHeader
-          eyebrow="Feature area"
-          title={areaLabel}
-          description="Manage the AutoMod listener, mute role, and moderation routes."
-          status={
-            <StatusBadge
-              tone={
-                workspace.workspaceState === "ready" ? areaSummary.tone : "info"
-              }
-            >
-              {workspace.workspaceState === "ready"
-                ? areaSummary.label
-                : formatWorkspaceStateTitle(
-                    areaLabel,
-                    workspace.workspaceState,
-                  )}
-            </StatusBadge>
-          }
-          meta={
-            <>
-              <span className="meta-note">Server: {selectedServerLabel}</span>
-              <span className="meta-note">Origin: {currentOriginLabel}</span>
-            </>
-          }
-          actions={renderHeaderActions()}
-        />
-
-        <FeatureWorkspaceLayout
+      <section className="page-shell moderation-page">
+        <DashboardPageSurface
+          className="home-page-surface moderation-page-surface"
           notice={workspaceNotice}
-          busyLabel={mutation.saving ? "Saving moderation settings..." : undefined}
-          workspaceEyebrow={null}
-          workspaceTitle={null}
-          workspaceDescription={null}
-          workspaceContent={renderWorkspaceContent()}
-        />
+          busyLabel={
+            mutation.saving ? "Saving moderation settings..." : undefined
+          }
+        >
+          <div className="moderation-page-intro">
+            <div className="card-copy">
+              <div className="moderation-page-title-row">
+                <h1>{areaLabel}</h1>
+                <StatusBadge
+                  tone={
+                    workspace.workspaceState === "ready" ? areaSummary.tone : "info"
+                  }
+                >
+                  {workspace.workspaceState === "ready"
+                    ? areaSummary.label
+                    : formatWorkspaceStateTitle(
+                        areaLabel,
+                        workspace.workspaceState,
+                      )}
+                </StatusBadge>
+              </div>
+              <p className="moderation-context-row">
+                <span>Server: {selectedServerLabel}</span>
+                <span>Origin: {currentOriginLabel}</span>
+              </p>
+            </div>
+          </div>
+
+          {renderWorkspaceContent()}
+        </DashboardPageSurface>
       </section>
 
       {selectedFeature !== null ? (
