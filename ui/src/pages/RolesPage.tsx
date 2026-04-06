@@ -321,16 +321,7 @@ export function RolesPage() {
       >
         Sign in with Discord
       </button>
-    ) : selectedGuild === null ? null : (
-      <button
-        className="button-secondary"
-        type="button"
-        disabled={workspace.loading || roleOptions.loading || mutation.saving}
-        onClick={() => void handleRefreshRoles()}
-      >
-        Refresh roles
-      </button>
-    );
+    ) : null;
 
   return (
     <>
@@ -352,8 +343,8 @@ export function RolesPage() {
           }
           meta={
             <>
-              <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
-              <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+              <span className="meta-note">Server: {selectedServerLabel}</span>
+              <span className="meta-note">Origin: {currentOriginLabel}</span>
             </>
           }
           actions={headerActions}
@@ -361,13 +352,7 @@ export function RolesPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={
-            mutation.saving
-              ? "Saving role settings..."
-              : workspace.loading || roleOptions.loading
-                ? "Refreshing roles workspace..."
-                : undefined
-          }
+          busyLabel={mutation.saving ? "Saving role settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" &&
             autoRoleFeature !== null &&
@@ -410,10 +395,8 @@ export function RolesPage() {
           workspaceMeta={
             workspace.workspaceState === "ready" ? (
               <>
-                <span className="meta-pill subtle-pill">
-                  {localOverrides} local overrides
-                </span>
-                <span className="meta-pill subtle-pill">
+                <span className="meta-note">{localOverrides} local overrides</span>
+                <span className="meta-note">
                   {advancedEnabledCount} advanced controls active
                 </span>
               </>
@@ -588,7 +571,10 @@ function RolesWorkspaceContent({
       {roleLookupNotice ? (
         <LookupNotice
           title="Role lookup unavailable"
-          message="The dashboard could not load server roles right now. Refresh roles before opening role-based editors."
+          message="The dashboard could not load server roles right now. Retry the role lookup before opening role-based editors."
+          retryLabel="Retry role lookup"
+          retryDisabled={roleOptionsLoading}
+          onRetry={onRefresh}
         />
       ) : null}
 
@@ -764,7 +750,7 @@ function RolesAdvancedControls({
     <details className="details-panel roles-advanced-details">
       <summary>
         <span>Advanced controls</span>
-        <span className="meta-pill subtle-pill">
+        <span className="meta-note">
           {advancedEnabledCount}/{advancedFeatures.length} active
         </span>
       </summary>

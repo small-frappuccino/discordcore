@@ -137,7 +137,7 @@ export function LandingPage() {
 
                 <div className="landing-meta">
                   <StatusBadge tone={statusTone}>{sessionTitle}</StatusBadge>
-                  <span className="meta-pill subtle-pill">{sessionSupportText}</span>
+                  <span className="meta-note">{sessionSupportText}</span>
                 </div>
               </div>
 

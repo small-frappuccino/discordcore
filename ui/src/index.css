@@ -1805,6 +1805,10 @@ textarea:focus {
   gap: var(--space-2);
 }
 
+.entity-multi-picker {
+  position: relative;
+}
+
 .commands-module-head {
   align-items: start;
 }
@@ -1839,7 +1843,7 @@ textarea:focus {
 .commands-role-list,
 .entity-option-list {
   display: grid;
-  gap: var(--space-2);
+  gap: 0;
 }
 
 .entity-multi-picker-trigger {
@@ -1878,7 +1882,24 @@ textarea:focus {
 
 .entity-multi-picker-panel {
   display: grid;
-  gap: var(--space-2);
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  right: 0;
+  z-index: 12;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--bg-surface-elevated) 88%, black 12%);
+  box-shadow: var(--shadow-2);
+}
+
+.entity-multi-picker-panel .entity-option-list {
+  max-height: min(360px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 0;
 }
 
 .commands-role-option,
@@ -1886,11 +1907,32 @@ textarea:focus {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-3);
-  align-items: start;
-  padding: 12px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-surface-muted);
+  cursor: pointer;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  transition: background-color 160ms ease;
+}
+
+.entity-option-card + .entity-option-card {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.entity-option-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.entity-option-card.is-selected {
+  background: rgba(111, 156, 255, 0.12);
+  box-shadow: inset 3px 0 0 var(--info);
+}
+
+.entity-option-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .commands-role-option input[type="checkbox"],
@@ -1907,8 +1949,9 @@ textarea:focus {
 
 .commands-role-option-copy strong,
 .entity-option-copy strong {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
+  font-weight: 500;
 }
 
 .entity-picker-field select {

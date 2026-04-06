@@ -52,11 +52,6 @@ export function ControlPanelPage() {
   const rolePickerOptions = roleOptions.roles.map((role) => ({
     value: role.id,
     label: formatRoleOptionLabel(role),
-    description: role.is_default
-      ? "Default role for every member."
-      : role.managed
-        ? "Managed by an integration."
-        : "Available for dashboard access.",
   }));
 
   async function handleSave() {
@@ -151,7 +146,7 @@ export function ControlPanelPage() {
               </p>
             </div>
             <div className="workspace-view-meta">
-              <span className="meta-pill subtle-pill">
+              <span className="meta-note">
                 {hasUnsavedChanges ? "Unsaved changes" : "Saved"}
               </span>
             </div>
@@ -234,8 +229,8 @@ export function ControlPanelPage() {
         description="Configure which roles can read or write the dashboard for the selected server."
         meta={
           <>
-            <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
-            <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+            <span className="meta-note">Server: {selectedServerLabel}</span>
+            <span className="meta-note">Origin: {currentOriginLabel}</span>
           </>
         }
       />

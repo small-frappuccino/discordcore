@@ -395,6 +395,7 @@ export function EntityMultiPickerField({
   const fieldId = useId();
   const [expanded, setExpanded] = useState(false);
   const panelId = `${fieldId}-panel`;
+  const listId = `${fieldId}-list`;
   const labelId = `${fieldId}-label`;
   const valueId = `${fieldId}-value`;
   const selectedSet = new Set(
@@ -440,13 +441,25 @@ export function EntityMultiPickerField({
         </span>
       </button>
       {expanded ? (
-        <div className="entity-multi-picker-panel">
-          <div className="entity-option-list" id={panelId} role="group" aria-label={label}>
+        <div className="entity-multi-picker-panel" id={panelId}>
+          <div
+            className="entity-option-list"
+            id={listId}
+            role="group"
+            aria-label={label}
+          >
             {options.map((option) => {
               const checked = selectedSet.has(option.value);
 
               return (
-                <label className="entity-option-card" key={option.value}>
+                <label
+                  className={joinClassNames(
+                    "entity-option-card",
+                    checked && "is-selected",
+                    option.disabled && "is-disabled",
+                  )}
+                  key={option.value}
+                >
                   <input
                     type="checkbox"
                     checked={checked}
@@ -483,8 +496,8 @@ export function AlertBanner({ notice, busyLabel }: AlertBannerProps) {
       <div>
         <p className="section-label">Workspace status</p>
         <strong>{notice?.message ?? busyLabel}</strong>
+        {notice && busyLabel ? <p className="meta-note">{busyLabel}</p> : null}
       </div>
-      {busyLabel ? <span className="meta-pill subtle-pill">{busyLabel}</span> : null}
     </div>
   );
 }

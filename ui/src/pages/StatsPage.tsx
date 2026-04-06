@@ -189,22 +189,7 @@ export function StatsPage() {
       );
     }
 
-    if (selectedGuild === null) {
-      return null;
-    }
-
-    return (
-      <button
-        className="button-secondary"
-        type="button"
-        disabled={
-          workspace.loading || mutation.saving || channelOptions.loading
-        }
-        onClick={() => void handleRefreshStats()}
-      >
-        Refresh stats
-      </button>
-    );
+    return null;
   }
 
   function renderPageState() {
@@ -443,12 +428,8 @@ export function StatsPage() {
           }
           meta={
             <>
-              <span className="meta-pill subtle-pill">
-                {selectedServerLabel}
-              </span>
-              <span className="meta-pill subtle-pill">
-                {currentOriginLabel}
-              </span>
+              <span className="meta-note">Server: {selectedServerLabel}</span>
+              <span className="meta-note">Origin: {currentOriginLabel}</span>
             </>
           }
           actions={renderHeaderActions()}
@@ -456,13 +437,7 @@ export function StatsPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={
-            mutation.saving
-              ? "Saving stats settings..."
-              : workspace.loading || channelOptions.loading
-                ? "Refreshing stats workspace..."
-                : undefined
-          }
+          busyLabel={mutation.saving ? "Saving stats settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" &&
             statsFeature !== null &&
@@ -510,10 +485,8 @@ export function StatsPage() {
           workspaceMeta={
             workspace.workspaceState === "ready" ? (
               <>
-                <span className="meta-pill subtle-pill">
-                  {localOverrides} local overrides
-                </span>
-                <span className="meta-pill subtle-pill">
+                <span className="meta-note">{localOverrides} local overrides</span>
+                <span className="meta-note">
                   {enabledModules}/{areaFeatures.length} enabled
                 </span>
               </>

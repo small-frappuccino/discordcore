@@ -204,20 +204,7 @@ export function LoggingCategoryPage() {
       );
     }
 
-    if (selectedGuild === null) {
-      return null;
-    }
-
-    return (
-      <button
-        className="button-secondary"
-        type="button"
-        disabled={workspace.loading || mutation.saving || channelOptions.loading}
-        onClick={() => void handleRefreshLogging()}
-      >
-        Refresh logging
-      </button>
-    );
+    return null;
   }
 
   function renderWorkspaceContent() {
@@ -406,8 +393,8 @@ export function LoggingCategoryPage() {
           }
           meta={
             <>
-              <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
-              <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+              <span className="meta-note">Server: {selectedServerLabel}</span>
+              <span className="meta-note">Origin: {currentOriginLabel}</span>
             </>
           }
           actions={renderHeaderActions()}
@@ -415,13 +402,7 @@ export function LoggingCategoryPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={
-            mutation.saving
-              ? "Saving logging settings..."
-              : workspace.loading || channelOptions.loading
-                ? "Refreshing logging workspace..."
-                : undefined
-          }
+          busyLabel={mutation.saving ? "Saving logging settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" ? (
               <section
@@ -464,10 +445,8 @@ export function LoggingCategoryPage() {
           workspaceMeta={
             workspace.workspaceState === "ready" ? (
               <>
-                <span className="meta-pill subtle-pill">
-                  {localOverrides} local overrides
-                </span>
-                <span className="meta-pill subtle-pill">
+                <span className="meta-note">{localOverrides} local overrides</span>
+                <span className="meta-note">
                   {runtimeBlockedFeatures.length} runtime-blocked
                 </span>
               </>

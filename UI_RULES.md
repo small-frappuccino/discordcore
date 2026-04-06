@@ -270,6 +270,9 @@ Rules:
 - Use color to support affordance, not replace it
 - For selectable item lists, default to a compact collapsed picker or disclosure that opens only on user intent
 - Do not render large checkbox lists fully expanded by default when they can grow the page or distort the layout
+- Expanded selectable lists must use a bounded panel with its own vertical scroll
+- The opened selector must be capped to the viewport instead of stretching the parent card, section, or page
+- Prefer the same structural model as the current compact server-picker style: collapsed trigger, bounded list panel, internal scroll
 - The closed state of a multi-select should summarize the current selection compactly instead of exposing the whole option set
 
 If a control needs a paragraph to explain what it is, the control, grouping, or labeling is probably wrong.
@@ -312,6 +315,7 @@ Do not introduce:
 - routine page-level `Refresh` buttons for normal data loading or revalidation
 - transient refresh text for routine background work
 - always-expanded multi-select or checkbox lists that can make a page suddenly grow in height
+- selectable lists that expand the surrounding card, drawer, or page instead of using a bounded scroll panel
 - duplicated context across section title, card title, and button label
 - decorative, categorical, or metadata tags unless the user explicitly asked for them
 - decorative use of semantic colors

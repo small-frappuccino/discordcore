@@ -251,25 +251,7 @@ export function ModerationPage() {
       );
     }
 
-    if (selectedGuild === null) {
-      return null;
-    }
-
-    return (
-      <button
-        className="button-secondary"
-        type="button"
-        disabled={
-          workspace.loading ||
-          mutation.saving ||
-          channelOptions.loading ||
-          roleOptions.loading
-        }
-        onClick={() => void handleRefreshModeration()}
-      >
-        Refresh moderation
-      </button>
-    );
+    return null;
   }
 
   function renderWorkspaceContent() {
@@ -364,8 +346,8 @@ export function ModerationPage() {
           }
           meta={
             <>
-              <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
-              <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+              <span className="meta-note">Server: {selectedServerLabel}</span>
+              <span className="meta-note">Origin: {currentOriginLabel}</span>
             </>
           }
           actions={renderHeaderActions()}
@@ -373,15 +355,7 @@ export function ModerationPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={
-            mutation.saving
-              ? "Saving moderation settings..."
-              : workspace.loading ||
-                  channelOptions.loading ||
-                  roleOptions.loading
-                ? "Refreshing moderation workspace..."
-                : undefined
-          }
+          busyLabel={mutation.saving ? "Saving moderation settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" ? (
               <section
@@ -440,10 +414,8 @@ export function ModerationPage() {
           workspaceMeta={
             workspace.workspaceState === "ready" ? (
               <>
-                <span className="meta-pill subtle-pill">
-                  {localOverrides} local overrides
-                </span>
-                <span className="meta-pill subtle-pill">
+                <span className="meta-note">{localOverrides} local overrides</span>
+                <span className="meta-note">
                   {configuredModerationRoutes}/{moderationLogFeatures.length} routes configured
                 </span>
               </>
@@ -540,11 +512,11 @@ function ModerationWorkspacePanels({
               </p>
             </div>
 
-            <span className="meta-pill subtle-pill">
+            <p className="meta-note">
               {automodFeature.override_state === "inherit"
                 ? "Using default"
                 : "Configured here"}
-            </span>
+            </p>
           </div>
 
           <KeyValueList
@@ -618,11 +590,11 @@ function ModerationWorkspacePanels({
               </p>
             </div>
 
-            <span className="meta-pill subtle-pill">
+            <p className="meta-note">
               {muteRoleFeature.override_state === "inherit"
                 ? "Using default"
                 : "Configured here"}
-            </span>
+            </p>
           </div>
 
           <KeyValueList

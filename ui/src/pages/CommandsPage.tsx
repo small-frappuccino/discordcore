@@ -527,8 +527,8 @@ export function CommandsPage() {
           }
           meta={
             <>
-              <span className="meta-pill subtle-pill">{selectedServerLabel}</span>
-              <span className="meta-pill subtle-pill">{currentOriginLabel}</span>
+              <span className="meta-note">Server: {selectedServerLabel}</span>
+              <span className="meta-note">Origin: {currentOriginLabel}</span>
             </>
           }
           actions={renderHeaderActions()}
