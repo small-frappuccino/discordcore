@@ -13,7 +13,6 @@ import {
 import {
   buildLoggingRequirementNotes,
   canEditLoggingChannel,
-  describeLoggingDestination,
   getLoggingFeatureDetails,
   summarizeLoggingDestination,
   summarizeLoggingGuidance,
@@ -21,10 +20,8 @@ import {
 import {
   canEditMuteRole,
   formatAutomodModeValue,
-  formatModerationRouteCoverageValue,
   getModerationLogFeatures,
   getMuteRoleFeatureDetails,
-  summarizeAutomodMode,
   summarizeAutomodSignal,
   summarizeMuteRoleSignal,
 } from "../features/features/moderation";
@@ -53,10 +50,8 @@ import {
   FeatureWorkspaceLayout,
   KeyValueList,
   LookupNotice,
-  MetricCard,
   PageHeader,
   StatusBadge,
-  SurfaceCard,
 } from "../components/ui";
 
 export function ModerationPage() {
@@ -93,10 +88,6 @@ export function ModerationPage() {
   const moderationLogFeatures = getModerationLogFeatures(areaFeatures);
   const selectedFeature =
     areaFeatures.find((feature) => feature.id === selectedFeatureId) ?? null;
-  const firstBlockedFeature = useMemo(
-    () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
-    [areaFeatures],
-  );
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
@@ -112,9 +103,6 @@ export function ModerationPage() {
   );
   const configuredModerationRoutes = moderationLogFeatures.filter(
     (feature) => getLoggingFeatureDetails(feature).channelId !== "",
-  ).length;
-  const localOverrides = areaFeatures.filter(
-    (feature) => feature.override_state !== "inherit",
   ).length;
   const selectedIsMuteRole = selectedFeature?.id === "moderation.mute_role";
   const muteRoleId =
@@ -329,7 +317,7 @@ export function ModerationPage() {
         <PageHeader
           eyebrow="Feature area"
           title={areaLabel}
-          description="Review the logging-only AutoMod listener, the mute role, and the routes used by ban, massban, kick, mute, timeout, and warnings workflows."
+          description="Manage the AutoMod listener, mute role, and moderation routes."
           status={
             <StatusBadge
               tone={
@@ -356,84 +344,10 @@ export function ModerationPage() {
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
           busyLabel={mutation.saving ? "Saving moderation settings..." : undefined}
-          summary={
-            workspace.workspaceState === "ready" ? (
-              <section
-                className="overview-summary-strip"
-                aria-label="Moderation summary"
-              >
-                <MetricCard
-                  label="AutoMod"
-                  value={
-                    automodFeature === null
-                      ? "Not available"
-                      : formatFeatureStatusLabel(automodFeature)
-                  }
-                  description={
-                    automodFeature === null
-                      ? "This server does not expose the AutoMod listener record."
-                      : summarizeAutomodMode(automodFeature)
-                  }
-                  tone={
-                    automodFeature === null
-                      ? "neutral"
-                      : getFeatureStatusTone(automodFeature)
-                  }
-                />
-                <MetricCard
-                  label="Mute role"
-                  value={formatRoleValue(muteRoleId, roleOptions.roles)}
-                  description={
-                    muteRoleFeature === null
-                      ? "This server does not expose a mute role control."
-                      : summarizeMuteRoleSignal(muteRoleFeature)
-                  }
-                  tone={
-                    muteRoleFeature === null
-                      ? "neutral"
-                      : getFeatureStatusTone(muteRoleFeature)
-                  }
-                />
-                <MetricCard
-                  label="Moderation logs"
-                  value={formatModerationRouteCoverageValue(moderationLogFeatures)}
-                  description="AutoMod action and moderation case routes configured in this workspace."
-                  tone={configuredModerationRoutes > 0 ? "info" : "neutral"}
-                />
-                <MetricCard
-                  label="Needs attention"
-                  value={String(areaSummary.blocked)}
-                  description="Enabled moderation controls still reporting blockers."
-                  tone={areaSummary.blocked > 0 ? "error" : "neutral"}
-                />
-              </section>
-            ) : null
-          }
-          workspaceTitle="Moderation controls"
-          workspaceDescription="Keep the moderation surface focused on the supported staff actions: log readiness, mute-role setup, and the listener state used alongside Discord native AutoMod."
-          workspaceMeta={
-            workspace.workspaceState === "ready" ? (
-              <>
-                <span className="meta-note">{localOverrides} local overrides</span>
-                <span className="meta-note">
-                  {configuredModerationRoutes}/{moderationLogFeatures.length} routes configured
-                </span>
-              </>
-            ) : null
-          }
+          workspaceEyebrow={null}
+          workspaceTitle={null}
+          workspaceDescription={null}
           workspaceContent={renderWorkspaceContent()}
-          aside={
-            <ModerationAside
-              selectedServerLabel={selectedServerLabel}
-              automodFeature={automodFeature}
-              muteRoleId={muteRoleId}
-              moderationLogFeatures={moderationLogFeatures}
-              firstBlockedFeature={firstBlockedFeature}
-              areaSummarySignal={areaSummary.signal}
-              channelOptions={channelOptions}
-              roleOptions={roleOptions}
-            />
-          }
         />
       </section>
 
@@ -498,17 +412,15 @@ function ModerationWorkspacePanels({
         <section className="surface-subsection moderation-service-panel">
           <div className="moderation-service-head">
             <div className="card-copy moderation-service-copy">
-              <p className="section-label">Automatic moderation</p>
               <div className="moderation-title-row">
                 <h3>{automodFeature.label}</h3>
                 <StatusBadge tone={getFeatureStatusTone(automodFeature)}>
                   {formatFeatureStatusLabel(automodFeature)}
                 </StatusBadge>
               </div>
-              <p className="section-description">
-                Discord still owns the actual AutoMod rules. This workspace only
-                keeps the listener state and related log readiness visible for
-                staff.
+              <p className="meta-note">
+                Discord keeps the rules. This page only controls listener state
+                and route readiness.
               </p>
             </div>
 
@@ -522,20 +434,12 @@ function ModerationWorkspacePanels({
           <KeyValueList
             items={[
               {
-                label: "Module state",
-                value: automodFeature.effective_enabled ? "On" : "Off",
-              },
-              {
                 label: "Mode",
                 value: formatAutomodModeValue(automodFeature),
               },
               {
                 label: "Current signal",
                 value: summarizeAutomodSignal(automodFeature),
-              },
-              {
-                label: "Supported actions",
-                value: "ban, massban, kick, mute, timeout, warnings",
               },
             ]}
           />
@@ -576,18 +480,12 @@ function ModerationWorkspacePanels({
         <section className="surface-subsection moderation-service-panel">
           <div className="moderation-service-head">
             <div className="card-copy moderation-service-copy">
-              <p className="section-label">Role-based mute</p>
               <div className="moderation-title-row">
                 <h3>{muteRoleFeature.label}</h3>
                 <StatusBadge tone={getFeatureStatusTone(muteRoleFeature)}>
                   {formatFeatureStatusLabel(muteRoleFeature)}
                 </StatusBadge>
               </div>
-              <p className="section-description">
-                Configure the role applied by the mute command. Keep it
-                assignable by the bot and below both bot and moderator top
-                roles.
-              </p>
             </div>
 
             <p className="meta-note">
@@ -600,20 +498,12 @@ function ModerationWorkspacePanels({
           <KeyValueList
             items={[
               {
-                label: "Module state",
-                value: muteRoleFeature.effective_enabled ? "On" : "Off",
-              },
-              {
                 label: "Configured role",
                 value: formatRoleValue(muteRoleId, roleOptions.roles),
               },
               {
                 label: "Current signal",
                 value: summarizeMuteRoleSignal(muteRoleFeature),
-              },
-              {
-                label: "Used by",
-                value: "/moderation mute",
               },
             ]}
           />
@@ -672,9 +562,8 @@ function ModerationWorkspacePanels({
       <section className="surface-subsection moderation-log-panel">
         <div className="moderation-log-panel-header">
           <div className="card-copy">
-            <p className="section-label">Moderation logging</p>
             <div className="moderation-title-row">
-              <h3>Enforcement event routes</h3>
+              <h3>Moderation routes</h3>
               <StatusBadge
                 tone={
                   moderationLogFeatures.some(
@@ -693,21 +582,25 @@ function ModerationWorkspacePanels({
                   : `${configuredModerationRoutes}/${moderationLogFeatures.length} configured`}
               </StatusBadge>
             </div>
-            <p className="section-description">
-              Keep AutoMod executions and moderation case logs routed to the
-              right staff destinations without leaving this workspace.
-            </p>
           </div>
         </div>
+
+        {channelOptions.notice ? (
+          <LookupNotice
+            title="Channel references unavailable"
+            message={channelOptions.notice.message}
+            retryLabel="Retry channel lookup"
+            retryDisabled={channelOptions.loading}
+            onRetry={channelOptions.refresh}
+          />
+        ) : null}
 
         {moderationLogFeatures.length === 0 ? (
           <div className="table-empty-state table-empty-state-compact">
             <div className="card-copy">
-              <p className="section-label">Routes</p>
-              <h2>No moderation log routes yet</h2>
+              <h2>No moderation routes</h2>
               <p className="section-description">
-                This server is not exposing moderation log routes in the
-                current workspace snapshot.
+                This workspace is not exposing moderation log routes yet.
               </p>
             </div>
           </div>
@@ -732,22 +625,16 @@ function ModerationWorkspacePanels({
                   return (
                     <tr key={feature.id}>
                       <td>
-                        <div className="feature-table-copy">
-                          <strong>{feature.label}</strong>
-                          <p>{feature.description}</p>
-                        </div>
+                        <strong>{feature.label}</strong>
                       </td>
                       <td>
-                        <div className="feature-table-copy">
-                          <strong>
-                            {formatGuildChannelValue(
-                              details.channelId,
-                              channelOptions.channels,
-                              summarizeLoggingDestination(feature),
-                            )}
-                          </strong>
-                          <p>{describeLoggingDestination(feature)}</p>
-                        </div>
+                        <strong>
+                          {formatGuildChannelValue(
+                            details.channelId,
+                            channelOptions.channels,
+                            summarizeLoggingDestination(feature),
+                          )}
+                        </strong>
                       </td>
                       <td>
                         <div className="feature-status-cell">
@@ -823,133 +710,6 @@ function ModerationWorkspacePanels({
         )}
       </section>
     </div>
-  );
-}
-
-interface ModerationAsideProps {
-  selectedServerLabel: string;
-  automodFeature: FeatureRecord | null;
-  muteRoleId: string;
-  moderationLogFeatures: FeatureRecord[];
-  firstBlockedFeature: FeatureRecord | null;
-  areaSummarySignal: string;
-  channelOptions: ReturnType<typeof useGuildChannelOptions>;
-  roleOptions: ReturnType<typeof useGuildRoleOptions>;
-}
-
-function ModerationAside({
-  selectedServerLabel,
-  automodFeature,
-  muteRoleId,
-  moderationLogFeatures,
-  firstBlockedFeature,
-  areaSummarySignal,
-  channelOptions,
-  roleOptions,
-}: ModerationAsideProps) {
-  return (
-    <aside className="page-aside">
-      <SurfaceCard>
-        <div className="card-copy">
-          <p className="section-label">Summary</p>
-          <h2>Current moderation state</h2>
-          <p className="section-description">
-            Use this panel to confirm whether the supported moderation
-            workflows have their mute role and staff log routes ready.
-          </p>
-        </div>
-
-        <KeyValueList
-          items={[
-            {
-              label: "Server",
-              value: selectedServerLabel,
-            },
-            {
-              label: "Supported actions",
-              value: "ban, massban, kick, mute, timeout, warnings",
-            },
-            {
-              label: "AutoMod mode",
-              value:
-                automodFeature === null
-                  ? "Not available"
-                  : formatAutomodModeValue(automodFeature),
-            },
-            {
-              label: "Mute role",
-              value: formatRoleValue(muteRoleId, roleOptions.roles),
-            },
-            {
-              label: "Moderation logs",
-              value: formatModerationRouteCoverageValue(moderationLogFeatures),
-            },
-            {
-              label: "Current blocker",
-              value:
-                firstBlockedFeature?.blockers?.[0]?.message ?? areaSummarySignal,
-            },
-          ]}
-        />
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <div className="card-copy">
-          <p className="section-label">Guidance</p>
-          <h2>How this page works</h2>
-          <p className="section-description">
-            Keep the workspace centered on supported moderation outcomes. Rule
-            engines and low-level diagnostics stay out of the primary path
-            here.
-          </p>
-        </div>
-
-        <ul className="feature-guidance-list">
-          <li>
-            Supported moderation commands are ban, massban, kick, mute,
-            timeout, and warnings.
-          </li>
-          <li>
-            AutoMod is logging-only here. Discord owns the actual rule
-            execution and enforcement settings.
-          </li>
-          <li>
-            Configure the mute role and moderation log routes before relying on
-            staff workflows.
-          </li>
-        </ul>
-
-        {firstBlockedFeature ? (
-          <div className="surface-subsection">
-            <p className="section-label">Current blocker</p>
-            <strong>{firstBlockedFeature.label}</strong>
-            <p className="meta-note">
-              {firstBlockedFeature.blockers?.[0]?.message ?? areaSummarySignal}
-            </p>
-          </div>
-        ) : null}
-
-        {channelOptions.notice ? (
-          <LookupNotice
-            title="Channel references unavailable"
-            message={channelOptions.notice.message}
-            retryLabel="Retry channel lookup"
-            retryDisabled={channelOptions.loading}
-            onRetry={channelOptions.refresh}
-          />
-        ) : null}
-
-        {roleOptions.notice ? (
-          <LookupNotice
-            title="Role references unavailable"
-            message={roleOptions.notice.message}
-            retryLabel="Retry role lookup"
-            retryDisabled={roleOptions.loading}
-            onRetry={roleOptions.refresh}
-          />
-        ) : null}
-      </SurfaceCard>
-    </aside>
   );
 }
 

@@ -1892,13 +1892,19 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.hash).toBe("");
     expect(screen.getAllByText("Logging only").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mute role").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Supported actions").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText("ban, massban, kick, mute, timeout, warnings").length,
-    ).toBeGreaterThan(0);
+      screen.getByRole("heading", { name: "Moderation routes" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Disable Automod service" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Supported actions")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("ban, massban, kick, mute, timeout, warnings"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Current moderation state")).not.toBeInTheDocument();
+    expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
+    expect(screen.queryByText("Moderation controls")).not.toBeInTheDocument();
     expect(screen.queryByText("Rule coverage")).not.toBeInTheDocument();
   });
 
