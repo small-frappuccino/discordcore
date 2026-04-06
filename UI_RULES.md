@@ -34,6 +34,33 @@ Also note:
 - `Home` is currently stronger than the other dashboard pages and should guide future cleanup
 - `Home` is still not final; palette and visual identity may continue to evolve
 
+### 1.1 Home constraints
+
+`Home` may evolve, but only inside these constraints:
+
+- do not introduce new UI components as part of page cleanup or redesign work
+- reuse existing layout primitives, cards, fields, rows, and shell patterns first
+- do not add extra explanatory text by default
+- do not compensate for weak hierarchy by adding more copy
+
+Allowed evolution:
+
+- spacing refinement
+- grouping refinement
+- density tuning
+- hierarchy improvements using existing primitives
+- stronger visual polish that preserves the current dashboard discipline
+
+`Home` must continue to preserve:
+
+- compact scan path
+- low copy density
+- direct action visibility
+- stable shared navigation structure
+- operational clarity over visual flourish
+
+If a `Home` change materially alters these constraints, update this file in the same change.
+
 ---
 
 ## 2. Primary UI rule
@@ -96,6 +123,28 @@ Better patterns:
 - state what happened only when the user needs to know
 - say what needs to be fixed when the user needs to act
 
+### 3.1 Rare helper text exception
+
+Small subdued helper text is allowed only in rare cases where a setting would otherwise be ambiguous.
+
+Allowed cases:
+
+- the setting has a non-obvious side effect
+- the label alone does not explain when the behavior applies
+- the setting controls edge-case or conditional behavior
+- the user could plausibly misconfigure the setting without that context
+
+Rules:
+
+- use one short line only
+- place it directly under the relevant control
+- style it as secondary text
+- attach it to the specific control, not the whole section
+- do not repeat the label in different words
+- do not use helper text for obvious settings
+
+If multiple controls in the same section need helper text, the layout, grouping, or labeling is probably wrong and should be redesigned instead.
+
 ---
 
 ## 4. Source of truth and reuse
@@ -110,6 +159,7 @@ Use the current implementation as the main reference:
 Rules:
 
 - Reuse existing components, tokens, and patterns before inventing new ones
+- Do not add new components for routine page polish, layout cleanup, or visual alignment work
 - Do not hardcode fresh visual systems inside page files
 - Do not document raw token values in this file; token roles matter more than frozen hex values
 - If a new token is needed, add it centrally instead of scattering raw values across components
@@ -214,6 +264,8 @@ Rules:
 - Primary actions should stand out by placement, contrast, and grouping
 - Secondary actions should remain quieter
 - In cards and single-page sections, action alignment should be consistent
+- Do not introduce tags as a dashboard pattern unless the user explicitly requests them
+- Treat decorative, categorical, or metadata tags as prohibited by default
 - Do not make non-interactive tags or status pills look clickable
 - Use color to support affordance, not replace it
 - For selectable item lists, default to a compact collapsed picker or disclosure that opens only on user intent
@@ -221,6 +273,9 @@ Rules:
 - The closed state of a multi-select should summarize the current selection compactly instead of exposing the whole option set
 
 If a control needs a paragraph to explain what it is, the control, grouping, or labeling is probably wrong.
+
+Status indicators that already represent real system state are separate from decorative tags.
+Do not replace meaningful status treatment with generic tag-like pills.
 
 Do not use a page-level `Refresh` button as a default affordance for keeping data current.
 If the product depends on frequent manual refresh to feel correct, fix the data flow or state model instead.
@@ -258,6 +313,7 @@ Do not introduce:
 - transient refresh text for routine background work
 - always-expanded multi-select or checkbox lists that can make a page suddenly grow in height
 - duplicated context across section title, card title, and button label
+- decorative, categorical, or metadata tags unless the user explicitly asked for them
 - decorative use of semantic colors
 - non-semantic shadows or elevation used as a crutch
 - whole-page jumps caused by notice mounts or refresh wrappers
