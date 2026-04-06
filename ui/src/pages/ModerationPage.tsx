@@ -11,7 +11,6 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
-  buildLoggingRequirementNotes,
   canEditLoggingChannel,
   getLoggingFeatureDetails,
   summarizeLoggingDestination,
@@ -775,7 +774,6 @@ function ModerationFeatureDrawer({
               {formatFeatureStatusLabel(selectedFeature)}
             </StatusBadge>
           </div>
-          <p className="section-description">{selectedFeature.description}</p>
         </div>
 
         {mutationNotice ? <AlertBanner notice={mutationNotice} /> : null}
@@ -875,7 +873,7 @@ function MuteRoleDrawerBody({
               ? "No roles available"
               : "No mute role"
         }
-        note="Choose a non-managed role that the bot can assign and remove."
+        note="Choose a role the bot can assign."
       />
 
       {roleOptions.notice ? (
@@ -894,23 +892,8 @@ function MuteRoleDrawerBody({
         value={roleDraft}
         onChange={setRoleDraft}
         placeholder="Discord role ID"
-        note="Use this only when the role picker is unavailable or you need to paste a role ID directly."
+        note="Use only if role lookup fails."
       />
-
-      <div className="surface-subsection">
-        <p className="section-label">Requirements</p>
-        <ul className="feature-guidance-list">
-          <li>Use a dedicated mute role instead of @everyone.</li>
-          <li>
-            The mute role must stay below both the moderator and bot highest
-            roles.
-          </li>
-          <li>
-            Avoid managed integration roles because Discord will reject manual
-            assignment.
-          </li>
-        </ul>
-      </div>
     </>
   );
 }
@@ -972,7 +955,11 @@ function ModerationDestinationDrawerBody({
               ? "No channels available"
               : "No destination channel"
         }
-        note="Leave this empty to clear the destination or keep the route without a dedicated channel."
+        note={
+          getLoggingFeatureDetails(selectedFeature).requiresChannel
+            ? undefined
+            : "Leave empty to clear the destination."
+        }
       />
 
       {channelOptions.notice ? (
@@ -991,31 +978,8 @@ function ModerationDestinationDrawerBody({
         value={channelDraft}
         onChange={setChannelDraft}
         placeholder="Discord channel ID"
-        note="Use this only when the channel picker is unavailable or when you need to paste a channel ID directly."
+        note="Use only if channel lookup fails."
       />
-
-      <div className="surface-subsection">
-        <p className="section-label">Requirements</p>
-        <ul className="feature-guidance-list">
-          {buildLoggingRequirementNotes(selectedFeature).map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
-      </div>
-
-      {selectedFeature.blockers?.some(
-        (blocker) =>
-          blocker.code === "runtime_kill_switch" ||
-          blocker.code === "missing_intent",
-      ) ? (
-        <div className="surface-subsection">
-          <p className="section-label">Runtime dependency</p>
-          <p className="meta-note">
-            This route depends on runtime conditions reported by the control
-            server. Review the blocker message before saving.
-          </p>
-        </div>
-      ) : null}
     </>
   );
 }

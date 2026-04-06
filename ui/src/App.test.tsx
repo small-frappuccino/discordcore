@@ -1929,6 +1929,7 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.getByRole("dialog", { name: "Configure Mute role" }),
     ).toBeVisible();
+    expect(screen.queryByText("Requirements")).not.toBeInTheDocument();
     await userEvent.selectOptions(
       screen.getByLabelText("Mute role"),
       "mute-role",
@@ -1955,6 +1956,8 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.getByRole("dialog", { name: "Configure Moderation case logging" }),
     ).toBeVisible();
+    expect(screen.queryByText("Requirements")).not.toBeInTheDocument();
+    expect(screen.queryByText("Runtime dependency")).not.toBeInTheDocument();
     await userEvent.selectOptions(
       screen.getByLabelText("Destination channel"),
       "mod-cases",
