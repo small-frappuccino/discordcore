@@ -406,21 +406,17 @@ function ModerationWorkspacePanels({
   onUseDefault,
 }: ModerationWorkspacePanelsProps) {
   return (
-    <div className="moderation-workspace-grid">
+    <div className="moderation-flat-stack">
       {automodFeature !== null ? (
-        <section className="surface-subsection moderation-service-panel">
-          <div className="moderation-service-head">
-            <div className="card-copy moderation-service-copy">
+        <section className="moderation-flat-section moderation-service-panel">
+          <div className="flat-inline-message">
+            <div className="card-copy moderation-section-copy">
               <div className="moderation-title-row">
                 <h3>{automodFeature.label}</h3>
                 <StatusBadge tone={getFeatureStatusTone(automodFeature)}>
                   {formatFeatureStatusLabel(automodFeature)}
                 </StatusBadge>
               </div>
-              <p className="meta-note">
-                Discord keeps the rules. This page only controls listener state
-                and route readiness.
-              </p>
             </div>
 
             <p className="meta-note">
@@ -476,9 +472,9 @@ function ModerationWorkspacePanels({
       ) : null}
 
       {muteRoleFeature !== null ? (
-        <section className="surface-subsection moderation-service-panel">
-          <div className="moderation-service-head">
-            <div className="card-copy moderation-service-copy">
+        <section className="moderation-flat-section moderation-service-panel">
+          <div className="flat-inline-message">
+            <div className="card-copy moderation-section-copy">
               <div className="moderation-title-row">
                 <h3>{muteRoleFeature.label}</h3>
                 <StatusBadge tone={getFeatureStatusTone(muteRoleFeature)}>
@@ -558,9 +554,9 @@ function ModerationWorkspacePanels({
         </section>
       ) : null}
 
-      <section className="surface-subsection moderation-log-panel">
-        <div className="moderation-log-panel-header">
-          <div className="card-copy">
+      <section className="moderation-flat-section moderation-log-panel">
+        <div className="flat-inline-message">
+          <div className="card-copy moderation-section-copy">
             <div className="moderation-title-row">
               <h3>Moderation routes</h3>
               <StatusBadge
@@ -599,7 +595,7 @@ function ModerationWorkspacePanels({
             <div className="card-copy">
               <h2>No moderation routes</h2>
               <p className="section-description">
-                This workspace is not exposing moderation log routes yet.
+                No moderation routes are exposed yet.
               </p>
             </div>
           </div>

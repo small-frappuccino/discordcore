@@ -1718,31 +1718,32 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
-.moderation-workspace-grid {
+.moderation-flat-stack {
   display: grid;
-  gap: var(--space-4);
+  gap: 0;
 }
 
 .moderation-service-panel,
 .moderation-log-panel,
-.moderation-rules-preview,
 .moderation-drawer {
   display: grid;
   gap: var(--space-4);
 }
 
-.moderation-service-head,
-.moderation-log-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+.moderation-flat-section {
+  display: grid;
   gap: var(--space-4);
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border-soft);
 }
 
-.moderation-service-copy,
-.moderation-rules-copy {
-  display: grid;
-  gap: var(--space-2);
+.moderation-flat-stack > .moderation-flat-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.moderation-section-copy {
+  min-width: 0;
 }
 
 .moderation-title-row {
@@ -2730,8 +2731,6 @@ textarea:focus {
   .overview-next-step,
   .home-area-card-header,
   .logging-drawer-title-row,
-  .moderation-service-head,
-  .moderation-log-panel-header,
   .moderation-title-row,
   .commands-module-title-row,
   .flat-inline-message,
@@ -2748,10 +2747,6 @@ textarea:focus {
   }
 
   .commands-module-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .moderation-workspace-grid {
     grid-template-columns: 1fr;
   }
 

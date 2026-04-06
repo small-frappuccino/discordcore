@@ -917,16 +917,6 @@ function RolesAside({
           <li>Use advanced controls only when you need presence watching or the permission mirror guard.</li>
           <li>Runtime issues stay in blockers and notices instead of taking over the main roles workspace.</li>
         </ul>
-
-        {firstBlockedFeature?.id === "safety.bot_role_perm_mirror" ? (
-          <div className="surface-subsection">
-            <p className="section-label">Runtime dependency</p>
-            <p className="meta-note">
-              Permission mirror blockers from runtime state are reported by the
-              control server and should be reviewed before saving.
-            </p>
-          </div>
-        ) : null}
       </SurfaceCard>
     </aside>
   );
@@ -1018,7 +1008,6 @@ function RolesFeatureDrawer({
               {formatFeatureStatusLabel(selectedFeature)}
             </StatusBadge>
           </div>
-          <p className="section-description">{selectedFeature.description}</p>
         </div>
 
         {mutationNotice ? <AlertBanner notice={mutationNotice} /> : null}
@@ -1151,8 +1140,7 @@ function AutoRoleDrawerBody({
             <option value="disabled">Disabled</option>
           </select>
           <span className="meta-note">
-            Keep the module enabled but pause the assignment rule when you need
-            to preserve the rest of the setup.
+            Leave the module on while pausing assignment.
           </span>
         </label>
 
@@ -1203,15 +1191,6 @@ function AutoRoleDrawerBody({
             ))}
           </select>
         </label>
-      </div>
-
-      <div className="surface-subsection">
-        <p className="section-label">What to configure</p>
-        <ul className="feature-guidance-list">
-          <li>Target role: the role granted automatically.</li>
-          <li>Level role: the first requirement checked before assignment.</li>
-          <li>Booster role: the second requirement that keeps the setup valid.</li>
-        </ul>
       </div>
 
       <div className="drawer-actions">
@@ -1278,8 +1257,7 @@ function PresenceWatchBotDrawerBody({
           <option value="disabled">Disabled</option>
         </select>
         <span className="meta-note">
-          This advanced flag controls whether the runtime watches the bot
-          identity itself.
+          Controls whether the runtime watches the bot account.
         </span>
       </label>
 
@@ -1362,8 +1340,7 @@ function PresenceWatchUserDrawerBody({
             placeholder="Search by username, nickname, or user ID"
           />
           <span className="meta-note">
-            Type to narrow the server member list without exposing raw IDs in
-            the primary control.
+            Filter the server member list.
           </span>
         </label>
 
@@ -1389,7 +1366,7 @@ function PresenceWatchUserDrawerBody({
             ))}
           </select>
           <span className="meta-note">
-            The selected member stays available while you refine the search.
+            Keep the current member or pick a new one.
           </span>
         </label>
       </div>
@@ -1494,22 +1471,9 @@ function PermissionMirrorDrawerBody({
           ))}
         </select>
         <span className="meta-note">
-          Use a guard role only when permission mirror changes should stay scoped
-          to a specific operator role.
+          Leave empty to keep the guard global.
         </span>
       </label>
-
-      {selectedFeature.blockers?.some(
-        (blocker) => blocker.code === "runtime_kill_switch",
-      ) ? (
-        <div className="surface-subsection">
-          <p className="section-label">Runtime dependency</p>
-          <p className="meta-note">
-            Runtime permission mirror blockers are reported by the control
-            server and should be reviewed before saving.
-          </p>
-        </div>
-      ) : null}
 
       <div className="drawer-actions">
         <button

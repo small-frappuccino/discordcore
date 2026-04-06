@@ -1902,6 +1902,7 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryByText("ban, massban, kick, mute, timeout, warnings"),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Discord keeps the rules/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Current moderation state")).not.toBeInTheDocument();
     expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
     expect(screen.queryByText("Moderation controls")).not.toBeInTheDocument();
@@ -2095,6 +2096,8 @@ describe("dashboard routing and workspace", () => {
         name: "Configure automatic role assignment",
       }),
     ).toBeVisible();
+    expect(screen.queryByText("What to configure")).not.toBeInTheDocument();
+    expect(screen.queryByText("Runtime dependency")).not.toBeInTheDocument();
 
     await userEvent.selectOptions(
       screen.getByLabelText("Assignment rule"),
@@ -2436,6 +2439,8 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.getByRole("dialog", { name: "Configure Member join logging" }),
     ).toBeVisible();
+    expect(screen.queryByText("Requirements")).not.toBeInTheDocument();
+    expect(screen.queryByText("Runtime dependency")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Destination channel")).toHaveValue("");
 
     await userEvent.selectOptions(

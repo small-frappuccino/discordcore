@@ -196,6 +196,22 @@ If cards have different content lengths, preserve their natural height and align
 
 If a page should feel like part of the dashboard canvas, do not wrap it in an unnecessary floating slab or inset surface.
 
+### 5.1 Flat composition default
+
+The default page composition should be flat and continuous, closer to `Home` than to card-inside-card stacks.
+
+Rules:
+
+- Prefer one main surface per workflow block instead of nested inner slabs
+- Do not create a second or third visual layer unless there is a real boundary such as a drawer, modal, bounded selector panel, or clearly separate diagnostic area
+- If content belongs to the same workflow, keep it attached to the surrounding surface instead of making it float inside an extra inset container
+- Prefer `title -> rows -> actions` inside the current flat content before introducing another wrapper component or inner card
+- Do not add an extra component only to display a local heading if that heading can live naturally inside the existing flat section
+- If a section can be expressed as a title and content within the current surface, do that instead of creating a decorative nested layer
+
+Nested layering is not a neutral stylistic choice here.
+It makes the dashboard feel heavier, more template-like, and less direct than the current `Home` reference.
+
 ---
 
 ## 6. Surfaces, color, and emphasis
@@ -310,6 +326,9 @@ Do not introduce:
 - generic hero sections or marketing-style dashboard headers
 - text-heavy UI that teaches the user where to look
 - floating inner canvases when the page should feel continuous
+- nested slabs, card-inside-card stacks, or inset panels without a real interaction boundary
+- extra wrapper components whose only job is to create another visual layer around content that could stay flat
+- separate sub-cards used only to hold a local title that could live inside the surrounding content block
 - default gradient chrome or gradient cards
 - equal-height card stretching that distorts proportions
 - routine page-level `Refresh` buttons for normal data loading or revalidation

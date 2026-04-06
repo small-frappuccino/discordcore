@@ -11,7 +11,6 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
-  buildLoggingRequirementNotes,
   canEditLoggingChannel,
   describeLoggingDestination,
   getLoggingFeatureDetails,
@@ -547,7 +546,6 @@ export function LoggingCategoryPage() {
                   {formatFeatureStatusLabel(selectedFeature)}
                 </StatusBadge>
               </div>
-              <p className="section-description">{selectedFeature.description}</p>
             </div>
 
             {mutation.notice ? <AlertBanner notice={mutation.notice} /> : null}
@@ -587,7 +585,11 @@ export function LoggingCategoryPage() {
                     ? "No channels available"
                     : "No destination channel"
               }
-              note="Leave this empty to clear the destination or keep the route without a dedicated channel."
+              note={
+                selectedFeatureDetails?.requiresChannel
+                  ? undefined
+                  : "Leave empty to clear the destination."
+              }
             />
 
             {channelOptions.notice ? (
@@ -606,31 +608,8 @@ export function LoggingCategoryPage() {
               value={channelDraft}
               onChange={setChannelDraft}
               placeholder="Discord channel ID"
-              note="Use this only when the channel picker is unavailable or when you need to paste a channel ID directly."
+              note="Use only if channel lookup fails."
             />
-
-            <div className="surface-subsection">
-              <p className="section-label">Requirements</p>
-              <ul className="feature-guidance-list">
-                {buildLoggingRequirementNotes(selectedFeature).map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </div>
-
-            {selectedFeature.blockers?.some(
-              (blocker) =>
-                blocker.code === "runtime_kill_switch" ||
-                blocker.code === "missing_intent",
-            ) ? (
-              <div className="surface-subsection">
-                <p className="section-label">Runtime dependency</p>
-                <p className="meta-note">
-                  This route depends on runtime conditions reported by the
-                  control server. Review the blocker message before saving.
-                </p>
-              </div>
-            ) : null}
 
             <div className="drawer-actions">
               <button
