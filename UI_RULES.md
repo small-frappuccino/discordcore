@@ -174,6 +174,32 @@ When diagnostic-only UI is needed, gate it behind the `?diagnostics=1` query par
 
 When in doubt, prefer omission over explanation.
 
+### 3.3 Direct settings pattern
+
+For settings-style pages, the default composition should feel closer to app settings than to an operator console.
+
+Preferred patterns:
+
+- binary settings: `short title + visible switch`
+- single-value settings: `short title + direct select or picker`
+- setting groups: `group title + compact rows`, not nested explanatory slabs
+
+Rules:
+
+- if the control already shows the current state, do not repeat that state in badges, status rows, or helper paragraphs
+- do not render `Current signal`, `Current value`, or provenance rows beside an already-visible switch, select, or picker in the default UI
+- use helper text only when the setting would otherwise be ambiguous, and keep it to one short secondary line directly under the control
+- only show warning or error text when the user has something real to fix, such as a missing channel, invalid role, runtime kill switch, or failed lookup
+- prefer one shared lookup failure message for a whole control group when the same dependency failure affects every row in that group
+
+Examples:
+
+- good: `Automod service` + switch
+- good: `Mute role` + switch + role select
+- good: `Moderation case logging` + switch + channel select + short blocker text only when needed
+- bad: `Mute role` + badge + `Current signal` + `Applied from` + long section description + extra reset-to-default metadata
+- bad: `Route destination` + select + paragraph explaining that the visible select controls the destination
+
 ---
 
 ## 4. Source of truth and reuse

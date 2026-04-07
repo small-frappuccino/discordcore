@@ -1903,24 +1903,27 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
-    await screen.findByRole("button", { name: "Disable Automod service" });
+    await screen.findByRole("checkbox", { name: "Automod service" });
 
     expect(window.location.pathname).toBe(testRoutes.moderation);
     expect(window.location.hash).toBe("");
-    expect(screen.getAllByText("Logging only").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Mute role").length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("heading", { name: "Route destinations" }),
+      screen.getByRole("heading", { name: "Mute role", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Disable Automod service" }),
+      screen.getByRole("heading", { name: "Moderation routes", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Automod service" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Supported actions")).not.toBeInTheDocument();
     expect(
       screen.queryByText("ban, massban, kick, mute, timeout, warnings"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Discord keeps the rules/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Current moderation state")).not.toBeInTheDocument();
+    expect(screen.queryByText("Logging only")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current signal")).not.toBeInTheDocument();
+    expect(screen.queryByText("Use inherited")).not.toBeInTheDocument();
+    expect(screen.queryByText("Use default")).not.toBeInTheDocument();
     expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
     expect(screen.queryByText("Moderation controls")).not.toBeInTheDocument();
     expect(screen.queryByText("Rule coverage")).not.toBeInTheDocument();
@@ -1947,7 +1950,7 @@ describe("dashboard routing and workspace", () => {
       .closest("section");
     expect(muteRoleSection).not.toBeNull();
     await userEvent.selectOptions(
-      within(muteRoleSection!).getByLabelText("Mute role"),
+      within(muteRoleSection!).getByLabelText("Role"),
       "mute-role",
     );
     await userEvent.click(
@@ -1971,7 +1974,7 @@ describe("dashboard routing and workspace", () => {
       .closest("section");
     expect(moderationCaseSection).not.toBeNull();
     await userEvent.selectOptions(
-      within(moderationCaseSection!).getByLabelText("Destination channel"),
+      within(moderationCaseSection!).getByLabelText("Channel"),
       "mod-cases",
     );
     await userEvent.click(
@@ -2002,6 +2005,65 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getAllByText("Muted").length).toBeGreaterThan(0);
     expect(screen.getAllByText("#mod-cases").length).toBeGreaterThan(0);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("toggles automod directly from the moderation workspace", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.moderation);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Moderation", level: 1 });
+
+    const automodToggle = screen.getByRole("checkbox", {
+      name: "Automod service",
+    });
+    expect(automodToggle).toBeChecked();
+
+    await userEvent.click(automodToggle);
+
+    await waitFor(() => {
+      expect(featureUpdates[0]).toEqual({
+        guildID: "guild-1",
+        featureID: "services.automod",
+        payload: {
+          enabled: false,
+        },
+      });
+    });
+  });
+
+  it("resets inline moderation drafts", async () => {
+    const { fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.moderation);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Moderation", level: 1 });
+
+    function getAutomodActionSection() {
+      return screen
+        .getByRole("heading", { name: "Automod action logging", level: 3 })
+        .closest("section");
+    }
+
+    expect(getAutomodActionSection()).not.toBeNull();
+
+    const routeChannelSelect =
+      within(getAutomodActionSection()!).getByLabelText("Channel");
+    await userEvent.selectOptions(routeChannelSelect, "mod-cases");
+    expect(routeChannelSelect).toHaveValue("mod-cases");
+    await waitFor(() => {
+      expect(
+        within(getAutomodActionSection()!).getByRole("button", { name: "Reset" }),
+      ).toBeInTheDocument();
+    });
+    await userEvent.click(
+      within(getAutomodActionSection()!).getByRole("button", { name: "Reset" }),
+    );
+    expect(routeChannelSelect).toHaveValue("mod-actions");
   });
 
   it.each(["/dashboard/automations", "/dashboard/activity"])(

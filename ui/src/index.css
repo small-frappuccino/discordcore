@@ -1837,12 +1837,115 @@ textarea:focus {
   min-width: 0;
 }
 
+.moderation-section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.moderation-route-title {
+  font-size: 1rem;
+}
+
+.moderation-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.moderation-routes-stack {
+  gap: 0;
+}
+
 .moderation-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+.moderation-inline-message {
+  align-items: center;
+}
+
+.moderation-inline-message-copy {
+  margin: 0;
+}
+
+.moderation-inline-message-copy.tone-info {
+  color: var(--info);
+}
+
+.moderation-inline-message-copy.tone-error {
+  color: var(--error);
+}
+
+.moderation-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 28px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.moderation-switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.moderation-switch-track {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--bg-surface-elevated) 88%, black 12%);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.moderation-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+  transition: transform 160ms ease;
+}
+
+.moderation-switch.is-checked .moderation-switch-track {
+  background: color-mix(in srgb, var(--success) 72%, var(--bg-surface) 28%);
+  border-color: color-mix(in srgb, var(--success) 65%, var(--border-strong));
+}
+
+.moderation-switch.is-checked .moderation-switch-thumb {
+  transform: translateX(18px);
+}
+
+.moderation-switch input:focus-visible + .moderation-switch-track {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+.moderation-switch.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .moderation-service-actions {
@@ -2855,11 +2958,12 @@ textarea:focus {
   .overview-next-step,
   .home-area-card-header,
    .logging-drawer-title-row,
-   .flat-config-header,
-   .flat-config-title-row,
-   .moderation-page-title-row,
-   .moderation-title-row,
-   .commands-module-title-row,
+    .flat-config-header,
+    .flat-config-title-row,
+    .moderation-page-title-row,
+    .moderation-setting-row,
+    .moderation-title-row,
+    .commands-module-title-row,
    .flat-inline-message,
   .qotd-section-header,
   .qotd-flat-inline-message,

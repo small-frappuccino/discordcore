@@ -278,6 +278,9 @@ Do not make these pages broader by default. When adding a new sub-workflow or re
 - prefer existing primitives such as `PageHeader`, `FeatureWorkspaceLayout`, `SurfaceCard`, `StatusBadge`, `EmptyState`, and picker fields before inventing new layout systems
 - use human-facing labels in the UI; avoid exposing raw internal enum or storage names unless the page is explicitly diagnostic
 - use `import.meta.env.BASE_URL` for embedded asset paths
+- default settings-style pages to a direct composition: short title, visible control, optional one-line secondary text only when it prevents ambiguity
+- keep standard dashboard pages free of diagnostic metadata such as provenance, override state, raw IDs, fallback inputs, and repeated status badges when the control already shows the state
+- if low-level metadata is still needed for debugging, gate it behind explicit diagnostic UI instead of exposing it in the default page flow
 
 ### 11.5 CSS and styling
 

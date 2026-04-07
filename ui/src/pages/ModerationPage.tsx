@@ -1,21 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
-  AdvancedTextInput,
   EmptyState,
   EntityPickerField,
   FlatPageLayout,
-  KeyValueList,
-  LookupNotice,
-  StatusBadge,
   UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import {
-  buildMessageRouteChannelPickerOptions,
-  formatGuildChannelValue,
-} from "../features/features/discordEntities";
+import { buildMessageRouteChannelPickerOptions } from "../features/features/discordEntities";
 import {
   getFeatureAreaDefinition,
   getFeatureAreaRecords,
@@ -23,29 +16,18 @@ import {
 import {
   canEditLoggingChannel,
   getLoggingFeatureDetails,
-  summarizeLoggingDestination,
   summarizeLoggingGuidance,
 } from "../features/features/logging";
 import {
   canEditMuteRole,
-  formatAutomodModeValue,
   getModerationLogFeatures,
   getMuteRoleFeatureDetails,
-  summarizeAutomodSignal,
   summarizeMuteRoleSignal,
 } from "../features/features/moderation";
+import { formatRoleOptionLabel } from "../features/features/roles";
 import {
-  formatRoleOptionLabel,
-  formatRoleValue,
-} from "../features/features/roles";
-import {
-  formatEffectiveSourceLabel,
-  formatFeatureStatusLabel,
-  formatOverrideLabel,
   formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
-  getFeatureStatusTone,
-  summarizeFeatureArea,
 } from "../features/features/presentation";
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
@@ -72,7 +54,6 @@ export function ModerationPage() {
 
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "moderation");
-  const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
   const automodFeature =
     areaFeatures.find((feature) => feature.id === "services.automod") ?? null;
@@ -115,21 +96,6 @@ export function ModerationPage() {
     try {
       const updated = await mutation.patchFeature(feature.id, {
         enabled,
-      });
-      if (updated !== null) {
-        workspace.updateFeature(updated);
-      }
-    } finally {
-      setPendingFeatureId("");
-    }
-  }
-
-  async function handleUseDefault(feature: FeatureRecord) {
-    setPendingFeatureId(feature.id);
-
-    try {
-      const updated = await mutation.patchFeature(feature.id, {
-        enabled: null,
       });
       if (updated !== null) {
         workspace.updateFeature(updated);
@@ -235,7 +201,6 @@ export function ModerationPage() {
         onSaveMuteRole={handleSaveMuteRole}
         onSaveDestination={handleSaveDestination}
         onSetFeatureEnabled={handleSetFeatureEnabled}
-        onUseDefault={handleUseDefault}
       />
     );
   }
@@ -252,15 +217,6 @@ export function ModerationPage() {
           <div className="card-copy">
             <div className="moderation-page-title-row">
               <h1>{areaLabel}</h1>
-              <StatusBadge
-                tone={
-                  workspace.workspaceState === "ready" ? areaSummary.tone : "info"
-                }
-              >
-                {workspace.workspaceState === "ready"
-                  ? areaSummary.label
-                  : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
-              </StatusBadge>
             </div>
           </div>
         </div>
@@ -299,7 +255,6 @@ interface ModerationWorkspacePanelsProps {
     feature: FeatureRecord,
     enabled: boolean,
   ) => Promise<void>;
-  onUseDefault: (feature: FeatureRecord) => Promise<void>;
 }
 
 function ModerationWorkspacePanels({
@@ -316,77 +271,23 @@ function ModerationWorkspacePanels({
   onSaveMuteRole,
   onSaveDestination,
   onSetFeatureEnabled,
-  onUseDefault,
 }: ModerationWorkspacePanelsProps) {
-  const hasConfiguredModerationRoute = moderationLogFeatures.some((feature) => {
-    const details = getLoggingFeatureDetails(feature);
-    return details.channelId !== "" || !details.requiresChannel;
-  });
-  const hasModerationRouteBlocker = moderationLogFeatures.some(
-    (feature) => feature.readiness === "blocked",
-  );
-
   return (
     <div className="flat-config-stack moderation-flat-stack">
       {automodFeature !== null ? (
         <section className="flat-config-section moderation-flat-section moderation-service-panel">
-          <div className="flat-config-header">
-            <div className="card-copy flat-config-copy moderation-section-copy">
-              <p className="section-label">Moderation</p>
-              <div className="flat-config-title-row moderation-title-row">
-                <h2>{automodFeature.label}</h2>
-                <StatusBadge tone={getFeatureStatusTone(automodFeature)}>
-                  {formatFeatureStatusLabel(automodFeature)}
-                </StatusBadge>
-              </div>
-            <p className="section-description">
-              Keep the service toggle visible here and use the moderation routes
-              below for destination-specific configuration.
-            </p>
-          </div>
-          </div>
-
-          <KeyValueList
-            items={[
-              {
-                label: "Mode",
-                value: formatAutomodModeValue(automodFeature),
-              },
-              {
-                label: "Current signal",
-                value: summarizeAutomodSignal(automodFeature),
-              },
-            ]}
-          />
-
-          <div className="inline-actions moderation-service-actions flat-config-actions">
-            <button
-              className="button-primary"
-              type="button"
+          <div className="moderation-setting-row">
+            <div className="card-copy moderation-section-copy">
+              <h2 className="moderation-section-title">Automod service</h2>
+            </div>
+            <ModerationSwitch
+              label="Automod service"
+              checked={automodFeature.effective_enabled}
               disabled={mutation.saving || !canEditSelectedGuild}
-              onClick={() =>
-                void onSetFeatureEnabled(
-                  automodFeature,
-                  !automodFeature.effective_enabled,
-                )
+              onChange={(enabled) =>
+                void onSetFeatureEnabled(automodFeature, enabled)
               }
-            >
-              {mutation.saving && pendingFeatureId === automodFeature.id
-                ? "Saving..."
-                : automodFeature.effective_enabled
-                  ? "Disable Automod service"
-                  : "Enable Automod service"}
-            </button>
-            {automodFeature.override_state !== "inherit" ? (
-              <button
-                className="button-ghost"
-                type="button"
-                disabled={mutation.saving || !canEditSelectedGuild}
-                onClick={() => void onUseDefault(automodFeature)}
-              >
-                Use default
-              </button>
-            ) : null}
+            />
           </div>
         </section>
       ) : null}
@@ -402,48 +303,28 @@ function ModerationWorkspacePanels({
           onClearNotice={mutation.clearNotice}
           onSave={onSaveMuteRole}
           onSetFeatureEnabled={onSetFeatureEnabled}
-          onUseDefault={onUseDefault}
         />
       ) : null}
 
       <section className="flat-config-section moderation-flat-section moderation-log-panel">
-        <div className="flat-config-header">
-          <div className="card-copy flat-config-copy moderation-section-copy">
-            <p className="section-label">Moderation routes</p>
-            <div className="flat-config-title-row moderation-title-row">
-              <h2>Route destinations</h2>
-              <StatusBadge
-                tone={
-                  hasModerationRouteBlocker
-                    ? "error"
-                    : hasConfiguredModerationRoute
-                      ? "success"
-                      : "neutral"
-                }
-              >
-                {moderationLogFeatures.length === 0
-                  ? "Not mapped"
-                  : hasModerationRouteBlocker
-                    ? "Needs attention"
-                    : hasConfiguredModerationRoute
-                      ? "Ready"
-                      : "Needs setup"}
-              </StatusBadge>
-            </div>
-            <p className="section-description">
-              Edit moderation case and route destinations directly here instead of
-              opening a separate route drawer.
-            </p>
-          </div>
+        <div className="card-copy moderation-section-copy">
+          <h2 className="moderation-section-title">Moderation routes</h2>
         </div>
 
         {channelOptions.notice ? (
-          <LookupNotice
-            title="Channel references unavailable"
+          <ModerationInlineMessage
             message={channelOptions.notice.message}
-            retryLabel="Retry channel lookup"
-            retryDisabled={channelOptions.loading}
-            onRetry={channelOptions.refresh}
+            tone="error"
+            action={
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={channelOptions.loading}
+                onClick={() => void channelOptions.refresh()}
+              >
+                Retry channel lookup
+              </button>
+            }
           />
         ) : null}
 
@@ -451,13 +332,10 @@ function ModerationWorkspacePanels({
           <div className="table-empty-state table-empty-state-compact">
             <div className="card-copy">
               <h2>No moderation routes</h2>
-              <p className="section-description">
-                No moderation routes are exposed yet.
-              </p>
             </div>
           </div>
         ) : (
-          <div className="flat-config-stack">
+          <div className="flat-config-stack moderation-flat-stack moderation-routes-stack">
             {moderationLogFeatures.map((feature) => (
               <ModerationRouteSection
                 key={feature.id}
@@ -470,7 +348,6 @@ function ModerationWorkspacePanels({
                 onClearNotice={mutation.clearNotice}
                 onSave={onSaveDestination}
                 onSetFeatureEnabled={onSetFeatureEnabled}
-                onUseDefault={onUseDefault}
               />
             ))}
           </div>
@@ -497,7 +374,6 @@ interface MuteRoleSectionProps {
     feature: FeatureRecord,
     enabled: boolean,
   ) => Promise<void>;
-  onUseDefault: (feature: FeatureRecord) => Promise<void>;
 }
 
 function MuteRoleSection({
@@ -510,12 +386,15 @@ function MuteRoleSection({
   onClearNotice,
   onSave,
   onSetFeatureEnabled,
-  onUseDefault,
 }: MuteRoleSectionProps) {
   const currentRoleId = getMuteRoleFeatureDetails(feature).roleId;
   const [roleDraft, setRoleDraft] = useState(currentRoleId);
   const canEditRole = canEditSelectedGuild && canEditMuteRole(feature);
   const hasUnsavedChanges = currentRoleId !== roleDraft.trim();
+  const muteRoleMessage =
+    feature.effective_enabled && feature.readiness === "blocked"
+      ? summarizeMuteRoleSignal(feature)
+      : null;
 
   useEffect(() => {
     setRoleDraft(currentRoleId);
@@ -528,55 +407,56 @@ function MuteRoleSection({
 
   return (
     <section className="flat-config-section moderation-flat-section moderation-service-panel">
-      <div className="flat-config-header">
-        <div className="card-copy flat-config-copy moderation-section-copy">
-          <p className="section-label">Role-based mute</p>
-          <div className="flat-config-title-row moderation-title-row">
-            <h2>{feature.label}</h2>
-            <StatusBadge tone={getFeatureStatusTone(feature)}>
-              {formatFeatureStatusLabel(feature)}
-            </StatusBadge>
-          </div>
-          <p className="section-description">
-            Keep the mute role selector visible in the workspace so the moderation
-            flow does not depend on a separate editor panel.
-          </p>
+      <div className="moderation-setting-row">
+        <div className="card-copy moderation-section-copy">
+          <h2 className="moderation-section-title">Mute role</h2>
         </div>
+        <ModerationSwitch
+          label="Mute role"
+          checked={feature.effective_enabled}
+          disabled={mutationSaving || !canEditSelectedGuild}
+          onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
+        />
       </div>
 
-      <MuteRoleDrawerBody
-        selectedFeature={feature}
-        roleDraft={roleDraft}
-        setRoleDraft={setRoleDraft}
-        muteRoleOptions={muteRoleOptions}
-        roleOptions={roleOptions}
-        disabled={!canEditRole}
+      <EntityPickerField
+        label="Role"
+        value={roleDraft}
+        disabled={!canEditRole || roleOptions.loading}
+        onChange={setRoleDraft}
+        options={muteRoleOptions}
+        placeholder={
+          roleOptions.loading
+            ? "Loading roles..."
+            : muteRoleOptions.length === 0
+              ? "No roles available"
+              : "No mute role"
+        }
+        note={
+          roleOptions.notice || muteRoleMessage
+            ? undefined
+            : "Assigned when a member is muted."
+        }
       />
 
-      <div className="inline-actions moderation-service-actions flat-config-actions">
-        <button
-          className="button-secondary"
-          type="button"
-          disabled={mutationSaving || !canEditSelectedGuild}
-          onClick={() => void onSetFeatureEnabled(feature, !feature.effective_enabled)}
-        >
-          {mutationSaving && pendingFeatureId === feature.id
-            ? "Saving..."
-            : feature.effective_enabled
-              ? "Disable"
-              : "Enable"}
-        </button>
-        {feature.override_state !== "inherit" ? (
-          <button
-            className="button-ghost"
-            type="button"
-            disabled={mutationSaving || !canEditSelectedGuild}
-            onClick={() => void onUseDefault(feature)}
-          >
-            Use inherited
-          </button>
-        ) : null}
-      </div>
+      {roleOptions.notice ? (
+        <ModerationInlineMessage
+          message={roleOptions.notice.message}
+          tone="error"
+          action={
+            <button
+              className="button-secondary"
+              type="button"
+              disabled={roleOptions.loading}
+              onClick={() => void roleOptions.refresh()}
+            >
+              Retry role lookup
+            </button>
+          }
+        />
+      ) : muteRoleMessage ? (
+        <ModerationInlineMessage message={muteRoleMessage} tone="error" />
+      ) : null}
 
       <UnsavedChangesBar
         hasUnsavedChanges={hasUnsavedChanges}
@@ -611,7 +491,6 @@ interface ModerationRouteSectionProps {
     feature: FeatureRecord,
     enabled: boolean,
   ) => Promise<void>;
-  onUseDefault: (feature: FeatureRecord) => Promise<void>;
 }
 
 function ModerationRouteSection({
@@ -624,13 +503,16 @@ function ModerationRouteSection({
   onClearNotice,
   onSave,
   onSetFeatureEnabled,
-  onUseDefault,
 }: ModerationRouteSectionProps) {
   const currentChannelId = getLoggingFeatureDetails(feature).channelId;
   const [channelDraft, setChannelDraft] = useState(currentChannelId);
   const canEditDestination =
     canEditSelectedGuild && canEditLoggingChannel(feature);
   const hasUnsavedChanges = currentChannelId !== channelDraft.trim();
+  const routeMessage =
+    feature.effective_enabled && feature.readiness === "blocked"
+      ? summarizeLoggingGuidance(feature)
+      : null;
 
   useEffect(() => {
     setChannelDraft(currentChannelId);
@@ -642,55 +524,39 @@ function ModerationRouteSection({
   }
 
   return (
-    <section className="flat-config-section moderation-flat-section">
-      <div className="flat-config-header">
-        <div className="card-copy flat-config-copy moderation-section-copy">
-          <div className="flat-config-title-row moderation-title-row">
-            <h3>{feature.label}</h3>
-            <StatusBadge tone={getFeatureStatusTone(feature)}>
-              {formatFeatureStatusLabel(feature)}
-            </StatusBadge>
-          </div>
-          <p className="section-description">{feature.description}</p>
+    <section className="flat-config-section moderation-flat-section moderation-route-section">
+      <div className="moderation-setting-row">
+        <div className="card-copy moderation-section-copy">
+          <h3 className="moderation-section-title moderation-route-title">
+            {feature.label}
+          </h3>
         </div>
+        <ModerationSwitch
+          label={feature.label}
+          checked={feature.effective_enabled}
+          disabled={mutationSaving || !canEditSelectedGuild}
+          onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
+        />
       </div>
 
-      <ModerationDestinationDrawerBody
-        selectedFeature={feature}
-        channelDraft={channelDraft}
-        setChannelDraft={setChannelDraft}
-        channelOptions={channelOptions}
-        messageRouteChannelOptions={messageRouteChannelOptions}
-        disabled={!canEditDestination}
-        showLookupNotice={false}
+      <EntityPickerField
+        label="Channel"
+        value={channelDraft}
+        disabled={!canEditDestination || channelOptions.loading}
+        onChange={setChannelDraft}
+        options={messageRouteChannelOptions}
+        placeholder={
+          channelOptions.loading
+            ? "Loading channels..."
+            : messageRouteChannelOptions.length === 0
+              ? "No channels available"
+              : "No channel"
+        }
       />
 
-      <div className="inline-actions flat-config-actions">
-        <button
-          className="button-secondary"
-          type="button"
-          disabled={mutationSaving || !canEditSelectedGuild}
-          aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
-          onClick={() => void onSetFeatureEnabled(feature, !feature.effective_enabled)}
-        >
-          {mutationSaving && pendingFeatureId === feature.id
-            ? "Saving..."
-            : feature.effective_enabled
-              ? "Disable"
-              : "Enable"}
-        </button>
-        {feature.override_state !== "inherit" ? (
-          <button
-            className="button-ghost"
-            type="button"
-            disabled={mutationSaving || !canEditSelectedGuild}
-            aria-label={`Use inherited setting for ${feature.label}`}
-            onClick={() => void onUseDefault(feature)}
-          >
-            Use inherited
-          </button>
-        ) : null}
-      </div>
+      {routeMessage ? (
+        <ModerationInlineMessage message={routeMessage} tone="error" />
+      ) : null}
 
       <UnsavedChangesBar
         hasUnsavedChanges={hasUnsavedChanges}
@@ -708,182 +574,54 @@ function ModerationRouteSection({
   );
 }
 
-interface MuteRoleDrawerBodyProps {
-  selectedFeature: FeatureRecord;
-  roleDraft: string;
-  setRoleDraft: (value: string) => void;
-  muteRoleOptions: Array<{
-    value: string;
-    label: string;
-    disabled?: boolean;
-  }>;
-  roleOptions: ReturnType<typeof useGuildRoleOptions>;
-  disabled?: boolean;
+interface ModerationInlineMessageProps {
+  message: string;
+  tone?: "info" | "error";
+  action?: ReactNode;
 }
 
-function MuteRoleDrawerBody({
-  selectedFeature,
-  roleDraft,
-  setRoleDraft,
-  muteRoleOptions,
-  roleOptions,
-  disabled = false,
-}: MuteRoleDrawerBodyProps) {
+function ModerationInlineMessage({
+  message,
+  tone = "error",
+  action,
+}: ModerationInlineMessageProps) {
   return (
-    <>
-      <KeyValueList
-        items={[
-          {
-            label: "Applied from",
-            value: formatEffectiveSourceLabel(selectedFeature.effective_source),
-          },
-          {
-            label: "Override",
-            value: formatOverrideLabel(selectedFeature.override_state),
-          },
-          {
-            label: "Current role",
-            value: formatRoleValue(roleDraft, roleOptions.roles),
-          },
-          {
-            label: "Current signal",
-            value: summarizeMuteRoleSignal(selectedFeature),
-          },
-        ]}
-      />
-
-      <div className="flat-config-fields">
-        <EntityPickerField
-          label="Mute role"
-          value={roleDraft}
-          disabled={disabled || roleOptions.loading}
-          onChange={setRoleDraft}
-          options={muteRoleOptions}
-          placeholder={
-            roleOptions.loading
-              ? "Loading roles..."
-              : muteRoleOptions.length === 0
-                ? "No roles available"
-                : "No mute role"
-          }
-          note="Choose a role the bot can assign."
-        />
-
-        <AdvancedTextInput
-          label="Mute role ID fallback"
-          inputLabel="Mute role ID fallback"
-          value={roleDraft}
-          disabled={disabled}
-          onChange={setRoleDraft}
-          placeholder="Discord role ID"
-          note="Use only if role lookup fails."
-        />
-      </div>
-
-      {roleOptions.notice ? (
-        <LookupNotice
-          title="Role references unavailable"
-          message={roleOptions.notice.message}
-          retryLabel="Retry role lookup"
-          retryDisabled={roleOptions.loading}
-          onRetry={roleOptions.refresh}
-        />
-      ) : null}
-    </>
+    <div className="flat-inline-message moderation-inline-message">
+      <p className={`meta-note moderation-inline-message-copy tone-${tone}`}>
+        {message}
+      </p>
+      {action ? <div className="inline-actions">{action}</div> : null}
+    </div>
   );
 }
 
-interface ModerationDestinationDrawerBodyProps {
-  selectedFeature: FeatureRecord;
-  channelDraft: string;
-  setChannelDraft: (value: string) => void;
-  channelOptions: ReturnType<typeof useGuildChannelOptions>;
-  messageRouteChannelOptions: Array<{
-    value: string;
-    label: string;
-    description?: string;
-  }>;
+interface ModerationSwitchProps {
+  label: string;
+  checked: boolean;
   disabled?: boolean;
-  showLookupNotice?: boolean;
+  onChange: (checked: boolean) => void;
 }
 
-function ModerationDestinationDrawerBody({
-  selectedFeature,
-  channelDraft,
-  setChannelDraft,
-  channelOptions,
-  messageRouteChannelOptions,
+function ModerationSwitch({
+  label,
+  checked,
   disabled = false,
-  showLookupNotice = true,
-}: ModerationDestinationDrawerBodyProps) {
+  onChange,
+}: ModerationSwitchProps) {
   return (
-    <>
-      <KeyValueList
-        items={[
-          {
-            label: "Applied from",
-            value: formatEffectiveSourceLabel(selectedFeature.effective_source),
-          },
-          {
-            label: "Override",
-            value: formatOverrideLabel(selectedFeature.override_state),
-          },
-          {
-            label: "Destination",
-            value: formatGuildChannelValue(
-              getLoggingFeatureDetails(selectedFeature).channelId,
-              channelOptions.channels,
-              summarizeLoggingDestination(selectedFeature),
-            ),
-          },
-          {
-            label: "Current signal",
-            value: summarizeLoggingGuidance(selectedFeature),
-          },
-        ]}
+    <label
+      className={`moderation-switch${checked ? " is-checked" : ""}${disabled ? " is-disabled" : ""}`}
+    >
+      <input
+        aria-label={label}
+        checked={checked}
+        disabled={disabled}
+        type="checkbox"
+        onChange={(event) => onChange(event.target.checked)}
       />
-
-      <div className="flat-config-fields">
-        <EntityPickerField
-          label="Destination channel"
-          value={channelDraft}
-          disabled={disabled || channelOptions.loading}
-          onChange={setChannelDraft}
-          options={messageRouteChannelOptions}
-          placeholder={
-            channelOptions.loading
-              ? "Loading channels..."
-              : messageRouteChannelOptions.length === 0
-                ? "No channels available"
-                : "No destination channel"
-          }
-          note={
-            getLoggingFeatureDetails(selectedFeature).requiresChannel
-              ? undefined
-              : "Leave empty to clear the destination."
-          }
-        />
-
-        <AdvancedTextInput
-          label="Channel ID fallback"
-          inputLabel="Destination channel ID fallback"
-          value={channelDraft}
-          disabled={disabled}
-          onChange={setChannelDraft}
-          placeholder="Discord channel ID"
-          note="Use only if channel lookup fails."
-        />
-      </div>
-
-      {showLookupNotice && channelOptions.notice ? (
-        <LookupNotice
-          title="Channel references unavailable"
-          message={channelOptions.notice.message}
-          retryLabel="Retry channel lookup"
-          retryDisabled={channelOptions.loading}
-          onRetry={channelOptions.refresh}
-        />
-      ) : null}
-    </>
+      <span className="moderation-switch-track" aria-hidden="true">
+        <span className="moderation-switch-thumb" />
+      </span>
+    </label>
   );
 }
