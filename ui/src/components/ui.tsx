@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type HTMLAttributes,
-  type ReactNode,
-} from "react";
+import { useId, useState, type HTMLAttributes, type ReactNode } from "react";
 import { getInitials } from "../app/utils";
 import type { Notice } from "../app/types";
 import {
@@ -501,120 +494,49 @@ export function SettingsSelectField({
   note,
   disabled = false,
 }: SettingsSelectFieldProps) {
-  const fieldId = useId();
-  const [expanded, setExpanded] = useState(false);
-  const fieldRef = useRef<HTMLDivElement | null>(null);
-  const labelId = `${fieldId}-label`;
-  const valueId = `${fieldId}-value`;
-  const panelId = `${fieldId}-panel`;
   const selectedOption = options.find((option) => option.value === value) ?? null;
   const displayValue = selectedOption?.label ?? placeholder;
-  const canExpand = !disabled && options.length > 0;
-
-  useEffect(() => {
-    if (!expanded) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!fieldRef.current?.contains(event.target as Node)) {
-        setExpanded(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setExpanded(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [expanded]);
-
-  function handleSelect(nextValue: string) {
-    onChange(nextValue);
-    setExpanded(false);
-  }
+  const labelId = useId();
 
   return (
-    <div className="settings-select-field" ref={fieldRef}>
-      <button
-        className="settings-select-trigger"
-        type="button"
-        aria-labelledby={`${labelId} ${valueId}`}
-        aria-haspopup="listbox"
-        aria-expanded={expanded}
-        aria-controls={expanded ? panelId : undefined}
-        disabled={!canExpand}
-        onClick={() => setExpanded((current) => !current)}
-      >
-        <span className="settings-select-trigger-copy">
-          <span className="settings-select-trigger-label" id={labelId}>
-            {label}
-          </span>
-          <span className="settings-select-value-group">
-            <span
-              className={`settings-select-trigger-value${selectedOption ? "" : " is-placeholder"}`}
-              id={valueId}
-            >
-              {displayValue}
-            </span>
-            <span className="settings-select-chevron" aria-hidden="true">
-              <span className={expanded ? "is-active" : undefined}>⌃</span>
-              <span className={!expanded ? "is-active" : undefined}>⌄</span>
-            </span>
-          </span>
+    <label className="settings-select-field">
+      <span className="settings-select-trigger-copy">
+        <span className="settings-select-trigger-label" id={labelId}>
+          {label}
         </span>
-      </button>
-
-      {expanded ? (
-        <div
-          className="settings-select-panel"
-          id={panelId}
-          role="listbox"
-          aria-labelledby={labelId}
-        >
-          <button
-            className={`settings-select-option${value === "" ? " is-selected" : ""}`}
-            type="button"
-            role="option"
-            aria-selected={value === ""}
-            onClick={() => handleSelect("")}
+        <span className="settings-select-value-group">
+          <span
+            className={`settings-select-trigger-value${selectedOption ? "" : " is-placeholder"}`}
+            aria-hidden="true"
           >
-            <span className="settings-select-option-copy">
-              <strong>{placeholder}</strong>
-            </span>
-          </button>
-
-          {options.map((option) => (
-            <button
-              className={`settings-select-option${value === option.value ? " is-selected" : ""}`}
-              key={option.value}
-              type="button"
-              role="option"
-              aria-selected={value === option.value}
-              disabled={option.disabled}
-              onClick={() => handleSelect(option.value)}
-            >
-              <span className="settings-select-option-copy">
-                <strong>{option.label}</strong>
-                {option.description ? (
-                  <span className="meta-note">{option.description}</span>
-                ) : null}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-
+            {displayValue}
+          </span>
+          <span className="settings-select-chevron" aria-hidden="true">
+            <span>⌃</span>
+            <span>⌄</span>
+          </span>
+          <select
+            aria-labelledby={labelId}
+            className="settings-select-control"
+            value={value}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+          >
+            <option value="">{placeholder}</option>
+            {options.map((option) => (
+              <option
+                key={option.value}
+                value={option.value}
+                disabled={option.disabled}
+              >
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </span>
+      </span>
       {note ? <p className="meta-note">{note}</p> : null}
-    </div>
+    </label>
   );
 }
 

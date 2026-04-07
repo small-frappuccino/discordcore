@@ -3,7 +3,6 @@ import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
   EmptyState,
-  EntityPickerField,
   FlatPageLayout,
   SettingsSelectField,
   UnsavedChangesBar,
@@ -273,40 +272,48 @@ function ModerationWorkspacePanels({
   onSetFeatureEnabled,
 }: ModerationWorkspacePanelsProps) {
   return (
-    <div className="flat-config-stack moderation-flat-stack">
-      {automodFeature !== null ? (
-        <section className="flat-config-section moderation-flat-section moderation-service-panel">
-          <div className="moderation-setting-row">
-            <div className="card-copy moderation-section-copy">
-              <h2 className="moderation-section-title">Automod service</h2>
-            </div>
-            <ModerationSwitch
-              label="Automod service"
-              checked={automodFeature.effective_enabled}
-              disabled={mutation.saving || !canEditSelectedGuild}
-              onChange={(enabled) =>
-                void onSetFeatureEnabled(automodFeature, enabled)
-              }
-            />
+    <div className="flat-config-stack moderation-flat-stack moderation-group-stack">
+      {automodFeature !== null || muteRoleFeature !== null ? (
+        <section className="moderation-group-block">
+          <div className="moderation-settings-group">
+            {automodFeature !== null ? (
+              <div className="moderation-settings-item">
+                <div className="moderation-settings-subrow">
+                  <div className="moderation-setting-row">
+                    <div className="card-copy moderation-section-copy">
+                      <h2 className="moderation-section-title">Automod service</h2>
+                    </div>
+                    <ModerationSwitch
+                      label="Automod service"
+                      checked={automodFeature.effective_enabled}
+                      disabled={mutation.saving || !canEditSelectedGuild}
+                      onChange={(enabled) =>
+                        void onSetFeatureEnabled(automodFeature, enabled)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {muteRoleFeature !== null ? (
+              <MuteRoleSection
+                feature={muteRoleFeature}
+                canEditSelectedGuild={canEditSelectedGuild}
+                mutationSaving={mutation.saving}
+                pendingFeatureId={pendingFeatureId}
+                roleOptions={roleOptions}
+                muteRoleOptions={muteRoleOptions}
+                onClearNotice={mutation.clearNotice}
+                onSave={onSaveMuteRole}
+                onSetFeatureEnabled={onSetFeatureEnabled}
+              />
+            ) : null}
           </div>
         </section>
       ) : null}
 
-      {muteRoleFeature !== null ? (
-        <MuteRoleSection
-          feature={muteRoleFeature}
-          canEditSelectedGuild={canEditSelectedGuild}
-          mutationSaving={mutation.saving}
-          pendingFeatureId={pendingFeatureId}
-          roleOptions={roleOptions}
-          muteRoleOptions={muteRoleOptions}
-          onClearNotice={mutation.clearNotice}
-          onSave={onSaveMuteRole}
-          onSetFeatureEnabled={onSetFeatureEnabled}
-        />
-      ) : null}
-
-      <section className="flat-config-section moderation-flat-section moderation-log-panel">
+      <section className="moderation-group-block moderation-log-panel">
         <div className="card-copy moderation-section-copy">
           <h2 className="moderation-section-title">Moderation routes</h2>
         </div>
@@ -335,7 +342,7 @@ function ModerationWorkspacePanels({
             </div>
           </div>
         ) : (
-          <div className="flat-config-stack moderation-flat-stack moderation-routes-stack">
+          <div className="moderation-settings-group">
             {moderationLogFeatures.map((feature) => (
               <ModerationRouteSection
                 key={feature.id}
@@ -421,21 +428,23 @@ function MuteRoleSection({
   }
 
   return (
-    <section className="flat-config-section moderation-flat-section moderation-service-panel">
-      <div className="moderation-setting-row">
-        <div className="card-copy moderation-section-copy">
-          <h2 className="moderation-section-title">Mute</h2>
+    <div className="moderation-settings-item moderation-settings-item-stack">
+      <div className="moderation-settings-subrow">
+        <div className="moderation-setting-row">
+          <div className="card-copy moderation-section-copy">
+            <h2 className="moderation-section-title">Mute command</h2>
+          </div>
+          <ModerationSwitch
+            label="Mute command"
+            checked={muteEnabled}
+            disabled={mutationSaving || !canEditSelectedGuild}
+            onChange={handleMuteToggle}
+          />
         </div>
-        <ModerationSwitch
-          label="Mute"
-          checked={muteEnabled}
-          disabled={mutationSaving || !canEditSelectedGuild}
-          onChange={handleMuteToggle}
-        />
       </div>
 
       {muteEnabled ? (
-        <div className="moderation-mute-controls">
+        <div className="moderation-settings-subrow">
           <SettingsSelectField
             label="Mute role"
             value={roleDraft}
@@ -450,24 +459,30 @@ function MuteRoleSection({
                   : "No mute role"
             }
           />
+        </div>
+      ) : null}
 
-          {roleOptions.notice ? (
-            <ModerationInlineMessage
-              message={roleOptions.notice.message}
-              tone="error"
-              action={
-                <button
-                  className="button-secondary"
-                  type="button"
-                  disabled={roleOptions.loading}
-                  onClick={() => void roleOptions.refresh()}
-                >
-                  Retry role lookup
-                </button>
-              }
-            />
-          ) : null}
+      {muteEnabled && roleOptions.notice ? (
+        <div className="moderation-settings-subrow">
+          <ModerationInlineMessage
+            message={roleOptions.notice.message}
+            tone="error"
+            action={
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={roleOptions.loading}
+                onClick={() => void roleOptions.refresh()}
+              >
+                Retry role lookup
+              </button>
+            }
+          />
+        </div>
+      ) : null}
 
+      {muteEnabled && hasUnsavedChanges ? (
+        <div className="moderation-settings-subrow">
           <UnsavedChangesBar
             hasUnsavedChanges={hasUnsavedChanges}
             saveLabel={
@@ -482,7 +497,7 @@ function MuteRoleSection({
           />
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }
 
@@ -536,53 +551,63 @@ function ModerationRouteSection({
   }
 
   return (
-    <section className="flat-config-section moderation-flat-section moderation-route-section">
-      <div className="moderation-setting-row">
-        <div className="card-copy moderation-section-copy">
-          <h3 className="moderation-section-title moderation-route-title">
-            {feature.label}
-          </h3>
+    <div className="moderation-settings-item moderation-settings-item-stack moderation-route-section">
+      <div className="moderation-settings-subrow">
+        <div className="moderation-setting-row">
+          <div className="card-copy moderation-section-copy">
+            <h3 className="moderation-section-title moderation-route-title">
+              {feature.label}
+            </h3>
+          </div>
+          <ModerationSwitch
+            label={feature.label}
+            checked={feature.effective_enabled}
+            disabled={mutationSaving || !canEditSelectedGuild}
+            onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
+          />
         </div>
-        <ModerationSwitch
-          label={feature.label}
-          checked={feature.effective_enabled}
-          disabled={mutationSaving || !canEditSelectedGuild}
-          onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
+      </div>
+
+      <div className="moderation-settings-subrow">
+        <SettingsSelectField
+          label="Channel"
+          value={channelDraft}
+          disabled={!canEditDestination || channelOptions.loading}
+          onChange={setChannelDraft}
+          options={messageRouteChannelOptions}
+          placeholder={
+            channelOptions.loading
+              ? "Loading channels..."
+              : messageRouteChannelOptions.length === 0
+                ? "No channels available"
+                : "No channel"
+          }
         />
       </div>
 
-      <EntityPickerField
-        label="Channel"
-        value={channelDraft}
-        disabled={!canEditDestination || channelOptions.loading}
-        onChange={setChannelDraft}
-        options={messageRouteChannelOptions}
-        placeholder={
-          channelOptions.loading
-            ? "Loading channels..."
-            : messageRouteChannelOptions.length === 0
-              ? "No channels available"
-              : "No channel"
-        }
-      />
-
       {routeMessage ? (
-        <ModerationInlineMessage message={routeMessage} tone="error" />
+        <div className="moderation-settings-subrow">
+          <ModerationInlineMessage message={routeMessage} tone="error" />
+        </div>
       ) : null}
 
-      <UnsavedChangesBar
-        hasUnsavedChanges={hasUnsavedChanges}
-        saveLabel={
-          mutationSaving && pendingFeatureId === feature.id
-            ? "Saving..."
-            : "Save changes"
-        }
-        saving={mutationSaving && pendingFeatureId === feature.id}
-        disabled={!canEditDestination || channelOptions.loading}
-        onReset={handleReset}
-        onSave={() => onSave(feature, channelDraft)}
-      />
-    </section>
+      {hasUnsavedChanges ? (
+        <div className="moderation-settings-subrow">
+          <UnsavedChangesBar
+            hasUnsavedChanges={hasUnsavedChanges}
+            saveLabel={
+              mutationSaving && pendingFeatureId === feature.id
+                ? "Saving..."
+                : "Save changes"
+            }
+            saving={mutationSaving && pendingFeatureId === feature.id}
+            disabled={!canEditDestination || channelOptions.loading}
+            onReset={handleReset}
+            onSave={() => onSave(feature, channelDraft)}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 

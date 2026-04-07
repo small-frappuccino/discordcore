@@ -200,6 +200,31 @@ Examples:
 - bad: `Mute role` + badge + `Current signal` + `Applied from` + long section description + extra reset-to-default metadata
 - bad: `Route destination` + select + paragraph explaining that the visible select controls the destination
 
+### 3.4 Grouped settings surfaces
+
+When multiple adjacent settings belong to the same workflow, render them inside one subtle grouped surface instead of leaving them as unrelated flat rows.
+
+Preferred grouping:
+
+- one grouped surface per cohesive settings cluster
+- internal dividers between direct settings rows inside that group
+- whitespace between separate groups, not a full-width divider line between them
+- expanded child controls stay inside the same parent setting block
+
+Rules:
+
+- group settings when they share one user task, one feature family, or one immediate decision path
+- use a grouped surface when two or more settings should be scanned together before the user acts
+- keep group rows compact: `label -> value/control`
+- if a setting expands, the expanded row stays inside the same grouped item and inherits the same divider rhythm
+- do not wrap every single isolated control in its own decorative box if the surrounding surface already provides enough boundary
+
+Exceptions:
+
+- a single standalone control may stay ungrouped when it has no natural sibling settings nearby
+- empty states, lookup failures affecting the entire section, and diagnostic affordances may sit outside the grouped surface when they are not themselves a setting row
+- drawers, modal pickers, and other bounded selector panels can create their own surface because they are separate workflows
+
 ---
 
 ## 4. Source of truth and reuse

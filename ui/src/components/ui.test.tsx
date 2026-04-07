@@ -238,26 +238,27 @@ describe("EntityMultiPickerField", () => {
 });
 
 describe("SettingsSelectField", () => {
-  it("shows the current selection inline and expands a list when opened", async () => {
+  it("keeps the native select behavior while rendering inline row copy", async () => {
     const user = userEvent.setup();
 
     render(<SettingsSelectFieldHarness />);
 
-    const trigger = screen.getByRole("button", { name: /mute role/i });
-    expect(trigger).toHaveTextContent("No mute role");
-    expect(screen.queryByRole("option", { name: "Muted" })).not.toBeInTheDocument();
+    const select = screen.getByLabelText("Mute role");
+    expect(select).toHaveValue("");
+    expect(
+      screen.getByText("No mute role", {
+        selector: ".settings-select-trigger-value",
+      }),
+    ).toBeInTheDocument();
 
-    await user.click(trigger);
+    await user.selectOptions(select, "muted");
 
-    expect(screen.getByRole("option", { name: "Muted" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Muted alt" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("option", { name: "Muted" }));
-
-    expect(screen.getByRole("button", { name: /mute role/i })).toHaveTextContent(
-      "Muted",
-    );
-    expect(screen.queryByRole("option", { name: "Muted" })).not.toBeInTheDocument();
+    expect(select).toHaveValue("muted");
+    expect(
+      screen.getByText("Muted", {
+        selector: ".settings-select-trigger-value",
+      }),
+    ).toBeInTheDocument();
   });
 });
 

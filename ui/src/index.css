@@ -1782,6 +1782,10 @@ textarea:focus {
   gap: 0;
 }
 
+.moderation-group-stack {
+  gap: var(--space-5);
+}
+
 .moderation-page-intro {
   display: grid;
   gap: var(--space-3);
@@ -1816,7 +1820,8 @@ textarea:focus {
 
 .moderation-service-panel,
 .moderation-log-panel,
-.moderation-drawer {
+.moderation-drawer,
+.moderation-group-block {
   display: grid;
   gap: var(--space-4);
 }
@@ -1831,6 +1836,32 @@ textarea:focus {
 .moderation-flat-stack > .moderation-flat-section:first-child {
   padding-top: 0;
   border-top: 0;
+}
+
+.moderation-settings-group {
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 86%, white 6%);
+  background: color-mix(in srgb, var(--bg-surface-elevated) 92%, white 2%);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.moderation-settings-item {
+  display: grid;
+}
+
+.moderation-settings-group > .moderation-settings-item + .moderation-settings-item {
+  border-top: 1px solid color-mix(in srgb, var(--border-soft) 82%, white 4%);
+}
+
+.moderation-settings-item-stack > .moderation-settings-subrow + .moderation-settings-subrow {
+  border-top: 1px solid color-mix(in srgb, var(--border-soft) 82%, white 4%);
+}
+
+.moderation-settings-subrow {
+  padding: 18px 20px;
 }
 
 .moderation-section-copy {
@@ -1855,15 +1886,6 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-}
-
-.moderation-routes-stack {
-  gap: 0;
-}
-
-.moderation-mute-controls {
-  display: grid;
-  gap: var(--space-3);
 }
 
 .moderation-title-row {
@@ -2081,20 +2103,8 @@ textarea:focus {
 }
 
 .settings-select-field {
-  position: relative;
   display: grid;
-  gap: var(--space-2);
-}
-
-.settings-select-trigger {
-  width: 100%;
-  min-height: 48px;
-  padding: 0 16px;
-  border-radius: 16px;
-  border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--bg-input) 90%, white 3%);
-  color: var(--text-main);
-  text-align: left;
+  gap: var(--space-3);
 }
 
 .settings-select-trigger-copy {
@@ -2120,6 +2130,8 @@ textarea:focus {
   gap: 10px;
   min-width: 0;
   justify-self: end;
+  position: relative;
+  max-width: min(320px, 100%);
 }
 
 .settings-select-trigger-value {
@@ -2145,63 +2157,38 @@ textarea:focus {
   color: var(--text-disabled);
   font-size: 9px;
   line-height: 0.75;
+  pointer-events: none;
 }
 
-.settings-select-chevron .is-active {
-  color: var(--text-muted);
+.settings-select-trigger-value,
+.settings-select-trigger-label {
+  pointer-events: none;
 }
 
-.settings-select-panel {
+.settings-select-control {
   position: absolute;
-  top: calc(100% + var(--space-2));
-  left: 0;
-  right: 0;
-  z-index: 12;
-  display: grid;
-  gap: 4px;
-  padding: 6px;
-  border-radius: 18px;
-  border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--bg-surface-elevated) 92%, black 8%);
-  box-shadow: var(--shadow-2);
-}
-
-.settings-select-option {
+  inset: 0;
   width: 100%;
   min-height: 0;
-  justify-content: flex-start;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border-color: transparent;
+  border: 0;
   background: transparent;
-  text-align: left;
+  color: transparent;
+  opacity: 0;
+  cursor: pointer;
+  appearance: auto;
+  -webkit-appearance: menulist;
+  box-shadow: none;
 }
 
-.settings-select-option:hover:not(:disabled),
-.settings-select-option:focus-visible {
-  background: var(--bg-surface-subtle);
+.settings-select-control:focus {
   border-color: transparent;
+  box-shadow: none;
 }
 
-.settings-select-option.is-selected {
-  background: color-mix(in srgb, var(--bg-accent) 14%, var(--bg-input) 86%);
-  border-color: color-mix(in srgb, var(--bg-accent) 22%, transparent);
-}
-
-.settings-select-option-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.settings-select-option-copy strong {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-}
-
-.settings-select-option-copy .meta-note {
-  margin: 0;
+.settings-select-field:focus-within .settings-select-value-group {
+  outline: 2px solid rgba(215, 161, 132, 0.32);
+  outline-offset: 4px;
+  border-radius: 999px;
 }
 
 .entity-multi-picker-panel {
