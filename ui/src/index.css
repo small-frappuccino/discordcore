@@ -1840,27 +1840,38 @@ textarea:focus {
 
 .moderation-settings-group {
   overflow: hidden;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--border-soft) 86%, white 6%);
-  background: color-mix(in srgb, var(--bg-surface-elevated) 92%, white 2%);
-  box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-surface) 94%, white 1%);
 }
 
 .moderation-settings-item {
   display: grid;
+  position: relative;
 }
 
-.moderation-settings-group > .moderation-settings-item + .moderation-settings-item {
-  border-top: 1px solid color-mix(in srgb, var(--border-soft) 82%, white 4%);
+.moderation-settings-group > .moderation-settings-item + .moderation-settings-item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: color-mix(in srgb, var(--border-soft) 66%, transparent);
 }
 
-.moderation-settings-item-stack > .moderation-settings-subrow + .moderation-settings-subrow {
-  border-top: 1px solid color-mix(in srgb, var(--border-soft) 82%, white 4%);
+.moderation-settings-item-stack > .moderation-settings-subrow + .moderation-settings-subrow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: color-mix(in srgb, var(--border-soft) 66%, transparent);
 }
 
 .moderation-settings-subrow {
+  position: relative;
   padding: 18px 20px;
 }
 
@@ -1870,6 +1881,15 @@ textarea:focus {
 
 .moderation-section-title {
   margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.moderation-group-heading {
+  margin: 0;
   font-family: var(--font-display);
   font-size: 1.05rem;
   line-height: 1.25;
@@ -1878,7 +1898,7 @@ textarea:focus {
 }
 
 .moderation-route-title {
-  font-size: 1rem;
+  font-size: 14px;
 }
 
 .moderation-setting-row {
@@ -2104,7 +2124,7 @@ textarea:focus {
 
 .settings-select-field {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .settings-select-trigger-copy {
@@ -2118,7 +2138,7 @@ textarea:focus {
 
 .settings-select-trigger-label {
   min-width: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 20px;
   font-weight: 500;
   color: var(--text-main);
@@ -2127,11 +2147,17 @@ textarea:focus {
 .settings-select-value-group {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   min-width: 0;
   justify-self: end;
   position: relative;
+  min-height: 36px;
+  min-width: min(240px, 100%);
   max-width: min(320px, 100%);
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
 }
 
 .settings-select-trigger-value {
@@ -2139,15 +2165,15 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-muted);
-  font-size: 15px;
+  color: var(--text-dim);
+  font-size: 14px;
   line-height: 20px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .settings-select-trigger-value.is-placeholder {
   color: var(--text-disabled);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .settings-select-chevron {
@@ -2186,9 +2212,8 @@ textarea:focus {
 }
 
 .settings-select-field:focus-within .settings-select-value-group {
-  outline: 2px solid rgba(215, 161, 132, 0.32);
-  outline-offset: 4px;
-  border-radius: 999px;
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 3px rgba(215, 161, 132, 0.12);
 }
 
 .entity-multi-picker-panel {

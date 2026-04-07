@@ -315,7 +315,7 @@ function ModerationWorkspacePanels({
 
       <section className="moderation-group-block moderation-log-panel">
         <div className="card-copy moderation-section-copy">
-          <h2 className="moderation-section-title">Moderation routes</h2>
+          <h2 className="moderation-group-heading">Moderation routes</h2>
         </div>
 
         {channelOptions.notice ? (
