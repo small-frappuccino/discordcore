@@ -163,6 +163,7 @@ interface SettingsSelectFieldProps {
   options: EntityPickerOption[];
   placeholder: string;
   note?: ReactNode;
+  labelClassName?: string;
   disabled?: boolean;
 }
 
@@ -492,6 +493,7 @@ export function SettingsSelectField({
   options,
   placeholder,
   note,
+  labelClassName,
   disabled = false,
 }: SettingsSelectFieldProps) {
   const selectedOption = options.find((option) => option.value === value) ?? null;
@@ -501,7 +503,10 @@ export function SettingsSelectField({
   return (
     <label className="settings-select-field">
       <span className="settings-select-trigger-copy">
-        <span className="settings-select-trigger-label" id={labelId}>
+        <span
+          className={joinClassNames("settings-select-trigger-label", labelClassName)}
+          id={labelId}
+        >
           {label}
         </span>
         <span className="settings-select-value-group">

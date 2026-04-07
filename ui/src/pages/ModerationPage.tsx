@@ -281,7 +281,9 @@ function ModerationWorkspacePanels({
                 <div className="moderation-settings-subrow">
                   <div className="moderation-setting-row">
                     <div className="card-copy moderation-section-copy">
-                      <h2 className="moderation-section-title">Automod service</h2>
+                      <ModerationGroupLabel as="h2">
+                        Automod service
+                      </ModerationGroupLabel>
                     </div>
                     <ModerationSwitch
                       label="Automod service"
@@ -432,7 +434,7 @@ function MuteRoleSection({
       <div className="moderation-settings-subrow">
         <div className="moderation-setting-row">
           <div className="card-copy moderation-section-copy">
-            <h2 className="moderation-section-title">Mute command</h2>
+            <ModerationGroupLabel as="h2">Mute command</ModerationGroupLabel>
           </div>
           <ModerationSwitch
             label="Mute command"
@@ -447,6 +449,7 @@ function MuteRoleSection({
         <div className="moderation-settings-subrow">
           <SettingsSelectField
             label="Mute role"
+            labelClassName="moderation-group-label"
             value={roleDraft}
             disabled={!canEditRole || roleOptions.loading}
             onChange={setRoleDraft}
@@ -555,9 +558,9 @@ function ModerationRouteSection({
       <div className="moderation-settings-subrow">
         <div className="moderation-setting-row">
           <div className="card-copy moderation-section-copy">
-            <h3 className="moderation-section-title moderation-route-title">
+            <ModerationGroupLabel as="h3">
               {feature.label}
-            </h3>
+            </ModerationGroupLabel>
           </div>
           <ModerationSwitch
             label={feature.label}
@@ -571,6 +574,7 @@ function ModerationRouteSection({
       <div className="moderation-settings-subrow">
         <SettingsSelectField
           label="Channel"
+          labelClassName="moderation-group-label"
           value={channelDraft}
           disabled={!canEditDestination || channelOptions.loading}
           onChange={setChannelDraft}
@@ -609,6 +613,18 @@ function ModerationRouteSection({
       ) : null}
     </div>
   );
+}
+
+interface ModerationGroupLabelProps {
+  as?: "h2" | "h3" | "span";
+  children: ReactNode;
+}
+
+function ModerationGroupLabel({
+  as: Component = "span",
+  children,
+}: ModerationGroupLabelProps) {
+  return <Component className="moderation-group-label">{children}</Component>;
 }
 
 interface ModerationInlineMessageProps {

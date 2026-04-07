@@ -1880,11 +1880,11 @@ textarea:focus {
   min-width: 0;
 }
 
-.moderation-section-title {
+.moderation-group-label {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 400;
   color: var(--text-main);
 }
@@ -1896,10 +1896,6 @@ textarea:focus {
   line-height: 1.25;
   font-weight: 500;
   color: var(--text-main);
-}
-
-.moderation-route-title {
-  font-size: 13px;
 }
 
 .moderation-setting-row {
@@ -2142,9 +2138,9 @@ textarea:focus {
 
 .settings-select-trigger-label {
   min-width: 0;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 400;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
   color: var(--text-main);
 }
 
@@ -2170,8 +2166,8 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-dim);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 400;
 }
 
