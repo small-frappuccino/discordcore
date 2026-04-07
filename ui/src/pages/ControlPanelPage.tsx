@@ -18,7 +18,6 @@ export function ControlPanelPage() {
     authState,
     beginLogin,
     canEditSelectedGuild,
-    currentOriginLabel,
     selectedGuild,
     selectedGuildID,
     selectedGuildAccessLevel,
@@ -42,7 +41,6 @@ export function ControlPanelPage() {
     dashboardWriteRoleIds: rolesSettings.roles.dashboardWriteRoleIds,
   });
 
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const controlsDisabled =
     authState !== "signed_in" ||
     selectedGuild === null ||
@@ -229,12 +227,6 @@ export function ControlPanelPage() {
         eyebrow="Core"
         title="Control Panel"
         description="Configure which roles can read or write the dashboard for the selected server."
-        meta={
-          <>
-            <span className="meta-note">Server: {selectedServerLabel}</span>
-            <span className="meta-note">Origin: {currentOriginLabel}</span>
-          </>
-        }
       />
 
       <DashboardPageSurface

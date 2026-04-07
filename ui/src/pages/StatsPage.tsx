@@ -26,7 +26,6 @@ import {
 import {
   canEditStatsSettings,
   formatStatsChannelAudience,
-  formatStatsChannelCountValue,
   formatStatsChannelLabel,
   formatStatsChannelTemplate,
   formatStatsChannelValue,
@@ -46,8 +45,6 @@ export function StatsPage() {
     authState,
     beginLogin,
     canEditSelectedGuild,
-    currentOriginLabel,
-    selectedGuild,
   } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
@@ -66,18 +63,11 @@ export function StatsPage() {
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "stats");
   const areaSummary = summarizeFeatureArea(areaFeatures);
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const workspaceNotice = mutation.notice ?? workspace.notice;
   const statsFeature =
     areaFeatures.find((feature) => feature.id === "stats_channels") ?? null;
   const statsDetails =
     statsFeature === null ? null : getStatsFeatureDetails(statsFeature);
-  const localOverrides = areaFeatures.filter(
-    (feature) => feature.override_state !== "inherit",
-  ).length;
-  const enabledModules = areaFeatures.filter(
-    (feature) => feature.effective_enabled,
-  ).length;
 
   async function handleRefreshStats() {
     await Promise.all([workspace.refresh(), channelOptions.refresh()]);
@@ -303,12 +293,6 @@ export function StatsPage() {
               : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
           </StatusBadge>
         }
-        meta={
-          <>
-            <span className="meta-note">Server: {selectedServerLabel}</span>
-            <span className="meta-note">Origin: {currentOriginLabel}</span>
-          </>
-        }
         actions={renderHeaderActions()}
       />
 
@@ -335,36 +319,11 @@ export function StatsPage() {
                 }
                 tone={statsDetails.configEnabled ? "info" : "neutral"}
               />
-              <MetricCard
-                label="Stats channels"
-                value={formatStatsChannelCountValue(
-                  statsDetails.configuredChannelCount,
-                )}
-                description="Configured channels currently reviewed in this workspace."
-                tone={
-                  statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
-                }
-              />
-              <MetricCard
-                label="Overrides"
-                value={String(localOverrides)}
-                description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
-              />
             </section>
           ) : null
         }
         workspaceTitle="Stats configuration"
         workspaceDescription="Keep the schedule controls and current inventory visible in the main workspace instead of editing the stats schedule in a separate drawer."
-        workspaceMeta={
-          workspace.workspaceState === "ready" ? (
-            <>
-              <span className="meta-note">{localOverrides} local overrides</span>
-              <span className="meta-note">
-                {enabledModules}/{areaFeatures.length} enabled
-              </span>
-            </>
-          ) : null
-        }
       >
         {renderPageState()}
       </FlatPageLayout>
@@ -442,22 +401,10 @@ function StatsScheduleSection({
             adjust the interval without leaving the main page.
           </p>
         </div>
-
-        <div className="flat-config-status">
-          <span className="meta-note">
-            {feature.override_state === "inherit"
-              ? "Using default"
-              : "Configured here"}
-          </span>
-        </div>
       </div>
 
       <KeyValueList
         items={[
-          {
-            label: "Module state",
-            value: feature.effective_enabled ? "On" : "Off",
-          },
           {
             label: "Update rule",
             value: formatStatsConfigValue(details.configEnabled),
@@ -465,10 +412,6 @@ function StatsScheduleSection({
           {
             label: "Update interval",
             value: formatStatsIntervalValue(details.updateIntervalMins),
-          },
-          {
-            label: "Configured channels",
-            value: formatStatsChannelCountValue(details.configuredChannelCount),
           },
           {
             label: "Current signal",

@@ -59,8 +59,6 @@ export function ModerationPage() {
     authState,
     beginLogin,
     canEditSelectedGuild,
-    currentOriginLabel,
-    selectedGuild,
   } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
@@ -76,15 +74,11 @@ export function ModerationPage() {
   const areaFeatures = getFeatureAreaRecords(workspace.features, "moderation");
   const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const automodFeature =
     areaFeatures.find((feature) => feature.id === "services.automod") ?? null;
   const muteRoleFeature =
     areaFeatures.find((feature) => feature.id === "moderation.mute_role") ?? null;
   const moderationLogFeatures = getModerationLogFeatures(areaFeatures);
-  const configuredModerationRoutes = moderationLogFeatures.filter(
-    (feature) => getLoggingFeatureDetails(feature).channelId !== "",
-  ).length;
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
@@ -98,10 +92,6 @@ export function ModerationPage() {
       })),
     [roleOptions.roles],
   );
-  const localOverrides = areaFeatures.filter(
-    (feature) => feature.override_state !== "inherit",
-  ).length;
-
   if (definition === null) {
     return null;
   }
@@ -235,7 +225,6 @@ export function ModerationPage() {
         automodFeature={automodFeature}
         muteRoleFeature={muteRoleFeature}
         moderationLogFeatures={moderationLogFeatures}
-        configuredModerationRoutes={configuredModerationRoutes}
         canEditSelectedGuild={canEditSelectedGuild}
         channelOptions={channelOptions}
         roleOptions={roleOptions}
@@ -258,16 +247,6 @@ export function ModerationPage() {
         workspaceEyebrow={null}
         workspaceTitle={null}
         workspaceDescription={null}
-        workspaceMeta={
-          workspace.workspaceState === "ready" ? (
-            <>
-              <span className="meta-note">{localOverrides} local overrides</span>
-              <span className="meta-note">
-                {configuredModerationRoutes}/{moderationLogFeatures.length} routes configured
-              </span>
-            </>
-          ) : null
-        }
       >
         <div className="moderation-page-intro">
           <div className="card-copy">
@@ -283,10 +262,6 @@ export function ModerationPage() {
                   : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
               </StatusBadge>
             </div>
-            <p className="moderation-context-row">
-              <span>Server: {selectedServerLabel}</span>
-              <span>Origin: {currentOriginLabel}</span>
-            </p>
           </div>
         </div>
 
@@ -300,7 +275,6 @@ interface ModerationWorkspacePanelsProps {
   automodFeature: FeatureRecord | null;
   muteRoleFeature: FeatureRecord | null;
   moderationLogFeatures: FeatureRecord[];
-  configuredModerationRoutes: number;
   canEditSelectedGuild: boolean;
   channelOptions: ReturnType<typeof useGuildChannelOptions>;
   roleOptions: ReturnType<typeof useGuildRoleOptions>;
@@ -332,7 +306,6 @@ function ModerationWorkspacePanels({
   automodFeature,
   muteRoleFeature,
   moderationLogFeatures,
-  configuredModerationRoutes,
   canEditSelectedGuild,
   channelOptions,
   roleOptions,
@@ -345,6 +318,14 @@ function ModerationWorkspacePanels({
   onSetFeatureEnabled,
   onUseDefault,
 }: ModerationWorkspacePanelsProps) {
+  const hasConfiguredModerationRoute = moderationLogFeatures.some((feature) => {
+    const details = getLoggingFeatureDetails(feature);
+    return details.channelId !== "" || !details.requiresChannel;
+  });
+  const hasModerationRouteBlocker = moderationLogFeatures.some(
+    (feature) => feature.readiness === "blocked",
+  );
+
   return (
     <div className="flat-config-stack moderation-flat-stack">
       {automodFeature !== null ? (
@@ -358,19 +339,11 @@ function ModerationWorkspacePanels({
                   {formatFeatureStatusLabel(automodFeature)}
                 </StatusBadge>
               </div>
-              <p className="section-description">
-                Keep the service toggle visible here and use the moderation routes
-                below for destination-specific configuration.
-              </p>
-            </div>
-
-            <div className="flat-config-status">
-              <span className="meta-note">
-                {automodFeature.override_state === "inherit"
-                  ? "Using default"
-                  : "Configured here"}
-              </span>
-            </div>
+            <p className="section-description">
+              Keep the service toggle visible here and use the moderation routes
+              below for destination-specific configuration.
+            </p>
+          </div>
           </div>
 
           <KeyValueList
@@ -441,20 +414,20 @@ function ModerationWorkspacePanels({
               <h2>Route destinations</h2>
               <StatusBadge
                 tone={
-                  moderationLogFeatures.some(
-                    (feature) => feature.readiness === "blocked",
-                  )
+                  hasModerationRouteBlocker
                     ? "error"
-                    : moderationLogFeatures.some(
-                          (feature) => feature.effective_enabled,
-                        )
+                    : hasConfiguredModerationRoute
                       ? "success"
                       : "neutral"
                 }
               >
                 {moderationLogFeatures.length === 0
                   ? "Not mapped"
-                  : `${configuredModerationRoutes}/${moderationLogFeatures.length} configured`}
+                  : hasModerationRouteBlocker
+                    ? "Needs attention"
+                    : hasConfiguredModerationRoute
+                      ? "Ready"
+                      : "Needs setup"}
               </StatusBadge>
             </div>
             <p className="section-description">
@@ -569,14 +542,6 @@ function MuteRoleSection({
             flow does not depend on a separate editor panel.
           </p>
         </div>
-
-        <div className="flat-config-status">
-          <span className="meta-note">
-            {feature.override_state === "inherit"
-              ? "Using default"
-              : "Configured here"}
-          </span>
-        </div>
       </div>
 
       <MuteRoleDrawerBody
@@ -687,10 +652,6 @@ function ModerationRouteSection({
             </StatusBadge>
           </div>
           <p className="section-description">{feature.description}</p>
-        </div>
-
-        <div className="flat-config-status">
-          <span className="meta-note">{formatOverrideLabel(feature.override_state)}</span>
         </div>
       </div>
 

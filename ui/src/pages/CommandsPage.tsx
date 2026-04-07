@@ -57,8 +57,6 @@ export function CommandsPage() {
     authState,
     beginLogin,
     canEditSelectedGuild,
-    currentOriginLabel,
-    selectedGuild,
   } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
@@ -73,18 +71,11 @@ export function CommandsPage() {
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "commands");
   const areaSummary = summarizeFeatureArea(areaFeatures);
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const workspaceNotice = mutation.notice ?? workspace.notice;
   const commandsFeature =
     areaFeatures.find((feature) => feature.id === "services.commands") ?? null;
   const adminCommandsFeature =
     areaFeatures.find((feature) => feature.id === "services.admin_commands") ?? null;
-  const localOverrides = areaFeatures.filter(
-    (feature) => feature.override_state !== "inherit",
-  ).length;
-  const enabledModules = areaFeatures.filter(
-    (feature) => feature.effective_enabled,
-  ).length;
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
@@ -291,12 +282,6 @@ export function CommandsPage() {
               : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
           </StatusBadge>
         }
-        meta={
-          <>
-            <span className="meta-note">Server: {selectedServerLabel}</span>
-            <span className="meta-note">Origin: {currentOriginLabel}</span>
-          </>
-        }
         actions={renderHeaderActions()}
       />
 
@@ -328,29 +313,11 @@ export function CommandsPage() {
                   {formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
                 </p>
               </div>
-
-              <div className="commands-context-item">
-                <p className="section-label">Overrides</p>
-                <strong>{localOverrides}</strong>
-                <p className="meta-note">
-                  {enabledModules}/{areaFeatures.length} modules enabled for this server.
-                </p>
-              </div>
             </section>
           ) : null
         }
         workspaceTitle="Command controls"
         workspaceDescription="Keep routing and privileged access visible in the main workspace instead of moving the primary command setup into a drawer."
-        workspaceMeta={
-          workspace.workspaceState === "ready" ? (
-            <>
-              <span className="meta-note">{localOverrides} local overrides</span>
-              <span className="meta-note">
-                {enabledModules}/{areaFeatures.length} enabled
-              </span>
-            </>
-          ) : null
-        }
       >
         {renderPageState()}
       </FlatPageLayout>
@@ -422,22 +389,10 @@ function CommandChannelSection({
             the main workspace.
           </p>
         </div>
-
-        <div className="flat-config-status">
-          <span className="meta-note">
-            {feature.override_state === "inherit"
-              ? "Using default"
-              : "Configured here"}
-          </span>
-        </div>
       </div>
 
       <KeyValueList
         items={[
-          {
-            label: "Module state",
-            value: feature.effective_enabled ? "Enabled" : "Disabled",
-          },
           {
             label: "Command channel",
             value: formatGuildChannelValue(
@@ -603,22 +558,10 @@ function AdminCommandAccessSection({
             selection in a separate editor.
           </p>
         </div>
-
-        <div className="flat-config-status">
-          <span className="meta-note">
-            {feature.override_state === "inherit"
-              ? "Using default"
-              : "Configured here"}
-          </span>
-        </div>
       </div>
 
       <KeyValueList
         items={[
-          {
-            label: "Module state",
-            value: feature.effective_enabled ? "Enabled" : "Disabled",
-          },
           {
             label: "Allowed roles",
             value: formatAllowedRolesValue(feature, roleOptions),

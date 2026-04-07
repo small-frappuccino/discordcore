@@ -32,7 +32,6 @@ import {
   canEditPermissionMirror,
   canEditPresenceWatchBot,
   canEditPresenceWatchUser,
-  countEnabledFeatures,
   formatMemberOptionLabel,
   formatMemberValue,
   formatRequirementRolesValue,
@@ -65,8 +64,6 @@ export function RolesPage() {
     authState,
     beginLogin,
     canEditSelectedGuild,
-    currentOriginLabel,
-    selectedGuild,
   } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
@@ -88,7 +85,6 @@ export function RolesPage() {
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "roles");
   const areaSummary = summarizeFeatureArea(areaFeatures);
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const workspaceNotice = mutation.notice ?? workspace.notice;
   const autoRoleFeature =
     areaFeatures.find((feature) => feature.id === "auto_role_assignment") ?? null;
@@ -105,10 +101,6 @@ export function RolesPage() {
   const advancedFeatures = areaFeatures.filter(
     (feature) => feature.id !== "auto_role_assignment",
   );
-  const advancedEnabledCount = countEnabledFeatures(advancedFeatures);
-  const localOverrides = areaFeatures.filter(
-    (feature) => feature.override_state !== "inherit",
-  ).length;
   const firstBlockedFeature =
     areaFeatures.find((feature) => feature.readiness === "blocked") ?? null;
   const rolePickerUnavailable =
@@ -393,12 +385,6 @@ export function RolesPage() {
               : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
           </StatusBadge>
         }
-        meta={
-          <>
-            <span className="meta-note">Server: {selectedServerLabel}</span>
-            <span className="meta-note">Origin: {currentOriginLabel}</span>
-          </>
-        }
         actions={headerActions}
       />
 
@@ -432,27 +418,11 @@ export function RolesPage() {
                   autoRoleDetails.requiredRoleCount === 2 ? "success" : "neutral"
                 }
               />
-              <MetricCard
-                label="Advanced controls"
-                value={`${advancedEnabledCount}/${advancedFeatures.length}`}
-                description="Presence watching and permission mirror controls kept visible in this workspace."
-                tone={advancedEnabledCount > 0 ? "info" : "neutral"}
-              />
             </section>
           ) : null
         }
         workspaceTitle="Manage roles"
         workspaceDescription="Keep auto role assignment, presence watching, and the permission mirror in one flat workspace so the main role controls stay visible while you edit them."
-        workspaceMeta={
-          workspace.workspaceState === "ready" ? (
-            <>
-              <span className="meta-note">{localOverrides} local overrides</span>
-              <span className="meta-note">
-                {advancedEnabledCount} advanced controls active
-              </span>
-            </>
-          ) : null
-        }
       >
         <RolesWorkspaceContent
           areaLabel={areaLabel}
@@ -807,10 +777,6 @@ function RolesPrimaryWorkflow({
             requirements that gate the assignment flow without leaving this page.
           </p>
         </div>
-
-        <div className="flat-config-status">
-          <span className="meta-note">{summarizeAutoRoleSignal(autoRoleFeature)}</span>
-        </div>
       </div>
 
       <AutoRoleDrawerBody
@@ -956,14 +922,8 @@ function RolesAdvancedControls({
                       {formatFeatureStatusLabel(feature)}
                     </StatusBadge>
                   </div>
-                  <p className="section-description">{feature.description}</p>
-                </div>
-
-                <div className="flat-config-status">
-                  <span className="meta-note">
-                    {summarizeAdvancedRoleSignal(feature)}
-                  </span>
-                </div>
+                <p className="section-description">{feature.description}</p>
+              </div>
               </div>
 
               <PresenceWatchBotDrawerBody
@@ -1030,14 +990,8 @@ function RolesAdvancedControls({
                       {formatFeatureStatusLabel(feature)}
                     </StatusBadge>
                   </div>
-                  <p className="section-description">{feature.description}</p>
-                </div>
-
-                <div className="flat-config-status">
-                  <span className="meta-note">
-                    {summarizeAdvancedRoleSignal(feature)}
-                  </span>
-                </div>
+                <p className="section-description">{feature.description}</p>
+              </div>
               </div>
 
               <PresenceWatchUserDrawerBody
@@ -1114,12 +1068,6 @@ function RolesAdvancedControls({
                   </StatusBadge>
                 </div>
                 <p className="section-description">{feature.description}</p>
-              </div>
-
-              <div className="flat-config-status">
-                <span className="meta-note">
-                  {summarizeAdvancedRoleSignal(feature)}
-                </span>
               </div>
             </div>
 

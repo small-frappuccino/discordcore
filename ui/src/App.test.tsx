@@ -37,6 +37,23 @@ async function selectServerOption(name: string) {
   );
 }
 
+function expectStandardDashboardBlacklistAbsent() {
+  expect(screen.queryByText("Configured here")).not.toBeInTheDocument();
+  expect(screen.queryByText("Using default")).not.toBeInTheDocument();
+  expect(screen.queryByText("Enabled for this server")).not.toBeInTheDocument();
+  expect(screen.queryByText(/^Applied from$/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/^Override$/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/local overrides/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/routes configured/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Server:/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Origin:/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Command channel ID fallback")).not.toBeInTheDocument();
+  expect(
+    screen.queryByLabelText("Destination channel ID fallback"),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Mute role ID fallback")).not.toBeInTheDocument();
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -2214,7 +2231,7 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps command setup inline with pickers first and raw IDs behind Advanced", async () => {
+  it("keeps command setup inline without exposing raw ID fallbacks in standard mode", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.coreCommands);
@@ -2223,17 +2240,8 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
     expect(screen.getByLabelText("Command channel")).toBeVisible();
-    const advancedDetails = screen
-      .getByText("Advanced", { selector: "summary" })
-      .closest("details");
-    expect(advancedDetails).not.toBeNull();
-    expect(advancedDetails).not.toHaveAttribute("open");
-
-    await userEvent.click(
-      screen.getByText("Advanced", { selector: "summary" }),
-    );
-    expect(advancedDetails).toHaveAttribute("open");
-    expect(screen.getByLabelText("Command channel ID fallback")).toBeVisible();
+    expect(screen.queryByText("Advanced", { selector: "summary" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Command channel ID fallback")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -2478,13 +2486,37 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe(testRoutes.coreStats);
     expect(screen.getByLabelText("Update rule")).toBeInTheDocument();
     expect(screen.getByLabelText("Update interval (minutes)")).toBeInTheDocument();
-    expect(screen.getAllByText("2 channels").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", { name: "Stats channel inventory", level: 2 }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Total members")).toBeInTheDocument();
     expect(screen.getByText("Bot count")).toBeInTheDocument();
     expect(
       screen.queryByRole("columnheader", { name: "Feature" }),
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    { route: testRoutes.coreControlPanel, heading: "Control Panel" },
+    { route: testRoutes.coreCommands, heading: "Commands" },
+    { route: testRoutes.moderation, heading: "Moderation" },
+    { route: testRoutes.moderationLogging, heading: "Logging" },
+    { route: testRoutes.rolesAutorole, heading: "Roles" },
+    { route: testRoutes.coreStats, heading: "Stats" },
+  ])(
+    "keeps blacklisted dashboard metadata out of $heading",
+    async ({ route, heading }) => {
+      const { fetchMock } = createFetchMock();
+      vi.stubGlobal("fetch", fetchMock);
+      window.history.replaceState({}, "", route);
+
+      render(<App />);
+
+      await screen.findByRole("heading", { name: heading, level: 1 });
+
+      expectStandardDashboardBlacklistAbsent();
+    },
+  );
 
   it("saves stats activation and interval inline from the dedicated Stats workspace", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();

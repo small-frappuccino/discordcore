@@ -1,6 +1,13 @@
 import { useId, useState, type HTMLAttributes, type ReactNode } from "react";
 import { getInitials } from "../app/utils";
 import type { Notice } from "../app/types";
+import {
+  filterDashboardKeyValueItems,
+  getVisibleDashboardMetaItems,
+  sanitizeDashboardFieldNote,
+  shouldRenderDashboardDiagnosticField,
+  type DashboardMetaItem,
+} from "../features/features/presentationPolicy";
 
 type StatusTone = "neutral" | "info" | "success" | "error";
 type SurfaceElement = "article" | "div" | "section";
@@ -12,6 +19,10 @@ interface PageHeaderProps {
   status?: ReactNode;
   meta?: ReactNode;
   actions?: ReactNode;
+}
+
+interface DashboardMetaListProps {
+  items: DashboardMetaItem[];
 }
 
 interface EmptyStateProps {
@@ -189,6 +200,26 @@ export function PageHeader({
       </div>
       {meta ? <div className="page-meta">{meta}</div> : null}
     </header>
+  );
+}
+
+export function DashboardMetaList({
+  items,
+}: DashboardMetaListProps) {
+  const visibleItems = getVisibleDashboardMetaItems(items);
+
+  if (visibleItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {visibleItems.map((item) => (
+        <span className="meta-note" key={item.label}>
+          {item.label}: {item.value}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -392,9 +423,15 @@ export function KeyValueList({
   items,
   className,
 }: KeyValueListProps) {
+  const visibleItems = filterDashboardKeyValueItems(items);
+
+  if (visibleItems.length === 0) {
+    return null;
+  }
+
   return (
     <dl className={joinClassNames("key-value-list", className)}>
-      {items.map((item, index) => (
+      {visibleItems.map((item, index) => (
         <div className="key-value-row" key={index}>
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
@@ -669,6 +706,12 @@ export function AdvancedTextInput({
   className,
   disabled = false,
 }: AdvancedTextInputProps) {
+  if (!shouldRenderDashboardDiagnosticField(label)) {
+    return null;
+  }
+
+  const visibleNote = sanitizeDashboardFieldNote(label, note);
+
   return (
     <details className={joinClassNames("details-panel", className)}>
       <summary>{summary}</summary>
@@ -682,7 +725,7 @@ export function AdvancedTextInput({
             onChange={(event) => onChange(event.target.value)}
             placeholder={placeholder}
           />
-          {note ? <span className="meta-note">{note}</span> : null}
+          {visibleNote ? <span className="meta-note">{visibleNote}</span> : null}
         </label>
       </div>
     </details>

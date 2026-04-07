@@ -3,10 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  AdvancedTextInput,
+  DashboardMetaList,
   DashboardPageSurface,
   EntityMultiPickerField,
   FeatureWorkspaceLayout,
   FlatPageLayout,
+  KeyValueList,
   UnsavedChangesBar,
 } from "./ui";
 
@@ -102,6 +105,41 @@ describe("FlatPageLayout", () => {
   });
 });
 
+describe("DashboardMetaList", () => {
+  it("suppresses shell-level context that should stay out of page bodies", () => {
+    render(
+      <DashboardMetaList
+        items={[
+          { label: "Server", value: "Operations" },
+          { label: "Origin", value: "https://control.example.test" },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText(/Server:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Origin:/)).not.toBeInTheDocument();
+  });
+});
+
+describe("KeyValueList", () => {
+  it("filters internal source and override metadata in standard dashboard mode", () => {
+    render(
+      <KeyValueList
+        items={[
+          { label: "Applied from", value: "Inherited from global dashboard settings." },
+          { label: "Override", value: "Configured here" },
+          { label: "Current signal", value: "Choose a destination channel." },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Applied from")).not.toBeInTheDocument();
+    expect(screen.queryByText("Override")).not.toBeInTheDocument();
+    expect(screen.getByText("Current signal")).toBeInTheDocument();
+    expect(screen.getByText("Choose a destination channel.")).toBeInTheDocument();
+  });
+});
+
 describe("UnsavedChangesBar", () => {
   it("renders reset and save actions only when the page is dirty", async () => {
     const user = userEvent.setup();
@@ -131,6 +169,48 @@ describe("UnsavedChangesBar", () => {
     expect(screen.getByText("Careful - you have unsaved changes.")).toBeInTheDocument();
     expect(onReset).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AdvancedTextInput", () => {
+  it("keeps raw ID fallback controls out of the standard UI", () => {
+    window.history.replaceState({}, "", "/manage/guild-1/core/commands");
+
+    render(
+      <AdvancedTextInput
+        label="Channel ID fallback"
+        inputLabel="Command channel ID fallback"
+        value=""
+        onChange={() => {}}
+        placeholder="Discord channel ID"
+      />,
+    );
+
+    expect(screen.queryByText("Advanced", { selector: "summary" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Command channel ID fallback")).not.toBeInTheDocument();
+  });
+
+  it("exposes diagnostic controls only in explicit diagnostic mode", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/manage/guild-1/core/commands?diagnostics=1",
+    );
+
+    render(
+      <AdvancedTextInput
+        label="Channel ID fallback"
+        inputLabel="Command channel ID fallback"
+        value=""
+        onChange={() => {}}
+        placeholder="Discord channel ID"
+      />,
+    );
+
+    expect(screen.getByText("Advanced", { selector: "summary" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Command channel ID fallback")).toBeInTheDocument();
+
+    window.history.replaceState({}, "", "/");
   });
 });
 

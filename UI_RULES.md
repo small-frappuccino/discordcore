@@ -147,6 +147,35 @@ If multiple controls in the same section need helper text, the layout, grouping,
 
 ---
 
+### 3.2 Standard dashboard blacklist
+
+The standard dashboard UI is not a diagnostics surface.
+
+By default, end-user-visible dashboard pages must show only:
+
+- the primary control
+- essential state
+- the current value
+- actionable errors or blockers
+
+Do not show these in the standard UI:
+
+- shell-level context already visible globally, such as the selected server or active account
+- environment, base URL, origin, or hostname values
+- effective source, applied from, inherited source, override state, or similar configuration provenance labels
+- copy such as `Configured here`, `Using default`, or `Enabled for this server`
+- aggregate counts that do not change the next action when the section already shows the underlying detail
+- raw Discord IDs or fallback-by-ID editors
+- long helper text that only narrates the visible toggle, picker, or select
+- repeated badges or repeated state text at multiple levels of the same screen
+
+Internal or low-level metadata is allowed only in an explicit diagnostic mode.
+When diagnostic-only UI is needed, gate it behind the `?diagnostics=1` query parameter instead of exposing it in the default page flow.
+
+When in doubt, prefer omission over explanation.
+
+---
+
 ## 4. Source of truth and reuse
 
 Use the current implementation as the main reference:

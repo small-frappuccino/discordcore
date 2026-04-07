@@ -16,6 +16,7 @@ export function formatGuildChannelValue(
   channelId: string,
   channels: GuildChannelOption[],
   emptyLabel = "Not configured",
+  unavailableLabel = "Channel no longer available",
 ) {
   const normalizedChannelId = channelId.trim();
   if (normalizedChannelId === "") {
@@ -29,7 +30,7 @@ export function formatGuildChannelValue(
     return formatGuildChannelOptionLabel(matchingChannel);
   }
 
-  return normalizedChannelId;
+  return unavailableLabel;
 }
 
 export function formatGuildChannelOptionLabel(channel: GuildChannelOption) {

@@ -8,7 +8,6 @@ import {
   FlatPageLayout,
   KeyValueList,
   LookupNotice,
-  MetricCard,
   PageHeader,
   StatusBadge,
   UnsavedChangesBar,
@@ -31,7 +30,6 @@ import {
 import {
   formatEffectiveSourceLabel,
   formatFeatureStatusLabel,
-  formatOverrideLabel,
   formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
   getFeatureStatusTone,
@@ -48,8 +46,6 @@ export function LoggingCategoryPage() {
     authState,
     beginLogin,
     canEditSelectedGuild,
-    currentOriginLabel,
-    selectedGuild,
   } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
@@ -63,20 +59,7 @@ export function LoggingCategoryPage() {
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "logging");
   const areaSummary = summarizeFeatureArea(areaFeatures);
-  const selectedServerLabel = selectedGuild?.name ?? "No server selected";
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const featuresRequiringChannel = areaFeatures.filter((feature) =>
-    getLoggingFeatureDetails(feature).requiresChannel,
-  );
-  const configuredDestinations = featuresRequiringChannel.filter(
-    (feature) => getLoggingFeatureDetails(feature).channelId !== "",
-  ).length;
-  const runtimeBlockedFeatures = areaFeatures.filter((feature) =>
-    feature.blockers?.some((blocker) => blocker.code === "runtime_kill_switch"),
-  );
-  const localOverrides = areaFeatures.filter(
-    (feature) => feature.override_state !== "inherit",
-  ).length;
   const firstBlockedFeature = useMemo(
     () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
     [areaFeatures],
@@ -268,63 +251,13 @@ export function LoggingCategoryPage() {
               : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
           </StatusBadge>
         }
-        meta={
-          <>
-            <span className="meta-note">Server: {selectedServerLabel}</span>
-            <span className="meta-note">Origin: {currentOriginLabel}</span>
-          </>
-        }
         actions={renderHeaderActions()}
       />
 
       <FlatPageLayout
         notice={workspaceNotice}
-        summary={
-          workspace.workspaceState === "ready" ? (
-            <section className="overview-summary-strip" aria-label="Logging summary">
-              <MetricCard
-                label="Log routes"
-                value={String(areaSummary.total)}
-                description="Mapped logging features available for this server."
-              />
-              <MetricCard
-                label="Destinations set"
-                value={`${configuredDestinations}/${featuresRequiringChannel.length}`}
-                description="Routes that already have a configured destination channel."
-                tone={
-                  configuredDestinations === featuresRequiringChannel.length &&
-                  featuresRequiringChannel.length > 0
-                    ? "success"
-                    : "neutral"
-                }
-              />
-              <MetricCard
-                label="Ready"
-                value={String(areaSummary.ready)}
-                description="Enabled log routes that are not reporting blockers."
-                tone={areaSummary.ready > 0 ? "success" : "neutral"}
-              />
-              <MetricCard
-                label="Needs attention"
-                value={String(areaSummary.blocked)}
-                description="Routes blocked by missing destinations or runtime prerequisites."
-                tone={areaSummary.blocked > 0 ? "error" : "neutral"}
-              />
-            </section>
-          ) : null
-        }
         workspaceTitle="Manage logging routes"
         workspaceDescription="Keep destinations and route readiness visible in the main workspace instead of using a separate destination drawer."
-        workspaceMeta={
-          workspace.workspaceState === "ready" ? (
-            <>
-              <span className="meta-note">{localOverrides} local overrides</span>
-              <span className="meta-note">
-                {runtimeBlockedFeatures.length} runtime-blocked
-              </span>
-            </>
-          ) : null
-        }
       >
         {renderWorkspaceContent()}
       </FlatPageLayout>
@@ -392,7 +325,6 @@ function LoggingRouteSection({
         </div>
 
         <div className="flat-config-status">
-          <span className="meta-note">{formatOverrideLabel(feature.override_state)}</span>
           {details.exclusiveModerationChannel ? (
             <span className="meta-note">
               Requires an exclusive moderation destination.
