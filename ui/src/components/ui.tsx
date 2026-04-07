@@ -90,6 +90,17 @@ interface FeatureWorkspaceLayoutProps {
   workspaceClassName?: string;
 }
 
+interface FlatPageLayoutProps
+  extends Omit<
+    FeatureWorkspaceLayoutProps,
+    "surfaceClassName" | "contentGridClassName" | "workspaceClassName" | "workspaceContent"
+  > {
+  children: ReactNode;
+  surfaceClassName?: string;
+  contentGridClassName?: string;
+  workspaceClassName?: string;
+}
+
 interface SidebarSectionProps {
   eyebrow?: string;
   title?: ReactNode;
@@ -152,6 +163,7 @@ interface AdvancedTextInputProps {
   note?: ReactNode;
   summary?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function PageHeader({
@@ -285,6 +297,30 @@ export function FeatureWorkspaceLayout({
         {aside}
       </section>
     </DashboardPageSurface>
+  );
+}
+
+export function FlatPageLayout({
+  children,
+  surfaceClassName,
+  contentGridClassName,
+  workspaceClassName,
+  ...props
+}: FlatPageLayoutProps) {
+  return (
+    <FeatureWorkspaceLayout
+      {...props}
+      surfaceClassName={joinClassNames("flat-page-surface", surfaceClassName)}
+      contentGridClassName={joinClassNames(
+        "flat-page-layout",
+        contentGridClassName,
+      )}
+      workspaceClassName={joinClassNames(
+        "flat-page-workspace",
+        workspaceClassName,
+      )}
+      workspaceContent={children}
+    />
   );
 }
 
@@ -631,6 +667,7 @@ export function AdvancedTextInput({
   note,
   summary = "Advanced",
   className,
+  disabled = false,
 }: AdvancedTextInputProps) {
   return (
     <details className={joinClassNames("details-panel", className)}>
@@ -640,6 +677,7 @@ export function AdvancedTextInput({
           <span className="field-label">{label}</span>
           <input
             aria-label={inputLabel}
+            disabled={disabled}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             placeholder={placeholder}

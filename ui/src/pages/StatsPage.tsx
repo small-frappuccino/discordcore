@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
-  AlertBanner,
   EmptyState,
-  FeatureWorkspaceLayout,
+  FlatPageLayout,
   KeyValueList,
   LookupNotice,
   MetricCard,
   PageHeader,
   StatusBadge,
-  SurfaceCard,
   UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
@@ -59,19 +57,6 @@ export function StatsPage() {
   });
   const channelOptions = useGuildChannelOptions();
   const [pendingFeatureId, setPendingFeatureId] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [configEnabledDraft, setConfigEnabledDraft] = useState("enabled");
-  const [updateIntervalDraft, setUpdateIntervalDraft] = useState("30");
-
-  useEffect(() => {
-    if (canEditSelectedGuild) {
-      return;
-    }
-    setDrawerOpen(false);
-    setConfigEnabledDraft("enabled");
-    setUpdateIntervalDraft("30");
-    mutation.clearNotice();
-  }, [canEditSelectedGuild, mutation]);
 
   if (definition === null) {
     return null;
@@ -82,8 +67,7 @@ export function StatsPage() {
   const areaFeatures = getFeatureAreaRecords(workspace.features, "stats");
   const areaSummary = summarizeFeatureArea(areaFeatures);
   const selectedServerLabel = selectedGuild?.name ?? "No server selected";
-  const workspaceNotice =
-    mutation.notice ?? channelOptions.notice ?? workspace.notice;
+  const workspaceNotice = mutation.notice ?? workspace.notice;
   const statsFeature =
     areaFeatures.find((feature) => feature.id === "stats_channels") ?? null;
   const statsDetails =
@@ -94,12 +78,6 @@ export function StatsPage() {
   const enabledModules = areaFeatures.filter(
     (feature) => feature.effective_enabled,
   ).length;
-  const parsedUpdateIntervalMins = Number.parseInt(
-    updateIntervalDraft.trim(),
-    10,
-  );
-  const canSaveStatsSettings =
-    Number.isFinite(parsedUpdateIntervalMins) && parsedUpdateIntervalMins > 0;
 
   async function handleRefreshStats() {
     await Promise.all([workspace.refresh(), channelOptions.refresh()]);
@@ -138,26 +116,11 @@ export function StatsPage() {
     }
   }
 
-  function openDrawer(feature: FeatureRecord) {
-    if (!canEditSelectedGuild || !canEditStatsSettings(feature)) {
-      return;
-    }
-    const details = getStatsFeatureDetails(feature);
-    setConfigEnabledDraft(details.configEnabled ? "enabled" : "disabled");
-    setUpdateIntervalDraft(String(details.updateIntervalMins));
-    setDrawerOpen(true);
-    mutation.clearNotice();
-  }
-
-  function closeDrawer() {
-    setDrawerOpen(false);
-    setConfigEnabledDraft("enabled");
-    setUpdateIntervalDraft("30");
-    mutation.clearNotice();
-  }
-
-  async function handleSaveStatsSettings() {
-    if (statsFeature === null || !canSaveStatsSettings) {
+  async function handleSaveStatsSettings(
+    configEnabled: boolean,
+    updateIntervalMins: number,
+  ) {
+    if (statsFeature === null) {
       return;
     }
 
@@ -165,32 +128,15 @@ export function StatsPage() {
 
     try {
       const updated = await mutation.patchFeature(statsFeature.id, {
-        config_enabled: configEnabledDraft === "enabled",
-        update_interval_mins: parsedUpdateIntervalMins,
+        config_enabled: configEnabled,
+        update_interval_mins: updateIntervalMins,
       });
       if (updated !== null) {
         workspace.updateFeature(updated);
-        closeDrawer();
       }
     } finally {
       setPendingFeatureId("");
     }
-  }
-
-  const statsSettingsDirty =
-    statsFeature !== null &&
-    statsDetails !== null &&
-    (statsDetails.configEnabled !== (configEnabledDraft === "enabled") ||
-      statsDetails.updateIntervalMins !== parsedUpdateIntervalMins);
-
-  function resetStatsSettingsDraft() {
-    if (statsDetails === null) {
-      return;
-    }
-
-    mutation.clearNotice();
-    setConfigEnabledDraft(statsDetails.configEnabled ? "enabled" : "disabled");
-    setUpdateIntervalDraft(String(statsDetails.updateIntervalMins));
   }
 
   function renderHeaderActions() {
@@ -258,99 +204,17 @@ export function StatsPage() {
 
     return (
       <>
-        <section className="surface-subsection">
-          <div className="card-copy">
-            <p className="section-label">Primary workflow</p>
-            <h2>Stats updates</h2>
-            <p className="section-description">
-              Keep the stats module enabled, choose whether updates should run,
-              and confirm the current schedule before reviewing the configured
-              channel list.
-            </p>
-          </div>
-
-          <KeyValueList
-            items={[
-              {
-                label: "Module state",
-                value: statsFeature.effective_enabled ? "On" : "Off",
-              },
-              {
-                label: "Update rule",
-                value: formatStatsConfigValue(statsDetails.configEnabled),
-              },
-              {
-                label: "Update interval",
-                value: formatStatsIntervalValue(
-                  statsDetails.updateIntervalMins,
-                ),
-              },
-              {
-                label: "Configured channels",
-                value: formatStatsChannelCountValue(
-                  statsDetails.configuredChannelCount,
-                ),
-              },
-              {
-                label: "Current signal",
-                value: summarizeStatsSignal(statsFeature),
-              },
-            ]}
-          />
-
-          <div className="feature-row-actions">
-            <button
-              className="button-primary"
-              type="button"
-              disabled={
-                mutation.saving ||
-                !canEditSelectedGuild ||
-                !canEditStatsSettings(statsFeature)
-              }
-              onClick={() => openDrawer(statsFeature)}
-            >
-              Configure stats schedule
-            </button>
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={mutation.saving || !canEditSelectedGuild}
-              onClick={() =>
-                void handleSetFeatureEnabled(
-                  statsFeature,
-                  !statsFeature.effective_enabled,
-                )
-              }
-            >
-              {mutation.saving && pendingFeatureId === statsFeature.id
-                ? "Saving..."
-                : statsFeature.effective_enabled
-                  ? "Disable stats module"
-                  : "Enable stats module"}
-            </button>
-            {statsFeature.override_state !== "inherit" ? (
-              <button
-                className="button-ghost"
-                type="button"
-                disabled={mutation.saving || !canEditSelectedGuild}
-                onClick={() => void handleUseDefault(statsFeature)}
-              >
-                Use default
-              </button>
-            ) : null}
-          </div>
-        </section>
-
-        {statsFeature.readiness === "blocked" ? (
-          <section className="surface-subsection">
-            <p className="section-label">Needs setup</p>
-            <strong>{summarizeStatsSignal(statsFeature)}</strong>
-            <p className="meta-note">
-              Use the schedule editor to enable updates or review whether the
-              selected server still has at least one configured stats channel.
-            </p>
-          </section>
-        ) : null}
+        <StatsScheduleSection
+          feature={statsFeature}
+          details={statsDetails}
+          canEditSelectedGuild={canEditSelectedGuild}
+          mutationSaving={mutation.saving}
+          pendingFeatureId={pendingFeatureId}
+          onClearNotice={mutation.clearNotice}
+          onSave={handleSaveStatsSettings}
+          onSetFeatureEnabled={handleSetFeatureEnabled}
+          onUseDefault={handleUseDefault}
+        />
 
         {channelOptions.notice ? (
           <LookupNotice
@@ -423,295 +287,281 @@ export function StatsPage() {
   }
 
   return (
-    <>
-      <section className="page-shell">
-        <PageHeader
-          eyebrow="Feature area"
-          title={areaLabel}
-          description="Manage the stats module schedule and review the configured stats channels for the selected server without falling back to the generic feature list."
-          status={
-            <StatusBadge
-              tone={
-                workspace.workspaceState === "ready" ? areaSummary.tone : "info"
-              }
-            >
-              {workspace.workspaceState === "ready"
-                ? areaSummary.label
-                : formatWorkspaceStateTitle(
-                    areaLabel,
-                    workspace.workspaceState,
-                  )}
-            </StatusBadge>
-          }
-          meta={
-            <>
-              <span className="meta-note">Server: {selectedServerLabel}</span>
-              <span className="meta-note">Origin: {currentOriginLabel}</span>
-            </>
-          }
-          actions={renderHeaderActions()}
-        />
-
-        <FeatureWorkspaceLayout
-          notice={workspaceNotice}
-          summary={
-            workspace.workspaceState === "ready" &&
-            statsFeature !== null &&
-            statsDetails !== null ? (
-              <section
-                className="overview-summary-strip"
-                aria-label="Stats summary"
-              >
-                <MetricCard
-                  label="Stats module"
-                  value={formatFeatureStatusLabel(statsFeature)}
-                  description={summarizeStatsSignal(statsFeature)}
-                  tone={getFeatureStatusTone(statsFeature)}
-                />
-                <MetricCard
-                  label="Update rule"
-                  value={formatStatsConfigValue(statsDetails.configEnabled)}
-                  description={
-                    statsDetails.configEnabled
-                      ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
-                      : "Updates are paused until the server rule is enabled."
-                  }
-                  tone={statsDetails.configEnabled ? "info" : "neutral"}
-                />
-                <MetricCard
-                  label="Stats channels"
-                  value={formatStatsChannelCountValue(
-                    statsDetails.configuredChannelCount,
-                  )}
-                  description="Configured channels currently reviewed in this workspace."
-                  tone={
-                    statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
-                  }
-                />
-                <MetricCard
-                  label="Overrides"
-                  value={String(localOverrides)}
-                  description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
-                />
-              </section>
-            ) : null
-          }
-          workspaceTitle="Stats configuration"
-          workspaceDescription="Keep the default workspace focused on the schedule admins actually need to verify here: whether stats updates should run, how often they run, and which channels the server will rename."
-          workspaceMeta={
-            workspace.workspaceState === "ready" ? (
-              <>
-                <span className="meta-note">{localOverrides} local overrides</span>
-                <span className="meta-note">
-                  {enabledModules}/{areaFeatures.length} enabled
-                </span>
-              </>
-            ) : null
-          }
-          workspaceContent={renderPageState()}
-          aside={
-            <aside className="page-aside">
-              <SurfaceCard>
-                <div className="card-copy">
-                  <p className="section-label">Summary</p>
-                  <h2>Current stats setup</h2>
-                  <p className="section-description">
-                    Use this panel to confirm the selected server, the active
-                    schedule, and the current signal reported by the control
-                    server.
-                  </p>
-                </div>
-
-                <KeyValueList
-                  items={[
-                    {
-                      label: "Server",
-                      value: selectedServerLabel,
-                    },
-                    {
-                      label: "Module state",
-                      value:
-                        statsFeature === null
-                          ? "Not available"
-                          : statsFeature.effective_enabled
-                            ? "On"
-                            : "Off",
-                    },
-                    {
-                      label: "Update interval",
-                      value:
-                        statsDetails === null
-                          ? "Not available"
-                          : formatStatsIntervalValue(
-                              statsDetails.updateIntervalMins,
-                            ),
-                    },
-                    {
-                      label: "Configured channels",
-                      value:
-                        statsDetails === null
-                          ? "Not available"
-                          : formatStatsChannelCountValue(
-                              statsDetails.configuredChannelCount,
-                            ),
-                    },
-                    {
-                      label: "Current signal",
-                      value:
-                        statsFeature === null
-                          ? areaSummary.signal
-                          : summarizeStatsSignal(statsFeature),
-                    },
-                  ]}
-                />
-              </SurfaceCard>
-
-              <SurfaceCard>
-                <div className="card-copy">
-                  <p className="section-label">Guidance</p>
-                  <h2>How this page works</h2>
-                  <p className="section-description">
-                    Keep the main workspace centered on the stats schedule and the
-                    current channel inventory instead of a generic feature row.
-                  </p>
-                </div>
-
-                <ul className="feature-guidance-list">
-                  <li>
-                    Use the module toggle when stats renames should stop or resume
-                    for the selected server.
-                  </li>
-                  <li>
-                    Use the schedule editor to pause updates or change how often
-                    the configured channels refresh.
-                  </li>
-                  <li>
-                    Review the channel inventory here before changing the
-                    underlying stats channel definitions elsewhere.
-                  </li>
-                </ul>
-              </SurfaceCard>
-            </aside>
-          }
-        />
-      </section>
-
-      {drawerOpen && statsFeature !== null && canEditSelectedGuild ? (
-        <div
-          className="drawer-backdrop"
-          onClick={closeDrawer}
-          role="presentation"
-        >
-          <aside
-            aria-label={getDrawerLabel(statsFeature)}
-            aria-modal="true"
-            className="drawer-panel commands-drawer"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
+    <section className="page-shell">
+      <PageHeader
+        eyebrow="Feature area"
+        title={areaLabel}
+        description="Manage the stats module schedule and review the configured stats channels for the selected server without falling back to the generic feature list."
+        status={
+          <StatusBadge
+            tone={
+              workspace.workspaceState === "ready" ? areaSummary.tone : "info"
+            }
           >
-            <div className="card-copy">
-              <p className="section-label">Stats</p>
-              <div className="logging-drawer-title-row">
-                <h2>{statsFeature.label}</h2>
-                <StatusBadge tone={getFeatureStatusTone(statsFeature)}>
-                  {formatFeatureStatusLabel(statsFeature)}
-                </StatusBadge>
-              </div>
-              <p className="section-description">{statsFeature.description}</p>
-            </div>
+            {workspace.workspaceState === "ready"
+              ? areaSummary.label
+              : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
+          </StatusBadge>
+        }
+        meta={
+          <>
+            <span className="meta-note">Server: {selectedServerLabel}</span>
+            <span className="meta-note">Origin: {currentOriginLabel}</span>
+          </>
+        }
+        actions={renderHeaderActions()}
+      />
 
-            {mutation.notice ? <AlertBanner notice={mutation.notice} /> : null}
-
-            <KeyValueList
-              items={[
-                {
-                  label: "Module state",
-                  value: statsFeature.effective_enabled ? "On" : "Off",
-                },
-                {
-                  label: "Current signal",
-                  value: summarizeStatsSignal(statsFeature),
-                },
-                {
-                  label: "Configured channels",
-                  value:
-                    statsDetails === null
-                      ? "Not available"
-                      : formatStatsChannelCountValue(
-                          statsDetails.configuredChannelCount,
-                        ),
-                },
-              ]}
-            />
-
-            <div className="field-grid roles-form-grid">
-              <label className="field-stack">
-                <span className="field-label">Update rule</span>
-                <select
-                  aria-label="Update rule"
-                  value={configEnabledDraft}
-                  onChange={(event) =>
-                    setConfigEnabledDraft(event.target.value)
-                  }
-                >
-                  <option value="enabled">Enabled</option>
-                  <option value="disabled">Disabled</option>
-                </select>
-                <span className="meta-note">
-                  Pause channel renames here without disabling the module-level
-                  override for this server.
-                </span>
-              </label>
-
-              <label className="field-stack">
-                <span className="field-label">Update interval (minutes)</span>
-                <input
-                  aria-label="Update interval (minutes)"
-                  inputMode="numeric"
-                  min={1}
-                  step={1}
-                  type="number"
-                  value={updateIntervalDraft}
-                  onChange={(event) =>
-                    setUpdateIntervalDraft(event.target.value)
-                  }
-                />
-                <span className="meta-note">
-                  Enter how often the selected server should refresh the
-                  configured stats channel names.
-                </span>
-              </label>
-            </div>
-
-            {!canSaveStatsSettings ? (
-              <div className="surface-subsection">
-                <p className="section-label">Interval required</p>
-                <p className="meta-note">
-                  Enter a whole number greater than zero before saving the stats
-                  schedule.
-                </p>
-              </div>
-            ) : null}
-
-            <UnsavedChangesBar
-              hasUnsavedChanges={statsSettingsDirty}
-              saveLabel={
-                mutation.saving && pendingFeatureId === statsFeature.id
-                  ? "Saving..."
-                  : "Save changes"
-              }
-              saving={mutation.saving && pendingFeatureId === statsFeature.id}
-              disabled={!canEditSelectedGuild || !canSaveStatsSettings}
-              onReset={resetStatsSettingsDraft}
-              onSave={handleSaveStatsSettings}
-            />
-          </aside>
-        </div>
-      ) : null}
-    </>
+      <FlatPageLayout
+        notice={workspaceNotice}
+        summary={
+          workspace.workspaceState === "ready" &&
+          statsFeature !== null &&
+          statsDetails !== null ? (
+            <section className="overview-summary-strip" aria-label="Stats summary">
+              <MetricCard
+                label="Stats module"
+                value={formatFeatureStatusLabel(statsFeature)}
+                description={summarizeStatsSignal(statsFeature)}
+                tone={getFeatureStatusTone(statsFeature)}
+              />
+              <MetricCard
+                label="Update rule"
+                value={formatStatsConfigValue(statsDetails.configEnabled)}
+                description={
+                  statsDetails.configEnabled
+                    ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
+                    : "Updates are paused until the server rule is enabled."
+                }
+                tone={statsDetails.configEnabled ? "info" : "neutral"}
+              />
+              <MetricCard
+                label="Stats channels"
+                value={formatStatsChannelCountValue(
+                  statsDetails.configuredChannelCount,
+                )}
+                description="Configured channels currently reviewed in this workspace."
+                tone={
+                  statsDetails.configuredChannelCount > 0 ? "info" : "neutral"
+                }
+              />
+              <MetricCard
+                label="Overrides"
+                value={String(localOverrides)}
+                description={`${enabledModules}/${areaFeatures.length} stats modules enabled for this server.`}
+              />
+            </section>
+          ) : null
+        }
+        workspaceTitle="Stats configuration"
+        workspaceDescription="Keep the schedule controls and current inventory visible in the main workspace instead of editing the stats schedule in a separate drawer."
+        workspaceMeta={
+          workspace.workspaceState === "ready" ? (
+            <>
+              <span className="meta-note">{localOverrides} local overrides</span>
+              <span className="meta-note">
+                {enabledModules}/{areaFeatures.length} enabled
+              </span>
+            </>
+          ) : null
+        }
+      >
+        {renderPageState()}
+      </FlatPageLayout>
+    </section>
   );
 }
 
-function getDrawerLabel(feature: FeatureRecord) {
-  return `Configure ${feature.label}`;
+interface StatsScheduleSectionProps {
+  feature: FeatureRecord;
+  details: ReturnType<typeof getStatsFeatureDetails>;
+  canEditSelectedGuild: boolean;
+  mutationSaving: boolean;
+  pendingFeatureId: string;
+  onClearNotice: () => void;
+  onSave: (configEnabled: boolean, updateIntervalMins: number) => Promise<void>;
+  onSetFeatureEnabled: (
+    feature: FeatureRecord,
+    enabled: boolean,
+  ) => Promise<void>;
+  onUseDefault: (feature: FeatureRecord) => Promise<void>;
+}
+
+function StatsScheduleSection({
+  feature,
+  details,
+  canEditSelectedGuild,
+  mutationSaving,
+  pendingFeatureId,
+  onClearNotice,
+  onSave,
+  onSetFeatureEnabled,
+  onUseDefault,
+}: StatsScheduleSectionProps) {
+  const [configEnabledDraft, setConfigEnabledDraft] = useState(
+    details.configEnabled ? "enabled" : "disabled",
+  );
+  const [updateIntervalDraft, setUpdateIntervalDraft] = useState(
+    String(details.updateIntervalMins),
+  );
+  const canEditSettings = canEditSelectedGuild && canEditStatsSettings(feature);
+  const parsedUpdateIntervalMins = Number.parseInt(updateIntervalDraft.trim(), 10);
+  const canSaveStatsSettings =
+    Number.isFinite(parsedUpdateIntervalMins) && parsedUpdateIntervalMins > 0;
+  const hasUnsavedChanges =
+    details.configEnabled !== (configEnabledDraft === "enabled") ||
+    details.updateIntervalMins !== parsedUpdateIntervalMins;
+
+  useEffect(() => {
+    setConfigEnabledDraft(details.configEnabled ? "enabled" : "disabled");
+  }, [details.configEnabled]);
+
+  useEffect(() => {
+    setUpdateIntervalDraft(String(details.updateIntervalMins));
+  }, [details.updateIntervalMins]);
+
+  function handleReset() {
+    onClearNotice();
+    setConfigEnabledDraft(details.configEnabled ? "enabled" : "disabled");
+    setUpdateIntervalDraft(String(details.updateIntervalMins));
+  }
+
+  return (
+    <section className="flat-config-section">
+      <div className="flat-config-header">
+        <div className="card-copy flat-config-copy">
+          <p className="section-label">Primary workflow</p>
+          <div className="flat-config-title-row">
+            <h2>Stats updates</h2>
+            <StatusBadge tone={getFeatureStatusTone(feature)}>
+              {formatFeatureStatusLabel(feature)}
+            </StatusBadge>
+          </div>
+          <p className="section-description">
+            Keep the stats module enabled, choose whether updates should run, and
+            adjust the interval without leaving the main page.
+          </p>
+        </div>
+
+        <div className="flat-config-status">
+          <span className="meta-note">
+            {feature.override_state === "inherit"
+              ? "Using default"
+              : "Configured here"}
+          </span>
+        </div>
+      </div>
+
+      <KeyValueList
+        items={[
+          {
+            label: "Module state",
+            value: feature.effective_enabled ? "On" : "Off",
+          },
+          {
+            label: "Update rule",
+            value: formatStatsConfigValue(details.configEnabled),
+          },
+          {
+            label: "Update interval",
+            value: formatStatsIntervalValue(details.updateIntervalMins),
+          },
+          {
+            label: "Configured channels",
+            value: formatStatsChannelCountValue(details.configuredChannelCount),
+          },
+          {
+            label: "Current signal",
+            value: summarizeStatsSignal(feature),
+          },
+        ]}
+      />
+
+      <div className="flat-config-fields">
+        <label className="field-stack">
+          <span className="field-label">Update rule</span>
+          <select
+            aria-label="Update rule"
+            disabled={!canEditSettings}
+            value={configEnabledDraft}
+            onChange={(event) => setConfigEnabledDraft(event.target.value)}
+          >
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
+          </select>
+          <span className="meta-note">
+            Pause channel renames here without disabling the module-level override
+            for this server.
+          </span>
+        </label>
+
+        <label className="field-stack">
+          <span className="field-label">Update interval (minutes)</span>
+          <input
+            aria-label="Update interval (minutes)"
+            disabled={!canEditSettings}
+            inputMode="numeric"
+            min={1}
+            step={1}
+            type="number"
+            value={updateIntervalDraft}
+            onChange={(event) => setUpdateIntervalDraft(event.target.value)}
+          />
+          <span className="meta-note">
+            Enter how often the selected server should refresh the configured
+            stats channel names.
+          </span>
+        </label>
+      </div>
+
+      {!canSaveStatsSettings ? (
+        <div className="surface-subsection">
+          <p className="section-label">Interval required</p>
+          <p className="meta-note">
+            Enter a whole number greater than zero before saving the stats schedule.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="inline-actions flat-config-actions">
+        <button
+          className="button-secondary"
+          type="button"
+          disabled={mutationSaving || !canEditSelectedGuild}
+          onClick={() =>
+            void onSetFeatureEnabled(feature, !feature.effective_enabled)
+          }
+        >
+          {mutationSaving && pendingFeatureId === feature.id
+            ? "Saving..."
+            : feature.effective_enabled
+              ? "Disable stats module"
+              : "Enable stats module"}
+        </button>
+        {feature.override_state !== "inherit" ? (
+          <button
+            className="button-ghost"
+            type="button"
+            disabled={mutationSaving || !canEditSelectedGuild}
+            onClick={() => void onUseDefault(feature)}
+          >
+            Use default
+          </button>
+        ) : null}
+      </div>
+
+      <UnsavedChangesBar
+        hasUnsavedChanges={hasUnsavedChanges}
+        saveLabel={
+          mutationSaving && pendingFeatureId === feature.id
+            ? "Saving..."
+            : "Save changes"
+        }
+        saving={mutationSaving && pendingFeatureId === feature.id}
+        disabled={!canEditSettings || !canSaveStatsSettings}
+        onReset={handleReset}
+        onSave={() => onSave(configEnabledDraft === "enabled", parsedUpdateIntervalMins)}
+      />
+    </section>
+  );
 }

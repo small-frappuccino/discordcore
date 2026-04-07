@@ -1893,7 +1893,7 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getAllByText("Logging only").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mute role").length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("heading", { name: "Moderation routes" }),
+      screen.getByRole("heading", { name: "Route destinations" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Disable Automod service" }),
@@ -1907,9 +1907,13 @@ describe("dashboard routing and workspace", () => {
     expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
     expect(screen.queryByText("Moderation controls")).not.toBeInTheDocument();
     expect(screen.queryByText("Rule coverage")).not.toBeInTheDocument();
+    expect(document.querySelector(".flat-page-workspace")).not.toBeNull();
+    expect(
+      document.querySelector(".flat-page-workspace .moderation-page-intro"),
+    ).not.toBeNull();
   });
 
-  it("saves mute role and moderation case route from the dedicated Moderation workspace", async () => {
+  it("saves mute role and moderation case route inline from the dedicated Moderation workspace", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState(
@@ -1921,22 +1925,16 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
-    await screen.findByRole("button", { name: "Configure mute role" });
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure mute role" }),
-    );
-
-    expect(
-      screen.getByRole("dialog", { name: "Configure Mute role" }),
-    ).toBeVisible();
-    expect(screen.queryByText("Requirements")).not.toBeInTheDocument();
+    const muteRoleSection = screen
+      .getByRole("heading", { name: "Mute role", level: 2 })
+      .closest("section");
+    expect(muteRoleSection).not.toBeNull();
     await userEvent.selectOptions(
-      screen.getByLabelText("Mute role"),
+      within(muteRoleSection!).getByLabelText("Mute role"),
       "mute-role",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(muteRoleSection!).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -1951,20 +1949,18 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure Moderation case logging" }),
-    );
-    expect(
-      screen.getByRole("dialog", { name: "Configure Moderation case logging" }),
-    ).toBeVisible();
-    expect(screen.queryByText("Requirements")).not.toBeInTheDocument();
-    expect(screen.queryByText("Runtime dependency")).not.toBeInTheDocument();
+    const moderationCaseSection = screen
+      .getByRole("heading", { name: "Moderation case logging", level: 3 })
+      .closest("section");
+    expect(moderationCaseSection).not.toBeNull();
     await userEvent.selectOptions(
-      screen.getByLabelText("Destination channel"),
+      within(moderationCaseSection!).getByLabelText("Destination channel"),
       "mod-cases",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(moderationCaseSection!).getByRole("button", {
+        name: "Save changes",
+      }),
     );
 
     await waitFor(() => {
@@ -1988,6 +1984,7 @@ describe("dashboard routing and workspace", () => {
 
     expect(screen.getAllByText("Muted").length).toBeGreaterThan(0);
     expect(screen.getAllByText("#mod-cases").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it.each(["/dashboard/automations", "/dashboard/activity"])(
@@ -2073,7 +2070,7 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe(testRoutes.rolesAutorole);
   });
 
-  it("opens the dedicated Roles workspace and saves auto role configuration through the drawer", async () => {
+  it("opens the dedicated Roles workspace and saves auto role configuration inline", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.rolesAutorole);
@@ -2086,37 +2083,32 @@ describe("dashboard routing and workspace", () => {
       level: 2,
     });
     expect(screen.getAllByText("Not configured").length).toBeGreaterThan(0);
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure auto role" }),
-    );
-
-    expect(
-      screen.getByRole("dialog", {
-        name: "Configure automatic role assignment",
-      }),
-    ).toBeVisible();
-    expect(screen.queryByText("What to configure")).not.toBeInTheDocument();
-    expect(screen.queryByText("Runtime dependency")).not.toBeInTheDocument();
+    const autoRoleSection = screen
+      .getByRole("heading", {
+        name: "Automatic role assignment",
+        level: 2,
+      })
+      .closest("section");
+    expect(autoRoleSection).not.toBeNull();
 
     await userEvent.selectOptions(
-      screen.getByLabelText("Assignment rule"),
+      within(autoRoleSection!).getByLabelText("Assignment rule"),
       "enabled",
     );
     await userEvent.selectOptions(
-      screen.getByLabelText("Target role"),
+      within(autoRoleSection!).getByLabelText("Target role"),
       "role-target",
     );
     await userEvent.selectOptions(
-      screen.getByLabelText("Level role"),
+      within(autoRoleSection!).getByLabelText("Level role"),
       "role-level",
     );
     await userEvent.selectOptions(
-      screen.getByLabelText("Booster role"),
+      within(autoRoleSection!).getByLabelText("Booster role"),
       "role-booster",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(autoRoleSection!).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -2133,18 +2125,14 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(
-      screen.queryByRole("dialog", {
-        name: "Configure automatic role assignment",
-      }),
-    ).not.toBeInTheDocument();
     expect(screen.getAllByText("Members").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Level Five + Boosters").length).toBeGreaterThan(
       0,
     );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("uses a member picker for presence watch user instead of a raw user ID field", async () => {
+  it("uses a member picker for presence watch user inline instead of a raw user ID field", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.rolesAutorole);
@@ -2156,38 +2144,33 @@ describe("dashboard routing and workspace", () => {
       name: "Automatic role assignment",
       level: 2,
     });
-    const advancedControlsSummary =
-      screen
-        .getAllByText("Advanced controls")
-        .find((element) => element.closest("summary") !== null)
-        ?.closest("summary") ?? null;
-    expect(advancedControlsSummary).not.toBeNull();
-    await userEvent.click(advancedControlsSummary!);
-
-    const configureButtons = await screen.findAllByRole("button", {
-      name: "Configure",
-    });
-    await userEvent.click(configureButtons[1]!);
-
-    expect(
-      screen.getByRole("dialog", { name: "Configure user presence watch" }),
-    ).toBeVisible();
+    const presenceWatchSection = screen
+      .getByRole("heading", { name: "Presence watch (user)", level: 2 })
+      .closest("section");
+    expect(presenceWatchSection).not.toBeNull();
     expect(screen.queryByLabelText("User ID")).not.toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText("Search members"), "car");
+    await userEvent.type(
+      within(presenceWatchSection!).getByLabelText("Search members"),
+      "car",
+    );
 
     await waitFor(() => {
       expect(
-        screen.getByRole("option", { name: "Carol Gamma (@carol)" }),
+        within(presenceWatchSection!).getByRole("option", {
+          name: "Carol Gamma (@carol)",
+        }),
       ).toBeInTheDocument();
     });
 
     await userEvent.selectOptions(
-      screen.getByLabelText("Member"),
+      within(presenceWatchSection!).getByLabelText("Member"),
       "user-carol",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(presenceWatchSection!).getByRole("button", {
+        name: "Save changes",
+      }),
     );
 
     await waitFor(() => {
@@ -2202,9 +2185,7 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(
-      screen.queryByRole("dialog", { name: "Configure user presence watch" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens Commands on a dedicated route and keeps the primary workspace focused on the two command tasks", async () => {
@@ -2218,11 +2199,9 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("heading", { name: "Command routing", level: 2 });
 
     expect(window.location.pathname).toBe(testRoutes.coreCommands);
+    expect(await screen.findByLabelText("Command channel")).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "Configure command channel" }),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: "Configure admin access" }),
+      await screen.findByRole("button", { name: /Allowed roles/i }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /refresh commands/i }),
@@ -2235,7 +2214,7 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps command setup inside a drawer with pickers first and raw IDs behind Advanced", async () => {
+  it("keeps command setup inline with pickers first and raw IDs behind Advanced", async () => {
     const { fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.coreCommands);
@@ -2243,14 +2222,6 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
-    await screen.findByRole("button", { name: "Configure command channel" });
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure command channel" }),
-    );
-
-    const dialog = screen.getByRole("dialog", { name: "Configure commands" });
-    expect(dialog).toBeVisible();
     expect(screen.getByLabelText("Command channel")).toBeVisible();
     const advancedDetails = screen
       .getByText("Advanced", { selector: "summary" })
@@ -2263,14 +2234,10 @@ describe("dashboard routing and workspace", () => {
     );
     expect(advancedDetails).toHaveAttribute("open");
     expect(screen.getByLabelText("Command channel ID fallback")).toBeVisible();
-
-    await userEvent.click(document.querySelector(".drawer-backdrop")!);
-    expect(
-      screen.queryByRole("dialog", { name: "Configure commands" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("opens the dedicated commands workspace and saves a command channel through the drawer", async () => {
+  it("opens the dedicated commands workspace and saves a command channel inline", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.home);
@@ -2285,24 +2252,20 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe(testRoutes.coreCommands);
     expect(screen.queryByText("Monitoring")).not.toBeInTheDocument();
     expect(screen.getAllByText("#bot-commands").length).toBeGreaterThan(0);
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure command channel" }),
-    );
-
-    expect(
-      screen.getByRole("dialog", { name: "Configure commands" }),
-    ).toBeVisible();
-    expect(screen.getByLabelText("Command channel")).toHaveValue(
+    const commandSection = screen
+      .getByRole("heading", { name: "Command routing", level: 2 })
+      .closest("section");
+    expect(commandSection).not.toBeNull();
+    expect(within(commandSection!).getByLabelText("Command channel")).toHaveValue(
       "bot-commands",
     );
 
     await userEvent.selectOptions(
-      screen.getByLabelText("Command channel"),
+      within(commandSection!).getByLabelText("Command channel"),
       "ops-commands",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(commandSection!).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -2317,13 +2280,11 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(
-      screen.queryByRole("dialog", { name: "Configure commands" }),
-    ).not.toBeInTheDocument();
     expect(screen.getAllByText("#ops-commands").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("saves admin command access through the dedicated commands drawer", async () => {
+  it("saves admin command access inline from the dedicated commands workspace", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.coreCommands);
@@ -2332,24 +2293,25 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
     await screen.findByRole("heading", { name: "Command routing", level: 2 });
-    await screen.findByRole("button", { name: "Configure admin access" });
-
+    const adminSection = screen
+      .getByRole("heading", { name: "Admin command access", level: 2 })
+      .closest("section");
+    expect(adminSection).not.toBeNull();
     await userEvent.click(
-      screen.getByRole("button", { name: "Configure admin access" }),
+      within(adminSection!).getByRole("button", { name: /allowed roles/i }),
     );
-
     expect(
-      screen.getByRole("dialog", { name: "Configure admin commands" }),
-    ).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: /allowed roles/i }));
-    expect(screen.getByRole("checkbox", { name: /Moderators/i })).toBeChecked();
+      within(adminSection!).getByRole("checkbox", { name: /Moderators/i }),
+    ).toBeChecked();
     expect(
-      screen.getByRole("checkbox", { name: /Members/i }),
+      within(adminSection!).getByRole("checkbox", { name: /Members/i }),
     ).not.toBeChecked();
 
-    await userEvent.click(screen.getByRole("checkbox", { name: /Members/i }));
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(adminSection!).getByRole("checkbox", { name: /Members/i }),
+    );
+    await userEvent.click(
+      within(adminSection!).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -2364,10 +2326,8 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(
-      screen.queryByRole("dialog", { name: "Configure admin commands" }),
-    ).not.toBeInTheDocument();
     expect(screen.getAllByText("2 roles").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("keeps command workspace affordances disabled for read-only servers", async () => {
@@ -2379,11 +2339,9 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Commands", level: 1 });
 
-    const configureChannelButton = screen.getByRole("button", {
-      name: "Configure command channel",
-    });
-    const configureAdminButton = screen.getByRole("button", {
-      name: "Configure admin access",
+    const commandChannelField = screen.getByLabelText("Command channel");
+    const allowedRolesButton = screen.getByRole("button", {
+      name: /Allowed roles/i,
     });
     const disableCommandsButton = screen.getByRole("button", {
       name: "Disable commands",
@@ -2392,24 +2350,18 @@ describe("dashboard routing and workspace", () => {
       name: "Disable admin commands",
     });
 
-    expect(configureChannelButton).toBeDisabled();
-    expect(configureAdminButton).toBeDisabled();
+    expect(commandChannelField).toBeDisabled();
+    expect(allowedRolesButton).toBeDisabled();
     expect(disableCommandsButton).toBeDisabled();
     expect(disableAdminCommandsButton).toBeDisabled();
 
-    await userEvent.click(configureChannelButton);
-    await userEvent.click(configureAdminButton);
+    await userEvent.click(allowedRolesButton);
 
-    expect(
-      screen.queryByRole("dialog", { name: "Configure commands" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("dialog", { name: "Configure admin commands" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(featureUpdates).toEqual([]);
   });
 
-  it("opens the dedicated logging workspace and saves a destination through the drawer", async () => {
+  it("opens the dedicated logging workspace and saves a destination inline", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.moderationLogging);
@@ -2417,38 +2369,31 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Logging", level: 1 });
-    expect(await screen.findByText("#user-log-channel")).toBeInTheDocument();
-    expect(await screen.findByText("Not configured")).toBeInTheDocument();
-
-    const configureButtons = await screen.findAllByRole("button", {
-      name: "Configure",
-    });
-    await userEvent.click(configureButtons[0]!);
-
+    const avatarSection = screen
+      .getByRole("heading", { name: "Avatar logging", level: 2 })
+      .closest("section");
+    expect(avatarSection).not.toBeNull();
     expect(
-      screen.getByRole("dialog", { name: "Configure Avatar logging" }),
-    ).toBeVisible();
-    expect(screen.getByLabelText("Destination channel")).toHaveValue(
+      within(avatarSection!).getAllByText("#user-log-channel").length,
+    ).toBeGreaterThan(0);
+    expect(within(avatarSection!).getByLabelText("Destination channel")).toHaveValue(
       "user-log-channel",
     );
-    await userEvent.click(document.querySelector(".drawer-backdrop")!);
-
-    await userEvent.click(
-      screen.getAllByRole("button", { name: "Configure" })[1]!,
-    );
+    const memberJoinSection = screen
+      .getByRole("heading", { name: "Member join logging", level: 2 })
+      .closest("section");
+    expect(memberJoinSection).not.toBeNull();
+    expect(within(memberJoinSection!).getByText("Not configured")).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: "Configure Member join logging" }),
-    ).toBeVisible();
-    expect(screen.queryByText("Requirements")).not.toBeInTheDocument();
-    expect(screen.queryByText("Runtime dependency")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Destination channel")).toHaveValue("");
+      within(memberJoinSection!).getByLabelText("Destination channel"),
+    ).toHaveValue("");
 
     await userEvent.selectOptions(
-      screen.getByLabelText("Destination channel"),
+      within(memberJoinSection!).getByLabelText("Destination channel"),
       "join-channel",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(memberJoinSection!).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -2464,9 +2409,9 @@ describe("dashboard routing and workspace", () => {
     });
 
     expect(
-      screen.queryByRole("dialog", { name: "Configure Member join logging" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("#join-channel")).toBeInTheDocument();
+      within(memberJoinSection!).getAllByText("#join-channel").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("keeps logging workspace affordances disabled for read-only servers", async () => {
@@ -2478,9 +2423,14 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Logging", level: 1 });
 
-    expect(
-      screen.queryByRole("button", { name: "Configure" }),
-    ).not.toBeInTheDocument();
+    const avatarSection = screen
+      .getByRole("heading", { name: "Avatar logging", level: 2 })
+      .closest("section");
+    const memberJoinSection = screen
+      .getByRole("heading", { name: "Member join logging", level: 2 })
+      .closest("section");
+    expect(avatarSection).not.toBeNull();
+    expect(memberJoinSection).not.toBeNull();
 
     const disableAvatarLoggingButton = screen.getByRole("button", {
       name: "Disable Avatar logging",
@@ -2489,6 +2439,12 @@ describe("dashboard routing and workspace", () => {
       name: "Disable Member join logging",
     });
 
+    expect(
+      within(avatarSection!).getByLabelText("Destination channel"),
+    ).toBeDisabled();
+    expect(
+      within(memberJoinSection!).getByLabelText("Destination channel"),
+    ).toBeDisabled();
     expect(disableAvatarLoggingButton).toBeDisabled();
     expect(disableMemberJoinLoggingButton).toBeDisabled();
 
@@ -2520,9 +2476,8 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("heading", { name: "Stats updates", level: 2 });
 
     expect(window.location.pathname).toBe(testRoutes.coreStats);
-    expect(
-      screen.getByRole("button", { name: "Configure stats schedule" }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Update rule")).toBeInTheDocument();
+    expect(screen.getByLabelText("Update interval (minutes)")).toBeInTheDocument();
     expect(screen.getAllByText("2 channels").length).toBeGreaterThan(0);
     expect(screen.getByText("Total members")).toBeInTheDocument();
     expect(screen.getByText("Bot count")).toBeInTheDocument();
@@ -2531,7 +2486,7 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("saves stats activation and interval from the dedicated Stats workspace", async () => {
+  it("saves stats activation and interval inline from the dedicated Stats workspace", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.coreStats);
@@ -2539,27 +2494,24 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Stats", level: 1 });
-    await screen.findByRole("button", { name: "Configure stats schedule" });
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Configure stats schedule" }),
-    );
-
-    expect(
-      screen.getByRole("dialog", { name: "Configure Stats channels" }),
-    ).toBeVisible();
+    const statsSection = screen
+      .getByRole("heading", { name: "Stats updates", level: 2 })
+      .closest("section");
+    expect(statsSection).not.toBeNull();
 
     await userEvent.selectOptions(
-      screen.getByLabelText("Update rule"),
+      within(statsSection!).getByLabelText("Update rule"),
       "enabled",
     );
-    await userEvent.clear(screen.getByLabelText("Update interval (minutes)"));
+    await userEvent.clear(
+      within(statsSection!).getByLabelText("Update interval (minutes)"),
+    );
     await userEvent.type(
-      screen.getByLabelText("Update interval (minutes)"),
+      within(statsSection!).getByLabelText("Update interval (minutes)"),
       "45",
     );
     await userEvent.click(
-      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+      within(statsSection!).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -2575,10 +2527,8 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    expect(
-      screen.queryByRole("dialog", { name: "Configure Stats channels" }),
-    ).not.toBeInTheDocument();
     expect(screen.getAllByText("45 minutes").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole("button", { name: "Disable stats module" }),
@@ -2618,20 +2568,18 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Stats", level: 1 });
 
-    const configureStatsButton = screen.getByRole("button", {
-      name: "Configure stats schedule",
-    });
+    const updateRuleField = screen.getByLabelText("Update rule");
+    const updateIntervalField = screen.getByLabelText("Update interval (minutes)");
     const statsToggleButton = screen.getByRole("button", {
       name: /stats module/i,
     });
 
-    expect(configureStatsButton).toBeDisabled();
+    expect(updateRuleField).toBeDisabled();
+    expect(updateIntervalField).toBeDisabled();
     expect(statsToggleButton).toBeDisabled();
 
-    await userEvent.click(configureStatsButton);
-
     expect(
-      screen.queryByRole("dialog", { name: "Configure Stats channels" }),
+      screen.queryByRole("dialog"),
     ).not.toBeInTheDocument();
     expect(featureUpdates).toEqual([]);
   });

@@ -6,6 +6,7 @@ import {
   DashboardPageSurface,
   EntityMultiPickerField,
   FeatureWorkspaceLayout,
+  FlatPageLayout,
   UnsavedChangesBar,
 } from "./ui";
 
@@ -78,6 +79,26 @@ describe("FeatureWorkspaceLayout", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Only workspace content")).toBeInTheDocument();
     expect(container.querySelector(".content-grid-with-aside")).toBeNull();
+  });
+});
+
+describe("FlatPageLayout", () => {
+  it("applies the reusable flat shell classes on top of the shared workspace layout", () => {
+    const { container } = render(
+      <FlatPageLayout
+        workspaceEyebrow={null}
+        workspaceTitle={null}
+        workspaceDescription={null}
+      >
+        <div>Flat workspace body</div>
+      </FlatPageLayout>,
+    );
+
+    expect(screen.getByText("Flat workspace body")).toBeInTheDocument();
+    expect(container.querySelector(".flat-page-surface")).not.toBeNull();
+    expect(container.querySelector(".flat-page-layout")).not.toBeNull();
+    expect(container.querySelector(".flat-page-workspace")).not.toBeNull();
+    expect(container.querySelector(".feature-category-panel")).not.toBeNull();
   });
 });
 

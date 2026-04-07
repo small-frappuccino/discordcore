@@ -4,7 +4,7 @@ import {
   getDashboardHomeNavigationSections,
   type NavigationItem,
 } from "../app/navigation";
-import { FeatureWorkspaceLayout } from "../components/ui";
+import { FlatPageLayout } from "../components/ui";
 import {
   OverviewCard,
   OverviewStatRow,
@@ -67,112 +67,108 @@ export function HomePage() {
     <section className="page-shell home-page">
       <h1 className="sr-only">Home</h1>
 
-      <FeatureWorkspaceLayout
+      <FlatPageLayout
         notice={homeNotice}
-        surfaceClassName="home-page-surface"
-        contentGridClassName="home-page-layout"
         workspaceEyebrow={null}
         workspaceTitle={null}
         workspaceDescription={null}
-        workspaceClassName="home-workspace-panel"
-        workspaceContent={
-          navigationSections.length === 0 ? (
-            <div className="table-empty-state table-empty-state-compact home-empty-state">
-              <div className="card-copy">
-                <p className="section-label">Workspace</p>
-                <h2>
-                  {authState === "signed_in" ? "Select a server" : "Sign in to continue"}
-                </h2>
-                <p className="section-description">
-                  {authState === "signed_in"
-                    ? "Choose a server from the top bar."
-                    : "Sign in with Discord to load your servers."}
-                </p>
-              </div>
+      >
+        {navigationSections.length === 0 ? (
+          <div className="table-empty-state table-empty-state-compact home-empty-state">
+            <div className="card-copy">
+              <p className="section-label">Workspace</p>
+              <h2>
+                {authState === "signed_in" ? "Select a server" : "Sign in to continue"}
+              </h2>
+              <p className="section-description">
+                {authState === "signed_in"
+                  ? "Choose a server from the top bar."
+                  : "Sign in with Discord to load your servers."}
+              </p>
             </div>
-          ) : (
-            <div className="home-category-stack">
-              {navigationSections.map((section) => (
-                <SectionBlock
-                  className="home-category-section"
-                  key={section.id}
-                  eyebrow={null}
-                  title={section.label}
-                >
-                  <div className="home-card-grid">
-                    {section.items.map((item) => {
-                      const card = buildHomeCardData(item, {
-                        sectionLabel: section.label,
-                        authState,
-                        selectedGuildPresent: selectedGuild !== null,
-                        rolesSettings,
-                        partnerBoard,
-                        statsFeature,
-                        commandsFeature,
-                        adminCommandsFeature,
-                        moderationFeatures,
-                        loggingFeatures,
-                        autoRoleFeature,
-                        workspaceState: workspace.workspaceState,
-                      });
-                      const actionLabel =
-                        card.item.homeActionLabel ?? `Open ${card.item.label}`;
+          </div>
+        ) : (
+          <div className="home-category-stack">
+            {navigationSections.map((section) => (
+              <SectionBlock
+                className="home-category-section"
+                key={section.id}
+                eyebrow={null}
+                title={section.label}
+              >
+                <div className="home-card-grid">
+                  {section.items.map((item) => {
+                    const card = buildHomeCardData(item, {
+                      sectionLabel: section.label,
+                      authState,
+                      selectedGuildPresent: selectedGuild !== null,
+                      rolesSettings,
+                      partnerBoard,
+                      statsFeature,
+                      commandsFeature,
+                      adminCommandsFeature,
+                      moderationFeatures,
+                      loggingFeatures,
+                      autoRoleFeature,
+                      workspaceState: workspace.workspaceState,
+                    });
+                    const actionLabel =
+                      card.item.homeActionLabel ?? `Open ${card.item.label}`;
 
-                      return (
-                        <OverviewCard
-                          aria-busy={card.loading}
-                          className={`home-nav-card${
-                            item.id === "control-panel"
-                              ? " home-nav-card-control-panel"
-                              : ""
-                          }`}
-                          tone={card.state}
-                          sectionLabel={null}
-                          title={card.item.label}
-                          action={
-                            card.loading ? null : (
-                              <Link
-                                aria-label={actionLabel}
-                                className="button-secondary home-nav-link"
-                                to={card.item.to}
-                              >
-                                Open
-                              </Link>
-                            )
-                          }
-                          key={item.id}
-                        >
-                          {card.loading ? (
-                            <div className="home-nav-card-skeleton" aria-hidden="true">
-                              <span className="home-nav-skeleton home-nav-skeleton-title" />
-                              <span className="home-nav-skeleton" />
-                              <span className="home-nav-skeleton" />
-                              <span className="home-nav-skeleton home-nav-skeleton-button" />
-                            </div>
-                          ) : (
-                            <ul className="home-nav-facts overview-card-list">
-                              {card.rows.map((row) => (
-                                <OverviewStatRow
-                                  key={`${row.label}-${row.value}`}
-                                  label={row.label}
-                                  value={row.value}
-                                  kind={row.valueKind}
-                                  tone={row.state}
-                                  screenReaderLabel={`${row.label}: ${row.value}`}
-                                />
-                              ))}
-                            </ul>
-                          )}
-                        </OverviewCard>
-                      );
-                    })}
-                  </div>
-                </SectionBlock>
-              ))}
-            </div>
-          )
-        }
-      />
+                    return (
+                      <OverviewCard
+                        aria-busy={card.loading}
+                        className={`home-nav-card${
+                          item.id === "control-panel"
+                            ? " home-nav-card-control-panel"
+                            : ""
+                        }`}
+                        tone={card.state}
+                        sectionLabel={null}
+                        title={card.item.label}
+                        action={
+                          card.loading ? null : (
+                            <Link
+                              aria-label={actionLabel}
+                              className="button-secondary home-nav-link"
+                              to={card.item.to}
+                            >
+                              Open
+                            </Link>
+                          )
+                        }
+                        key={item.id}
+                      >
+                        {card.loading ? (
+                          <div className="home-nav-card-skeleton" aria-hidden="true">
+                            <span className="home-nav-skeleton home-nav-skeleton-title" />
+                            <span className="home-nav-skeleton" />
+                            <span className="home-nav-skeleton" />
+                            <span className="home-nav-skeleton home-nav-skeleton-button" />
+                          </div>
+                        ) : (
+                          <ul className="home-nav-facts overview-card-list">
+                            {card.rows.map((row) => (
+                              <OverviewStatRow
+                                key={`${row.label}-${row.value}`}
+                                label={row.label}
+                                value={row.value}
+                                kind={row.valueKind}
+                                tone={row.state}
+                                screenReaderLabel={`${row.label}: ${row.value}`}
+                              />
+                            ))}
+                          </ul>
+                        )}
+                      </OverviewCard>
+                    );
+                  })}
+                </div>
+              </SectionBlock>
+            ))}
+          </div>
+        )}
+      </FlatPageLayout>
     </section>
   );
 }
