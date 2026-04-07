@@ -10,6 +10,7 @@ import {
   FeatureWorkspaceLayout,
   FlatPageLayout,
   KeyValueList,
+  SettingsSelectField,
   UnsavedChangesBar,
 } from "./ui";
 
@@ -236,6 +237,30 @@ describe("EntityMultiPickerField", () => {
   });
 });
 
+describe("SettingsSelectField", () => {
+  it("shows the current selection inline and expands a list when opened", async () => {
+    const user = userEvent.setup();
+
+    render(<SettingsSelectFieldHarness />);
+
+    const trigger = screen.getByRole("button", { name: /mute role/i });
+    expect(trigger).toHaveTextContent("No mute role");
+    expect(screen.queryByRole("option", { name: "Muted" })).not.toBeInTheDocument();
+
+    await user.click(trigger);
+
+    expect(screen.getByRole("option", { name: "Muted" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Muted alt" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("option", { name: "Muted" }));
+
+    expect(screen.getByRole("button", { name: /mute role/i })).toHaveTextContent(
+      "Muted",
+    );
+    expect(screen.queryByRole("option", { name: "Muted" })).not.toBeInTheDocument();
+  });
+});
+
 function EntityMultiPickerFieldHarness() {
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
 
@@ -254,6 +279,23 @@ function EntityMultiPickerFieldHarness() {
             : [...current, value],
         )
       }
+    />
+  );
+}
+
+function SettingsSelectFieldHarness() {
+  const [value, setValue] = useState("");
+
+  return (
+    <SettingsSelectField
+      label="Mute role"
+      value={value}
+      onChange={setValue}
+      placeholder="No mute role"
+      options={[
+        { value: "muted", label: "Muted" },
+        { value: "muted-alt", label: "Muted alt" },
+      ]}
     />
   );
 }

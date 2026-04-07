@@ -1908,7 +1908,7 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe(testRoutes.moderation);
     expect(window.location.hash).toBe("");
     expect(
-      screen.getByRole("heading", { name: "Mute role", level: 2 }),
+      screen.getByRole("heading", { name: "Mute", level: 2 }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Moderation routes", level: 2 }),
@@ -1946,12 +1946,14 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
     const muteRoleSection = screen
-      .getByRole("heading", { name: "Mute role", level: 2 })
+      .getByRole("heading", { name: "Mute", level: 2 })
       .closest("section");
     expect(muteRoleSection).not.toBeNull();
-    await userEvent.selectOptions(
-      within(muteRoleSection!).getByLabelText("Role"),
-      "mute-role",
+    await userEvent.click(
+      within(muteRoleSection!).getByRole("button", { name: /Mute role/i }),
+    );
+    await userEvent.click(
+      within(muteRoleSection!).getByRole("option", { name: "Muted" }),
     );
     await userEvent.click(
       within(muteRoleSection!).getByRole("button", { name: "Save changes" }),
@@ -2031,6 +2033,66 @@ describe("dashboard routing and workspace", () => {
           enabled: false,
         },
       });
+    });
+  });
+
+  it("collapses mute role controls when mute is disabled and restores them when re-enabled", async () => {
+    const { featureUpdates, fetchMock } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", testRoutes.moderation);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Moderation", level: 1 });
+
+    const muteSection = screen
+      .getByRole("heading", { name: "Mute", level: 2 })
+      .closest("section");
+    expect(muteSection).not.toBeNull();
+
+    const muteToggle = within(muteSection!).getByRole("checkbox", {
+      name: "Mute",
+    });
+    expect(
+      within(muteSection!).getByRole("button", { name: /Mute role/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(muteToggle);
+
+    await waitFor(() => {
+      expect(featureUpdates[0]).toEqual({
+        guildID: "guild-1",
+        featureID: "moderation.mute_role",
+        payload: {
+          enabled: false,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(
+        within(muteSection!).queryByRole("button", { name: /Mute role/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(
+      within(muteSection!).getByRole("checkbox", {
+        name: "Mute",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates[1]).toEqual({
+        guildID: "guild-1",
+        featureID: "moderation.mute_role",
+        payload: {
+          enabled: true,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(
+        within(muteSection!).getByRole("button", { name: /Mute role/i }),
+      ).toBeInTheDocument();
     });
   });
 

@@ -5,6 +5,7 @@ import {
   EmptyState,
   EntityPickerField,
   FlatPageLayout,
+  SettingsSelectField,
   UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
@@ -22,7 +23,6 @@ import {
   canEditMuteRole,
   getModerationLogFeatures,
   getMuteRoleFeatureDetails,
-  summarizeMuteRoleSignal,
 } from "../features/features/moderation";
 import { formatRoleOptionLabel } from "../features/features/roles";
 import {
@@ -389,87 +389,99 @@ function MuteRoleSection({
 }: MuteRoleSectionProps) {
   const currentRoleId = getMuteRoleFeatureDetails(feature).roleId;
   const [roleDraft, setRoleDraft] = useState(currentRoleId);
+  const [muteExpanded, setMuteExpanded] = useState(feature.effective_enabled);
   const canEditRole = canEditSelectedGuild && canEditMuteRole(feature);
+  const isMuteTogglePending = mutationSaving && pendingFeatureId === feature.id;
+  const muteEnabled = isMuteTogglePending
+    ? muteExpanded
+    : feature.effective_enabled;
   const hasUnsavedChanges = currentRoleId !== roleDraft.trim();
-  const muteRoleMessage =
-    feature.effective_enabled && feature.readiness === "blocked"
-      ? summarizeMuteRoleSignal(feature)
-      : null;
 
   useEffect(() => {
     setRoleDraft(currentRoleId);
   }, [currentRoleId]);
+
+  useEffect(() => {
+    setMuteExpanded(feature.effective_enabled);
+  }, [feature.effective_enabled]);
 
   function handleReset() {
     onClearNotice();
     setRoleDraft(currentRoleId);
   }
 
+  function handleMuteToggle(enabled: boolean) {
+    if (!enabled) {
+      onClearNotice();
+      setRoleDraft(currentRoleId);
+    }
+
+    setMuteExpanded(enabled);
+    void onSetFeatureEnabled(feature, enabled);
+  }
+
   return (
     <section className="flat-config-section moderation-flat-section moderation-service-panel">
       <div className="moderation-setting-row">
         <div className="card-copy moderation-section-copy">
-          <h2 className="moderation-section-title">Mute role</h2>
+          <h2 className="moderation-section-title">Mute</h2>
         </div>
         <ModerationSwitch
-          label="Mute role"
-          checked={feature.effective_enabled}
+          label="Mute"
+          checked={muteEnabled}
           disabled={mutationSaving || !canEditSelectedGuild}
-          onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
+          onChange={handleMuteToggle}
         />
       </div>
 
-      <EntityPickerField
-        label="Role"
-        value={roleDraft}
-        disabled={!canEditRole || roleOptions.loading}
-        onChange={setRoleDraft}
-        options={muteRoleOptions}
-        placeholder={
-          roleOptions.loading
-            ? "Loading roles..."
-            : muteRoleOptions.length === 0
-              ? "No roles available"
-              : "No mute role"
-        }
-        note={
-          roleOptions.notice || muteRoleMessage
-            ? undefined
-            : "Assigned when a member is muted."
-        }
-      />
+      {muteEnabled ? (
+        <div className="moderation-mute-controls">
+          <SettingsSelectField
+            label="Mute role"
+            value={roleDraft}
+            disabled={!canEditRole || roleOptions.loading}
+            onChange={setRoleDraft}
+            options={muteRoleOptions}
+            placeholder={
+              roleOptions.loading
+                ? "Loading roles..."
+                : muteRoleOptions.length === 0
+                  ? "No roles available"
+                  : "No mute role"
+            }
+          />
 
-      {roleOptions.notice ? (
-        <ModerationInlineMessage
-          message={roleOptions.notice.message}
-          tone="error"
-          action={
-            <button
-              className="button-secondary"
-              type="button"
-              disabled={roleOptions.loading}
-              onClick={() => void roleOptions.refresh()}
-            >
-              Retry role lookup
-            </button>
-          }
-        />
-      ) : muteRoleMessage ? (
-        <ModerationInlineMessage message={muteRoleMessage} tone="error" />
+          {roleOptions.notice ? (
+            <ModerationInlineMessage
+              message={roleOptions.notice.message}
+              tone="error"
+              action={
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={roleOptions.loading}
+                  onClick={() => void roleOptions.refresh()}
+                >
+                  Retry role lookup
+                </button>
+              }
+            />
+          ) : null}
+
+          <UnsavedChangesBar
+            hasUnsavedChanges={hasUnsavedChanges}
+            saveLabel={
+              mutationSaving && pendingFeatureId === feature.id
+                ? "Saving..."
+                : "Save changes"
+            }
+            saving={mutationSaving && pendingFeatureId === feature.id}
+            disabled={!canEditRole || roleOptions.loading}
+            onReset={handleReset}
+            onSave={() => onSave(feature, roleDraft)}
+          />
+        </div>
       ) : null}
-
-      <UnsavedChangesBar
-        hasUnsavedChanges={hasUnsavedChanges}
-        saveLabel={
-          mutationSaving && pendingFeatureId === feature.id
-            ? "Saving..."
-            : "Save changes"
-        }
-        saving={mutationSaving && pendingFeatureId === feature.id}
-        disabled={!canEditRole || roleOptions.loading}
-        onReset={handleReset}
-        onSave={() => onSave(feature, roleDraft)}
-      />
     </section>
   );
 }
