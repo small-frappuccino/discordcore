@@ -11,6 +11,7 @@ import {
   PageHeader,
   StatusBadge,
   SurfaceCard,
+  UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import {
@@ -115,7 +116,7 @@ export function StatsPage() {
         enabled,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -130,7 +131,7 @@ export function StatsPage() {
         enabled: null,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -168,12 +169,28 @@ export function StatsPage() {
         update_interval_mins: parsedUpdateIntervalMins,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
       setPendingFeatureId("");
     }
+  }
+
+  const statsSettingsDirty =
+    statsFeature !== null &&
+    statsDetails !== null &&
+    (statsDetails.configEnabled !== (configEnabledDraft === "enabled") ||
+      statsDetails.updateIntervalMins !== parsedUpdateIntervalMins);
+
+  function resetStatsSettingsDraft() {
+    if (statsDetails === null) {
+      return;
+    }
+
+    mutation.clearNotice();
+    setConfigEnabledDraft(statsDetails.configEnabled ? "enabled" : "disabled");
+    setUpdateIntervalDraft(String(statsDetails.updateIntervalMins));
   }
 
   function renderHeaderActions() {
@@ -437,7 +454,6 @@ export function StatsPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={mutation.saving ? "Saving stats settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" &&
             statsFeature !== null &&
@@ -677,29 +693,18 @@ export function StatsPage() {
               </div>
             ) : null}
 
-            <div className="drawer-actions">
-              <button
-                className="button-primary"
-                type="button"
-                disabled={
-                  mutation.saving ||
-                  !canEditSelectedGuild ||
-                  !canSaveStatsSettings
-                }
-                onClick={() => void handleSaveStatsSettings()}
-              >
-                {mutation.saving && pendingFeatureId === statsFeature.id
+            <UnsavedChangesBar
+              hasUnsavedChanges={statsSettingsDirty}
+              saveLabel={
+                mutation.saving && pendingFeatureId === statsFeature.id
                   ? "Saving..."
-                  : "Save stats settings"}
-              </button>
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={closeDrawer}
-              >
-                Cancel
-              </button>
-            </div>
+                  : "Save changes"
+              }
+              saving={mutation.saving && pendingFeatureId === statsFeature.id}
+              disabled={!canEditSelectedGuild || !canSaveStatsSettings}
+              onReset={resetStatsSettingsDraft}
+              onSave={handleSaveStatsSettings}
+            />
           </aside>
         </div>
       ) : null}

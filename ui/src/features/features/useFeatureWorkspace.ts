@@ -69,6 +69,32 @@ export function useFeatureWorkspace({
     setNotice(null);
   }
 
+  function updateFeature(nextFeature: FeatureRecord) {
+    setWorkspace((currentWorkspace) => {
+      if (currentWorkspace === null) {
+        return currentWorkspace;
+      }
+
+      let featureFound = false;
+      const nextFeatures = currentWorkspace.features.map((currentFeature) => {
+        if (currentFeature.id !== nextFeature.id) {
+          return currentFeature;
+        }
+        featureFound = true;
+        return nextFeature;
+      });
+
+      if (!featureFound) {
+        return currentWorkspace;
+      }
+
+      return {
+        ...currentWorkspace,
+        features: nextFeatures,
+      };
+    });
+  }
+
   async function refresh() {
     if (authState !== "signed_in") {
       return;
@@ -186,6 +212,7 @@ export function useFeatureWorkspace({
     workspaceState,
     clearNotice: () => setNotice(null),
     refresh,
+    updateFeature,
   };
 }
 

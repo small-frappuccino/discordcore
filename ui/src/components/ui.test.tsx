@@ -1,11 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DashboardPageSurface,
   EntityMultiPickerField,
   FeatureWorkspaceLayout,
+  UnsavedChangesBar,
 } from "./ui";
 
 describe("DashboardPageSurface", () => {
@@ -21,6 +22,7 @@ describe("DashboardPageSurface", () => {
 
     expect(screen.getByText("Loading dashboard data.")).toBeInTheDocument();
     expect(screen.getByText("Refreshing...")).toBeInTheDocument();
+    expect(screen.queryByText("Workspace status")).not.toBeInTheDocument();
     expect(screen.getByText("Page content")).toBeInTheDocument();
   });
 });
@@ -50,6 +52,7 @@ describe("FeatureWorkspaceLayout", () => {
 
     expect(screen.getByText("Workspace failed to load.")).toBeInTheDocument();
     expect(screen.getByText("Refreshing workspace...")).toBeInTheDocument();
+    expect(screen.queryByText("Workspace status")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Feature summary")).toHaveTextContent("Summary strip");
     expect(
       screen.getByRole("heading", { name: "Manage widgets", level: 2 }),
@@ -75,6 +78,38 @@ describe("FeatureWorkspaceLayout", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Only workspace content")).toBeInTheDocument();
     expect(container.querySelector(".content-grid-with-aside")).toBeNull();
+  });
+});
+
+describe("UnsavedChangesBar", () => {
+  it("renders reset and save actions only when the page is dirty", async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn();
+    const onSave = vi.fn();
+    const { rerender } = render(
+      <UnsavedChangesBar
+        hasUnsavedChanges={false}
+        onReset={onReset}
+        onSave={onSave}
+      />,
+    );
+
+    expect(screen.queryByText("Careful - you have unsaved changes.")).not.toBeInTheDocument();
+
+    rerender(
+      <UnsavedChangesBar
+        hasUnsavedChanges
+        onReset={onReset}
+        onSave={onSave}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(screen.getByText("Careful - you have unsaved changes.")).toBeInTheDocument();
+    expect(onReset).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledTimes(1);
   });
 });
 

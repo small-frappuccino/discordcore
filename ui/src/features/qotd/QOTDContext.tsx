@@ -272,11 +272,20 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.saveSettings);
     try {
       const response = await client.updateQOTDSettings(normalizedGuildID, nextSettings);
-      setSettings({
+      const updatedSettings = {
         ...emptySettings,
         ...response.settings,
-      });
-      const forumChannelID = response.settings.forum_channel_id?.trim() ?? "";
+      };
+      setSettings(updatedSettings);
+      setSummary((currentSummary) =>
+        currentSummary === null
+          ? currentSummary
+          : {
+              ...currentSummary,
+              settings: updatedSettings,
+            },
+      );
+      const forumChannelID = updatedSettings.forum_channel_id?.trim() ?? "";
       if (forumChannelID !== "") {
         try {
           await loadForumTags(forumChannelID);
@@ -286,7 +295,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       } else {
         setForumTags([]);
       }
-      await loadWorkspace();
+      setNotice(null);
     } catch (error) {
       setNotice({
         tone: "error",

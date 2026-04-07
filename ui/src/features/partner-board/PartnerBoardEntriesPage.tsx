@@ -1,3 +1,4 @@
+import { UnsavedChangesBar } from "../../components/ui";
 import { usePartnerBoard } from "./PartnerBoardContext";
 import { PartnerBoardWorkspaceState } from "./PartnerBoardWorkspaceState";
 
@@ -5,6 +6,7 @@ export function PartnerBoardEntriesPage() {
   const {
     confirmDeleteEntry,
     drawerMode,
+    entryDirty,
     entryForm,
     filteredPartners,
     isDrawerOpen,
@@ -13,6 +15,7 @@ export function PartnerBoardEntriesPage() {
     openEditEntryDrawer,
     partners,
     pendingDeleteName,
+    resetEntryForm,
     saveEntry,
     searchQuery,
     setEntryFormField,
@@ -187,6 +190,14 @@ export function PartnerBoardEntriesPage() {
               </p>
             </div>
 
+            <UnsavedChangesBar
+              hasUnsavedChanges={entryDirty}
+              saveLabel={loading ? "Saving..." : "Save changes"}
+              saving={loading}
+              onReset={resetEntryForm}
+              onSave={saveEntry}
+            />
+
             <label className="field-stack">
               <span className="field-label">Group</span>
               <input
@@ -216,23 +227,6 @@ export function PartnerBoardEntriesPage() {
               />
             </label>
 
-            <div className="drawer-actions">
-              <button
-                className="button-primary"
-                type="button"
-                disabled={loading}
-                onClick={() => void saveEntry()}
-              >
-                {drawerMode === "edit" ? "Save changes" : "Add partner"}
-              </button>
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={closeEntryDrawer}
-              >
-                Cancel
-              </button>
-            </div>
           </aside>
         </div>
       ) : null}

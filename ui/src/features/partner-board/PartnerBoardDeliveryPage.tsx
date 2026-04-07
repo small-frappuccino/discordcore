@@ -1,4 +1,8 @@
-import { KeyValueList, StatusBadge } from "../../components/ui";
+import {
+  KeyValueList,
+  StatusBadge,
+  UnsavedChangesBar,
+} from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import {
   buildDeliveryPayload,
@@ -13,9 +17,10 @@ import { usePartnerBoard } from "./PartnerBoardContext";
 export function PartnerBoardDeliveryPage() {
   const { canEditSelectedGuild } = useDashboardSession();
   const {
+    deliveryDirty,
     deliveryForm,
     loading,
-    notice,
+    resetDeliveryForm,
     saveDelivery,
     setDeliveryFormField,
     workspaceState,
@@ -64,6 +69,15 @@ export function PartnerBoardDeliveryPage() {
             value: canEditSelectedGuild ? "Writable" : "Read-only",
           },
         ]}
+      />
+
+      <UnsavedChangesBar
+        hasUnsavedChanges={deliveryDirty}
+        saveLabel={loading ? "Saving..." : "Save changes"}
+        saving={loading}
+        disabled={!canEditSelectedGuild}
+        onReset={resetDeliveryForm}
+        onSave={saveDelivery}
       />
 
       <section className="workspace-callout">
@@ -130,23 +144,10 @@ export function PartnerBoardDeliveryPage() {
             </label>
           )}
 
-          <div className="workspace-toolbar-actions">
-            <button
-              className="button-primary"
-              type="button"
-              disabled={!canEditSelectedGuild || loading}
-              onClick={() => void saveDelivery()}
-            >
-              {loading ? "Saving..." : "Save destination"}
-            </button>
-          </div>
-
           {!canEditSelectedGuild ? (
             <p className="meta-note">
               This server is open in read-only mode. Destination changes are disabled.
             </p>
-          ) : notice ? (
-            <p className="meta-note">{notice.message}</p>
           ) : null}
         </div>
       </section>

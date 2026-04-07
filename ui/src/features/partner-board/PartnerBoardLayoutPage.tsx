@@ -1,11 +1,14 @@
+import { UnsavedChangesBar } from "../../components/ui";
 import { PartnerBoardWorkspaceState } from "./PartnerBoardWorkspaceState";
 import { usePartnerBoard } from "./PartnerBoardContext";
 
 export function PartnerBoardLayoutPage() {
   const {
     layoutFieldCount,
+    layoutDirty,
     layoutForm,
     loading,
+    resetLayoutForm,
     saveLayout,
     setLayoutFormField,
     workspaceState,
@@ -29,6 +32,14 @@ export function PartnerBoardLayoutPage() {
           <span className="meta-pill subtle-pill">{layoutFieldCount}/5 fields filled</span>
         </div>
       </div>
+
+      <UnsavedChangesBar
+        hasUnsavedChanges={layoutDirty}
+        saveLabel={loading ? "Saving..." : "Save changes"}
+        saving={loading}
+        onReset={resetLayoutForm}
+        onSave={saveLayout}
+      />
 
       <div className="workspace-form-grid">
         <label className="field-stack">
@@ -83,18 +94,6 @@ export function PartnerBoardLayoutPage() {
           placeholder="Optional introduction shown above the partner list"
         />
       </label>
-
-      <div className="workspace-footer">
-        <button
-          className="button-primary"
-          type="button"
-          disabled={loading}
-          onClick={() => void saveLayout()}
-        >
-          Save layout
-        </button>
-        <span className="meta-note">Layout changes save directly in phase 1.</span>
-      </div>
 
       <details className="details-panel">
         <summary>Advanced formatting</summary>

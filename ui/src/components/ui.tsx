@@ -30,6 +30,18 @@ interface AlertBannerProps {
   busyLabel?: string;
 }
 
+interface UnsavedChangesBarProps {
+  hasUnsavedChanges: boolean;
+  message?: ReactNode;
+  saveLabel?: string;
+  resetLabel?: string;
+  onSave: () => void | Promise<void>;
+  onReset: () => void | Promise<void>;
+  saving?: boolean;
+  disabled?: boolean;
+  className?: string;
+}
+
 interface LookupNoticeProps {
   title: string;
   message: ReactNode;
@@ -57,6 +69,7 @@ interface PageContentSurfaceProps extends HTMLAttributes<HTMLElement> {
 interface DashboardPageSurfaceProps {
   notice?: Notice | null;
   busyLabel?: string;
+  actionBar?: ReactNode;
   className?: string;
   children: ReactNode;
 }
@@ -64,6 +77,7 @@ interface DashboardPageSurfaceProps {
 interface FeatureWorkspaceLayoutProps {
   notice?: Notice | null;
   busyLabel?: string;
+  actionBar?: ReactNode;
   surfaceClassName?: string;
   contentGridClassName?: string;
   summary?: ReactNode;
@@ -192,12 +206,14 @@ export function PageContentSurface({
 export function DashboardPageSurface({
   notice,
   busyLabel,
+  actionBar,
   className,
   children,
 }: DashboardPageSurfaceProps) {
   return (
     <PageContentSurface className={className}>
       <AlertBanner notice={notice} busyLabel={busyLabel} />
+      {actionBar}
       {children}
     </PageContentSurface>
   );
@@ -206,6 +222,7 @@ export function DashboardPageSurface({
 export function FeatureWorkspaceLayout({
   notice,
   busyLabel,
+  actionBar,
   surfaceClassName,
   contentGridClassName,
   summary,
@@ -228,6 +245,7 @@ export function FeatureWorkspaceLayout({
       className={surfaceClassName}
       notice={notice}
       busyLabel={busyLabel}
+      actionBar={actionBar}
     >
       {summary}
 
@@ -483,6 +501,55 @@ export function EntityMultiPickerField({
   );
 }
 
+export function UnsavedChangesBar({
+  hasUnsavedChanges,
+  message = "Careful - you have unsaved changes.",
+  saveLabel = "Save changes",
+  resetLabel = "Reset",
+  onSave,
+  onReset,
+  saving = false,
+  disabled = false,
+  className,
+}: UnsavedChangesBarProps) {
+  if (!hasUnsavedChanges) {
+    return null;
+  }
+
+  const actionsDisabled = disabled || saving;
+
+  return (
+    <div
+      className={joinClassNames("unsaved-changes-bar", className)}
+      role="status"
+      aria-live="polite"
+      aria-busy={saving}
+    >
+      <div className="unsaved-changes-copy">
+        <strong>{message}</strong>
+      </div>
+      <div className="unsaved-changes-actions">
+        <button
+          className="button-ghost"
+          type="button"
+          disabled={actionsDisabled}
+          onClick={() => void onReset()}
+        >
+          {resetLabel}
+        </button>
+        <button
+          className="button-primary"
+          type="button"
+          disabled={actionsDisabled}
+          onClick={() => void onSave()}
+        >
+          {saveLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AlertBanner({ notice, busyLabel }: AlertBannerProps) {
   if (!notice && !busyLabel) {
     return null;
@@ -493,8 +560,7 @@ export function AlertBanner({ notice, busyLabel }: AlertBannerProps) {
       className={`alert-banner alert-${notice?.tone ?? "info"}`}
       role="status"
     >
-      <div>
-        <p className="section-label">Workspace status</p>
+      <div className="card-copy">
         <strong>{notice?.message ?? busyLabel}</strong>
         {notice && busyLabel ? <p className="meta-note">{busyLabel}</p> : null}
       </div>

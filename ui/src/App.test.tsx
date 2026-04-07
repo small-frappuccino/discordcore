@@ -1760,7 +1760,7 @@ describe("dashboard routing and workspace", () => {
 
     await userEvent.click(membersRoleToggle);
     await userEvent.click(
-      screen.getByRole("button", { name: "Save access roles" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -1781,8 +1781,8 @@ describe("dashboard routing and workspace", () => {
       screen.queryByText("Dashboard access roles updated."),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Save access roles" }),
-    ).toBeDisabled();
+      screen.queryAllByRole("button", { name: "Save changes" }),
+    ).toHaveLength(0);
   });
 
   it("keeps Control Panel writes disabled when the selected server is read-only", async () => {
@@ -1814,8 +1814,8 @@ describe("dashboard routing and workspace", () => {
       screen.getByRole("button", { name: /write access roles/i }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Save access roles" }),
-    ).toBeDisabled();
+      screen.queryAllByRole("button", { name: "Save changes" }),
+    ).toHaveLength(0);
   });
 
   it("includes read-only accessible servers in the server picker", async () => {
@@ -1936,7 +1936,7 @@ describe("dashboard routing and workspace", () => {
       "mute-role",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save mute role" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -1964,7 +1964,7 @@ describe("dashboard routing and workspace", () => {
       "mod-cases",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save destination" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2052,12 +2052,12 @@ describe("dashboard routing and workspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add partner" }));
     expect(screen.getByLabelText("Add partner")).toBeVisible();
 
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(document.querySelector(".drawer-backdrop")!);
 
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByLabelText("Edit partner")).toBeVisible();
 
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(document.querySelector(".drawer-backdrop")!);
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(screen.getByRole("button", { name: "Confirm" })).toBeVisible();
   });
@@ -2116,7 +2116,7 @@ describe("dashboard routing and workspace", () => {
       "role-booster",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save auto role" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2187,7 +2187,7 @@ describe("dashboard routing and workspace", () => {
       "user-carol",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save user watch" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2264,7 +2264,7 @@ describe("dashboard routing and workspace", () => {
     expect(advancedDetails).toHaveAttribute("open");
     expect(screen.getByLabelText("Command channel ID fallback")).toBeVisible();
 
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(document.querySelector(".drawer-backdrop")!);
     expect(
       screen.queryByRole("dialog", { name: "Configure commands" }),
     ).not.toBeInTheDocument();
@@ -2302,7 +2302,7 @@ describe("dashboard routing and workspace", () => {
       "ops-commands",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save command channel" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2349,7 +2349,7 @@ describe("dashboard routing and workspace", () => {
 
     await userEvent.click(screen.getByRole("checkbox", { name: /Members/i }));
     await userEvent.click(
-      screen.getByRole("button", { name: "Save admin access" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2431,7 +2431,7 @@ describe("dashboard routing and workspace", () => {
     expect(screen.getByLabelText("Destination channel")).toHaveValue(
       "user-log-channel",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(document.querySelector(".drawer-backdrop")!);
 
     await userEvent.click(
       screen.getAllByRole("button", { name: "Configure" })[1]!,
@@ -2448,7 +2448,7 @@ describe("dashboard routing and workspace", () => {
       "join-channel",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save destination" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2559,7 +2559,7 @@ describe("dashboard routing and workspace", () => {
       "45",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save stats settings" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {
@@ -2661,7 +2661,7 @@ describe("dashboard routing and workspace", () => {
       "https://discord.com/api/webhooks/new-target",
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Save destination" }),
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
     );
 
     await waitFor(() => {

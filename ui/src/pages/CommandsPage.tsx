@@ -46,6 +46,7 @@ import {
   KeyValueList,
   PageHeader,
   StatusBadge,
+  UnsavedChangesBar,
 } from "../components/ui";
 import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
 
@@ -101,25 +102,6 @@ export function CommandsPage() {
     closeDrawer();
   }, [canEditSelectedGuild]);
 
-  useEffect(() => {
-    if (selectedFeature === null) {
-      return;
-    }
-
-    switch (selectedFeature.id) {
-      case "services.commands":
-        setChannelDraft(getCommandsFeatureDetails(selectedFeature).channelId);
-        return;
-      case "services.admin_commands":
-        setAllowedRoleIdsDraft(
-          getAdminCommandsFeatureDetails(selectedFeature).allowedRoleIds,
-        );
-        return;
-      default:
-        return;
-    }
-  }, [selectedFeature]);
-
   if (definition === null) {
     return null;
   }
@@ -149,7 +131,16 @@ export function CommandsPage() {
       return;
     }
 
+    mutation.clearNotice();
     setSelectedFeatureId(feature.id);
+    if (feature.id === "services.commands") {
+      setChannelDraft(getCommandsFeatureDetails(feature).channelId);
+      setAllowedRoleIdsDraft([]);
+      return;
+    }
+
+    setChannelDraft("");
+    setAllowedRoleIdsDraft(getAdminCommandsFeatureDetails(feature).allowedRoleIds);
   }
 
   async function handleRefreshCommands() {
@@ -171,7 +162,7 @@ export function CommandsPage() {
         enabled,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -186,7 +177,7 @@ export function CommandsPage() {
         enabled: null,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -205,7 +196,7 @@ export function CommandsPage() {
         channel_id: channelDraft.trim(),
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
@@ -225,12 +216,36 @@ export function CommandsPage() {
         allowed_role_ids: allowedRoleIdsDraft,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
       setPendingFeatureId("");
     }
+  }
+
+  const selectedFeatureHasUnsavedChanges =
+    selectedFeature === null
+      ? false
+      : selectedFeature.id === "services.commands"
+        ? getCommandsFeatureDetails(selectedFeature).channelId !== channelDraft.trim()
+        : !areStringListsEqual(
+            getAdminCommandsFeatureDetails(selectedFeature).allowedRoleIds,
+            allowedRoleIdsDraft,
+          );
+
+  function resetSelectedFeatureDrafts() {
+    if (selectedFeature === null) {
+      return;
+    }
+
+    mutation.clearNotice();
+    if (selectedFeature.id === "services.commands") {
+      setChannelDraft(getCommandsFeatureDetails(selectedFeature).channelId);
+      return;
+    }
+
+    setAllowedRoleIdsDraft(getAdminCommandsFeatureDetails(selectedFeature).allowedRoleIds);
   }
 
   function renderHeaderActions() {
@@ -599,8 +614,6 @@ export function CommandsPage() {
 
             {renderDrawerBody({
               selectedFeature,
-              pendingFeatureId,
-              mutationSaving: mutation.saving,
               channelDraft,
               allowedRoleIdsDraft,
               availableChannels: channelOptions.channels,
@@ -613,11 +626,29 @@ export function CommandsPage() {
               refreshChannelOptions: channelOptions.refresh,
               setChannelDraft,
               setAllowedRoleIdsDraft,
-              closeDrawer,
               refreshRoleOptions: roleOptions.refresh,
-              handleSaveCommandChannel,
-              handleSaveAdminAccess,
             })}
+
+            <UnsavedChangesBar
+              hasUnsavedChanges={selectedFeatureHasUnsavedChanges}
+              saveLabel={
+                mutation.saving && pendingFeatureId === selectedFeature.id
+                  ? "Saving..."
+                  : "Save changes"
+              }
+              saving={mutation.saving && pendingFeatureId === selectedFeature.id}
+              disabled={
+                !canEditSelectedGuild ||
+                (selectedFeature.id === "services.admin_commands" &&
+                  (roleOptions.loading || roleOptions.notice !== null))
+              }
+              onReset={resetSelectedFeatureDrafts}
+              onSave={
+                selectedFeature.id === "services.commands"
+                  ? handleSaveCommandChannel
+                  : handleSaveAdminAccess
+              }
+            />
           </aside>
         </div>
       ) : null}
@@ -638,8 +669,6 @@ function getDrawerLabel(feature: FeatureRecord) {
 
 interface RenderDrawerBodyProps {
   selectedFeature: FeatureRecord;
-  pendingFeatureId: string;
-  mutationSaving: boolean;
   channelDraft: string;
   allowedRoleIdsDraft: string[];
   availableChannels: GuildChannelOption[];
@@ -653,17 +682,12 @@ interface RenderDrawerBodyProps {
   setAllowedRoleIdsDraft: (
     value: string[] | ((current: string[]) => string[]),
   ) => void;
-  closeDrawer: () => void;
   refreshChannelOptions: () => Promise<void>;
   refreshRoleOptions: () => Promise<void>;
-  handleSaveCommandChannel: () => Promise<void>;
-  handleSaveAdminAccess: () => Promise<void>;
 }
 
 function renderDrawerBody({
   selectedFeature,
-  pendingFeatureId,
-  mutationSaving,
   channelDraft,
   allowedRoleIdsDraft,
   availableChannels,
@@ -675,11 +699,8 @@ function renderDrawerBody({
   roleOptionsNotice,
   setChannelDraft,
   setAllowedRoleIdsDraft,
-  closeDrawer,
   refreshChannelOptions,
   refreshRoleOptions,
-  handleSaveCommandChannel,
-  handleSaveAdminAccess,
 }: RenderDrawerBodyProps) {
   if (selectedFeature.id === "services.commands") {
     const details = getCommandsFeatureDetails(selectedFeature);
@@ -751,22 +772,6 @@ function renderDrawerBody({
         <p className="meta-note">
           Use one command channel when setup and follow-up actions should stay in a single place.
         </p>
-
-        <div className="drawer-actions">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={mutationSaving}
-            onClick={() => void handleSaveCommandChannel()}
-          >
-            {mutationSaving && pendingFeatureId === selectedFeature.id
-              ? "Saving..."
-              : "Save command channel"}
-          </button>
-          <button className="button-secondary" type="button" onClick={closeDrawer}>
-            Cancel
-          </button>
-        </div>
       </>
     );
   }
@@ -843,22 +848,13 @@ function renderDrawerBody({
           ? `The current configuration already grants access to ${formatAllowedRoleCountValue(selectedFeature).toLowerCase()}.`
           : "Choose only the roles that should be able to run privileged command workflows."}
       </p>
-
-      <div className="drawer-actions">
-        <button
-          className="button-primary"
-          type="button"
-          disabled={mutationSaving || roleOptionsLoading || roleOptionsNotice !== null}
-          onClick={() => void handleSaveAdminAccess()}
-        >
-          {mutationSaving && pendingFeatureId === selectedFeature.id
-            ? "Saving..."
-            : "Save admin access"}
-        </button>
-        <button className="button-secondary" type="button" onClick={closeDrawer}>
-          Cancel
-        </button>
-      </div>
     </>
+  );
+}
+
+function areStringListsEqual(currentValues: string[], nextValues: string[]) {
+  return (
+    currentValues.length === nextValues.length &&
+    currentValues.every((value, index) => value === nextValues[index])
   );
 }

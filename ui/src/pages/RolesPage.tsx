@@ -15,6 +15,7 @@ import {
   PageHeader,
   StatusBadge,
   SurfaceCard,
+  UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import { getFeatureAreaDefinition, getFeatureAreaRecords } from "../features/features/areas";
@@ -73,6 +74,7 @@ export function RolesPage() {
   const {
     authState,
     beginLogin,
+    canEditSelectedGuild,
     currentOriginLabel,
     selectedGuild,
   } = useDashboardSession();
@@ -148,7 +150,7 @@ export function RolesPage() {
         enabled,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -163,7 +165,7 @@ export function RolesPage() {
         enabled: null,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -244,7 +246,7 @@ export function RolesPage() {
         ),
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
@@ -264,7 +266,7 @@ export function RolesPage() {
         watch_bot: watchBotDraft === "enabled",
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
@@ -284,7 +286,7 @@ export function RolesPage() {
         user_id: userIdDraft.trim(),
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
@@ -304,11 +306,59 @@ export function RolesPage() {
         actor_role_id: actorRoleDraft,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
       setPendingFeatureId("");
+    }
+  }
+
+  const selectedFeatureHasUnsavedChanges = hasRolesFeatureDraftChanges({
+    actorRoleDraft,
+    boosterRoleDraft,
+    configEnabledDraft,
+    levelRoleDraft,
+    selectedFeature,
+    targetRoleDraft,
+    userIdDraft,
+    watchBotDraft,
+  });
+
+  function resetSelectedFeatureDrafts() {
+    if (selectedFeature === null) {
+      return;
+    }
+
+    mutation.clearNotice();
+
+    switch (selectedFeature.id) {
+      case "auto_role_assignment": {
+        const details = getAutoRoleFeatureDetails(selectedFeature);
+        setConfigEnabledDraft(details.configEnabled ? "enabled" : "disabled");
+        setTargetRoleDraft(details.targetRoleId);
+        setLevelRoleDraft(details.levelRoleId);
+        setBoosterRoleDraft(details.boosterRoleId);
+        return;
+      }
+      case "presence_watch.bot": {
+        const details = getPresenceWatchBotDetails(selectedFeature);
+        setWatchBotDraft(details.watchBot ? "enabled" : "disabled");
+        return;
+      }
+      case "presence_watch.user": {
+        const details = getPresenceWatchUserDetails(selectedFeature);
+        setUserIdDraft(details.userId);
+        setMemberSearchDraft("");
+        return;
+      }
+      case "safety.bot_role_perm_mirror": {
+        const details = getPermissionMirrorDetails(selectedFeature);
+        setActorRoleDraft(details.actorRoleId);
+        return;
+      }
+      default:
+        return;
     }
   }
 
@@ -352,7 +402,6 @@ export function RolesPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={mutation.saving ? "Saving role settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" &&
             autoRoleFeature !== null &&
@@ -468,6 +517,9 @@ export function RolesPage() {
         setTargetRoleDraft={setTargetRoleDraft}
         setUserIdDraft={setUserIdDraft}
         setWatchBotDraft={setWatchBotDraft}
+        hasUnsavedChanges={selectedFeatureHasUnsavedChanges}
+        canSave={canEditSelectedGuild}
+        onReset={resetSelectedFeatureDrafts}
         onSaveAutoRole={() => void handleSaveAutoRole()}
         onSavePermissionMirror={() => void handleSavePermissionMirror()}
         onSavePresenceWatchBot={() => void handleSavePresenceWatchBot()}
@@ -925,8 +977,10 @@ function RolesAside({
 interface RolesFeatureDrawerProps {
   actorRoleDraft: string;
   boosterRoleDraft: string;
+  canSave: boolean;
   closeDrawer: () => void;
   configEnabledDraft: string;
+  hasUnsavedChanges: boolean;
   levelRoleDraft: string;
   memberLookupLoading: boolean;
   memberLookupNotice: DashboardNotice | null;
@@ -949,6 +1003,7 @@ interface RolesFeatureDrawerProps {
   setTargetRoleDraft: (value: string) => void;
   setUserIdDraft: (value: string) => void;
   setWatchBotDraft: (value: string) => void;
+  onReset: () => void;
   onSaveAutoRole: () => void;
   onSavePermissionMirror: () => void;
   onSavePresenceWatchBot: () => void;
@@ -958,8 +1013,10 @@ interface RolesFeatureDrawerProps {
 function RolesFeatureDrawer({
   actorRoleDraft,
   boosterRoleDraft,
+  canSave,
   closeDrawer,
   configEnabledDraft,
+  hasUnsavedChanges,
   levelRoleDraft,
   memberLookupLoading,
   memberLookupNotice,
@@ -982,6 +1039,7 @@ function RolesFeatureDrawer({
   setTargetRoleDraft,
   setUserIdDraft,
   setWatchBotDraft,
+  onReset,
   onSaveAutoRole,
   onSavePermissionMirror,
   onSavePresenceWatchBot,
@@ -1015,11 +1073,8 @@ function RolesFeatureDrawer({
         {selectedFeature.id === "auto_role_assignment" ? (
           <AutoRoleDrawerBody
             boosterRoleDraft={boosterRoleDraft}
-            closeDrawer={closeDrawer}
             configEnabledDraft={configEnabledDraft}
             levelRoleDraft={levelRoleDraft}
-            mutationSaving={mutationSaving}
-            pendingFeatureId={pendingFeatureId}
             roleOptions={roleOptions}
             selectedFeature={selectedFeature}
             targetRoleDraft={targetRoleDraft}
@@ -1027,47 +1082,55 @@ function RolesFeatureDrawer({
             setConfigEnabledDraft={setConfigEnabledDraft}
             setLevelRoleDraft={setLevelRoleDraft}
             setTargetRoleDraft={setTargetRoleDraft}
-            onSave={onSaveAutoRole}
           />
         ) : selectedFeature.id === "presence_watch.bot" ? (
           <PresenceWatchBotDrawerBody
-            closeDrawer={closeDrawer}
-            mutationSaving={mutationSaving}
-            pendingFeatureId={pendingFeatureId}
             selectedFeature={selectedFeature}
             watchBotDraft={watchBotDraft}
             setWatchBotDraft={setWatchBotDraft}
-            onSave={onSavePresenceWatchBot}
           />
         ) : selectedFeature.id === "presence_watch.user" ? (
           <PresenceWatchUserDrawerBody
-            closeDrawer={closeDrawer}
             memberLookupLoading={memberLookupLoading}
             memberLookupNotice={memberLookupNotice}
             memberOptions={memberOptions}
             memberSearchDraft={memberSearchDraft}
-            mutationSaving={mutationSaving}
-            pendingFeatureId={pendingFeatureId}
             selectedFeature={selectedFeature}
             userIdDraft={userIdDraft}
             refreshMemberOptions={refreshMemberOptions}
             setMemberSearchDraft={setMemberSearchDraft}
             setUserIdDraft={setUserIdDraft}
-            onSave={onSavePresenceWatchUser}
           />
         ) : (
           <PermissionMirrorDrawerBody
             actorRoleDraft={actorRoleDraft}
-            closeDrawer={closeDrawer}
-            mutationSaving={mutationSaving}
-            pendingFeatureId={pendingFeatureId}
             permissionMirrorDetails={getPermissionMirrorDetails(selectedFeature)}
             roleOptions={roleOptions}
             selectedFeature={selectedFeature}
             setActorRoleDraft={setActorRoleDraft}
-            onSave={onSavePermissionMirror}
           />
         )}
+
+        <UnsavedChangesBar
+          hasUnsavedChanges={hasUnsavedChanges}
+          saveLabel={
+            mutationSaving && pendingFeatureId === selectedFeature.id
+              ? "Saving..."
+              : "Save changes"
+          }
+          saving={mutationSaving && pendingFeatureId === selectedFeature.id}
+          disabled={!canSave}
+          onReset={onReset}
+          onSave={
+            selectedFeature.id === "auto_role_assignment"
+              ? onSaveAutoRole
+              : selectedFeature.id === "presence_watch.bot"
+                ? onSavePresenceWatchBot
+                : selectedFeature.id === "presence_watch.user"
+                  ? onSavePresenceWatchUser
+                  : onSavePermissionMirror
+          }
+        />
       </aside>
     </div>
   );
@@ -1075,11 +1138,8 @@ function RolesFeatureDrawer({
 
 interface AutoRoleDrawerBodyProps {
   boosterRoleDraft: string;
-  closeDrawer: () => void;
   configEnabledDraft: string;
   levelRoleDraft: string;
-  mutationSaving: boolean;
-  pendingFeatureId: string;
   roleOptions: GuildRoleOption[];
   selectedFeature: FeatureRecord;
   targetRoleDraft: string;
@@ -1087,16 +1147,12 @@ interface AutoRoleDrawerBodyProps {
   setConfigEnabledDraft: (value: string) => void;
   setLevelRoleDraft: (value: string) => void;
   setTargetRoleDraft: (value: string) => void;
-  onSave: () => void;
 }
 
 function AutoRoleDrawerBody({
   boosterRoleDraft,
-  closeDrawer,
   configEnabledDraft,
   levelRoleDraft,
-  mutationSaving,
-  pendingFeatureId,
   roleOptions,
   selectedFeature,
   targetRoleDraft,
@@ -1104,7 +1160,6 @@ function AutoRoleDrawerBody({
   setConfigEnabledDraft,
   setLevelRoleDraft,
   setTargetRoleDraft,
-  onSave,
 }: AutoRoleDrawerBodyProps) {
   return (
     <>
@@ -1193,43 +1248,20 @@ function AutoRoleDrawerBody({
         </label>
       </div>
 
-      <div className="drawer-actions">
-        <button
-          className="button-primary"
-          type="button"
-          disabled={mutationSaving}
-          onClick={onSave}
-        >
-          {mutationSaving && pendingFeatureId === selectedFeature.id
-            ? "Saving..."
-            : "Save auto role"}
-        </button>
-        <button className="button-secondary" type="button" onClick={closeDrawer}>
-          Cancel
-        </button>
-      </div>
     </>
   );
 }
 
 interface PresenceWatchBotDrawerBodyProps {
-  closeDrawer: () => void;
-  mutationSaving: boolean;
-  pendingFeatureId: string;
   selectedFeature: FeatureRecord;
   watchBotDraft: string;
   setWatchBotDraft: (value: string) => void;
-  onSave: () => void;
 }
 
 function PresenceWatchBotDrawerBody({
-  closeDrawer,
-  mutationSaving,
-  pendingFeatureId,
   selectedFeature,
   watchBotDraft,
   setWatchBotDraft,
-  onSave,
 }: PresenceWatchBotDrawerBodyProps) {
   return (
     <>
@@ -1261,55 +1293,32 @@ function PresenceWatchBotDrawerBody({
         </span>
       </label>
 
-      <div className="drawer-actions">
-        <button
-          className="button-primary"
-          type="button"
-          disabled={mutationSaving}
-          onClick={onSave}
-        >
-          {mutationSaving && pendingFeatureId === selectedFeature.id
-            ? "Saving..."
-            : "Save presence watch"}
-        </button>
-        <button className="button-secondary" type="button" onClick={closeDrawer}>
-          Cancel
-        </button>
-      </div>
     </>
   );
 }
 
 interface PresenceWatchUserDrawerBodyProps {
-  closeDrawer: () => void;
   memberLookupLoading: boolean;
   memberLookupNotice: DashboardNotice | null;
   memberOptions: GuildMemberOption[];
   memberSearchDraft: string;
-  mutationSaving: boolean;
-  pendingFeatureId: string;
   selectedFeature: FeatureRecord;
   userIdDraft: string;
   refreshMemberOptions: () => Promise<void>;
   setMemberSearchDraft: (value: string) => void;
   setUserIdDraft: (value: string) => void;
-  onSave: () => void;
 }
 
 function PresenceWatchUserDrawerBody({
-  closeDrawer,
   memberLookupLoading,
   memberLookupNotice,
   memberOptions,
   memberSearchDraft,
-  mutationSaving,
-  pendingFeatureId,
   selectedFeature,
   userIdDraft,
   refreshMemberOptions,
   setMemberSearchDraft,
   setUserIdDraft,
-  onSave,
 }: PresenceWatchUserDrawerBodyProps) {
   return (
     <>
@@ -1391,47 +1400,24 @@ function PresenceWatchUserDrawerBody({
         </div>
       ) : null}
 
-      <div className="drawer-actions">
-        <button
-          className="button-primary"
-          type="button"
-          disabled={mutationSaving}
-          onClick={onSave}
-        >
-          {mutationSaving && pendingFeatureId === selectedFeature.id
-            ? "Saving..."
-            : "Save user watch"}
-        </button>
-        <button className="button-secondary" type="button" onClick={closeDrawer}>
-          Cancel
-        </button>
-      </div>
     </>
   );
 }
 
 interface PermissionMirrorDrawerBodyProps {
   actorRoleDraft: string;
-  closeDrawer: () => void;
-  mutationSaving: boolean;
-  pendingFeatureId: string;
   permissionMirrorDetails: PermissionMirrorDetails;
   roleOptions: GuildRoleOption[];
   selectedFeature: FeatureRecord;
   setActorRoleDraft: (value: string) => void;
-  onSave: () => void;
 }
 
 function PermissionMirrorDrawerBody({
   actorRoleDraft,
-  closeDrawer,
-  mutationSaving,
-  pendingFeatureId,
   permissionMirrorDetails,
   roleOptions,
   selectedFeature,
   setActorRoleDraft,
-  onSave,
 }: PermissionMirrorDrawerBodyProps) {
   return (
     <>
@@ -1475,23 +1461,54 @@ function PermissionMirrorDrawerBody({
         </span>
       </label>
 
-      <div className="drawer-actions">
-        <button
-          className="button-primary"
-          type="button"
-          disabled={mutationSaving}
-          onClick={onSave}
-        >
-          {mutationSaving && pendingFeatureId === selectedFeature.id
-            ? "Saving..."
-            : "Save guard role"}
-        </button>
-        <button className="button-secondary" type="button" onClick={closeDrawer}>
-          Cancel
-        </button>
-      </div>
     </>
   );
+}
+
+function hasRolesFeatureDraftChanges({
+  actorRoleDraft,
+  boosterRoleDraft,
+  configEnabledDraft,
+  levelRoleDraft,
+  selectedFeature,
+  targetRoleDraft,
+  userIdDraft,
+  watchBotDraft,
+}: {
+  actorRoleDraft: string;
+  boosterRoleDraft: string;
+  configEnabledDraft: string;
+  levelRoleDraft: string;
+  selectedFeature: FeatureRecord | null;
+  targetRoleDraft: string;
+  userIdDraft: string;
+  watchBotDraft: string;
+}) {
+  if (selectedFeature === null) {
+    return false;
+  }
+
+  switch (selectedFeature.id) {
+    case "auto_role_assignment": {
+      const details = getAutoRoleFeatureDetails(selectedFeature);
+      return (
+        details.configEnabled !== (configEnabledDraft === "enabled") ||
+        details.targetRoleId !== targetRoleDraft.trim() ||
+        details.levelRoleId !== levelRoleDraft.trim() ||
+        details.boosterRoleId !== boosterRoleDraft.trim()
+      );
+    }
+    case "presence_watch.bot":
+      return getPresenceWatchBotDetails(selectedFeature).watchBot !==
+        (watchBotDraft === "enabled");
+    case "presence_watch.user":
+      return getPresenceWatchUserDetails(selectedFeature).userId !== userIdDraft.trim();
+    case "safety.bot_role_perm_mirror":
+      return getPermissionMirrorDetails(selectedFeature).actorRoleId !==
+        actorRoleDraft.trim();
+    default:
+      return false;
+  }
 }
 
 function getDrawerLabel(feature: FeatureRecord) {

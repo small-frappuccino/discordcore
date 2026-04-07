@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -46,8 +47,10 @@ interface PartnerBoardContextValue {
   board: PartnerBoardConfig | null;
   busyLabel: string;
   deliveryConfigured: boolean;
+  deliveryDirty: boolean;
   deliveryForm: DeliveryFormState;
   drawerMode: EntryDrawerMode;
+  entryDirty: boolean;
   entryForm: EntryFormState;
   filteredPartners: PartnerEntryConfig[];
   hasLoadedAttempt: boolean;
@@ -55,6 +58,7 @@ interface PartnerBoardContextValue {
   lastLoadedAt: number | null;
   lastSyncedAt: number | null;
   layoutConfigured: boolean;
+  layoutDirty: boolean;
   layoutFieldCount: number;
   layoutForm: LayoutFormState;
   loading: boolean;
@@ -70,6 +74,9 @@ interface PartnerBoardContextValue {
   openCreateEntryDrawer: () => void;
   openEditEntryDrawer: (partner: PartnerEntryConfig) => void;
   refreshBoard: () => Promise<void>;
+  resetDeliveryForm: () => void;
+  resetEntryForm: () => void;
+  resetLayoutForm: () => void;
   saveDelivery: () => Promise<void>;
   saveEntry: () => Promise<void>;
   saveLayout: () => Promise<void>;
@@ -122,13 +129,21 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
   );
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [hasLoadedAttempt, setHasLoadedAttempt] = useState(initialCachedBoard !== null);
+  const boardRef = useRef<PartnerBoardConfig | null>(initialCachedBoard);
+  const deliveryFormRef = useRef(initialForms.deliveryForm);
+  const layoutFormRef = useRef(initialForms.layoutForm);
 
   const partners = board?.partners ?? [];
+  const boardForms = formsFromBoard(board);
   const deliveryDraft = buildDeliveryPayload(deliveryForm);
   const layoutDraft = buildLayoutPayload(layoutForm, board?.template);
   const deliveryConfigured = isDeliveryConfigured(deliveryDraft);
+  const deliveryDirty = !areDeliveryFormsEqual(deliveryForm, boardForms.deliveryForm);
   const layoutConfigured = isLayoutConfigured(layoutDraft);
+  const layoutDirty = !areLayoutFormsEqual(layoutForm, boardForms.layoutForm);
   const layoutFieldCount = countFilledLayoutFields(layoutDraft);
+  const entryBaseline = getEntryBaseline(board, drawerMode, editingPartnerName);
+  const entryDirty = !areEntryFormsEqual(entryForm, entryBaseline);
   const filteredPartners =
     searchQuery.trim() === ""
       ? partners
@@ -190,18 +205,50 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setNotice(null);
   }, [resetTransientWorkspaceState]);
 
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+
+  useEffect(() => {
+    deliveryFormRef.current = deliveryForm;
+  }, [deliveryForm]);
+
+  useEffect(() => {
+    layoutFormRef.current = layoutForm;
+  }, [layoutForm]);
+
   const applyBoard = useCallback((
     nextBoard: PartnerBoardConfig,
-    options: { cache?: boolean; fetchedAt?: number } = {},
+    options: {
+      cache?: boolean;
+      fetchedAt?: number;
+      preserveDeliveryDraft?: boolean;
+      preserveLayoutDraft?: boolean;
+    } = {},
   ) => {
     const fetchedAt = options.fetchedAt ?? Date.now();
+    const previousForms = formsFromBoard(boardRef.current);
     const nextForms = formsFromBoard(nextBoard);
     if (options.cache !== false && normalizedGuildID !== "") {
       writePartnerBoardCache(baseUrl, normalizedGuildID, nextBoard, fetchedAt);
     }
+    const preserveDeliveryDraft =
+      options.preserveDeliveryDraft !== false &&
+      !areDeliveryFormsEqual(
+        deliveryFormRef.current,
+        previousForms.deliveryForm,
+      );
+    const preserveLayoutDraft =
+      options.preserveLayoutDraft !== false &&
+      !areLayoutFormsEqual(layoutFormRef.current, previousForms.layoutForm);
+    boardRef.current = nextBoard;
     setBoard(nextBoard);
-    setDeliveryForm(nextForms.deliveryForm);
-    setLayoutForm(nextForms.layoutForm);
+    setDeliveryForm(
+      preserveDeliveryDraft ? deliveryFormRef.current : nextForms.deliveryForm,
+    );
+    setLayoutForm(
+      preserveLayoutDraft ? layoutFormRef.current : nextForms.layoutForm,
+    );
     setLastLoadedAt(fetchedAt);
     setHasLoadedAttempt(true);
   }, [baseUrl, normalizedGuildID]);
@@ -390,6 +437,18 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setEntryForm(initialEntryForm);
   }
 
+  const resetDeliveryForm = useCallback(() => {
+    setDeliveryForm(formsFromBoard(boardRef.current).deliveryForm);
+  }, []);
+
+  const resetLayoutForm = useCallback(() => {
+    setLayoutForm(formsFromBoard(boardRef.current).layoutForm);
+  }, []);
+
+  const resetEntryForm = useCallback(() => {
+    setEntryForm(getEntryBaseline(board, drawerMode, editingPartnerName));
+  }, [board, drawerMode, editingPartnerName]);
+
   async function saveDelivery() {
     if (!canEditSelectedGuild) {
       return;
@@ -408,16 +467,28 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setBusyLabel("Saving posting destination");
 
     try {
-      await client.setPartnerBoardTarget(normalizedGuildID, deliveryDraft);
-      await loadBoardData({
-        preservePendingState: true,
-        successMessage: "Posting destination updated.",
+      const response = await client.setPartnerBoardTarget(
+        normalizedGuildID,
+        deliveryDraft,
+      );
+      applyBoard(
+        mergeBoardConfig(boardRef.current, {
+          target: response.target,
+        }),
+        {
+          preserveDeliveryDraft: false,
+        },
+      );
+      setNotice({
+        tone: "success",
+        message: "Posting destination updated.",
       });
     } catch (error) {
       setNotice({
         tone: "error",
         message: formatError(error),
       });
+    } finally {
       setLoading(false);
       setBusyLabel("");
     }
@@ -432,16 +503,28 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
     setBusyLabel("Saving layout settings");
 
     try {
-      await client.setPartnerBoardTemplate(normalizedGuildID, layoutDraft);
-      await loadBoardData({
-        preservePendingState: true,
-        successMessage: "Layout updated.",
+      const response = await client.setPartnerBoardTemplate(
+        normalizedGuildID,
+        layoutDraft,
+      );
+      applyBoard(
+        mergeBoardConfig(boardRef.current, {
+          template: response.template,
+        }),
+        {
+          preserveLayoutDraft: false,
+        },
+      );
+      setNotice({
+        tone: "success",
+        message: "Layout updated.",
       });
     } catch (error) {
       setNotice({
         tone: "error",
         message: formatError(error),
       });
+    } finally {
       setLoading(false);
       setBusyLabel("");
     }
@@ -466,34 +549,53 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
 
     try {
       if (drawerMode === "edit") {
-        await client.updatePartner(normalizedGuildID, editingPartnerName, {
+        const response = await client.updatePartner(normalizedGuildID, editingPartnerName, {
           fandom: entryForm.fandom.trim(),
           link: entryForm.link.trim(),
           name: entryForm.name.trim(),
         });
         closeEntryDrawer();
-        await loadBoardData({
-          preservePendingState: true,
-          successMessage: "Partner entry updated.",
+        applyBoard(
+          mergeBoardConfig(boardRef.current, {
+            partners: sortPartnersByName([
+              ...(boardRef.current?.partners ?? []).filter(
+                (partner) => partner.name !== editingPartnerName,
+              ),
+              response.partner,
+            ]),
+          }),
+        );
+        setNotice({
+          tone: "success",
+          message: "Partner entry updated.",
         });
         return;
       }
 
-      await client.createPartner(normalizedGuildID, {
+      const response = await client.createPartner(normalizedGuildID, {
         fandom: entryForm.fandom.trim(),
         link: entryForm.link.trim(),
         name: entryForm.name.trim(),
       });
       closeEntryDrawer();
-      await loadBoardData({
-        preservePendingState: true,
-        successMessage: "Partner entry added.",
+      applyBoard(
+        mergeBoardConfig(boardRef.current, {
+          partners: sortPartnersByName([
+            ...(boardRef.current?.partners ?? []),
+            response.partner,
+          ]),
+        }),
+      );
+      setNotice({
+        tone: "success",
+        message: "Partner entry added.",
       });
     } catch (error) {
       setNotice({
         tone: "error",
         message: formatError(error),
       });
+    } finally {
       setLoading(false);
       setBusyLabel("");
     }
@@ -513,15 +615,23 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
       if (editingPartnerName === partnerName) {
         closeEntryDrawer();
       }
-      await loadBoardData({
-        preservePendingState: true,
-        successMessage: "Partner entry removed.",
+      applyBoard(
+        mergeBoardConfig(boardRef.current, {
+          partners: (boardRef.current?.partners ?? []).filter(
+            (partner) => partner.name !== partnerName,
+          ),
+        }),
+      );
+      setNotice({
+        tone: "success",
+        message: "Partner entry removed.",
       });
     } catch (error) {
       setNotice({
         tone: "error",
         message: formatError(error),
       });
+    } finally {
       setLoading(false);
       setBusyLabel("");
     }
@@ -568,8 +678,10 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
         board,
         busyLabel,
         deliveryConfigured,
+        deliveryDirty,
         deliveryForm,
         drawerMode,
+        entryDirty,
         entryForm,
         filteredPartners,
         hasLoadedAttempt,
@@ -577,6 +689,7 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
         lastLoadedAt,
         lastSyncedAt,
         layoutConfigured,
+        layoutDirty,
         layoutFieldCount,
         layoutForm,
         loading,
@@ -592,6 +705,9 @@ export function PartnerBoardProvider({ children }: { children: ReactNode }) {
         openCreateEntryDrawer,
         openEditEntryDrawer,
         refreshBoard,
+        resetDeliveryForm,
+        resetEntryForm,
+        resetLayoutForm,
         saveDelivery,
         saveEntry,
         saveLayout,
@@ -627,4 +743,74 @@ function validateEntryForm(form: EntryFormState): string | null {
   }
 
   return null;
+}
+
+function areDeliveryFormsEqual(
+  left: DeliveryFormState,
+  right: DeliveryFormState,
+) {
+  return (
+    left.type === right.type &&
+    left.messageID === right.messageID &&
+    left.webhookURL === right.webhookURL &&
+    left.channelID === right.channelID
+  );
+}
+
+function areLayoutFormsEqual(left: LayoutFormState, right: LayoutFormState) {
+  return (
+    left.title === right.title &&
+    left.intro === right.intro &&
+    left.sectionHeaderTemplate === right.sectionHeaderTemplate &&
+    left.lineTemplate === right.lineTemplate &&
+    left.emptyStateText === right.emptyStateText
+  );
+}
+
+function areEntryFormsEqual(left: EntryFormState, right: EntryFormState) {
+  return (
+    left.fandom === right.fandom &&
+    left.name === right.name &&
+    left.link === right.link
+  );
+}
+
+function getEntryBaseline(
+  board: PartnerBoardConfig | null,
+  drawerMode: EntryDrawerMode,
+  editingPartnerName: string,
+): EntryFormState {
+  if (drawerMode !== "edit" || editingPartnerName.trim() === "") {
+    return initialEntryForm;
+  }
+
+  const partner = board?.partners?.find(
+    (entry) => entry.name === editingPartnerName,
+  );
+  if (partner === undefined) {
+    return initialEntryForm;
+  }
+
+  return {
+    fandom: partner.fandom ?? "",
+    name: partner.name,
+    link: partner.link,
+  };
+}
+
+function mergeBoardConfig(
+  currentBoard: PartnerBoardConfig | null,
+  patch: Partial<PartnerBoardConfig>,
+): PartnerBoardConfig {
+  return {
+    ...(currentBoard ?? {}),
+    ...patch,
+    target: patch.target ?? currentBoard?.target,
+    template: patch.template ?? currentBoard?.template,
+    partners: patch.partners ?? currentBoard?.partners ?? [],
+  };
+}
+
+function sortPartnersByName(partners: PartnerEntryConfig[]) {
+  return [...partners].sort((left, right) => left.name.localeCompare(right.name));
 }

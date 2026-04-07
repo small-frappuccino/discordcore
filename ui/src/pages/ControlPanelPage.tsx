@@ -4,6 +4,7 @@ import {
   EntityMultiPickerField,
   EmptyState,
   PageHeader,
+  UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
@@ -92,6 +93,15 @@ export function ControlPanelPage() {
     }
   }
 
+  function handleReset() {
+    replaceDrafts(
+      normalizeRoleIds(rolesSettings.roles.dashboardReadRoleIds),
+      normalizeRoleIds(rolesSettings.roles.dashboardWriteRoleIds),
+    );
+    setNotice(null);
+    rolesSettings.clearNotice();
+  }
+
   function renderBody() {
     if (authState === "checking") {
       return (
@@ -147,7 +157,10 @@ export function ControlPanelPage() {
             </div>
             <div className="workspace-view-meta">
               <span className="meta-note">
-                {hasUnsavedChanges ? "Unsaved changes" : "Saved"}
+                {dashboardReadRoleIds.length} read roles
+              </span>
+              <span className="meta-note">
+                {dashboardWriteRoleIds.length} write roles
               </span>
             </div>
           </div>
@@ -205,17 +218,6 @@ export function ControlPanelPage() {
               ? "You currently have read-only access to this server. Role changes are disabled."
               : "Save changes after reviewing both role lists. Existing admin command roles remain separate."}
           </p>
-
-          <div className="workspace-footer">
-            <button
-              className="button-primary"
-              type="button"
-              disabled={controlsDisabled || !hasUnsavedChanges}
-              onClick={() => void handleSave()}
-            >
-              {saving ? "Saving..." : "Save access roles"}
-            </button>
-          </div>
         </section>
       </div>
     );
@@ -235,7 +237,19 @@ export function ControlPanelPage() {
         }
       />
 
-      <DashboardPageSurface notice={notice ?? rolesSettings.notice}>
+      <DashboardPageSurface
+        notice={notice ?? rolesSettings.notice}
+        actionBar={
+          <UnsavedChangesBar
+            hasUnsavedChanges={hasUnsavedChanges}
+            saveLabel={saving ? "Saving..." : "Save changes"}
+            saving={saving}
+            disabled={controlsDisabled}
+            onReset={handleReset}
+            onSave={handleSave}
+          />
+        }
+      >
         {renderBody()}
       </DashboardPageSurface>
     </section>

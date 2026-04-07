@@ -1,7 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccessibleGuild, QOTDQuestion } from "../../api/control";
+import type {
+  AccessibleGuild,
+  QOTDConfig,
+  QOTDQuestion,
+  QOTDSummary,
+} from "../../api/control";
 import { appRoutes } from "../../app/routes";
 import { QOTDLayout } from "./QOTDLayout";
 import { QOTDQuestionsPage } from "./QOTDQuestionsPage";
@@ -51,44 +57,8 @@ const qotdMock = {
       status: "draft",
     }),
   ] as QOTDQuestion[],
-  settings: {
-    enabled: true,
-    forum_channel_id: "forum-1",
-    question_tag_id: "question",
-    reply_tag_id: "reply",
-    staff_role_ids: ["role-1"],
-  },
-  summary: {
-    settings: {
-      enabled: true,
-      forum_channel_id: "forum-1",
-      question_tag_id: "question",
-      reply_tag_id: "reply",
-      staff_role_ids: ["role-1"],
-    },
-    counts: {
-      total: 2,
-      draft: 1,
-      ready: 1,
-      reserved: 0,
-      used: 0,
-      disabled: 0,
-    },
-    current_publish_date_utc: "2026-04-04T00:00:00Z",
-    published_for_current_slot: false,
-    previous_post: {
-      id: 8,
-      question_id: 22,
-      publish_mode: "scheduled",
-      publish_date_utc: "2026-04-03T00:00:00Z",
-      state: "published",
-      forum_channel_id: "forum-1",
-      question_text_snapshot: "Yesterday's question",
-      is_pinned: false,
-      grace_until: "2026-04-04T00:00:00Z",
-      archive_at: "2026-04-05T00:00:00Z",
-    },
-  },
+  settings: createQOTDSettings(),
+  summary: createQOTDSummary(),
   workspaceState: "ready",
   clearNotice: vi.fn(),
   createQuestion: vi.fn(),
@@ -156,7 +126,11 @@ describe("QOTD UI", () => {
     qotdMock.busyLabel = "";
     qotdMock.loading = false;
     qotdMock.notice = null;
+    qotdMock.settings = createQOTDSettings();
+    qotdMock.summary = createQOTDSummary();
     qotdMock.workspaceState = "ready";
+    qotdMock.refreshForumTags.mockReset().mockResolvedValue(undefined);
+    qotdMock.saveSettings.mockReset().mockResolvedValue(undefined);
   });
 
   it("keeps refresh actions out of the ready settings shell", () => {
@@ -193,7 +167,108 @@ describe("QOTD UI", () => {
     expect(screen.getByRole("heading", { name: "Workflow settings", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Staff roles", level: 2 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refresh tags/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+
+  it("shows the unsaved changes bar and resets the local draft", async () => {
+    const user = userEvent.setup();
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    const enabledToggle = within(view.container).getByRole("checkbox", {
+      name: /Enable QOTD workflow/,
+    });
+
+    expect(enabledToggle).toBeChecked();
+
+    await user.click(enabledToggle);
+
+    expect(enabledToggle).not.toBeChecked();
+    expect(
+      within(view.container).getByRole("button", { name: "Reset" }),
+    ).toBeInTheDocument();
+    expect(
+      within(view.container).getByRole("button", { name: "Save changes" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(view.container).getByRole("button", { name: "Reset" }),
+    );
+
+    expect(enabledToggle).toBeChecked();
+    expect(
+      within(view.container).queryByRole("button", { name: "Save changes" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves the local settings draft without forcing a workspace reload", async () => {
+    const user = userEvent.setup();
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(view.container).getByRole("checkbox", {
+        name: /Enable QOTD workflow/,
+      }),
+    );
+    await user.click(
+      within(view.container).getByRole("button", { name: "Save changes" }),
+    );
+
+    expect(qotdMock.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: false,
+        forum_channel_id: "forum-1",
+        question_tag_id: "question",
+        reply_tag_id: "reply",
+        staff_role_ids: ["role-1"],
+      }),
+    );
+  });
+
+  it("keeps a dirty settings draft when a newer workspace snapshot arrives", async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(view.container).getByRole("checkbox", {
+        name: /Enable QOTD workflow/,
+      }),
+    );
+
+    qotdMock.settings = {
+      ...createQOTDSettings(),
+      forum_channel_id: "forum-2",
+    };
+    qotdMock.summary = createQOTDSummary({
+      settings: qotdMock.settings,
+    });
+    view.rerender(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      within(view.container).getByRole("checkbox", {
+        name: /Enable QOTD workflow/,
+      }),
+    ).not.toBeChecked();
+    expect(
+      within(view.container).getByRole("button", { name: "Save changes" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the queue editor with question cards and local actions", () => {
@@ -235,5 +310,48 @@ function createQuestion(overrides: Partial<QOTDQuestion>): QOTDQuestion {
     created_at: "2026-04-04T00:00:00Z",
     updated_at: "2026-04-04T00:00:00Z",
     ...overrides,
+  };
+}
+
+function createQOTDSettings(overrides: Partial<QOTDConfig> = {}): QOTDConfig {
+  return {
+    enabled: true,
+    forum_channel_id: "forum-1",
+    question_tag_id: "question",
+    reply_tag_id: "reply",
+    staff_role_ids: ["role-1"],
+    ...overrides,
+  };
+}
+
+function createQOTDSummary(
+  overrides: Partial<QOTDSummary> = {},
+): QOTDSummary {
+  const settings = overrides.settings ?? createQOTDSettings();
+  return {
+    counts: {
+      total: 2,
+      draft: 1,
+      ready: 1,
+      reserved: 0,
+      used: 0,
+      disabled: 0,
+    },
+    current_publish_date_utc: "2026-04-04T00:00:00Z",
+    published_for_current_slot: false,
+    previous_post: {
+      id: 8,
+      question_id: 22,
+      publish_mode: "scheduled",
+      publish_date_utc: "2026-04-03T00:00:00Z",
+      state: "published",
+      forum_channel_id: "forum-1",
+      question_text_snapshot: "Yesterday's question",
+      is_pinned: false,
+      grace_until: "2026-04-04T00:00:00Z",
+      archive_at: "2026-04-05T00:00:00Z",
+    },
+    ...overrides,
+    settings,
   };
 }

@@ -2315,7 +2315,40 @@ textarea:focus {
 
 .alert-banner strong {
   display: block;
-  margin-top: 4px;
+}
+
+.unsaved-changes-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(111, 156, 255, 0.22);
+  background: color-mix(in srgb, var(--bg-surface-card) 88%, black 12%);
+  box-shadow: var(--shadow-1);
+}
+
+.unsaved-changes-copy {
+  min-width: 0;
+}
+
+.unsaved-changes-copy strong {
+  display: block;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 650;
+}
+
+.unsaved-changes-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .card-copy,
@@ -2769,12 +2802,13 @@ textarea:focus {
   .flat-inline-message,
   .qotd-section-header,
   .qotd-flat-inline-message,
-  .qotd-card-head,
-  .qotd-settings-footer,
-  .qotd-question-top,
-  .workspace-view-header,
-  .workspace-toolbar,
-  .workspace-footer {
+   .qotd-card-head,
+   .qotd-settings-footer,
+   .qotd-question-top,
+   .workspace-view-header,
+   .workspace-toolbar,
+   .workspace-footer,
+   .unsaved-changes-bar {
     flex-direction: column;
     align-items: stretch;
   }

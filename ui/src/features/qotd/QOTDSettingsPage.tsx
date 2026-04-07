@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { QOTDConfig } from "../../api/control";
 import {
   EntityMultiPickerField,
   EntityPickerField,
+  UnsavedChangesBar,
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useGuildChannelOptions } from "../features/useGuildChannelOptions";
@@ -23,11 +24,19 @@ export function QOTDSettingsPage() {
   const { busyLabel, forumTags, refreshForumTags, saveSettings, settings } = useQOTD();
   const channelOptions = useGuildChannelOptions();
   const roleOptions = useGuildRoleOptions();
-  const [draft, setDraft] = useState<SettingsDraft>(() => createSettingsDraft(settings));
+  const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
+  const [draft, setDraft] = useState<SettingsDraft>(() => savedDraftRef.current);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft(createSettingsDraft(settings));
+    const nextSavedDraft = createSettingsDraft(settings);
+    const previousSavedDraft = savedDraftRef.current;
+    savedDraftRef.current = nextSavedDraft;
+    setDraft((currentDraft) =>
+      settingsDraftChanged(previousSavedDraft, currentDraft)
+        ? currentDraft
+        : nextSavedDraft,
+    );
   }, [settings]);
 
   const forumChannelOptions = channelOptions.channels
@@ -51,7 +60,7 @@ export function QOTDSettingsPage() {
     label: tag.name,
     description: tag.moderated ? "Moderated forum tag." : "Standard forum tag.",
   }));
-  const hasUnsavedChanges = settingsDraftChanged(settings, draft);
+  const hasUnsavedChanges = settingsDraftChanged(savedDraftRef.current, draft);
   const controlsDisabled = !canEditSelectedGuild || saving;
   const tagLookupAvailable = draft.forum_channel_id.trim() !== "";
   const refreshingTags = busyLabel === QOTD_BUSY_LABELS.refreshForumTags;
@@ -67,6 +76,12 @@ export function QOTDSettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleReset() {
+    const nextDraft = savedDraftRef.current;
+    setDraft(nextDraft);
+    void refreshForumTags(nextDraft.forum_channel_id);
   }
 
   return (
@@ -219,17 +234,16 @@ export function QOTDSettingsPage() {
           note="Stored for backend moderation flows."
         />
 
-        <div className="workspace-footer">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={controlsDisabled || !hasUnsavedChanges}
-            onClick={() => void handleSave()}
-          >
-            {saving ? "Saving..." : "Save changes"}
-          </button>
-        </div>
       </section>
+
+      <UnsavedChangesBar
+        hasUnsavedChanges={hasUnsavedChanges}
+        saveLabel={saving ? "Saving..." : "Save changes"}
+        saving={saving}
+        disabled={controlsDisabled}
+        onReset={handleReset}
+        onSave={handleSave}
+      />
     </div>
   );
 }

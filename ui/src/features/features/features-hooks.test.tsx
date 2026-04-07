@@ -220,6 +220,56 @@ describe("feature hooks", () => {
     expect(mockDashboardSession.client.listGuildFeatures).toHaveBeenCalledTimes(1);
   });
 
+  it("updates a loaded feature locally without refetching the workspace", async () => {
+    const features = [
+      buildFeatureRecord({
+        id: "services.commands",
+        category: "services",
+        label: "Commands",
+      }),
+      buildFeatureRecord({
+        id: "logging.member_join",
+        category: "logging",
+        label: "Member join logging",
+      }),
+    ];
+    mockDashboardSession.client.listGuildFeatures.mockResolvedValue(
+      buildWorkspaceResponse(features),
+    );
+
+    const { result } = renderHook(() =>
+      useFeatureWorkspace({
+        scope: "guild",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.workspaceState).toBe("ready");
+    });
+
+    const updatedFeature = buildFeatureRecord({
+      id: "logging.member_join",
+      details: {
+        channel_id: "logs-2",
+      },
+      effective_enabled: false,
+      override_state: "inherit",
+    });
+
+    act(() => {
+      result.current.updateFeature(updatedFeature);
+    });
+
+    expect(result.current.features).toEqual([
+      expect.objectContaining({ id: "services.commands" }),
+      updatedFeature,
+    ]);
+    expect(
+      result.current.groupedFeatures.find((group) => group.category === "logging")?.features,
+    ).toEqual([updatedFeature]);
+    expect(mockDashboardSession.client.listGuildFeatures).toHaveBeenCalledTimes(1);
+  });
+
   it("loads guild role options for the selected server", async () => {
     const roles: GuildRoleOption[] = [
       {

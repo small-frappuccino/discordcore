@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import { useDashboardSession } from "../context/DashboardSessionContext";
@@ -50,6 +50,7 @@ import {
   KeyValueList,
   LookupNotice,
   StatusBadge,
+  UnsavedChangesBar,
 } from "../components/ui";
 
 export function ModerationPage() {
@@ -58,6 +59,7 @@ export function ModerationPage() {
   const {
     authState,
     beginLogin,
+    canEditSelectedGuild,
     currentOriginLabel,
     selectedGuild,
   } = useDashboardSession();
@@ -108,30 +110,6 @@ export function ModerationPage() {
       ? ""
       : getMuteRoleFeatureDetails(muteRoleFeature).roleId;
 
-  useEffect(() => {
-    if (selectedFeature === null) {
-      setChannelDraft("");
-      setRoleDraft("");
-      return;
-    }
-
-    if (selectedFeature.id === "moderation.mute_role") {
-      setRoleDraft(getMuteRoleFeatureDetails(selectedFeature).roleId);
-      setChannelDraft("");
-      return;
-    }
-
-    if (!canEditLoggingChannel(selectedFeature)) {
-      setSelectedFeatureId("");
-      setChannelDraft("");
-      setRoleDraft("");
-      return;
-    }
-
-    setChannelDraft(getLoggingFeatureDetails(selectedFeature).channelId);
-    setRoleDraft("");
-  }, [selectedFeature]);
-
   if (definition === null) {
     return null;
   }
@@ -157,7 +135,7 @@ export function ModerationPage() {
         enabled,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -172,7 +150,7 @@ export function ModerationPage() {
         enabled: null,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -194,7 +172,7 @@ export function ModerationPage() {
           : { channel_id: channelDraft.trim() },
       );
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
@@ -207,6 +185,7 @@ export function ModerationPage() {
       return;
     }
 
+    mutation.clearNotice();
     setSelectedFeatureId(feature.id);
     if (feature.id === "moderation.mute_role") {
       setRoleDraft(getMuteRoleFeatureDetails(feature).roleId);
@@ -222,6 +201,27 @@ export function ModerationPage() {
     setSelectedFeatureId("");
     setChannelDraft("");
     setRoleDraft("");
+  }
+
+  const selectedFeatureHasUnsavedChanges =
+    selectedFeature === null
+      ? false
+      : selectedFeature.id === "moderation.mute_role"
+        ? getMuteRoleFeatureDetails(selectedFeature).roleId !== roleDraft.trim()
+        : getLoggingFeatureDetails(selectedFeature).channelId !== channelDraft.trim();
+
+  function resetSelectedFeatureDrafts() {
+    if (selectedFeature === null) {
+      return;
+    }
+
+    mutation.clearNotice();
+    if (selectedFeature.id === "moderation.mute_role") {
+      setRoleDraft(getMuteRoleFeatureDetails(selectedFeature).roleId);
+      return;
+    }
+
+    setChannelDraft(getLoggingFeatureDetails(selectedFeature).channelId);
   }
 
   function renderWorkspaceContent() {
@@ -299,9 +299,6 @@ export function ModerationPage() {
         <DashboardPageSurface
           className="home-page-surface moderation-page-surface"
           notice={workspaceNotice}
-          busyLabel={
-            mutation.saving ? "Saving moderation settings..." : undefined
-          }
         >
           <div className="moderation-page-intro">
             <div className="card-copy">
@@ -346,7 +343,10 @@ export function ModerationPage() {
           setChannelDraft={setChannelDraft}
           channelOptions={channelOptions}
           messageRouteChannelOptions={messageRouteChannelOptions}
+          hasUnsavedChanges={selectedFeatureHasUnsavedChanges}
+          canSave={canEditSelectedGuild}
           onSave={handleSaveSelectedFeature}
+          onReset={resetSelectedFeatureDrafts}
           onClose={closeDrawer}
         />
       ) : null}
@@ -711,7 +711,10 @@ interface ModerationFeatureDrawerProps {
     label: string;
     description?: string;
   }>;
+  hasUnsavedChanges: boolean;
+  canSave: boolean;
   onSave: () => Promise<void>;
+  onReset: () => void;
   onClose: () => void;
 }
 
@@ -729,7 +732,10 @@ function ModerationFeatureDrawer({
   setChannelDraft,
   channelOptions,
   messageRouteChannelOptions,
+  hasUnsavedChanges,
+  canSave,
   onSave,
+  onReset,
   onClose,
 }: ModerationFeatureDrawerProps) {
   return (
@@ -773,23 +779,18 @@ function ModerationFeatureDrawer({
           />
         )}
 
-        <div className="drawer-actions">
-          <button
-            className="button-primary"
-            type="button"
-            disabled={mutationSaving}
-            onClick={() => void onSave()}
-          >
-            {mutationSaving && pendingFeatureId === selectedFeature.id
+        <UnsavedChangesBar
+          hasUnsavedChanges={hasUnsavedChanges}
+          saveLabel={
+            mutationSaving && pendingFeatureId === selectedFeature.id
               ? "Saving..."
-              : selectedIsMuteRole
-                ? "Save mute role"
-                : "Save destination"}
-          </button>
-          <button className="button-secondary" type="button" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
+              : "Save changes"
+          }
+          saving={mutationSaving && pendingFeatureId === selectedFeature.id}
+          disabled={!canSave}
+          onReset={onReset}
+          onSave={onSave}
+        />
       </aside>
     </div>
   );

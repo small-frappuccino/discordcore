@@ -14,11 +14,9 @@ import { usePartnerBoard } from "./PartnerBoardContext";
 export function PartnerBoardLayout() {
   const { selectedGuildID } = useDashboardSession();
   const {
-    busyLabel,
     deliveryForm,
     lastLoadedAt,
     lastSyncedAt,
-    loading,
     notice,
     partners,
     shellStatus,
@@ -51,7 +49,6 @@ export function PartnerBoardLayout() {
 
       <DashboardPageSurface
         notice={notice}
-        busyLabel={loading ? busyLabel : undefined}
       >
 
         <section className="partner-board-summary-strip" aria-label="Partner Board setup summary">

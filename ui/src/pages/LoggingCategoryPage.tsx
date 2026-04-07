@@ -41,6 +41,7 @@ import {
   PageHeader,
   StatusBadge,
   SurfaceCard,
+  UnsavedChangesBar,
 } from "../components/ui";
 
 export function LoggingCategoryPage() {
@@ -93,18 +94,6 @@ export function LoggingCategoryPage() {
     closeDrawer();
   }, [canEditSelectedGuild]);
 
-  useEffect(() => {
-    if (selectedFeature === null) {
-      return;
-    }
-    if (!canEditLoggingChannel(selectedFeature)) {
-      setSelectedFeatureId("");
-      setChannelDraft("");
-      return;
-    }
-    setChannelDraft(getLoggingFeatureDetails(selectedFeature).channelId);
-  }, [selectedFeature]);
-
   const firstBlockedFeature = useMemo(
     () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
     [areaFeatures],
@@ -135,7 +124,7 @@ export function LoggingCategoryPage() {
         enabled,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -150,7 +139,7 @@ export function LoggingCategoryPage() {
         enabled: null,
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
       }
     } finally {
       setPendingFeatureId("");
@@ -169,7 +158,7 @@ export function LoggingCategoryPage() {
         channel_id: channelDraft.trim(),
       });
       if (updated !== null) {
-        await workspace.refresh();
+        workspace.updateFeature(updated);
         closeDrawer();
       }
     } finally {
@@ -181,6 +170,7 @@ export function LoggingCategoryPage() {
     if (!canEditSelectedGuild || !canEditLoggingChannel(feature)) {
       return;
     }
+    mutation.clearNotice();
     setSelectedFeatureId(feature.id);
     setChannelDraft(getLoggingFeatureDetails(feature).channelId);
   }
@@ -188,6 +178,19 @@ export function LoggingCategoryPage() {
   function closeDrawer() {
     setSelectedFeatureId("");
     setChannelDraft("");
+  }
+
+  const selectedFeatureHasUnsavedChanges =
+    selectedFeature !== null &&
+    getLoggingFeatureDetails(selectedFeature).channelId !== channelDraft.trim();
+
+  function resetSelectedFeatureDraft() {
+    if (selectedFeature === null) {
+      return;
+    }
+
+    mutation.clearNotice();
+    setChannelDraft(getLoggingFeatureDetails(selectedFeature).channelId);
   }
 
   function renderHeaderActions() {
@@ -401,7 +404,6 @@ export function LoggingCategoryPage() {
 
         <FeatureWorkspaceLayout
           notice={workspaceNotice}
-          busyLabel={mutation.saving ? "Saving logging settings..." : undefined}
           summary={
             workspace.workspaceState === "ready" ? (
               <section
@@ -611,25 +613,18 @@ export function LoggingCategoryPage() {
               note="Use only if channel lookup fails."
             />
 
-            <div className="drawer-actions">
-              <button
-                className="button-primary"
-                type="button"
-                disabled={mutation.saving || !canEditSelectedGuild}
-                onClick={() => void handleSaveDestination()}
-              >
-                {mutation.saving && pendingFeatureId === selectedFeature.id
+            <UnsavedChangesBar
+              hasUnsavedChanges={selectedFeatureHasUnsavedChanges}
+              saveLabel={
+                mutation.saving && pendingFeatureId === selectedFeature.id
                   ? "Saving..."
-                  : "Save destination"}
-              </button>
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={closeDrawer}
-              >
-                Cancel
-              </button>
-            </div>
+                  : "Save changes"
+              }
+              saving={mutation.saving && pendingFeatureId === selectedFeature.id}
+              disabled={!canEditSelectedGuild || channelOptions.loading}
+              onReset={resetSelectedFeatureDraft}
+              onSave={handleSaveDestination}
+            />
           </aside>
         </div>
       ) : null}
