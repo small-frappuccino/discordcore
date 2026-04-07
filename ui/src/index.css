@@ -1841,8 +1841,9 @@ textarea:focus {
 .moderation-settings-group {
   overflow: hidden;
   border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
-  background: color-mix(in srgb, var(--bg-surface) 94%, white 1%);
+  background: color-mix(in srgb, var(--bg-surface) 97%, white 1%);
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .moderation-settings-item {
@@ -1854,8 +1855,8 @@ textarea:focus {
   content: "";
   position: absolute;
   top: 0;
-  left: 20px;
-  right: 20px;
+  left: 28px;
+  right: 28px;
   height: 1px;
   background: color-mix(in srgb, var(--border-soft) 66%, transparent);
 }
@@ -1864,8 +1865,8 @@ textarea:focus {
   content: "";
   position: absolute;
   top: 0;
-  left: 20px;
-  right: 20px;
+  left: 28px;
+  right: 28px;
   height: 1px;
   background: color-mix(in srgb, var(--border-soft) 66%, transparent);
 }
@@ -1882,9 +1883,9 @@ textarea:focus {
 .moderation-section-title {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
   color: var(--text-main);
 }
 
@@ -1893,12 +1894,12 @@ textarea:focus {
   font-family: var(--font-display);
   font-size: 1.05rem;
   line-height: 1.25;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-main);
 }
 
 .moderation-route-title {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .moderation-setting-row {
@@ -1922,6 +1923,9 @@ textarea:focus {
 
 .moderation-inline-message-copy {
   margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
 }
 
 .moderation-inline-message-copy.tone-info {
@@ -2138,9 +2142,9 @@ textarea:focus {
 
 .settings-select-trigger-label {
   min-width: 0;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
   color: var(--text-main);
 }
 
@@ -2166,8 +2170,8 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-dim);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 400;
 }
 
