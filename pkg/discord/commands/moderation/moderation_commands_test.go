@@ -68,6 +68,95 @@ func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
 	}
 }
 
+func TestEnsureModerationCommandEnabledRejectsDisabledCommands(t *testing.T) {
+	t.Parallel()
+
+	guildID := "g1"
+	cm := newTestConfigManager(t)
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID: guildID,
+		Features: files.FeatureToggles{
+			Moderation: files.FeatureModerationToggles{
+				Ban:      boolPtr(false),
+				MassBan:  boolPtr(false),
+				Kick:     boolPtr(false),
+				Timeout:  boolPtr(false),
+				Warn:     boolPtr(false),
+				Warnings: boolPtr(false),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	ctx := &core.Context{Config: cm, GuildID: guildID}
+
+	tests := []struct {
+		name      string
+		featureID string
+		message   string
+	}{
+		{name: "ban", featureID: "moderation.ban", message: "Ban command is disabled for this server."},
+		{name: "massban", featureID: "moderation.massban", message: "Mass ban command is disabled for this server."},
+		{name: "kick", featureID: "moderation.kick", message: "Kick command is disabled for this server."},
+		{name: "timeout", featureID: "moderation.timeout", message: "Timeout command is disabled for this server."},
+		{name: "warn", featureID: "moderation.warn", message: "Warn command is disabled for this server."},
+		{name: "warnings", featureID: "moderation.warnings", message: "Warnings command is disabled for this server."},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			err := ensureModerationCommandEnabled(ctx, tt.featureID, tt.message)
+			if err == nil {
+				t.Fatalf("expected %s to be rejected", tt.name)
+			}
+			cmdErr, ok := err.(*core.CommandError)
+			if !ok {
+				t.Fatalf("expected *core.CommandError, got %T", err)
+			}
+			if cmdErr.Message != tt.message {
+				t.Fatalf("unexpected message: got %q want %q", cmdErr.Message, tt.message)
+			}
+			if !cmdErr.Ephemeral {
+				t.Fatal("expected command error to be ephemeral")
+			}
+		})
+	}
+}
+
+func TestBanCommandHandleRejectsWhenFeatureDisabled(t *testing.T) {
+	t.Parallel()
+
+	guildID := "g1"
+	cm := newTestConfigManager(t)
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID: guildID,
+		Features: files.FeatureToggles{
+			Moderation: files.FeatureModerationToggles{
+				Ban: boolPtr(false),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	err := newBanCommand().Handle(&core.Context{
+		Config:  cm,
+		GuildID: guildID,
+	})
+	if err == nil {
+		t.Fatal("expected ban command to be rejected")
+	}
+	cmdErr, ok := err.(*core.CommandError)
+	if !ok {
+		t.Fatalf("expected *core.CommandError, got %T", err)
+	}
+	if cmdErr.Message != "Ban command is disabled for this server." {
+		t.Fatalf("unexpected error message: %q", cmdErr.Message)
+	}
+}
+
 func TestSendModerationLogNoChannel(t *testing.T) {
 	t.Parallel()
 

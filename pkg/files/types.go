@@ -188,6 +188,15 @@ type FeatureLoggingToggles struct {
 	CleanAction    *bool `json:"clean_action,omitempty"`
 }
 
+type FeatureModerationToggles struct {
+	Ban      *bool `json:"ban,omitempty"`
+	MassBan  *bool `json:"massban,omitempty"`
+	Kick     *bool `json:"kick,omitempty"`
+	Timeout  *bool `json:"timeout,omitempty"`
+	Warn     *bool `json:"warn,omitempty"`
+	Warnings *bool `json:"warnings,omitempty"`
+}
+
 type FeatureMessageCacheToggles struct {
 	CleanupOnStartup *bool `json:"cleanup_on_startup,omitempty"`
 	DeleteOnLog      *bool `json:"delete_on_log,omitempty"`
@@ -213,6 +222,7 @@ type FeatureBackfillToggles struct {
 type FeatureToggles struct {
 	Services       FeatureServiceToggles       `json:"services,omitempty"`
 	Logging        FeatureLoggingToggles       `json:"logging,omitempty"`
+	Moderation     FeatureModerationToggles    `json:"moderation,omitempty"`
 	MessageCache   FeatureMessageCacheToggles  `json:"message_cache,omitempty"`
 	PresenceWatch  FeaturePresenceWatchToggles `json:"presence_watch,omitempty"`
 	Maintenance    FeatureMaintenanceToggles   `json:"maintenance,omitempty"`
@@ -253,6 +263,14 @@ type ResolvedFeatureToggles struct {
 		AutomodAction  bool
 		ModerationCase bool
 		CleanAction    bool
+	}
+	Moderation struct {
+		Ban      bool
+		MassBan  bool
+		Kick     bool
+		Timeout  bool
+		Warn     bool
+		Warnings bool
 	}
 	MessageCache struct {
 		CleanupOnStartup bool
@@ -719,6 +737,13 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	out.Logging.AutomodAction = resolveFeatureBool(guild.Logging.AutomodAction, global.Logging.AutomodAction, true)
 	out.Logging.ModerationCase = resolveFeatureBool(guild.Logging.ModerationCase, global.Logging.ModerationCase, true)
 	out.Logging.CleanAction = resolveFeatureBool(guild.Logging.CleanAction, global.Logging.CleanAction, true)
+
+	out.Moderation.Ban = resolveFeatureBool(guild.Moderation.Ban, global.Moderation.Ban, true)
+	out.Moderation.MassBan = resolveFeatureBool(guild.Moderation.MassBan, global.Moderation.MassBan, true)
+	out.Moderation.Kick = resolveFeatureBool(guild.Moderation.Kick, global.Moderation.Kick, true)
+	out.Moderation.Timeout = resolveFeatureBool(guild.Moderation.Timeout, global.Moderation.Timeout, true)
+	out.Moderation.Warn = resolveFeatureBool(guild.Moderation.Warn, global.Moderation.Warn, true)
+	out.Moderation.Warnings = resolveFeatureBool(guild.Moderation.Warnings, global.Moderation.Warnings, true)
 
 	out.MessageCache.CleanupOnStartup = resolveFeatureBool(guild.MessageCache.CleanupOnStartup, global.MessageCache.CleanupOnStartup, false)
 	out.MessageCache.DeleteOnLog = resolveFeatureBool(guild.MessageCache.DeleteOnLog, global.MessageCache.DeleteOnLog, false)

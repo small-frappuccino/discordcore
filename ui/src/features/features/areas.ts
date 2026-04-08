@@ -1,4 +1,8 @@
 import type { FeatureRecord } from "../../api/control";
+import {
+  moderationCommandFeatureIDs,
+  moderationRouteFeatureIDs,
+} from "./moderation";
 
 export type FeatureAreaID =
   | "commands"
@@ -40,14 +44,14 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
     anchor: "moderation",
     label: "Moderation",
     description:
-      "Logging-only AutoMod readiness, mute-role setup, and moderation event routes for staff workflows.",
+      "Moderation command toggles, mute-role setup, and moderation event routes for staff workflows.",
     homeShortcutLabel: "Moderation setup",
     navigation: "primary",
     featureIDs: [
       "services.automod",
       "moderation.mute_role",
-      "logging.automod_action",
-      "logging.moderation_case",
+      ...moderationCommandFeatureIDs,
+      ...moderationRouteFeatureIDs,
     ],
   },
   {

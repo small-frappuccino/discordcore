@@ -12,6 +12,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -187,6 +188,39 @@ var (
 	fallbackCaseSeq   = map[string]int64{}
 )
 
+func ensureModerationCommandEnabled(ctx *core.Context, featureID, disabledMessage string) error {
+	if ctx == nil || ctx.Config == nil {
+		return core.NewCommandError("Configuration is not available right now.", true)
+	}
+	cfg := ctx.Config.Config()
+	if cfg == nil {
+		return core.NewCommandError("Configuration is not available right now.", true)
+	}
+	if !moderationCommandFeatureEnabled(cfg.ResolveFeatures(ctx.GuildID), featureID) {
+		return core.NewCommandError(disabledMessage, true)
+	}
+	return nil
+}
+
+func moderationCommandFeatureEnabled(features files.ResolvedFeatureToggles, featureID string) bool {
+	switch featureID {
+	case "moderation.ban":
+		return features.Moderation.Ban
+	case "moderation.massban":
+		return features.Moderation.MassBan
+	case "moderation.kick":
+		return features.Moderation.Kick
+	case "moderation.timeout":
+		return features.Moderation.Timeout
+	case "moderation.warn":
+		return features.Moderation.Warn
+	case "moderation.warnings":
+		return features.Moderation.Warnings
+	default:
+		return false
+	}
+}
+
 // RegisterModerationCommands registers slash commands under the /moderation group.
 func RegisterModerationCommands(router *core.CommandRouter) {
 	checker := router.GetPermissionChecker()
@@ -236,6 +270,9 @@ func (c *banCommand) RequiresGuild() bool { return true }
 func (c *banCommand) RequiresPermissions() bool { return true }
 
 func (c *banCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.ban", "Ban command is disabled for this server."); err != nil {
+		return err
+	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
@@ -310,6 +347,9 @@ func (c *massBanCommand) RequiresGuild() bool { return true }
 func (c *massBanCommand) RequiresPermissions() bool { return true }
 
 func (c *massBanCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.massban", "Mass ban command is disabled for this server."); err != nil {
+		return err
+	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	membersInput, err := extractor.StringRequired("members")
@@ -409,6 +449,9 @@ func (c *kickCommand) RequiresGuild() bool { return true }
 func (c *kickCommand) RequiresPermissions() bool { return true }
 
 func (c *kickCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.kick", "Kick command is disabled for this server."); err != nil {
+		return err
+	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
@@ -491,6 +534,9 @@ func (c *timeoutCommand) RequiresGuild() bool { return true }
 func (c *timeoutCommand) RequiresPermissions() bool { return true }
 
 func (c *timeoutCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.timeout", "Timeout command is disabled for this server."); err != nil {
+		return err
+	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
@@ -661,6 +707,9 @@ func (c *warnCommand) RequiresGuild() bool { return true }
 func (c *warnCommand) RequiresPermissions() bool { return true }
 
 func (c *warnCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.warn", "Warn command is disabled for this server."); err != nil {
+		return err
+	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
@@ -745,6 +794,9 @@ func (c *warningsCommand) RequiresGuild() bool { return true }
 func (c *warningsCommand) RequiresPermissions() bool { return true }
 
 func (c *warningsCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.warnings", "Warnings command is disabled for this server."); err != nil {
+		return err
+	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")

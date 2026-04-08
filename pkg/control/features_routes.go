@@ -86,6 +86,12 @@ var featureDefinitions = []featureDefinition{
 	{ID: "services.monitoring", Category: "services", Label: "Monitoring", Description: "Core monitoring service lifecycle and shared event processing.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "services.automod", Category: "services", Label: "Automod service", Description: "Discord native AutoMod event listener used for moderation logging. No local rules engine is active yet.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "moderation.mute_role", Category: "moderation", Label: "Mute role", Description: "Role applied by the mute command when the selected server needs role-based muting.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "role_id"}},
+	{ID: "moderation.ban", Category: "moderation", Label: "Ban command", Description: "Enable the slash command that bans a single member.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "moderation.massban", Category: "moderation", Label: "Mass ban command", Description: "Enable the slash command that bans multiple members in one action.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "moderation.kick", Category: "moderation", Label: "Kick command", Description: "Enable the slash command that removes a member from the server.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "moderation.timeout", Category: "moderation", Label: "Timeout command", Description: "Enable the slash command that applies a temporary member timeout.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "moderation.warn", Category: "moderation", Label: "Warn command", Description: "Enable the slash command that records a moderation warning.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "moderation.warnings", Category: "moderation", Label: "Warnings command", Description: "Enable the slash command that lists recent warnings for a member.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "services.commands", Category: "services", Label: "Commands", Description: "Slash-command handling plus the optional command channel route used by guild configuration.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}},
 	{ID: "services.admin_commands", Category: "services", Label: "Admin commands", Description: "Privileged command workflows scoped by the configured allowed roles.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "allowed_role_ids"}},
 	{ID: "logging.avatar_logging", Category: "logging", Label: "Avatar logging", Description: "Record avatar changes in the configured user log channel.", SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "channel_id"}, LogEvent: discordlogging.LogEventAvatarChange},
@@ -641,6 +647,10 @@ func buildFeatureReadiness(
 				}
 			}
 		}
+	case "moderation.ban", "moderation.massban", "moderation.kick", "moderation.timeout", "moderation.warn", "moderation.warnings":
+		if !cfg.ResolveFeatures(guildID).Services.Commands {
+			return "blocked", []featureBlocker{{Code: "commands_disabled", Message: "Enable the Commands service before using moderation commands."}}
+		}
 	case "message_cache.cleanup_on_startup":
 		if !rc.MessageCacheCleanup {
 			return "blocked", []featureBlocker{{Code: "runtime_disabled", Message: "Runtime message cache cleanup is disabled."}}
@@ -1099,6 +1109,18 @@ func resolvedFeatureValue(cfg *files.BotConfig, guildID, featureID string) bool 
 		return resolved.Services.Automod
 	case "moderation.mute_role":
 		return resolved.MuteRole
+	case "moderation.ban":
+		return resolved.Moderation.Ban
+	case "moderation.massban":
+		return resolved.Moderation.MassBan
+	case "moderation.kick":
+		return resolved.Moderation.Kick
+	case "moderation.timeout":
+		return resolved.Moderation.Timeout
+	case "moderation.warn":
+		return resolved.Moderation.Warn
+	case "moderation.warnings":
+		return resolved.Moderation.Warnings
 	case "services.commands":
 		return resolved.Services.Commands
 	case "services.admin_commands":
@@ -1156,6 +1178,18 @@ func getGlobalFeatureToggle(ft files.FeatureToggles, featureID string) *bool {
 		return ft.Services.Automod
 	case "moderation.mute_role":
 		return ft.MuteRole
+	case "moderation.ban":
+		return ft.Moderation.Ban
+	case "moderation.massban":
+		return ft.Moderation.MassBan
+	case "moderation.kick":
+		return ft.Moderation.Kick
+	case "moderation.timeout":
+		return ft.Moderation.Timeout
+	case "moderation.warn":
+		return ft.Moderation.Warn
+	case "moderation.warnings":
+		return ft.Moderation.Warnings
 	case "services.commands":
 		return ft.Services.Commands
 	case "services.admin_commands":
@@ -1213,6 +1247,18 @@ func setGlobalFeatureToggle(ft *files.FeatureToggles, featureID string, value *b
 		ft.Services.Automod = cloneBool(value)
 	case "moderation.mute_role":
 		ft.MuteRole = cloneBool(value)
+	case "moderation.ban":
+		ft.Moderation.Ban = cloneBool(value)
+	case "moderation.massban":
+		ft.Moderation.MassBan = cloneBool(value)
+	case "moderation.kick":
+		ft.Moderation.Kick = cloneBool(value)
+	case "moderation.timeout":
+		ft.Moderation.Timeout = cloneBool(value)
+	case "moderation.warn":
+		ft.Moderation.Warn = cloneBool(value)
+	case "moderation.warnings":
+		ft.Moderation.Warnings = cloneBool(value)
 	case "services.commands":
 		ft.Services.Commands = cloneBool(value)
 	case "services.admin_commands":

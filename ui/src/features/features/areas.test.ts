@@ -4,6 +4,7 @@ import {
   featureAreaDefinitions,
   getFeatureAreaDefinition,
 } from "./areas";
+import { moderationCommandFeatureIDs } from "./moderation";
 
 describe("feature area definitions", () => {
   it("assigns each feature id to only one area", () => {
@@ -22,5 +23,14 @@ describe("feature area definitions", () => {
       "services.monitoring",
     );
     expect(advancedSettingsFeatureIDs).toContain("services.monitoring");
+  });
+
+  it("exposes moderation command toggles in the moderation area", () => {
+    const moderationArea = getFeatureAreaDefinition("moderation");
+    expect(moderationArea).not.toBeNull();
+
+    for (const featureID of moderationCommandFeatureIDs) {
+      expect(moderationArea?.featureIDs).toContain(featureID);
+    }
   });
 });

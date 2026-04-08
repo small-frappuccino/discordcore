@@ -1,7 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 type GroupedSettingsSectionElement = "div" | "section";
-type GroupedSettingsLabelElement = "h2" | "h3" | "span";
 
 interface GroupedSettingsSectionProps extends HTMLAttributes<HTMLElement> {
   as?: GroupedSettingsSectionElement;
@@ -33,8 +32,7 @@ interface GroupedSettingsCopyProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
 }
 
-interface GroupedSettingsLabelProps extends HTMLAttributes<HTMLElement> {
-  as?: GroupedSettingsLabelElement;
+interface GroupedSettingsHeadingProps extends HTMLAttributes<HTMLHeadingElement> {
   children: ReactNode;
 }
 
@@ -162,29 +160,15 @@ export function GroupedSettingsCopy({
   );
 }
 
-export function GroupedSettingsLabel({
-  as: Component = "span",
-  className,
-  children,
-  ...props
-}: GroupedSettingsLabelProps) {
-  return (
-    <Component className={joinClassNames("grouped-settings-label", className)} {...props}>
-      {children}
-    </Component>
-  );
-}
-
 export function GroupedSettingsHeading({
-  as: Component = "span",
   className,
   children,
   ...props
-}: GroupedSettingsLabelProps) {
+}: GroupedSettingsHeadingProps) {
   return (
-    <Component className={joinClassNames("grouped-settings-heading", className)} {...props}>
+    <h2 className={joinClassNames("grouped-settings-heading", className)} {...props}>
       {children}
-    </Component>
+    </h2>
   );
 }
 

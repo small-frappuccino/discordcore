@@ -229,6 +229,14 @@ func cloneFeatureToggles(in FeatureToggles) FeatureToggles {
 			ModerationCase: cloneBoolPtr(in.Logging.ModerationCase),
 			CleanAction:    cloneBoolPtr(in.Logging.CleanAction),
 		},
+		Moderation: FeatureModerationToggles{
+			Ban:      cloneBoolPtr(in.Moderation.Ban),
+			MassBan:  cloneBoolPtr(in.Moderation.MassBan),
+			Kick:     cloneBoolPtr(in.Moderation.Kick),
+			Timeout:  cloneBoolPtr(in.Moderation.Timeout),
+			Warn:     cloneBoolPtr(in.Moderation.Warn),
+			Warnings: cloneBoolPtr(in.Moderation.Warnings),
+		},
 		MessageCache: FeatureMessageCacheToggles{
 			CleanupOnStartup: cloneBoolPtr(in.MessageCache.CleanupOnStartup),
 			DeleteOnLog:      cloneBoolPtr(in.MessageCache.DeleteOnLog),

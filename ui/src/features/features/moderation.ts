@@ -1,5 +1,22 @@
 import type { FeatureRecord } from "../../api/control";
 
+export const moderationCommandFeatureIDs = [
+  "moderation.ban",
+  "moderation.massban",
+  "moderation.kick",
+  "moderation.timeout",
+  "moderation.warn",
+  "moderation.warnings",
+] as const;
+
+export const moderationRouteFeatureIDs = [
+  "logging.automod_action",
+  "logging.moderation_case",
+] as const;
+
+const moderationCommandFeatureIDSet = new Set<string>(moderationCommandFeatureIDs);
+const moderationRouteFeatureIDSet = new Set<string>(moderationRouteFeatureIDs);
+
 interface AutomodFeatureDetails {
   mode: string;
 }
@@ -28,12 +45,12 @@ export function getMuteRoleFeatureDetails(
   };
 }
 
+export function getModerationCommandFeatures(features: FeatureRecord[]) {
+  return features.filter((feature) => moderationCommandFeatureIDSet.has(feature.id));
+}
+
 export function getModerationLogFeatures(features: FeatureRecord[]) {
-  return features.filter(
-    (feature) =>
-      feature.id !== "services.automod" &&
-      feature.id !== "moderation.mute_role",
-  );
+  return features.filter((feature) => moderationRouteFeatureIDSet.has(feature.id));
 }
 
 export function canEditMuteRole(feature: FeatureRecord) {

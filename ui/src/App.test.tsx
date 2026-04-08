@@ -1927,9 +1927,10 @@ describe("dashboard routing and workspace", () => {
     expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
     expect(screen.queryByText("Moderation controls")).not.toBeInTheDocument();
     expect(screen.queryByText("Rule coverage")).not.toBeInTheDocument();
-    expect(document.querySelector(".flat-page-workspace")).not.toBeNull();
     expect(
-      document.querySelector(".flat-page-workspace .moderation-page-intro"),
+      screen
+        .getByRole("heading", { name: "Moderation", level: 1 })
+        .closest(".flat-page-workspace"),
     ).not.toBeNull();
   });
 
@@ -1945,16 +1946,15 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
-    const muteRoleSection = screen
-      .getByRole("heading", { name: "Mute command", level: 2 })
-      .closest(".moderation-settings-item") as HTMLElement | null;
-    expect(muteRoleSection).not.toBeNull();
+    const muteRoleSection = screen.getByRole("group", {
+      name: "Mute command",
+    });
     await userEvent.selectOptions(
-      within(muteRoleSection!).getByLabelText("Mute role"),
+      within(muteRoleSection).getByLabelText("Mute role"),
       "mute-role",
     );
     await userEvent.click(
-      within(muteRoleSection!).getByRole("button", { name: "Save changes" }),
+      within(muteRoleSection).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -1969,16 +1969,15 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
-    const moderationCaseSection = screen
-      .getByRole("heading", { name: "Moderation case logging", level: 3 })
-      .closest(".moderation-settings-item") as HTMLElement | null;
-    expect(moderationCaseSection).not.toBeNull();
+    const moderationCaseSection = screen.getByRole("group", {
+      name: "Moderation case logging",
+    });
     await userEvent.selectOptions(
-      within(moderationCaseSection!).getByLabelText("Channel"),
+      within(moderationCaseSection).getByLabelText("Channel"),
       "mod-cases",
     );
     await userEvent.click(
-      within(moderationCaseSection!).getByRole("button", {
+      within(moderationCaseSection).getByRole("button", {
         name: "Save changes",
       }),
     );
@@ -2043,16 +2042,13 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
 
-    const muteSection = screen
-      .getByRole("heading", { name: "Mute command", level: 2 })
-      .closest(".moderation-settings-item") as HTMLElement | null;
-    expect(muteSection).not.toBeNull();
+    const muteSection = screen.getByRole("group", { name: "Mute command" });
 
-    const muteToggle = within(muteSection!).getByRole("checkbox", {
+    const muteToggle = within(muteSection).getByRole("checkbox", {
       name: "Mute command",
     });
     expect(
-      within(muteSection!).getByLabelText("Mute role"),
+      within(muteSection).getByLabelText("Mute role"),
     ).toBeInTheDocument();
 
     await userEvent.click(muteToggle);
@@ -2068,12 +2064,12 @@ describe("dashboard routing and workspace", () => {
     });
     await waitFor(() => {
       expect(
-        within(muteSection!).queryByLabelText("Mute role"),
+        within(muteSection).queryByLabelText("Mute role"),
       ).not.toBeInTheDocument();
     });
 
     await userEvent.click(
-      within(muteSection!).getByRole("checkbox", {
+      within(muteSection).getByRole("checkbox", {
         name: "Mute command",
       }),
     );
@@ -2089,7 +2085,7 @@ describe("dashboard routing and workspace", () => {
     });
     await waitFor(() => {
       expect(
-        within(muteSection!).getByLabelText("Mute role"),
+        within(muteSection).getByLabelText("Mute role"),
       ).toBeInTheDocument();
     });
   });
@@ -2104,24 +2100,20 @@ describe("dashboard routing and workspace", () => {
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
 
     function getAutomodActionSection() {
-      return screen
-        .getByRole("heading", { name: "Automod action logging", level: 3 })
-        .closest(".moderation-settings-item") as HTMLElement | null;
+      return screen.getByRole("group", { name: "Automod action logging" });
     }
 
-    expect(getAutomodActionSection()).not.toBeNull();
-
     const routeChannelSelect =
-      within(getAutomodActionSection()!).getByLabelText("Channel");
+      within(getAutomodActionSection()).getByLabelText("Channel");
     await userEvent.selectOptions(routeChannelSelect, "mod-cases");
     expect(routeChannelSelect).toHaveValue("mod-cases");
     await waitFor(() => {
       expect(
-        within(getAutomodActionSection()!).getByRole("button", { name: "Reset" }),
+        within(getAutomodActionSection()).getByRole("button", { name: "Reset" }),
       ).toBeInTheDocument();
     });
     await userEvent.click(
-      within(getAutomodActionSection()!).getByRole("button", { name: "Reset" }),
+      within(getAutomodActionSection()).getByRole("button", { name: "Reset" }),
     );
     expect(routeChannelSelect).toHaveValue("mod-actions");
   });

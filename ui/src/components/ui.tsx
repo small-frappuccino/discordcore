@@ -21,7 +21,6 @@ export {
   GroupedSettingsHeading,
   GroupedSettingsInlineMessage,
   GroupedSettingsItem,
-  GroupedSettingsLabel,
   GroupedSettingsMainRow,
   GroupedSettingsRow,
   GroupedSettingsSection,

@@ -34,6 +34,14 @@ func NewMinimalGuildConfig(guildID, botInstanceID string) GuildConfig {
 				ModerationCase: boolPtr(disabled),
 				CleanAction:    boolPtr(disabled),
 			},
+			Moderation: FeatureModerationToggles{
+				Ban:      boolPtr(disabled),
+				MassBan:  boolPtr(disabled),
+				Kick:     boolPtr(disabled),
+				Timeout:  boolPtr(disabled),
+				Warn:     boolPtr(disabled),
+				Warnings: boolPtr(disabled),
+			},
 			MessageCache: FeatureMessageCacheToggles{
 				CleanupOnStartup: boolPtr(disabled),
 				DeleteOnLog:      boolPtr(disabled),

@@ -171,6 +171,12 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 		{path: "/v1/guilds/g1/features/services.commands", payload: map[string]any{"channel_id": "cmd-channel"}},
 		{path: "/v1/guilds/g1/features/services.admin_commands", payload: map[string]any{"allowed_role_ids": []string{"admin-a", "admin-b", "admin-a", ""}}},
 		{path: "/v1/guilds/g1/features/moderation.mute_role", payload: map[string]any{"role_id": "mute-role"}},
+		{path: "/v1/guilds/g1/features/moderation.ban", payload: map[string]any{"enabled": true}},
+		{path: "/v1/guilds/g1/features/moderation.massban", payload: map[string]any{"enabled": true}},
+		{path: "/v1/guilds/g1/features/moderation.kick", payload: map[string]any{"enabled": true}},
+		{path: "/v1/guilds/g1/features/moderation.timeout", payload: map[string]any{"enabled": true}},
+		{path: "/v1/guilds/g1/features/moderation.warn", payload: map[string]any{"enabled": true}},
+		{path: "/v1/guilds/g1/features/moderation.warnings", payload: map[string]any{"enabled": true}},
 		{path: "/v1/guilds/g1/features/logging.member_join", payload: map[string]any{"channel_id": "join-channel"}},
 		{path: "/v1/guilds/g1/features/presence_watch.user", payload: map[string]any{"user_id": "user-42"}},
 		{path: "/v1/guilds/g1/features/safety.bot_role_perm_mirror", payload: map[string]any{"actor_role_id": "actor-7"}},
@@ -204,6 +210,14 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	}
 	if guild.Roles.MuteRole != "mute-role" {
 		t.Fatalf("expected mute role persisted, got %+v", guild.Roles)
+	}
+	if guild.Features.Moderation.Ban == nil || !*guild.Features.Moderation.Ban ||
+		guild.Features.Moderation.MassBan == nil || !*guild.Features.Moderation.MassBan ||
+		guild.Features.Moderation.Kick == nil || !*guild.Features.Moderation.Kick ||
+		guild.Features.Moderation.Timeout == nil || !*guild.Features.Moderation.Timeout ||
+		guild.Features.Moderation.Warn == nil || !*guild.Features.Moderation.Warn ||
+		guild.Features.Moderation.Warnings == nil || !*guild.Features.Moderation.Warnings {
+		t.Fatalf("expected moderation command feature toggles to persist, got %+v", guild.Features.Moderation)
 	}
 	if guild.Channels.MemberJoin != "join-channel" {
 		t.Fatalf("expected member_join channel persisted, got %+v", guild.Channels)
@@ -375,6 +389,61 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		response := decodeFeatureResponse[featureRecordResponse](t, rec)
 		if response.Feature.Readiness != "ready" || len(response.Feature.Blockers) != 0 {
 			t.Fatalf("expected ready feature, got %+v", response.Feature)
+		}
+	})
+}
+
+func TestModerationCommandFeatureReadinessStates(t *testing.T) {
+	t.Parallel()
+
+	t.Run("blocked when commands service disabled", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.Moderation.Ban = testBoolPtr(true)
+			cfg.Guilds[0].Features.Services.Commands = testBoolPtr(false)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed moderation command config: %v", err)
+		}
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/moderation.ban", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET moderation.ban status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if response.Feature.Readiness != "blocked" {
+			t.Fatalf("expected blocked readiness, got %+v", response.Feature)
+		}
+		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "commands_disabled" {
+			t.Fatalf("expected commands_disabled blocker, got %+v", response.Feature.Blockers)
+		}
+	})
+
+	t.Run("ready when commands service enabled", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.Moderation.Ban = testBoolPtr(true)
+			cfg.Guilds[0].Features.Services.Commands = testBoolPtr(true)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed moderation command config: %v", err)
+		}
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/moderation.ban", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET moderation.ban status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if response.Feature.Readiness != "ready" || len(response.Feature.Blockers) != 0 {
+			t.Fatalf("expected ready moderation command feature, got %+v", response.Feature)
 		}
 	})
 }

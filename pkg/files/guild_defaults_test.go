@@ -47,6 +47,12 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 		resolved.Logging.AutomodAction ||
 		resolved.Logging.ModerationCase ||
 		resolved.Logging.CleanAction ||
+		resolved.Moderation.Ban ||
+		resolved.Moderation.MassBan ||
+		resolved.Moderation.Kick ||
+		resolved.Moderation.Timeout ||
+		resolved.Moderation.Warn ||
+		resolved.Moderation.Warnings ||
 		resolved.MessageCache.CleanupOnStartup ||
 		resolved.MessageCache.DeleteOnLog ||
 		resolved.PresenceWatch.Bot ||
@@ -118,5 +124,23 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuildToPostgres(t *testing
 	}
 	if resolved := loaded.ResolveFeatures("guild-pg"); resolved.Services.Monitoring || resolved.Services.Commands || resolved.Logging.MemberJoin {
 		t.Fatalf("expected postgres-backed dormant guild features to stay disabled, got %+v", resolved)
+	}
+}
+
+func TestResolveFeaturesDefaultsModerationCommandsEnabledWhenUnset(t *testing.T) {
+	t.Parallel()
+
+	cfg := &BotConfig{
+		Guilds: []GuildConfig{{GuildID: "guild-unset"}},
+	}
+
+	resolved := cfg.ResolveFeatures("guild-unset")
+	if !resolved.Moderation.Ban ||
+		!resolved.Moderation.MassBan ||
+		!resolved.Moderation.Kick ||
+		!resolved.Moderation.Timeout ||
+		!resolved.Moderation.Warn ||
+		!resolved.Moderation.Warnings {
+		t.Fatalf("expected unset moderation command toggles to default to enabled, got %+v", resolved.Moderation)
 	}
 }
