@@ -1,0 +1,157 @@
+Abaixo estão três prompts com enfoques diferentes. Em todos, já incluí a exigência de separar `melhorias generalizadas` de `melhorias específicas a repositórios`.
+
+**Prompt 1**
+```text
+Continue a evolução do `smallfrappuccino-mcp` a partir do estado atual de `smallfrappuccino_related_tests` e `task_context`, mantendo rigorosamente a direção do projeto:
+
+- heurísticas explícitas
+- sem embeddings
+- sem vetores
+- sem infraestrutura nova
+- sem serviços externos
+- saída operacional
+- priorização de testes reais impactados acima de ruído lexical
+- evidência estrutural acima de evidência lexical
+- diffs pequenos e fáceis de manter
+
+Contexto relevante:
+- Já existe implementação recente em:
+  - `src/repo/relatedTests.ts`
+  - `src/repo/taskIntel.ts`
+  - `src/discordcore/taskIntel.ts`
+  - `src/retrieval/context.ts`
+  - `tests/relatedTests.test.ts`
+  - `tests/taskContextIntegration.test.ts`
+  - `tests/retrieval.test.ts`
+- O worktree pode estar sujo. Não reverta mudanças alheias.
+- Há falhas pré-existentes fora desta feature. Não tente “consertar o mundo”.
+
+Problemas a atacar:
+1. Melhorar recall para símbolos ambíguos ou parcialmente inferíveis, sem abrir ruído excessivo.
+2. Melhorar casos em que o teste real usa tokens fracos (`active`, `save`, etc.), mas o contexto contratual está distribuído em múltiplas linhas ou padrões menos óbvios.
+3. Refinar a promoção em `task_context` para tarefas operacionais menos explícitas, sem permitir que hits puramente lexicais virem promoção indevida.
+4. Adicionar apenas heurísticas explícitas pequenas, de alto valor e baixa fragilidade.
+5. Validar que não houve degradação do ranking existente nem regressão lateral óbvia.
+
+O que fazer:
+1. Inspecione o estado atual da implementação e dos testes.
+2. Explicite as hipóteses de melhoria antes de mudar ranking.
+3. Implemente apenas as menores mudanças corretas.
+4. Adicione testes automatizados cobrindo os novos casos.
+5. Rode validação focada e validação adjacente suficiente para detectar regressão lateral.
+6. Preserve a separação conceitual entre `related_tests` e `related_files`.
+
+Na resposta final, organize em seções:
+- Melhorias generalizadas
+- Melhorias específicas a repositórios
+- Heurísticas adicionadas/refinadas
+- Como o ranking mudou
+- Riscos remanescentes
+- Falhas de validação pré-existentes vs introduzidas
+```
+
+**Prompt 2**
+```text
+Quero uma iteração orientada a hipóteses sobre `smallfrappuccino_related_tests` e o consumo disso em `task_context`.
+
+Restrições não negociáveis:
+- sem embeddings
+- sem vetores
+- sem LLM auxiliar
+- sem serviços externos
+- sem nova infraestrutura
+- heurísticas explícitas, pequenas e auditáveis
+- precisão operacional acima de recall “bonito”
+- não permitir que ruído lexical passe à frente de teste real impactado
+
+Arquivos prioritários:
+- `src/repo/relatedTests.ts`
+- `src/repo/taskIntel.ts`
+- `src/discordcore/taskIntel.ts`
+- `src/retrieval/context.ts`
+- `tests/relatedTests.test.ts`
+- `tests/taskContextIntegration.test.ts`
+- `tests/retrieval.test.ts`
+
+Trabalhe assim:
+1. Liste as hipóteses mais prováveis de ganho real de recall/precisão.
+2. Para cada hipótese, diga:
+   - por que pode melhorar
+   - como evita regressão
+   - qual o menor diff necessário
+3. Escolha só as hipóteses de maior relação valor/complexidade.
+4. Implemente.
+5. Cubra com testes.
+6. Valide com suites focadas e uma validação adjacente curta.
+
+Áreas onde espero avanço:
+- símbolos inferidos parcialmente ou ambíguos
+- contratos de teste distribuídos em múltiplas linhas
+- tarefas operacionais menos explícitas no `task_context`
+- promoção conservadora, sem hits lexicais puros
+
+Importante:
+- Se uma ideia exigir heurística grande, frágil ou difícil de explicar, descarte.
+- Se houver trade-off entre recall e precisão, prefira precisão.
+- Não reverta mudanças alheias no worktree.
+
+Na resposta final, separe explicitamente:
+- Melhorias generalizadas
+- Melhorias específicas a repositórios
+
+E dentro de cada grupo, detalhe:
+- problema resolvido
+- heurística usada
+- impacto no ranking
+- cobertura de testes
+```
+
+**Prompt 3**
+```text
+Faça uma revisão-implementação focada em elevar a utilidade operacional de `smallfrappuccino_related_tests` sem descaracterizar o projeto.
+
+Direção do projeto:
+- local-only
+- heurísticas explícitas
+- inspectable
+- sem vetores
+- sem embeddings
+- sem infra nova
+- sem mágica opaca
+- preferir SQL/regex/regras claras a mecanismos difíceis de explicar
+- testes reais impactados devem rankear acima de ruído lexical
+
+Escopo:
+- revisar o estado atual
+- encontrar melhorias pequenas e defensáveis
+- implementar
+- testar
+- validar ausência de regressão óbvia
+
+Quero que você trate especificamente:
+1. Ambiguidade de símbolo: como recuperar recall útil sem virar “best effort lexical”.
+2. Tokens fracos em contexto distribuído: como capturar contrato real quando a evidência está espalhada.
+3. `task_context`: como melhorar promoção para tarefas operacionais menos explícitas sem abrir falso positivo.
+4. Regras pequenas e manteníveis que possam ser explicadas em uma frase.
+5. Estratégia de validação que prove não ter degradado o ranking existente.
+
+Regras:
+- Preserve a separação entre `related_tests` e `related_files`.
+- Prefira mudanças incrementais.
+- Não mexa em áreas não necessárias.
+- Se encontrar falhas adjacentes que bloqueiem validação, faça no máximo o ajuste mínimo e chame isso explicitamente de adjacente, não parte da heurística principal.
+
+Formato esperado da resposta final:
+1. Melhorias generalizadas
+2. Melhorias específicas a repositórios
+3. Mudanças implementadas
+4. Testes adicionados/ajustados
+5. Resultado da validação
+6. Riscos e limitações remanescentes
+7. Falhas pré-existentes vs novas
+```
+
+Se quiser, também posso transformar esses três em versões:
+- mais curtas para uso diário
+- mais agressivas em implementação
+- mais orientadas a auditoria/ranking/tests.

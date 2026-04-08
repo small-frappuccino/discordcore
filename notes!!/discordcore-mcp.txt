@@ -1,0 +1,96 @@
+You are working inside `C:/Users/enzok/git/small-frappuccino/tools`.
+
+Do not implement code in this repository for this task.
+Your job is to inspect this repository and the existing MCP repository at `C:/Users/enzok/git/small-frappuccino/discordcore-mcp`, then write a single implementation prompt that will later be executed inside `discordcore-mcp`.
+
+The goal of that future implementation prompt is to extend `discordcore-mcp` so it can support repositories that contain Rust, while preserving its current strength on the existing Discord-focused stack.
+
+Important background you must design around:
+- `discordcore-mcp` already exists. This is not a greenfield scaffold task.
+- The current MCP base is already optimized around a repository shape that uses Go with `discordgo`, `bun`, and React/TypeScript.
+- `discordcore-mcp` already has a generic/neutral module intended for future expansion and a second module/profile that is specific to the Discord use case.
+- The current repository also contains experimental Rust code inside `discordcore-mcp`. That Rust implementation must be removed before any new extension work starts.
+- After cleanup, `discordcore-mcp` must remain a TypeScript MCP server. Do not propose keeping parallel MCP implementations in both TypeScript and Rust.
+- The first Rust-capable target to support is only this repository: `C:/Users/enzok/git/small-frappuccino/tools`.
+
+What you must do:
+1. Read `C:/Users/enzok/git/small-frappuccino/discordcore-mcp` as the reference implementation.
+2. Understand its current architecture, especially:
+   - the generic/shared core
+   - the Discord-specific profile/module
+   - SQLite schema and indexing model
+   - retrieval, task-context, rules, related-file, and observation flows
+   - any current Rust-specific code that should be removed instead of extended
+3. Read `C:/Users/enzok/git/small-frappuccino/tools` as the first Rust target.
+4. Infer the practical repository facts that matter for MCP support in `tools`.
+5. Produce one concrete prompt, in English, ready to paste into a future Codex session running in `discordcore-mcp`.
+
+That output prompt must tell the future agent to do this work in `discordcore-mcp`:
+
+Phase 0: Remove experimental Rust from `discordcore-mcp`
+1. Remove the Rust MCP implementation and Rust build artifacts/source from `discordcore-mcp`.
+2. Keep the TypeScript implementation as the only MCP implementation.
+3. Update docs/config/scripts so the repository no longer suggests that the Rust MCP path is active.
+4. Make sure the TypeScript project still builds, tests, and runs after cleanup.
+
+Phase 1: Preserve and clarify the existing architecture
+1. Keep the current generic/shared MCP foundation.
+2. Keep the existing Discord-specific behavior strong for the repo shape built around `discordgo`, `bun`, and React/TypeScript.
+3. Do not weaken current `discordcore` behavior in order to make the system more generic.
+4. If architecture cleanup is needed, it must improve the separation between:
+   - shared generic MCP/index/retrieval capabilities
+   - Discord-specific profiling and heuristics
+   - new Rust-targeted support for `tools`
+
+Phase 2: Add Rust-targeted support in TypeScript for `tools`
+1. Extend the TypeScript MCP so it can understand a small Rust repository, specifically `tools`.
+2. Add or adapt the generic layer only where it materially helps future expansion.
+3. Add a new profile/module for `tools`, with heuristics driven by the real repository layout.
+4. Focus on practical repository understanding, not on building a perfect Rust compiler pipeline.
+5. Prefer explicit source heuristics, Cargo metadata, file discovery, symbol extraction, binary/command entrypoint facts, module relations, workspace/build behavior, and repo-specific hotspots.
+
+Phase 3: Retrieval and tooling behavior
+1. Preserve the existing MCP tool names unless there is a compelling technical reason to change internals only.
+2. Ensure the architecture can resolve the correct profile for:
+   - the existing Discord-oriented repo
+   - the Rust `tools` repo
+3. Make the retrieval/task-context layer useful for Rust work in `tools`, not just generic file search.
+4. Keep the system local, inspectable, SQLite-backed, and deterministic.
+
+Phase 4: Tests and docs
+1. Add or update tests that prove:
+   - Rust cleanup happened correctly in `discordcore-mcp`
+   - profile resolution still works
+   - `discordcore` behavior still works
+   - `tools` indexing/retrieval produces useful high-value results
+2. Update README and agent-facing docs to explain:
+   - the TypeScript-only MCP architecture
+   - the generic module
+   - the Discord-specific module
+   - the new `tools` Rust support
+   - current limitations
+
+Constraints for the future implementation prompt:
+- Keep the architecture local-only.
+- No cloud service.
+- No distributed workers.
+- No vector database.
+- No embeddings in v1.
+- No opaque magic abstractions.
+- Prefer explicit schemas, explicit heuristics, and readable code.
+- Keep the project runnable at every phase boundary.
+- Avoid large rewrites when a smaller refactor preserves current behavior.
+- Do not ask the future agent to implement the same MCP behavior twice in different languages.
+
+Your output requirements:
+1. Output only the final implementation prompt text.
+2. Do not output analysis outside the prompt.
+3. The prompt must be specific and actionable, not generic advice.
+4. The prompt must include concrete repository facts from:
+   - `discordcore-mcp`
+   - `tools`
+5. The prompt must explicitly instruct the future agent to remove the experimental Rust code from `discordcore-mcp` before adding `tools` support.
+6. The prompt must make clear that `tools` is the only Rust target that matters for now.
+7. The prompt must tell the future agent to preserve current MCP strengths for the existing Discord-focused repository.
+
+If something is uncertain, state the uncertainty explicitly inside the generated prompt instead of inventing details.

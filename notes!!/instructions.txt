@@ -1,0 +1,72 @@
+You are working inside this repository. Make the requested UI changes directly in code and keep the app runnable at every step.
+
+Objective:
+Improve the UI design language by using the current `Home` page as the reference point for overall structure and visual intent, while avoiding UI that depends on instructional text to guide the user through the interface.
+
+Tasks:
+
+1. Inspect the current `Home` page
+- Find the page that acts as the overview/landing page and links to other areas of the application.
+- Understand its layout, spacing, hierarchy, navigation patterns, card structure, and overall visual rhythm.
+- Identify the core shape of the page that should be preserved.
+
+2. Analyze how the UI communicates flow and direction
+- Evaluate how the page guides the user’s eyes toward important actions and content.
+- Prefer guidance through layout, grouping, spacing, contrast, alignment, scale, motion, and visual hierarchy.
+- Do not rely on explanatory or directional text to tell the user where to look or what part of the interface matters.
+- Text is allowed when it is genuinely useful content, but not as a crutch for basic orientation unless clearly necessary.
+
+3. Refine the Home page visual design
+- Keep the existing core shape and structure of the `Home` page.
+- Smooth out any hard edges in the visual design if needed: harsh transitions, overly rigid spacing, visually abrupt blocks, awkward density, or noisy emphasis.
+- Make the page feel calmer, clearer, and easier on the eyes without flattening its personality.
+- Do not introduce ornamental UI that weakens readability or scanning.
+
+4. Rewrite `UI_RULES.md`
+- Rewrite the file to document this UI mindset clearly and concretely.
+- Explain that UI should guide users primarily through visual design, hierarchy, spacing, grouping, affordances, and interaction design, not through large amounts of guiding text.
+- State that explanatory copy is optional and should only be used when the product owner explicitly wants it or when the interface truly needs it.
+- Add practical design rules the agent can apply in future pages.
+- Search the web for reliable, respected human sources on strong UI writing and modern UI guidance. Prefer established design sources rather than generic AI-generated summaries.
+- Distill those sources into concise, actionable project rules.
+- If you cite sources in the document or summary, keep citations brief and relevant.
+
+5. Add or improve the QOTD page
+- Check whether there is already a dedicated UI page for QOTD (“Question of the Day”).
+- If it already exists, review it and improve it to match the updated UI rules.
+- If it does not exist, create it.
+
+Navigation requirements:
+- In the lateral sidebar, place it under a new category: `Fun`
+- Inside that category, add the sub-item: `Question of the Day`
+- On the `Home` page, in the content area where the cards live, place it under `Misc`
+- Within that section, expose it through a card labeled `QOTD`
+
+QOTD page expectations:
+- Do not copy the `Home` page layout blindly.
+- Design the page around strong readability and clear eye flow.
+- The page should guide attention through layout and hierarchy, not through instructional text.
+- The result should feel modern, readable, and visually intentional.
+
+Implementation requirements:
+- Read the repository structure first so the solution matches existing patterns.
+- Reuse established components, routing conventions, navigation patterns, and styling systems where appropriate.
+- Keep diffs targeted; do not rewrite unrelated areas.
+- Preserve maintainability and consistency with the current codebase.
+
+Deliverables:
+- Implement the UI changes in code.
+- Rewrite `UI_RULES.md`.
+- Summarize:
+  - what you changed,
+  - whether QOTD already existed or had to be created,
+  - how the Home page was refined,
+  - what principles were added to `UI_RULES.md`,
+  - which external design sources informed the rewritten rules.
+
+Acceptance criteria:
+- The `Home` page keeps its recognizable structure but feels more visually refined.
+- The interface no longer depends on guiding text for basic orientation.
+- `UI_RULES.md` clearly documents this design philosophy for future work.
+- QOTD exists as a dedicated page and is reachable from both the sidebar and the Home page card area.
+- The new or updated QOTD page demonstrates the revised UI principles in practice.

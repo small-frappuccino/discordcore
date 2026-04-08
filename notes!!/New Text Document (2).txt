@@ -1,0 +1,41 @@
+Continue a evolução do `smallfrappuccino_contract_checks` no repositório `smallfrappuccino-mcp`, partindo exatamente do estado atual do worktree.
+
+Contexto já resolvido:
+- comparação inicial de shape/semântica genérica de readiness/blockers entre runtime e UI
+- persistência via leitura explícita de `applyGlobalFeaturePatch` / `applyGuildFeaturePatch`
+- distinção inicial entre UI genérica e especializada, agora com leitura AST das páginas curadas, resolução de imports/aliases, leitura de helper exports, campos de `details.*`, `editable_fields` e um passo explícito de fluxo JSX/props
+
+Riscos remanescentes a atacar:
+1. wrappers locais além de um salto de props ainda não são seguidos
+2. namespace imports e re-exports ainda não entram na leitura
+3. alguns helpers semanticamente amplos ainda dependem de fallback explícito, em vez de derivação estrutural completa
+4. `maintenance` / advanced routines continuam sem página curada dedicada, então o gap de cobertura de UI permanece explícito
+5. a parte profunda de semântica especializada de readiness/blockers por feature/blocker code ainda não foi fechada
+6. helper especializado existente mas não consumido por página ainda não vira uma categoria própria de saída; hoje isso cai em ambiguidade
+7. a análise atual privilegia `pageFiles` curados; ainda não existe leitura estrutural ampla de toda a UI além dessas superfícies e das superfícies genéricas explicitamente listadas
+
+Restrições:
+- prefira diffs mínimos
+- use regras explícitas e inspecionáveis
+- não introduza scoring nem heurística opaca
+- se a ambiguidade continuar inevitável, modele isso explicitamente na saída
+- mantenha o projeto runnable
+- preserve nomes de tools/checks existentes
+
+Arquivos mais relevantes:
+- `src/discordcore/facts.ts`
+- `src/discordcore/contracts.ts`
+- `src/model/discordcore.ts`
+- `tests/contractChecks.test.ts`
+
+Entrega:
+1. implemente a menor próxima extensão correta
+2. adicione testes automatizados para os novos casos
+3. rode pelo menos:
+   - `npm test -- tests/contractChecks.test.ts tests/taskContextIntegration.test.ts`
+   - `npm run build`
+4. reporte:
+   - qual limitação foi resolvida
+   - como o novo gap foi modelado
+   - por que essa foi a menor próxima extensão correta
+   - quais limitações ficaram para a próxima rodada
