@@ -1,4 +1,10 @@
-import { useId, useState, type HTMLAttributes, type ReactNode } from "react";
+import {
+  useId,
+  useState,
+  type CSSProperties,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 import { getInitials } from "../app/utils";
 import type { Notice } from "../app/types";
 import {
@@ -8,6 +14,21 @@ import {
   shouldRenderDashboardDiagnosticField,
   type DashboardMetaItem,
 } from "../features/features/presentationPolicy";
+export {
+  GroupedSettingsBlock,
+  GroupedSettingsCopy,
+  GroupedSettingsGroup,
+  GroupedSettingsHeading,
+  GroupedSettingsInlineMessage,
+  GroupedSettingsItem,
+  GroupedSettingsLabel,
+  GroupedSettingsMainRow,
+  GroupedSettingsRow,
+  GroupedSettingsSection,
+  GroupedSettingsStack,
+  GroupedSettingsSubrow,
+  GroupedSettingsSwitch,
+} from "./groupedSettings";
 
 type StatusTone = "neutral" | "info" | "success" | "error";
 type SurfaceElement = "article" | "div" | "section";
@@ -163,8 +184,22 @@ interface SettingsSelectFieldProps {
   options: EntityPickerOption[];
   placeholder: string;
   note?: ReactNode;
+  className?: string;
+  style?: CSSProperties;
   labelClassName?: string;
+  classNames?: SettingsSelectFieldClassNames;
   disabled?: boolean;
+}
+
+interface SettingsSelectFieldClassNames {
+  root?: string;
+  triggerCopy?: string;
+  label?: string;
+  valueGroup?: string;
+  value?: string;
+  chevron?: string;
+  control?: string;
+  note?: string;
 }
 
 interface EntityMultiPickerFieldProps {
@@ -493,7 +528,10 @@ export function SettingsSelectField({
   options,
   placeholder,
   note,
+  className,
+  style,
   labelClassName,
+  classNames,
   disabled = false,
 }: SettingsSelectFieldProps) {
   const selectedOption = options.find((option) => option.value === value) ?? null;
@@ -501,28 +539,59 @@ export function SettingsSelectField({
   const labelId = useId();
 
   return (
-    <label className="settings-select-field">
-      <span className="settings-select-trigger-copy">
+    <label
+      className={joinClassNames(
+        "settings-select-field",
+        classNames?.root,
+        className,
+      )}
+      style={style}
+    >
+      <span
+        className={joinClassNames(
+          "settings-select-trigger-copy",
+          classNames?.triggerCopy,
+        )}
+      >
         <span
-          className={joinClassNames("settings-select-trigger-label", labelClassName)}
+          className={joinClassNames(
+            "settings-select-trigger-label",
+            labelClassName,
+            classNames?.label,
+          )}
           id={labelId}
         >
           {label}
         </span>
-        <span className="settings-select-value-group">
+        <span
+          className={joinClassNames(
+            "settings-select-value-group",
+            classNames?.valueGroup,
+          )}
+        >
           <span
-            className={`settings-select-trigger-value${selectedOption ? "" : " is-placeholder"}`}
+            className={joinClassNames(
+              "settings-select-trigger-value",
+              selectedOption ? null : "is-placeholder",
+              classNames?.value,
+            )}
             aria-hidden="true"
           >
             {displayValue}
           </span>
-          <span className="settings-select-chevron" aria-hidden="true">
+          <span
+            className={joinClassNames("settings-select-chevron", classNames?.chevron)}
+            aria-hidden="true"
+          >
             <span>⌃</span>
             <span>⌄</span>
           </span>
           <select
             aria-labelledby={labelId}
-            className="settings-select-control"
+            className={joinClassNames(
+              "settings-select-control",
+              classNames?.control,
+            )}
             value={value}
             disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
@@ -540,7 +609,9 @@ export function SettingsSelectField({
           </select>
         </span>
       </span>
-      {note ? <p className="meta-note">{note}</p> : null}
+      {note ? (
+        <p className={joinClassNames("meta-note", classNames?.note)}>{note}</p>
+      ) : null}
     </label>
   );
 }

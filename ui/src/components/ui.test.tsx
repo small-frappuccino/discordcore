@@ -260,6 +260,15 @@ describe("SettingsSelectField", () => {
       }),
     ).toBeInTheDocument();
   });
+
+  it("applies slot class names on the shared select structure", () => {
+    const { container } = render(<SettingsSelectFieldHarness withClassNames />);
+
+    expect(container.querySelector(".settings-select-root-slot")).not.toBeNull();
+    expect(container.querySelector(".settings-select-label-slot")).not.toBeNull();
+    expect(container.querySelector(".settings-select-value-slot")).not.toBeNull();
+    expect(container.querySelector(".settings-select-note-slot")).not.toBeNull();
+  });
 });
 
 function EntityMultiPickerFieldHarness() {
@@ -284,14 +293,29 @@ function EntityMultiPickerFieldHarness() {
   );
 }
 
-function SettingsSelectFieldHarness() {
+function SettingsSelectFieldHarness({
+  withClassNames = false,
+}: {
+  withClassNames?: boolean;
+}) {
   const [value, setValue] = useState("");
 
   return (
     <SettingsSelectField
+      classNames={
+        withClassNames
+          ? {
+              root: "settings-select-root-slot",
+              label: "settings-select-label-slot",
+              value: "settings-select-value-slot",
+              note: "settings-select-note-slot",
+            }
+          : undefined
+      }
       label="Mute role"
       value={value}
       onChange={setValue}
+      note="Select the role used for mute."
       placeholder="No mute role"
       options={[
         { value: "muted", label: "Muted" },

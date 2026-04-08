@@ -1,9 +1,20 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
   EmptyState,
   FlatPageLayout,
+  GroupedSettingsCopy,
+  GroupedSettingsGroup,
+  GroupedSettingsHeading,
+  GroupedSettingsInlineMessage,
+  GroupedSettingsItem,
+  GroupedSettingsLabel,
+  GroupedSettingsMainRow,
+  GroupedSettingsSection,
+  GroupedSettingsStack,
+  GroupedSettingsSubrow,
+  GroupedSettingsSwitch,
   SettingsSelectField,
   UnsavedChangesBar,
 } from "../components/ui";
@@ -272,20 +283,20 @@ function ModerationWorkspacePanels({
   onSetFeatureEnabled,
 }: ModerationWorkspacePanelsProps) {
   return (
-    <div className="flat-config-stack moderation-flat-stack moderation-group-stack">
+    <GroupedSettingsStack className="flat-config-stack">
       {automodFeature !== null || muteRoleFeature !== null ? (
-        <section className="moderation-group-block">
-          <div className="moderation-settings-group">
+        <GroupedSettingsSection>
+          <GroupedSettingsGroup>
             {automodFeature !== null ? (
-              <div className="moderation-settings-item">
-                <div className="moderation-settings-subrow">
-                  <div className="moderation-setting-row">
-                    <div className="card-copy moderation-section-copy">
-                      <ModerationGroupLabel as="h2">
+              <GroupedSettingsItem className="moderation-settings-item">
+                <GroupedSettingsSubrow>
+                  <GroupedSettingsMainRow>
+                    <GroupedSettingsCopy>
+                      <GroupedSettingsLabel as="h2">
                         Automod service
-                      </ModerationGroupLabel>
-                    </div>
-                    <ModerationSwitch
+                      </GroupedSettingsLabel>
+                    </GroupedSettingsCopy>
+                    <GroupedSettingsSwitch
                       label="Automod service"
                       checked={automodFeature.effective_enabled}
                       disabled={mutation.saving || !canEditSelectedGuild}
@@ -293,9 +304,9 @@ function ModerationWorkspacePanels({
                         void onSetFeatureEnabled(automodFeature, enabled)
                       }
                     />
-                  </div>
-                </div>
-              </div>
+                  </GroupedSettingsMainRow>
+                </GroupedSettingsSubrow>
+              </GroupedSettingsItem>
             ) : null}
 
             {muteRoleFeature !== null ? (
@@ -311,17 +322,17 @@ function ModerationWorkspacePanels({
                 onSetFeatureEnabled={onSetFeatureEnabled}
               />
             ) : null}
-          </div>
-        </section>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
       ) : null}
 
-      <section className="moderation-group-block moderation-log-panel">
-        <div className="card-copy moderation-section-copy">
-          <h2 className="moderation-group-heading">Moderation routes</h2>
-        </div>
+      <GroupedSettingsSection>
+        <GroupedSettingsCopy>
+          <GroupedSettingsHeading as="h2">Moderation routes</GroupedSettingsHeading>
+        </GroupedSettingsCopy>
 
         {channelOptions.notice ? (
-          <ModerationInlineMessage
+          <GroupedSettingsInlineMessage
             message={channelOptions.notice.message}
             tone="error"
             action={
@@ -344,7 +355,7 @@ function ModerationWorkspacePanels({
             </div>
           </div>
         ) : (
-          <div className="moderation-settings-group">
+          <GroupedSettingsGroup>
             {moderationLogFeatures.map((feature) => (
               <ModerationRouteSection
                 key={feature.id}
@@ -359,10 +370,10 @@ function ModerationWorkspacePanels({
                 onSetFeatureEnabled={onSetFeatureEnabled}
               />
             ))}
-          </div>
+          </GroupedSettingsGroup>
         )}
-      </section>
-    </div>
+      </GroupedSettingsSection>
+    </GroupedSettingsStack>
   );
 }
 
@@ -430,26 +441,29 @@ function MuteRoleSection({
   }
 
   return (
-    <div className="moderation-settings-item moderation-settings-item-stack">
-      <div className="moderation-settings-subrow">
-        <div className="moderation-setting-row">
-          <div className="card-copy moderation-section-copy">
-            <ModerationGroupLabel as="h2">Mute command</ModerationGroupLabel>
-          </div>
-          <ModerationSwitch
+    <GroupedSettingsItem
+      stacked
+      className="moderation-settings-item"
+    >
+      <GroupedSettingsSubrow>
+        <GroupedSettingsMainRow>
+          <GroupedSettingsCopy>
+            <GroupedSettingsLabel as="h2">Mute command</GroupedSettingsLabel>
+          </GroupedSettingsCopy>
+          <GroupedSettingsSwitch
             label="Mute command"
             checked={muteEnabled}
             disabled={mutationSaving || !canEditSelectedGuild}
             onChange={handleMuteToggle}
           />
-        </div>
-      </div>
+        </GroupedSettingsMainRow>
+      </GroupedSettingsSubrow>
 
       {muteEnabled ? (
-        <div className="moderation-settings-subrow">
+        <GroupedSettingsSubrow>
           <SettingsSelectField
             label="Mute role"
-            labelClassName="moderation-group-label"
+            labelClassName="grouped-settings-label"
             value={roleDraft}
             disabled={!canEditRole || roleOptions.loading}
             onChange={setRoleDraft}
@@ -462,12 +476,12 @@ function MuteRoleSection({
                   : "No mute role"
             }
           />
-        </div>
+        </GroupedSettingsSubrow>
       ) : null}
 
       {muteEnabled && roleOptions.notice ? (
-        <div className="moderation-settings-subrow">
-          <ModerationInlineMessage
+        <GroupedSettingsSubrow>
+          <GroupedSettingsInlineMessage
             message={roleOptions.notice.message}
             tone="error"
             action={
@@ -481,12 +495,13 @@ function MuteRoleSection({
               </button>
             }
           />
-        </div>
+        </GroupedSettingsSubrow>
       ) : null}
 
       {muteEnabled && hasUnsavedChanges ? (
-        <div className="moderation-settings-subrow">
+        <GroupedSettingsSubrow>
           <UnsavedChangesBar
+            className="grouped-settings-unsaved-bar"
             hasUnsavedChanges={hasUnsavedChanges}
             saveLabel={
               mutationSaving && pendingFeatureId === feature.id
@@ -498,9 +513,9 @@ function MuteRoleSection({
             onReset={handleReset}
             onSave={() => onSave(feature, roleDraft)}
           />
-        </div>
+        </GroupedSettingsSubrow>
       ) : null}
-    </div>
+    </GroupedSettingsItem>
   );
 }
 
@@ -554,27 +569,30 @@ function ModerationRouteSection({
   }
 
   return (
-    <div className="moderation-settings-item moderation-settings-item-stack moderation-route-section">
-      <div className="moderation-settings-subrow">
-        <div className="moderation-setting-row">
-          <div className="card-copy moderation-section-copy">
-            <ModerationGroupLabel as="h3">
+    <GroupedSettingsItem
+      stacked
+      className="moderation-settings-item"
+    >
+      <GroupedSettingsSubrow>
+        <GroupedSettingsMainRow>
+          <GroupedSettingsCopy>
+            <GroupedSettingsLabel as="h3">
               {feature.label}
-            </ModerationGroupLabel>
-          </div>
-          <ModerationSwitch
+            </GroupedSettingsLabel>
+          </GroupedSettingsCopy>
+          <GroupedSettingsSwitch
             label={feature.label}
             checked={feature.effective_enabled}
             disabled={mutationSaving || !canEditSelectedGuild}
             onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
           />
-        </div>
-      </div>
+        </GroupedSettingsMainRow>
+      </GroupedSettingsSubrow>
 
-      <div className="moderation-settings-subrow">
+      <GroupedSettingsSubrow>
         <SettingsSelectField
           label="Channel"
-          labelClassName="moderation-group-label"
+          labelClassName="grouped-settings-label"
           value={channelDraft}
           disabled={!canEditDestination || channelOptions.loading}
           onChange={setChannelDraft}
@@ -584,20 +602,21 @@ function ModerationRouteSection({
               ? "Loading channels..."
               : messageRouteChannelOptions.length === 0
                 ? "No channels available"
-                : "No channel"
+              : "No channel"
           }
         />
-      </div>
+      </GroupedSettingsSubrow>
 
       {routeMessage ? (
-        <div className="moderation-settings-subrow">
-          <ModerationInlineMessage message={routeMessage} tone="error" />
-        </div>
+        <GroupedSettingsSubrow>
+          <GroupedSettingsInlineMessage message={routeMessage} tone="error" />
+        </GroupedSettingsSubrow>
       ) : null}
 
       {hasUnsavedChanges ? (
-        <div className="moderation-settings-subrow">
+        <GroupedSettingsSubrow>
           <UnsavedChangesBar
+            className="grouped-settings-unsaved-bar"
             hasUnsavedChanges={hasUnsavedChanges}
             saveLabel={
               mutationSaving && pendingFeatureId === feature.id
@@ -609,72 +628,8 @@ function ModerationRouteSection({
             onReset={handleReset}
             onSave={() => onSave(feature, channelDraft)}
           />
-        </div>
+        </GroupedSettingsSubrow>
       ) : null}
-    </div>
-  );
-}
-
-interface ModerationGroupLabelProps {
-  as?: "h2" | "h3" | "span";
-  children: ReactNode;
-}
-
-function ModerationGroupLabel({
-  as: Component = "span",
-  children,
-}: ModerationGroupLabelProps) {
-  return <Component className="moderation-group-label">{children}</Component>;
-}
-
-interface ModerationInlineMessageProps {
-  message: string;
-  tone?: "info" | "error";
-  action?: ReactNode;
-}
-
-function ModerationInlineMessage({
-  message,
-  tone = "error",
-  action,
-}: ModerationInlineMessageProps) {
-  return (
-    <div className="flat-inline-message moderation-inline-message">
-      <p className={`meta-note moderation-inline-message-copy tone-${tone}`}>
-        {message}
-      </p>
-      {action ? <div className="inline-actions">{action}</div> : null}
-    </div>
-  );
-}
-
-interface ModerationSwitchProps {
-  label: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ModerationSwitch({
-  label,
-  checked,
-  disabled = false,
-  onChange,
-}: ModerationSwitchProps) {
-  return (
-    <label
-      className={`moderation-switch${checked ? " is-checked" : ""}${disabled ? " is-disabled" : ""}`}
-    >
-      <input
-        aria-label={label}
-        checked={checked}
-        disabled={disabled}
-        type="checkbox"
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span className="moderation-switch-track" aria-hidden="true">
-        <span className="moderation-switch-thumb" />
-      </span>
-    </label>
+    </GroupedSettingsItem>
   );
 }
