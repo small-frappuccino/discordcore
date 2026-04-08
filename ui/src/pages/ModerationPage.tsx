@@ -551,7 +551,6 @@ function MuteRoleSection({
         <GroupedSettingsSubrow>
           <SettingsSelectField
             label="Mute role"
-            labelClassName="grouped-settings-label"
             value={roleDraft}
             disabled={!canEditRole || roleOptions.loading}
             onChange={setRoleDraft}
@@ -682,7 +681,6 @@ function ModerationRouteSection({
       <GroupedSettingsSubrow>
         <SettingsSelectField
           label="Channel"
-          labelClassName="grouped-settings-label"
           value={channelDraft}
           disabled={!canEditDestination || channelOptions.loading}
           onChange={setChannelDraft}

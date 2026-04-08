@@ -1869,7 +1869,11 @@ textarea:focus {
   --grouped-settings-main-row-gap: var(--space-4);
   --grouped-settings-inline-message-info-color: var(--info);
   --grouped-settings-inline-message-error-color: var(--error);
-  --settings-select-label-color: var(--grouped-settings-label-color);
+  --settings-select-label-font-family: var(--grouped-settings-heading-font-family);
+  --settings-select-label-size: var(--grouped-settings-heading-size);
+  --settings-select-label-line-height: var(--grouped-settings-heading-line-height);
+  --settings-select-label-weight: var(--grouped-settings-heading-weight);
+  --settings-select-label-color: var(--grouped-settings-heading-color);
 
   --grouped-settings-switch-width: 46px;
   --grouped-settings-switch-height: 28px;
@@ -2188,6 +2192,7 @@ textarea:focus {
 .settings-select-field {
   --settings-select-gap: var(--space-2);
   --settings-select-row-gap: var(--space-4);
+  --settings-select-label-font-family: inherit;
   --settings-select-label-color: var(--text-main);
   --settings-select-label-size: inherit;
   --settings-select-label-line-height: inherit;
@@ -2229,6 +2234,7 @@ textarea:focus {
 
 .settings-select-trigger-label {
   min-width: 0;
+  font-family: var(--settings-select-label-font-family);
   font-size: var(--settings-select-label-size);
   line-height: var(--settings-select-label-line-height);
   font-weight: var(--settings-select-label-weight);
