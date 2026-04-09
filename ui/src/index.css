@@ -1861,10 +1861,10 @@ textarea:focus {
   --grouped-settings-label-line-height: 20px;
   --grouped-settings-label-weight: 400;
   --grouped-settings-label-color: var(--text-main);
-  --grouped-settings-heading-font-family: var(--font-display);
-  --grouped-settings-heading-size: 1.05rem;
-  --grouped-settings-heading-line-height: 1.25;
-  --grouped-settings-heading-weight: 500;
+  --grouped-settings-heading-font-family: var(--font-body);
+  --grouped-settings-heading-size: 14px;
+  --grouped-settings-heading-line-height: 20px;
+  --grouped-settings-heading-weight: 600;
   --grouped-settings-heading-color: var(--text-main);
   --grouped-settings-main-row-gap: var(--space-4);
   --grouped-settings-inline-message-info-color: var(--info);
