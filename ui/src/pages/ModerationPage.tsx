@@ -4,6 +4,7 @@ import type { FeatureRecord } from "../api/control";
 import {
   EmptyState,
   FlatPageLayout,
+  GroupedSettingsCaption,
   GroupedSettingsCopy,
   GroupedSettingsGroup,
   GroupedSettingsHeading,
@@ -306,6 +307,11 @@ function ModerationWorkspacePanels({
                       <GroupedSettingsHeading id={automodHeadingId}>
                         Automod service
                       </GroupedSettingsHeading>
+                      {automodFeature.description ? (
+                        <GroupedSettingsCaption>
+                          {automodFeature.description}
+                        </GroupedSettingsCaption>
+                      ) : null}
                     </GroupedSettingsCopy>
                     <GroupedSettingsSwitch
                       label="Automod service"
@@ -446,6 +452,9 @@ function ModerationCommandSection({
             <GroupedSettingsHeading id={headingId}>
               {feature.label}
             </GroupedSettingsHeading>
+            {feature.description ? (
+              <GroupedSettingsCaption>{feature.description}</GroupedSettingsCaption>
+            ) : null}
           </GroupedSettingsCopy>
           <GroupedSettingsSwitch
             label={feature.label}
@@ -673,6 +682,9 @@ function ModerationRouteSection({
             <GroupedSettingsHeading id={headingId}>
               {feature.label}
             </GroupedSettingsHeading>
+            {feature.description ? (
+              <GroupedSettingsCaption>{feature.description}</GroupedSettingsCaption>
+            ) : null}
           </GroupedSettingsCopy>
           <GroupedSettingsSwitch
             label={feature.label}

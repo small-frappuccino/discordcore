@@ -1883,11 +1883,17 @@ textarea:focus {
   --grouped-settings-divider-color: color-mix(in srgb, var(--border-soft) 66%, transparent);
   --grouped-settings-subrow-padding-block: 18px;
   --grouped-settings-subrow-padding-inline: 20px;
+  --grouped-settings-copy-gap: var(--space-1);
   --grouped-settings-label-font-family: var(--font-body);
-  --grouped-settings-label-size: var(--text-sm-size);
-  --grouped-settings-label-line-height: var(--text-sm-line-height);
+  --grouped-settings-label-size: var(--text-base-size);
+  --grouped-settings-label-line-height: var(--text-base-line-height);
   --grouped-settings-label-weight: var(--font-weight-medium);
   --grouped-settings-label-color: var(--text-main);
+  --grouped-settings-caption-font-family: var(--font-body);
+  --grouped-settings-caption-size: var(--text-sm-size);
+  --grouped-settings-caption-line-height: var(--text-sm-line-height);
+  --grouped-settings-caption-weight: var(--font-weight-regular);
+  --grouped-settings-caption-color: var(--text-muted);
   --grouped-settings-section-heading-font-family: var(--font-body);
   --grouped-settings-section-heading-size: var(--text-md-size);
   --grouped-settings-section-heading-line-height: var(--text-md-line-height);
@@ -1967,7 +1973,13 @@ textarea:focus {
   padding: var(--grouped-settings-subrow-padding-block) var(--grouped-settings-subrow-padding-inline);
 }
 
+.grouped-settings-copy.card-copy {
+  gap: var(--grouped-settings-copy-gap);
+}
+
 .grouped-settings-copy {
+  display: grid;
+  align-content: center;
   min-width: 0;
 }
 
@@ -1987,6 +1999,15 @@ textarea:focus {
   line-height: var(--grouped-settings-label-line-height);
   font-weight: var(--grouped-settings-label-weight);
   color: var(--grouped-settings-label-color);
+}
+
+.grouped-settings-caption {
+  margin: 0;
+  font-family: var(--grouped-settings-caption-font-family);
+  font-size: var(--grouped-settings-caption-size);
+  line-height: var(--grouped-settings-caption-line-height);
+  font-weight: var(--grouped-settings-caption-weight);
+  color: var(--grouped-settings-caption-color);
 }
 
 .grouped-settings-heading-section {

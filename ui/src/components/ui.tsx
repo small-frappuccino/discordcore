@@ -16,6 +16,7 @@ import {
 } from "../features/features/presentationPolicy";
 export {
   GroupedSettingsBlock,
+  GroupedSettingsCaption,
   GroupedSettingsCopy,
   GroupedSettingsGroup,
   GroupedSettingsHeading,

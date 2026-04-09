@@ -40,6 +40,10 @@ interface GroupedSettingsHeadingProps extends HTMLAttributes<HTMLElement> {
   variant?: "item" | "section";
 }
 
+interface GroupedSettingsCaptionProps extends HTMLAttributes<HTMLParagraphElement> {
+  children: ReactNode;
+}
+
 interface GroupedSettingsSwitchClassNames {
   input?: string;
   track?: string;
@@ -184,6 +188,18 @@ export function GroupedSettingsHeading({
     >
       {children}
     </Component>
+  );
+}
+
+export function GroupedSettingsCaption({
+  className,
+  children,
+  ...props
+}: GroupedSettingsCaptionProps) {
+  return (
+    <p className={joinClassNames("grouped-settings-caption", className)} {...props}>
+      {children}
+    </p>
   );
 }
 
