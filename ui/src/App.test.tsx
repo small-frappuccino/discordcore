@@ -1908,8 +1908,11 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe(testRoutes.moderation);
     expect(window.location.hash).toBe("");
     expect(
-      screen.getByRole("heading", { name: "Mute command", level: 2 }),
+      screen.getByRole("group", { name: "Mute command" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Mute command", level: 2 }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Moderation routes", level: 2 }),
     ).toBeInTheDocument();

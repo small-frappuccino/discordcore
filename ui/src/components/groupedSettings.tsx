@@ -32,7 +32,10 @@ interface GroupedSettingsCopyProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
 }
 
-interface GroupedSettingsHeadingProps extends HTMLAttributes<HTMLHeadingElement> {
+type GroupedSettingsHeadingElement = "h2" | "p";
+
+interface GroupedSettingsHeadingProps extends HTMLAttributes<HTMLElement> {
+  as?: GroupedSettingsHeadingElement;
   children: ReactNode;
   variant?: "item" | "section";
 }
@@ -162,13 +165,16 @@ export function GroupedSettingsCopy({
 }
 
 export function GroupedSettingsHeading({
+  as,
   className,
   children,
   variant = "item",
   ...props
 }: GroupedSettingsHeadingProps) {
+  const Component = as ?? (variant === "section" ? "h2" : "p");
+
   return (
-    <h2
+    <Component
       className={joinClassNames(
         "grouped-settings-heading",
         variant === "section" && "grouped-settings-heading-section",
@@ -177,7 +183,7 @@ export function GroupedSettingsHeading({
       {...props}
     >
       {children}
-    </h2>
+    </Component>
   );
 }
 

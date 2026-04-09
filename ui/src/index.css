@@ -1888,11 +1888,6 @@ textarea:focus {
   --grouped-settings-label-line-height: var(--text-sm-line-height);
   --grouped-settings-label-weight: var(--font-weight-medium);
   --grouped-settings-label-color: var(--text-main);
-  --grouped-settings-item-heading-font-family: var(--font-body);
-  --grouped-settings-item-heading-size: var(--text-base-size);
-  --grouped-settings-item-heading-line-height: var(--text-base-line-height);
-  --grouped-settings-item-heading-weight: var(--font-weight-semibold);
-  --grouped-settings-item-heading-color: var(--text-main);
   --grouped-settings-section-heading-font-family: var(--font-body);
   --grouped-settings-section-heading-size: var(--text-md-size);
   --grouped-settings-section-heading-line-height: var(--text-md-line-height);
@@ -1987,11 +1982,11 @@ textarea:focus {
 
 .grouped-settings-heading {
   margin: 0;
-  font-family: var(--grouped-settings-item-heading-font-family);
-  font-size: var(--grouped-settings-item-heading-size);
-  line-height: var(--grouped-settings-item-heading-line-height);
-  font-weight: var(--grouped-settings-item-heading-weight);
-  color: var(--grouped-settings-item-heading-color);
+  font-family: var(--grouped-settings-label-font-family);
+  font-size: var(--grouped-settings-label-size);
+  line-height: var(--grouped-settings-label-line-height);
+  font-weight: var(--grouped-settings-label-weight);
+  color: var(--grouped-settings-label-color);
 }
 
 .grouped-settings-heading-section {
