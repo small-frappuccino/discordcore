@@ -340,7 +340,9 @@ function ModerationWorkspacePanels({
       {moderationCommandFeatures.length > 0 ? (
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
-            <GroupedSettingsHeading>Moderation commands</GroupedSettingsHeading>
+            <GroupedSettingsHeading variant="section">
+              Moderation commands
+            </GroupedSettingsHeading>
           </GroupedSettingsCopy>
 
           <GroupedSettingsGroup>
@@ -359,7 +361,9 @@ function ModerationWorkspacePanels({
 
       <GroupedSettingsSection>
         <GroupedSettingsCopy>
-          <GroupedSettingsHeading>Moderation routes</GroupedSettingsHeading>
+          <GroupedSettingsHeading variant="section">
+            Moderation routes
+          </GroupedSettingsHeading>
         </GroupedSettingsCopy>
 
         {channelOptions.notice ? (
@@ -551,6 +555,7 @@ function MuteRoleSection({
         <GroupedSettingsSubrow>
           <SettingsSelectField
             label="Mute role"
+            labelClassName="grouped-settings-label"
             value={roleDraft}
             disabled={!canEditRole || roleOptions.loading}
             onChange={setRoleDraft}
@@ -681,6 +686,7 @@ function ModerationRouteSection({
       <GroupedSettingsSubrow>
         <SettingsSelectField
           label="Channel"
+          labelClassName="grouped-settings-label"
           value={channelDraft}
           disabled={!canEditDestination || channelOptions.loading}
           onChange={setChannelDraft}

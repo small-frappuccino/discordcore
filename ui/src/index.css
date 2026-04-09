@@ -49,6 +49,28 @@
     "Segoe UI Variable Text",
     "Segoe UI",
     sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-display: 650;
+  --text-xs-size: 11px;
+  --text-xs-line-height: 16px;
+  --text-xs-weight: var(--font-weight-semibold);
+  --text-sm-size: 13px;
+  --text-sm-line-height: 18px;
+  --text-sm-weight: var(--font-weight-regular);
+  --text-base-size: 14px;
+  --text-base-line-height: 20px;
+  --text-base-weight: var(--font-weight-medium);
+  --text-md-size: 16px;
+  --text-md-line-height: 24px;
+  --text-md-weight: var(--font-weight-semibold);
+  --text-lg-size: 20px;
+  --text-lg-line-height: 28px;
+  --text-lg-weight: var(--font-weight-display);
+  --text-xl-size: 24px;
+  --text-xl-line-height: 30px;
+  --text-xl-weight: var(--font-weight-display);
 }
 
 html {
@@ -65,8 +87,8 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--text-base-size);
+  line-height: var(--text-base-line-height);
   color: var(--text-main);
   background: var(--bg-page);
 }
@@ -371,9 +393,9 @@ textarea:focus {
 }
 
 .sidebar-section-title {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line-height);
+  font-weight: var(--text-md-weight);
 }
 
 .sidebar-section-description {
@@ -662,9 +684,9 @@ textarea:focus {
 .section-label {
   margin: 0;
   color: var(--text-dim);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 600;
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line-height);
+  font-weight: var(--text-xs-weight);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1804,9 +1826,14 @@ textarea:focus {
 .moderation-page-title-row h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 32px;
-  line-height: 38px;
-  font-weight: 650;
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line-height);
+  font-weight: var(--text-xl-weight);
+}
+
+.moderation-page-intro .section-description {
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line-height);
 }
 
 .moderation-context-row {
@@ -1849,31 +1876,36 @@ textarea:focus {
 .grouped-settings-group {
   --grouped-settings-radius: 18px;
   --grouped-settings-surface-bg: color-mix(in srgb, var(--bg-surface) 97%, white 1%);
-  --grouped-settings-font-size: 13px;
-  --grouped-settings-line-height: 18px;
+  --grouped-settings-font-size: var(--text-sm-size);
+  --grouped-settings-line-height: var(--text-sm-line-height);
   --grouped-settings-divider-inset: 28px;
   --grouped-settings-divider-size: 1px;
   --grouped-settings-divider-color: color-mix(in srgb, var(--border-soft) 66%, transparent);
   --grouped-settings-subrow-padding-block: 18px;
   --grouped-settings-subrow-padding-inline: 20px;
   --grouped-settings-label-font-family: var(--font-body);
-  --grouped-settings-label-size: 14px;
-  --grouped-settings-label-line-height: 20px;
-  --grouped-settings-label-weight: 400;
+  --grouped-settings-label-size: var(--text-sm-size);
+  --grouped-settings-label-line-height: var(--text-sm-line-height);
+  --grouped-settings-label-weight: var(--font-weight-medium);
   --grouped-settings-label-color: var(--text-main);
-  --grouped-settings-heading-font-family: var(--font-body);
-  --grouped-settings-heading-size: 14px;
-  --grouped-settings-heading-line-height: 20px;
-  --grouped-settings-heading-weight: 600;
-  --grouped-settings-heading-color: var(--text-main);
+  --grouped-settings-item-heading-font-family: var(--font-body);
+  --grouped-settings-item-heading-size: var(--text-base-size);
+  --grouped-settings-item-heading-line-height: var(--text-base-line-height);
+  --grouped-settings-item-heading-weight: var(--font-weight-semibold);
+  --grouped-settings-item-heading-color: var(--text-main);
+  --grouped-settings-section-heading-font-family: var(--font-body);
+  --grouped-settings-section-heading-size: var(--text-md-size);
+  --grouped-settings-section-heading-line-height: var(--text-md-line-height);
+  --grouped-settings-section-heading-weight: var(--text-md-weight);
+  --grouped-settings-section-heading-color: var(--text-main);
   --grouped-settings-main-row-gap: var(--space-4);
   --grouped-settings-inline-message-info-color: var(--info);
   --grouped-settings-inline-message-error-color: var(--error);
-  --settings-select-label-font-family: var(--grouped-settings-heading-font-family);
-  --settings-select-label-size: var(--grouped-settings-heading-size);
-  --settings-select-label-line-height: var(--grouped-settings-heading-line-height);
-  --settings-select-label-weight: var(--grouped-settings-heading-weight);
-  --settings-select-label-color: var(--grouped-settings-heading-color);
+  --settings-select-label-font-family: var(--grouped-settings-label-font-family);
+  --settings-select-label-size: var(--grouped-settings-label-size);
+  --settings-select-label-line-height: var(--grouped-settings-label-line-height);
+  --settings-select-label-weight: var(--grouped-settings-label-weight);
+  --settings-select-label-color: var(--grouped-settings-label-color);
 
   --grouped-settings-switch-width: 46px;
   --grouped-settings-switch-height: 28px;
@@ -1955,11 +1987,19 @@ textarea:focus {
 
 .grouped-settings-heading {
   margin: 0;
-  font-family: var(--grouped-settings-heading-font-family);
-  font-size: var(--grouped-settings-heading-size);
-  line-height: var(--grouped-settings-heading-line-height);
-  font-weight: var(--grouped-settings-heading-weight);
-  color: var(--grouped-settings-heading-color);
+  font-family: var(--grouped-settings-item-heading-font-family);
+  font-size: var(--grouped-settings-item-heading-size);
+  line-height: var(--grouped-settings-item-heading-line-height);
+  font-weight: var(--grouped-settings-item-heading-weight);
+  color: var(--grouped-settings-item-heading-color);
+}
+
+.grouped-settings-heading-section {
+  font-family: var(--grouped-settings-section-heading-font-family);
+  font-size: var(--grouped-settings-section-heading-size);
+  line-height: var(--grouped-settings-section-heading-line-height);
+  font-weight: var(--grouped-settings-section-heading-weight);
+  color: var(--grouped-settings-section-heading-color);
 }
 
 .grouped-settings-main-row,
@@ -1984,9 +2024,9 @@ textarea:focus {
 
 .grouped-settings-inline-message-copy {
   margin: 0;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 400;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line-height);
+  font-weight: var(--text-sm-weight);
 }
 
 .grouped-settings-inline-message-copy.tone-info {
@@ -2774,15 +2814,15 @@ textarea:focus {
 }
 
 .card-copy h2 {
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 650;
+  font-size: var(--text-lg-size);
+  line-height: var(--text-lg-line-height);
+  font-weight: var(--text-lg-weight);
 }
 
 .card-copy h3 {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line-height);
+  font-weight: var(--text-md-weight);
 }
 
 .card-copy p {
