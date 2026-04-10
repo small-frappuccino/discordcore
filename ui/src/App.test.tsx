@@ -1908,10 +1908,12 @@ describe("dashboard routing and workspace", () => {
     expect(window.location.pathname).toBe(testRoutes.moderation);
     expect(window.location.hash).toBe("");
     expect(
-      screen.getByRole("group", { name: "Mute command" }),
+      screen.getByRole("group", { name: "Mute role" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: "Mute command", level: 2 }),
+      screen.queryByText(
+        "Moderation command toggles, mute-role setup, and moderation event routes for staff workflows.",
+      ),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Moderation routes", level: 2 }),
@@ -1930,6 +1932,18 @@ describe("dashboard routing and workspace", () => {
     expect(screen.queryByText("How this page works")).not.toBeInTheDocument();
     expect(screen.queryByText("Moderation controls")).not.toBeInTheDocument();
     expect(screen.queryByText("Rule coverage")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Discord native AutoMod listener used for logging."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Role applied by the mute command.")).not.toBeInTheDocument();
+    expect(screen.queryByText("AutoMod executions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Moderation cases")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Choose the role that should be applied by the mute command."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Choose a destination channel for this logging route."),
+    ).toBeInTheDocument();
     expect(
       screen
         .getByRole("heading", { name: "Moderation", level: 1 })
@@ -1950,10 +1964,10 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
     const muteRoleSection = screen.getByRole("group", {
-      name: "Mute command",
+      name: "Mute role",
     });
     await userEvent.selectOptions(
-      within(muteRoleSection).getByLabelText("Mute role"),
+      within(muteRoleSection).getByLabelText("Role"),
       "mute-role",
     );
     await userEvent.click(
@@ -2036,7 +2050,7 @@ describe("dashboard routing and workspace", () => {
     });
   });
 
-  it("collapses mute role controls when mute is disabled and restores them when re-enabled", async () => {
+  it("requires a mute role selection before re-enabling the feature", async () => {
     const { featureUpdates, fetchMock } = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     window.history.replaceState({}, "", testRoutes.moderation);
@@ -2045,13 +2059,13 @@ describe("dashboard routing and workspace", () => {
 
     await screen.findByRole("heading", { name: "Moderation", level: 1 });
 
-    const muteSection = screen.getByRole("group", { name: "Mute command" });
+    const muteSection = screen.getByRole("group", { name: "Mute role" });
 
     const muteToggle = within(muteSection).getByRole("checkbox", {
-      name: "Mute command",
+      name: "Mute role",
     });
     expect(
-      within(muteSection).getByLabelText("Mute role"),
+      within(muteSection).getByLabelText("Role"),
     ).toBeInTheDocument();
 
     await userEvent.click(muteToggle);
@@ -2067,13 +2081,21 @@ describe("dashboard routing and workspace", () => {
     });
     await waitFor(() => {
       expect(
-        within(muteSection).queryByLabelText("Mute role"),
-      ).not.toBeInTheDocument();
+        within(muteSection).getByLabelText("Role"),
+      ).toBeInTheDocument();
     });
+    expect(
+      within(muteSection).getByRole("checkbox", { name: "Mute role" }),
+    ).toBeDisabled();
+
+    await userEvent.selectOptions(
+      within(muteSection).getByLabelText("Role"),
+      "mute-role",
+    );
 
     await userEvent.click(
       within(muteSection).getByRole("checkbox", {
-        name: "Mute command",
+        name: "Mute role",
       }),
     );
 
@@ -2082,13 +2104,14 @@ describe("dashboard routing and workspace", () => {
         guildID: "guild-1",
         featureID: "moderation.mute_role",
         payload: {
+          role_id: "mute-role",
           enabled: true,
         },
       });
     });
     await waitFor(() => {
       expect(
-        within(muteSection).getByLabelText("Mute role"),
+        within(muteSection).getByLabelText("Role"),
       ).toBeInTheDocument();
     });
   });

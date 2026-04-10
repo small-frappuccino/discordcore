@@ -57,6 +57,24 @@ export function canEditMuteRole(feature: FeatureRecord) {
   return feature.editable_fields?.includes("role_id") ?? false;
 }
 
+export function getActionableFeatureBlocker(feature: FeatureRecord) {
+  const message = feature.blockers?.[0]?.message?.trim() ?? "";
+
+  if (!feature.effective_enabled || feature.readiness !== "blocked" || message === "") {
+    return null;
+  }
+
+  return message;
+}
+
+export function getActionableMuteRoleBlocker(feature: FeatureRecord) {
+  if (!feature.effective_enabled || feature.readiness !== "blocked") {
+    return null;
+  }
+
+  return summarizeMuteRoleSignal(feature);
+}
+
 export function summarizeAutomodSignal(feature: FeatureRecord) {
   const firstBlocker = feature.blockers?.[0]?.message?.trim() ?? "";
 

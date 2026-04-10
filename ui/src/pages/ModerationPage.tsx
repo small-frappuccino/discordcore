@@ -4,7 +4,6 @@ import type { FeatureRecord } from "../api/control";
 import {
   EmptyState,
   FlatPageLayout,
-  GroupedSettingsCaption,
   GroupedSettingsCopy,
   GroupedSettingsGroup,
   GroupedSettingsHeading,
@@ -31,6 +30,8 @@ import {
 } from "../features/features/logging";
 import {
   canEditMuteRole,
+  getActionableFeatureBlocker,
+  getActionableMuteRoleBlocker,
   getModerationCommandFeatures,
   getModerationLogFeatures,
   getMuteRoleFeatureDetails,
@@ -132,6 +133,26 @@ export function ModerationPage() {
     }
   }
 
+  async function handleSaveMuteRoleState(
+    feature: FeatureRecord,
+    roleId: string,
+    enabled: boolean,
+  ) {
+    setPendingFeatureId(feature.id);
+
+    try {
+      const updated = await mutation.patchFeature(feature.id, {
+        role_id: roleId.trim(),
+        enabled,
+      });
+      if (updated !== null) {
+        workspace.updateFeature(updated);
+      }
+    } finally {
+      setPendingFeatureId("");
+    }
+  }
+
   async function handleSaveDestination(feature: FeatureRecord, channelId: string) {
     setPendingFeatureId(feature.id);
 
@@ -213,6 +234,7 @@ export function ModerationPage() {
         mutation={mutation}
         pendingFeatureId={pendingFeatureId}
         onSaveMuteRole={handleSaveMuteRole}
+        onSaveMuteRoleState={handleSaveMuteRoleState}
         onSaveDestination={handleSaveDestination}
         onSetFeatureEnabled={handleSetFeatureEnabled}
       />
@@ -232,7 +254,6 @@ export function ModerationPage() {
             <div className="moderation-page-title-row">
               <h1>{areaLabel}</h1>
             </div>
-            <p className="section-description">{definition.description}</p>
           </div>
         </div>
 
@@ -263,6 +284,11 @@ interface ModerationWorkspacePanelsProps {
   mutation: ReturnType<typeof useFeatureMutation>;
   pendingFeatureId: string;
   onSaveMuteRole: (feature: FeatureRecord, roleId: string) => Promise<void>;
+  onSaveMuteRoleState: (
+    feature: FeatureRecord,
+    roleId: string,
+    enabled: boolean,
+  ) => Promise<void>;
   onSaveDestination: (
     feature: FeatureRecord,
     channelId: string,
@@ -286,10 +312,13 @@ function ModerationWorkspacePanels({
   mutation,
   pendingFeatureId,
   onSaveMuteRole,
+  onSaveMuteRoleState,
   onSaveDestination,
   onSetFeatureEnabled,
 }: ModerationWorkspacePanelsProps) {
   const automodHeadingId = useId();
+  const automodBlockerMessage =
+    automodFeature === null ? null : getActionableFeatureBlocker(automodFeature);
 
   return (
     <GroupedSettingsStack className="flat-config-stack">
@@ -298,6 +327,7 @@ function ModerationWorkspacePanels({
           <GroupedSettingsGroup>
             {automodFeature !== null ? (
               <GroupedSettingsItem
+                stacked
                 role="group"
                 aria-labelledby={automodHeadingId}
               >
@@ -307,11 +337,6 @@ function ModerationWorkspacePanels({
                       <GroupedSettingsHeading id={automodHeadingId}>
                         Automod service
                       </GroupedSettingsHeading>
-                      {automodFeature.description ? (
-                        <GroupedSettingsCaption>
-                          {automodFeature.description}
-                        </GroupedSettingsCaption>
-                      ) : null}
                     </GroupedSettingsCopy>
                     <GroupedSettingsSwitch
                       label="Automod service"
@@ -323,6 +348,14 @@ function ModerationWorkspacePanels({
                     />
                   </GroupedSettingsMainRow>
                 </GroupedSettingsSubrow>
+                {automodBlockerMessage ? (
+                  <GroupedSettingsSubrow>
+                    <GroupedSettingsInlineMessage
+                      message={automodBlockerMessage}
+                      tone="info"
+                    />
+                  </GroupedSettingsSubrow>
+                ) : null}
               </GroupedSettingsItem>
             ) : null}
 
@@ -336,6 +369,7 @@ function ModerationWorkspacePanels({
                 muteRoleOptions={muteRoleOptions}
                 onClearNotice={mutation.clearNotice}
                 onSave={onSaveMuteRole}
+                onSaveState={onSaveMuteRoleState}
                 onSetFeatureEnabled={onSetFeatureEnabled}
               />
             ) : null}
@@ -435,10 +469,7 @@ function ModerationCommandSection({
   onSetFeatureEnabled,
 }: ModerationCommandSectionProps) {
   const headingId = useId();
-  const commandBlockerMessage =
-    feature.effective_enabled && feature.readiness === "blocked"
-      ? feature.blockers?.[0]?.message ?? null
-      : null;
+  const commandBlockerMessage = getActionableFeatureBlocker(feature);
 
   return (
     <GroupedSettingsItem
@@ -452,9 +483,6 @@ function ModerationCommandSection({
             <GroupedSettingsHeading id={headingId}>
               {feature.label}
             </GroupedSettingsHeading>
-            {feature.description ? (
-              <GroupedSettingsCaption>{feature.description}</GroupedSettingsCaption>
-            ) : null}
           </GroupedSettingsCopy>
           <GroupedSettingsSwitch
             label={feature.label}
@@ -489,6 +517,11 @@ interface MuteRoleSectionProps {
   }>;
   onClearNotice: () => void;
   onSave: (feature: FeatureRecord, roleId: string) => Promise<void>;
+  onSaveState: (
+    feature: FeatureRecord,
+    roleId: string,
+    enabled: boolean,
+  ) => Promise<void>;
   onSetFeatureEnabled: (
     feature: FeatureRecord,
     enabled: boolean,
@@ -504,25 +537,29 @@ function MuteRoleSection({
   muteRoleOptions,
   onClearNotice,
   onSave,
+  onSaveState,
   onSetFeatureEnabled,
 }: MuteRoleSectionProps) {
   const currentRoleId = getMuteRoleFeatureDetails(feature).roleId;
   const headingId = useId();
   const [roleDraft, setRoleDraft] = useState(currentRoleId);
-  const [muteExpanded, setMuteExpanded] = useState(feature.effective_enabled);
+  const [muteEnabledDraft, setMuteEnabledDraft] = useState(feature.effective_enabled);
   const canEditRole = canEditSelectedGuild && canEditMuteRole(feature);
   const isMuteTogglePending = mutationSaving && pendingFeatureId === feature.id;
   const muteEnabled = isMuteTogglePending
-    ? muteExpanded
+    ? muteEnabledDraft
     : feature.effective_enabled;
-  const hasUnsavedChanges = currentRoleId !== roleDraft.trim();
+  const selectedRoleId = roleDraft.trim();
+  const hasUnsavedChanges = currentRoleId !== selectedRoleId;
+  const muteRoleBlockerMessage = getActionableMuteRoleBlocker(feature);
+  const canEnableMuteRole = currentRoleId !== "" || selectedRoleId !== "";
 
   useEffect(() => {
     setRoleDraft(currentRoleId);
   }, [currentRoleId]);
 
   useEffect(() => {
-    setMuteExpanded(feature.effective_enabled);
+    setMuteEnabledDraft(feature.effective_enabled);
   }, [feature.effective_enabled]);
 
   function handleReset() {
@@ -530,13 +567,14 @@ function MuteRoleSection({
     setRoleDraft(currentRoleId);
   }
 
-  function handleMuteToggle(enabled: boolean) {
-    if (!enabled) {
-      onClearNotice();
-      setRoleDraft(currentRoleId);
+  async function handleMuteToggle(enabled: boolean) {
+    setMuteEnabledDraft(enabled);
+
+    if (enabled && selectedRoleId !== "" && selectedRoleId !== currentRoleId) {
+      await onSaveState(feature, selectedRoleId, enabled);
+      return;
     }
 
-    setMuteExpanded(enabled);
     void onSetFeatureEnabled(feature, enabled);
   }
 
@@ -549,38 +587,40 @@ function MuteRoleSection({
       <GroupedSettingsSubrow>
         <GroupedSettingsMainRow>
           <GroupedSettingsCopy>
-            <GroupedSettingsHeading id={headingId}>Mute command</GroupedSettingsHeading>
+            <GroupedSettingsHeading id={headingId}>{feature.label}</GroupedSettingsHeading>
           </GroupedSettingsCopy>
           <GroupedSettingsSwitch
-            label="Mute command"
+            label={feature.label}
             checked={muteEnabled}
-            disabled={mutationSaving || !canEditSelectedGuild}
-            onChange={handleMuteToggle}
+            disabled={
+              mutationSaving ||
+              !canEditSelectedGuild ||
+              (!muteEnabled && !canEnableMuteRole)
+            }
+            onChange={(enabled) => void handleMuteToggle(enabled)}
           />
         </GroupedSettingsMainRow>
       </GroupedSettingsSubrow>
 
-      {muteEnabled ? (
-        <GroupedSettingsSubrow>
-          <SettingsSelectField
-            label="Mute role"
-            labelClassName="grouped-settings-label"
-            value={roleDraft}
-            disabled={!canEditRole || roleOptions.loading}
-            onChange={setRoleDraft}
-            options={muteRoleOptions}
-            placeholder={
-              roleOptions.loading
-                ? "Loading roles..."
-                : muteRoleOptions.length === 0
-                  ? "No roles available"
-                  : "No mute role"
-            }
-          />
-        </GroupedSettingsSubrow>
-      ) : null}
+      <GroupedSettingsSubrow>
+        <SettingsSelectField
+          label="Role"
+          labelClassName="grouped-settings-label"
+          value={roleDraft}
+          disabled={!canEditRole || roleOptions.loading}
+          onChange={setRoleDraft}
+          options={muteRoleOptions}
+          placeholder={
+            roleOptions.loading
+              ? "Loading roles..."
+              : muteRoleOptions.length === 0
+                ? "No roles available"
+                : "No mute role"
+          }
+        />
+      </GroupedSettingsSubrow>
 
-      {muteEnabled && roleOptions.notice ? (
+      {roleOptions.notice ? (
         <GroupedSettingsSubrow>
           <GroupedSettingsInlineMessage
             message={roleOptions.notice.message}
@@ -597,9 +637,16 @@ function MuteRoleSection({
             }
           />
         </GroupedSettingsSubrow>
+      ) : muteRoleBlockerMessage ? (
+        <GroupedSettingsSubrow>
+          <GroupedSettingsInlineMessage
+            message={muteRoleBlockerMessage}
+            tone="info"
+          />
+        </GroupedSettingsSubrow>
       ) : null}
 
-      {muteEnabled && hasUnsavedChanges ? (
+      {hasUnsavedChanges ? (
         <GroupedSettingsSubrow>
           <UnsavedChangesBar
             className="grouped-settings-unsaved-bar"
@@ -612,7 +659,7 @@ function MuteRoleSection({
             saving={mutationSaving && pendingFeatureId === feature.id}
             disabled={!canEditRole || roleOptions.loading}
             onReset={handleReset}
-            onSave={() => onSave(feature, roleDraft)}
+            onSave={() => onSave(feature, selectedRoleId)}
           />
         </GroupedSettingsSubrow>
       ) : null}
@@ -682,9 +729,6 @@ function ModerationRouteSection({
             <GroupedSettingsHeading id={headingId}>
               {feature.label}
             </GroupedSettingsHeading>
-            {feature.description ? (
-              <GroupedSettingsCaption>{feature.description}</GroupedSettingsCaption>
-            ) : null}
           </GroupedSettingsCopy>
           <GroupedSettingsSwitch
             label={feature.label}
