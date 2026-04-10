@@ -1,21 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { FeatureRecord } from "../api/control";
 import {
   AdvancedTextInput,
   EmptyState,
-  EntityPickerField,
   FlatPageLayout,
-  KeyValueList,
-  LookupNotice,
-  PageHeader,
-  StatusBadge,
+  GroupedSettingsCopy,
+  GroupedSettingsGroup,
+  GroupedSettingsHeading,
+  GroupedSettingsInlineMessage,
+  GroupedSettingsItem,
+  GroupedSettingsMainRow,
+  GroupedSettingsSection,
+  GroupedSettingsStack,
+  GroupedSettingsSubrow,
+  GroupedSettingsSwitch,
+  SettingsSelectField,
   UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import {
   buildMessageRouteChannelPickerOptions,
-  formatGuildChannelValue,
 } from "../features/features/discordEntities";
 import {
   getFeatureAreaDefinition,
@@ -24,17 +29,13 @@ import {
 import {
   canEditLoggingChannel,
   getLoggingFeatureDetails,
-  summarizeLoggingDestination,
   summarizeLoggingGuidance,
 } from "../features/features/logging";
 import {
-  formatEffectiveSourceLabel,
-  formatFeatureStatusLabel,
   formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
-  getFeatureStatusTone,
-  summarizeFeatureArea,
 } from "../features/features/presentation";
+import { shouldRenderDashboardDiagnosticField } from "../features/features/presentationPolicy";
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
@@ -58,12 +59,7 @@ export function LoggingCategoryPage() {
 
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "logging");
-  const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const firstBlockedFeature = useMemo(
-    () => areaFeatures.find((feature) => feature.readiness === "blocked") ?? null,
-    [areaFeatures],
-  );
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
@@ -127,22 +123,6 @@ export function LoggingCategoryPage() {
     }
   }
 
-  function renderHeaderActions() {
-    if (authState !== "signed_in") {
-      return (
-        <button
-          className="button-primary"
-          type="button"
-          onClick={() => void beginLogin(nextPath)}
-        >
-          Sign in with Discord
-        </button>
-      );
-    }
-
-    return null;
-  }
-
   function renderWorkspaceContent() {
     if (workspace.workspaceState !== "ready") {
       return (
@@ -190,84 +170,123 @@ export function LoggingCategoryPage() {
     }
 
     return (
-      <>
-        {firstBlockedFeature ? (
-          <div className="surface-subsection">
-            <p className="section-label">Current blocker</p>
-            <strong>{firstBlockedFeature.label}</strong>
-            <p className="meta-note">
-              {summarizeLoggingGuidance(firstBlockedFeature)}
-            </p>
-          </div>
-        ) : null}
-
-        {channelOptions.notice ? (
-          <LookupNotice
-            as="section"
-            title="Channel references unavailable"
-            message={channelOptions.notice.message}
-            retryLabel="Retry channel lookup"
-            retryDisabled={channelOptions.loading}
-            onRetry={channelOptions.refresh}
-          />
-        ) : null}
-
-        <div className="flat-config-stack">
-          {areaFeatures.map((feature) => (
-            <LoggingRouteSection
-              key={feature.id}
-              feature={feature}
-              availableChannels={channelOptions.channels}
-              channelOptions={messageRouteChannelOptions}
-              channelOptionsLoading={channelOptions.loading}
-              canEditSelectedGuild={canEditSelectedGuild}
-              mutationSaving={mutation.saving}
-              pendingFeatureId={pendingFeatureId}
-              onClearNotice={mutation.clearNotice}
-              onSave={handleSaveDestination}
-              onSetFeatureEnabled={handleSetFeatureEnabled}
-              onUseInherited={handleUseInherited}
-            />
-          ))}
-        </div>
-      </>
+      <LoggingWorkspacePanels
+        areaFeatures={areaFeatures}
+        canEditSelectedGuild={canEditSelectedGuild}
+        channelOptions={channelOptions}
+        messageRouteChannelOptions={messageRouteChannelOptions}
+        mutation={mutation}
+        pendingFeatureId={pendingFeatureId}
+        onSaveDestination={handleSaveDestination}
+        onSetFeatureEnabled={handleSetFeatureEnabled}
+        onUseInherited={handleUseInherited}
+      />
     );
   }
 
   return (
-    <section className="page-shell">
-      <PageHeader
-        eyebrow="Feature area"
-        title={areaLabel}
-        description="Configure event log routes for the selected server, keep destinations valid, and resolve blockers before relying on operational logging."
-        status={
-          <StatusBadge
-            tone={
-              workspace.workspaceState === "ready" ? areaSummary.tone : "info"
-            }
-          >
-            {workspace.workspaceState === "ready"
-              ? areaSummary.label
-              : formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
-          </StatusBadge>
-        }
-        actions={renderHeaderActions()}
-      />
-
+    <section className="page-shell logging-page">
       <FlatPageLayout
         notice={workspaceNotice}
-        workspaceTitle="Manage logging routes"
-        workspaceDescription="Keep destinations and route readiness visible in the main workspace instead of using a separate destination drawer."
+        workspaceEyebrow={null}
+        workspaceTitle={null}
+        workspaceDescription={null}
       >
+        <div className="card-copy">
+          <div className="page-title-row">
+            <h1>{areaLabel}</h1>
+          </div>
+        </div>
+
         {renderWorkspaceContent()}
       </FlatPageLayout>
     </section>
   );
 }
 
+interface LoggingWorkspacePanelsProps {
+  areaFeatures: FeatureRecord[];
+  canEditSelectedGuild: boolean;
+  channelOptions: ReturnType<typeof useGuildChannelOptions>;
+  messageRouteChannelOptions: Array<{
+    value: string;
+    label: string;
+    description?: string;
+  }>;
+  mutation: ReturnType<typeof useFeatureMutation>;
+  pendingFeatureId: string;
+  onSaveDestination: (
+    feature: FeatureRecord,
+    channelId: string,
+  ) => Promise<void>;
+  onSetFeatureEnabled: (
+    feature: FeatureRecord,
+    enabled: boolean,
+  ) => Promise<void>;
+  onUseInherited: (feature: FeatureRecord) => Promise<void>;
+}
+
+function LoggingWorkspacePanels({
+  areaFeatures,
+  canEditSelectedGuild,
+  channelOptions,
+  messageRouteChannelOptions,
+  mutation,
+  pendingFeatureId,
+  onSaveDestination,
+  onSetFeatureEnabled,
+  onUseInherited,
+}: LoggingWorkspacePanelsProps) {
+  return (
+    <GroupedSettingsStack className="flat-config-stack">
+      <GroupedSettingsSection>
+        <GroupedSettingsCopy>
+          <GroupedSettingsHeading variant="section">
+            Logging routes
+          </GroupedSettingsHeading>
+        </GroupedSettingsCopy>
+
+        {channelOptions.notice ? (
+          <GroupedSettingsInlineMessage
+            message={channelOptions.notice.message}
+            tone="error"
+            action={
+              <button
+                className="button-secondary"
+                type="button"
+                disabled={channelOptions.loading}
+                onClick={() => void channelOptions.refresh()}
+              >
+                Retry channel lookup
+              </button>
+            }
+          />
+        ) : null}
+
+        <GroupedSettingsGroup>
+          {areaFeatures.map((feature) => (
+            <LoggingRouteSection
+              key={feature.id}
+              feature={feature}
+              channelOptions={messageRouteChannelOptions}
+              channelOptionsLoading={channelOptions.loading}
+              canEditSelectedGuild={canEditSelectedGuild}
+              mutationSaving={mutation.saving}
+              pendingFeatureId={pendingFeatureId}
+              onClearNotice={mutation.clearNotice}
+              onSave={onSaveDestination}
+              onSetFeatureEnabled={onSetFeatureEnabled}
+              onUseInherited={onUseInherited}
+            />
+          ))}
+        </GroupedSettingsGroup>
+      </GroupedSettingsSection>
+    </GroupedSettingsStack>
+  );
+}
+
 interface LoggingRouteSectionProps {
   feature: FeatureRecord;
-  availableChannels: ReturnType<typeof useGuildChannelOptions>["channels"];
   channelOptions: Array<{ value: string; label: string; description?: string }>;
   channelOptionsLoading: boolean;
   canEditSelectedGuild: boolean;
@@ -284,7 +303,6 @@ interface LoggingRouteSectionProps {
 
 function LoggingRouteSection({
   feature,
-  availableChannels,
   channelOptions,
   channelOptionsLoading,
   canEditSelectedGuild,
@@ -296,10 +314,21 @@ function LoggingRouteSection({
   onUseInherited,
 }: LoggingRouteSectionProps) {
   const details = getLoggingFeatureDetails(feature);
+  const headingId = useId();
   const [channelDraft, setChannelDraft] = useState(details.channelId);
   const canEditDestination =
     canEditSelectedGuild && canEditLoggingChannel(feature);
   const hasUnsavedChanges = details.channelId !== channelDraft.trim();
+  const isPending = mutationSaving && pendingFeatureId === feature.id;
+  const routeMessage =
+    feature.effective_enabled && feature.readiness === "blocked"
+      ? summarizeLoggingGuidance(feature)
+      : null;
+  const channelNote = details.exclusiveModerationChannel
+    ? "Use a dedicated moderation channel for this route."
+    : details.requiresChannel
+      ? undefined
+      : "Leave empty to clear the destination.";
 
   useEffect(() => {
     setChannelDraft(details.channelId);
@@ -311,58 +340,31 @@ function LoggingRouteSection({
   }
 
   return (
-    <section className="flat-config-section">
-      <div className="flat-config-header">
-        <div className="card-copy flat-config-copy">
-          <p className="section-label">Log route</p>
-          <div className="flat-config-title-row">
-            <h2>{feature.label}</h2>
-            <StatusBadge tone={getFeatureStatusTone(feature)}>
-              {formatFeatureStatusLabel(feature)}
-            </StatusBadge>
-          </div>
-          <p className="section-description">{feature.description}</p>
-        </div>
+    <GroupedSettingsItem
+      stacked
+      role="group"
+      aria-labelledby={headingId}
+    >
+      <GroupedSettingsSubrow>
+        <GroupedSettingsMainRow>
+          <GroupedSettingsCopy>
+            <GroupedSettingsHeading id={headingId}>
+              {feature.label}
+            </GroupedSettingsHeading>
+          </GroupedSettingsCopy>
+          <GroupedSettingsSwitch
+            label={feature.label}
+            checked={feature.effective_enabled}
+            disabled={mutationSaving || !canEditSelectedGuild}
+            onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
+          />
+        </GroupedSettingsMainRow>
+      </GroupedSettingsSubrow>
 
-        <div className="flat-config-status">
-          {details.exclusiveModerationChannel ? (
-            <span className="meta-note">
-              Requires an exclusive moderation destination.
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <KeyValueList
-        items={[
-          {
-            label: "Destination",
-            value: formatGuildChannelValue(
-              details.channelId,
-              availableChannels,
-              summarizeLoggingDestination(feature),
-            ),
-          },
-          {
-            label: "Applied from",
-            value: formatEffectiveSourceLabel(feature.effective_source),
-          },
-          {
-            label: "Destination rule",
-            value: details.requiresChannel
-              ? "Needs destination channel"
-              : "No dedicated destination",
-          },
-          {
-            label: "Current signal",
-            value: summarizeLoggingGuidance(feature),
-          },
-        ]}
-      />
-
-      <div className="flat-config-fields">
-        <EntityPickerField
+      <GroupedSettingsSubrow>
+        <SettingsSelectField
           label="Destination channel"
+          labelClassName="grouped-settings-label"
           value={channelDraft}
           disabled={!canEditDestination || channelOptionsLoading}
           onChange={setChannelDraft}
@@ -374,65 +376,59 @@ function LoggingRouteSection({
                 ? "No channels available"
                 : "No destination channel"
           }
-          note={
-            details.requiresChannel
-              ? undefined
-              : "Leave empty to clear the destination."
-          }
+          note={channelNote}
         />
+      </GroupedSettingsSubrow>
 
-        <AdvancedTextInput
-          label="Channel ID fallback"
-          inputLabel="Destination channel ID fallback"
-          value={channelDraft}
-          disabled={!canEditDestination}
-          onChange={setChannelDraft}
-          placeholder="Discord channel ID"
-          note="Use only if channel lookup fails."
-        />
-      </div>
+      {routeMessage ? (
+        <GroupedSettingsSubrow>
+          <GroupedSettingsInlineMessage message={routeMessage} tone="error" />
+        </GroupedSettingsSubrow>
+      ) : null}
 
-      <div className="inline-actions flat-config-actions">
-        <button
-          className="button-secondary"
-          type="button"
-          disabled={mutationSaving || !canEditSelectedGuild}
-          aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
-          onClick={() =>
-            void onSetFeatureEnabled(feature, !feature.effective_enabled)
-          }
-        >
-          {mutationSaving && pendingFeatureId === feature.id
-            ? "Saving..."
-            : feature.effective_enabled
-              ? "Disable"
-              : "Enable"}
-        </button>
-        {feature.override_state !== "inherit" ? (
-          <button
-            className="button-ghost"
-            type="button"
-            disabled={mutationSaving || !canEditSelectedGuild}
-            aria-label={`Use inherited setting for ${feature.label}`}
-            onClick={() => void onUseInherited(feature)}
-          >
-            Use inherited
-          </button>
-        ) : null}
-      </div>
+      {feature.override_state !== "inherit" ? (
+        <GroupedSettingsSubrow>
+          <div className="inline-actions">
+            <button
+              className="button-ghost"
+              type="button"
+              disabled={mutationSaving || !canEditSelectedGuild}
+              aria-label={`Use inherited setting for ${feature.label}`}
+              onClick={() => void onUseInherited(feature)}
+            >
+              Use inherited
+            </button>
+          </div>
+        </GroupedSettingsSubrow>
+      ) : null}
 
-      <UnsavedChangesBar
-        hasUnsavedChanges={hasUnsavedChanges}
-        saveLabel={
-          mutationSaving && pendingFeatureId === feature.id
-            ? "Saving..."
-            : "Save changes"
-        }
-        saving={mutationSaving && pendingFeatureId === feature.id}
-        disabled={!canEditDestination}
-        onReset={handleReset}
-        onSave={() => onSave(feature, channelDraft)}
-      />
-    </section>
+      {shouldRenderDashboardDiagnosticField("Channel ID fallback") ? (
+        <GroupedSettingsSubrow>
+          <AdvancedTextInput
+            label="Channel ID fallback"
+            inputLabel="Destination channel ID fallback"
+            value={channelDraft}
+            disabled={!canEditDestination}
+            onChange={setChannelDraft}
+            placeholder="Discord channel ID"
+            note="Use only if channel lookup fails."
+          />
+        </GroupedSettingsSubrow>
+      ) : null}
+
+      {hasUnsavedChanges ? (
+        <GroupedSettingsSubrow>
+          <UnsavedChangesBar
+            className="grouped-settings-unsaved-bar"
+            hasUnsavedChanges={hasUnsavedChanges}
+            saveLabel={isPending ? "Saving..." : "Save changes"}
+            saving={isPending}
+            disabled={!canEditDestination}
+            onReset={handleReset}
+            onSave={() => onSave(feature, channelDraft)}
+          />
+        </GroupedSettingsSubrow>
+      ) : null}
+    </GroupedSettingsItem>
   );
 }

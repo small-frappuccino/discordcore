@@ -2517,31 +2517,40 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Logging", level: 1 });
-    const avatarSection = screen
-      .getByRole("heading", { name: "Avatar logging", level: 2 })
-      .closest("section");
-    expect(avatarSection).not.toBeNull();
+    await screen.findByRole("heading", { name: "Logging routes", level: 2 });
+    expect(window.location.pathname).toBe(testRoutes.moderationLogging);
+    expect(screen.queryByText("Feature area")).not.toBeInTheDocument();
+    expect(screen.queryByText("Manage logging routes")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current blocker")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current signal")).not.toBeInTheDocument();
+    expect(screen.queryByText("Destination rule")).not.toBeInTheDocument();
+    expectStandardDashboardBlacklistAbsent();
+
+    const avatarSection = screen.getByRole("group", {
+      name: "Avatar logging",
+    });
     expect(
-      within(avatarSection!).getAllByText("#user-log-channel").length,
+      within(avatarSection).getAllByText("#user-log-channel").length,
     ).toBeGreaterThan(0);
-    expect(within(avatarSection!).getByLabelText("Destination channel")).toHaveValue(
+    expect(within(avatarSection).getByLabelText("Destination channel")).toHaveValue(
       "user-log-channel",
     );
-    const memberJoinSection = screen
-      .getByRole("heading", { name: "Member join logging", level: 2 })
-      .closest("section");
-    expect(memberJoinSection).not.toBeNull();
-    expect(within(memberJoinSection!).getByText("Not configured")).toBeInTheDocument();
+    const memberJoinSection = screen.getByRole("group", {
+      name: "Member join logging",
+    });
     expect(
-      within(memberJoinSection!).getByLabelText("Destination channel"),
+      within(memberJoinSection).getAllByText("No destination channel").length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(memberJoinSection).getByLabelText("Destination channel"),
     ).toHaveValue("");
 
     await userEvent.selectOptions(
-      within(memberJoinSection!).getByLabelText("Destination channel"),
+      within(memberJoinSection).getByLabelText("Destination channel"),
       "join-channel",
     );
     await userEvent.click(
-      within(memberJoinSection!).getByRole("button", { name: "Save changes" }),
+      within(memberJoinSection).getByRole("button", { name: "Save changes" }),
     );
 
     await waitFor(() => {
@@ -2557,7 +2566,7 @@ describe("dashboard routing and workspace", () => {
     });
 
     expect(
-      within(memberJoinSection!).getAllByText("#join-channel").length,
+      within(memberJoinSection).getAllByText("#join-channel").length,
     ).toBeGreaterThan(0);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -2570,33 +2579,33 @@ describe("dashboard routing and workspace", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Logging", level: 1 });
-
-    const avatarSection = screen
-      .getByRole("heading", { name: "Avatar logging", level: 2 })
-      .closest("section");
-    const memberJoinSection = screen
-      .getByRole("heading", { name: "Member join logging", level: 2 })
-      .closest("section");
-    expect(avatarSection).not.toBeNull();
-    expect(memberJoinSection).not.toBeNull();
-
-    const disableAvatarLoggingButton = screen.getByRole("button", {
-      name: "Disable Avatar logging",
+    const avatarSection = screen.getByRole("group", {
+      name: "Avatar logging",
     });
-    const disableMemberJoinLoggingButton = screen.getByRole("button", {
-      name: "Disable Member join logging",
+    const memberJoinSection = screen.getByRole("group", {
+      name: "Member join logging",
     });
 
     expect(
-      within(avatarSection!).getByLabelText("Destination channel"),
+      within(avatarSection).getByLabelText("Destination channel"),
     ).toBeDisabled();
     expect(
-      within(memberJoinSection!).getByLabelText("Destination channel"),
+      within(memberJoinSection).getByLabelText("Destination channel"),
     ).toBeDisabled();
-    expect(disableAvatarLoggingButton).toBeDisabled();
-    expect(disableMemberJoinLoggingButton).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", { name: "Avatar logging" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", { name: "Member join logging" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Disable Avatar logging" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Disable Member join logging" }),
+    ).not.toBeInTheDocument();
 
-    await userEvent.click(disableAvatarLoggingButton);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Avatar logging" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(featureUpdates).toEqual([]);
