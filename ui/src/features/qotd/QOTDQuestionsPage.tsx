@@ -21,7 +21,6 @@ export function QOTDQuestionsPage() {
   const [editingBody, setEditingBody] = useState("");
   const [editingStatus, setEditingStatus] = useState<QOTDQuestionStatus>("ready");
   const [submitting, setSubmitting] = useState(false);
-  const queueCounts = countQuestionsByStatus(orderedQuestions);
 
   useEffect(() => {
     if (editingQuestionID === null) {
@@ -123,14 +122,6 @@ export function QOTDQuestionsPage() {
           <div className="card-copy">
             <p className="section-label">Question bank</p>
             <h2>Add a question</h2>
-            <p className="section-description">
-              New items enter the queue in the selected starting state.
-            </p>
-          </div>
-          <div className="qotd-chip-row">
-            <span className="meta-pill subtle-pill">{queueCounts.ready} ready</span>
-            <span className="meta-pill subtle-pill">{queueCounts.draft} draft</span>
-            <span className="meta-pill subtle-pill">{queueCounts.reserved} reserved</span>
           </div>
         </div>
 
@@ -183,12 +174,6 @@ export function QOTDQuestionsPage() {
           <div className="card-copy">
             <p className="section-label">Queue</p>
             <h2>Question order</h2>
-            <p className="section-description">
-              Keep ready items near the front and preserve reserved or used history.
-            </p>
-          </div>
-          <div className="inline-actions">
-            <span className="meta-pill subtle-pill">{orderedQuestions.length} total</span>
           </div>
         </div>
 
@@ -377,7 +362,6 @@ function getQuestionToneClass(status: QOTDQuestionStatus) {
 
 function buildQuestionMeta(question: QOTDQuestion) {
   const meta: string[] = [];
-  meta.push(`Status ${formatStatusLabel(question.status)}`);
   if (question.scheduled_for_date_utc) {
     meta.push(`Scheduled ${question.scheduled_for_date_utc.slice(0, 10)}`);
   }
@@ -386,20 +370,4 @@ function buildQuestionMeta(question: QOTDQuestion) {
   }
   meta.push(`Updated ${question.updated_at.slice(0, 10)}`);
   return meta;
-}
-
-function countQuestionsByStatus(questions: QOTDQuestion[]) {
-  return questions.reduce(
-    (counts, question) => {
-      counts[question.status] += 1;
-      return counts;
-    },
-    {
-      draft: 0,
-      ready: 0,
-      reserved: 0,
-      used: 0,
-      disabled: 0,
-    },
-  );
 }

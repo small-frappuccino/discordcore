@@ -91,9 +91,6 @@ export function QOTDSettingsPage() {
           <div className="card-copy">
             <p className="section-label">Settings</p>
             <h2>Workflow settings</h2>
-            <p className="section-description">
-              Choose the forum and tags used by the daily publish flow.
-            </p>
           </div>
         </div>
 
@@ -127,9 +124,6 @@ export function QOTDSettingsPage() {
           />
           <span className="entity-option-copy">
             <strong>Enable QOTD workflow</strong>
-            <span className="meta-note">
-              Turns on daily publishing for the selected forum route.
-            </span>
           </span>
         </label>
 
@@ -149,7 +143,7 @@ export function QOTDSettingsPage() {
             options={forumChannelOptions}
             placeholder="Select a forum channel"
             disabled={controlsDisabled || channelOptions.loading}
-            note="Use one forum for the official post and member reply threads."
+            note="Forum used for official posts and reply threads."
           />
 
           <EntityPickerField
@@ -164,7 +158,7 @@ export function QOTDSettingsPage() {
             options={tagOptions}
             placeholder="Select the Question tag"
             disabled={controlsDisabled || !tagLookupAvailable}
-            note="Applied to the official daily post."
+            note="Tag for the official QOTD post."
           />
 
           <EntityPickerField
@@ -179,7 +173,7 @@ export function QOTDSettingsPage() {
             options={tagOptions}
             placeholder="Select the Reply tag"
             disabled={controlsDisabled || !tagLookupAvailable}
-            note="Applied to member-created answer threads."
+            note="Tag for member reply threads."
           />
         </div>
 
@@ -195,12 +189,6 @@ export function QOTDSettingsPage() {
           <div className="card-copy">
             <p className="section-label">Staff</p>
             <h2>Staff roles</h2>
-            <p className="section-description">
-              Stored for moderation and official post handling flows.
-            </p>
-          </div>
-          <div className="inline-actions">
-            <span className="meta-pill subtle-pill">{draft.staff_role_ids.length} roles</span>
           </div>
         </div>
 
@@ -231,7 +219,7 @@ export function QOTDSettingsPage() {
               staff_role_ids: toggleStringValue(current.staff_role_ids, roleId),
             }))
           }
-          note="Stored for backend moderation flows."
+          note="Roles allowed to handle official QOTD threads."
         />
 
       </section>

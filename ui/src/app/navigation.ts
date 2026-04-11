@@ -62,7 +62,6 @@ export function getDashboardSidebarNavigationSections(
   return [
     getDashboardCoreNavigationSection(guildId),
     getDashboardModerationNavigationSection(guildId),
-    getDashboardPartnersNavigationSection(guildId),
     getDashboardEngagementNavigationSection(guildId),
     getDashboardRolesNavigationSection(guildId),
   ];
@@ -74,7 +73,6 @@ export function getDashboardHomeNavigationSections(
   return [
     getDashboardCoreNavigationSection(guildId),
     getDashboardModerationNavigationSection(guildId),
-    getDashboardPartnersNavigationSection(guildId),
     getDashboardEngagementNavigationSection(guildId),
     getDashboardRolesNavigationSection(guildId),
   ];
@@ -157,23 +155,16 @@ function getDashboardModerationNavigationSection(
   };
 }
 
-function getDashboardPartnersNavigationSection(
-  guildId: string,
-): NavigationSection {
-  return {
-    id: "partners",
-    label: "Partners",
-    items: [getDashboardPartnerBoardNavigationItem(guildId)],
-  };
-}
-
 function getDashboardEngagementNavigationSection(
   guildId: string,
 ): NavigationSection {
   return {
     id: "engagement",
     label: "Engagement",
-    items: [getDashboardQOTDNavigationItem(guildId)],
+    items: [
+      getDashboardPartnerBoardNavigationItem(guildId),
+      getDashboardQOTDNavigationItem(guildId),
+    ],
   };
 }
 

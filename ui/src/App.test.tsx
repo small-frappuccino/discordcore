@@ -1624,13 +1624,13 @@ describe("dashboard routing and workspace", () => {
     const moderationButton = within(sidebarNav).getByRole("button", {
       name: "Moderation",
     });
-    const partnersButton = within(sidebarNav).getByRole("button", {
-      name: "Partners",
+    const engagementButton = within(sidebarNav).getByRole("button", {
+      name: "Engagement",
     });
     const rolesButton = within(sidebarNav).getByRole("button", { name: "Roles" });
     expect(coreButton).toHaveAttribute("aria-expanded", "true");
     expect(moderationButton).toHaveAttribute("aria-expanded", "false");
-    expect(partnersButton).toHaveAttribute("aria-expanded", "false");
+    expect(engagementButton).toHaveAttribute("aria-expanded", "false");
     expect(rolesButton).toHaveAttribute("aria-expanded", "false");
     expect(
       within(sidebarNav).getByRole("link", { name: "Control Panel" }),
@@ -1659,13 +1659,14 @@ describe("dashboard routing and workspace", () => {
     expect(
       within(sidebarNav).queryByRole("link", { name: "Settings" }),
     ).not.toBeInTheDocument();
-    await userEvent.click(partnersButton);
+    await userEvent.click(engagementButton);
 
     expect(moderationButton).toHaveAttribute("aria-expanded", "false");
-    expect(partnersButton).toHaveAttribute("aria-expanded", "true");
+    expect(engagementButton).toHaveAttribute("aria-expanded", "true");
     expect(
       within(sidebarNav).getByRole("link", { name: "Partner Board" }),
     ).toBeInTheDocument();
+    expect(within(sidebarNav).getByRole("link", { name: "QOTD" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Reconnect" }),
     ).not.toBeInTheDocument();
@@ -1690,7 +1691,7 @@ describe("dashboard routing and workspace", () => {
       within(sidebarNav).getByRole("button", { name: "Moderation" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(
-      within(sidebarNav).getByRole("button", { name: "Partners" }),
+      within(sidebarNav).getByRole("button", { name: "Engagement" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(
       within(sidebarNav).getByRole("button", { name: "Roles" }),
@@ -1700,13 +1701,14 @@ describe("dashboard routing and workspace", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Core", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Moderation", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Partners", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Engagement", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Roles", level: 2 })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Control Panel" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Stats" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Commands" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Logging" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Partner Board" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open QOTD" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Autorole" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Open Level Roles" })).toBeInTheDocument();
     expect(await screen.findByText("Write roles: 1")).toBeInTheDocument();

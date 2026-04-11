@@ -15,7 +15,6 @@ export function QOTDLayout() {
     busyLabel,
     notice,
     publishNow,
-    summary,
     workspaceState,
   } = useQOTD();
   const normalizedGuildID = selectedGuildID.trim();
@@ -28,11 +27,7 @@ export function QOTDLayout() {
       <PageHeader
         eyebrow="Engagement"
         title="QOTD"
-        description={
-          isQuestionsRoute
-            ? "Manage the bank and queue for the next QOTD publish."
-            : "Configure the forum, tags, and staff roles used by QOTD."
-        }
+        description="Settings and question bank."
         actions={
           workspaceState === "ready" && isQuestionsRoute && canEditSelectedGuild ? (
             <button
@@ -52,48 +47,6 @@ export function QOTDLayout() {
           <QOTDWorkspaceState />
         ) : (
           <div className="qotd-shell">
-            <section className="qotd-context-strip" aria-label="QOTD overview">
-              <div className="qotd-context-item">
-                <p className="section-label">Current slot</p>
-                <div className="qotd-context-value-row">
-                  <strong className="qotd-context-value">
-                    {formatDateLabel(summary?.current_publish_date_utc)}
-                  </strong>
-                  <span
-                    className={`qotd-status-pill ${
-                      summary?.published_for_current_slot
-                        ? "qotd-status-success"
-                        : "qotd-status-neutral"
-                    }`}
-                  >
-                    {summary?.published_for_current_slot ? "Published" : "Waiting"}
-                  </span>
-                </div>
-                <p className="qotd-context-meta">
-                  {summary?.previous_post
-                    ? `Previous post ${formatDateLabel(summary.previous_post.publish_date_utc)}`
-                    : "No official post history yet."}
-                </p>
-              </div>
-
-              <div className="qotd-context-item">
-                <p className="section-label">Queue</p>
-                <div className="qotd-context-value-row">
-                  <strong className="qotd-context-value">
-                    {summary?.counts.ready ?? 0} ready
-                  </strong>
-                  <span className="meta-pill subtle-pill">
-                    {summary?.counts.total ?? 0} total
-                  </span>
-                </div>
-                <p className="qotd-context-meta">
-                  {summary
-                    ? `${summary.counts.draft} draft · ${summary.counts.reserved} reserved`
-                    : "No question counts available."}
-                </p>
-              </div>
-            </section>
-
             {tabs.length > 0 ? (
               <nav className="subnav qotd-tabs" aria-label="QOTD sections">
                 {tabs.map((tab) => (
@@ -206,12 +159,4 @@ function WorkspaceStateMessage({
       {action ? <div className="workspace-state-actions">{action}</div> : null}
     </section>
   );
-}
-
-function formatDateLabel(value?: string) {
-  const trimmed = value?.trim() ?? "";
-  if (trimmed === "") {
-    return "No active slot";
-  }
-  return trimmed.slice(0, 10);
 }

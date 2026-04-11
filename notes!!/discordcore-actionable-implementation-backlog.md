@@ -18,7 +18,7 @@ Escopo deste arquivo:
   Arquivos principais: `ui/src/pages/ModerationPage.tsx`, `ui/src/features/features/moderation.ts`, `ui/src/components/groupedSettings.tsx`, `ui/src/App.test.tsx`.
   Resultado esperado: remover status agregado redundante no topo, reduzir `Automod service` para `titulo curto + toggle`, transformar `Mute role` em fluxo `select-first`, reduzir `Moderation routes` para `nome + toggle + select`, e exibir texto secundario apenas quando houver bloqueio acionavel.
 
-- [ ] Revalidar e alinhar a experiencia de `QOTD` com as regras atuais de UI.
+- [x] Revalidar e alinhar a experiencia de `QOTD` com as regras atuais de UI.
   Arquivos principais: `ui/src/app/navigation.ts`, `ui/src/pages/HomePage.tsx`, `ui/src/app/AppRoutes.tsx`, `ui/src/features/qotd/QOTDLayout.tsx`, `ui/src/features/qotd/QOTDSettingsPage.tsx`, `ui/src/features/qotd/QOTDQuestionsPage.tsx`, `ui/src/features/qotd/QOTDPages.test.tsx`, `ui/src/index.css`.
   Resultado esperado: manter a feature existente, mas cortar descricoes instrucionais, `meta pills`, resumos redundantes e texto de orientacao que substitui hierarquia visual; aplicar a taxonomia pedida nas notas para o acesso do `QOTD` no sidebar e no `Home`, ou consolidar uma unica taxonomia canonica antes de continuar a limpeza.
 

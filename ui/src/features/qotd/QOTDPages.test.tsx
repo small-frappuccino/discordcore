@@ -148,9 +148,9 @@ describe("QOTD UI", () => {
     );
 
     expect(screen.getByRole("heading", { name: "QOTD", level: 1 })).toBeInTheDocument();
-    expect(screen.getByText("Current slot")).toBeInTheDocument();
-    expect(screen.getByText("Queue")).toBeInTheDocument();
     expect(screen.getByText("Settings body")).toBeInTheDocument();
+    expect(screen.queryByText("Current slot")).not.toBeInTheDocument();
+    expect(screen.queryByText("Queue")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Publish manual QOTD" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace status")).not.toBeInTheDocument();
@@ -166,6 +166,8 @@ describe("QOTD UI", () => {
 
     expect(screen.getByRole("heading", { name: "Workflow settings", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Staff roles", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText("Choose the forum and tags used by the daily publish flow.")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 roles")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refresh tags/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
@@ -281,7 +283,9 @@ describe("QOTD UI", () => {
     expect(screen.getByText("Add a question")).toBeInTheDocument();
     expect(screen.getByText("Question order")).toBeInTheDocument();
     expect(screen.getByText("What is one thing you shipped this week?")).toBeInTheDocument();
-    expect(screen.queryByText("Queue total")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 ready")).not.toBeInTheDocument();
+    expect(screen.queryByText("2 total")).not.toBeInTheDocument();
+    expect(screen.queryByText("Status Ready")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Move up" })).not.toHaveLength(0);
   });
 
