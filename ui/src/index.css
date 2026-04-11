@@ -1507,7 +1507,6 @@ textarea:focus {
   --qotd-border-strong: rgba(208, 161, 114, 0.26);
 }
 
-.qotd-page-surface,
 .qotd-shell,
 .qotd-workspace,
 .qotd-question-list,
@@ -1519,9 +1518,31 @@ textarea:focus {
   gap: var(--space-4);
 }
 
-.qotd-page-surface,
 .qotd-shell {
   gap: var(--space-5);
+}
+
+.qotd-page-intro {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.qotd-page-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.qotd-page-title-row h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl-size);
+  line-height: var(--text-xl-line-height);
+  font-weight: var(--text-xl-weight);
 }
 
 .qotd-question-order-row,

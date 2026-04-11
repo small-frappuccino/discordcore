@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { buildQOTDTabs } from "../../app/routes";
-import { DashboardPageSurface, PageHeader } from "../../components/ui";
+import { FlatPageLayout } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
@@ -23,26 +23,33 @@ export function QOTDLayout() {
   const publishBusy = busyLabel === QOTD_BUSY_LABELS.publishNow;
 
   return (
-    <div className="qotd-page">
-      <PageHeader
-        eyebrow="Engagement"
-        title="QOTD"
-        description="Settings and question bank."
-        actions={
-          workspaceState === "ready" && isQuestionsRoute && canEditSelectedGuild ? (
-            <button
-              className="button-primary"
-              type="button"
-              disabled={publishBusy}
-              onClick={() => void publishNow()}
-            >
-              {publishBusy ? "Publishing..." : "Publish manual QOTD"}
-            </button>
-          ) : undefined
-        }
-      />
+    <section className="page-shell qotd-page">
+      <FlatPageLayout
+        notice={notice}
+        workspaceEyebrow={null}
+        workspaceTitle={null}
+        workspaceDescription={null}
+      >
+        <div className="qotd-page-intro">
+          <div className="card-copy">
+            <div className="qotd-page-title-row">
+              <h1>QOTD</h1>
+              {workspaceState === "ready" &&
+              isQuestionsRoute &&
+              canEditSelectedGuild ? (
+                <button
+                  className="button-primary"
+                  type="button"
+                  disabled={publishBusy}
+                  onClick={() => void publishNow()}
+                >
+                  {publishBusy ? "Publishing..." : "Publish manual QOTD"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
 
-      <DashboardPageSurface className="qotd-page-surface" notice={notice}>
         {workspaceState !== "ready" ? (
           <QOTDWorkspaceState />
         ) : (
@@ -66,8 +73,8 @@ export function QOTDLayout() {
             <Outlet />
           </div>
         )}
-      </DashboardPageSurface>
-    </div>
+      </FlatPageLayout>
+    </section>
   );
 }
 
