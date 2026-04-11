@@ -1553,32 +1553,56 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
-.qotd-page .qotd-tabs {
-  gap: var(--space-2);
-  padding: 0 0 var(--space-3);
+.qotd-workspace-panel {
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--qotd-border-soft);
+  background: color-mix(in srgb, var(--qotd-panel-surface) 95%, white 1%);
+}
+
+.qotd-workspace-tabs {
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4) 0;
   border: 0;
   border-bottom: 1px solid var(--qotd-border-soft);
   border-radius: 0;
-  background: transparent;
+  background: color-mix(in srgb, var(--qotd-panel-surface) 94%, black 6%);
 }
 
-.qotd-page .qotd-tabs .subnav-link {
-  min-height: 34px;
+.qotd-workspace-tabs .subnav-link {
+  min-height: 38px;
   padding: 0 14px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-bottom: 2px solid transparent;
+  border-radius: calc(var(--radius-control) + 2px) calc(var(--radius-control) + 2px) 0 0;
   background: transparent;
 }
 
-.qotd-page .qotd-tabs .subnav-link.is-active,
-.qotd-page .qotd-tabs .subnav-link:hover {
-  border-color: var(--qotd-border-strong);
-  background: var(--qotd-panel-active);
+.qotd-workspace-tabs .subnav-link.is-active,
+.qotd-workspace-tabs .subnav-link:hover {
+  border-color: transparent;
+  border-bottom-color: color-mix(in srgb, var(--bg-accent) 82%, white 18%);
+  background: color-mix(in srgb, var(--qotd-panel-active) 84%, white 16%);
+}
+
+.qotd-workspace-panel-body {
+  gap: var(--space-6);
 }
 
 .qotd-workspace {
-  gap: 0;
+  gap: var(--space-6);
   align-items: start;
+}
+
+.qotd-grouped-stack {
+  --grouped-settings-stack-gap: var(--space-6);
+}
+
+.qotd-grouped-stack .grouped-settings-group {
+  --grouped-settings-radius: 22px;
+  --grouped-settings-surface-bg: color-mix(in srgb, var(--bg-surface) 96%, white 2%);
+  --grouped-settings-divider-inset: 24px;
+  --grouped-settings-subrow-padding-block: 20px;
+  --grouped-settings-subrow-padding-inline: 22px;
 }
 
 .qotd-flat-section {
@@ -1605,6 +1629,11 @@ textarea:focus {
 .qotd-settings-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
+}
+
+.qotd-staff-field {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .qotd-composer-grid {

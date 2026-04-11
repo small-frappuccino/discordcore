@@ -1461,6 +1461,60 @@ func TestDiscordOAuthGuildAccessFreshQueryRefreshesCachedGuilds(t *testing.T) {
 	}
 }
 
+func TestDiscordOAuthGuildAccessEndpointSkipsErrorResponseOnRequestCancellation(t *testing.T) {
+	t.Parallel()
+
+	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/@me/guilds":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer discordAPI.Close()
+
+	srv, _ := newControlTestServer(t)
+	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
+		ClientID:      "1234567890",
+		ClientSecret:  "super-secret",
+		RedirectURI:   "http://127.0.0.1:8080/auth/discord/callback",
+		TokenURL:      discordAPI.URL + "/token",
+		UserInfoURL:   discordAPI.URL + "/users/@me",
+		UserGuildsURL: discordAPI.URL + "/users/@me/guilds",
+		HTTPClient:    discordAPI.Client(),
+	})); err != nil {
+		t.Fatalf("configure oauth: %v", err)
+	}
+
+	session, err := srv.discordOAuth.sessions.Create(
+		discordOAuthUser{ID: "u1", Username: "alice"},
+		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		"access-token",
+		"refresh-token",
+		"Bearer",
+		time.Hour,
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("create oauth session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+	req.AddCookie(&http.Cookie{Name: defaultDiscordOAuthSessionCookie, Value: session.ID})
+
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if body := rec.Body.String(); body != "" {
+		t.Fatalf("expected canceled guild access request to return without an error response, got code=%d body=%q", rec.Code, body)
+	}
+}
+
 func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 	t.Parallel()
 

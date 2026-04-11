@@ -1,8 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { QOTDConfig } from "../../api/control";
 import {
   EntityMultiPickerField,
-  EntityPickerField,
+  GroupedSettingsCaption,
+  GroupedSettingsCopy,
+  GroupedSettingsGroup,
+  GroupedSettingsHeading,
+  GroupedSettingsInlineMessage,
+  GroupedSettingsItem,
+  GroupedSettingsMainRow,
+  GroupedSettingsSection,
+  GroupedSettingsStack,
+  GroupedSettingsSubrow,
+  GroupedSettingsSwitch,
+  SettingsSelectField,
   UnsavedChangesBar,
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
@@ -24,6 +35,8 @@ export function QOTDSettingsPage() {
   const { busyLabel, forumTags, refreshForumTags, saveSettings, settings } = useQOTD();
   const channelOptions = useGuildChannelOptions();
   const roleOptions = useGuildRoleOptions();
+  const workflowHeadingId = useId();
+  const staffHeadingId = useId();
   const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
   const [draft, setDraft] = useState<SettingsDraft>(() => savedDraftRef.current);
   const [saving, setSaving] = useState(false);
@@ -64,6 +77,25 @@ export function QOTDSettingsPage() {
   const controlsDisabled = !canEditSelectedGuild || saving;
   const tagLookupAvailable = draft.forum_channel_id.trim() !== "";
   const refreshingTags = busyLabel === QOTD_BUSY_LABELS.refreshForumTags;
+  const forumChannelPlaceholder = channelOptions.loading
+    ? "Loading forum channels..."
+    : forumChannelOptions.length === 0
+      ? "No forum channels available"
+      : "Select a forum channel";
+  const questionTagPlaceholder = !tagLookupAvailable
+    ? "Choose a forum channel first"
+    : refreshingTags
+      ? "Loading forum tags..."
+      : tagOptions.length === 0
+        ? "No forum tags available"
+        : "Select the Question tag";
+  const replyTagPlaceholder = !tagLookupAvailable
+    ? "Choose a forum channel first"
+    : refreshingTags
+      ? "Loading forum tags..."
+      : tagOptions.length === 0
+        ? "No forum tags available"
+        : "Select the Reply tag";
 
   async function handleSave() {
     if (controlsDisabled) {
@@ -86,143 +118,182 @@ export function QOTDSettingsPage() {
 
   return (
     <div className="workspace-view qotd-workspace">
-      <section className="qotd-flat-section">
-        <div className="qotd-section-header">
-          <div className="card-copy">
+      <GroupedSettingsStack className="qotd-grouped-stack">
+        <GroupedSettingsSection>
+          <GroupedSettingsCopy>
             <p className="section-label">Settings</p>
-            <h2>Workflow settings</h2>
-          </div>
-        </div>
+            <GroupedSettingsHeading as="h2" variant="section">
+              Workflow settings
+            </GroupedSettingsHeading>
+          </GroupedSettingsCopy>
 
-        {channelOptions.notice ? (
-          <div className="qotd-flat-inline-message">
-            <p className="meta-note">{channelOptions.notice.message}</p>
-            <div className="inline-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={channelOptions.loading}
-                onClick={() => void channelOptions.refresh()}
-              >
-                Retry channel lookup
-              </button>
-            </div>
-          </div>
-        ) : null}
+          {channelOptions.notice ? (
+            <GroupedSettingsInlineMessage
+              message={channelOptions.notice.message}
+              tone="error"
+              action={
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={channelOptions.loading}
+                  onClick={() => void channelOptions.refresh()}
+                >
+                  Retry channel lookup
+                </button>
+              }
+            />
+          ) : null}
 
-        <label className="entity-option-card">
-          <input
-            checked={draft.enabled}
-            disabled={controlsDisabled}
-            type="checkbox"
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                enabled: event.target.checked,
-              }))
-            }
-          />
-          <span className="entity-option-copy">
-            <strong>Enable QOTD workflow</strong>
-          </span>
-        </label>
+          <GroupedSettingsGroup>
+            <GroupedSettingsItem stacked role="group" aria-labelledby={workflowHeadingId}>
+              <GroupedSettingsSubrow>
+                <GroupedSettingsMainRow>
+                  <GroupedSettingsCopy>
+                    <GroupedSettingsHeading id={workflowHeadingId}>
+                      Enable QOTD workflow
+                    </GroupedSettingsHeading>
+                  </GroupedSettingsCopy>
+                  <GroupedSettingsSwitch
+                    label="Enable QOTD workflow"
+                    checked={draft.enabled}
+                    disabled={controlsDisabled}
+                    onChange={(checked) =>
+                      setDraft((current) => ({
+                        ...current,
+                        enabled: checked,
+                      }))
+                    }
+                  />
+                </GroupedSettingsMainRow>
+              </GroupedSettingsSubrow>
 
-        <div className="qotd-settings-fields">
-          <EntityPickerField
-            label="Forum channel"
-            value={draft.forum_channel_id}
-            onChange={(value) => {
-              setDraft((current) => ({
-                ...current,
-                forum_channel_id: value,
-                question_tag_id: "",
-                reply_tag_id: "",
-              }));
-              void refreshForumTags(value);
-            }}
-            options={forumChannelOptions}
-            placeholder="Select a forum channel"
-            disabled={controlsDisabled || channelOptions.loading}
-            note="Forum used for official posts and reply threads."
-          />
+              <GroupedSettingsSubrow>
+                <div className="qotd-settings-fields">
+                  <SettingsSelectField
+                    label="Forum channel"
+                    value={draft.forum_channel_id}
+                    onChange={(value) => {
+                      setDraft((current) => ({
+                        ...current,
+                        forum_channel_id: value,
+                        question_tag_id: "",
+                        reply_tag_id: "",
+                      }));
+                      void refreshForumTags(value);
+                    }}
+                    options={forumChannelOptions}
+                    placeholder={forumChannelPlaceholder}
+                    disabled={controlsDisabled || channelOptions.loading}
+                    note="Forum used for official posts and reply threads."
+                  />
 
-          <EntityPickerField
-            label="Question tag"
-            value={draft.question_tag_id}
-            onChange={(value) =>
-              setDraft((current) => ({
-                ...current,
-                question_tag_id: value,
-              }))
-            }
-            options={tagOptions}
-            placeholder="Select the Question tag"
-            disabled={controlsDisabled || !tagLookupAvailable}
-            note="Tag for the official QOTD post."
-          />
+                  <SettingsSelectField
+                    label="Question tag"
+                    value={draft.question_tag_id}
+                    onChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        question_tag_id: value,
+                      }))
+                    }
+                    options={tagOptions}
+                    placeholder={questionTagPlaceholder}
+                    disabled={controlsDisabled || !tagLookupAvailable || refreshingTags}
+                    note="Tag for the official QOTD post."
+                  />
 
-          <EntityPickerField
-            label="Reply tag"
-            value={draft.reply_tag_id}
-            onChange={(value) =>
-              setDraft((current) => ({
-                ...current,
-                reply_tag_id: value,
-              }))
-            }
-            options={tagOptions}
-            placeholder="Select the Reply tag"
-            disabled={controlsDisabled || !tagLookupAvailable}
-            note="Tag for member reply threads."
-          />
-        </div>
+                  <SettingsSelectField
+                    label="Reply tag"
+                    value={draft.reply_tag_id}
+                    onChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        reply_tag_id: value,
+                      }))
+                    }
+                    options={tagOptions}
+                    placeholder={replyTagPlaceholder}
+                    disabled={controlsDisabled || !tagLookupAvailable || refreshingTags}
+                    note="Tag for member reply threads."
+                  />
+                </div>
+              </GroupedSettingsSubrow>
 
-        {!tagLookupAvailable ? (
-          <p className="meta-note">Choose a forum channel before selecting tags.</p>
-        ) : refreshingTags ? (
-          <p className="meta-note">Loading forum tags for the selected forum.</p>
-        ) : null}
-      </section>
+              {!tagLookupAvailable ? (
+                <GroupedSettingsSubrow>
+                  <GroupedSettingsInlineMessage
+                    message="Choose a forum channel before selecting tags."
+                    tone="info"
+                  />
+                </GroupedSettingsSubrow>
+              ) : refreshingTags ? (
+                <GroupedSettingsSubrow>
+                  <GroupedSettingsInlineMessage
+                    message="Loading forum tags for the selected forum."
+                    tone="info"
+                  />
+                </GroupedSettingsSubrow>
+              ) : null}
+            </GroupedSettingsItem>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
 
-      <section className="qotd-flat-section">
-        <div className="qotd-section-header">
-          <div className="card-copy">
+        <GroupedSettingsSection>
+          <GroupedSettingsCopy>
             <p className="section-label">Staff</p>
-            <h2>Staff roles</h2>
-          </div>
-        </div>
+            <GroupedSettingsHeading as="h2" variant="section">
+              Staff roles
+            </GroupedSettingsHeading>
+          </GroupedSettingsCopy>
 
-        {roleOptions.notice ? (
-          <div className="qotd-flat-inline-message">
-            <p className="meta-note">{roleOptions.notice.message}</p>
-            <div className="inline-actions">
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={roleOptions.loading}
-                onClick={() => void roleOptions.refresh()}
-              >
-                Retry role lookup
-              </button>
-            </div>
-          </div>
-        ) : null}
+          {roleOptions.notice ? (
+            <GroupedSettingsInlineMessage
+              message={roleOptions.notice.message}
+              tone="error"
+              action={
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={roleOptions.loading}
+                  onClick={() => void roleOptions.refresh()}
+                >
+                  Retry role lookup
+                </button>
+              }
+            />
+          ) : null}
 
-        <EntityMultiPickerField
-          label="Staff roles"
-          options={rolePickerOptions}
-          selectedValues={draft.staff_role_ids}
-          disabled={controlsDisabled || roleOptions.loading}
-          onToggle={(roleId) =>
-            setDraft((current) => ({
-              ...current,
-              staff_role_ids: toggleStringValue(current.staff_role_ids, roleId),
-            }))
-          }
-          note="Roles allowed to handle official QOTD threads."
-        />
+          <GroupedSettingsGroup>
+            <GroupedSettingsItem stacked role="group" aria-labelledby={staffHeadingId}>
+              <GroupedSettingsSubrow>
+                <div className="qotd-staff-field">
+                  <GroupedSettingsCopy>
+                    <GroupedSettingsHeading id={staffHeadingId}>
+                      Staff roles
+                    </GroupedSettingsHeading>
+                    <GroupedSettingsCaption>
+                      Roles allowed to handle official QOTD threads.
+                    </GroupedSettingsCaption>
+                  </GroupedSettingsCopy>
 
-      </section>
+                  <EntityMultiPickerField
+                    label="Staff roles"
+                    options={rolePickerOptions}
+                    selectedValues={draft.staff_role_ids}
+                    disabled={controlsDisabled || roleOptions.loading}
+                    onToggle={(roleId) =>
+                      setDraft((current) => ({
+                        ...current,
+                        staff_role_ids: toggleStringValue(current.staff_role_ids, roleId),
+                      }))
+                    }
+                  />
+                </div>
+              </GroupedSettingsSubrow>
+            </GroupedSettingsItem>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
+      </GroupedSettingsStack>
 
       <UnsavedChangesBar
         hasUnsavedChanges={hasUnsavedChanges}

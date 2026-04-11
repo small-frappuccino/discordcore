@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { buildQOTDTabs } from "../../app/routes";
-import { FlatPageLayout } from "../../components/ui";
+import { FlatPageLayout, SurfaceCard } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
@@ -53,9 +53,12 @@ export function QOTDLayout() {
         {workspaceState !== "ready" ? (
           <QOTDWorkspaceState />
         ) : (
-          <div className="qotd-shell">
+          <SurfaceCard className="workspace-panel qotd-workspace-panel">
             {tabs.length > 0 ? (
-              <nav className="subnav qotd-tabs" aria-label="QOTD sections">
+              <nav
+                className="subnav workspace-tabs qotd-workspace-tabs"
+                aria-label="QOTD sections"
+              >
                 {tabs.map((tab) => (
                   <NavLink
                     key={tab.path}
@@ -70,8 +73,10 @@ export function QOTDLayout() {
               </nav>
             ) : null}
 
-            <Outlet />
-          </div>
+            <div className="workspace-panel-body qotd-workspace-panel-body">
+              <Outlet />
+            </div>
+          </SurfaceCard>
         )}
       </FlatPageLayout>
     </section>

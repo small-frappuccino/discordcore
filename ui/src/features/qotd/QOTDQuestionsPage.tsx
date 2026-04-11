@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { QOTDQuestion, QOTDQuestionStatus } from "../../api/control";
+import {
+  GroupedSettingsCopy,
+  GroupedSettingsGroup,
+  GroupedSettingsHeading,
+  GroupedSettingsInlineMessage,
+  GroupedSettingsItem,
+  GroupedSettingsSection,
+  GroupedSettingsStack,
+  GroupedSettingsSubrow,
+} from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useQOTD } from "./QOTDContext";
 
@@ -9,6 +19,8 @@ export function QOTDQuestionsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
   const { createQuestion, deleteQuestion, questions, reorderQuestions, updateQuestion } =
     useQOTD();
+  const composerHeadingId = useId();
+  const queueHeadingId = useId();
   const orderedQuestions = [...questions].sort((left, right) => {
     if (left.queue_position !== right.queue_position) {
       return left.queue_position - right.queue_position;
@@ -117,201 +129,220 @@ export function QOTDQuestionsPage() {
 
   return (
     <div className="workspace-view qotd-workspace">
-      <section className="qotd-flat-section">
-        <div className="qotd-section-header">
-          <div className="card-copy">
+      <GroupedSettingsStack className="qotd-grouped-stack">
+        <GroupedSettingsSection>
+          <GroupedSettingsCopy>
             <p className="section-label">Question bank</p>
-            <h2>Add a question</h2>
-          </div>
-        </div>
+            <GroupedSettingsHeading as="h2" variant="section" id={composerHeadingId}>
+              Add a question
+            </GroupedSettingsHeading>
+          </GroupedSettingsCopy>
 
-        <div className="qotd-composer-grid">
-          <label className="field-stack">
-            <span className="field-label">Question text</span>
-            <textarea
-              value={draftBody}
-              disabled={!canEditSelectedGuild || submitting}
-              onChange={(event) => setDraftBody(event.target.value)}
-              placeholder="Write the next question of the day"
-              rows={4}
-            />
-          </label>
+          <GroupedSettingsGroup>
+            <GroupedSettingsItem role="group" aria-labelledby={composerHeadingId}>
+              <GroupedSettingsSubrow>
+                <div className="qotd-composer-grid">
+                  <label className="field-stack">
+                    <span className="field-label">Question text</span>
+                    <textarea
+                      value={draftBody}
+                      disabled={!canEditSelectedGuild || submitting}
+                      onChange={(event) => setDraftBody(event.target.value)}
+                      placeholder="Write the next question of the day"
+                      rows={4}
+                    />
+                  </label>
 
-          <div className="qotd-composer-side">
-            <label className="field-stack">
-              <span className="field-label">Initial status</span>
-              <select
-                value={draftStatus}
-                disabled={!canEditSelectedGuild || submitting}
-                onChange={(event) =>
-                  setDraftStatus(event.target.value as QOTDQuestionStatus)
-                }
-              >
-                {editableStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {formatStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="workspace-footer">
-              <button
-                className="button-primary"
-                type="button"
-                disabled={!canEditSelectedGuild || submitting || draftBody.trim() === ""}
-                onClick={() => void handleCreate()}
-              >
-                {submitting ? "Saving..." : "Add question"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="qotd-flat-section">
-        <div className="qotd-section-header">
-          <div className="card-copy">
-            <p className="section-label">Queue</p>
-            <h2>Question order</h2>
-          </div>
-        </div>
-
-        {orderedQuestions.length === 0 ? (
-          <div className="qotd-flat-inline-message">
-            <p className="meta-note">No questions have been added yet.</p>
-          </div>
-        ) : (
-          <div className="qotd-question-list">
-            {orderedQuestions.map((question, index) => {
-              const mutable = canMutateQuestion(question);
-              const editing = editingQuestionID === question.id;
-
-              return (
-                <article
-                  className={`qotd-question-card${editing ? " is-editing" : ""}`}
-                  key={question.id}
-                >
-                  <div className="qotd-question-top">
-                    <div className="qotd-question-heading">
-                      <div className="qotd-question-order-row">
-                        <span className="qotd-question-index">Queue #{question.queue_position}</span>
-                        <span className={`qotd-status-pill ${getQuestionToneClass(question.status)}`}>
-                          {formatStatusLabel(question.status)}
-                        </span>
-                      </div>
-                      <p className="qotd-question-body">{question.body}</p>
-                    </div>
-
-                    <div className="inline-actions qotd-question-actions">
-                      <button
-                        className="button-secondary"
-                        type="button"
-                        disabled={!canEditSelectedGuild || submitting || index === 0}
-                        onClick={() => void moveQuestion(question.id, -1)}
-                      >
-                        Move up
-                      </button>
-                      <button
-                        className="button-secondary"
-                        type="button"
-                        disabled={
-                          !canEditSelectedGuild ||
-                          submitting ||
-                          index === orderedQuestions.length - 1
+                  <div className="qotd-composer-side">
+                    <label className="field-stack">
+                      <span className="field-label">Initial status</span>
+                      <select
+                        value={draftStatus}
+                        disabled={!canEditSelectedGuild || submitting}
+                        onChange={(event) =>
+                          setDraftStatus(event.target.value as QOTDQuestionStatus)
                         }
-                        onClick={() => void moveQuestion(question.id, 1)}
                       >
-                        Move down
-                      </button>
+                        {editableStatuses.map((status) => (
+                          <option key={status} value={status}>
+                            {formatStatusLabel(status)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="workspace-footer">
                       <button
-                        className="button-secondary"
+                        className="button-primary"
                         type="button"
-                        disabled={!canEditSelectedGuild || submitting || !mutable}
-                        onClick={() => {
-                          setEditingQuestionID(question.id);
-                          setEditingBody(question.body);
-                          setEditingStatus(normalizeEditableStatus(question.status));
-                        }}
+                        disabled={!canEditSelectedGuild || submitting || draftBody.trim() === ""}
+                        onClick={() => void handleCreate()}
                       >
-                        Edit
-                      </button>
-                      <button
-                        className="button-secondary"
-                        type="button"
-                        disabled={!canEditSelectedGuild || submitting || !mutable}
-                        onClick={() => void handleDelete(question.id)}
-                      >
-                        Delete
+                        {submitting ? "Saving..." : "Add question"}
                       </button>
                     </div>
                   </div>
+                </div>
+              </GroupedSettingsSubrow>
+            </GroupedSettingsItem>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
 
-                  <div className="qotd-question-meta">
-                    {buildQuestionMeta(question).map((item) => (
-                      <span key={item}>{item}</span>
-                    ))}
+        <GroupedSettingsSection>
+          <GroupedSettingsCopy>
+            <p className="section-label">Queue</p>
+            <GroupedSettingsHeading as="h2" variant="section" id={queueHeadingId}>
+              Question order
+            </GroupedSettingsHeading>
+          </GroupedSettingsCopy>
+
+          <GroupedSettingsGroup>
+            <GroupedSettingsItem role="group" aria-labelledby={queueHeadingId}>
+              <GroupedSettingsSubrow>
+                {orderedQuestions.length === 0 ? (
+                  <GroupedSettingsInlineMessage
+                    message="No questions have been added yet."
+                    tone="info"
+                  />
+                ) : (
+                  <div className="qotd-question-list">
+                    {orderedQuestions.map((question, index) => {
+                      const mutable = canMutateQuestion(question);
+                      const editing = editingQuestionID === question.id;
+
+                      return (
+                        <article
+                          className={`qotd-question-card${editing ? " is-editing" : ""}`}
+                          key={question.id}
+                        >
+                          <div className="qotd-question-top">
+                            <div className="qotd-question-heading">
+                              <div className="qotd-question-order-row">
+                                <span className="qotd-question-index">
+                                  Queue #{question.queue_position}
+                                </span>
+                                <span
+                                  className={`qotd-status-pill ${getQuestionToneClass(question.status)}`}
+                                >
+                                  {formatStatusLabel(question.status)}
+                                </span>
+                              </div>
+                              <p className="qotd-question-body">{question.body}</p>
+                            </div>
+
+                            <div className="inline-actions qotd-question-actions">
+                              <button
+                                className="button-secondary"
+                                type="button"
+                                disabled={!canEditSelectedGuild || submitting || index === 0}
+                                onClick={() => void moveQuestion(question.id, -1)}
+                              >
+                                Move up
+                              </button>
+                              <button
+                                className="button-secondary"
+                                type="button"
+                                disabled={
+                                  !canEditSelectedGuild ||
+                                  submitting ||
+                                  index === orderedQuestions.length - 1
+                                }
+                                onClick={() => void moveQuestion(question.id, 1)}
+                              >
+                                Move down
+                              </button>
+                              <button
+                                className="button-secondary"
+                                type="button"
+                                disabled={!canEditSelectedGuild || submitting || !mutable}
+                                onClick={() => {
+                                  setEditingQuestionID(question.id);
+                                  setEditingBody(question.body);
+                                  setEditingStatus(normalizeEditableStatus(question.status));
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="button-secondary"
+                                type="button"
+                                disabled={!canEditSelectedGuild || submitting || !mutable}
+                                onClick={() => void handleDelete(question.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="qotd-question-meta">
+                            {buildQuestionMeta(question).map((item) => (
+                              <span key={item}>{item}</span>
+                            ))}
+                          </div>
+
+                          {editing ? (
+                            <div className="qotd-question-editor">
+                              <label className="field-stack">
+                                <span className="field-label">Question text</span>
+                                <textarea
+                                  value={editingBody}
+                                  disabled={submitting}
+                                  onChange={(event) => setEditingBody(event.target.value)}
+                                  rows={4}
+                                />
+                              </label>
+
+                              <label className="field-stack">
+                                <span className="field-label">Status</span>
+                                <select
+                                  value={editingStatus}
+                                  disabled={submitting}
+                                  onChange={(event) =>
+                                    setEditingStatus(event.target.value as QOTDQuestionStatus)
+                                  }
+                                >
+                                  {editableStatuses.map((status) => (
+                                    <option key={status} value={status}>
+                                      {formatStatusLabel(status)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <div className="inline-actions">
+                                <button
+                                  className="button-primary"
+                                  type="button"
+                                  disabled={submitting || editingBody.trim() === ""}
+                                  onClick={() => void handleUpdate()}
+                                >
+                                  {submitting ? "Saving..." : "Save changes"}
+                                </button>
+                                <button
+                                  className="button-secondary"
+                                  type="button"
+                                  disabled={submitting}
+                                  onClick={() => {
+                                    setEditingQuestionID(null);
+                                    setEditingBody("");
+                                    setEditingStatus("ready");
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })}
                   </div>
-
-                  {editing ? (
-                    <div className="qotd-question-editor">
-                      <label className="field-stack">
-                        <span className="field-label">Question text</span>
-                        <textarea
-                          value={editingBody}
-                          disabled={submitting}
-                          onChange={(event) => setEditingBody(event.target.value)}
-                          rows={4}
-                        />
-                      </label>
-
-                      <label className="field-stack">
-                        <span className="field-label">Status</span>
-                        <select
-                          value={editingStatus}
-                          disabled={submitting}
-                          onChange={(event) =>
-                            setEditingStatus(event.target.value as QOTDQuestionStatus)
-                          }
-                        >
-                          {editableStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {formatStatusLabel(status)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <div className="inline-actions">
-                        <button
-                          className="button-primary"
-                          type="button"
-                          disabled={submitting || editingBody.trim() === ""}
-                          onClick={() => void handleUpdate()}
-                        >
-                          {submitting ? "Saving..." : "Save changes"}
-                        </button>
-                        <button
-                          className="button-secondary"
-                          type="button"
-                          disabled={submitting}
-                          onClick={() => {
-                            setEditingQuestionID(null);
-                            setEditingBody("");
-                            setEditingStatus("ready");
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                )}
+              </GroupedSettingsSubrow>
+            </GroupedSettingsItem>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
+      </GroupedSettingsStack>
     </div>
   );
 }

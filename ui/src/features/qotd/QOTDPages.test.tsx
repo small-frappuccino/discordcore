@@ -157,7 +157,7 @@ describe("QOTD UI", () => {
     expect(screen.queryByText("Refreshing QOTD workspace...")).not.toBeInTheDocument();
   });
 
-  it("renders the QOTD settings as flat configuration sections", () => {
+  it("renders the QOTD settings as grouped configuration sections", () => {
     render(
       <MemoryRouter>
         <QOTDSettingsPage />

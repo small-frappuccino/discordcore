@@ -81,6 +81,9 @@ func (s *Server) handleDiscordOAuthGuildAccessList(
 
 	accessible, err := resolveAccessible(ctx, oauth, session)
 	if err != nil {
+		if shouldSuppressAccessibleGuildsRequestError(r.Context(), err) {
+			return
+		}
 		status := statusForAccessibleGuildsError(err)
 		message := "failed to resolve accessible guilds"
 		if status == http.StatusUnauthorized {
@@ -138,6 +141,9 @@ func (s *Server) authorizeGuildAccess(
 
 		accessible, err := resolveAccessible(ctx, s.discordOAuth, auth.oauthSession)
 		if err != nil {
+			if shouldSuppressAccessibleGuildsRequestError(r.Context(), err) {
+				return false
+			}
 			status := statusForAccessibleGuildsError(err)
 			message := "failed to authorize guild access"
 			if status == http.StatusUnauthorized {
@@ -596,6 +602,19 @@ func statusForAccessibleGuildsError(err error) int {
 	default:
 		return http.StatusBadGateway
 	}
+}
+
+func shouldSuppressAccessibleGuildsRequestError(parent context.Context, err error) bool {
+	if err == nil || parent == nil {
+		return false
+	}
+
+	parentErr := parent.Err()
+	if parentErr == nil {
+		return false
+	}
+
+	return errors.Is(err, parentErr)
 }
 
 func statusForManageableGuildsError(err error) int {
