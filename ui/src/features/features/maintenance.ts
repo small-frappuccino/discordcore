@@ -51,29 +51,6 @@ export function getUserPruneFeatureDetails(
   };
 }
 
-export function canEditBackfill(feature: FeatureRecord) {
-  const fields = feature.editable_fields ?? [];
-  return (
-    fields.includes("channel_id") ||
-    fields.includes("start_day") ||
-    fields.includes("initial_date")
-  );
-}
-
-export function canEditUserPrune(feature: FeatureRecord) {
-  const fields = feature.editable_fields ?? [];
-  return (
-    fields.includes("config_enabled") ||
-    fields.includes("grace_days") ||
-    fields.includes("scan_interval_mins") ||
-    fields.includes("initial_delay_secs") ||
-    fields.includes("kicks_per_second") ||
-    fields.includes("max_kicks_per_run") ||
-    fields.includes("exempt_role_ids") ||
-    fields.includes("dry_run")
-  );
-}
-
 export function summarizeBackfillSignal(feature: FeatureRecord) {
   const details = getBackfillFeatureDetails(feature);
   const blockerMessage = feature.blockers?.[0]?.message ?? "";

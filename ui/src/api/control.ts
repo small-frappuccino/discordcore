@@ -81,7 +81,6 @@ export interface QOTDConfig {
   forum_channel_id?: string;
   question_tag_id?: string;
   reply_tag_id?: string;
-  staff_role_ids?: string[];
 }
 
 export interface QOTDQuestion {

@@ -1,8 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { QOTDConfig } from "../../api/control";
 import {
-  EntityMultiPickerField,
-  GroupedSettingsCaption,
   GroupedSettingsCopy,
   GroupedSettingsGroup,
   GroupedSettingsHeading,
@@ -18,8 +16,6 @@ import {
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useGuildChannelOptions } from "../features/useGuildChannelOptions";
-import { useGuildRoleOptions } from "../features/useGuildRoleOptions";
-import { formatRoleOptionLabel } from "../features/roles";
 import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
 interface SettingsDraft {
@@ -27,16 +23,13 @@ interface SettingsDraft {
   forum_channel_id: string;
   question_tag_id: string;
   reply_tag_id: string;
-  staff_role_ids: string[];
 }
 
 export function QOTDSettingsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
   const { busyLabel, forumTags, refreshForumTags, saveSettings, settings } = useQOTD();
   const channelOptions = useGuildChannelOptions();
-  const roleOptions = useGuildRoleOptions();
   const workflowHeadingId = useId();
-  const staffHeadingId = useId();
   const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
   const [draft, setDraft] = useState<SettingsDraft>(() => savedDraftRef.current);
   const [saving, setSaving] = useState(false);
@@ -59,15 +52,6 @@ export function QOTDSettingsPage() {
       label: channel.display_name,
       description: "Forum channel available for official QOTD and reply posts.",
     }));
-  const rolePickerOptions = roleOptions.roles.map((role) => ({
-    value: role.id,
-    label: formatRoleOptionLabel(role),
-    description: role.is_default
-      ? "Default role for every member."
-      : role.managed
-        ? "Managed by an integration."
-        : "Available for staff-only post handling.",
-  }));
   const tagOptions = forumTags.map((tag) => ({
     value: tag.id,
     label: tag.name,
@@ -237,62 +221,6 @@ export function QOTDSettingsPage() {
             </GroupedSettingsItem>
           </GroupedSettingsGroup>
         </GroupedSettingsSection>
-
-        <GroupedSettingsSection>
-          <GroupedSettingsCopy>
-            <p className="section-label">Staff</p>
-            <GroupedSettingsHeading as="h2" variant="section">
-              Staff roles
-            </GroupedSettingsHeading>
-          </GroupedSettingsCopy>
-
-          {roleOptions.notice ? (
-            <GroupedSettingsInlineMessage
-              message={roleOptions.notice.message}
-              tone="error"
-              action={
-                <button
-                  className="button-secondary"
-                  type="button"
-                  disabled={roleOptions.loading}
-                  onClick={() => void roleOptions.refresh()}
-                >
-                  Retry role lookup
-                </button>
-              }
-            />
-          ) : null}
-
-          <GroupedSettingsGroup>
-            <GroupedSettingsItem stacked role="group" aria-labelledby={staffHeadingId}>
-              <GroupedSettingsSubrow>
-                <div className="qotd-staff-field">
-                  <GroupedSettingsCopy>
-                    <GroupedSettingsHeading id={staffHeadingId}>
-                      Staff roles
-                    </GroupedSettingsHeading>
-                    <GroupedSettingsCaption>
-                      Roles allowed to handle official QOTD threads.
-                    </GroupedSettingsCaption>
-                  </GroupedSettingsCopy>
-
-                  <EntityMultiPickerField
-                    label="Staff roles"
-                    options={rolePickerOptions}
-                    selectedValues={draft.staff_role_ids}
-                    disabled={controlsDisabled || roleOptions.loading}
-                    onToggle={(roleId) =>
-                      setDraft((current) => ({
-                        ...current,
-                        staff_role_ids: toggleStringValue(current.staff_role_ids, roleId),
-                      }))
-                    }
-                  />
-                </div>
-              </GroupedSettingsSubrow>
-            </GroupedSettingsItem>
-          </GroupedSettingsGroup>
-        </GroupedSettingsSection>
       </GroupedSettingsStack>
 
       <UnsavedChangesBar
@@ -313,9 +241,6 @@ function createSettingsDraft(settings: Partial<SettingsDraft> | QOTDConfig): Set
     forum_channel_id: String(settings.forum_channel_id ?? ""),
     question_tag_id: String(settings.question_tag_id ?? ""),
     reply_tag_id: String(settings.reply_tag_id ?? ""),
-    staff_role_ids: normalizeStrings(
-      Array.isArray(settings.staff_role_ids) ? settings.staff_role_ids : [],
-    ),
   };
 }
 
@@ -325,36 +250,6 @@ function settingsDraftChanged(previous: Partial<SettingsDraft> | QOTDConfig, nex
     normalizedPrevious.enabled !== next.enabled ||
     normalizedPrevious.forum_channel_id !== next.forum_channel_id ||
     normalizedPrevious.question_tag_id !== next.question_tag_id ||
-    normalizedPrevious.reply_tag_id !== next.reply_tag_id ||
-    normalizedPrevious.staff_role_ids.join("|") !== next.staff_role_ids.join("|")
+    normalizedPrevious.reply_tag_id !== next.reply_tag_id
   );
-}
-
-function toggleStringValue(values: string[], nextValue: string) {
-  const normalized = nextValue.trim();
-  if (normalized === "") {
-    return normalizeStrings(values);
-  }
-
-  const set = new Set(normalizeStrings(values));
-  if (set.has(normalized)) {
-    set.delete(normalized);
-  } else {
-    set.add(normalized);
-  }
-  return Array.from(set).sort();
-}
-
-function normalizeStrings(values: unknown[]) {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    const normalized = String(value ?? "").trim();
-    if (normalized === "" || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    out.push(normalized);
-  }
-  return out.sort();
 }

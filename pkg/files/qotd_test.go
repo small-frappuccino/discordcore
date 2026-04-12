@@ -13,7 +13,7 @@ func TestNormalizeQOTDConfigRequiresForumAndTagsWhenEnabled(t *testing.T) {
 	}
 }
 
-func TestSetQOTDConfigCanonicalizesRoleIDs(t *testing.T) {
+func TestSetQOTDConfigCanonicalizesCoreFields(t *testing.T) {
 	t.Parallel()
 
 	mgr, _ := newTransactionalTestManager(t, &BotConfig{
@@ -22,14 +22,9 @@ func TestSetQOTDConfigCanonicalizesRoleIDs(t *testing.T) {
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
 		Enabled:        true,
-		ForumChannelID: "123456789012345678",
-		QuestionTagID:  "223456789012345678",
-		ReplyTagID:     "323456789012345678",
-		StaffRoleIDs: []string{
-			"523456789012345678",
-			"423456789012345678",
-			"523456789012345678",
-		},
+		ForumChannelID: " 123456789012345678 ",
+		QuestionTagID:  " 223456789012345678 ",
+		ReplyTagID:     " 323456789012345678 ",
 	})
 	if err != nil {
 		t.Fatalf("SetQOTDConfig() failed: %v", err)
@@ -42,11 +37,14 @@ func TestSetQOTDConfigCanonicalizesRoleIDs(t *testing.T) {
 	if !cfg.Enabled {
 		t.Fatal("expected qotd config to remain enabled")
 	}
-	if got, want := len(cfg.StaffRoleIDs), 2; got != want {
-		t.Fatalf("expected %d canonical staff roles, got %d (%v)", want, got, cfg.StaffRoleIDs)
+	if cfg.ForumChannelID != "123456789012345678" {
+		t.Fatalf("expected trimmed forum channel id, got %q", cfg.ForumChannelID)
 	}
-	if cfg.StaffRoleIDs[0] != "423456789012345678" || cfg.StaffRoleIDs[1] != "523456789012345678" {
-		t.Fatalf("expected sorted canonical role ids, got %v", cfg.StaffRoleIDs)
+	if cfg.QuestionTagID != "223456789012345678" {
+		t.Fatalf("expected trimmed question tag id, got %q", cfg.QuestionTagID)
+	}
+	if cfg.ReplyTagID != "323456789012345678" {
+		t.Fatalf("expected trimmed reply tag id, got %q", cfg.ReplyTagID)
 	}
 }
 

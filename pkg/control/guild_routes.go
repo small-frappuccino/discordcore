@@ -25,7 +25,7 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "guild_id is required", http.StatusBadRequest)
 		return
 	}
-	if !s.authorizeGuildAccess(w, r, auth, guildID) {
+	if !s.authorizeGuildControlAccess(w, r, auth, guildID, requiredControlAccessLevel(r.Method)) {
 		return
 	}
 

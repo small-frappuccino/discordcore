@@ -519,6 +519,32 @@ function createFetchMock() {
         editable_fields: ["enabled", "channel_id"],
       },
       {
+        id: "logging.clean_action",
+        category: "logging",
+        label: "Clean action logging",
+        description: "Clean actions",
+        scope: "guild",
+        supports_guild_override: true,
+        override_state: "enabled",
+        effective_enabled: true,
+        effective_source: "guild",
+        readiness: "blocked",
+        blockers: [
+          {
+            code: "missing_channel",
+            message: "Choose a channel for this log route.",
+            field: "channel_id",
+          },
+        ],
+        details: {
+          requires_channel: true,
+          channel_id: "",
+          validate_channel_permissions: true,
+          runtime_toggle_path: "disable_clean_log",
+        },
+        editable_fields: ["enabled", "channel_id"],
+      },
+      {
         id: "presence_watch.bot",
         category: "presence_watch",
         label: "Presence watch (bot)",
@@ -2546,6 +2572,12 @@ describe("dashboard routing and workspace", () => {
     expect(
       within(memberJoinSection).getByLabelText("Destination channel"),
     ).toHaveValue("");
+    const cleanActionSection = screen.getByRole("group", {
+      name: "Clean action logging",
+    });
+    expect(
+      within(cleanActionSection).getByLabelText("Destination channel"),
+    ).toHaveValue("");
 
     await userEvent.selectOptions(
       within(memberJoinSection).getByLabelText("Destination channel"),
@@ -2567,8 +2599,38 @@ describe("dashboard routing and workspace", () => {
       ]);
     });
 
+    await userEvent.selectOptions(
+      within(cleanActionSection).getByLabelText("Destination channel"),
+      "mod-actions",
+    );
+    await userEvent.click(
+      within(cleanActionSection).getByRole("button", { name: "Save changes" }),
+    );
+
+    await waitFor(() => {
+      expect(featureUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          featureID: "logging.member_join",
+          payload: {
+            channel_id: "join-channel",
+          },
+        },
+        {
+          guildID: "guild-1",
+          featureID: "logging.clean_action",
+          payload: {
+            channel_id: "mod-actions",
+          },
+        },
+      ]);
+    });
+
     expect(
       within(memberJoinSection).getAllByText("#join-channel").length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(cleanActionSection).getAllByText("#mod-actions").length,
     ).toBeGreaterThan(0);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

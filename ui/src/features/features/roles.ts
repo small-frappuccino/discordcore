@@ -72,27 +72,6 @@ export function getPermissionMirrorDetails(
   };
 }
 
-export function canEditAutoRole(feature: FeatureRecord) {
-  const fields = feature.editable_fields ?? [];
-  return (
-    fields.includes("config_enabled") ||
-    fields.includes("target_role_id") ||
-    fields.includes("required_role_ids")
-  );
-}
-
-export function canEditPresenceWatchBot(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("watch_bot") ?? false;
-}
-
-export function canEditPresenceWatchUser(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("user_id") ?? false;
-}
-
-export function canEditPermissionMirror(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("actor_role_id") ?? false;
-}
-
 export function formatRoleValue(
   roleId: string,
   roleOptions: GuildRoleOption[],
@@ -148,7 +127,10 @@ export function summarizeAutoRoleSignal(feature: FeatureRecord) {
       if (!feature.effective_enabled) {
         return "The module is currently off for this server.";
       }
-      return feature.blockers?.[0]?.message ?? "Automatic role assignment is ready to review.";
+      return (
+        feature.blockers?.[0]?.message ??
+        "Automatic role assignment is ready to review."
+      );
   }
 }
 
@@ -168,7 +150,9 @@ export function summarizeAdvancedRoleSignal(feature: FeatureRecord) {
       if (!feature.effective_enabled) {
         return "This advanced control is currently off for the selected server.";
       }
-      return feature.blockers?.[0]?.message ?? "No blockers are currently reported.";
+      return (
+        feature.blockers?.[0]?.message ?? "No blockers are currently reported."
+      );
   }
 }
 

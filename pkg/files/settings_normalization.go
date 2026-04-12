@@ -81,11 +81,6 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		ReplyTagID:     strings.TrimSpace(in.ReplyTagID),
 	}
 
-	var err error
-	if out.StaffRoleIDs, err = normalizeQOTDStaffRoleIDs(in.StaffRoleIDs); err != nil {
-		return QOTDConfig{}, err
-	}
-
 	if out.IsZero() {
 		return QOTDConfig{}, nil
 	}

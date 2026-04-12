@@ -27,8 +27,6 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
-  canEditAdminCommands,
-  canEditCommandsChannel,
   formatAllowedRoleCountValue,
   formatAllowedRoleOptionLabel,
   formatAllowedRolesValue,
@@ -38,6 +36,7 @@ import {
   summarizeCommandsSignal,
   toggleAllowedRole,
 } from "../features/features/commands";
+import { featureSupportsField } from "../features/features/model";
 import {
   formatFeatureStatusLabel,
   formatWorkspaceStateDescription,
@@ -53,11 +52,7 @@ import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 export function CommandsPage() {
   const definition = getFeatureAreaDefinition("commands");
   const location = useLocation();
-  const {
-    authState,
-    beginLogin,
-    canEditSelectedGuild,
-  } = useDashboardSession();
+  const { authState, beginLogin, canEditSelectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -75,7 +70,8 @@ export function CommandsPage() {
   const commandsFeature =
     areaFeatures.find((feature) => feature.id === "services.commands") ?? null;
   const adminCommandsFeature =
-    areaFeatures.find((feature) => feature.id === "services.admin_commands") ?? null;
+    areaFeatures.find((feature) => feature.id === "services.admin_commands") ??
+    null;
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],
@@ -291,7 +287,10 @@ export function CommandsPage() {
           workspace.workspaceState === "ready" &&
           commandsFeature !== null &&
           adminCommandsFeature !== null ? (
-            <section className="commands-context-strip" aria-label="Commands summary">
+            <section
+              className="commands-context-strip"
+              aria-label="Commands summary"
+            >
               <div className="commands-context-item">
                 <p className="section-label">Command channel</p>
                 <strong>
@@ -308,9 +307,14 @@ export function CommandsPage() {
 
               <div className="commands-context-item">
                 <p className="section-label">Admin access</p>
-                <strong>{formatAllowedRoleCountValue(adminCommandsFeature)}</strong>
+                <strong>
+                  {formatAllowedRoleCountValue(adminCommandsFeature)}
+                </strong>
                 <p className="meta-note">
-                  {formatAllowedRolesValue(adminCommandsFeature, roleOptions.roles)}
+                  {formatAllowedRolesValue(
+                    adminCommandsFeature,
+                    roleOptions.roles,
+                  )}
                 </p>
               </div>
             </section>
@@ -330,7 +334,10 @@ interface CommandChannelSectionProps {
   availableChannels: GuildChannelOption[];
   channelOptions: Array<{ value: string; label: string; description?: string }>;
   channelOptionsLoading: boolean;
-  channelOptionsNotice: { tone: "info" | "success" | "error"; message: string } | null;
+  channelOptionsNotice: {
+    tone: "info" | "success" | "error";
+    message: string;
+  } | null;
   canEditSelectedGuild: boolean;
   mutationSaving: boolean;
   pendingFeatureId: string;
@@ -361,7 +368,8 @@ function CommandChannelSection({
 }: CommandChannelSectionProps) {
   const details = getCommandsFeatureDetails(feature);
   const [channelDraft, setChannelDraft] = useState(details.channelId);
-  const canEditChannel = canEditSelectedGuild && canEditCommandsChannel(feature);
+  const canEditChannel =
+    canEditSelectedGuild && featureSupportsField(feature, "channel_id");
   const hasUnsavedChanges = details.channelId !== channelDraft.trim();
 
   useEffect(() => {
@@ -385,8 +393,8 @@ function CommandChannelSection({
             </StatusBadge>
           </div>
           <p className="section-description">
-            Set the optional command destination and keep the routing controls in
-            the main workspace.
+            Set the optional command destination and keep the routing controls
+            in the main workspace.
           </p>
         </div>
       </div>
@@ -494,7 +502,10 @@ interface AdminCommandAccessSectionProps {
   feature: FeatureRecord;
   roleOptions: GuildRoleOption[];
   roleOptionsLoading: boolean;
-  roleOptionsNotice: { tone: "info" | "success" | "error"; message: string } | null;
+  roleOptionsNotice: {
+    tone: "info" | "success" | "error";
+    message: string;
+  } | null;
   canEditSelectedGuild: boolean;
   mutationSaving: boolean;
   pendingFeatureId: string;
@@ -527,7 +538,8 @@ function AdminCommandAccessSection({
   const [allowedRoleIdsDraft, setAllowedRoleIdsDraft] = useState(
     details.allowedRoleIds,
   );
-  const canEditRoles = canEditSelectedGuild && canEditAdminCommands(feature);
+  const canEditRoles =
+    canEditSelectedGuild && featureSupportsField(feature, "allowed_role_ids");
   const hasUnsavedChanges = !areStringListsEqual(
     details.allowedRoleIds,
     allowedRoleIdsDraft,
@@ -554,8 +566,8 @@ function AdminCommandAccessSection({
             </StatusBadge>
           </div>
           <p className="section-description">
-            Keep privileged command access visible here instead of hiding the role
-            selection in a separate editor.
+            Keep privileged command access visible here instead of hiding the
+            role selection in a separate editor.
           </p>
         </div>
       </div>
@@ -586,14 +598,16 @@ function AdminCommandAccessSection({
         <div className="surface-subsection">
           <p className="section-label">Loading roles</p>
           <p className="meta-note">
-            Loading the current server roles before privileged access can be updated.
+            Loading the current server roles before privileged access can be
+            updated.
           </p>
         </div>
       ) : roleOptions.length === 0 ? (
         <div className="surface-subsection">
           <p className="section-label">No roles available</p>
           <p className="meta-note">
-            This server did not return any selectable roles for privileged command access.
+            This server did not return any selectable roles for privileged
+            command access.
           </p>
         </div>
       ) : null}
@@ -601,10 +615,14 @@ function AdminCommandAccessSection({
       <div className="flat-config-fields">
         <EntityMultiPickerField
           label="Allowed roles"
-          disabled={!canEditRoles || roleOptionsLoading || roleOptionsNotice !== null}
+          disabled={
+            !canEditRoles || roleOptionsLoading || roleOptionsNotice !== null
+          }
           selectedValues={allowedRoleIdsDraft}
           onToggle={(roleId) =>
-            setAllowedRoleIdsDraft((current) => toggleAllowedRole(current, roleId))
+            setAllowedRoleIdsDraft((current) =>
+              toggleAllowedRole(current, roleId),
+            )
           }
           note="Choose only the roles that should be able to run privileged command workflows."
           options={roleOptions.map((role) => ({
@@ -654,7 +672,9 @@ function AdminCommandAccessSection({
             : "Save changes"
         }
         saving={mutationSaving && pendingFeatureId === feature.id}
-        disabled={!canEditRoles || roleOptionsLoading || roleOptionsNotice !== null}
+        disabled={
+          !canEditRoles || roleOptionsLoading || roleOptionsNotice !== null
+        }
         onReset={handleReset}
         onSave={() => onSave(allowedRoleIdsDraft)}
       />

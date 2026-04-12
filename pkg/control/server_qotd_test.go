@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,7 +121,6 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 		ForumChannelID: "123456789012345678",
 		QuestionTagID:  "223456789012345678",
 		ReplyTagID:     "323456789012345678",
-		StaffRoleIDs:   []string{"555555555555555555"},
 	})
 	if settingsRec.Code != 200 {
 		t.Fatalf("put settings status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
@@ -128,6 +128,9 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	settingsResp := decodeQOTDRouteResponse(t, settingsRec.Body.String())
 	if !settingsResp.Settings.Enabled || settingsResp.Settings.ForumChannelID != "123456789012345678" {
 		t.Fatalf("unexpected qotd settings response: %+v", settingsResp.Settings)
+	}
+	if strings.Contains(settingsRec.Body.String(), "staff_role_ids") {
+		t.Fatalf("expected qotd settings payload to omit deprecated staff roles, body=%q", settingsRec.Body.String())
 	}
 
 	createFirst := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/questions", map[string]any{

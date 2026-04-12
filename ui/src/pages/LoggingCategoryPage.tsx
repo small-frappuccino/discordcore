@@ -19,18 +19,16 @@ import {
   UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import {
-  buildMessageRouteChannelPickerOptions,
-} from "../features/features/discordEntities";
+import { buildMessageRouteChannelPickerOptions } from "../features/features/discordEntities";
 import {
   getFeatureAreaDefinition,
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
-  canEditLoggingChannel,
   getLoggingFeatureDetails,
   summarizeLoggingGuidance,
 } from "../features/features/logging";
+import { featureSupportsField } from "../features/features/model";
 import {
   formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
@@ -43,11 +41,7 @@ import { useGuildChannelOptions } from "../features/features/useGuildChannelOpti
 export function LoggingCategoryPage() {
   const definition = getFeatureAreaDefinition("logging");
   const location = useLocation();
-  const {
-    authState,
-    beginLogin,
-    canEditSelectedGuild,
-  } = useDashboardSession();
+  const { authState, beginLogin, canEditSelectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -108,7 +102,10 @@ export function LoggingCategoryPage() {
     }
   }
 
-  async function handleSaveDestination(feature: FeatureRecord, channelId: string) {
+  async function handleSaveDestination(
+    feature: FeatureRecord,
+    channelId: string,
+  ) {
     setPendingFeatureId(feature.id);
 
     try {
@@ -317,7 +314,7 @@ function LoggingRouteSection({
   const headingId = useId();
   const [channelDraft, setChannelDraft] = useState(details.channelId);
   const canEditDestination =
-    canEditSelectedGuild && canEditLoggingChannel(feature);
+    canEditSelectedGuild && featureSupportsField(feature, "channel_id");
   const hasUnsavedChanges = details.channelId !== channelDraft.trim();
   const isPending = mutationSaving && pendingFeatureId === feature.id;
   const routeMessage =
@@ -340,11 +337,7 @@ function LoggingRouteSection({
   }
 
   return (
-    <GroupedSettingsItem
-      stacked
-      role="group"
-      aria-labelledby={headingId}
-    >
+    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
       <GroupedSettingsSubrow>
         <GroupedSettingsMainRow>
           <GroupedSettingsCopy>

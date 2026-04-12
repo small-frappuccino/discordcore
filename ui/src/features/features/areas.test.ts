@@ -33,4 +33,10 @@ describe("feature area definitions", () => {
       expect(moderationArea?.featureIDs).toContain(featureID);
     }
   });
+
+  it("exposes clean action logging in the logging area", () => {
+    expect(getFeatureAreaDefinition("logging")?.featureIDs).toContain(
+      "logging.clean_action",
+    );
+  });
 });

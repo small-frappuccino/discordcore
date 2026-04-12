@@ -24,7 +24,6 @@ import {
   summarizeFeatureArea,
 } from "../features/features/presentation";
 import {
-  canEditStatsSettings,
   formatStatsChannelAudience,
   formatStatsChannelLabel,
   formatStatsChannelTemplate,
@@ -34,6 +33,7 @@ import {
   getStatsFeatureDetails,
   summarizeStatsSignal,
 } from "../features/features/stats";
+import { featureSupportsAnyField } from "../features/features/model";
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
@@ -41,11 +41,7 @@ import { useGuildChannelOptions } from "../features/features/useGuildChannelOpti
 export function StatsPage() {
   const definition = getFeatureAreaDefinition("stats");
   const location = useLocation();
-  const {
-    authState,
-    beginLogin,
-    canEditSelectedGuild,
-  } = useDashboardSession();
+  const { authState, beginLogin, canEditSelectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -302,7 +298,10 @@ export function StatsPage() {
           workspace.workspaceState === "ready" &&
           statsFeature !== null &&
           statsDetails !== null ? (
-            <section className="overview-summary-strip" aria-label="Stats summary">
+            <section
+              className="overview-summary-strip"
+              aria-label="Stats summary"
+            >
               <MetricCard
                 label="Stats module"
                 value={formatFeatureStatusLabel(statsFeature)}
@@ -363,8 +362,16 @@ function StatsScheduleSection({
   const [updateIntervalDraft, setUpdateIntervalDraft] = useState(
     String(details.updateIntervalMins),
   );
-  const canEditSettings = canEditSelectedGuild && canEditStatsSettings(feature);
-  const parsedUpdateIntervalMins = Number.parseInt(updateIntervalDraft.trim(), 10);
+  const canEditSettings =
+    canEditSelectedGuild &&
+    featureSupportsAnyField(feature, [
+      "config_enabled",
+      "update_interval_mins",
+    ]);
+  const parsedUpdateIntervalMins = Number.parseInt(
+    updateIntervalDraft.trim(),
+    10,
+  );
   const canSaveStatsSettings =
     Number.isFinite(parsedUpdateIntervalMins) && parsedUpdateIntervalMins > 0;
   const hasUnsavedChanges =
@@ -397,8 +404,8 @@ function StatsScheduleSection({
             </StatusBadge>
           </div>
           <p className="section-description">
-            Keep the stats module enabled, choose whether updates should run, and
-            adjust the interval without leaving the main page.
+            Keep the stats module enabled, choose whether updates should run,
+            and adjust the interval without leaving the main page.
           </p>
         </div>
       </div>
@@ -433,8 +440,8 @@ function StatsScheduleSection({
             <option value="disabled">Disabled</option>
           </select>
           <span className="meta-note">
-            Pause channel renames here without disabling the module-level override
-            for this server.
+            Pause channel renames here without disabling the module-level
+            override for this server.
           </span>
         </label>
 
@@ -461,7 +468,8 @@ function StatsScheduleSection({
         <div className="surface-subsection">
           <p className="section-label">Interval required</p>
           <p className="meta-note">
-            Enter a whole number greater than zero before saving the stats schedule.
+            Enter a whole number greater than zero before saving the stats
+            schedule.
           </p>
         </div>
       ) : null}
@@ -503,7 +511,9 @@ function StatsScheduleSection({
         saving={mutationSaving && pendingFeatureId === feature.id}
         disabled={!canEditSettings || !canSaveStatsSettings}
         onReset={handleReset}
-        onSave={() => onSave(configEnabledDraft === "enabled", parsedUpdateIntervalMins)}
+        onSave={() =>
+          onSave(configEnabledDraft === "enabled", parsedUpdateIntervalMins)
+        }
       />
     </section>
   );

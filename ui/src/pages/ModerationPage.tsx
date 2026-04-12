@@ -24,18 +24,17 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
-  canEditLoggingChannel,
   getLoggingFeatureDetails,
   summarizeLoggingGuidance,
 } from "../features/features/logging";
 import {
-  canEditMuteRole,
   getActionableFeatureBlocker,
   getActionableMuteRoleBlocker,
   getModerationCommandFeatures,
   getModerationLogFeatures,
   getMuteRoleFeatureDetails,
 } from "../features/features/moderation";
+import { featureSupportsField } from "../features/features/model";
 import { formatRoleOptionLabel } from "../features/features/roles";
 import {
   formatWorkspaceStateDescription,
@@ -49,11 +48,7 @@ import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 export function ModerationPage() {
   const definition = getFeatureAreaDefinition("moderation");
   const location = useLocation();
-  const {
-    authState,
-    beginLogin,
-    canEditSelectedGuild,
-  } = useDashboardSession();
+  const { authState, beginLogin, canEditSelectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -70,7 +65,8 @@ export function ModerationPage() {
   const automodFeature =
     areaFeatures.find((feature) => feature.id === "services.automod") ?? null;
   const muteRoleFeature =
-    areaFeatures.find((feature) => feature.id === "moderation.mute_role") ?? null;
+    areaFeatures.find((feature) => feature.id === "moderation.mute_role") ??
+    null;
   const moderationCommandFeatures = getModerationCommandFeatures(areaFeatures);
   const moderationRouteFeatures = getModerationLogFeatures(areaFeatures);
   const messageRouteChannelOptions = useMemo(
@@ -153,7 +149,10 @@ export function ModerationPage() {
     }
   }
 
-  async function handleSaveDestination(feature: FeatureRecord, channelId: string) {
+  async function handleSaveDestination(
+    feature: FeatureRecord,
+    channelId: string,
+  ) {
     setPendingFeatureId(feature.id);
 
     try {
@@ -318,7 +317,9 @@ function ModerationWorkspacePanels({
 }: ModerationWorkspacePanelsProps) {
   const automodHeadingId = useId();
   const automodBlockerMessage =
-    automodFeature === null ? null : getActionableFeatureBlocker(automodFeature);
+    automodFeature === null
+      ? null
+      : getActionableFeatureBlocker(automodFeature);
 
   return (
     <GroupedSettingsStack className="flat-config-stack">
@@ -472,11 +473,7 @@ function ModerationCommandSection({
   const commandBlockerMessage = getActionableFeatureBlocker(feature);
 
   return (
-    <GroupedSettingsItem
-      stacked
-      role="group"
-      aria-labelledby={headingId}
-    >
+    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
       <GroupedSettingsSubrow>
         <GroupedSettingsMainRow>
           <GroupedSettingsCopy>
@@ -543,8 +540,11 @@ function MuteRoleSection({
   const currentRoleId = getMuteRoleFeatureDetails(feature).roleId;
   const headingId = useId();
   const [roleDraft, setRoleDraft] = useState(currentRoleId);
-  const [muteEnabledDraft, setMuteEnabledDraft] = useState(feature.effective_enabled);
-  const canEditRole = canEditSelectedGuild && canEditMuteRole(feature);
+  const [muteEnabledDraft, setMuteEnabledDraft] = useState(
+    feature.effective_enabled,
+  );
+  const canEditRole =
+    canEditSelectedGuild && featureSupportsField(feature, "role_id");
   const isMuteTogglePending = mutationSaving && pendingFeatureId === feature.id;
   const muteEnabled = isMuteTogglePending
     ? muteEnabledDraft
@@ -579,15 +579,13 @@ function MuteRoleSection({
   }
 
   return (
-    <GroupedSettingsItem
-      stacked
-      role="group"
-      aria-labelledby={headingId}
-    >
+    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
       <GroupedSettingsSubrow>
         <GroupedSettingsMainRow>
           <GroupedSettingsCopy>
-            <GroupedSettingsHeading id={headingId}>{feature.label}</GroupedSettingsHeading>
+            <GroupedSettingsHeading id={headingId}>
+              {feature.label}
+            </GroupedSettingsHeading>
           </GroupedSettingsCopy>
           <GroupedSettingsSwitch
             label={feature.label}
@@ -701,7 +699,7 @@ function ModerationRouteSection({
   const headingId = useId();
   const [channelDraft, setChannelDraft] = useState(currentChannelId);
   const canEditDestination =
-    canEditSelectedGuild && canEditLoggingChannel(feature);
+    canEditSelectedGuild && featureSupportsField(feature, "channel_id");
   const hasUnsavedChanges = currentChannelId !== channelDraft.trim();
   const routeMessage =
     feature.effective_enabled && feature.readiness === "blocked"
@@ -718,11 +716,7 @@ function ModerationRouteSection({
   }
 
   return (
-    <GroupedSettingsItem
-      stacked
-      role="group"
-      aria-labelledby={headingId}
-    >
+    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
       <GroupedSettingsSubrow>
         <GroupedSettingsMainRow>
           <GroupedSettingsCopy>
@@ -752,7 +746,7 @@ function ModerationRouteSection({
               ? "Loading channels..."
               : messageRouteChannelOptions.length === 0
                 ? "No channels available"
-              : "No channel"
+                : "No channel"
           }
         />
       </GroupedSettingsSubrow>

@@ -1631,11 +1631,6 @@ textarea:focus {
   align-items: start;
 }
 
-.qotd-staff-field {
-  display: grid;
-  gap: var(--space-4);
-}
-
 .qotd-composer-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);

@@ -35,13 +35,6 @@ export function getStatsFeatureDetails(
   };
 }
 
-export function canEditStatsSettings(feature: FeatureRecord) {
-  return (
-    feature.editable_fields?.includes("config_enabled") === true ||
-    feature.editable_fields?.includes("update_interval_mins") === true
-  );
-}
-
 export function summarizeStatsSignal(feature: FeatureRecord) {
   const details = getStatsFeatureDetails(feature);
   const firstBlocker = feature.blockers?.[0]?.message?.trim() ?? "";

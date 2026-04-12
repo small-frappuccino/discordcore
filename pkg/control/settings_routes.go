@@ -41,11 +41,17 @@ func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
+			return
+		}
 		s.handleSettingsOverviewGet(w, r, auth)
 		return
 	case "/v1/settings/catalog":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -56,9 +62,15 @@ func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 	case "/v1/settings/global":
 		switch r.Method {
 		case http.MethodGet:
+			if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
+				return
+			}
 			s.handleGlobalSettingsGet(w, r)
 		case http.MethodPut:
-			s.handleGlobalSettingsPut(w, r, auth)
+			if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelWrite) {
+				return
+			}
+			s.handleGlobalSettingsPut(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -66,6 +78,9 @@ func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 	case "/v1/settings/guilds":
 		switch r.Method {
 		case http.MethodGet:
+			if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
+				return
+			}
 			s.handleGuildRegistryGet(w, r, auth)
 		case http.MethodPost:
 			s.handleGuildRegistrationPost(w, r, auth)
@@ -107,11 +122,7 @@ func (s *Server) handleGlobalSettingsGet(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request, auth requestAuthorization) {
-	if !s.authorizeGlobalMutation(w, r, auth) {
-		return
-	}
-
+func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request) {
 	var payload updateGlobalSettingsRequest
 	if err := decodeJSONBody(w, r, &payload); err != nil {
 		return
@@ -176,6 +187,10 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "guild_id is required", http.StatusBadRequest)
 		return
 	}
+	if !s.authorizeGuildControlAccess(w, r, auth, guildID, guildAccessLevelWrite) {
+		return
+	}
+
 	availableBotInstanceIDs, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), auth, guildID)
 	if err != nil {
 		status := statusForManageableGuildsError(err)
@@ -185,9 +200,6 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	botInstanceID, err := selectGuildBotInstanceID(payload.BotInstanceID, availableBotInstanceIDs)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if !s.authorizeGuildAccess(w, r, auth, guildID) {
 		return
 	}
 
@@ -405,7 +417,7 @@ func (s *Server) resolveGuildRegistrySources(
 		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
-		accessible, err := s.resolveAccessibleGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		accessible, err := s.oauthControl().resolveAccessibleGuilds(ctx, auth.oauthSession)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -508,7 +520,7 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 	}
 	available := groupBotInstanceIDsByGuild(bindings)[guildID]
 	if auth.mode == requestAuthModeDiscordOAuthSession {
-		accessible, resolveErr := s.resolveAccessibleGuilds(ctx, s.discordOAuth, auth.oauthSession)
+		accessible, resolveErr := s.oauthControl().resolveAccessibleGuilds(ctx, auth.oauthSession)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}

@@ -48,10 +48,11 @@ func (h *dashboardAccessHandler) isPublicDashboardAsset(r *http.Request) bool {
 }
 
 func (s *Server) hasAuthenticatedDashboardSession(r *http.Request) bool {
-	if s == nil || s.discordOAuth == nil {
+	oauthControl := s.oauthControl()
+	if !oauthControl.configured() {
 		return false
 	}
 
-	_, err := s.discordOAuth.sessionFromRequest(r)
+	_, err := oauthControl.sessionFromRequest(r)
 	return err == nil
 }

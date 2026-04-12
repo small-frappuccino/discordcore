@@ -325,7 +325,6 @@ func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 		ForumChannelID: in.ForumChannelID,
 		QuestionTagID:  in.QuestionTagID,
 		ReplyTagID:     in.ReplyTagID,
-		StaffRoleIDs:   cloneStringSlice(in.StaffRoleIDs),
 	}
 }
 

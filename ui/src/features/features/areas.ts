@@ -71,6 +71,7 @@ export const featureAreaDefinitions: FeatureAreaDefinition[] = [
       "logging.message_edit",
       "logging.message_delete",
       "logging.reaction_metric",
+      "logging.clean_action",
     ],
   },
   {

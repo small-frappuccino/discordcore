@@ -178,6 +178,7 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 		{path: "/v1/guilds/g1/features/moderation.warn", payload: map[string]any{"enabled": true}},
 		{path: "/v1/guilds/g1/features/moderation.warnings", payload: map[string]any{"enabled": true}},
 		{path: "/v1/guilds/g1/features/logging.member_join", payload: map[string]any{"channel_id": "join-channel"}},
+		{path: "/v1/guilds/g1/features/logging.clean_action", payload: map[string]any{"enabled": true, "channel_id": "clean-log"}},
 		{path: "/v1/guilds/g1/features/presence_watch.user", payload: map[string]any{"user_id": "user-42"}},
 		{path: "/v1/guilds/g1/features/safety.bot_role_perm_mirror", payload: map[string]any{"actor_role_id": "actor-7"}},
 		{path: "/v1/guilds/g1/features/backfill.enabled", payload: map[string]any{"channel_id": "backfill-channel", "start_day": "2026-03-10", "initial_date": "2026-03-01"}},
@@ -221,6 +222,12 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	}
 	if guild.Channels.MemberJoin != "join-channel" {
 		t.Fatalf("expected member_join channel persisted, got %+v", guild.Channels)
+	}
+	if guild.Features.Logging.CleanAction == nil || !*guild.Features.Logging.CleanAction {
+		t.Fatalf("expected clean_action feature toggle persisted, got %+v", guild.Features.Logging)
+	}
+	if guild.Channels.CleanAction != "clean-log" {
+		t.Fatalf("expected clean_action channel persisted, got %+v", guild.Channels)
 	}
 	if guild.RuntimeConfig.PresenceWatchUserID != "user-42" {
 		t.Fatalf("expected presence watch user persisted, got %+v", guild.RuntimeConfig)
@@ -370,6 +377,37 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		response := decodeFeatureResponse[featureRecordResponse](t, rec)
 		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "invalid_channel" {
 			t.Fatalf("expected invalid_channel blocker, got %+v", response.Feature.Blockers)
+		}
+	})
+
+	t.Run("clean action runtime kill switch", func(t *testing.T) {
+		t.Parallel()
+
+		srv, cm := newControlTestServer(t)
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds[0].Features.Logging.CleanAction = testBoolPtr(true)
+			cfg.Guilds[0].Channels.CleanAction = "clean-log"
+			cfg.Guilds[0].RuntimeConfig.DisableCleanLog = true
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("seed clean action config: %v", err)
+		}
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/logging.clean_action", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET clean_action status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[featureRecordResponse](t, rec)
+		if response.Feature.Readiness != "blocked" {
+			t.Fatalf("expected blocked readiness, got %+v", response.Feature)
+		}
+		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "runtime_kill_switch" {
+			t.Fatalf("expected runtime_kill_switch blocker, got %+v", response.Feature.Blockers)
+		}
+		if response.Feature.Details["channel_id"] != "clean-log" {
+			t.Fatalf("expected clean_action channel detail, got %+v", response.Feature.Details)
 		}
 	})
 

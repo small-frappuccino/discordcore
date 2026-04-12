@@ -3,7 +3,6 @@ package files
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -17,8 +16,7 @@ func (cfg QOTDConfig) IsZero() bool {
 	return !cfg.Enabled &&
 		strings.TrimSpace(cfg.ForumChannelID) == "" &&
 		strings.TrimSpace(cfg.QuestionTagID) == "" &&
-		strings.TrimSpace(cfg.ReplyTagID) == "" &&
-		len(cfg.StaffRoleIDs) == 0
+		strings.TrimSpace(cfg.ReplyTagID) == ""
 }
 
 // GetQOTDConfig returns the canonical QOTD config for one guild.
@@ -61,31 +59,6 @@ func (mgr *ConfigManager) SetQOTDConfig(guildID string, cfg QOTDConfig) error {
 		return fmt.Errorf("set qotd config: %w", err)
 	}
 	return nil
-}
-
-func normalizeQOTDStaffRoleIDs(roleIDs []string) ([]string, error) {
-	if len(roleIDs) == 0 {
-		return nil, nil
-	}
-
-	seen := make(map[string]struct{}, len(roleIDs))
-	normalized := make([]string, 0, len(roleIDs))
-	for _, roleID := range roleIDs {
-		roleID = strings.TrimSpace(roleID)
-		if roleID == "" {
-			continue
-		}
-		if !isAllDigits(roleID) {
-			return nil, invalidQOTDInput("staff_role_ids must be numeric")
-		}
-		if _, ok := seen[roleID]; ok {
-			continue
-		}
-		seen[roleID] = struct{}{}
-		normalized = append(normalized, roleID)
-	}
-	sort.Strings(normalized)
-	return normalized, nil
 }
 
 func invalidQOTDInput(format string, args ...any) error {

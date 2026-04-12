@@ -14,7 +14,9 @@ export const moderationRouteFeatureIDs = [
   "logging.moderation_case",
 ] as const;
 
-const moderationCommandFeatureIDSet = new Set<string>(moderationCommandFeatureIDs);
+const moderationCommandFeatureIDSet = new Set<string>(
+  moderationCommandFeatureIDs,
+);
 const moderationRouteFeatureIDSet = new Set<string>(moderationRouteFeatureIDs);
 
 interface AutomodFeatureDetails {
@@ -46,21 +48,25 @@ export function getMuteRoleFeatureDetails(
 }
 
 export function getModerationCommandFeatures(features: FeatureRecord[]) {
-  return features.filter((feature) => moderationCommandFeatureIDSet.has(feature.id));
+  return features.filter((feature) =>
+    moderationCommandFeatureIDSet.has(feature.id),
+  );
 }
 
 export function getModerationLogFeatures(features: FeatureRecord[]) {
-  return features.filter((feature) => moderationRouteFeatureIDSet.has(feature.id));
-}
-
-export function canEditMuteRole(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("role_id") ?? false;
+  return features.filter((feature) =>
+    moderationRouteFeatureIDSet.has(feature.id),
+  );
 }
 
 export function getActionableFeatureBlocker(feature: FeatureRecord) {
   const message = feature.blockers?.[0]?.message?.trim() ?? "";
 
-  if (!feature.effective_enabled || feature.readiness !== "blocked" || message === "") {
+  if (
+    !feature.effective_enabled ||
+    feature.readiness !== "blocked" ||
+    message === ""
+  ) {
     return null;
   }
 
@@ -119,7 +125,10 @@ export function summarizeMuteRoleSignal(feature: FeatureRecord) {
       if (!feature.effective_enabled) {
         return "Role-based muting is currently off for the selected server.";
       }
-      return feature.blockers?.[0]?.message ?? "Mute role is ready for role-based mute actions.";
+      return (
+        feature.blockers?.[0]?.message ??
+        "Mute role is ready for role-based mute actions."
+      );
   }
 }
 
@@ -132,7 +141,9 @@ export function formatModerationRouteCoverageValue(features: FeatureRecord[]) {
 
 function readLoggingChannelID(feature: FeatureRecord) {
   const details = feature.details ?? {};
-  return typeof details.channel_id === "string" ? details.channel_id.trim() : "";
+  return typeof details.channel_id === "string"
+    ? details.channel_id.trim()
+    : "";
 }
 
 function readString(value: unknown) {

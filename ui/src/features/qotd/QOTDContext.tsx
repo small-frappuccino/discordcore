@@ -64,7 +64,6 @@ const emptySettings: QOTDConfig = {
   forum_channel_id: "",
   question_tag_id: "",
   reply_tag_id: "",
-  staff_role_ids: [],
 };
 
 const QOTDContext = createContext<QOTDContextValue | null>(null);

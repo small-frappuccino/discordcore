@@ -28,10 +28,6 @@ import {
   summarizeFeatureArea,
 } from "../features/features/presentation";
 import {
-  canEditAutoRole,
-  canEditPermissionMirror,
-  canEditPresenceWatchBot,
-  canEditPresenceWatchUser,
   formatMemberOptionLabel,
   formatMemberValue,
   formatRequirementRolesValue,
@@ -44,12 +40,18 @@ import {
   summarizeAdvancedRoleSignal,
   summarizeAutoRoleSignal,
 } from "../features/features/roles";
+import {
+  featureSupportsAnyField,
+  featureSupportsField,
+} from "../features/features/model";
 import { useFeatureMutation } from "../features/features/useFeatureMutation";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
 import { useGuildMemberOptions } from "../features/features/useGuildMemberOptions";
 import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
 
-type RolesWorkspaceState = ReturnType<typeof useFeatureWorkspace>["workspaceState"];
+type RolesWorkspaceState = ReturnType<
+  typeof useFeatureWorkspace
+>["workspaceState"];
 type AutoRoleDetails = ReturnType<typeof getAutoRoleFeatureDetails>;
 type PermissionMirrorDetails = ReturnType<typeof getPermissionMirrorDetails>;
 type DashboardNotice = {
@@ -60,11 +62,7 @@ type DashboardNotice = {
 export function RolesPage() {
   const definition = getFeatureAreaDefinition("roles");
   const location = useLocation();
-  const {
-    authState,
-    beginLogin,
-    canEditSelectedGuild,
-  } = useDashboardSession();
+  const { authState, beginLogin, canEditSelectedGuild } = useDashboardSession();
   const workspace = useFeatureWorkspace({
     scope: "guild",
   });
@@ -87,13 +85,17 @@ export function RolesPage() {
   const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
   const autoRoleFeature =
-    areaFeatures.find((feature) => feature.id === "auto_role_assignment") ?? null;
+    areaFeatures.find((feature) => feature.id === "auto_role_assignment") ??
+    null;
   const autoRoleDetails =
-    autoRoleFeature === null ? null : getAutoRoleFeatureDetails(autoRoleFeature);
+    autoRoleFeature === null
+      ? null
+      : getAutoRoleFeatureDetails(autoRoleFeature);
   const presenceWatchBotFeature =
     areaFeatures.find((feature) => feature.id === "presence_watch.bot") ?? null;
   const presenceWatchUserFeature =
-    areaFeatures.find((feature) => feature.id === "presence_watch.user") ?? null;
+    areaFeatures.find((feature) => feature.id === "presence_watch.user") ??
+    null;
   const permissionMirrorFeature =
     areaFeatures.find(
       (feature) => feature.id === "safety.bot_role_perm_mirror",
@@ -303,7 +305,8 @@ export function RolesPage() {
       (watchBotDraft === "enabled");
   const presenceWatchUserHasUnsavedChanges =
     presenceWatchUserFeature !== null &&
-    getPresenceWatchUserDetails(presenceWatchUserFeature).userId !== userIdDraft.trim();
+    getPresenceWatchUserDetails(presenceWatchUserFeature).userId !==
+      userIdDraft.trim();
   const permissionMirrorHasUnsavedChanges =
     permissionMirrorFeature !== null &&
     getPermissionMirrorDetails(permissionMirrorFeature).actorRoleId !==
@@ -315,7 +318,9 @@ export function RolesPage() {
     }
 
     mutation.clearNotice();
-    setConfigEnabledDraft(autoRoleDetails.configEnabled ? "enabled" : "disabled");
+    setConfigEnabledDraft(
+      autoRoleDetails.configEnabled ? "enabled" : "disabled",
+    );
     setTargetRoleDraft(autoRoleDetails.targetRoleId);
     setLevelRoleDraft(autoRoleDetails.levelRoleId);
     setBoosterRoleDraft(autoRoleDetails.boosterRoleId);
@@ -340,7 +345,9 @@ export function RolesPage() {
     }
 
     mutation.clearNotice();
-    setUserIdDraft(getPresenceWatchUserDetails(presenceWatchUserFeature).userId);
+    setUserIdDraft(
+      getPresenceWatchUserDetails(presenceWatchUserFeature).userId,
+    );
     setMemberSearchDraft("");
   }
 
@@ -350,7 +357,9 @@ export function RolesPage() {
     }
 
     mutation.clearNotice();
-    setActorRoleDraft(getPermissionMirrorDetails(permissionMirrorFeature).actorRoleId);
+    setActorRoleDraft(
+      getPermissionMirrorDetails(permissionMirrorFeature).actorRoleId,
+    );
   }
 
   if (definition === null) {
@@ -394,7 +403,10 @@ export function RolesPage() {
           workspace.workspaceState === "ready" &&
           autoRoleFeature !== null &&
           autoRoleDetails !== null ? (
-            <section className="overview-summary-strip" aria-label="Roles summary">
+            <section
+              className="overview-summary-strip"
+              aria-label="Roles summary"
+            >
               <MetricCard
                 label="Auto role"
                 value={formatFeatureStatusLabel(autoRoleFeature)}
@@ -403,19 +415,27 @@ export function RolesPage() {
               />
               <MetricCard
                 label="Target role"
-                value={formatRoleValue(autoRoleDetails.targetRoleId, roleOptions.roles)}
+                value={formatRoleValue(
+                  autoRoleDetails.targetRoleId,
+                  roleOptions.roles,
+                )}
                 description="The role that gets assigned automatically."
               />
               <MetricCard
                 label="Requirement roles"
-                value={formatRequirementRolesValue(autoRoleFeature, roleOptions.roles)}
+                value={formatRequirementRolesValue(
+                  autoRoleFeature,
+                  roleOptions.roles,
+                )}
                 description={
                   autoRoleDetails.requiredRoleCount === 2
                     ? "Both requirement roles are configured."
                     : "Choose the level and booster roles that gate the assignment."
                 }
                 tone={
-                  autoRoleDetails.requiredRoleCount === 2 ? "success" : "neutral"
+                  autoRoleDetails.requiredRoleCount === 2
+                    ? "success"
+                    : "neutral"
                 }
               />
             </section>
@@ -439,7 +459,9 @@ export function RolesPage() {
           actorRoleDraft={actorRoleDraft}
           autoRoleHasUnsavedChanges={autoRoleHasUnsavedChanges}
           presenceWatchBotHasUnsavedChanges={presenceWatchBotHasUnsavedChanges}
-          presenceWatchUserHasUnsavedChanges={presenceWatchUserHasUnsavedChanges}
+          presenceWatchUserHasUnsavedChanges={
+            presenceWatchUserHasUnsavedChanges
+          }
           permissionMirrorHasUnsavedChanges={permissionMirrorHasUnsavedChanges}
           advancedFeatures={advancedFeatures}
           firstBlockedFeature={firstBlockedFeature}
@@ -601,7 +623,11 @@ function RolesWorkspaceContent({
               Sign in with Discord
             </button>
           ) : workspaceState === "unavailable" ? (
-            <button className="button-secondary" type="button" onClick={onRefresh}>
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={onRefresh}
+            >
               Retry loading
             </button>
           ) : undefined
@@ -617,7 +643,8 @@ function RolesWorkspaceContent({
           <p className="section-label">Workspace</p>
           <h2>No role controls yet</h2>
           <p className="section-description">
-            The selected server does not expose role controls in this workspace yet.
+            The selected server does not expose role controls in this workspace
+            yet.
           </p>
         </div>
       </div>
@@ -679,7 +706,9 @@ function RolesWorkspaceContent({
           memberSearchDraft={memberSearchDraft}
           actorRoleDraft={actorRoleDraft}
           presenceWatchBotHasUnsavedChanges={presenceWatchBotHasUnsavedChanges}
-          presenceWatchUserHasUnsavedChanges={presenceWatchUserHasUnsavedChanges}
+          presenceWatchUserHasUnsavedChanges={
+            presenceWatchUserHasUnsavedChanges
+          }
           permissionMirrorHasUnsavedChanges={permissionMirrorHasUnsavedChanges}
           pendingFeatureId={pendingFeatureId}
           roleOptions={roleOptions}
@@ -757,7 +786,11 @@ function RolesPrimaryWorkflow({
 }: RolesPrimaryWorkflowProps) {
   const canEditSettings =
     canEditSelectedGuild &&
-    canEditAutoRole(autoRoleFeature) &&
+    featureSupportsAnyField(autoRoleFeature, [
+      "config_enabled",
+      "target_role_id",
+      "required_role_ids",
+    ]) &&
     !roleOptionsLoading &&
     !rolePickerUnavailable;
 
@@ -773,8 +806,9 @@ function RolesPrimaryWorkflow({
             </StatusBadge>
           </div>
           <p className="section-description">
-            Configure the role that should be assigned automatically and the role
-            requirements that gate the assignment flow without leaving this page.
+            Configure the role that should be assigned automatically and the
+            role requirements that gate the assignment flow without leaving this
+            page.
           </p>
         </div>
       </div>
@@ -800,7 +834,10 @@ function RolesPrimaryWorkflow({
           disabled={mutationSaving || !canEditSelectedGuild}
           aria-label={`${autoRoleFeature.effective_enabled ? "Disable" : "Enable"} ${autoRoleFeature.label}`}
           onClick={() =>
-            onSetFeatureEnabled(autoRoleFeature, !autoRoleFeature.effective_enabled)
+            onSetFeatureEnabled(
+              autoRoleFeature,
+              !autoRoleFeature.effective_enabled,
+            )
           }
         >
           {mutationSaving && pendingFeatureId === autoRoleFeature.id
@@ -909,7 +946,7 @@ function RolesAdvancedControls({
       {advancedFeatures.map((feature) => {
         if (feature.id === "presence_watch.bot") {
           const canEditSettings =
-            canEditSelectedGuild && canEditPresenceWatchBot(feature);
+            canEditSelectedGuild && featureSupportsField(feature, "watch_bot");
 
           return (
             <section className="flat-config-section" key={feature.id}>
@@ -922,8 +959,8 @@ function RolesAdvancedControls({
                       {formatFeatureStatusLabel(feature)}
                     </StatusBadge>
                   </div>
-                <p className="section-description">{feature.description}</p>
-              </div>
+                  <p className="section-description">{feature.description}</p>
+                </div>
               </div>
 
               <PresenceWatchBotDrawerBody
@@ -939,7 +976,9 @@ function RolesAdvancedControls({
                   type="button"
                   disabled={mutationSaving || !canEditSelectedGuild}
                   aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
-                  onClick={() => onSetFeatureEnabled(feature, !feature.effective_enabled)}
+                  onClick={() =>
+                    onSetFeatureEnabled(feature, !feature.effective_enabled)
+                  }
                 >
                   {mutationSaving && pendingFeatureId === feature.id
                     ? "Saving..."
@@ -977,7 +1016,7 @@ function RolesAdvancedControls({
 
         if (feature.id === "presence_watch.user") {
           const canEditSettings =
-            canEditSelectedGuild && canEditPresenceWatchUser(feature);
+            canEditSelectedGuild && featureSupportsField(feature, "user_id");
 
           return (
             <section className="flat-config-section" key={feature.id}>
@@ -990,8 +1029,8 @@ function RolesAdvancedControls({
                       {formatFeatureStatusLabel(feature)}
                     </StatusBadge>
                   </div>
-                <p className="section-description">{feature.description}</p>
-              </div>
+                  <p className="section-description">{feature.description}</p>
+                </div>
               </div>
 
               <PresenceWatchUserDrawerBody
@@ -1013,7 +1052,9 @@ function RolesAdvancedControls({
                   type="button"
                   disabled={mutationSaving || !canEditSelectedGuild}
                   aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
-                  onClick={() => onSetFeatureEnabled(feature, !feature.effective_enabled)}
+                  onClick={() =>
+                    onSetFeatureEnabled(feature, !feature.effective_enabled)
+                  }
                 >
                   {mutationSaving && pendingFeatureId === feature.id
                     ? "Saving..."
@@ -1051,7 +1092,7 @@ function RolesAdvancedControls({
 
         const canEditSettings =
           canEditSelectedGuild &&
-          canEditPermissionMirror(feature) &&
+          featureSupportsField(feature, "actor_role_id") &&
           !roleOptionsLoading &&
           !rolePickerUnavailable &&
           roleLookupNotice === null;
@@ -1086,7 +1127,9 @@ function RolesAdvancedControls({
                 type="button"
                 disabled={mutationSaving || !canEditSelectedGuild}
                 aria-label={`${feature.effective_enabled ? "Disable" : "Enable"} ${feature.label}`}
-                onClick={() => onSetFeatureEnabled(feature, !feature.effective_enabled)}
+                onClick={() =>
+                  onSetFeatureEnabled(feature, !feature.effective_enabled)
+                }
               >
                 {mutationSaving && pendingFeatureId === feature.id
                   ? "Saving..."
@@ -1355,7 +1398,9 @@ function PresenceWatchUserDrawerBody({
           <select
             aria-label="Member"
             value={userIdDraft}
-            disabled={disabled || memberLookupLoading || memberOptions.length === 0}
+            disabled={
+              disabled || memberLookupLoading || memberOptions.length === 0
+            }
             onChange={(event) => setUserIdDraft(event.target.value)}
           >
             <option value="">
@@ -1387,7 +1432,9 @@ function PresenceWatchUserDrawerBody({
         />
       ) : null}
 
-      {!memberLookupNotice && !memberLookupLoading && memberOptions.length === 0 ? (
+      {!memberLookupNotice &&
+      !memberLookupLoading &&
+      memberOptions.length === 0 ? (
         <div className="surface-subsection">
           <p className="section-label">No matches</p>
           <p className="meta-note">

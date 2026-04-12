@@ -86,21 +86,6 @@ const channelOptionsMock = {
   refresh: vi.fn(),
 };
 
-const roleOptionsMock = {
-  roles: [
-    {
-      id: "role-1",
-      name: "Moderators",
-      position: 1,
-      managed: false,
-      is_default: false,
-    },
-  ],
-  loading: false,
-  notice: null,
-  refresh: vi.fn(),
-};
-
 vi.mock("../../context/DashboardSessionContext", () => ({
   useDashboardSession: () => dashboardSessionMock,
 }));
@@ -115,10 +100,6 @@ vi.mock("./QOTDContext", async () => {
 
 vi.mock("../features/useGuildChannelOptions", () => ({
   useGuildChannelOptions: () => channelOptionsMock,
-}));
-
-vi.mock("../features/useGuildRoleOptions", () => ({
-  useGuildRoleOptions: () => roleOptionsMock,
 }));
 
 describe("QOTD UI", () => {
@@ -165,7 +146,7 @@ describe("QOTD UI", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Workflow settings", level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Staff roles", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Staff roles", level: 2 })).not.toBeInTheDocument();
     expect(screen.queryByText("Choose the forum and tags used by the daily publish flow.")).not.toBeInTheDocument();
     expect(screen.queryByText("1 roles")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refresh tags/i })).not.toBeInTheDocument();
@@ -231,7 +212,6 @@ describe("QOTD UI", () => {
         forum_channel_id: "forum-1",
         question_tag_id: "question",
         reply_tag_id: "reply",
-        staff_role_ids: ["role-1"],
       }),
     );
   });
@@ -323,7 +303,6 @@ function createQOTDSettings(overrides: Partial<QOTDConfig> = {}): QOTDConfig {
     forum_channel_id: "forum-1",
     question_tag_id: "question",
     reply_tag_id: "reply",
-    staff_role_ids: ["role-1"],
     ...overrides,
   };
 }

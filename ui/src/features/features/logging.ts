@@ -30,10 +30,6 @@ export function getLoggingFeatureDetails(
   };
 }
 
-export function canEditLoggingChannel(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("channel_id") ?? false;
-}
-
 export function summarizeLoggingDestination(feature: FeatureRecord) {
   const details = getLoggingFeatureDetails(feature);
 
@@ -75,7 +71,9 @@ export function summarizeLoggingGuidance(feature: FeatureRecord) {
     case "missing_intent":
       return "The runtime host is missing required gateway intents for this event.";
     default:
-      return feature.blockers?.[0]?.message ?? describeLoggingDestination(feature);
+      return (
+        feature.blockers?.[0]?.message ?? describeLoggingDestination(feature)
+      );
   }
 }
 
@@ -90,11 +88,15 @@ export function buildLoggingRequirementNotes(feature: FeatureRecord) {
   }
 
   if (details.validatesChannelPermissions) {
-    notes.push("The control server validates the destination channel before logs are emitted.");
+    notes.push(
+      "The control server validates the destination channel before logs are emitted.",
+    );
   }
 
   if (details.exclusiveModerationChannel) {
-    notes.push("This event requires an exclusive moderation channel instead of a shared destination.");
+    notes.push(
+      "This event requires an exclusive moderation channel instead of a shared destination.",
+    );
   }
 
   if (details.requiredIntentsMask !== 0) {
@@ -102,11 +104,15 @@ export function buildLoggingRequirementNotes(feature: FeatureRecord) {
   }
 
   if (details.requiredPermissionsMask !== 0) {
-    notes.push("The destination channel must satisfy additional Discord permission checks.");
+    notes.push(
+      "The destination channel must satisfy additional Discord permission checks.",
+    );
   }
 
   if (details.hasRuntimeToggle) {
-    notes.push("A runtime logging switch can disable this event even when the feature stays enabled.");
+    notes.push(
+      "A runtime logging switch can disable this event even when the feature stays enabled.",
+    );
   }
 
   return notes;

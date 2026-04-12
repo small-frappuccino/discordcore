@@ -3,7 +3,6 @@ package control
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -385,7 +384,7 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.authorizeGlobalMutation(w, r, auth) {
+	if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelWrite) {
 		return
 	}
 
@@ -604,83 +603,4 @@ func decodeInt(raw json.RawMessage) (int, error) {
 
 func boolPtr(v bool) *bool {
 	return &v
-}
-
-func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) (requestAuthorization, bool) {
-	if s == nil {
-		http.Error(w, "control server unavailable", http.StatusInternalServerError)
-		return requestAuthorization{}, false
-	}
-
-	token := strings.TrimSpace(s.authBearerToken)
-	oauthConfigured := s.discordOAuth != nil
-	if token == "" && !oauthConfigured {
-		http.Error(w, "control authentication is not configured", http.StatusServiceUnavailable)
-		return requestAuthorization{}, false
-	}
-
-	authz := strings.TrimSpace(r.Header.Get("Authorization"))
-	if authz != "" {
-		if !strings.HasPrefix(authz, "Bearer ") {
-			http.Error(w, "invalid authorization scheme", http.StatusUnauthorized)
-			return requestAuthorization{}, false
-		}
-		provided := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-		if provided == "" {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
-			return requestAuthorization{}, false
-		}
-		if token == "" {
-			http.Error(w, "control bearer authentication is not configured", http.StatusServiceUnavailable)
-			return requestAuthorization{}, false
-		}
-		if strings.TrimSpace(r.Header.Get("Origin")) != "" {
-			http.Error(w, "bearer authentication is restricted to internal automation", http.StatusForbidden)
-			return requestAuthorization{}, false
-		}
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return requestAuthorization{}, false
-		}
-		return requestAuthorization{mode: requestAuthModeBearer}, true
-	}
-
-	if oauthConfigured {
-		if session, err := s.discordOAuth.sessionFromRequest(r); err == nil {
-			if err := s.discordOAuth.validateSessionCSRFToken(r, session); err != nil {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return requestAuthorization{}, false
-			}
-			return requestAuthorization{
-				mode:         requestAuthModeDiscordOAuthSession,
-				oauthSession: session,
-			}, true
-		}
-	}
-
-	http.Error(w, "missing authorization", http.StatusUnauthorized)
-	return requestAuthorization{}, false
-}
-
-func (s *Server) authorizeGlobalMutation(w http.ResponseWriter, r *http.Request, auth requestAuthorization) bool {
-	switch auth.mode {
-	case requestAuthModeBearer:
-		return true
-	case requestAuthModeDiscordOAuthSession:
-		log.ApplicationLogger().Warn(
-			"Global control mutation denied",
-			"operation", "control.global_mutation.authorize",
-			"guildID", "",
-			"channelID", "",
-			"userID", auth.oauthSession.User.ID,
-			"reason", "global mutations require bearer authentication",
-			"method", r.Method,
-			"path", r.URL.Path,
-		)
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return false
-	default:
-		http.Error(w, "missing authorization", http.StatusUnauthorized)
-		return false
-	}
 }

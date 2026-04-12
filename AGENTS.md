@@ -41,6 +41,7 @@ Use this responsibility map before editing:
   - orchestration and startup wiring for the bot runtime
 - `pkg/control/`
   - control API, auth/session handling, dashboard serving, guild/settings/feature routes
+  - keep router/provider entrypoints thin; feature and OAuth workflows should live in focused sibling files or explicit internal services
 - `pkg/files/`
   - canonical config model, normalization, persistence adapters, and `ConfigManager`
 - `pkg/discord/`
@@ -218,6 +219,8 @@ Do not:
 - bypass validation/normalization before persisting config
 - add ad hoc logger stacks when `pkg/log` already covers the use case
 - widen giant files further when a helper or sibling file is the clearer move
+- re-grow decomposed entrypoints such as `pkg/control/features_routes.go`, `pkg/control/discord_oauth.go`, `pkg/storage/postgres_store.go`, or `pkg/discord/logging/monitoring.go`
+- add new cross-cutting free functions to a hotspot root file when the area already has a focused internal service or sibling-file seam
 - put dashboard-only semantics into `pkg/app/`
 
 ## 10. TypeScript Conventions For This Repo
@@ -316,6 +319,25 @@ These files are central and high-context. Read more of their neighborhood before
 - `ui/src/pages/ModerationPage.tsx`
 
 If a change only needs one branch/helper inside a hotspot, avoid refactoring unrelated sections.
+
+## 12.1 Decomposition Invariants
+
+These seams are intentional and should be preserved when adding features or evolving existing code:
+
+- `pkg/control/features_routes.go`
+  - router/dispatch only
+  - feature catalog, workspace shaping, readiness, blockers, patch flows, and toggle binding changes belong in `featureControlService` or focused `features_*.go` siblings
+- `pkg/control/discord_oauth.go`
+  - shared OAuth types, constants, provider construction, and permission parsing only
+  - login/callback/session/cookie/guild-access flows belong in `discordOAuthControlService` or focused `discord_oauth_*.go` siblings
+- `pkg/storage/postgres_store.go`
+  - `Store` type, bootstrap, schema init entrypoint, and shared SQL helpers only
+  - domain behavior belongs in focused `postgres_store_*.go` files
+- `pkg/discord/logging/monitoring.go`
+  - lifecycle/orchestration only
+  - gateway handlers, user/avatar/role reactions, state/cache loops, and bot permission mirroring belong in focused `monitoring_*.go` files
+
+When a workflow needs coordination across multiple sibling files, prefer adding or extending an explicit internal service instead of pushing more logic back into the root file.
 
 ## 13. Preferred Modification Strategy
 

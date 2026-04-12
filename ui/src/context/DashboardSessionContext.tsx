@@ -43,7 +43,6 @@ interface DashboardSessionContextValue {
   accessibleGuilds: AccessibleGuild[];
   canEditSelectedGuild: boolean;
   canReadSelectedGuild: boolean;
-  canManageGuild: boolean;
   client: ControlApiClient;
   currentOriginLabel: string;
   manageableGuilds: AccessibleGuild[];
@@ -77,8 +76,12 @@ export function DashboardSessionProvider({
   const [baseUrlDraft, setBaseUrlDraft] = useState(defaultBaseUrl);
   const [authState, setAuthState] = useState<DashboardAuthState>("checking");
   const [session, setSession] = useState<AuthSessionResponse | null>(null);
-  const [accessibleGuilds, setAccessibleGuilds] = useState<AccessibleGuild[]>([]);
-  const [manageableGuilds, setManageableGuilds] = useState<AccessibleGuild[]>([]);
+  const [accessibleGuilds, setAccessibleGuilds] = useState<AccessibleGuild[]>(
+    [],
+  );
+  const [manageableGuilds, setManageableGuilds] = useState<AccessibleGuild[]>(
+    [],
+  );
   const [selectedGuildID, setSelectedGuildID] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
@@ -104,8 +107,8 @@ export function DashboardSessionProvider({
     normalizeBaseUrlInput(baseUrlDraft) !== normalizeBaseUrlInput(baseUrl);
   const canReadSelectedGuild =
     authState === "signed_in" && selectedGuild !== null;
-  const canEditSelectedGuild = selectedGuildAccessLevel === "write";
-  const canManageGuild = canEditSelectedGuild;
+  const canEditSelectedGuild =
+    authState === "signed_in" && selectedGuildAccessLevel === "write";
   const sessionAvatarURL = session ? buildUserAvatarURL(session.user) : null;
   const selectedGuildIconURL = selectedGuild
     ? buildGuildIconURL(selectedGuild)
@@ -154,20 +157,27 @@ export function DashboardSessionProvider({
         const guildsResponse = await activeClient.listAccessibleGuilds({
           fresh: freshGuilds,
         });
-        const manageableGuildsResponse = await activeClient.listManageableGuilds();
+        const manageableGuildsResponse =
+          await activeClient.listManageableGuilds();
         const availableGuildIDs = new Set([
           ...guildsResponse.guilds.map((guild) => guild.id),
           ...manageableGuildsResponse.guilds.map((guild) => guild.id),
         ]);
         const routedGuildID = getRoutedGuildID(location.pathname);
         const preferredGuildID =
-          selectedGuildID.trim() !== "" ? selectedGuildID.trim() : routedGuildID;
+          selectedGuildID.trim() !== ""
+            ? selectedGuildID.trim()
+            : routedGuildID;
         const nextGuildID =
           preferredGuildID !== "" && availableGuildIDs.has(preferredGuildID)
             ? preferredGuildID
             : "";
         if (nextGuildID !== "") {
-          await prefetchGuildDashboardResources(activeClient, baseUrl, nextGuildID);
+          await prefetchGuildDashboardResources(
+            activeClient,
+            baseUrl,
+            nextGuildID,
+          );
         }
         setAuthState("signed_in");
         setSession(probe.session);
@@ -201,7 +211,10 @@ export function DashboardSessionProvider({
         lastFreshSessionRefreshAtRef.current = Date.now();
       }
 
-      const refreshPromise = performSessionRefresh(activeClient, options).finally(() => {
+      const refreshPromise = performSessionRefresh(
+        activeClient,
+        options,
+      ).finally(() => {
         if (freshSessionRefreshRef.current === refreshPromise) {
           freshSessionRefreshRef.current = null;
         }
@@ -219,7 +232,10 @@ export function DashboardSessionProvider({
     if (authState === "checking" || authState === "oauth_unavailable") {
       return;
     }
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
       return;
     }
     if (freshSessionRefreshRef.current !== null) {
@@ -278,9 +294,11 @@ export function DashboardSessionProvider({
     if (authState !== "signed_in" || selectedGuildID.trim() === "") {
       return;
     }
-    void prefetchGuildDashboardResources(client, baseUrl, selectedGuildID.trim()).catch(
-      () => {},
-    );
+    void prefetchGuildDashboardResources(
+      client,
+      baseUrl,
+      selectedGuildID.trim(),
+    ).catch(() => {});
   }, [authState, baseUrl, client, selectedGuildID]);
 
   useEffect(() => {
@@ -392,7 +410,6 @@ export function DashboardSessionProvider({
         busyLabel,
         canEditSelectedGuild,
         canReadSelectedGuild,
-        canManageGuild,
         client,
         currentOriginLabel,
         manageableGuilds,
@@ -421,7 +438,9 @@ export function DashboardSessionProvider({
 export function useDashboardSession() {
   const context = useContext(DashboardSessionContext);
   if (context === null) {
-    throw new Error("useDashboardSession must be used inside DashboardSessionProvider");
+    throw new Error(
+      "useDashboardSession must be used inside DashboardSessionProvider",
+    );
   }
   return context;
 }

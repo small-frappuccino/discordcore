@@ -29,17 +29,8 @@ export function getAdminCommandsFeatureDetails(
 
   return {
     allowedRoleIds,
-    allowedRoleCount:
-      reportedCount > 0 ? reportedCount : allowedRoleIds.length,
+    allowedRoleCount: reportedCount > 0 ? reportedCount : allowedRoleIds.length,
   };
-}
-
-export function canEditCommandsChannel(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("channel_id") ?? false;
-}
-
-export function canEditAdminCommands(feature: FeatureRecord) {
-  return feature.editable_fields?.includes("allowed_role_ids") ?? false;
 }
 
 export function formatCommandChannelValue(
@@ -74,7 +65,9 @@ export function formatAllowedRolesValue(
   }
 
   return details.allowedRoleIds
-    .map((roleId) => formatRoleValue(roleId, roleOptions, "Role no longer available"))
+    .map((roleId) =>
+      formatRoleValue(roleId, roleOptions, "Role no longer available"),
+    )
     .join(", ");
 }
 
@@ -104,7 +97,9 @@ export function summarizeAdminCommandsSignal(feature: FeatureRecord) {
   }
 
   if ((feature.blockers?.length ?? 0) > 0) {
-    return feature.blockers?.[0]?.message ?? "Admin command access needs review.";
+    return (
+      feature.blockers?.[0]?.message ?? "Admin command access needs review."
+    );
   }
 
   if (details.allowedRoleCount === 0) {
@@ -115,17 +110,14 @@ export function summarizeAdminCommandsSignal(feature: FeatureRecord) {
 }
 
 export function formatCommandServerSetting(feature: FeatureRecord) {
-  return feature.override_state === "inherit" ? "Using default" : "Configured here";
+  return feature.override_state === "inherit"
+    ? "Using default"
+    : "Configured here";
 }
 
-export function toggleAllowedRole(
-  currentRoleIds: string[],
-  roleId: string,
-) {
+export function toggleAllowedRole(currentRoleIds: string[], roleId: string) {
   const next = new Set(
-    currentRoleIds
-      .map((value) => value.trim())
-      .filter((value) => value !== ""),
+    currentRoleIds.map((value) => value.trim()).filter((value) => value !== ""),
   );
 
   if (next.has(roleId)) {

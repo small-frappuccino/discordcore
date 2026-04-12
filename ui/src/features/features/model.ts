@@ -35,7 +35,26 @@ export function isFeatureBlocked(feature: FeatureRecord): boolean {
 }
 
 export function isFeatureConfigurable(feature: FeatureRecord): boolean {
-  return (feature.editable_fields?.length ?? 0) > 0;
+  return getFeatureEditableFields(feature).length > 0;
+}
+
+export function getFeatureEditableFields(feature: FeatureRecord): string[] {
+  return feature.editable_fields ?? [];
+}
+
+export function featureSupportsField(
+  feature: FeatureRecord,
+  field: string,
+): boolean {
+  return getFeatureEditableFields(feature).includes(field);
+}
+
+export function featureSupportsAnyField(
+  feature: FeatureRecord,
+  fields: readonly string[],
+): boolean {
+  const editableFields = getFeatureEditableFields(feature);
+  return fields.some((field) => editableFields.includes(field));
 }
 
 export function getFeatureStatusTone(feature: FeatureRecord) {
