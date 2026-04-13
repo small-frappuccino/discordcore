@@ -131,12 +131,14 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setHasLoadedAttempt(false);
   }
 
-  async function loadWorkspace(preferredDeckID = "") {
+  async function loadWorkspace(preferredDeckID = "", background = false) {
     if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
     }
 
-    setLoading(true);
+    if (!background) {
+      setLoading(true);
+    }
 
     try {
       const [settingsResponse, summaryResponse] = await Promise.all([
@@ -157,7 +159,9 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       setSelectedDeckID(nextDeckID);
       setQuestions(questionsResponse.questions);
       setHasLoadedAttempt(true);
-      setNotice(null);
+      if (!background) {
+        setNotice(null);
+      }
     } catch (error) {
       setHasLoadedAttempt(true);
       setSummary(null);
@@ -166,8 +170,10 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         message: formatError(error),
       });
     } finally {
-      setLoading(false);
-      setBusyLabel("");
+      if (!background) {
+        setLoading(false);
+        setBusyLabel("");
+      }
     }
   }
 
@@ -276,11 +282,14 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
     setBusyLabel(QOTD_BUSY_LABELS.createQuestion);
     try {
-      await client.createQOTDQuestion(normalizedGuildID, {
+      const response = await client.createQOTDQuestion(normalizedGuildID, {
         ...payload,
         deck_id: targetDeckID,
       });
-      await loadWorkspace(targetDeckID);
+      if (targetDeckID === selectedDeckRef.current) {
+        setQuestions((prev) => [...prev, response.question]);
+      }
+      void loadWorkspace(targetDeckID, true);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -329,12 +338,10 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       selectedDeckRef.current;
 
     setBusyLabel(QOTD_BUSY_LABELS.createQuestions);
-    let createdCount = 0;
     try {
-      for (const payload of normalizedPayloads) {
-        await client.createQOTDQuestion(normalizedGuildID, payload);
-        createdCount += 1;
-      }
+      await client.createQOTDQuestionsBatch(normalizedGuildID, {
+        questions: normalizedPayloads,
+      });
       await loadWorkspace(reloadDeckID);
       setNotice({
         tone: "success",
@@ -347,10 +354,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       setNotice({
         tone: "error",
-        message:
-          createdCount > 0
-            ? `${formatError(error)} ${createdCount} questions were created before the import stopped.`
-            : formatError(error),
+        message: formatError(error),
       });
       return false;
     } finally {
@@ -373,8 +377,15 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
     setBusyLabel(QOTD_BUSY_LABELS.updateQuestion);
     try {
-      await client.updateQOTDQuestion(normalizedGuildID, questionId, payload);
-      await loadWorkspace(targetDeckID);
+      const response = await client.updateQOTDQuestion(normalizedGuildID, questionId, payload);
+      if (targetDeckID === selectedDeckRef.current) {
+        setQuestions((prev) =>
+          prev.map((q) => (q.id === questionId ? response.question : q)),
+        );
+      } else {
+        setQuestions((prev) => prev.filter((q) => q.id !== questionId));
+      }
+      void loadWorkspace(targetDeckID, true);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -393,7 +404,8 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.deleteQuestion);
     try {
       await client.deleteQOTDQuestion(normalizedGuildID, questionId);
-      await loadWorkspace(selectedDeckRef.current);
+      setQuestions((prev) => prev.filter((q) => q.id !== questionId));
+      void loadWorkspace(selectedDeckRef.current, true);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -422,7 +434,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         orderedIDs,
       );
       setQuestions(response.questions);
-      await loadWorkspace(targetDeckID);
+      void loadWorkspace(targetDeckID, true);
     } catch (error) {
       setNotice({
         tone: "error",

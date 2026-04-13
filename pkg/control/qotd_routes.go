@@ -53,6 +53,13 @@ func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, g
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
+	case len(tail) == 3 && tail[1] == "questions" && tail[2] == "batch":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleQOTDQuestionsCreateBatch(w, r, guildID, auth)
+		return
 	case len(tail) == 3 && tail[1] == "questions" && tail[2] == "reorder":
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -215,6 +222,52 @@ func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Reques
 		"guild_id": guildID,
 		"question": buildQOTDQuestionsResponse([]storage.QOTDQuestionRecord{*question})[0],
 	})
+}
+
+func (s *Server) handleQOTDQuestionsCreateBatch(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
+	var payload struct {
+		Questions []struct {
+			DeckID string `json:"deck_id"`
+			Body   string `json:"body"`
+			Status string `json:"status"`
+		} `json:"questions"`
+	}
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		return
+	}
+
+	mutations := make([]qotd.QuestionMutation, 0, len(payload.Questions))
+	for _, q := range payload.Questions {
+		mutations = append(mutations, qotd.QuestionMutation{
+			DeckID: strings.TrimSpace(q.DeckID),
+			Body:   q.Body,
+			Status: qotd.QuestionStatus(strings.TrimSpace(q.Status)),
+		})
+	}
+
+	createdRecords, err := s.qotdService.CreateQuestionsBatch(r.Context(), guildID, settingsRequestUserID(auth), mutations)
+	statusCode := http.StatusCreated
+	
+	var errMessage string
+	if err != nil {
+		statusCode = qotdErrorStatus(err)
+		errMessage = err.Error()
+	}
+
+	response := map[string]any{
+		"status":    "ok",
+		"guild_id":  guildID,
+		"questions": buildQOTDQuestionsResponse(createdRecords),
+	}
+	
+	if err != nil {
+		response["status"] = "error"
+		response["error"] = errMessage
+		// If at least one was created, we can return 207 Multi-Status, but let's just stick to what the UI expects for now or return a 400 with the questions.
+		// Sending 207 is safer. Wait, qotdErrorStatus will return 400 or 500. We can just send that status, but still include the "questions".
+	}
+
+	writeJSON(w, statusCode, response)
 }
 
 func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Request, guildID string, questionID int64) {

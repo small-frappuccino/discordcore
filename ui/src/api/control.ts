@@ -589,6 +589,17 @@ export class ControlApiClient {
     );
   }
 
+  async createQOTDQuestionsBatch(
+    guildId: string,
+    payload: { questions: QOTDQuestionMutation[] },
+  ): Promise<QOTDQuestionsResponse> {
+    return this.request<QOTDQuestionsResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/batch`,
+      payload,
+    );
+  }
+
   async updateQOTDQuestion(
     guildId: string,
     questionId: number,

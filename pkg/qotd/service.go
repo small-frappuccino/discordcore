@@ -171,6 +171,40 @@ func (s *Service) CreateQuestion(ctx context.Context, guildID, actorID string, m
 	})
 }
 
+func (s *Service) CreateQuestionsBatch(ctx context.Context, guildID, actorID string, mutations []QuestionMutation) ([]storage.QOTDQuestionRecord, error) {
+	if err := s.validate(); err != nil {
+		return nil, err
+	}
+	
+	guildID = strings.TrimSpace(guildID)
+	var created []storage.QOTDQuestionRecord
+
+	for _, mutation := range mutations {
+		deck, err := s.resolveDashboardDeck(guildID, mutation.DeckID)
+		if err != nil {
+			return created, err
+		}
+		body, status, err := normalizeQuestionMutation(mutation)
+		if err != nil {
+			return created, err
+		}
+
+		record, err := s.store.CreateQOTDQuestion(ctx, storage.QOTDQuestionRecord{
+			GuildID:   guildID,
+			DeckID:    deck.ID,
+			Body:      body,
+			Status:    string(status),
+			CreatedBy: normalizeActorID(actorID),
+		})
+		if err != nil {
+			return created, err
+		}
+		created = append(created, *record)
+	}
+
+	return created, nil
+}
+
 func (s *Service) UpdateQuestion(ctx context.Context, guildID string, questionID int64, mutation QuestionMutation) (*storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
