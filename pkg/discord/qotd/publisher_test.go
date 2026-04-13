@@ -47,17 +47,11 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 	if embed.Footer == nil || embed.Footer.Text != "Official QOTD #80" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
-	if embed.Timestamp != "2026-04-13T00:00:00Z" {
-		t.Fatalf("expected publish timestamp to be carried, got %q", embed.Timestamp)
+	if embed.Timestamp != "" {
+		t.Fatalf("expected publish timestamp to be omitted, got %q", embed.Timestamp)
 	}
-	if len(embed.Fields) != 4 {
-		t.Fatalf("expected prompt metadata fields, got %+v", embed.Fields)
-	}
-	if got := embed.Fields[1].Value; got != "`#80`" {
-		t.Fatalf("expected question id field, got %q", got)
-	}
-	if !strings.Contains(embed.Description, "Use **Answer** below") {
-		t.Fatalf("expected actionable prompt description, got %q", embed.Description)
+	if len(embed.Fields) != 0 {
+		t.Fatalf("expected prompt metadata fields to be removed, got %+v", embed.Fields)
 	}
 	if !strings.Contains(embed.Description, "What song best represents") {
 		t.Fatalf("expected question text in description, got %q", embed.Description)
@@ -77,25 +71,28 @@ func TestBuildAnswerEmbedIncludesAvatarAndContext(t *testing.T) {
 		"https://cdn.discordapp.com/avatars/user-1/avatar-hash.png?size=256",
 	)
 
-	if embed.Title != "QOTD Answer" {
-		t.Fatalf("unexpected title: %+v", embed)
+	if embed.Title != "" {
+		t.Fatalf("expected title to be removed, got %+v", embed)
 	}
-	if embed.Author == nil || embed.Author.Name != "Submitted by Alice" {
+	if embed.Author == nil || embed.Author.Name != "Alice" {
 		t.Fatalf("expected author metadata, got %+v", embed.Author)
 	}
-	if embed.Thumbnail == nil || embed.Thumbnail.URL != "https://cdn.discordapp.com/avatars/user-1/avatar-hash.png?size=256" {
-		t.Fatalf("expected thumbnail avatar, got %+v", embed.Thumbnail)
+	if embed.Thumbnail != nil {
+		t.Fatalf("expected thumbnail avatar to be removed, got %+v", embed.Thumbnail)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "QOTD response for question #80" {
+	if embed.Footer == nil || embed.Footer.Text != "Official QOTD #80" {
 		t.Fatalf("expected response footer metadata, got %+v", embed.Footer)
 	}
-	if len(embed.Fields) < 4 {
-		t.Fatalf("expected richer answer fields, got %+v", embed.Fields)
+	if embed.Timestamp != "" {
+		t.Fatalf("expected response timestamp to be omitted, got %q", embed.Timestamp)
 	}
-	if got := embed.Fields[0].Name; got != "Responder" {
-		t.Fatalf("expected responder field first, got %+v", embed.Fields[0])
+	if len(embed.Fields) != 1 || embed.Fields[0].Name != "Question" {
+		t.Fatalf("expected only question context field, got %+v", embed.Fields)
 	}
 	if !strings.Contains(embed.Description, "late-night synthwave") {
 		t.Fatalf("expected answer text in description, got %q", embed.Description)
+	}
+	if strings.Contains(embed.Description, "Submitted answer") {
+		t.Fatalf("expected submitted answer label to be removed, got %q", embed.Description)
 	}
 }

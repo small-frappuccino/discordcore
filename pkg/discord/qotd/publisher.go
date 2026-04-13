@@ -353,42 +353,13 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 }
 
 func buildOfficialQuestionEmbed(officialPostID int64, questionText string, publishDateUTC time.Time) *discordgo.MessageEmbed {
-	description := strings.Join([]string{
-		quoteEmbedText(questionText, 2800),
-		"*Daily prompt*",
-		fmt.Sprintf("Use **%s** below to open the reply form and send your answer.", answerButtonLabel),
-	}, "\n\n")
-
 	return &discordgo.MessageEmbed{
 		Title:       "Question Of The Day",
-		Description: description,
+		Description: quoteEmbedText(questionText, 3800),
 		Color:       0x89E5D1,
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "Prompt Type",
-				Value:  "Daily question",
-				Inline: true,
-			},
-			{
-				Name:   "Question ID",
-				Value:  fmt.Sprintf("`#%d`", officialPostID),
-				Inline: true,
-			},
-			{
-				Name:   "Publish Date",
-				Value:  fmt.Sprintf("`%s`", publishDateUTC.UTC().Format("2006-01-02")),
-				Inline: true,
-			},
-			{
-				Name:   "How It Works",
-				Value:  "The button below opens a private form so members can write a complete answer before it is posted in the response channel.",
-				Inline: false,
-			},
-		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Official QOTD #%d", officialPostID),
 		},
-		Timestamp: publishDateUTC.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -420,13 +391,7 @@ func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerTex
 		userDisplayName = "Member"
 	}
 
-	fields := []*discordgo.MessageEmbedField{
-		{
-			Name:   "Responder",
-			Value:  formatQOTDResponder(userDisplayName, userID),
-			Inline: false,
-		},
-	}
+	fields := []*discordgo.MessageEmbedField{}
 	if trimmedQuestion := strings.TrimSpace(questionText); trimmedQuestion != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Question",
@@ -434,48 +399,18 @@ func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerTex
 			Inline: false,
 		})
 	}
-	if trimmedQuestionURL := strings.TrimSpace(questionURL); trimmedQuestionURL != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Original Post",
-			Value:  "[Jump to the official question](" + trimmedQuestionURL + ")",
-			Inline: false,
-		})
-	}
-	fields = append(fields,
-		&discordgo.MessageEmbedField{
-			Name:   "Response Type",
-			Value:  "Member response",
-			Inline: true,
-		},
-		&discordgo.MessageEmbedField{
-			Name:   "Question ID",
-			Value:  fmt.Sprintf("`#%d`", officialPostID),
-			Inline: true,
-		},
-	)
 
 	embed := &discordgo.MessageEmbed{
-		Title: "QOTD Answer",
 		Author: &discordgo.MessageEmbedAuthor{
-			Name:    "Submitted by " + userDisplayName,
+			Name:    userDisplayName,
 			IconURL: strings.TrimSpace(userAvatarURL),
 		},
-		Description: strings.Join([]string{
-			"**Submitted answer**",
-			quoteEmbedText(answerText, 3600),
-			"*Shared through the QOTD answer form.*",
-		}, "\n\n"),
-		Color:     0x68C77C,
-		Fields:    fields,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Description: quoteEmbedText(answerText, 3600),
+		Color:       0x68C77C,
+		Fields:      fields,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("QOTD response for question #%d", officialPostID),
+			Text: fmt.Sprintf("Official QOTD #%d", officialPostID),
 		},
-	}
-	if strings.TrimSpace(userAvatarURL) != "" {
-		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
-			URL: strings.TrimSpace(userAvatarURL),
-		}
 	}
 	return embed
 }
@@ -681,19 +616,4 @@ func truncateEmbedText(text string, limit int) string {
 		return text[:limit]
 	}
 	return strings.TrimSpace(text[:limit-3]) + "..."
-}
-
-func formatQOTDResponder(userDisplayName, userID string) string {
-	userDisplayName = strings.TrimSpace(userDisplayName)
-	userID = strings.TrimSpace(userID)
-	if userDisplayName == "" && userID == "" {
-		return "Member"
-	}
-	if userID == "" {
-		return "**" + userDisplayName + "**"
-	}
-	if userDisplayName == "" {
-		return "<@" + userID + ">\n`" + userID + "`"
-	}
-	return fmt.Sprintf("**%s**\n<@%s> · `%s`", userDisplayName, userID, userID)
 }
