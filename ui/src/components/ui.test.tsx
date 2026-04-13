@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { GroupedSettingsInlineMessage } from "./groupedSettings";
 import {
   AdvancedTextInput,
   DashboardMetaList,
@@ -268,6 +269,19 @@ describe("SettingsSelectField", () => {
     expect(container.querySelector(".settings-select-label-slot")).not.toBeNull();
     expect(container.querySelector(".settings-select-value-slot")).not.toBeNull();
     expect(container.querySelector(".settings-select-note-slot")).not.toBeNull();
+  });
+});
+
+describe("GroupedSettingsInlineMessage", () => {
+  it("uses dedicated tone classes instead of the global tone background utility", () => {
+    const { container } = render(
+      <GroupedSettingsInlineMessage message="No questions have been added yet." tone="info" />,
+    );
+
+    const message = container.querySelector(".grouped-settings-inline-message-copy");
+    expect(message).not.toBeNull();
+    expect(message).toHaveClass("grouped-settings-inline-message-copy-tone-info");
+    expect(message).not.toHaveClass("tone-info");
   });
 });
 

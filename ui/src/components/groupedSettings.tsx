@@ -253,7 +253,7 @@ export function GroupedSettingsInlineMessage({
         className={joinClassNames(
           "meta-note",
           "grouped-settings-inline-message-copy",
-          `tone-${tone}`,
+          `grouped-settings-inline-message-copy-tone-${tone}`,
           classNames?.copy,
         )}
       >

@@ -2109,11 +2109,11 @@ textarea:focus {
   font-weight: var(--text-sm-weight);
 }
 
-.grouped-settings-inline-message-copy.tone-info {
+.grouped-settings-inline-message-copy-tone-info {
   color: var(--grouped-settings-inline-message-info-color);
 }
 
-.grouped-settings-inline-message-copy.tone-error {
+.grouped-settings-inline-message-copy-tone-error {
   color: var(--grouped-settings-inline-message-error-color);
 }
 
