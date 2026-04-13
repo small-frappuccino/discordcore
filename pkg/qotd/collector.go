@@ -198,6 +198,15 @@ func collectorAllowsAuthor(message discordqotd.ArchivedMessage, authorIDs []stri
 }
 
 func extractCollectedQuestion(guildID, sourceChannelID string, message discordqotd.ArchivedMessage, titlePatterns []string) (storage.QOTDCollectedQuestionRecord, bool) {
+	sourceMessageID := strings.TrimSpace(message.MessageID)
+	if sourceMessageID == "" {
+		return storage.QOTDCollectedQuestionRecord{}, false
+	}
+	sourceCreatedAt := message.CreatedAt.UTC()
+	if sourceCreatedAt.IsZero() {
+		return storage.QOTDCollectedQuestionRecord{}, false
+	}
+
 	embeds := parseCollectorEmbeds(message.EmbedsJSON)
 	for _, embed := range embeds {
 		title := strings.TrimSpace(embed.Title)
@@ -211,10 +220,10 @@ func extractCollectedQuestion(guildID, sourceChannelID string, message discordqo
 		return storage.QOTDCollectedQuestionRecord{
 			GuildID:                  guildID,
 			SourceChannelID:          sourceChannelID,
-			SourceMessageID:          strings.TrimSpace(message.MessageID),
+			SourceMessageID:          sourceMessageID,
 			SourceAuthorID:           strings.TrimSpace(message.AuthorID),
 			SourceAuthorNameSnapshot: strings.TrimSpace(message.AuthorNameSnapshot),
-			SourceCreatedAt:          message.CreatedAt.UTC(),
+			SourceCreatedAt:          sourceCreatedAt,
 			EmbedTitle:               title,
 			QuestionText:             questionText,
 		}, true

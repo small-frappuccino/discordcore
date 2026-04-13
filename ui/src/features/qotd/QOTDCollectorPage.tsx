@@ -142,10 +142,15 @@ export function QOTDCollectorPage() {
 
     setSaving(true);
     try {
-      await saveSettings({
+      const updatedSettings = await saveSettings({
         ...settings,
         collector: buildCollectorConfigFromDraft(draft),
       });
+      if (updatedSettings != null) {
+        const nextDraft = createCollectorDraft(updatedSettings.collector);
+        savedDraftRef.current = nextDraft;
+        setDraft(nextDraft);
+      }
     } finally {
       setSaving(false);
     }
@@ -395,7 +400,7 @@ export function QOTDCollectorPage() {
                     <span>
                       {draft.source_channel_id.trim() === ""
                         ? "No source channel selected"
-                        : "Ready to scan saved source channel"}
+                        : "Source channel ready"}
                     </span>
                   </div>
 
@@ -534,17 +539,24 @@ function buildCollectorConfigFromDraft(
 }
 
 function parseAuthorIDs(value: string) {
-  return value
-    .split(/[\s,]+/)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== "");
+  return normalizeCollectorEntries(
+    value
+      .split(/[\s,]+/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== ""),
+  );
 }
 
 function parseTitlePatterns(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== "");
+  return normalizeCollectorEntries(
+    value
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== ""),
+    {
+      caseInsensitive: true,
+    },
+  );
 }
 
 function formatCollectorRunResult(result: QOTDCollectorRunResult) {
@@ -552,7 +564,12 @@ function formatCollectorRunResult(result: QOTDCollectorRunResult) {
 }
 
 function buildCollectedQuestionMeta(question: QOTDCollectedQuestion) {
-  const meta = [`Posted ${question.source_created_at.slice(0, 10)}`];
+  const postedLabel =
+    typeof question.source_created_at === "string" &&
+    question.source_created_at.length >= 10
+      ? `Posted ${question.source_created_at.slice(0, 10)}`
+      : "Posted date unavailable";
+  const meta = [postedLabel];
   if (question.source_author_name) {
     meta.push(question.source_author_name);
   } else if (question.source_author_id) {
@@ -569,6 +586,48 @@ function normalizeCollectorSummary(
     total_questions: Number(summary?.total_questions ?? 0),
     recent_questions: Array.isArray(summary?.recent_questions)
       ? summary.recent_questions
+          .filter(
+            (question): question is QOTDCollectedQuestion =>
+              question !== null && typeof question === "object",
+          )
+          .map((question) => ({
+            id: Number(question.id ?? 0),
+            source_channel_id: String(question.source_channel_id ?? "").trim(),
+            source_message_id: String(question.source_message_id ?? "").trim(),
+            source_author_id: String(question.source_author_id ?? "").trim(),
+            source_author_name: String(
+              question.source_author_name ?? "",
+            ).trim(),
+            source_created_at: String(question.source_created_at ?? "").trim(),
+            embed_title: String(question.embed_title ?? "").trim(),
+            question_text: String(question.question_text ?? "").trim(),
+            created_at: String(question.created_at ?? "").trim(),
+            updated_at: String(question.updated_at ?? "").trim(),
+          }))
+          .filter(
+            (question) => question.id > 0 && question.question_text !== "",
+          )
       : [],
   };
+}
+
+function normalizeCollectorEntries(
+  values: readonly string[],
+  options: { caseInsensitive?: boolean } = {},
+) {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      continue;
+    }
+    const key = options.caseInsensitive ? trimmed.toLowerCase() : trimmed;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(trimmed);
+  }
+  return normalized;
 }

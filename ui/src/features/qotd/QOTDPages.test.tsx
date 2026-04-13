@@ -154,7 +154,7 @@ describe("QOTD UI", () => {
     qotdMock.summary = createQOTDSummary();
     qotdMock.workspaceState = "ready";
     qotdMock.createQuestions.mockReset().mockResolvedValue(true);
-    qotdMock.saveSettings.mockReset().mockResolvedValue(undefined);
+    qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
     qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
     dashboardSessionMock.client.getQOTDCollectorSummary = vi
       .fn()
@@ -589,6 +589,67 @@ describe("QOTD UI", () => {
     );
   });
 
+  it("normalizes collector draft values after save and clears the unsaved state", async () => {
+    const user = userEvent.setup();
+    qotdMock.saveSettings.mockImplementation(async (next) =>
+      createQOTDSettings({
+        ...next,
+        collector: {
+          source_channel_id: "answers-channel-1",
+          author_ids: ["111111111111111111", "222222222222222222"],
+          title_patterns: ["Question Of The Day", "question!!"],
+          start_date: "2026-01-01",
+        },
+      }),
+    );
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDCollectorPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        within(view.container).getByText("1 collected question stored"),
+      ).toBeInTheDocument();
+    });
+
+    await user.selectOptions(
+      within(view.container).getByLabelText("History channel"),
+      "answers-channel-1",
+    );
+    await user.type(
+      within(view.container).getByLabelText("Allowed author IDs"),
+      "111111111111111111\n111111111111111111\n222222222222222222",
+    );
+    await user.type(
+      within(view.container).getByLabelText("Embed title patterns"),
+      "Question Of The Day\nquestion of the day\nquestion!!",
+    );
+    await user.type(
+      within(view.container).getByLabelText("Earliest message date"),
+      "2026-01-01",
+    );
+
+    await user.click(
+      within(view.container).getByRole("button", { name: "Save changes" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        within(view.container).queryByRole("button", { name: "Save changes" }),
+      ).not.toBeInTheDocument();
+    });
+
+    expect(
+      within(view.container).getByLabelText("Allowed author IDs"),
+    ).toHaveValue("111111111111111111\n222222222222222222");
+    expect(
+      within(view.container).getByLabelText("Embed title patterns"),
+    ).toHaveValue("Question Of The Day\nquestion!!");
+  });
+
   it("runs collector scans and downloads the exported text file", async () => {
     const user = userEvent.setup();
     qotdMock.settings = createQOTDSettings({
@@ -617,6 +678,9 @@ describe("QOTD UI", () => {
       .mockReturnValue("blob:collector");
     const revokeObjectURL = vi
       .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
     const view = render(
@@ -664,6 +728,7 @@ describe("QOTD UI", () => {
 
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
+    anchorClick.mockRestore();
   });
 });
 

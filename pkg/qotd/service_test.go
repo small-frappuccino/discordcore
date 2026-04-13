@@ -485,6 +485,14 @@ func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
 	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
 		"123456789012345678": {
 			{
+				MessageID:          "",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"This malformed message should be skipped"}]`),
+				CreatedAt:          time.Date(2026, 4, 13, 16, 0, 0, 0, time.UTC),
+			},
+			{
 				MessageID:          "message-3",
 				AuthorID:           "999999999999999999",
 				AuthorNameSnapshot: "QOTD Bot",
@@ -515,7 +523,7 @@ func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CollectArchivedQuestions() failed: %v", err)
 	}
-	if result.ScannedMessages != 3 || result.MatchedMessages != 2 || result.NewQuestions != 2 || result.TotalQuestions != 2 {
+	if result.ScannedMessages != 4 || result.MatchedMessages != 2 || result.NewQuestions != 2 || result.TotalQuestions != 2 {
 		t.Fatalf("unexpected collector result: %+v", result)
 	}
 

@@ -57,7 +57,7 @@ interface QOTDContextValue {
   publishNow: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
-  saveSettings: (settings: QOTDConfig) => Promise<void>;
+  saveSettings: (settings: QOTDConfig) => Promise<QOTDConfig | null>;
   selectDeck: (deckId: string) => Promise<void>;
   updateQuestion: (
     questionId: number,
@@ -234,7 +234,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
   async function saveSettings(nextSettings: QOTDConfig) {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
+      return null;
     }
 
     setBusyLabel(QOTD_BUSY_LABELS.saveSettings);
@@ -249,11 +249,13 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         chooseDeckID(selectedDeckRef.current, updatedSettings),
       );
       setNotice(null);
+      return updatedSettings;
     } catch (error) {
       setNotice({
         tone: "error",
         message: formatError(error),
       });
+      return null;
     } finally {
       setBusyLabel("");
     }
@@ -546,18 +548,37 @@ function normalizeQOTDCollectorConfig(
 ): QOTDCollectorConfig {
   return {
     source_channel_id: String(collector?.source_channel_id ?? "").trim(),
-    author_ids: Array.isArray(collector?.author_ids)
-      ? collector.author_ids
-          .map((value) => String(value ?? "").trim())
-          .filter((value) => value !== "")
-      : [],
-    title_patterns: Array.isArray(collector?.title_patterns)
-      ? collector.title_patterns
-          .map((value) => String(value ?? "").trim())
-          .filter((value) => value !== "")
-      : [],
+    author_ids: normalizeCollectorEntries(collector?.author_ids),
+    title_patterns: normalizeCollectorEntries(collector?.title_patterns, {
+      caseInsensitive: true,
+    }),
     start_date: String(collector?.start_date ?? "").trim(),
   };
+}
+
+function normalizeCollectorEntries(
+  values: readonly unknown[] | undefined,
+  options: { caseInsensitive?: boolean } = {},
+) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed === "") {
+      continue;
+    }
+    const key = options.caseInsensitive ? trimmed.toLowerCase() : trimmed;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(trimmed);
+  }
+  return normalized;
 }
 
 function normalizeQOTDDeck(deck: QOTDDeck): QOTDDeck {

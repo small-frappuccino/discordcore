@@ -76,7 +76,12 @@ export function QOTDSettingsPage() {
 
     setSaving(true);
     try {
-      await saveSettings(draft);
+      const updatedSettings = await saveSettings(draft);
+      if (updatedSettings != null) {
+        const nextDraft = createSettingsDraft(updatedSettings);
+        savedDraftRef.current = nextDraft;
+        setDraft(nextDraft);
+      }
     } finally {
       setSaving(false);
     }
@@ -436,15 +441,38 @@ function normalizeCollectorConfig(
   collector?: QOTDCollectorConfig,
 ): QOTDCollectorConfig {
   return {
-    source_channel_id: String(collector?.source_channel_id ?? ""),
-    author_ids: Array.isArray(collector?.author_ids)
-      ? collector.author_ids.map((value) => String(value ?? ""))
-      : [],
-    title_patterns: Array.isArray(collector?.title_patterns)
-      ? collector.title_patterns.map((value) => String(value ?? ""))
-      : [],
-    start_date: String(collector?.start_date ?? ""),
+    source_channel_id: String(collector?.source_channel_id ?? "").trim(),
+    author_ids: normalizeCollectorEntries(collector?.author_ids),
+    title_patterns: normalizeCollectorEntries(collector?.title_patterns, {
+      caseInsensitive: true,
+    }),
+    start_date: String(collector?.start_date ?? "").trim(),
   };
+}
+
+function normalizeCollectorEntries(
+  values: readonly unknown[] | undefined,
+  options: { caseInsensitive?: boolean } = {},
+) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed === "") {
+      continue;
+    }
+    const key = options.caseInsensitive ? trimmed.toLowerCase() : trimmed;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(trimmed);
+  }
+  return normalized;
 }
 
 function findDeckSummary(
