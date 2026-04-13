@@ -382,7 +382,7 @@ export function QOTDQuestionsPage() {
 
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
-            <p className="section-label">Queue</p>
+            <p className="section-label">Question</p>
             <GroupedSettingsHeading as="h2" variant="section">
               Question order
             </GroupedSettingsHeading>
@@ -411,7 +411,7 @@ export function QOTDQuestionsPage() {
                             <div className="qotd-question-heading">
                               <div className="qotd-question-order-row">
                                 <span className="qotd-question-index">
-                                  Queue #{question.queue_position}
+                                  Question #{question.queue_position}
                                 </span>
                                 <span
                                   className={`qotd-status-pill ${getQuestionToneClass(question.status)}`}

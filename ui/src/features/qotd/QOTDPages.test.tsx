@@ -218,7 +218,7 @@ describe("QOTD UI", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Settings body")).toBeInTheDocument();
     expect(screen.queryByText("Current slot")).not.toBeInTheDocument();
-    expect(screen.queryByText("Queue")).not.toBeInTheDocument();
+    expect(screen.queryByText("Question")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Publish manual QOTD" }),
     ).not.toBeInTheDocument();

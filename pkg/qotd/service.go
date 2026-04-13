@@ -487,6 +487,17 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		return nil, ErrReplyThreadUnavailable
 	}
 
+	questionNumber := int64(0)
+	if officialPost.QuestionID > 0 {
+		question, err := s.store.GetQOTDQuestion(ctx, officialPost.GuildID, officialPost.QuestionID)
+		if err != nil {
+			return nil, err
+		}
+		if question != nil {
+			questionNumber = question.QueuePosition
+		}
+	}
+
 	lock := s.replyThreadLock(officialPost.ID, normalized.UserID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -527,7 +538,7 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		GuildID:           officialPost.GuildID,
 		OfficialPostID:    officialPost.ID,
 		DeckName:          officialPost.DeckNameSnapshot,
-		PublishDateUTC:    officialPost.PublishDateUTC,
+		QuestionNumber:    questionNumber,
 		ResponseChannelID: targetChannelID,
 		QuestionText:      officialPost.QuestionTextSnapshot,
 		QuestionURL:       officialPostJumpURL(*officialPost),

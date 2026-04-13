@@ -45,7 +45,7 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 	if embed.Title != "☆ question!! ☆" {
 		t.Fatalf("unexpected title: %+v", embed)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Deck: Final Mix | Queue #345 -- 62 Cards Remaining" {
+	if embed.Footer == nil || embed.Footer.Text != "Deck: Final Mix | Question #345 -- 62 Cards Remaining" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {
@@ -64,7 +64,7 @@ func TestBuildAnswerEmbedIncludesAvatarAndContext(t *testing.T) {
 
 	embed := buildAnswerEmbed(
 		"Final Mix",
-		time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		3,
 		80,
 		"What song best represents the current mood you are in?",
 		"https://discord.com/channels/g1/c1/m1",
@@ -83,7 +83,7 @@ func TestBuildAnswerEmbedIncludesAvatarAndContext(t *testing.T) {
 	if embed.Thumbnail != nil {
 		t.Fatalf("expected thumbnail avatar to be removed, got %+v", embed.Thumbnail)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Final Mix | 2026-04-03" {
+	if embed.Footer == nil || embed.Footer.Text != "Final Mix | Question #3" {
 		t.Fatalf("expected response footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {

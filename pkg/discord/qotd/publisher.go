@@ -72,7 +72,7 @@ type UpsertAnswerMessageParams struct {
 	GuildID           string
 	OfficialPostID    int64
 	DeckName          string
-	PublishDateUTC    time.Time
+	QuestionNumber    int64
 	ResponseChannelID string
 	QuestionText      string
 	QuestionURL       string
@@ -217,7 +217,7 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 
 	embed := buildAnswerEmbed(
 		normalized.DeckName,
-		normalized.PublishDateUTC,
+		normalized.QuestionNumber,
 		normalized.OfficialPostID,
 		normalized.QuestionText,
 		normalized.QuestionURL,
@@ -389,7 +389,7 @@ func buildReplyThreadEmbed(questionText, officialPostURL, provisioningNonce stri
 	return embed
 }
 
-func buildAnswerEmbed(deckName string, publishDateUTC time.Time, officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
+func buildAnswerEmbed(deckName string, questionNumber, officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -413,7 +413,7 @@ func buildAnswerEmbed(deckName string, publishDateUTC time.Time, officialPostID 
 		Description: description,
 		Color:       0x68C77C,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildAnswerFooter(deckName, publishDateUTC, officialPostID),
+			Text: buildAnswerFooter(deckName, questionNumber, officialPostID),
 		},
 	}
 	return embed
@@ -533,9 +533,6 @@ func normalizeFindReplyPostByNonceParams(params FindReplyPostByNonceParams) (Fin
 func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (UpsertAnswerMessageParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
 	params.DeckName = strings.TrimSpace(params.DeckName)
-	if !params.PublishDateUTC.IsZero() {
-		params.PublishDateUTC = params.PublishDateUTC.UTC()
-	}
 	params.ResponseChannelID = strings.TrimSpace(params.ResponseChannelID)
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.QuestionURL = strings.TrimSpace(params.QuestionURL)
@@ -639,28 +636,21 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, queueP
 		availableQuestions = 0
 	}
 	if queuePosition > 0 {
-		return fmt.Sprintf("Deck: %s | Queue #%d -- %d Cards Remaining", deckName, queuePosition, availableQuestions)
+		return fmt.Sprintf("Deck: %s | Question #%d -- %d Cards Remaining", deckName, queuePosition, availableQuestions)
 	}
 	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
 }
 
-func buildAnswerFooter(deckName string, publishDateUTC time.Time, officialPostID int64) string {
+func buildAnswerFooter(deckName string, questionNumber, officialPostID int64) string {
 	deckName = strings.TrimSpace(deckName)
-	if !publishDateUTC.IsZero() {
-		publishDateUTC = publishDateUTC.UTC()
-	}
-	publishDateText := ""
-	if !publishDateUTC.IsZero() {
-		publishDateText = publishDateUTC.Format("2006-01-02")
-	}
 
 	switch {
-	case deckName != "" && publishDateText != "":
-		return fmt.Sprintf("%s | %s", deckName, publishDateText)
+	case deckName != "" && questionNumber > 0:
+		return fmt.Sprintf("%s | Question #%d", deckName, questionNumber)
 	case deckName != "":
 		return deckName
-	case publishDateText != "":
-		return publishDateText
+	case questionNumber > 0:
+		return fmt.Sprintf("Question #%d", questionNumber)
 	case officialPostID > 0:
 		return fmt.Sprintf("Official QOTD #%d", officialPostID)
 	default:
