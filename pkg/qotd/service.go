@@ -393,6 +393,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		OfficialPostID:     provisioned.ID,
 		DeckName:           deck.Name,
 		AvailableQuestions: availableQuestions,
+		QuestionID:         question.ID,
 		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
 		QuestionText:       question.Body,
 		PublishDateUTC:     publishDate,

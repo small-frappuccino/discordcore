@@ -120,9 +120,6 @@ func (s *Server) authorizeGuildControlAccess(
 		defer cancel()
 
 		resolveAccessible := s.resolveAccessibleGuilds
-		if requiredAccess == guildAccessLevelWrite {
-			resolveAccessible = s.resolveAccessibleGuildsFresh
-		}
 
 		accessible, err := resolveAccessible(ctx, auth.oauthSession)
 		if err != nil {

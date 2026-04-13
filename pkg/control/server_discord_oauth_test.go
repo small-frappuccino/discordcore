@@ -1194,7 +1194,7 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 	}
 }
 
-func TestGuildWriteAuthorizationBypassesAccessibleGuildCache(t *testing.T) {
+func TestGuildWriteAuthorizationUsesAccessibleGuildCache(t *testing.T) {
 	t.Parallel()
 
 	var guildRequests atomic.Int32
@@ -1282,11 +1282,11 @@ func TestGuildWriteAuthorizationBypassesAccessibleGuildCache(t *testing.T) {
 	patchReq.Header.Set(discordOAuthCSRFHeaderName, session.CSRFToken)
 	patchRec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(patchRec, patchReq)
-	if patchRec.Code != http.StatusForbidden {
-		t.Fatalf("expected guild write route to revalidate oauth guild access and reject stale cache, got %d body=%q", patchRec.Code, patchRec.Body.String())
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("expected guild write route to succeed with cached oauth access, got %d body=%q", patchRec.Code, patchRec.Body.String())
 	}
-	if got := guildRequests.Load(); got != 2 {
-		t.Fatalf("expected guild write authorization to bypass cache and refetch discord guilds, got %d requests", got)
+	if got := guildRequests.Load(); got != 1 {
+		t.Fatalf("expected guild write authorization to use cache and not refetch discord guilds, got %d requests", got)
 	}
 
 	secondAccessReq := httptest.NewRequest(http.MethodGet, "/auth/guilds/access", nil)
@@ -1308,7 +1308,7 @@ func TestGuildWriteAuthorizationBypassesAccessibleGuildCache(t *testing.T) {
 	if secondAccess.Count != 1 || len(secondAccess.Guilds) != 1 || secondAccess.Guilds[0].ID != "g1" {
 		t.Fatalf("expected list endpoint to continue serving cached accessible guilds, got %+v", secondAccess)
 	}
-	if got := guildRequests.Load(); got != 2 {
+	if got := guildRequests.Load(); got != 1 {
 		t.Fatalf("expected cached list endpoint not to refetch discord guilds, got %d requests", got)
 	}
 }

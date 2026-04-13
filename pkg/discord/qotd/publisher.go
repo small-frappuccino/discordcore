@@ -19,6 +19,7 @@ const (
 type PublishOfficialPostParams struct {
 	GuildID            string
 	OfficialPostID     int64
+	QuestionID         int64
 	DeckName           string
 	AvailableQuestions int
 	QuestionChannelID  string
@@ -114,7 +115,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		normalized.QuestionChannelID,
 		&discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{
-				buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText),
+				buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText, normalized.QuestionID),
 			},
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
@@ -354,13 +355,13 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, messageID)
 }
 
-func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string) *discordgo.MessageEmbed {
+func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string, questionID int64) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "☆ question!! ☆",
 		Description: quoteEmbedText(questionText, 3800),
 		Color:       0x89E5D1,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildOfficialQuestionFooter(deckName, availableQuestions),
+			Text: buildOfficialQuestionFooter(deckName, availableQuestions, questionID),
 		},
 	}
 }
@@ -393,23 +394,20 @@ func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerTex
 		userDisplayName = "Member"
 	}
 
-	fields := []*discordgo.MessageEmbedField{}
+	description := ""
 	if trimmedQuestion := strings.TrimSpace(questionText); trimmedQuestion != "" {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Question",
-			Value:  truncateEmbedText(trimmedQuestion, 1024),
-			Inline: false,
-		})
+		compactQuestion := strings.ReplaceAll(trimmedQuestion, "\n", " ")
+		description += fmt.Sprintf("*%s*\n\n", truncateEmbedText(compactQuestion, 256))
 	}
+	description += quoteEmbedText(answerText, 3600)
 
 	embed := &discordgo.MessageEmbed{
 		Author: &discordgo.MessageEmbedAuthor{
 			Name:    userDisplayName,
 			IconURL: strings.TrimSpace(userAvatarURL),
 		},
-		Description: quoteEmbedText(answerText, 3600),
+		Description: description,
 		Color:       0x68C77C,
-		Fields:      fields,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Official QOTD #%d", officialPostID),
 		},
@@ -624,13 +622,16 @@ func truncateEmbedText(text string, limit int) string {
 	return strings.TrimSpace(text[:limit-3]) + "..."
 }
 
-func buildOfficialQuestionFooter(deckName string, availableQuestions int) string {
+func buildOfficialQuestionFooter(deckName string, availableQuestions int, questionID int64) string {
 	deckName = strings.TrimSpace(deckName)
 	if deckName == "" {
 		deckName = "Default"
 	}
 	if availableQuestions < 0 {
 		availableQuestions = 0
+	}
+	if questionID > 0 {
+		return fmt.Sprintf("Deck: %s | Question #%d -- %d Cards Remaining", deckName, questionID, availableQuestions)
 	}
 	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
 }

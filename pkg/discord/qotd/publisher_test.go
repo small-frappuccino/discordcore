@@ -39,12 +39,13 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 		"Final Mix",
 		62,
 		"What song best represents the current mood you are in?",
+		345,
 	)
 
 	if embed.Title != "☆ question!! ☆" {
 		t.Fatalf("unexpected title: %+v", embed)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Deck: Final Mix -- 62 Cards Remaining" {
+	if embed.Footer == nil || embed.Footer.Text != "Deck: Final Mix | Question #345 -- 62 Cards Remaining" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {
@@ -86,8 +87,11 @@ func TestBuildAnswerEmbedIncludesAvatarAndContext(t *testing.T) {
 	if embed.Timestamp != "" {
 		t.Fatalf("expected response timestamp to be omitted, got %q", embed.Timestamp)
 	}
-	if len(embed.Fields) != 1 || embed.Fields[0].Name != "Question" {
-		t.Fatalf("expected only question context field, got %+v", embed.Fields)
+	if len(embed.Fields) != 0 {
+		t.Fatalf("expected question context field to be removed, got %+v", embed.Fields)
+	}
+	if !strings.Contains(embed.Description, "What song best") {
+		t.Fatalf("expected question text inline in description, got %q", embed.Description)
 	}
 	if !strings.Contains(embed.Description, "late-night synthwave") {
 		t.Fatalf("expected answer text in description, got %q", embed.Description)

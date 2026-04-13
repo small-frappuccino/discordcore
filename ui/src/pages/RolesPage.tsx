@@ -193,6 +193,8 @@ export function RolesPage() {
     enabled: boolean,
   ) {
     setPendingFeatureId(feature.id);
+    const previous = workspace.features.find(f => f.id === feature.id);
+    workspace.updateFeature({ ...feature, effective_enabled: enabled });
 
     try {
       const updated = await mutation.patchFeature(feature.id, {
@@ -200,6 +202,8 @@ export function RolesPage() {
       });
       if (updated !== null) {
         workspace.updateFeature(updated);
+      } else if (previous !== undefined) {
+        workspace.updateFeature(previous);
       }
     } finally {
       setPendingFeatureId("");
@@ -208,6 +212,8 @@ export function RolesPage() {
 
   async function handleUseDefaultState(feature: FeatureRecord) {
     setPendingFeatureId(feature.id);
+    const previous = workspace.features.find(f => f.id === feature.id);
+    workspace.updateFeature({ ...feature, effective_enabled: false });
 
     try {
       const updated = await mutation.patchFeature(feature.id, {
@@ -215,6 +221,8 @@ export function RolesPage() {
       });
       if (updated !== null) {
         workspace.updateFeature(updated);
+      } else if (previous !== undefined) {
+        workspace.updateFeature(previous);
       }
     } finally {
       setPendingFeatureId("");

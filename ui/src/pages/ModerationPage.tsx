@@ -108,6 +108,8 @@ export function ModerationPage() {
     enabled: boolean,
   ) {
     setPendingFeatureId(feature.id);
+    const previous = workspace.features.find(f => f.id === feature.id);
+    workspace.updateFeature({ ...feature, effective_enabled: enabled });
 
     try {
       const updated = await mutation.patchFeature(feature.id, {
@@ -115,6 +117,8 @@ export function ModerationPage() {
       });
       if (updated !== null) {
         workspace.updateFeature(updated);
+      } else if (previous !== undefined) {
+        workspace.updateFeature(previous);
       }
     } finally {
       setPendingFeatureId("");

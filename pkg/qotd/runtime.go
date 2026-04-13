@@ -106,6 +106,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		OfficialPostID:     provisioned.ID,
 		DeckName:           deck.Name,
 		AvailableQuestions: availableQuestions,
+		QuestionID:         question.ID,
 		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
 		QuestionText:       question.Body,
 		PublishDateUTC:     publishDate,
