@@ -434,6 +434,12 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	if len(fake.answerParams) != 1 || fake.answerParams[0].UserAvatarURL != "https://cdn.discordapp.com/avatars/user-7/avatar-hash.png?size=256" {
 		t.Fatalf("expected answer publisher params to carry avatar url, got %+v", fake.answerParams)
 	}
+	if fake.answerParams[0].DeckName != files.LegacyQOTDDefaultDeckName {
+		t.Fatalf("expected answer publisher params to carry deck name snapshot, got %+v", fake.answerParams[0])
+	}
+	if got := fake.answerParams[0].PublishDateUTC; !got.Equal(publishDate) {
+		t.Fatalf("expected answer publisher params to carry publish date, got %v", got)
+	}
 
 	stored, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-7")
 	if err != nil {

@@ -175,7 +175,7 @@ func (s *Service) CreateQuestionsBatch(ctx context.Context, guildID, actorID str
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
-	
+
 	guildID = strings.TrimSpace(guildID)
 	var created []storage.QOTDQuestionRecord
 
@@ -393,7 +393,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		OfficialPostID:     provisioned.ID,
 		DeckName:           deck.Name,
 		AvailableQuestions: availableQuestions,
-		QuestionID:         question.ID,
+		QueuePosition:      question.QueuePosition,
 		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
 		QuestionText:       question.Body,
 		PublishDateUTC:     publishDate,
@@ -526,6 +526,8 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 	upserted, err := s.publisher.UpsertAnswerMessage(ctx, session, discordqotd.UpsertAnswerMessageParams{
 		GuildID:           officialPost.GuildID,
 		OfficialPostID:    officialPost.ID,
+		DeckName:          officialPost.DeckNameSnapshot,
+		PublishDateUTC:    officialPost.PublishDateUTC,
 		ResponseChannelID: targetChannelID,
 		QuestionText:      officialPost.QuestionTextSnapshot,
 		QuestionURL:       officialPostJumpURL(*officialPost),

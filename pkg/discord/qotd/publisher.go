@@ -19,7 +19,7 @@ const (
 type PublishOfficialPostParams struct {
 	GuildID            string
 	OfficialPostID     int64
-	QuestionID         int64
+	QueuePosition      int64
 	DeckName           string
 	AvailableQuestions int
 	QuestionChannelID  string
@@ -71,6 +71,8 @@ type FoundReplyPost struct {
 type UpsertAnswerMessageParams struct {
 	GuildID           string
 	OfficialPostID    int64
+	DeckName          string
+	PublishDateUTC    time.Time
 	ResponseChannelID string
 	QuestionText      string
 	QuestionURL       string
@@ -115,7 +117,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		normalized.QuestionChannelID,
 		&discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{
-				buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText, normalized.QuestionID),
+				buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText, normalized.QueuePosition),
 			},
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
@@ -214,6 +216,8 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 	}
 
 	embed := buildAnswerEmbed(
+		normalized.DeckName,
+		normalized.PublishDateUTC,
 		normalized.OfficialPostID,
 		normalized.QuestionText,
 		normalized.QuestionURL,
@@ -355,13 +359,13 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, messageID)
 }
 
-func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string, questionID int64) *discordgo.MessageEmbed {
+func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string, queuePosition int64) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "☆ question!! ☆",
 		Description: quoteEmbedText(questionText, 3800),
 		Color:       0x89E5D1,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildOfficialQuestionFooter(deckName, availableQuestions, questionID),
+			Text: buildOfficialQuestionFooter(deckName, availableQuestions, queuePosition),
 		},
 	}
 }
@@ -385,7 +389,7 @@ func buildReplyThreadEmbed(questionText, officialPostURL, provisioningNonce stri
 	return embed
 }
 
-func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
+func buildAnswerEmbed(deckName string, publishDateUTC time.Time, officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -409,7 +413,7 @@ func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerTex
 		Description: description,
 		Color:       0x68C77C,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Official QOTD #%d", officialPostID),
+			Text: buildAnswerFooter(deckName, publishDateUTC, officialPostID),
 		},
 	}
 	return embed
@@ -528,6 +532,10 @@ func normalizeFindReplyPostByNonceParams(params FindReplyPostByNonceParams) (Fin
 
 func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (UpsertAnswerMessageParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
+	params.DeckName = strings.TrimSpace(params.DeckName)
+	if !params.PublishDateUTC.IsZero() {
+		params.PublishDateUTC = params.PublishDateUTC.UTC()
+	}
 	params.ResponseChannelID = strings.TrimSpace(params.ResponseChannelID)
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.QuestionURL = strings.TrimSpace(params.QuestionURL)
@@ -622,7 +630,7 @@ func truncateEmbedText(text string, limit int) string {
 	return strings.TrimSpace(text[:limit-3]) + "..."
 }
 
-func buildOfficialQuestionFooter(deckName string, availableQuestions int, questionID int64) string {
+func buildOfficialQuestionFooter(deckName string, availableQuestions int, queuePosition int64) string {
 	deckName = strings.TrimSpace(deckName)
 	if deckName == "" {
 		deckName = "Default"
@@ -630,8 +638,32 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, questi
 	if availableQuestions < 0 {
 		availableQuestions = 0
 	}
-	if questionID > 0 {
-		return fmt.Sprintf("Deck: %s | Question #%d -- %d Cards Remaining", deckName, questionID, availableQuestions)
+	if queuePosition > 0 {
+		return fmt.Sprintf("Deck: %s | Queue #%d -- %d Cards Remaining", deckName, queuePosition, availableQuestions)
 	}
 	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
+}
+
+func buildAnswerFooter(deckName string, publishDateUTC time.Time, officialPostID int64) string {
+	deckName = strings.TrimSpace(deckName)
+	if !publishDateUTC.IsZero() {
+		publishDateUTC = publishDateUTC.UTC()
+	}
+	publishDateText := ""
+	if !publishDateUTC.IsZero() {
+		publishDateText = publishDateUTC.Format("2006-01-02")
+	}
+
+	switch {
+	case deckName != "" && publishDateText != "":
+		return fmt.Sprintf("%s | %s", deckName, publishDateText)
+	case deckName != "":
+		return deckName
+	case publishDateText != "":
+		return publishDateText
+	case officialPostID > 0:
+		return fmt.Sprintf("Official QOTD #%d", officialPostID)
+	default:
+		return "Official QOTD"
+	}
 }
