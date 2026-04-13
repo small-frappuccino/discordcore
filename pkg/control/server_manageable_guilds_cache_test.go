@@ -58,11 +58,11 @@ func TestResolveManageableGuildsCachesDiscordLookup(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	first, err := srv.resolveManageableGuilds(ctx, srv.discordOAuth, session)
+	first, err := srv.resolveManageableGuilds(ctx, session)
 	if err != nil {
 		t.Fatalf("first manageable guild lookup: %v", err)
 	}
-	second, err := srv.resolveManageableGuilds(ctx, srv.discordOAuth, session)
+	second, err := srv.resolveManageableGuilds(ctx, session)
 	if err != nil {
 		t.Fatalf("second manageable guild lookup: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestResolveManageableGuildsCacheExpires(t *testing.T) {
 	defer discordAPI.Close()
 
 	srv, _ := newControlTestServer(t)
-	srv.accessibleGuildsTTL = 5 * time.Millisecond
+	srv.accessibleGuildCache.SetTTL(5 * time.Millisecond)
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})
@@ -125,13 +125,13 @@ func TestResolveManageableGuildsCacheExpires(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if _, err := srv.resolveManageableGuilds(ctx, srv.discordOAuth, session); err != nil {
+	if _, err := srv.resolveManageableGuilds(ctx, session); err != nil {
 		t.Fatalf("first manageable guild lookup: %v", err)
 	}
 
 	time.Sleep(12 * time.Millisecond)
 
-	if _, err := srv.resolveManageableGuilds(ctx, srv.discordOAuth, session); err != nil {
+	if _, err := srv.resolveManageableGuilds(ctx, session); err != nil {
 		t.Fatalf("second manageable guild lookup after ttl: %v", err)
 	}
 
@@ -210,7 +210,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 	}
 
 	ctx := context.Background()
-	first, err := srv.resolveAccessibleGuilds(ctx, srv.discordOAuth, session)
+	first, err := srv.resolveAccessibleGuilds(ctx, session)
 	if err != nil {
 		t.Fatalf("first accessible guild lookup: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 		},
 	)
 
-	second, err := srv.resolveAccessibleGuilds(ctx, srv.discordOAuth, session)
+	second, err := srv.resolveAccessibleGuilds(ctx, session)
 	if err != nil {
 		t.Fatalf("second accessible guild lookup: %v", err)
 	}

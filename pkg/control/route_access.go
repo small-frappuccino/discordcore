@@ -119,10 +119,9 @@ func (s *Server) authorizeGuildControlAccess(
 		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
-		oauthControl := s.oauthControl()
-		resolveAccessible := oauthControl.resolveAccessibleGuilds
+		resolveAccessible := s.resolveAccessibleGuilds
 		if requiredAccess == guildAccessLevelWrite {
-			resolveAccessible = oauthControl.resolveAccessibleGuildsFresh
+			resolveAccessible = s.resolveAccessibleGuildsFresh
 		}
 
 		accessible, err := resolveAccessible(ctx, auth.oauthSession)

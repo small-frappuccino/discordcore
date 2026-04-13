@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -66,19 +65,22 @@ type Server struct {
 	partnerBoardService  partners.BoardService
 	partnerBoardSyncer   partners.GuildSyncExecutor
 	qotdService          *qotd.Service
-	botGuildIDsProvider  botGuildIDsProvider
-	botGuildBindings     botGuildBindingsProvider
 	guildRegistration    guildRegistrationFunc
 	discordSession       discordSessionResolver
 	defaultBotInstanceID string
 	discordOAuth         *discordOAuthProvider
 	publicOrigin         controlPublicOrigin
 	runtimeApplier       *runtimeapply.Manager
+	botGuildSource       *botGuildBindingSource
+	accessibleGuildCache *accessibleGuildCache
+	guildAccessEvaluator *guildAccessEvaluator
+	guildAccessResolver  *accessibleGuildResolver
+	featureBuilder       *featureWorkspaceBuilder
+	featureApplier       *featureMutationApplier
+	featureControlSvc    *featureControlService
+	discordOAuthSvc      *discordOAuthControlService
 	httpServer           *http.Server
 	listener             net.Listener
-	accessibleGuildsTTL  time.Duration
-	accessibleGuildsMu   sync.RWMutex
-	accessibleGuilds     map[string]accessibleGuildCacheEntry
 }
 
 // NewServer returns nil if addr is empty.
@@ -94,9 +96,26 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		configManager:       configManager,
 		partnerBoardService: partners.NewBoardApplicationService(configManager, nil),
 		runtimeApplier:      runtimeApplier,
-		accessibleGuildsTTL: defaultAccessibleGuildsCache,
-		accessibleGuilds:    make(map[string]accessibleGuildCacheEntry),
 	}
+	discordSessions := func(guildID string) (*discordgo.Session, error) {
+		return s.discordSessionForGuild(guildID)
+	}
+	providerSource := func() *discordOAuthProvider {
+		return s.discordOAuth
+	}
+	s.botGuildSource = newBotGuildBindingSource()
+	s.accessibleGuildCache = newAccessibleGuildCache(defaultAccessibleGuildsCache, time.Now)
+	s.guildAccessEvaluator = newGuildAccessEvaluator(configManager, discordSessions)
+	s.guildAccessResolver = newAccessibleGuildResolver(providerSource, s.botGuildSource, s.accessibleGuildCache, s.guildAccessEvaluator)
+	s.featureBuilder = newFeatureWorkspaceBuilder(configManager, discordSessions)
+	s.featureApplier = newFeatureMutationApplier(configManager)
+	s.featureControlSvc = newFeatureControlService(s.featureBuilder, s.featureApplier)
+	s.discordOAuthSvc = newDiscordOAuthControlService(
+		providerSource,
+		s.guildAccessResolver,
+		s.publicDashboardURL,
+		s.publicDiscordOAuthLoginURL,
+	)
 	s.httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           s.wrapCanonicalPublicOrigin(mux),
@@ -166,17 +185,8 @@ func (s *Server) SetBotGuildIDsProvider(provider func(context.Context) ([]string
 	if s == nil || provider == nil {
 		return
 	}
-	s.botGuildIDsProvider = provider
-	s.botGuildBindings = func(ctx context.Context) ([]BotGuildBinding, error) {
-		ids, err := provider(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]BotGuildBinding, 0, len(ids))
-		for _, guildID := range ids {
-			out = append(out, BotGuildBinding{GuildID: guildID})
-		}
-		return out, nil
+	if s.botGuildSource != nil {
+		s.botGuildSource.SetIDsProvider(provider)
 	}
 }
 
@@ -186,26 +196,8 @@ func (s *Server) SetBotGuildBindingsProvider(provider func(context.Context) ([]B
 	if s == nil || provider == nil {
 		return
 	}
-	s.botGuildBindings = provider
-	s.botGuildIDsProvider = func(ctx context.Context) ([]string, error) {
-		bindings, err := provider(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ids := make([]string, 0, len(bindings))
-		seen := make(map[string]struct{}, len(bindings))
-		for _, binding := range bindings {
-			guildID := strings.TrimSpace(binding.GuildID)
-			if guildID == "" {
-				continue
-			}
-			if _, ok := seen[guildID]; ok {
-				continue
-			}
-			seen[guildID] = struct{}{}
-			ids = append(ids, guildID)
-		}
-		return ids, nil
+	if s.botGuildSource != nil {
+		s.botGuildSource.SetBindingsProvider(provider)
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -15,14 +14,23 @@ import (
 var errDiscordOAuthUnavailable = errors.New("discord oauth is not configured")
 
 type discordOAuthControlService struct {
-	server   *Server
-	provider *discordOAuthProvider
+	providerSource             func() *discordOAuthProvider
+	guildAccessResolver        *accessibleGuildResolver
+	publicDashboardURL         func(string) string
+	publicDiscordOAuthLoginURL func(string) string
 }
 
-func newDiscordOAuthControlService(server *Server, provider *discordOAuthProvider) *discordOAuthControlService {
+func newDiscordOAuthControlService(
+	providerSource func() *discordOAuthProvider,
+	guildAccessResolver *accessibleGuildResolver,
+	publicDashboardURL func(string) string,
+	publicDiscordOAuthLoginURL func(string) string,
+) *discordOAuthControlService {
 	return &discordOAuthControlService{
-		server:   server,
-		provider: provider,
+		providerSource:             providerSource,
+		guildAccessResolver:        guildAccessResolver,
+		publicDashboardURL:         publicDashboardURL,
+		publicDiscordOAuthLoginURL: publicDiscordOAuthLoginURL,
 	}
 }
 
@@ -30,32 +38,27 @@ func (s *Server) oauthControl() *discordOAuthControlService {
 	if s == nil {
 		return nil
 	}
-	return newDiscordOAuthControlService(s, s.discordOAuth)
-}
-
-func (s *Server) oauthControlWithProvider(provider *discordOAuthProvider) *discordOAuthControlService {
-	if s == nil {
-		return nil
-	}
-	return newDiscordOAuthControlService(s, provider)
+	return s.discordOAuthSvc
 }
 
 func (svc *discordOAuthControlService) configured() bool {
-	return svc != nil && svc.provider != nil
+	return svc.provider() != nil
 }
 
 func (svc *discordOAuthControlService) sessionFromRequest(r *http.Request) (discordOAuthSession, error) {
-	if !svc.configured() {
+	provider := svc.provider()
+	if provider == nil {
 		return discordOAuthSession{}, errDiscordOAuthUnavailable
 	}
-	return svc.provider.sessionFromRequest(r)
+	return provider.sessionFromRequest(r)
 }
 
 func (svc *discordOAuthControlService) validateSessionCSRFToken(r *http.Request, session discordOAuthSession) error {
-	if !svc.configured() {
+	provider := svc.provider()
+	if provider == nil {
 		return errDiscordOAuthUnavailable
 	}
-	return svc.provider.validateSessionCSRFToken(r, session)
+	return provider.validateSessionCSRFToken(r, session)
 }
 
 func (svc *discordOAuthControlService) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -68,20 +71,21 @@ func (svc *discordOAuthControlService) handleLogin(w http.ResponseWriter, r *htt
 		return
 	}
 
-	state, err := svc.provider.generateState()
+	provider := svc.provider()
+	state, err := provider.generateState()
 	if err != nil {
 		log.ApplicationLogger().Error("Failed to generate OAuth state", "operation", "control.oauth.login.generate_state", "err", err)
 		http.Error(w, "failed to initialize oauth state", http.StatusInternalServerError)
 		return
 	}
-	svc.provider.setStateCookie(w, r, state)
+	provider.setStateCookie(w, r, state)
 	if next := sanitizeControlRedirectTarget(r.URL.Query().Get("next")); next != "" {
-		svc.provider.setNextCookie(w, r, next)
+		provider.setNextCookie(w, r, next)
 	} else {
-		svc.provider.clearNextCookie(w, r)
+		provider.clearNextCookie(w, r)
 	}
 
-	redirectURL, err := svc.provider.buildAuthorizationURL(state)
+	redirectURL, err := provider.buildAuthorizationURL(state)
 	if err != nil {
 		log.ApplicationLogger().Error("Failed to build OAuth login URL", "operation", "control.oauth.login.build_url", "err", err)
 		http.Error(w, "failed to build oauth redirect", http.StatusInternalServerError)
@@ -100,8 +104,9 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 		http.Error(w, "discord oauth is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	defer svc.provider.clearStateCookie(w, r)
-	defer svc.provider.clearNextCookie(w, r)
+	provider := svc.provider()
+	defer provider.clearStateCookie(w, r)
+	defer provider.clearNextCookie(w, r)
 
 	if oauthErr := strings.TrimSpace(r.URL.Query().Get("error")); oauthErr != "" {
 		desc := strings.TrimSpace(r.URL.Query().Get("error_description"))
@@ -114,7 +119,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 	}
 
 	providedState := strings.TrimSpace(r.URL.Query().Get("state"))
-	if err := svc.provider.validateState(r, providedState); err != nil {
+	if err := provider.validateState(r, providedState); err != nil {
 		log.ApplicationLogger().Warn("Discord OAuth state validation failed", "operation", "control.oauth.callback.state_validation", "err", err)
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)
 		return
@@ -129,7 +134,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 	ctx, cancel := context.WithTimeout(r.Context(), defaultDiscordOAuthExchangeTimeout)
 	defer cancel()
 
-	tokenPayload, status, err := svc.provider.exchangeCode(ctx, code)
+	tokenPayload, status, err := provider.exchangeCode(ctx, code)
 	if err != nil {
 		log.ApplicationLogger().Error("Discord OAuth token exchange failed", "operation", "control.oauth.callback.exchange_token", "status", status, "err", err)
 		if status < 400 {
@@ -150,36 +155,36 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 		return
 	}
 
-	accessToken, refreshToken, tokenType, scopes, tokenTTL, err := parseTokenResponse(tokenPayload, svc.provider.scopes)
+	accessToken, refreshToken, tokenType, scopes, tokenTTL, err := parseTokenResponse(tokenPayload, provider.scopes)
 	if err != nil {
 		log.ApplicationLogger().Warn("Discord OAuth token payload validation failed", "operation", "control.oauth.callback.parse_token", "err", err)
 		http.Error(w, "invalid oauth token response", http.StatusBadGateway)
 		return
 	}
 
-	user, err := svc.provider.fetchUser(ctx, accessToken, tokenType)
+	user, err := provider.fetchUser(ctx, accessToken, tokenType)
 	if err != nil {
 		log.ApplicationLogger().Error("Discord OAuth user fetch failed", "operation", "control.oauth.callback.fetch_user", "err", err)
 		http.Error(w, "failed to resolve oauth user", http.StatusBadGateway)
 		return
 	}
 
-	session, err := svc.provider.sessions.Create(
+	session, err := provider.sessions.Create(
 		user,
 		scopes,
 		accessToken,
 		refreshToken,
 		tokenType,
 		tokenTTL,
-		svc.provider.sessionTTL,
+		provider.sessionTTL,
 	)
 	if err != nil {
 		log.ApplicationLogger().Error("Discord OAuth session creation failed", "operation", "control.oauth.callback.create_session", "err", err)
 		http.Error(w, "failed to create oauth session", http.StatusInternalServerError)
 		return
 	}
-	svc.provider.setSessionCookie(w, r, session.ID, session.ExpiresAt)
-	if next := svc.provider.nextFromRequest(r); next != "" {
+	provider.setSessionCookie(w, r, session.ID, session.ExpiresAt)
+	if next := provider.nextFromRequest(r); next != "" {
 		http.Redirect(w, r, next, http.StatusFound)
 		return
 	}
@@ -233,8 +238,11 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 		"status":           "ok",
 		"oauth_configured": svc.configured(),
 		"authenticated":    false,
-		"dashboard_url":    svc.server.publicDashboardURL(dashboardRoutePrefix),
+		"dashboard_url":    "",
 		"login_url":        "",
+	}
+	if svc.publicDashboardURL != nil {
+		response["dashboard_url"] = svc.publicDashboardURL(dashboardRoutePrefix)
 	}
 	if !svc.configured() {
 		w.Header().Set("Cache-Control", "no-store")
@@ -243,7 +251,9 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
-	response["login_url"] = svc.server.publicDiscordOAuthLoginURL(next)
+	if svc.publicDiscordOAuthLoginURL != nil {
+		response["login_url"] = svc.publicDiscordOAuthLoginURL(next)
+	}
 	session, err := svc.sessionFromRequest(r)
 	if err == nil {
 		response["authenticated"] = true
@@ -278,7 +288,8 @@ func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := svc.provider.sessions.Delete(session.ID); err != nil {
+	provider := svc.provider()
+	if err := provider.sessions.Delete(session.ID); err != nil {
 		log.ApplicationLogger().Error(
 			"Discord OAuth logout session delete failed",
 			"operation", "control.oauth.logout.delete_session",
@@ -289,7 +300,7 @@ func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *ht
 		http.Error(w, "failed to logout", http.StatusInternalServerError)
 		return
 	}
-	svc.provider.clearSessionCookie(w, r)
+	provider.clearSessionCookie(w, r)
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
@@ -364,245 +375,52 @@ func (svc *discordOAuthControlService) resolveAccessibleGuilds(
 	ctx context.Context,
 	session discordOAuthSession,
 ) ([]accessibleGuildResponse, error) {
-	return svc.resolveAccessibleGuildsWithCache(ctx, session, true, true)
+	if svc == nil || svc.guildAccessResolver == nil {
+		return nil, errDiscordOAuthUnavailable
+	}
+	return svc.guildAccessResolver.ResolveAccessibleGuilds(ctx, session)
 }
 
 func (svc *discordOAuthControlService) resolveAccessibleGuildsFresh(
 	ctx context.Context,
 	session discordOAuthSession,
 ) ([]accessibleGuildResponse, error) {
-	return svc.resolveAccessibleGuildsWithCache(ctx, session, false, false)
+	if svc == nil || svc.guildAccessResolver == nil {
+		return nil, errDiscordOAuthUnavailable
+	}
+	return svc.guildAccessResolver.ResolveAccessibleGuildsFresh(ctx, session)
 }
 
 func (svc *discordOAuthControlService) resolveAccessibleGuildsRefreshed(
 	ctx context.Context,
 	session discordOAuthSession,
 ) ([]accessibleGuildResponse, error) {
-	return svc.resolveAccessibleGuildsWithCache(ctx, session, false, true)
-}
-
-func (svc *discordOAuthControlService) resolveAccessibleGuildsWithCache(
-	ctx context.Context,
-	session discordOAuthSession,
-	useCache bool,
-	storeCache bool,
-) ([]accessibleGuildResponse, error) {
-	if !svc.configured() {
+	if svc == nil || svc.guildAccessResolver == nil {
 		return nil, errDiscordOAuthUnavailable
 	}
-	if useCache {
-		if cached, ok := svc.cachedAccessibleGuilds(session.ID, time.Now().UTC()); ok {
-			return svc.materializeAccessibleGuilds(cached, session.User.ID), nil
-		}
-	}
-
-	botGuildSet, err := svc.server.resolveBotGuildIDSet(ctx)
-	if err != nil {
-		if !errors.Is(err, errBotGuildIDsProviderUnavailable) {
-			return nil, err
-		}
-		botGuildSet = map[string]struct{}{}
-	}
-
-	freshSession, err := svc.provider.ensureFreshSessionAccessToken(ctx, session)
-	if err != nil {
-		return nil, fmt.Errorf("resolve accessible guilds: refresh oauth access token: %w", err)
-	}
-
-	userGuilds, err := svc.provider.fetchUserGuilds(ctx, freshSession.AccessToken, freshSession.TokenType)
-	if err != nil {
-		return nil, fmt.Errorf("resolve accessible guilds: fetch user guilds: %w", err)
-	}
-
-	cachedGuilds := make([]cachedAccessibleGuild, 0, len(userGuilds))
-	for _, guild := range userGuilds {
-		guildID := strings.TrimSpace(guild.ID)
-		if guildID == "" {
-			continue
-		}
-		_, botPresent := botGuildSet[guildID]
-
-		cachedGuilds = append(cachedGuilds, cachedAccessibleGuild{
-			guild:      guild,
-			botPresent: botPresent,
-		})
-	}
-
-	if useCache || storeCache {
-		svc.storeAccessibleGuilds(session, cachedGuilds, time.Now().UTC())
-	}
-	return svc.materializeAccessibleGuilds(cachedGuilds, session.User.ID), nil
+	return svc.guildAccessResolver.ResolveAccessibleGuildsRefreshed(ctx, session)
 }
 
 func (svc *discordOAuthControlService) resolveManageableGuilds(
 	ctx context.Context,
 	session discordOAuthSession,
 ) ([]accessibleGuildResponse, error) {
-	accessible, err := svc.resolveAccessibleGuilds(ctx, session)
-	if err != nil {
-		return nil, err
+	if svc == nil || svc.guildAccessResolver == nil {
+		return nil, errDiscordOAuthUnavailable
 	}
-	return filterAccessibleGuildsByLevel(accessible, guildAccessLevelWrite), nil
-}
-
-func (svc *discordOAuthControlService) resolveGuildAccessLevel(
-	guild discordOAuthGuild,
-	userID string,
-) (guildAccessLevel, bool) {
-	if isGuildManageableByUser(guild) {
-		return guildAccessLevelWrite, true
-	}
-	if svc == nil || svc.server == nil || svc.server.configManager == nil {
-		return "", false
-	}
-
-	guildID := strings.TrimSpace(guild.ID)
-	userID = strings.TrimSpace(userID)
-	if guildID == "" || userID == "" {
-		return "", false
-	}
-
-	guildConfig := svc.server.configManager.GuildConfig(guildID)
-	if guildConfig == nil {
-		return "", false
-	}
-	if len(guildConfig.Roles.DashboardRead) == 0 && len(guildConfig.Roles.DashboardWrite) == 0 {
-		return "", false
-	}
-
-	session, err := svc.server.discordSessionForGuild(guildID)
-	if err != nil || session == nil {
-		return "", false
-	}
-
-	member, err := resolveGuildMemberFromDiscordSession(session, guildID, userID)
-	if err != nil || member == nil {
-		return "", false
-	}
-
-	memberRoleSet := make(map[string]struct{}, len(member.Roles))
-	for _, roleID := range member.Roles {
-		roleID = strings.TrimSpace(roleID)
-		if roleID == "" {
-			continue
-		}
-		memberRoleSet[roleID] = struct{}{}
-	}
-
-	if matchesAnyRole(memberRoleSet, guildConfig.Roles.DashboardWrite) {
-		return guildAccessLevelWrite, true
-	}
-	if matchesAnyRole(memberRoleSet, guildConfig.Roles.DashboardRead) {
-		return guildAccessLevelRead, true
-	}
-
-	return "", false
-}
-
-func (svc *discordOAuthControlService) materializeAccessibleGuilds(
-	guilds []cachedAccessibleGuild,
-	userID string,
-) []accessibleGuildResponse {
-	if len(guilds) == 0 {
-		return nil
-	}
-
-	out := make([]accessibleGuildResponse, 0, len(guilds))
-	for _, cached := range guilds {
-		accessLevel, ok := svc.resolveGuildAccessLevel(cached.guild, userID)
-		if !ok {
-			continue
-		}
-
-		icon := strings.TrimSpace(cached.guild.Icon)
-		if !cached.botPresent {
-			icon = ""
-		}
-
-		out = append(out, accessibleGuildResponse{
-			ID:          strings.TrimSpace(cached.guild.ID),
-			Name:        strings.TrimSpace(cached.guild.Name),
-			Icon:        icon,
-			BotPresent:  cached.botPresent,
-			Owner:       cached.guild.Owner,
-			Permissions: cached.guild.Permissions,
-			AccessLevel: accessLevel,
-		})
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		li := strings.ToLower(strings.TrimSpace(out[i].Name))
-		lj := strings.ToLower(strings.TrimSpace(out[j].Name))
-		if li == lj {
-			return out[i].ID < out[j].ID
-		}
-		return li < lj
-	})
-
-	return out
-}
-
-func (svc *discordOAuthControlService) cachedAccessibleGuilds(
-	sessionID string,
-	now time.Time,
-) ([]cachedAccessibleGuild, bool) {
-	if svc == nil || svc.server == nil || svc.server.accessibleGuildsTTL <= 0 {
-		return nil, false
-	}
-
-	sessionID = strings.TrimSpace(sessionID)
-	if sessionID == "" {
-		return nil, false
-	}
-
-	svc.server.accessibleGuildsMu.RLock()
-	entry, ok := svc.server.accessibleGuilds[sessionID]
-	svc.server.accessibleGuildsMu.RUnlock()
-	if !ok {
-		return nil, false
-	}
-	if !entry.expiresAt.IsZero() && !now.Before(entry.expiresAt) {
-		svc.server.accessibleGuildsMu.Lock()
-		delete(svc.server.accessibleGuilds, sessionID)
-		svc.server.accessibleGuildsMu.Unlock()
-		return nil, false
-	}
-	return cloneCachedAccessibleGuilds(entry.guilds), true
-}
-
-func (svc *discordOAuthControlService) storeAccessibleGuilds(
-	session discordOAuthSession,
-	guilds []cachedAccessibleGuild,
-	now time.Time,
-) {
-	if svc == nil || svc.server == nil || svc.server.accessibleGuildsTTL <= 0 {
-		return
-	}
-
-	sessionID := strings.TrimSpace(session.ID)
-	if sessionID == "" {
-		return
-	}
-
-	expiresAt := now.Add(svc.server.accessibleGuildsTTL)
-	if !session.ExpiresAt.IsZero() && session.ExpiresAt.Before(expiresAt) {
-		expiresAt = session.ExpiresAt
-	}
-
-	svc.server.accessibleGuildsMu.Lock()
-	svc.server.accessibleGuilds[sessionID] = accessibleGuildCacheEntry{
-		guilds:    cloneCachedAccessibleGuilds(guilds),
-		expiresAt: expiresAt,
-	}
-	svc.server.accessibleGuildsMu.Unlock()
+	return svc.guildAccessResolver.ResolveManageableGuilds(ctx, session)
 }
 
 func (svc *discordOAuthControlService) invalidateAccessibleGuildsCache() {
-	if svc == nil || svc.server == nil {
+	if svc == nil || svc.guildAccessResolver == nil {
 		return
 	}
+	svc.guildAccessResolver.InvalidateCache()
+}
 
-	svc.server.accessibleGuildsMu.Lock()
-	svc.server.accessibleGuilds = make(map[string]accessibleGuildCacheEntry)
-	svc.server.accessibleGuildsMu.Unlock()
+func (svc *discordOAuthControlService) provider() *discordOAuthProvider {
+	if svc == nil || svc.providerSource == nil {
+		return nil
+	}
+	return svc.providerSource()
 }

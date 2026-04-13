@@ -417,7 +417,7 @@ func (s *Server) resolveGuildRegistrySources(
 		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
-		accessible, err := s.oauthControl().resolveAccessibleGuilds(ctx, auth.oauthSession)
+		accessible, err := s.resolveAccessibleGuilds(ctx, auth.oauthSession)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -520,7 +520,7 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 	}
 	available := groupBotInstanceIDsByGuild(bindings)[guildID]
 	if auth.mode == requestAuthModeDiscordOAuthSession {
-		accessible, resolveErr := s.oauthControl().resolveAccessibleGuilds(ctx, auth.oauthSession)
+		accessible, resolveErr := s.resolveAccessibleGuilds(ctx, auth.oauthSession)
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
