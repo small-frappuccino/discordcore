@@ -13,7 +13,8 @@ export const appRoutes = {
   dashboardCoreStatsPattern: "/manage/:guildId/core/stats",
   dashboardCoreCommandsPattern: "/manage/:guildId/core/commands",
   dashboardModerationPattern: "/manage/:guildId/moderation",
-  dashboardModerationModerationPattern: "/manage/:guildId/moderation/moderation",
+  dashboardModerationModerationPattern:
+    "/manage/:guildId/moderation/moderation",
   dashboardModerationLoggingPattern: "/manage/:guildId/moderation/logging",
   dashboardPartnerBoardPattern: "/manage/:guildId/partner-board",
   partnerBoardEntriesPattern: "/manage/:guildId/partner-board/entries",
@@ -22,6 +23,7 @@ export const appRoutes = {
   dashboardQOTDPattern: "/manage/:guildId/qotd",
   qotdSettingsPattern: "/manage/:guildId/qotd/settings",
   qotdQuestionsPattern: "/manage/:guildId/qotd/questions",
+  qotdCollectorPattern: "/manage/:guildId/qotd/collector",
   dashboardRolesPattern: "/manage/:guildId/roles",
   dashboardRolesAutorolePattern: "/manage/:guildId/roles/autorole",
   dashboardRolesLevelRolesPattern: "/manage/:guildId/roles/level-roles",
@@ -55,6 +57,8 @@ export const appRoutes = {
     `/manage/${encodeGuildID(guildId)}/qotd/settings`,
   qotdQuestions: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/qotd/questions`,
+  qotdCollector: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/qotd/collector`,
   dashboardRoles: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/roles`,
   dashboardRolesAutorole: (guildId: string) =>
@@ -81,6 +85,7 @@ export function buildQOTDTabs(guildId: string) {
   return [
     { label: "Settings", path: appRoutes.qotdSettings(guildId) },
     { label: "Question Bank", path: appRoutes.qotdQuestions(guildId) },
+    { label: "Collector", path: appRoutes.qotdCollector(guildId) },
   ] as const;
 }
 
@@ -110,13 +115,19 @@ export function mapLegacyDashboardPath(pathname: string) {
   return mapLegacyDashboardPathForGuild(pathname, "");
 }
 
-export function mapLegacyDashboardPathForGuild(pathname: string, guildId: string) {
+export function mapLegacyDashboardPathForGuild(
+  pathname: string,
+  guildId: string,
+) {
   const normalizedGuildID = guildId.trim();
   if (normalizedGuildID === "") {
     return appRoutes.manage;
   }
 
-  if (pathname === appRoutes.manageLegacy || pathname === `${appRoutes.manageLegacy}/`) {
+  if (
+    pathname === appRoutes.manageLegacy ||
+    pathname === `${appRoutes.manageLegacy}/`
+  ) {
     return appRoutes.dashboardHome(normalizedGuildID);
   }
 
@@ -153,6 +164,8 @@ export function mapLegacyDashboardPathForGuild(pathname: string, guildId: string
       return appRoutes.qotdSettings(normalizedGuildID);
     case "qotd/questions":
       return appRoutes.qotdQuestions(normalizedGuildID);
+    case "qotd/collector":
+      return appRoutes.qotdCollector(normalizedGuildID);
     case "roles":
     case "roles-members":
       return appRoutes.dashboardRolesAutorole(normalizedGuildID);

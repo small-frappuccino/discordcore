@@ -35,6 +35,7 @@ type Publisher interface {
 	UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 	FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error)
+	FetchChannelMessages(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]discordqotd.ArchivedMessage, error)
 }
 
 type QuestionMutation struct {
@@ -333,18 +334,18 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 
 	lifecycle := EvaluateManualOfficialPost(now, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
-		GuildID:            guildID,
-		DeckID:             deck.ID,
-		DeckNameSnapshot:   deck.Name,
-		QuestionID:         question.ID,
-		PublishMode:        string(PublishModeManual),
-		PublishDateUTC:     publishDate,
-		State:              string(OfficialPostStateProvisioning),
-		ForumChannelID:     strings.TrimSpace(deck.QuestionChannelID),
-		ResponseChannelID:  strings.TrimSpace(deck.ResponseChannelID),
+		GuildID:              guildID,
+		DeckID:               deck.ID,
+		DeckNameSnapshot:     deck.Name,
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeManual),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStateProvisioning),
+		ForumChannelID:       strings.TrimSpace(deck.QuestionChannelID),
+		ResponseChannelID:    strings.TrimSpace(deck.ResponseChannelID),
 		QuestionTextSnapshot: question.Body,
-		GraceUntil:         lifecycle.BecomesPreviousAt,
-		ArchiveAt:          lifecycle.ArchiveAt,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
 	})
 	if err != nil {
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {

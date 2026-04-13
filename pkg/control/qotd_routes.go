@@ -36,6 +36,13 @@ func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, g
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
+	case len(tail) == 2 && tail[1] == "collector":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleQOTDCollectorGet(w, r, guildID)
+		return
 	case len(tail) == 2 && tail[1] == "questions":
 		switch r.Method {
 		case http.MethodGet:
@@ -52,6 +59,20 @@ func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, g
 			return
 		}
 		s.handleQOTDQuestionsReorder(w, r, guildID)
+		return
+	case len(tail) == 3 && tail[1] == "collector" && tail[2] == "collect":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleQOTDCollectorCollectPost(w, r, guildID, auth)
+		return
+	case len(tail) == 3 && tail[1] == "collector" && tail[2] == "export":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleQOTDCollectorExportGet(w, r, guildID)
 		return
 	case len(tail) == 3 && tail[1] == "questions":
 		questionID, err := strconv.ParseInt(strings.TrimSpace(tail[2]), 10, 64)
@@ -135,6 +156,21 @@ func (s *Server) handleQOTDSettingsPut(w http.ResponseWriter, r *http.Request, g
 		"status":   "ok",
 		"guild_id": guildID,
 		"settings": settings,
+	})
+}
+
+func (s *Server) handleQOTDCollectorGet(w http.ResponseWriter, r *http.Request, guildID string) {
+	summary, err := s.qotdService.GetCollectorSummary(r.Context(), guildID)
+	if err != nil {
+		status := qotdErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to read qotd collector summary: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"summary":  buildQOTDCollectorSummaryResponse(summary),
 	})
 }
 
@@ -225,7 +261,7 @@ func (s *Server) handleQOTDQuestionsDelete(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleQOTDQuestionsReorder(w http.ResponseWriter, r *http.Request, guildID string) {
 	var payload struct {
-		DeckID    string  `json:"deck_id"`
+		DeckID     string  `json:"deck_id"`
 		OrderedIDs []int64 `json:"ordered_ids"`
 	}
 	if err := decodeJSONBody(w, r, &payload); err != nil {
@@ -244,6 +280,56 @@ func (s *Server) handleQOTDQuestionsReorder(w http.ResponseWriter, r *http.Reque
 		"guild_id":  guildID,
 		"questions": buildQOTDQuestionsResponse(questions),
 	})
+}
+
+func (s *Server) handleQOTDCollectorCollectPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
+	session, err := s.discordSessionForGuild(guildID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to resolve discord session: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+
+	result, err := s.qotdService.CollectArchivedQuestions(r.Context(), guildID, session)
+	if err != nil {
+		status := qotdErrorStatus(err)
+		log.ApplicationLogger().Warn(
+			"QOTD collector scan failed",
+			"operation", "control.qotd.collector.collect",
+			"guildID", guildID,
+			"userID", settingsRequestUserID(auth),
+			"err", err,
+		)
+		http.Error(w, fmt.Sprintf("failed to collect qotd history: %v", err), status)
+		return
+	}
+
+	summary, err := s.qotdService.GetCollectorSummary(r.Context(), guildID)
+	if err != nil {
+		status := qotdErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to read qotd collector summary: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"result":   buildQOTDCollectorRunResultResponse(result),
+		"summary":  buildQOTDCollectorSummaryResponse(summary),
+	})
+}
+
+func (s *Server) handleQOTDCollectorExportGet(w http.ResponseWriter, r *http.Request, guildID string) {
+	exported, err := s.qotdService.ExportCollectedQuestionsTXT(r.Context(), guildID)
+	if err != nil {
+		status := qotdErrorStatus(err)
+		http.Error(w, fmt.Sprintf("failed to export qotd history: %v", err), status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="qotd-collected-questions.txt"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(exported))
 }
 
 func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {

@@ -20,6 +20,7 @@ type fakePublisher struct {
 	threadStates    map[string]discordqotd.ThreadState
 	fetchCalls      []string
 	threadMessages  map[string][]discordqotd.ArchivedMessage
+	channelMessages map[string][]discordqotd.ArchivedMessage
 	fetchErrs       map[string]error
 }
 
@@ -66,6 +67,36 @@ func (p *fakePublisher) FetchThreadMessages(_ context.Context, _ *discordgo.Sess
 		return nil, nil
 	}
 	return append([]discordqotd.ArchivedMessage(nil), p.threadMessages[threadID]...), nil
+}
+
+func (p *fakePublisher) FetchChannelMessages(_ context.Context, _ *discordgo.Session, channelID, beforeMessageID string, limit int) ([]discordqotd.ArchivedMessage, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	messages := p.channelMessages[channelID]
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
+	start := 0
+	if beforeMessageID = strings.TrimSpace(beforeMessageID); beforeMessageID != "" {
+		start = len(messages)
+		for idx, message := range messages {
+			if strings.TrimSpace(message.MessageID) == beforeMessageID {
+				start = idx + 1
+				break
+			}
+		}
+	}
+	if start >= len(messages) {
+		return nil, nil
+	}
+
+	end := start + limit
+	if end > len(messages) {
+		end = len(messages)
+	}
+	return append([]discordqotd.ArchivedMessage(nil), messages[start:end]...), nil
 }
 
 func newTestQOTDService(t *testing.T) (*Service, *storage.Store, *fakePublisher) {
@@ -435,6 +466,77 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	}
 	if strings.TrimSpace(stored.ForumChannelID) != "answers-channel-1" {
 		t.Fatalf("expected stored answer record to track the response channel, got %+v", stored)
+	}
+}
+
+func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
+	service, _, fake := newTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		Collector: files.QOTDCollectorConfig{
+			SourceChannelID: "123456789012345678",
+			AuthorIDs:       []string{"999999999999999999"},
+			TitlePatterns:   []string{"Question Of The Day", "question!!"},
+			StartDate:       "2026-01-01",
+		},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
+		"123456789012345678": {
+			{
+				MessageID:          "message-3",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"✰ question!! ✰","description":"What food have you never eaten but would really like to try?\nAuthor: QOTD Bot"}]`),
+				CreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
+			},
+			{
+				MessageID:          "message-2",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Tell us about a person you look up to!\n\nPreset Question"}]`),
+				CreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
+			},
+			{
+				MessageID:          "message-1",
+				AuthorID:           "555555555555555555",
+				AuthorNameSnapshot: "Ignored Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Ignored question"}]`),
+				CreatedAt:          time.Date(2025, 12, 31, 15, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	result, err := service.CollectArchivedQuestions(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("CollectArchivedQuestions() failed: %v", err)
+	}
+	if result.ScannedMessages != 3 || result.MatchedMessages != 2 || result.NewQuestions != 2 || result.TotalQuestions != 2 {
+		t.Fatalf("unexpected collector result: %+v", result)
+	}
+
+	summary, err := service.GetCollectorSummary(context.Background(), "g1")
+	if err != nil {
+		t.Fatalf("GetCollectorSummary() failed: %v", err)
+	}
+	if summary.TotalQuestions != 2 || len(summary.RecentQuestions) != 2 {
+		t.Fatalf("unexpected collector summary: %+v", summary)
+	}
+	if summary.RecentQuestions[0].QuestionText != "What food have you never eaten but would really like to try?" {
+		t.Fatalf("expected most recent collected question first, got %+v", summary.RecentQuestions)
+	}
+
+	exported, err := service.ExportCollectedQuestionsTXT(context.Background(), "g1")
+	if err != nil {
+		t.Fatalf("ExportCollectedQuestionsTXT() failed: %v", err)
+	}
+	expected := "Tell us about a person you look up to!\nWhat food have you never eaten but would really like to try?\n"
+	if exported != expected {
+		t.Fatalf("unexpected exported collector text:\n%s", exported)
 	}
 }
 

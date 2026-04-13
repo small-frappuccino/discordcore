@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import type {
   QOTDDeck,
   QOTDQuestion,
@@ -23,6 +23,7 @@ export function QOTDQuestionsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
   const {
     createQuestion,
+    createQuestions,
     deckSummaries,
     deleteQuestion,
     questions,
@@ -33,6 +34,7 @@ export function QOTDQuestionsPage() {
     updateQuestion,
   } = useQOTD();
   const composerHeadingId = useId();
+  const importInputId = useId();
   const queueHeadingId = useId();
   const availableDecks = settings.decks ?? [];
   const selectedDeck = availableDecks.find((deck) => deck.id === selectedDeckID) ?? null;
@@ -46,10 +48,14 @@ export function QOTDQuestionsPage() {
   });
   const [draftBody, setDraftBody] = useState("");
   const [draftStatus, setDraftStatus] = useState<QOTDQuestionStatus>("ready");
+  const [importError, setImportError] = useState("");
+  const [importFileName, setImportFileName] = useState("");
+  const [importedQuestions, setImportedQuestions] = useState<string[]>([]);
   const [editingQuestionID, setEditingQuestionID] = useState<number | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [editingStatus, setEditingStatus] = useState<QOTDQuestionStatus>("ready");
   const [editingDeckID, setEditingDeckID] = useState("");
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -80,6 +86,56 @@ export function QOTDQuestionsPage() {
       });
       setDraftBody("");
       setDraftStatus("ready");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    if (file === null) {
+      resetImportedQuestions();
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const questionsFromFile = parseImportedQuestions(text);
+      setImportFileName(file.name);
+      setImportedQuestions(questionsFromFile);
+      setImportError(
+        questionsFromFile.length === 0
+          ? "This text file does not contain any questions yet."
+          : "",
+      );
+    } catch {
+      setImportFileName(file.name);
+      setImportedQuestions([]);
+      setImportError("Couldn't read this text file. Upload a plain .txt document.");
+    }
+  }
+
+  async function handleImport() {
+    if (
+      !canEditSelectedGuild ||
+      importedQuestions.length === 0 ||
+      selectedDeckID.trim() === ""
+    ) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const imported = await createQuestions(
+        importedQuestions.map((body) => ({
+          deck_id: selectedDeckID,
+          body,
+          status: draftStatus,
+        })),
+      );
+      if (imported) {
+        resetImportedQuestions();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -152,6 +208,15 @@ export function QOTDQuestionsPage() {
       await reorderQuestions(nextOrder);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function resetImportedQuestions() {
+    setImportError("");
+    setImportFileName("");
+    setImportedQuestions([]);
+    if (importInputRef.current) {
+      importInputRef.current.value = "";
     }
   }
 
@@ -247,7 +312,38 @@ export function QOTDQuestionsPage() {
                         </select>
                       </label>
 
-                      <div className="workspace-footer">
+                      <label className="field-stack" htmlFor={importInputId}>
+                        <span className="field-label">Import from .txt</span>
+                        <input
+                          id={importInputId}
+                          ref={importInputRef}
+                          type="file"
+                          accept=".txt,text/plain"
+                          disabled={!canEditSelectedGuild || submitting}
+                          onChange={(event) => void handleImportFileChange(event)}
+                        />
+                      </label>
+
+                      <div className="card-copy">
+                        Each non-empty line becomes one question card in the selected
+                        deck.
+                      </div>
+
+                      {importFileName !== "" ? (
+                        <div className="card-copy">
+                          <strong>{importFileName}</strong>
+                          <br />
+                          {importedQuestions.length === 1
+                            ? "1 question ready to import."
+                            : `${importedQuestions.length} questions ready to import.`}
+                        </div>
+                      ) : null}
+
+                      {importError !== "" ? (
+                        <GroupedSettingsInlineMessage message={importError} tone="error" />
+                      ) : null}
+
+                      <div className="inline-actions">
                         <button
                           className="button-primary"
                           type="button"
@@ -260,6 +356,20 @@ export function QOTDQuestionsPage() {
                           onClick={() => void handleCreate()}
                         >
                           {submitting ? "Saving..." : "Add question"}
+                        </button>
+
+                        <button
+                          className="button-secondary"
+                          type="button"
+                          disabled={
+                            !canEditSelectedGuild ||
+                            submitting ||
+                            importedQuestions.length === 0 ||
+                            selectedDeckID.trim() === ""
+                          }
+                          onClick={() => void handleImport()}
+                        >
+                          {submitting ? "Importing..." : "Import .txt"}
                         </button>
                       </div>
                     </div>
@@ -448,6 +558,13 @@ export function QOTDQuestionsPage() {
       </GroupedSettingsStack>
     </div>
   );
+}
+
+function parseImportedQuestions(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
 }
 
 function canMutateQuestion(question: QOTDQuestion) {

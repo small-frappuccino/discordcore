@@ -30,25 +30,15 @@ func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.
 		return nil, err
 	}
 
-	out := make([]ArchivedMessage, 0, len(collected))
-	for idx := len(collected) - 1; idx >= 0; idx-- {
-		message := collected[idx]
-		if message == nil || strings.TrimSpace(message.ID) == "" {
-			continue
-		}
-		out = append(out, ArchivedMessage{
-			MessageID:          strings.TrimSpace(message.ID),
-			AuthorID:           archiveAuthorID(message.Author),
-			AuthorNameSnapshot: archiveAuthorName(message),
-			AuthorIsBot:        message.Author != nil && message.Author.Bot,
-			Content:            message.Content,
-			EmbedsJSON:         marshalArchiveField(message.Embeds),
-			AttachmentsJSON:    marshalArchiveField(message.Attachments),
-			CreatedAt:          normalizeArchiveMessageTimestamp(message.Timestamp),
-		})
-	}
+	return archiveMessagesAscending(collected), nil
+}
 
-	return out, nil
+func (p *Publisher) FetchChannelMessages(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]ArchivedMessage, error) {
+	page, err := fetchChannelMessagesPageRaw(ctx, session, channelID, beforeMessageID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return archiveMessagesDescending(page), nil
 }
 
 func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, threadID string) ([]*discordgo.Message, error) {
@@ -86,6 +76,65 @@ func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, thr
 	}
 
 	return collected, nil
+}
+
+func fetchChannelMessagesPageRaw(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]*discordgo.Message, error) {
+	if session == nil {
+		return nil, fmt.Errorf("fetch qotd channel messages: discord session is required")
+	}
+	channelID = strings.TrimSpace(channelID)
+	beforeMessageID = strings.TrimSpace(beforeMessageID)
+	if channelID == "" {
+		return nil, fmt.Errorf("fetch qotd channel messages: channel id is required")
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	page, err := session.ChannelMessages(channelID, limit, beforeMessageID, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("fetch qotd channel messages: %w", err)
+	}
+	return page, nil
+}
+
+func archiveMessagesAscending(collected []*discordgo.Message) []ArchivedMessage {
+	out := make([]ArchivedMessage, 0, len(collected))
+	for idx := len(collected) - 1; idx >= 0; idx-- {
+		if archived, ok := archiveMessage(collected[idx]); ok {
+			out = append(out, archived)
+		}
+	}
+	return out
+}
+
+func archiveMessagesDescending(collected []*discordgo.Message) []ArchivedMessage {
+	out := make([]ArchivedMessage, 0, len(collected))
+	for _, message := range collected {
+		if archived, ok := archiveMessage(message); ok {
+			out = append(out, archived)
+		}
+	}
+	return out
+}
+
+func archiveMessage(message *discordgo.Message) (ArchivedMessage, bool) {
+	if message == nil || strings.TrimSpace(message.ID) == "" {
+		return ArchivedMessage{}, false
+	}
+	return ArchivedMessage{
+		MessageID:          strings.TrimSpace(message.ID),
+		AuthorID:           archiveAuthorID(message.Author),
+		AuthorNameSnapshot: archiveAuthorName(message),
+		AuthorIsBot:        message.Author != nil && message.Author.Bot,
+		Content:            message.Content,
+		EmbedsJSON:         marshalArchiveField(message.Embeds),
+		AttachmentsJSON:    marshalArchiveField(message.Attachments),
+		CreatedAt:          normalizeArchiveMessageTimestamp(message.Timestamp),
+	}, true
 }
 
 func archiveAuthorID(author *discordgo.User) string {

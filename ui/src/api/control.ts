@@ -84,9 +84,17 @@ export interface QOTDDeck {
   response_channel_id?: string;
 }
 
+export interface QOTDCollectorConfig {
+  source_channel_id?: string;
+  author_ids?: string[];
+  title_patterns?: string[];
+  start_date?: string;
+}
+
 export interface QOTDConfig {
   active_deck_id?: string;
   decks?: QOTDDeck[];
+  collector?: QOTDCollectorConfig;
 }
 
 export interface QOTDQuestion {
@@ -192,6 +200,44 @@ export interface QOTDPublishResponse {
   status: string;
   guild_id: string;
   result: QOTDPublishResult;
+}
+
+export interface QOTDCollectedQuestion {
+  id: number;
+  source_channel_id: string;
+  source_message_id: string;
+  source_author_id?: string;
+  source_author_name?: string;
+  source_created_at: string;
+  embed_title: string;
+  question_text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QOTDCollectorSummary {
+  total_questions: number;
+  recent_questions: QOTDCollectedQuestion[];
+}
+
+export interface QOTDCollectorRunResult {
+  scanned_messages: number;
+  matched_messages: number;
+  new_questions: number;
+  total_questions: number;
+}
+
+export interface QOTDCollectorSummaryResponse {
+  status: string;
+  guild_id: string;
+  summary: QOTDCollectorSummary;
+}
+
+export interface QOTDCollectorRunResponse {
+  status: string;
+  guild_id: string;
+  result: QOTDCollectorRunResult;
+  summary: QOTDCollectorSummary;
 }
 
 export type DashboardGuildAccessLevel = "read" | "write";
@@ -555,10 +601,7 @@ export class ControlApiClient {
     );
   }
 
-  async deleteQOTDQuestion(
-    guildId: string,
-    questionId: number,
-  ): Promise<void> {
+  async deleteQOTDQuestion(guildId: string, questionId: number): Promise<void> {
     await this.request<Record<string, unknown>>(
       "DELETE",
       `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/${questionId}`,
@@ -585,6 +628,43 @@ export class ControlApiClient {
       "POST",
       `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/publish-now`,
     );
+  }
+
+  async getQOTDCollectorSummary(
+    guildId: string,
+  ): Promise<QOTDCollectorSummaryResponse> {
+    return this.request<QOTDCollectorSummaryResponse>(
+      "GET",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector`,
+    );
+  }
+
+  async runQOTDCollector(guildId: string): Promise<QOTDCollectorRunResponse> {
+    return this.request<QOTDCollectorRunResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/collect`,
+    );
+  }
+
+  async downloadQOTDCollectorExport(
+    guildId: string,
+  ): Promise<{ filename: string; text: string }> {
+    const path = `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/export`;
+    const url = this.baseUrl === "" ? path : `${this.baseUrl}${path}`;
+    const response = await this.fetchWithTransientGetRetry(url);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Control API GET ${path} failed: ${response.status} ${response.statusText} - ${text}`.trim(),
+      );
+    }
+
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    return {
+      filename: filenameMatch?.[1]?.trim() || "qotd-collected-questions.txt",
+      text: await response.text(),
+    };
   }
 
   async reconcileQOTD(guildId: string): Promise<QOTDSummaryResponse> {
@@ -815,12 +895,16 @@ export class ControlApiClient {
     });
     const resolvedResponse =
       method === "GET" && transientGetRetryStatuses.has(response.status)
-        ? await this.retryTransientGetRequest(url, {
-            method,
-            headers,
-            credentials: "include",
-            body: body !== undefined ? JSON.stringify(body) : undefined,
-          }, response)
+        ? await this.retryTransientGetRequest(
+            url,
+            {
+              method,
+              headers,
+              credentials: "include",
+              body: body !== undefined ? JSON.stringify(body) : undefined,
+            },
+            response,
+          )
         : response;
 
     if (
@@ -890,9 +974,13 @@ export class ControlApiClient {
       const probe = await this.getSessionStatus();
       if (probe.status !== "authenticated") {
         if (probe.status === "oauth_unavailable") {
-          throw new Error("Discord OAuth is not configured on this control server.");
+          throw new Error(
+            "Discord OAuth is not configured on this control server.",
+          );
         }
-        throw new Error("Unauthorized. Sign in with Discord before changing dashboard settings.");
+        throw new Error(
+          "Unauthorized. Sign in with Discord before changing dashboard settings.",
+        );
       }
       return probe.session.csrf_token.trim();
     })();

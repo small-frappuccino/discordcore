@@ -323,9 +323,19 @@ func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 	return QOTDConfig{
 		ActiveDeckID:      in.ActiveDeckID,
 		Decks:             cloneQOTDDeckConfigs(in.Decks),
+		Collector:         cloneQOTDCollectorConfig(in.Collector),
 		Enabled:           in.Enabled,
 		QuestionChannelID: in.QuestionChannelID,
 		ResponseChannelID: in.ResponseChannelID,
+	}
+}
+
+func cloneQOTDCollectorConfig(in QOTDCollectorConfig) QOTDCollectorConfig {
+	return QOTDCollectorConfig{
+		SourceChannelID: in.SourceChannelID,
+		AuthorIDs:       cloneStringSlice(in.AuthorIDs),
+		TitlePatterns:   cloneStringSlice(in.TitlePatterns),
+		StartDate:       in.StartDate,
 	}
 }
 

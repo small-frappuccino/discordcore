@@ -16,6 +16,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 		"qotd_reply_threads",
 		"qotd_thread_archives",
 		"qotd_message_archives",
+		"qotd_collected_questions",
 	}
 	for _, tableName := range required {
 		var exists bool
@@ -107,52 +108,52 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 	archiveAt := time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
 
 	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
-		GuildID:            "g1",
-		DeckID:             "default",
-		DeckNameSnapshot:   "Default",
-		QuestionID:         question.ID,
-		PublishMode:        "scheduled",
-		PublishDateUTC:     publishDate,
-		State:              "current",
-		ForumChannelID:     "forum-1",
-		ResponseChannelID:  "responses-1",
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: question.Body,
-		GraceUntil:         graceUntil,
-		ArchiveAt:          archiveAt,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
 	}); err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(scheduled) failed: %v", err)
 	}
 
 	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
-		GuildID:            "g1",
-		DeckID:             "default",
-		DeckNameSnapshot:   "Default",
-		QuestionID:         second.ID,
-		PublishMode:        "manual",
-		PublishDateUTC:     publishDate,
-		State:              "current",
-		ForumChannelID:     "forum-1",
-		ResponseChannelID:  "responses-1",
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           second.ID,
+		PublishMode:          "manual",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: second.Body,
-		GraceUntil:         graceUntil,
-		ArchiveAt:          archiveAt,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
 	}); err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
 	}
 
 	_, err = store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
-		GuildID:            "g1",
-		DeckID:             "default",
-		DeckNameSnapshot:   "Default",
-		QuestionID:         second.ID,
-		PublishMode:        "scheduled",
-		PublishDateUTC:     publishDate,
-		State:              "current",
-		ForumChannelID:     "forum-1",
-		ResponseChannelID:  "responses-1",
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           second.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: second.Body,
-		GraceUntil:         graceUntil,
-		ArchiveAt:          archiveAt,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
 	})
 	if err == nil {
 		t.Fatal("expected duplicate scheduled publish date to remain unique")
@@ -176,18 +177,18 @@ func TestQOTDReplyThreadProvisioningNonceLifecycle(t *testing.T) {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
 	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
-		GuildID:            "g1",
-		DeckID:             "default",
-		DeckNameSnapshot:   "Default",
-		QuestionID:         question.ID,
-		PublishMode:        "scheduled",
-		PublishDateUTC:     time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
-		State:              "current",
-		ForumChannelID:     "forum-1",
-		ResponseChannelID:  "responses-1",
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		State:                "current",
+		ForumChannelID:       "forum-1",
+		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: question.Body,
-		GraceUntil:         time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
-		ArchiveAt:          time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
+		GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
 	})
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
@@ -286,5 +287,74 @@ func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
 	}
 	if preservedOfficial.QuestionID != question.ID || preservedOfficial.QuestionTextSnapshot != question.Body {
 		t.Fatalf("expected official post snapshot to remain intact, got %+v", preservedOfficial)
+	}
+}
+
+func TestCreateQOTDCollectedQuestionsDeduplicatesBySourceMessage(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 4, 13, 16, 0, 0, 0, time.UTC)
+
+	created, err := store.CreateQOTDCollectedQuestions(ctx, []QOTDCollectedQuestionRecord{
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "channel-1",
+			SourceMessageID:          "message-1",
+			SourceAuthorID:           "bot-1",
+			SourceAuthorNameSnapshot: "QOTD Bot",
+			SourceCreatedAt:          now,
+			EmbedTitle:               "Question Of The Day",
+			QuestionText:             "What shipped this week?",
+		},
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "channel-1",
+			SourceMessageID:          "message-1",
+			SourceAuthorID:           "bot-1",
+			SourceAuthorNameSnapshot: "QOTD Bot",
+			SourceCreatedAt:          now,
+			EmbedTitle:               "Question Of The Day",
+			QuestionText:             "What shipped this week?",
+		},
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "channel-1",
+			SourceMessageID:          "message-2",
+			SourceAuthorID:           "bot-2",
+			SourceAuthorNameSnapshot: "Other QOTD Bot",
+			SourceCreatedAt:          now.Add(time.Minute),
+			EmbedTitle:               "question!!",
+			QuestionText:             "What are you trying next?",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDCollectedQuestions() failed: %v", err)
+	}
+	if created != 2 {
+		t.Fatalf("expected 2 unique collected questions, got %d", created)
+	}
+
+	total, err := store.CountQOTDCollectedQuestions(ctx, "g1")
+	if err != nil {
+		t.Fatalf("CountQOTDCollectedQuestions() failed: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("expected total collected questions to be 2, got %d", total)
+	}
+
+	recent, err := store.ListRecentQOTDCollectedQuestions(ctx, "g1", 10)
+	if err != nil {
+		t.Fatalf("ListRecentQOTDCollectedQuestions() failed: %v", err)
+	}
+	if len(recent) != 2 || recent[0].SourceMessageID != "message-2" {
+		t.Fatalf("expected most recent collected question first, got %+v", recent)
+	}
+
+	exported, err := store.ListAllQOTDCollectedQuestions(ctx, "g1")
+	if err != nil {
+		t.Fatalf("ListAllQOTDCollectedQuestions() failed: %v", err)
+	}
+	if len(exported) != 2 || exported[0].SourceMessageID != "message-1" || exported[1].SourceMessageID != "message-2" {
+		t.Fatalf("expected export ordering by source_created_at asc, got %+v", exported)
 	}
 }

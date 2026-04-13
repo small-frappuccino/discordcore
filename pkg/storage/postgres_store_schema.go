@@ -24,6 +24,7 @@ var requiredSchemaTables = []string{
 	"daily_reaction_metrics",
 	"daily_member_joins",
 	"daily_member_leaves",
+	"qotd_collected_questions",
 }
 
 var requiredSchemaColumns = map[string][]string{

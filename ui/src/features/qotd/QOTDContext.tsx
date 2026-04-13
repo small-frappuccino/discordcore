@@ -9,6 +9,7 @@ import {
 } from "react";
 import type {
   QOTDConfig,
+  QOTDCollectorConfig,
   QOTDDeck,
   QOTDDeckSummary,
   QOTDQuestion,
@@ -31,6 +32,7 @@ export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
   saveSettings: "Saving QOTD settings...",
   createQuestion: "Creating question...",
+  createQuestions: "Importing questions...",
   updateQuestion: "Updating question...",
   deleteQuestion: "Deleting question...",
   reorderQuestions: "Reordering question bank...",
@@ -50,13 +52,17 @@ interface QOTDContextValue {
   workspaceState: WorkspaceState;
   clearNotice: () => void;
   createQuestion: (payload: QOTDQuestionMutation) => Promise<void>;
+  createQuestions: (payloads: QOTDQuestionMutation[]) => Promise<boolean>;
   deleteQuestion: (questionId: number) => Promise<void>;
   publishNow: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<void>;
   selectDeck: (deckId: string) => Promise<void>;
-  updateQuestion: (questionId: number, payload: QOTDQuestionMutation) => Promise<void>;
+  updateQuestion: (
+    questionId: number,
+    payload: QOTDQuestionMutation,
+  ) => Promise<void>;
 }
 
 const defaultDeck: QOTDDeck = {
@@ -239,7 +245,9 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       );
       const updatedSettings = normalizeQOTDSettings(response.settings);
       setSettings(updatedSettings);
-      await loadWorkspace(chooseDeckID(selectedDeckRef.current, updatedSettings));
+      await loadWorkspace(
+        chooseDeckID(selectedDeckRef.current, updatedSettings),
+      );
       setNotice(null);
     } catch (error) {
       setNotice({
@@ -256,7 +264,10 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const targetDeckID = chooseDeckID(payload.deck_id ?? selectedDeckRef.current, settings);
+    const targetDeckID = chooseDeckID(
+      payload.deck_id ?? selectedDeckRef.current,
+      settings,
+    );
     if (targetDeckID === "") {
       return;
     }
@@ -278,7 +289,77 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function updateQuestion(questionId: number, payload: QOTDQuestionMutation) {
+  async function createQuestions(payloads: QOTDQuestionMutation[]) {
+    if (!canEditSelectedGuild || normalizedGuildID === "") {
+      return false;
+    }
+
+    const normalizedPayloads = payloads
+      .map((payload) => {
+        const targetDeckID = chooseDeckID(
+          payload.deck_id ?? selectedDeckRef.current,
+          settings,
+        );
+        const body = payload.body.trim();
+        if (targetDeckID === "" || body === "") {
+          return null;
+        }
+        return {
+          ...payload,
+          body,
+          deck_id: targetDeckID,
+        };
+      })
+      .filter(
+        (
+          payload,
+        ): payload is QOTDQuestionMutation & {
+          deck_id: string;
+        } => payload !== null,
+      );
+
+    if (normalizedPayloads.length === 0) {
+      return false;
+    }
+
+    const reloadDeckID =
+      normalizedPayloads[normalizedPayloads.length - 1]?.deck_id ??
+      selectedDeckRef.current;
+
+    setBusyLabel(QOTD_BUSY_LABELS.createQuestions);
+    let createdCount = 0;
+    try {
+      for (const payload of normalizedPayloads) {
+        await client.createQOTDQuestion(normalizedGuildID, payload);
+        createdCount += 1;
+      }
+      await loadWorkspace(reloadDeckID);
+      setNotice({
+        tone: "success",
+        message:
+          normalizedPayloads.length === 1
+            ? "Created 1 question."
+            : `Created ${normalizedPayloads.length} questions.`,
+      });
+      return true;
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message:
+          createdCount > 0
+            ? `${formatError(error)} ${createdCount} questions were created before the import stopped.`
+            : formatError(error),
+      });
+      return false;
+    } finally {
+      setBusyLabel("");
+    }
+  }
+
+  async function updateQuestion(
+    questionId: number,
+    payload: QOTDQuestionMutation,
+  ) {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
       return;
     }
@@ -386,7 +467,10 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
-      const response = await client.listQOTDQuestions(normalizedGuildID, nextDeckID);
+      const response = await client.listQOTDQuestions(
+        normalizedGuildID,
+        nextDeckID,
+      );
       setSelectedDeckID(nextDeckID);
       setQuestions(response.questions);
       setNotice(null);
@@ -415,6 +499,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         workspaceState,
         clearNotice: () => setNotice(null),
         createQuestion,
+        createQuestions,
         deleteQuestion,
         publishNow,
         refreshWorkspace,
@@ -450,8 +535,28 @@ function normalizeQOTDSettings(settings?: QOTDConfig | null): QOTDConfig {
     decks,
   });
   return {
+    collector: normalizeQOTDCollectorConfig(settings?.collector),
     active_deck_id: activeDeckID,
     decks,
+  };
+}
+
+function normalizeQOTDCollectorConfig(
+  collector?: QOTDCollectorConfig | null,
+): QOTDCollectorConfig {
+  return {
+    source_channel_id: String(collector?.source_channel_id ?? "").trim(),
+    author_ids: Array.isArray(collector?.author_ids)
+      ? collector.author_ids
+          .map((value) => String(value ?? "").trim())
+          .filter((value) => value !== "")
+      : [],
+    title_patterns: Array.isArray(collector?.title_patterns)
+      ? collector.title_patterns
+          .map((value) => String(value ?? "").trim())
+          .filter((value) => value !== "")
+      : [],
+    start_date: String(collector?.start_date ?? "").trim(),
   };
 }
 

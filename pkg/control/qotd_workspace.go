@@ -64,6 +64,31 @@ type qotdSummaryResponse struct {
 	PreviousPost            *qotdOfficialPostResponse `json:"previous_post,omitempty"`
 }
 
+type qotdCollectedQuestionResponse struct {
+	ID               int64     `json:"id"`
+	SourceChannelID  string    `json:"source_channel_id"`
+	SourceMessageID  string    `json:"source_message_id"`
+	SourceAuthorID   string    `json:"source_author_id,omitempty"`
+	SourceAuthorName string    `json:"source_author_name,omitempty"`
+	SourceCreatedAt  time.Time `json:"source_created_at"`
+	EmbedTitle       string    `json:"embed_title"`
+	QuestionText     string    `json:"question_text"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type qotdCollectorSummaryResponse struct {
+	TotalQuestions  int                             `json:"total_questions"`
+	RecentQuestions []qotdCollectedQuestionResponse `json:"recent_questions,omitempty"`
+}
+
+type qotdCollectorRunResultResponse struct {
+	ScannedMessages int `json:"scanned_messages"`
+	MatchedMessages int `json:"matched_messages"`
+	NewQuestions    int `json:"new_questions"`
+	TotalQuestions  int `json:"total_questions"`
+}
+
 func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQuestionResponse {
 	out := make([]qotdQuestionResponse, 0, len(records))
 	for _, record := range records {
@@ -159,6 +184,44 @@ func buildQOTDDeckSummaryResponse(decks []qotd.DeckSummary) []qotdDeckSummaryRes
 		})
 	}
 	return out
+}
+
+func buildQOTDCollectedQuestionResponse(records []storage.QOTDCollectedQuestionRecord) []qotdCollectedQuestionResponse {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]qotdCollectedQuestionResponse, 0, len(records))
+	for _, record := range records {
+		out = append(out, qotdCollectedQuestionResponse{
+			ID:               record.ID,
+			SourceChannelID:  strings.TrimSpace(record.SourceChannelID),
+			SourceMessageID:  strings.TrimSpace(record.SourceMessageID),
+			SourceAuthorID:   strings.TrimSpace(record.SourceAuthorID),
+			SourceAuthorName: strings.TrimSpace(record.SourceAuthorNameSnapshot),
+			SourceCreatedAt:  record.SourceCreatedAt.UTC(),
+			EmbedTitle:       record.EmbedTitle,
+			QuestionText:     record.QuestionText,
+			CreatedAt:        record.CreatedAt.UTC(),
+			UpdatedAt:        record.UpdatedAt.UTC(),
+		})
+	}
+	return out
+}
+
+func buildQOTDCollectorSummaryResponse(summary qotd.CollectorSummary) qotdCollectorSummaryResponse {
+	return qotdCollectorSummaryResponse{
+		TotalQuestions:  summary.TotalQuestions,
+		RecentQuestions: buildQOTDCollectedQuestionResponse(summary.RecentQuestions),
+	}
+}
+
+func buildQOTDCollectorRunResultResponse(result qotd.CollectorRunResult) qotdCollectorRunResultResponse {
+	return qotdCollectorRunResultResponse{
+		ScannedMessages: result.ScannedMessages,
+		MatchedMessages: result.MatchedMessages,
+		NewQuestions:    result.NewQuestions,
+		TotalQuestions:  result.TotalQuestions,
+	}
 }
 
 func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPostRecord) string {

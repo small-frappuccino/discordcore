@@ -16,15 +16,25 @@ import (
 )
 
 type qotdRouteResponse struct {
-	Status    string                 `json:"status"`
-	GuildID   string                 `json:"guild_id"`
-	Settings  files.QOTDConfig       `json:"settings"`
-	Summary   qotdSummaryResponse    `json:"summary"`
-	Question  qotdQuestionResponse   `json:"question"`
-	Questions []qotdQuestionResponse `json:"questions"`
+	Status          string                         `json:"status"`
+	GuildID         string                         `json:"guild_id"`
+	Settings        files.QOTDConfig               `json:"settings"`
+	Summary         qotdSummaryResponse            `json:"summary"`
+	Question        qotdQuestionResponse           `json:"question"`
+	Questions       []qotdQuestionResponse         `json:"questions"`
+	CollectorResult qotdCollectorRunResultResponse `json:"result"`
 }
 
-type routeFakePublisher struct{}
+type qotdCollectorRouteResponse struct {
+	Status          string                         `json:"status"`
+	GuildID         string                         `json:"guild_id"`
+	Summary         qotdCollectorSummaryResponse   `json:"summary"`
+	CollectorResult qotdCollectorRunResultResponse `json:"result"`
+}
+
+type routeFakePublisher struct {
+	channelMessages map[string][]discordqotd.ArchivedMessage
+}
 
 func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
 	messageID := "message-" + params.PublishDateUTC.Format("20060102")
@@ -51,7 +61,37 @@ func (routeFakePublisher) FetchThreadMessages(context.Context, *discordgo.Sessio
 	return nil, nil
 }
 
-func newQOTDControlTestServer(t *testing.T) (*Server, *qotd.Service, *storage.Store) {
+func (p *routeFakePublisher) FetchChannelMessages(_ context.Context, _ *discordgo.Session, channelID, beforeMessageID string, limit int) ([]discordqotd.ArchivedMessage, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	messages := p.channelMessages[channelID]
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
+	start := 0
+	if beforeMessageID = strings.TrimSpace(beforeMessageID); beforeMessageID != "" {
+		start = len(messages)
+		for idx, message := range messages {
+			if strings.TrimSpace(message.MessageID) == beforeMessageID {
+				start = idx + 1
+				break
+			}
+		}
+	}
+	if start >= len(messages) {
+		return nil, nil
+	}
+
+	end := start + limit
+	if end > len(messages) {
+		end = len(messages)
+	}
+	return append([]discordqotd.ArchivedMessage(nil), messages[start:end]...), nil
+}
+
+func newQOTDControlTestServer(t *testing.T) (*Server, *qotd.Service, *storage.Store, *routeFakePublisher) {
 	t.Helper()
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
@@ -87,12 +127,13 @@ func newQOTDControlTestServer(t *testing.T) (*Server, *qotd.Service, *storage.St
 		t.Fatal("expected control server handler")
 	}
 	srv.SetBearerToken(controlTestAuthToken)
-	service := qotd.NewService(cm, store, routeFakePublisher{})
+	publisher := &routeFakePublisher{}
+	service := qotd.NewService(cm, store, publisher)
 	srv.SetQOTDService(service)
 	srv.SetDiscordSessionResolver(func(string) (*discordgo.Session, error) {
 		return &discordgo.Session{}, nil
 	})
-	return srv, service, store
+	return srv, service, store, publisher
 }
 
 func decodeQOTDRouteResponse(t *testing.T, recBody string) qotdRouteResponse {
@@ -105,10 +146,20 @@ func decodeQOTDRouteResponse(t *testing.T, recBody string) qotdRouteResponse {
 	return out
 }
 
+func decodeQOTDCollectorRouteResponse(t *testing.T, recBody string) qotdCollectorRouteResponse {
+	t.Helper()
+
+	var out qotdCollectorRouteResponse
+	if err := json.Unmarshal([]byte(recBody), &out); err != nil {
+		t.Fatalf("decode qotd collector response: %v body=%q", err, recBody)
+	}
+	return out
+}
+
 func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	t.Parallel()
 
-	srv, _, _ := newQOTDControlTestServer(t)
+	srv, _, _, _ := newQOTDControlTestServer(t)
 	handler := srv.httpServer.Handler
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
@@ -120,7 +171,11 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 		t.Fatalf("put settings status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
 	}
 	settingsResp := decodeQOTDRouteResponse(t, settingsRec.Body.String())
-	if !settingsResp.Settings.Enabled || settingsResp.Settings.QuestionChannelID != "123456789012345678" {
+	deck, ok := settingsResp.Settings.ActiveDeck()
+	if !ok {
+		t.Fatalf("expected qotd settings response to expose an active deck: %+v", settingsResp.Settings)
+	}
+	if !deck.Enabled || deck.QuestionChannelID != "123456789012345678" || deck.ResponseChannelID != "223456789012345678" {
 		t.Fatalf("unexpected qotd settings response: %+v", settingsResp.Settings)
 	}
 	if strings.Contains(settingsRec.Body.String(), "staff_role_ids") {
@@ -164,15 +219,80 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	if summaryResp.Summary.Counts.Total != 2 || summaryResp.Summary.Counts.Ready != 1 || summaryResp.Summary.Counts.Draft != 1 {
 		t.Fatalf("unexpected qotd summary counts: %+v", summaryResp.Summary.Counts)
 	}
-	if !summaryResp.Summary.Settings.Enabled {
-		t.Fatalf("expected summary settings to include enabled qotd config: %+v", summaryResp.Summary.Settings)
+	activeDeck, ok := summaryResp.Summary.Settings.ActiveDeck()
+	if !ok || !activeDeck.Enabled {
+		t.Fatalf("expected summary settings to include an enabled active deck: %+v", summaryResp.Summary.Settings)
+	}
+}
+
+func TestQOTDRoutesCollectAndExportArchivedQuestions(t *testing.T) {
+	t.Parallel()
+
+	srv, _, _, publisher := newQOTDControlTestServer(t)
+	handler := srv.httpServer.Handler
+
+	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
+		Collector: files.QOTDCollectorConfig{
+			SourceChannelID: "123456789012345678",
+			AuthorIDs:       []string{"999999999999999999"},
+			TitlePatterns:   []string{"Question Of The Day", "question!!"},
+			StartDate:       "2026-01-01",
+		},
+	})
+	if settingsRec.Code != 200 {
+		t.Fatalf("put collector settings status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
+	}
+
+	publisher.channelMessages = map[string][]discordqotd.ArchivedMessage{
+		"123456789012345678": {
+			{
+				MessageID:          "message-2",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"✰ question!! ✰","description":"What food have you never eaten but would really like to try?\nAuthor: QOTD Bot"}]`),
+				CreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
+			},
+			{
+				MessageID:          "message-1",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Tell us about a person you look up to!\n\nPreset Question"}]`),
+				CreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	collectRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/collector/collect", nil)
+	if collectRec.Code != 200 {
+		t.Fatalf("collect status=%d body=%q", collectRec.Code, collectRec.Body.String())
+	}
+	collectResp := decodeQOTDCollectorRouteResponse(t, collectRec.Body.String())
+	if collectResp.CollectorResult.MatchedMessages != 2 || collectResp.CollectorResult.NewQuestions != 2 {
+		t.Fatalf("unexpected collector result: %+v", collectResp.CollectorResult)
+	}
+	if collectResp.CollectorResult.TotalQuestions != 2 || collectResp.Summary.TotalQuestions != 2 {
+		t.Fatalf("expected collector summary to report two stored questions, got result=%+v summary=%+v", collectResp.CollectorResult, collectResp.Summary)
+	}
+
+	exportRec := performHandlerJSONRequest(t, handler, "GET", "/v1/guilds/g1/qotd/collector/export", nil)
+	if exportRec.Code != 200 {
+		t.Fatalf("export status=%d body=%q", exportRec.Code, exportRec.Body.String())
+	}
+	expected := "Tell us about a person you look up to!\nWhat food have you never eaten but would really like to try?\n"
+	if exportRec.Body.String() != expected {
+		t.Fatalf("unexpected export body:\n%s", exportRec.Body.String())
+	}
+	if got := exportRec.Header().Get("Content-Disposition"); !strings.Contains(got, "qotd-collected-questions.txt") {
+		t.Fatalf("expected export filename header, got %q", got)
 	}
 }
 
 func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	t.Parallel()
 
-	srv, service, store := newQOTDControlTestServer(t)
+	srv, service, store, _ := newQOTDControlTestServer(t)
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		Enabled:           true,
 		QuestionChannelID: "question-channel-1",

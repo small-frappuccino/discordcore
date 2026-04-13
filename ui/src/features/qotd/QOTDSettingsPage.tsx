@@ -1,5 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { QOTDConfig, QOTDDeck, QOTDDeckSummary } from "../../api/control";
+import type {
+  QOTDCollectorConfig,
+  QOTDConfig,
+  QOTDDeck,
+  QOTDDeckSummary,
+} from "../../api/control";
 import {
   GroupedSettingsCopy,
   GroupedSettingsGroup,
@@ -21,6 +26,7 @@ import { useQOTD } from "./QOTDContext";
 interface SettingsDraft {
   active_deck_id: string;
   decks: QOTDDeck[];
+  collector?: QOTDCollectorConfig;
 }
 
 export function QOTDSettingsPage() {
@@ -29,7 +35,9 @@ export function QOTDSettingsPage() {
   const channelOptions = useGuildChannelOptions();
   const workflowHeadingId = useId();
   const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
-  const [draft, setDraft] = useState<SettingsDraft>(() => savedDraftRef.current);
+  const [draft, setDraft] = useState<SettingsDraft>(
+    () => savedDraftRef.current,
+  );
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -107,7 +115,11 @@ export function QOTDSettingsPage() {
           ) : null}
 
           <GroupedSettingsGroup>
-            <GroupedSettingsItem stacked role="group" aria-labelledby={workflowHeadingId}>
+            <GroupedSettingsItem
+              stacked
+              role="group"
+              aria-labelledby={workflowHeadingId}
+            >
               <GroupedSettingsSubrow>
                 <GroupedSettingsMainRow>
                   <GroupedSettingsCopy>
@@ -168,7 +180,9 @@ export function QOTDSettingsPage() {
                   <GroupedSettingsSubrow>
                     <GroupedSettingsMainRow>
                       <GroupedSettingsCopy>
-                        <GroupedSettingsHeading id={`${workflowHeadingId}-${deck.id}`}>
+                        <GroupedSettingsHeading
+                          id={`${workflowHeadingId}-${deck.id}`}
+                        >
                           {deck.name}
                         </GroupedSettingsHeading>
                       </GroupedSettingsCopy>
@@ -180,7 +194,9 @@ export function QOTDSettingsPage() {
                           setDraft((current) => ({
                             ...current,
                             decks: current.decks.map((entry) =>
-                              entry.id === deck.id ? { ...entry, enabled: checked } : entry,
+                              entry.id === deck.id
+                                ? { ...entry, enabled: checked }
+                                : entry,
                             ),
                           }))
                         }
@@ -252,10 +268,14 @@ export function QOTDSettingsPage() {
                   <GroupedSettingsSubrow>
                     <div className="qotd-deck-card-footer">
                       <div className="qotd-deck-summary">
-                        <span>{summary?.cards_remaining ?? 0} cards remaining</span>
+                        <span>
+                          {summary?.cards_remaining ?? 0} cards remaining
+                        </span>
                         <span>{summary?.counts.used ?? 0} used</span>
                         <span>
-                          {draft.active_deck_id === deck.id ? "Active deck" : "Inactive deck"}
+                          {draft.active_deck_id === deck.id
+                            ? "Active deck"
+                            : "Inactive deck"}
                         </span>
                       </div>
 
@@ -263,7 +283,9 @@ export function QOTDSettingsPage() {
                         <button
                           className="button-secondary"
                           type="button"
-                          disabled={controlsDisabled || draft.active_deck_id === deck.id}
+                          disabled={
+                            controlsDisabled || draft.active_deck_id === deck.id
+                          }
                           onClick={() =>
                             setDraft((current) => ({
                               ...current,
@@ -284,7 +306,7 @@ export function QOTDSettingsPage() {
                               );
                               const nextActiveDeckID =
                                 current.active_deck_id === deck.id
-                                  ? nextDecks[0]?.id ?? ""
+                                  ? (nextDecks[0]?.id ?? "")
                                   : current.active_deck_id;
                               return {
                                 ...current,
@@ -336,6 +358,7 @@ export function QOTDSettingsPage() {
                       const newDeck = createDeckDraft(current.decks);
                       return {
                         active_deck_id: current.active_deck_id || newDeck.id,
+                        collector: current.collector,
                         decks: [...current.decks, newDeck],
                       };
                     })
@@ -384,11 +407,18 @@ function createSettingsDraft(settings: QOTDConfig): SettingsDraft {
   return {
     active_deck_id: activeDeckID,
     decks,
+    collector: normalizeCollectorConfig(settings.collector),
   };
 }
 
-function settingsDraftChanged(previous: QOTDConfig | SettingsDraft, next: SettingsDraft) {
-  return JSON.stringify(createSettingsDraft(previous as QOTDConfig)) !== JSON.stringify(next);
+function settingsDraftChanged(
+  previous: QOTDConfig | SettingsDraft,
+  next: SettingsDraft,
+) {
+  return (
+    JSON.stringify(createSettingsDraft(previous as QOTDConfig)) !==
+    JSON.stringify(next)
+  );
 }
 
 function createDeckDraft(existingDecks: QOTDDeck[]): QOTDDeck {
@@ -399,6 +429,21 @@ function createDeckDraft(existingDecks: QOTDDeck[]): QOTDDeck {
     enabled: false,
     question_channel_id: "",
     response_channel_id: "",
+  };
+}
+
+function normalizeCollectorConfig(
+  collector?: QOTDCollectorConfig,
+): QOTDCollectorConfig {
+  return {
+    source_channel_id: String(collector?.source_channel_id ?? ""),
+    author_ids: Array.isArray(collector?.author_ids)
+      ? collector.author_ids.map((value) => String(value ?? ""))
+      : [],
+    title_patterns: Array.isArray(collector?.title_patterns)
+      ? collector.title_patterns.map((value) => String(value ?? ""))
+      : [],
+    start_date: String(collector?.start_date ?? ""),
   };
 }
 

@@ -25,12 +25,25 @@ func (cfg QOTDDeckConfig) IsZero() bool {
 		strings.TrimSpace(cfg.ResponseChannelID) == ""
 }
 
+// IsZero reports whether all QOTD collector fields are unset.
+func (cfg QOTDCollectorConfig) IsZero() bool {
+	return strings.TrimSpace(cfg.SourceChannelID) == "" &&
+		strings.TrimSpace(cfg.StartDate) == "" &&
+		len(cfg.AuthorIDs) == 0 &&
+		len(cfg.TitlePatterns) == 0
+}
+
 // IsZero reports whether all QOTD fields are unset.
 func (cfg QOTDConfig) IsZero() bool {
 	if len(cfg.deckConfigs()) > 0 {
-		if len(cfg.deckConfigs()) == 1 && isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) {
+		if len(cfg.deckConfigs()) == 1 &&
+			isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) &&
+			cfg.Collector.IsZero() {
 			return true
 		}
+		return false
+	}
+	if !cfg.Collector.IsZero() {
 		return false
 	}
 	return !cfg.Enabled &&
@@ -41,16 +54,33 @@ func (cfg QOTDConfig) IsZero() bool {
 // DashboardQOTDConfig returns a stable deck-aware settings payload for the
 // dashboard, even when the persisted config is still empty.
 func DashboardQOTDConfig(cfg QOTDConfig) QOTDConfig {
-	if !cfg.IsZero() {
-		return cfg
-	}
-	return QOTDConfig{
-		ActiveDeckID: LegacyQOTDDefaultDeckID,
-		Decks: []QOTDDeckConfig{{
+	out := cloneQOTDConfig(cfg)
+	decks := out.deckConfigs()
+	if len(decks) == 0 {
+		out.ActiveDeckID = LegacyQOTDDefaultDeckID
+		out.Decks = []QOTDDeckConfig{{
 			ID:   LegacyQOTDDefaultDeckID,
 			Name: LegacyQOTDDefaultDeckName,
-		}},
+		}}
+		out.Enabled = false
+		out.QuestionChannelID = ""
+		out.ResponseChannelID = ""
+		return out
 	}
+
+	out.Decks = decks
+	out.Enabled = false
+	out.QuestionChannelID = ""
+	out.ResponseChannelID = ""
+	if strings.TrimSpace(out.ActiveDeckID) == "" {
+		if activeDeck, ok := (QOTDConfig{
+			ActiveDeckID: out.ActiveDeckID,
+			Decks:        decks,
+		}).ActiveDeck(); ok {
+			out.ActiveDeckID = activeDeck.ID
+		}
+	}
+	return out
 }
 
 // DeckByID resolves one configured deck by ID.

@@ -291,13 +291,23 @@ type QOTDDeckConfig struct {
 	ResponseChannelID string `json:"response_channel_id,omitempty"`
 }
 
+// QOTDCollectorConfig stores channel-history collection settings used to
+// harvest already-posted QOTD prompts from other bots.
+type QOTDCollectorConfig struct {
+	SourceChannelID string   `json:"source_channel_id,omitempty"`
+	AuthorIDs       []string `json:"author_ids,omitempty"`
+	TitlePatterns   []string `json:"title_patterns,omitempty"`
+	StartDate       string   `json:"start_date,omitempty"`
+}
+
 // QOTDConfig stores per-guild question-of-the-day deck settings.
 //
 // Legacy single-deck fields remain for backwards compatibility with older
 // persisted configs and are normalized into Decks by NormalizeQOTDConfig.
 type QOTDConfig struct {
-	ActiveDeckID string           `json:"active_deck_id,omitempty"`
-	Decks        []QOTDDeckConfig `json:"decks,omitempty"`
+	ActiveDeckID string              `json:"active_deck_id,omitempty"`
+	Decks        []QOTDDeckConfig    `json:"decks,omitempty"`
+	Collector    QOTDCollectorConfig `json:"collector,omitempty"`
 
 	Enabled           bool   `json:"enabled,omitempty"`
 	QuestionChannelID string `json:"question_channel_id,omitempty"`

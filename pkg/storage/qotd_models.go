@@ -84,3 +84,17 @@ type QOTDMessageArchiveRecord struct {
 	AttachmentsJSON    json.RawMessage
 	CreatedAt          time.Time
 }
+
+type QOTDCollectedQuestionRecord struct {
+	ID                       int64
+	GuildID                  string
+	SourceChannelID          string
+	SourceMessageID          string
+	SourceAuthorID           string
+	SourceAuthorNameSnapshot string
+	SourceCreatedAt          time.Time
+	EmbedTitle               string
+	QuestionText             string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}

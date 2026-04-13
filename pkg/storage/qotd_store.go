@@ -204,6 +204,193 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 	return nil
 }
 
+func (s *Store) CreateQOTDCollectedQuestions(ctx context.Context, records []QOTDCollectedQuestionRecord) (int, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	normalized, err := normalizeQOTDCollectedQuestionRecords(records)
+	if err != nil {
+		return 0, fmt.Errorf("create qotd collected questions: %w", err)
+	}
+	if len(normalized) == 0 {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("create qotd collected questions: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	created := 0
+	for _, record := range normalized {
+		result, err := txExecContext(ctx, tx,
+			`INSERT INTO qotd_collected_questions (
+				guild_id,
+				source_channel_id,
+				source_message_id,
+				source_author_id,
+				source_author_name_snapshot,
+				source_created_at,
+				embed_title,
+				question_text
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (guild_id, source_message_id) DO NOTHING`,
+			record.GuildID,
+			record.SourceChannelID,
+			record.SourceMessageID,
+			zeroEmptyString(record.SourceAuthorID),
+			zeroEmptyString(record.SourceAuthorNameSnapshot),
+			record.SourceCreatedAt,
+			record.EmbedTitle,
+			record.QuestionText,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("create qotd collected questions: %w", err)
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return 0, fmt.Errorf("create qotd collected questions: rows affected: %w", err)
+		}
+		created += int(rowsAffected)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("create qotd collected questions: %w", err)
+	}
+	return created, nil
+}
+
+func (s *Store) CountQOTDCollectedQuestions(ctx context.Context, guildID string) (int, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var total int
+	if err := s.queryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM qotd_collected_questions WHERE guild_id = ?`,
+		guildID,
+	).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count qotd collected questions: %w", err)
+	}
+	return total, nil
+}
+
+func (s *Store) ListRecentQOTDCollectedQuestions(ctx context.Context, guildID string, limit int) ([]QOTDCollectedQuestionRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 25
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	rows, err := s.queryContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			source_channel_id,
+			source_message_id,
+			source_author_id,
+			source_author_name_snapshot,
+			source_created_at,
+			embed_title,
+			question_text,
+			created_at,
+			updated_at
+		FROM qotd_collected_questions
+		WHERE guild_id = ?
+		ORDER BY source_created_at DESC, id DESC
+		LIMIT ?`,
+		guildID,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list recent qotd collected questions: %w", err)
+	}
+	defer rows.Close()
+
+	records := make([]QOTDCollectedQuestionRecord, 0, limit)
+	for rows.Next() {
+		record, err := scanQOTDCollectedQuestionRecord(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list recent qotd collected questions: %w", err)
+		}
+		records = append(records, *record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list recent qotd collected questions: %w", err)
+	}
+	return records, nil
+}
+
+func (s *Store) ListAllQOTDCollectedQuestions(ctx context.Context, guildID string) ([]QOTDCollectedQuestionRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	rows, err := s.queryContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			source_channel_id,
+			source_message_id,
+			source_author_id,
+			source_author_name_snapshot,
+			source_created_at,
+			embed_title,
+			question_text,
+			created_at,
+			updated_at
+		FROM qotd_collected_questions
+		WHERE guild_id = ?
+		ORDER BY source_created_at ASC, id ASC`,
+		guildID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list all qotd collected questions: %w", err)
+	}
+	defer rows.Close()
+
+	records := make([]QOTDCollectedQuestionRecord, 0, 32)
+	for rows.Next() {
+		record, err := scanQOTDCollectedQuestionRecord(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list all qotd collected questions: %w", err)
+		}
+		records = append(records, *record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list all qotd collected questions: %w", err)
+	}
+	return records, nil
+}
+
 func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) ([]QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -1749,6 +1936,50 @@ func normalizeQOTDMessageArchives(threadArchiveID int64, msgs []QOTDMessageArchi
 	return normalized, nil
 }
 
+func normalizeQOTDCollectedQuestionRecords(records []QOTDCollectedQuestionRecord) ([]QOTDCollectedQuestionRecord, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+
+	order := make([]string, 0, len(records))
+	byMessage := make(map[string]QOTDCollectedQuestionRecord, len(records))
+	for _, record := range records {
+		record.GuildID = strings.TrimSpace(record.GuildID)
+		record.SourceChannelID = strings.TrimSpace(record.SourceChannelID)
+		record.SourceMessageID = strings.TrimSpace(record.SourceMessageID)
+		record.SourceAuthorID = strings.TrimSpace(record.SourceAuthorID)
+		record.SourceAuthorNameSnapshot = strings.TrimSpace(record.SourceAuthorNameSnapshot)
+		record.EmbedTitle = strings.TrimSpace(record.EmbedTitle)
+		record.QuestionText = strings.Join(strings.Fields(strings.TrimSpace(record.QuestionText)), " ")
+		record.SourceCreatedAt = normalizeQOTDRequiredTime(record.SourceCreatedAt)
+
+		switch {
+		case record.GuildID == "":
+			return nil, fmt.Errorf("guild_id is required")
+		case record.SourceChannelID == "":
+			return nil, fmt.Errorf("source_channel_id is required")
+		case record.SourceMessageID == "":
+			return nil, fmt.Errorf("source_message_id is required")
+		case record.SourceCreatedAt.IsZero():
+			return nil, fmt.Errorf("source_created_at is required")
+		case record.QuestionText == "":
+			return nil, fmt.Errorf("question_text is required")
+		}
+
+		key := record.GuildID + "\x00" + record.SourceMessageID
+		if _, exists := byMessage[key]; !exists {
+			order = append(order, key)
+		}
+		byMessage[key] = record
+	}
+
+	normalized := make([]QOTDCollectedQuestionRecord, 0, len(order))
+	for _, key := range order {
+		normalized = append(normalized, byMessage[key])
+	}
+	return normalized, nil
+}
+
 func normalizeQOTDOrderedIDs(ids []int64) ([]int64, error) {
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("ordered ids are required")
@@ -1872,6 +2103,33 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	record.PublishDateUTC = normalizeQOTDDateUTC(record.PublishDateUTC)
 	record.GraceUntil = record.GraceUntil.UTC()
 	record.ArchiveAt = record.ArchiveAt.UTC()
+	return &record, nil
+}
+
+func scanQOTDCollectedQuestionRecord(scanner qotdRowScanner) (*QOTDCollectedQuestionRecord, error) {
+	var record QOTDCollectedQuestionRecord
+	var sourceAuthorID sql.NullString
+	var sourceAuthorName sql.NullString
+	if err := scanner.Scan(
+		&record.ID,
+		&record.GuildID,
+		&record.SourceChannelID,
+		&record.SourceMessageID,
+		&sourceAuthorID,
+		&sourceAuthorName,
+		&record.SourceCreatedAt,
+		&record.EmbedTitle,
+		&record.QuestionText,
+		&record.CreatedAt,
+		&record.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	record.SourceAuthorID = strings.TrimSpace(sourceAuthorID.String)
+	record.SourceAuthorNameSnapshot = strings.TrimSpace(sourceAuthorName.String)
+	record.SourceCreatedAt = record.SourceCreatedAt.UTC()
+	record.CreatedAt = record.CreatedAt.UTC()
+	record.UpdatedAt = record.UpdatedAt.UTC()
 	return &record, nil
 }
 

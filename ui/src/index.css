@@ -10,6 +10,7 @@
   --bg-surface-muted: rgba(255, 255, 255, 0.03);
   --bg-surface-subtle: rgba(255, 255, 255, 0.048);
   --bg-input: #101720;
+  --bg-native-select-menu: var(--bg-input);
   --bg-accent: #d0a172;
   --bg-accent-hover: #ddb48a;
   --bg-accent-soft: #2f241c;
@@ -20,6 +21,8 @@
   --text-muted: #c4cdda;
   --text-dim: #96a4b5;
   --text-disabled: #6f7c8d;
+  --text-native-select-menu: var(--text-main);
+  --text-native-select-menu-disabled: var(--text-disabled);
   --success: #5aa474;
   --warning: #c89a57;
   --error: #cf6f7b;
@@ -215,6 +218,25 @@ textarea {
 input,
 select {
   min-height: 36px;
+}
+
+/* Native select popups do not consistently inherit the dashboard palette on
+   Windows, so keep the menu rows on explicit tokens instead of page-local fixes. */
+select {
+  color-scheme: dark;
+  color: var(--text-native-select-menu);
+  background-color: var(--bg-native-select-menu);
+}
+
+select option,
+select optgroup {
+  color: var(--text-native-select-menu);
+  background-color: var(--bg-native-select-menu);
+}
+
+select option:disabled,
+select optgroup:disabled {
+  color: var(--text-native-select-menu-disabled);
 }
 
 textarea {
@@ -2414,8 +2436,8 @@ textarea:focus {
   width: 100%;
   min-height: 0;
   border: 0;
-  background: transparent;
-  color: transparent;
+  background: var(--settings-select-bg);
+  color: var(--text-native-select-menu);
   opacity: 0;
   cursor: pointer;
   appearance: auto;

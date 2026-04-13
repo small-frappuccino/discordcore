@@ -416,4 +416,31 @@ var postgresMigrations = []migration{
 			 FOREIGN KEY (question_id) REFERENCES qotd_questions(id) ON DELETE RESTRICT`,
 		},
 	},
+	{
+		Version: 12,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS qotd_collected_questions (
+				id                         BIGSERIAL PRIMARY KEY,
+				guild_id                   TEXT NOT NULL,
+				source_channel_id          TEXT NOT NULL,
+				source_message_id          TEXT NOT NULL,
+				source_author_id           TEXT,
+				source_author_name_snapshot TEXT,
+				source_created_at          TIMESTAMPTZ NOT NULL,
+				embed_title                TEXT NOT NULL DEFAULT '',
+				question_text              TEXT NOT NULL,
+				created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+				updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_collected_questions_message
+			 ON qotd_collected_questions(guild_id, source_message_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_collected_questions_recent
+			 ON qotd_collected_questions(guild_id, source_created_at DESC, id DESC)`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_collected_questions_recent`,
+			`DROP INDEX IF EXISTS idx_qotd_collected_questions_message`,
+			`DROP TABLE IF EXISTS qotd_collected_questions`,
+		},
+	},
 }

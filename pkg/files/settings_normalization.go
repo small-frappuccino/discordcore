@@ -3,6 +3,7 @@ package files
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 )
@@ -76,21 +77,32 @@ func NormalizePartnerBoardConfig(in PartnerBoardConfig) (PartnerBoardConfig, err
 func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	activeDeckID := strings.TrimSpace(in.ActiveDeckID)
 	decks := cloneQOTDDeckConfigs(in.Decks)
+	collector, err := normalizeQOTDCollectorConfig(in.Collector)
+	if err != nil {
+		return QOTDConfig{}, invalidQOTDInput("collector: %v", err)
+	}
 	if len(decks) == 0 {
-		legacy := QOTDDeckConfig{
-			ID:                LegacyQOTDDefaultDeckID,
-			Name:              LegacyQOTDDefaultDeckName,
-			Enabled:           in.Enabled,
-			QuestionChannelID: strings.TrimSpace(in.QuestionChannelID),
-			ResponseChannelID: strings.TrimSpace(in.ResponseChannelID),
-		}
-		if !legacy.IsZero() {
+		legacyQuestionChannelID := strings.TrimSpace(in.QuestionChannelID)
+		legacyResponseChannelID := strings.TrimSpace(in.ResponseChannelID)
+		if in.Enabled || legacyQuestionChannelID != "" || legacyResponseChannelID != "" {
+			legacy := QOTDDeckConfig{
+				ID:                LegacyQOTDDefaultDeckID,
+				Name:              LegacyQOTDDefaultDeckName,
+				Enabled:           in.Enabled,
+				QuestionChannelID: legacyQuestionChannelID,
+				ResponseChannelID: legacyResponseChannelID,
+			}
 			decks = []QOTDDeckConfig{legacy}
 		}
 	}
 
 	if len(decks) == 0 {
-		return QOTDConfig{}, nil
+		if collector.IsZero() {
+			return QOTDConfig{}, nil
+		}
+		return QOTDConfig{
+			Collector: collector,
+		}, nil
 	}
 
 	normalizedDecks := make([]QOTDDeckConfig, 0, len(decks))
@@ -125,13 +137,16 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		}
 	}
 
-	if len(normalizedDecks) == 1 && isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) {
+	if len(normalizedDecks) == 1 &&
+		isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) &&
+		collector.IsZero() {
 		return QOTDConfig{}, nil
 	}
 
 	return QOTDConfig{
 		ActiveDeckID: activeDeckID,
 		Decks:        normalizedDecks,
+		Collector:    collector,
 	}, nil
 }
 
@@ -180,6 +195,56 @@ func firstEnabledQOTDDeckID(decks []QOTDDeckConfig) string {
 		}
 	}
 	return ""
+}
+
+func normalizeQOTDCollectorConfig(in QOTDCollectorConfig) (QOTDCollectorConfig, error) {
+	out := QOTDCollectorConfig{
+		SourceChannelID: strings.TrimSpace(in.SourceChannelID),
+		StartDate:       strings.TrimSpace(in.StartDate),
+	}
+
+	if out.SourceChannelID != "" && !isAllDigits(out.SourceChannelID) {
+		return QOTDCollectorConfig{}, fmt.Errorf("source_channel_id must be numeric")
+	}
+	if out.StartDate != "" {
+		parsed, err := time.Parse("2006-01-02", out.StartDate)
+		if err != nil {
+			return QOTDCollectorConfig{}, fmt.Errorf("start_date must be YYYY-MM-DD")
+		}
+		out.StartDate = parsed.UTC().Format("2006-01-02")
+	}
+
+	seenAuthorIDs := make(map[string]struct{}, len(in.AuthorIDs))
+	for idx, authorID := range in.AuthorIDs {
+		authorID = strings.TrimSpace(authorID)
+		if authorID == "" {
+			continue
+		}
+		if !isAllDigits(authorID) {
+			return QOTDCollectorConfig{}, fmt.Errorf("author_ids[%d] must be numeric", idx)
+		}
+		if _, exists := seenAuthorIDs[authorID]; exists {
+			continue
+		}
+		seenAuthorIDs[authorID] = struct{}{}
+		out.AuthorIDs = append(out.AuthorIDs, authorID)
+	}
+
+	seenTitlePatterns := make(map[string]struct{}, len(in.TitlePatterns))
+	for _, pattern := range in.TitlePatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		key := strings.ToLower(pattern)
+		if _, exists := seenTitlePatterns[key]; exists {
+			continue
+		}
+		seenTitlePatterns[key] = struct{}{}
+		out.TitlePatterns = append(out.TitlePatterns, pattern)
+	}
+
+	return out, nil
 }
 
 func normalizeRuntimeDatabaseConfig(in DatabaseRuntimeConfig) (DatabaseRuntimeConfig, bool, error) {

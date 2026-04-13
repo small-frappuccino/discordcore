@@ -76,3 +76,54 @@ func TestSetQOTDConfigRollsBackOnSaveError(t *testing.T) {
 		t.Fatalf("expected qotd config rollback, got %+v", cfg.Guilds[0].QOTD)
 	}
 }
+
+func TestNormalizeQOTDConfigPreservesCollectorWithoutDecks(t *testing.T) {
+	t.Parallel()
+
+	normalized, err := NormalizeQOTDConfig(QOTDConfig{
+		Collector: QOTDCollectorConfig{
+			SourceChannelID: "123456789012345678",
+			AuthorIDs:       []string{"111111111111111111", "111111111111111111", "222222222222222222"},
+			TitlePatterns:   []string{"Question Of The Day", "question of the day", "question!!"},
+			StartDate:       "2026-01-04",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
+	}
+
+	if len(normalized.Decks) != 0 {
+		t.Fatalf("expected collector-only config to avoid persisted decks, got %+v", normalized.Decks)
+	}
+	if normalized.Collector.SourceChannelID != "123456789012345678" {
+		t.Fatalf("expected trimmed source channel id, got %+v", normalized.Collector)
+	}
+	if len(normalized.Collector.AuthorIDs) != 2 {
+		t.Fatalf("expected duplicate author ids to be removed, got %+v", normalized.Collector.AuthorIDs)
+	}
+	if len(normalized.Collector.TitlePatterns) != 2 {
+		t.Fatalf("expected duplicate title patterns to be removed case-insensitively, got %+v", normalized.Collector.TitlePatterns)
+	}
+}
+
+func TestDashboardQOTDConfigProvidesDefaultDeckForCollectorOnlySettings(t *testing.T) {
+	t.Parallel()
+
+	display := DashboardQOTDConfig(QOTDConfig{
+		Collector: QOTDCollectorConfig{
+			SourceChannelID: "123456789012345678",
+			TitlePatterns:   []string{"Question Of The Day"},
+		},
+	})
+
+	deck, ok := display.ActiveDeck()
+	if !ok {
+		t.Fatal("expected dashboard config to expose a default deck for collector-only settings")
+	}
+	if deck.ID != LegacyQOTDDefaultDeckID || deck.Name != LegacyQOTDDefaultDeckName {
+		t.Fatalf("expected implicit default deck, got %+v", deck)
+	}
+	if display.Collector.SourceChannelID != "123456789012345678" {
+		t.Fatalf("expected collector settings to be preserved, got %+v", display.Collector)
+	}
+}

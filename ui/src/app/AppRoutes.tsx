@@ -16,6 +16,7 @@ import { QOTDProvider } from "../features/qotd/QOTDContext";
 import { QOTDLayout } from "../features/qotd/QOTDLayout";
 import { QOTDSettingsPage } from "../features/qotd/QOTDSettingsPage";
 import { QOTDQuestionsPage } from "../features/qotd/QOTDQuestionsPage";
+import { QOTDCollectorPage } from "../features/qotd/QOTDCollectorPage";
 import { appRoutes, mapLegacyDashboardPathForGuild } from "./routes";
 import { ManageIndexPage } from "../pages/ManageIndexPage";
 import { LandingPage } from "../pages/LandingPage";
@@ -29,11 +30,23 @@ export function AppRoutes() {
         <Route path=":guildId">
           <Route index element={<Navigate replace to="home" />} />
           <Route path="home" element={<HomePage />} />
-          <Route path="control-panel" element={<GuildRedirect to="core/control-panel" />} />
-          <Route path="commands" element={<GuildRedirect to="core/commands" />} />
-          <Route path="logging" element={<GuildRedirect to="moderation/logging" />} />
+          <Route
+            path="control-panel"
+            element={<GuildRedirect to="core/control-panel" />}
+          />
+          <Route
+            path="commands"
+            element={<GuildRedirect to="core/commands" />}
+          />
+          <Route
+            path="logging"
+            element={<GuildRedirect to="moderation/logging" />}
+          />
           <Route path="stats" element={<GuildRedirect to="core/stats" />} />
-          <Route path="roles-members" element={<GuildRedirect to="roles/autorole" />} />
+          <Route
+            path="roles-members"
+            element={<GuildRedirect to="roles/autorole" />}
+          />
 
           <Route path="core">
             <Route index element={<Navigate replace to="control-panel" />} />
@@ -60,7 +73,10 @@ export function AppRoutes() {
             <Route path="entries" element={<PartnerBoardEntriesPage />} />
             <Route path="layout" element={<PartnerBoardLayoutPage />} />
             <Route path="delivery" element={<PartnerBoardDeliveryPage />} />
-            <Route path="activity" element={<Navigate replace to="../entries" />} />
+            <Route
+              path="activity"
+              element={<Navigate replace to="../entries" />}
+            />
           </Route>
 
           <Route
@@ -74,6 +90,7 @@ export function AppRoutes() {
             <Route index element={<Navigate replace to="settings" />} />
             <Route path="settings" element={<QOTDSettingsPage />} />
             <Route path="questions" element={<QOTDQuestionsPage />} />
+            <Route path="collector" element={<QOTDCollectorPage />} />
           </Route>
 
           <Route path="roles">
@@ -98,11 +115,12 @@ function GuildRedirect({ to }: { to: string }) {
 
 function LegacyDashboardRedirect() {
   const location = useLocation();
-  const { authState, manageableGuilds, selectedGuildID } = useDashboardSession();
+  const { authState, manageableGuilds, selectedGuildID } =
+    useDashboardSession();
   const fallbackGuildID =
     selectedGuildID.trim() !== ""
       ? selectedGuildID.trim()
-      : manageableGuilds[0]?.id?.trim() ?? "";
+      : (manageableGuilds[0]?.id?.trim() ?? "");
 
   if (authState === "checking") {
     return null;
