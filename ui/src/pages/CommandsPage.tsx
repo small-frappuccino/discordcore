@@ -27,6 +27,10 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
+  featureTags,
+  findFeatureByTag,
+} from "../features/features/featureContract";
+import {
   formatAllowedRoleCountValue,
   formatAllowedRoleOptionLabel,
   formatAllowedRolesValue,
@@ -67,11 +71,14 @@ export function CommandsPage() {
   const areaFeatures = getFeatureAreaRecords(workspace.features, "commands");
   const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const commandsFeature =
-    areaFeatures.find((feature) => feature.id === "services.commands") ?? null;
-  const adminCommandsFeature =
-    areaFeatures.find((feature) => feature.id === "services.admin_commands") ??
-    null;
+  const commandsFeature = findFeatureByTag(
+    areaFeatures,
+    featureTags.commandsPrimary,
+  );
+  const adminCommandsFeature = findFeatureByTag(
+    areaFeatures,
+    featureTags.commandsAdmin,
+  );
   const messageRouteChannelOptions = useMemo(
     () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
     [channelOptions.channels],

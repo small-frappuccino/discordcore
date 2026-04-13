@@ -1,0 +1,86 @@
+{
+  "areas": [
+    {
+      "id": "commands",
+      "anchor": "commands",
+      "label": "Commands",
+      "description": "Command handling, command routing, and privileged command access for the selected server.",
+      "homeShortcutLabel": "Command setup",
+      "navigation": "primary"
+    },
+    {
+      "id": "moderation",
+      "anchor": "moderation",
+      "label": "Moderation",
+      "description": "Moderation command toggles, mute-role setup, and moderation event routes for staff workflows.",
+      "homeShortcutLabel": "Moderation setup",
+      "navigation": "primary"
+    },
+    {
+      "id": "logging",
+      "anchor": "logging",
+      "label": "Logging",
+      "description": "User, message, and reaction event logging for day-to-day observability.",
+      "homeShortcutLabel": "Log routes",
+      "navigation": "primary"
+    },
+    {
+      "id": "roles",
+      "anchor": "roles",
+      "label": "Roles",
+      "description": "Role assignment and member-facing safeguards that still depend on role configuration.",
+      "homeShortcutLabel": "Role setup",
+      "navigation": "primary"
+    },
+    {
+      "id": "maintenance",
+      "anchor": "maintenance",
+      "label": "Maintenance",
+      "description": "Advanced monitoring, cleanup, backfill, pruning, and scheduled data routines that now live under Settings > Advanced.",
+      "homeShortcutLabel": "Advanced routines",
+      "navigation": "advanced"
+    },
+    {
+      "id": "stats",
+      "anchor": "stats",
+      "label": "Stats",
+      "description": "Server statistics and member-count channel updates for the selected guild.",
+      "homeShortcutLabel": "Stats schedule",
+      "navigation": "primary"
+    }
+  ],
+  "features": [
+    { "id": "services.monitoring", "area": "maintenance", "tags": [] },
+    { "id": "services.automod", "area": "moderation", "tags": ["moderation.automod"] },
+    { "id": "moderation.mute_role", "area": "moderation", "tags": ["moderation.mute_role"] },
+    { "id": "moderation.ban", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "moderation.massban", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "moderation.kick", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "moderation.timeout", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "moderation.warn", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "moderation.warnings", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "services.commands", "area": "commands", "tags": ["commands.primary", "home.commands"] },
+    { "id": "services.admin_commands", "area": "commands", "tags": ["commands.admin", "home.admin_commands"] },
+    { "id": "logging.avatar_logging", "area": "logging", "tags": [] },
+    { "id": "logging.role_update", "area": "logging", "tags": [] },
+    { "id": "logging.member_join", "area": "logging", "tags": [] },
+    { "id": "logging.member_leave", "area": "logging", "tags": [] },
+    { "id": "logging.message_process", "area": "logging", "tags": [] },
+    { "id": "logging.message_edit", "area": "logging", "tags": [] },
+    { "id": "logging.message_delete", "area": "logging", "tags": [] },
+    { "id": "logging.reaction_metric", "area": "logging", "tags": [] },
+    { "id": "logging.automod_action", "area": "moderation", "tags": ["moderation.route"] },
+    { "id": "logging.moderation_case", "area": "moderation", "tags": ["moderation.route"] },
+    { "id": "logging.clean_action", "area": "logging", "tags": [] },
+    { "id": "message_cache.cleanup_on_startup", "area": "maintenance", "tags": [] },
+    { "id": "message_cache.delete_on_log", "area": "maintenance", "tags": [] },
+    { "id": "presence_watch.bot", "area": "roles", "tags": ["roles.advanced", "roles.presence_watch.bot"] },
+    { "id": "presence_watch.user", "area": "roles", "tags": ["roles.advanced", "roles.presence_watch.user"] },
+    { "id": "maintenance.db_cleanup", "area": "maintenance", "tags": [] },
+    { "id": "safety.bot_role_perm_mirror", "area": "roles", "tags": ["roles.advanced", "roles.permission_mirror"] },
+    { "id": "backfill.enabled", "area": "maintenance", "tags": [] },
+    { "id": "stats_channels", "area": "stats", "tags": ["stats.primary", "home.stats"] },
+    { "id": "auto_role_assignment", "area": "roles", "tags": ["roles.auto_assignment", "home.auto_role"] },
+    { "id": "user_prune", "area": "maintenance", "tags": [] }
+  ]
+}

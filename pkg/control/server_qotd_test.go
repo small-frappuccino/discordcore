@@ -27,25 +27,20 @@ type qotdRouteResponse struct {
 type routeFakePublisher struct{}
 
 func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
+	messageID := "message-" + params.PublishDateUTC.Format("20060102")
 	return &discordqotd.PublishedOfficialPost{
-		ThreadID:         "thread-" + params.PublishDateUTC.Format("20060102"),
-		StarterMessageID: "message-" + params.PublishDateUTC.Format("20060102"),
+		StarterMessageID: messageID,
 		PublishedAt:      qotd.PublishTimeUTC(params.PublishDateUTC),
-		ThreadURL:        discordqotd.BuildThreadJumpURL(params.GuildID, "thread-"+params.PublishDateUTC.Format("20060102")),
+		PostURL:          discordqotd.BuildMessageJumpURL(params.GuildID, params.QuestionChannelID, messageID),
 	}, nil
 }
 
-func (routeFakePublisher) CreateReplyPost(_ context.Context, _ *discordgo.Session, params discordqotd.CreateReplyPostParams) (*discordqotd.CreatedReplyPost, error) {
-	threadID := "reply-thread-" + params.UserID
-	return &discordqotd.CreatedReplyPost{
-		ThreadID:         threadID,
-		StarterMessageID: "reply-message-" + params.UserID,
-		ThreadURL:        discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
+func (routeFakePublisher) UpsertAnswerMessage(context.Context, *discordgo.Session, discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error) {
+	return &discordqotd.UpsertedAnswerMessage{
+		ChannelID:  "answers-channel",
+		MessageID:  "answer-message",
+		MessageURL: discordqotd.BuildMessageJumpURL("g1", "answers-channel", "answer-message"),
 	}, nil
-}
-
-func (routeFakePublisher) FindReplyPostByNonce(context.Context, *discordgo.Session, discordqotd.FindReplyPostByNonceParams) (*discordqotd.FoundReplyPost, error) {
-	return nil, nil
 }
 
 func (routeFakePublisher) SetThreadState(context.Context, *discordgo.Session, string, discordqotd.ThreadState) error {
@@ -117,16 +112,15 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	handler := srv.httpServer.Handler
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
-		Enabled:        true,
-		ForumChannelID: "123456789012345678",
-		QuestionTagID:  "223456789012345678",
-		ReplyTagID:     "323456789012345678",
+		Enabled:           true,
+		QuestionChannelID: "123456789012345678",
+		ResponseChannelID: "223456789012345678",
 	})
 	if settingsRec.Code != 200 {
 		t.Fatalf("put settings status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
 	}
 	settingsResp := decodeQOTDRouteResponse(t, settingsRec.Body.String())
-	if !settingsResp.Settings.Enabled || settingsResp.Settings.ForumChannelID != "123456789012345678" {
+	if !settingsResp.Settings.Enabled || settingsResp.Settings.QuestionChannelID != "123456789012345678" {
 		t.Fatalf("unexpected qotd settings response: %+v", settingsResp.Settings)
 	}
 	if strings.Contains(settingsRec.Body.String(), "staff_role_ids") {
@@ -180,10 +174,9 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 
 	srv, service, store := newQOTDControlTestServer(t)
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		Enabled:        true,
-		ForumChannelID: "forum-1",
-		QuestionTagID:  "question-tag-1",
-		ReplyTagID:     "reply-tag-1",
+		Enabled:           true,
+		QuestionChannelID: "question-channel-1",
+		ResponseChannelID: "answers-channel-1",
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -206,7 +199,7 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 		PublishMode:          string(qotd.PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(qotd.OfficialPostStatePrevious),
-		ForumChannelID:       "forum-1",
+		ForumChannelID:       "question-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,

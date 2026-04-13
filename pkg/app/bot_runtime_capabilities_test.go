@@ -54,8 +54,9 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 					},
 				},
 				QOTD: files.QOTDConfig{
-					Enabled:        true,
-					ForumChannelID: "forum-alice",
+					Enabled:           true,
+					QuestionChannelID: "question-alice",
+					ResponseChannelID: "answers-alice",
 				},
 			},
 			{
@@ -74,8 +75,9 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 				UserPrune: files.UserPruneConfig{Enabled: true},
 				QOTD: files.QOTDConfig{
-					Enabled:        true,
-					ForumChannelID: "forum-yuzuha",
+					Enabled:           true,
+					QuestionChannelID: "question-yuzuha",
+					ResponseChannelID: "answers-yuzuha",
 				},
 			},
 		},
@@ -149,8 +151,9 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 					},
 				},
 				QOTD: files.QOTDConfig{
-					Enabled:        true,
-					ForumChannelID: "forum-1",
+					Enabled:           true,
+					QuestionChannelID: "question-1",
+					ResponseChannelID: "answers-1",
 				},
 			},
 			{
@@ -165,7 +168,8 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 					},
 				},
 				QOTD: files.QOTDConfig{
-					ForumChannelID: "forum-2",
+					QuestionChannelID: "question-2",
+					ResponseChannelID: "answers-2",
 				},
 			},
 		},

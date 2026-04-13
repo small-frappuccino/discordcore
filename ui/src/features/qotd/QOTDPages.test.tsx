@@ -36,10 +36,6 @@ const dashboardSessionMock: {
 
 const qotdMock = {
   busyLabel: "",
-  forumTags: [
-    { id: "question", name: "Question", moderated: false },
-    { id: "reply", name: "Reply", moderated: true },
-  ],
   hasLoadedAttempt: true,
   loading: false,
   notice: null,
@@ -64,7 +60,6 @@ const qotdMock = {
   createQuestion: vi.fn(),
   deleteQuestion: vi.fn(),
   publishNow: vi.fn(),
-  refreshForumTags: vi.fn(),
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
@@ -74,11 +69,18 @@ const qotdMock = {
 const channelOptionsMock = {
   channels: [
     {
-      id: "forum-1",
+      id: "question-channel-1",
       name: "qotd",
       display_name: "#qotd",
-      kind: "forum",
-      supports_message_route: false,
+      kind: "text",
+      supports_message_route: true,
+    },
+    {
+      id: "answers-channel-1",
+      name: "qotd-answers",
+      display_name: "#qotd-answers",
+      kind: "text",
+      supports_message_route: true,
     },
   ],
   loading: false,
@@ -110,7 +112,6 @@ describe("QOTD UI", () => {
     qotdMock.settings = createQOTDSettings();
     qotdMock.summary = createQOTDSummary();
     qotdMock.workspaceState = "ready";
-    qotdMock.refreshForumTags.mockReset().mockResolvedValue(undefined);
     qotdMock.saveSettings.mockReset().mockResolvedValue(undefined);
   });
 
@@ -209,9 +210,8 @@ describe("QOTD UI", () => {
     expect(qotdMock.saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         enabled: false,
-        forum_channel_id: "forum-1",
-        question_tag_id: "question",
-        reply_tag_id: "reply",
+        question_channel_id: "question-channel-1",
+        response_channel_id: "answers-channel-1",
       }),
     );
   });
@@ -232,7 +232,7 @@ describe("QOTD UI", () => {
 
     qotdMock.settings = {
       ...createQOTDSettings(),
-      forum_channel_id: "forum-2",
+      question_channel_id: "question-channel-2",
     };
     qotdMock.summary = createQOTDSummary({
       settings: qotdMock.settings,
@@ -300,9 +300,8 @@ function createQuestion(overrides: Partial<QOTDQuestion>): QOTDQuestion {
 function createQOTDSettings(overrides: Partial<QOTDConfig> = {}): QOTDConfig {
   return {
     enabled: true,
-    forum_channel_id: "forum-1",
-    question_tag_id: "question",
-    reply_tag_id: "reply",
+    question_channel_id: "question-channel-1",
+    response_channel_id: "answers-channel-1",
     ...overrides,
   };
 }
@@ -328,7 +327,7 @@ function createQOTDSummary(
       publish_mode: "scheduled",
       publish_date_utc: "2026-04-03T00:00:00Z",
       state: "published",
-      forum_channel_id: "forum-1",
+      question_channel_id: "question-channel-1",
       question_text_snapshot: "Yesterday's question",
       is_pinned: false,
       grace_until: "2026-04-04T00:00:00Z",

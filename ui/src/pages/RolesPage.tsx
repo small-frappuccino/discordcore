@@ -21,6 +21,12 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
+  featureHasTag,
+  featureTags,
+  findFeatureByTag,
+  filterFeaturesByTag,
+} from "../features/features/featureContract";
+import {
   formatFeatureStatusLabel,
   formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
@@ -84,24 +90,26 @@ export function RolesPage() {
   const areaFeatures = getFeatureAreaRecords(workspace.features, "roles");
   const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const autoRoleFeature =
-    areaFeatures.find((feature) => feature.id === "auto_role_assignment") ??
-    null;
+  const autoRoleFeature = findFeatureByTag(
+    areaFeatures,
+    featureTags.rolesAutoAssignment,
+  );
   const autoRoleDetails =
     autoRoleFeature === null
       ? null
       : getAutoRoleFeatureDetails(autoRoleFeature);
-  const presenceWatchBotFeature =
-    areaFeatures.find((feature) => feature.id === "presence_watch.bot") ?? null;
-  const presenceWatchUserFeature =
-    areaFeatures.find((feature) => feature.id === "presence_watch.user") ??
-    null;
-  const permissionMirrorFeature =
-    areaFeatures.find(
-      (feature) => feature.id === "safety.bot_role_perm_mirror",
-    ) ?? null;
-  const advancedFeatures = areaFeatures.filter(
-    (feature) => feature.id !== "auto_role_assignment",
+  const advancedFeatures = filterFeaturesByTag(areaFeatures, featureTags.rolesAdvanced);
+  const presenceWatchBotFeature = findFeatureByTag(
+    advancedFeatures,
+    featureTags.rolesPresenceWatchBot,
+  );
+  const presenceWatchUserFeature = findFeatureByTag(
+    advancedFeatures,
+    featureTags.rolesPresenceWatchUser,
+  );
+  const permissionMirrorFeature = findFeatureByTag(
+    advancedFeatures,
+    featureTags.rolesPermissionMirror,
   );
   const firstBlockedFeature =
     areaFeatures.find((feature) => feature.readiness === "blocked") ?? null;
@@ -668,7 +676,7 @@ function RolesWorkspaceContent({
           <p className="section-label">Needs setup</p>
           <strong>{firstBlockedFeature.label}</strong>
           <p className="meta-note">
-            {firstBlockedFeature.id === "auto_role_assignment"
+            {featureHasTag(firstBlockedFeature, featureTags.rolesAutoAssignment)
               ? summarizeAutoRoleSignal(firstBlockedFeature)
               : summarizeAdvancedRoleSignal(firstBlockedFeature)}
           </p>
@@ -944,7 +952,7 @@ function RolesAdvancedControls({
   return (
     <>
       {advancedFeatures.map((feature) => {
-        if (feature.id === "presence_watch.bot") {
+        if (featureHasTag(feature, featureTags.rolesPresenceWatchBot)) {
           const canEditSettings =
             canEditSelectedGuild && featureSupportsField(feature, "watch_bot");
 
@@ -1014,7 +1022,7 @@ function RolesAdvancedControls({
           );
         }
 
-        if (feature.id === "presence_watch.user") {
+        if (featureHasTag(feature, featureTags.rolesPresenceWatchUser)) {
           const canEditSettings =
             canEditSelectedGuild && featureSupportsField(feature, "user_id");
 

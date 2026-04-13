@@ -30,7 +30,7 @@ type CommandHandler struct {
 	qotdHandlerCancel    func()
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
-	qotdReplyService     discordqotd.ReplyThreadService
+	qotdReplyService     discordqotd.AnswerSubmissionService
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -99,7 +99,7 @@ func (ch *CommandHandler) SetupCommands() error {
 		runtimeHandler(s, i)
 	})
 	if ch.qotdReplyService != nil {
-		qotdHandler := discordqotd.HandleAnswerButtonInteractions(ch.qotdReplyService)
+		qotdHandler := discordqotd.HandleQOTDInteractions(ch.qotdReplyService)
 		ch.qotdHandlerCancel = ch.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			if i == nil || !ch.handlesGuild(i.GuildID) {
 				return
@@ -146,7 +146,7 @@ func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyn
 	ch.partnerSyncExecutor = executor
 }
 
-func (ch *CommandHandler) SetQOTDReplyService(service discordqotd.ReplyThreadService) {
+func (ch *CommandHandler) SetQOTDReplyService(service discordqotd.AnswerSubmissionService) {
 	ch.qotdReplyService = service
 }
 

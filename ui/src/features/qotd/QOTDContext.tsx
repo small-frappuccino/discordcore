@@ -6,12 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type {
-  QOTDConfig,
-  QOTDForumTagOption,
-  QOTDQuestion,
-  QOTDSummary,
-} from "../../api/control";
+import type { QOTDConfig, QOTDQuestion, QOTDSummary } from "../../api/control";
 import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
@@ -26,7 +21,6 @@ type WorkspaceState =
 
 export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
-  refreshForumTags: "Refreshing forum tags...",
   saveSettings: "Saving QOTD settings...",
   createQuestion: "Creating question...",
   updateQuestion: "Updating question...",
@@ -37,7 +31,6 @@ export const QOTD_BUSY_LABELS = {
 
 interface QOTDContextValue {
   busyLabel: string;
-  forumTags: QOTDForumTagOption[];
   hasLoadedAttempt: boolean;
   loading: boolean;
   notice: Notice | null;
@@ -49,7 +42,6 @@ interface QOTDContextValue {
   createQuestion: (payload: Pick<QOTDQuestion, "body" | "status">) => Promise<void>;
   deleteQuestion: (questionId: number) => Promise<void>;
   publishNow: () => Promise<void>;
-  refreshForumTags: (channelId: string) => Promise<void>;
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<void>;
@@ -61,9 +53,8 @@ interface QOTDContextValue {
 
 const emptySettings: QOTDConfig = {
   enabled: false,
-  forum_channel_id: "",
-  question_tag_id: "",
-  reply_tag_id: "",
+  question_channel_id: "",
+  response_channel_id: "",
 };
 
 const QOTDContext = createContext<QOTDContextValue | null>(null);
@@ -80,7 +71,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<QOTDConfig>(emptySettings);
   const [questions, setQuestions] = useState<QOTDQuestion[]>([]);
   const [summary, setSummary] = useState<QOTDSummary | null>(null);
-  const [forumTags, setForumTags] = useState<QOTDForumTagOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -103,22 +93,10 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setSettings(emptySettings);
     setQuestions([]);
     setSummary(null);
-    setForumTags([]);
     setLoading(false);
     setBusyLabel("");
     setNotice(null);
     setHasLoadedAttempt(false);
-  }
-
-  async function loadForumTags(channelId: string) {
-    const trimmedChannelID = channelId.trim();
-    if (!canReadSelectedGuild || normalizedGuildID === "" || trimmedChannelID === "") {
-      setForumTags([]);
-      return;
-    }
-
-    const response = await client.listQOTDForumTags(normalizedGuildID, trimmedChannelID);
-    setForumTags(response.tags);
   }
 
   async function loadWorkspace() {
@@ -141,18 +119,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       setQuestions(questionsResponse.questions);
       setSummary(summaryResponse.summary);
       setHasLoadedAttempt(true);
-
-      const forumChannelID = settingsResponse.settings.forum_channel_id?.trim() ?? "";
-      if (forumChannelID !== "") {
-        try {
-          await loadForumTags(forumChannelID);
-        } catch {
-          setForumTags([]);
-        }
-      } else {
-        setForumTags([]);
-      }
-
       setNotice(null);
     } catch (error) {
       setHasLoadedAttempt(true);
@@ -195,29 +161,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         setQuestions(questionsResponse.questions);
         setSummary(summaryResponse.summary);
         setHasLoadedAttempt(true);
-
-        const forumChannelID = settingsResponse.settings.forum_channel_id?.trim() ?? "";
-        if (forumChannelID !== "") {
-          try {
-            const tagResponse = await client.listQOTDForumTags(
-              normalizedGuildID,
-              forumChannelID,
-            );
-            if (!cancelled) {
-              setForumTags(tagResponse.tags);
-            }
-          } catch {
-            if (!cancelled) {
-              setForumTags([]);
-            }
-          }
-        } else if (!cancelled) {
-          setForumTags([]);
-        }
-
-        if (!cancelled) {
-          setNotice(null);
-        }
+        setNotice(null);
       } catch (error) {
         if (!cancelled) {
           setSummary(null);
@@ -247,22 +191,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     await loadWorkspace();
   }
 
-  async function refreshForumTags(channelId: string) {
-    setBusyLabel(QOTD_BUSY_LABELS.refreshForumTags);
-    try {
-      await loadForumTags(channelId);
-      setNotice(null);
-    } catch (error) {
-      setForumTags([]);
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
   async function saveSettings(nextSettings: QOTDConfig) {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
       return;
@@ -284,16 +212,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
               settings: updatedSettings,
             },
       );
-      const forumChannelID = updatedSettings.forum_channel_id?.trim() ?? "";
-      if (forumChannelID !== "") {
-        try {
-          await loadForumTags(forumChannelID);
-        } catch {
-          setForumTags([]);
-        }
-      } else {
-        setForumTags([]);
-      }
       setNotice(null);
     } catch (error) {
       setNotice({
@@ -396,8 +314,8 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       await loadWorkspace();
       setNotice({
         tone: "success",
-        message: response.result.thread_url
-          ? "Manual QOTD published to Discord. Use the thread link to verify it."
+        message: response.result.post_url
+          ? "Manual QOTD published to Discord. Use the post link to verify it."
           : "Manual QOTD published to Discord.",
       });
     } catch (error) {
@@ -414,7 +332,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     <QOTDContext.Provider
       value={{
         busyLabel,
-        forumTags,
         hasLoadedAttempt,
         loading,
         notice,
@@ -426,7 +343,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         createQuestion,
         deleteQuestion,
         publishNow,
-        refreshForumTags,
         refreshWorkspace,
         reorderQuestions,
         saveSettings,

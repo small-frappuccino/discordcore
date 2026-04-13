@@ -19,6 +19,10 @@ import {
   getCommandsFeatureDetails,
 } from "../features/features/commands";
 import { getFeatureAreaRecords } from "../features/features/areas";
+import {
+  featureTags,
+  findFeatureByTag,
+} from "../features/features/featureContract";
 import { getAutoRoleFeatureDetails } from "../features/features/roles";
 import { getStatsFeatureDetails } from "../features/features/stats";
 import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
@@ -48,15 +52,15 @@ export function HomePage() {
   const partnerBoard = usePartnerBoardSummary();
 
   const features = workspace.features;
-  const statsFeature = features.find((feature) => feature.id === "stats_channels") ?? null;
-  const commandsFeature =
-    features.find((feature) => feature.id === "services.commands") ?? null;
-  const adminCommandsFeature =
-    features.find((feature) => feature.id === "services.admin_commands") ?? null;
+  const statsFeature = findFeatureByTag(features, featureTags.homeStats);
+  const commandsFeature = findFeatureByTag(features, featureTags.homeCommands);
+  const adminCommandsFeature = findFeatureByTag(
+    features,
+    featureTags.homeAdminCommands,
+  );
   const moderationFeatures = getFeatureAreaRecords(features, "moderation");
   const loggingFeatures = getFeatureAreaRecords(features, "logging");
-  const autoRoleFeature =
-    features.find((feature) => feature.id === "auto_role_assignment") ?? null;
+  const autoRoleFeature = findFeatureByTag(features, featureTags.homeAutoRole);
 
   const homeNotice = rolesSettings.notice ?? workspace.notice ?? partnerBoard.notice;
   const activeGuildID = selectedGuildID?.trim() ?? "";

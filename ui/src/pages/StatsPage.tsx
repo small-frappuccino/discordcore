@@ -17,6 +17,10 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
+  featureTags,
+  findFeatureByTag,
+} from "../features/features/featureContract";
+import {
   formatFeatureStatusLabel,
   formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
@@ -60,8 +64,10 @@ export function StatsPage() {
   const areaFeatures = getFeatureAreaRecords(workspace.features, "stats");
   const areaSummary = summarizeFeatureArea(areaFeatures);
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const statsFeature =
-    areaFeatures.find((feature) => feature.id === "stats_channels") ?? null;
+  const statsFeature = findFeatureByTag(
+    areaFeatures,
+    featureTags.statsPrimary,
+  );
   const statsDetails =
     statsFeature === null ? null : getStatsFeatureDetails(statsFeature);
 

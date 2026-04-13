@@ -56,13 +56,13 @@ func (r *qotdInteractionRecorder) patchCount() int {
 	return r.webhookPatches
 }
 
-type stubReplyThreadService struct {
-	calls  []EnsureReplyThreadParams
-	result *EnsureReplyThreadResult
+type stubAnswerSubmissionService struct {
+	calls  []SubmitAnswerParams
+	result *SubmitAnswerResult
 	err    error
 }
 
-func (s *stubReplyThreadService) EnsureReplyThread(_ context.Context, _ *discordgo.Session, params EnsureReplyThreadParams) (*EnsureReplyThreadResult, error) {
+func (s *stubAnswerSubmissionService) SubmitAnswer(_ context.Context, _ *discordgo.Session, params SubmitAnswerParams) (*SubmitAnswerResult, error) {
 	s.calls = append(s.calls, params)
 	if s.err != nil {
 		return nil, s.err
@@ -118,7 +118,7 @@ func newQOTDComponentInteraction(customID string) *discordgo.InteractionCreate {
 			Token:     "token-id",
 			Type:      discordgo.InteractionMessageComponent,
 			GuildID:   "guild-1",
-			ChannelID: "official-thread-1",
+			ChannelID: "question-channel-1",
 			Member: &discordgo.Member{
 				Nick: "Display Name",
 				User: &discordgo.User{
@@ -133,27 +133,87 @@ func newQOTDComponentInteraction(customID string) *discordgo.InteractionCreate {
 	}
 }
 
-func TestHandleAnswerButtonInteractionsDeferredEphemeralAndEditsSuccess(t *testing.T) {
+func newQOTDModalInteraction(customID, answer string) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:        "interaction-submit",
+			AppID:     "app-id",
+			Token:     "token-id",
+			Type:      discordgo.InteractionModalSubmit,
+			GuildID:   "guild-1",
+			ChannelID: "question-channel-1",
+			Member: &discordgo.Member{
+				Nick: "Display Name",
+				User: &discordgo.User{
+					ID:       "user-1",
+					Username: "fallback-name",
+				},
+			},
+			Data: discordgo.ModalSubmitInteractionData{
+				CustomID: customID,
+				Components: []discordgo.MessageComponent{
+					&discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							&discordgo.TextInput{
+								CustomID: answerModalFieldID,
+								Value:    answer,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestHandleQOTDInteractionsOpensAnswerModal(t *testing.T) {
 	session, rec := newQOTDInteractionTestSession(t)
-	service := &stubReplyThreadService{
-		result: &EnsureReplyThreadResult{
-			ThreadID:  "reply-thread-1",
-			ThreadURL: "https://discord.com/channels/guild-1/reply-thread-1",
+	service := &stubAnswerSubmissionService{}
+
+	handler := HandleQOTDInteractions(service)
+	handler(session, newQOTDComponentInteraction("qotd:answer:42"))
+
+	if len(service.calls) != 0 {
+		t.Fatalf("expected button interaction to only open modal, got %+v", service.calls)
+	}
+
+	resp := rec.lastResponse(t)
+	if resp.Type != discordgo.InteractionResponseModal {
+		t.Fatalf("expected modal response, got %+v", resp)
+	}
+	if resp.Data == nil || resp.Data.CustomID != "qotd:answer:submit:42" {
+		t.Fatalf("expected modal custom id for official post, got %+v", resp.Data)
+	}
+	if resp.Data.Title != "Answer QOTD #42" {
+		t.Fatalf("unexpected modal title: %+v", resp.Data)
+	}
+}
+
+func TestHandleQOTDInteractionsSubmitsAnswerDeferredEphemeralAndEditsSuccess(t *testing.T) {
+	session, rec := newQOTDInteractionTestSession(t)
+	service := &stubAnswerSubmissionService{
+		result: &SubmitAnswerResult{
+			MessageID:  "answer-message-1",
+			ChannelID:  "answers-channel-1",
+			MessageURL: "https://discord.com/channels/guild-1/answers-channel-1/answer-message-1",
 		},
 	}
 
-	handler := HandleAnswerButtonInteractions(service)
-	handler(session, newQOTDComponentInteraction("qotd:answer:42"))
+	handler := HandleQOTDInteractions(service)
+	handler(session, newQOTDModalInteraction("qotd:answer:submit:42", "My final answer"))
 
 	if len(service.calls) != 1 {
-		t.Fatalf("expected one EnsureReplyThread call, got %d", len(service.calls))
+		t.Fatalf("expected one SubmitAnswer call, got %d", len(service.calls))
 	}
 	call := service.calls[0]
-	if call.OfficialPostID != 42 || call.OfficialThreadID != "official-thread-1" || call.UserID != "user-1" {
+	if call.OfficialPostID != 42 || call.UserID != "user-1" {
 		t.Fatalf("unexpected service call: %+v", call)
 	}
 	if call.UserDisplayName != "Display Name" {
 		t.Fatalf("expected nick to be used as display name, got %+v", call)
+	}
+	if call.AnswerText != "My final answer" {
+		t.Fatalf("expected answer text from modal, got %+v", call)
 	}
 
 	resp := rec.lastResponse(t)
@@ -167,17 +227,17 @@ func TestHandleAnswerButtonInteractionsDeferredEphemeralAndEditsSuccess(t *testi
 	if rec.patchCount() != 1 {
 		t.Fatalf("expected one webhook patch edit, got %d", rec.patchCount())
 	}
-	if !strings.Contains(rec.patchBody(), "Reply thread ready") {
+	if !strings.Contains(rec.patchBody(), "Your answer was posted") {
 		t.Fatalf("expected success message in patch body, got %q", rec.patchBody())
 	}
 }
 
-func TestHandleAnswerButtonInteractionsMapsKnownErrors(t *testing.T) {
+func TestHandleQOTDInteractionsMapsKnownErrors(t *testing.T) {
 	session, rec := newQOTDInteractionTestSession(t)
-	service := &stubReplyThreadService{err: ErrAnswerWindowClosed}
+	service := &stubAnswerSubmissionService{err: ErrAnswerWindowClosed}
 
-	handler := HandleAnswerButtonInteractions(service)
-	handler(session, newQOTDComponentInteraction("qotd:answer:99"))
+	handler := HandleQOTDInteractions(service)
+	handler(session, newQOTDModalInteraction("qotd:answer:submit:99", "Too late"))
 
 	resp := rec.lastResponse(t)
 	if resp.Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
@@ -191,12 +251,13 @@ func TestHandleAnswerButtonInteractionsMapsKnownErrors(t *testing.T) {
 	}
 }
 
-func TestHandleAnswerButtonInteractionsIgnoresOtherComponents(t *testing.T) {
+func TestHandleQOTDInteractionsIgnoresOtherComponents(t *testing.T) {
 	session, rec := newQOTDInteractionTestSession(t)
-	service := &stubReplyThreadService{err: errors.New("should not be called")}
+	service := &stubAnswerSubmissionService{err: errors.New("should not be called")}
 
-	handler := HandleAnswerButtonInteractions(service)
+	handler := HandleQOTDInteractions(service)
 	handler(session, newQOTDComponentInteraction("runtime:other"))
+	handler(session, newQOTDModalInteraction("runtime:other", "ignored"))
 
 	if len(service.calls) != 0 {
 		t.Fatalf("expected handler to ignore non-qotd component")

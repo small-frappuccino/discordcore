@@ -33,23 +33,26 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 			GuildID:       "g-enabled",
 			BotInstanceID: "alice",
 			QOTD: files.QOTDConfig{
-				Enabled:        true,
-				ForumChannelID: "forum-enabled",
+				Enabled:           true,
+				QuestionChannelID: "question-enabled",
+				ResponseChannelID: "answers-enabled",
 			},
 		},
 		{
 			GuildID:       "g-configured-disabled",
 			BotInstanceID: "alice",
 			QOTD: files.QOTDConfig{
-				ForumChannelID: "forum-disabled",
+				QuestionChannelID: "question-disabled",
+				ResponseChannelID: "answers-disabled",
 			},
 		},
 		{
 			GuildID:       "g-other-runtime",
 			BotInstanceID: "other",
 			QOTD: files.QOTDConfig{
-				Enabled:        true,
-				ForumChannelID: "forum-other",
+				Enabled:           true,
+				QuestionChannelID: "question-other",
+				ResponseChannelID: "answers-other",
 			},
 		},
 		{

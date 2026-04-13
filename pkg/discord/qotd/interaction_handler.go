@@ -12,99 +12,166 @@ import (
 )
 
 var (
-	ErrOfficialPostNotFound    = errors.New("qotd official post not found")
-	ErrAnswerWindowClosed      = errors.New("qotd answer window closed")
-	ErrReplyThreadProvisioning = errors.New("qotd reply thread provisioning in progress")
-	ErrReplyThreadUnavailable  = errors.New("qotd reply thread creation is unavailable")
+	ErrOfficialPostNotFound   = errors.New("qotd official post not found")
+	ErrAnswerWindowClosed     = errors.New("qotd answer window closed")
+	ErrReplyThreadUnavailable = errors.New("qotd reply thread creation is unavailable")
 )
 
-type EnsureReplyThreadParams struct {
-	GuildID          string
-	OfficialPostID   int64
-	OfficialThreadID string
-	UserID           string
-	UserDisplayName  string
-	InteractionID    string
+const (
+	answerModalCustomID = "qotd:answer:submit:%d"
+	answerModalFieldID  = "qotd:answer:body"
+	answerModalTitleFmt = "Answer QOTD #%d"
+)
+
+type SubmitAnswerParams struct {
+	GuildID         string
+	OfficialPostID  int64
+	UserID          string
+	UserDisplayName string
+	InteractionID   string
+	AnswerText      string
 }
 
-type EnsureReplyThreadResult struct {
-	ThreadID         string
-	StarterMessageID string
-	ThreadURL        string
-	Reused           bool
+type SubmitAnswerResult struct {
+	MessageID  string
+	ChannelID  string
+	MessageURL string
+	Updated    bool
 }
 
-type ReplyThreadService interface {
-	EnsureReplyThread(ctx context.Context, session *discordgo.Session, params EnsureReplyThreadParams) (*EnsureReplyThreadResult, error)
+type AnswerSubmissionService interface {
+	SubmitAnswer(ctx context.Context, session *discordgo.Session, params SubmitAnswerParams) (*SubmitAnswerResult, error)
 }
 
-func HandleAnswerButtonInteractions(service ReplyThreadService) func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func HandleQOTDInteractions(service AnswerSubmissionService) func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if service == nil || s == nil || i == nil || i.Interaction == nil || i.Type != discordgo.InteractionMessageComponent {
+		if service == nil || s == nil || i == nil || i.Interaction == nil {
 			return
 		}
 
-		officialPostID, ok := parseAnswerButtonCustomID(i.MessageComponentData().CustomID)
-		if !ok {
-			return
+		switch i.Type {
+		case discordgo.InteractionMessageComponent:
+			handleAnswerButtonInteraction(s, i)
+		case discordgo.InteractionModalSubmit:
+			handleAnswerModalSubmit(service, s, i)
 		}
+	}
+}
 
-		if err := respondQOTDInteractionDeferred(s, i); err != nil {
-			log.ApplicationLogger().Warn(
-				"QOTD interaction respond failed",
-				"guildID", i.GuildID,
-				"channelID", i.ChannelID,
-				"interactionID", i.ID,
-				"officialPostID", officialPostID,
-				"err", err,
-			)
-			return
-		}
+func handleAnswerButtonInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	officialPostID, ok := parseAnswerButtonCustomID(i.MessageComponentData().CustomID)
+	if !ok {
+		return
+	}
 
-		userID := interactionUserID(i)
-		result, err := service.EnsureReplyThread(context.Background(), s, EnsureReplyThreadParams{
-			GuildID:          strings.TrimSpace(i.GuildID),
-			OfficialPostID:   officialPostID,
-			OfficialThreadID: strings.TrimSpace(i.ChannelID),
-			UserID:           userID,
-			UserDisplayName:  interactionUserDisplayName(i),
-			InteractionID:    strings.TrimSpace(i.ID),
-		})
-		if err != nil {
-			log.ApplicationLogger().Warn(
-				"QOTD reply-thread interaction failed",
-				"guildID", i.GuildID,
-				"channelID", i.ChannelID,
-				"userID", userID,
-				"interactionID", i.ID,
-				"officialPostID", officialPostID,
-				"err", err,
-			)
-			_ = editQOTDInteractionResponse(s, i, qotdInteractionErrorMessage(err))
-			return
-		}
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: fmt.Sprintf(answerModalCustomID, officialPostID),
+			Title:    fmt.Sprintf(answerModalTitleFmt, officialPostID),
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:    answerModalFieldID,
+							Label:       "Your answer",
+							Style:       discordgo.TextInputParagraph,
+							Placeholder: "Write your answer here",
+							Required:    true,
+							MinLength:   1,
+							MaxLength:   4000,
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		log.ApplicationLogger().Warn(
+			"QOTD interaction open-modal failed",
+			"guildID", i.GuildID,
+			"channelID", i.ChannelID,
+			"interactionID", i.ID,
+			"officialPostID", officialPostID,
+			"err", err,
+		)
+	}
+}
 
-		content := fmt.Sprintf("Reply thread ready: %s", result.ThreadURL)
-		if result.Reused {
-			content = fmt.Sprintf("You already have a reply thread for this question: %s", result.ThreadURL)
-		}
-		if err := editQOTDInteractionResponse(s, i, content); err != nil {
-			log.ApplicationLogger().Warn(
-				"QOTD interaction edit failed",
-				"guildID", i.GuildID,
-				"channelID", i.ChannelID,
-				"userID", userID,
-				"interactionID", i.ID,
-				"officialPostID", officialPostID,
-				"err", err,
-			)
-		}
+func handleAnswerModalSubmit(service AnswerSubmissionService, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	modalData := i.ModalSubmitData()
+	officialPostID, ok := parseAnswerModalCustomID(modalData.CustomID)
+	if !ok {
+		return
+	}
+
+	if err := respondQOTDInteractionDeferred(s, i); err != nil {
+		log.ApplicationLogger().Warn(
+			"QOTD interaction respond failed",
+			"guildID", i.GuildID,
+			"channelID", i.ChannelID,
+			"interactionID", i.ID,
+			"officialPostID", officialPostID,
+			"err", err,
+		)
+		return
+	}
+
+	userID := interactionUserID(i)
+	result, err := service.SubmitAnswer(context.Background(), s, SubmitAnswerParams{
+		GuildID:         strings.TrimSpace(i.GuildID),
+		OfficialPostID:  officialPostID,
+		UserID:          userID,
+		UserDisplayName: interactionUserDisplayName(i),
+		InteractionID:   strings.TrimSpace(i.ID),
+		AnswerText:      extractModalValue(modalData, answerModalFieldID),
+	})
+	if err != nil {
+		log.ApplicationLogger().Warn(
+			"QOTD answer submission failed",
+			"guildID", i.GuildID,
+			"channelID", i.ChannelID,
+			"userID", userID,
+			"interactionID", i.ID,
+			"officialPostID", officialPostID,
+			"err", err,
+		)
+		_ = editQOTDInteractionResponse(s, i, qotdInteractionErrorMessage(err))
+		return
+	}
+
+	content := fmt.Sprintf("Your answer was posted: %s", result.MessageURL)
+	if result.Updated {
+		content = fmt.Sprintf("Your answer was updated: %s", result.MessageURL)
+	}
+	if err := editQOTDInteractionResponse(s, i, content); err != nil {
+		log.ApplicationLogger().Warn(
+			"QOTD interaction edit failed",
+			"guildID", i.GuildID,
+			"channelID", i.ChannelID,
+			"userID", userID,
+			"interactionID", i.ID,
+			"officialPostID", officialPostID,
+			"err", err,
+		)
 	}
 }
 
 func parseAnswerButtonCustomID(customID string) (int64, bool) {
 	customID = strings.TrimSpace(customID)
 	prefix := strings.TrimSuffix(answerButtonCustomID, "%d")
+	if !strings.HasPrefix(customID, prefix) {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(strings.TrimPrefix(customID, prefix), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
+}
+
+func parseAnswerModalCustomID(customID string) (int64, bool) {
+	customID = strings.TrimSpace(customID)
+	prefix := strings.TrimSuffix(answerModalCustomID, "%d")
 	if !strings.HasPrefix(customID, prefix) {
 		return 0, false
 	}
@@ -137,10 +204,8 @@ func qotdInteractionErrorMessage(err error) string {
 		return "This QOTD post could not be resolved anymore."
 	case errors.Is(err, ErrAnswerWindowClosed):
 		return "This question is no longer accepting replies."
-	case errors.Is(err, ErrReplyThreadProvisioning):
-		return "Your reply thread is already being prepared. Try again in a moment."
 	default:
-		return "Could not open your QOTD reply thread right now."
+		return "Could not post your QOTD answer right now."
 	}
 }
 
@@ -180,6 +245,22 @@ func interactionUserDisplayName(i *discordgo.InteractionCreate) string {
 		}
 		if value := strings.TrimSpace(i.User.Username); value != "" {
 			return value
+		}
+	}
+	return ""
+}
+
+func extractModalValue(m discordgo.ModalSubmitInteractionData, fieldID string) string {
+	for _, comp := range m.Components {
+		row, ok := comp.(*discordgo.ActionsRow)
+		if !ok || row == nil {
+			continue
+		}
+		for _, c := range row.Components {
+			ti, ok := c.(*discordgo.TextInput)
+			if ok && ti.CustomID == fieldID {
+				return strings.TrimSpace(ti.Value)
+			}
 		}
 	}
 	return ""

@@ -321,10 +321,9 @@ func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 
 func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 	return QOTDConfig{
-		Enabled:        in.Enabled,
-		ForumChannelID: in.ForumChannelID,
-		QuestionTagID:  in.QuestionTagID,
-		ReplyTagID:     in.ReplyTagID,
+		Enabled:           in.Enabled,
+		QuestionChannelID: in.QuestionChannelID,
+		ResponseChannelID: in.ResponseChannelID,
 	}
 }
 

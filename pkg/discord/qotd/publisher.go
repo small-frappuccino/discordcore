@@ -17,21 +17,20 @@ const (
 )
 
 type PublishOfficialPostParams struct {
-	GuildID        string
-	OfficialPostID int64
-	ForumChannelID string
-	QuestionTagID  string
-	QuestionText   string
-	PublishDateUTC time.Time
-	ThreadName     string
-	Pinned         bool
+	GuildID           string
+	OfficialPostID    int64
+	QuestionChannelID string
+	QuestionText      string
+	PublishDateUTC    time.Time
+	ThreadName        string
+	Pinned            bool
 }
 
 type PublishedOfficialPost struct {
 	ThreadID         string
 	StarterMessageID string
 	PublishedAt      time.Time
-	ThreadURL        string
+	PostURL          string
 }
 
 type CreateReplyPostParams struct {
@@ -66,13 +65,32 @@ type FoundReplyPost struct {
 	ThreadURL        string
 }
 
+type UpsertAnswerMessageParams struct {
+	GuildID           string
+	OfficialPostID    int64
+	ResponseChannelID string
+	QuestionText      string
+	QuestionURL       string
+	AnswerText        string
+	UserID            string
+	UserDisplayName   string
+	ExistingMessageID string
+}
+
+type UpsertedAnswerMessage struct {
+	ChannelID  string
+	MessageID  string
+	MessageURL string
+	Updated    bool
+}
+
 type ThreadState struct {
 	Pinned   bool
 	Locked   bool
 	Archived bool
 }
 
-// Publisher wraps forum-thread creation and thread state transitions for QOTD.
+// Publisher wraps Discord publishing and archive/state transitions for QOTD.
 type Publisher struct{}
 
 func NewPublisher() *Publisher {
@@ -89,13 +107,8 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		return nil, fmt.Errorf("publish official qotd post: %w", err)
 	}
 
-	thread, err := session.ForumThreadStartComplex(
-		normalized.ForumChannelID,
-		&discordgo.ThreadStart{
-			Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.ThreadName),
-			AutoArchiveDuration: 4320,
-			AppliedTags:         []string{normalized.QuestionTagID},
-		},
+	message, err := session.ChannelMessageSendComplex(
+		normalized.QuestionChannelID,
 		&discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{
 				buildOfficialQuestionEmbed(normalized.QuestionText, normalized.PublishDateUTC),
@@ -115,40 +128,22 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create forum thread: %w", err)
+		return nil, fmt.Errorf("create qotd message: %w", err)
 	}
 
-	threadID := strings.TrimSpace(thread.ID)
-	if threadID == "" {
-		return nil, fmt.Errorf("create forum thread: missing thread id")
+	messageID := ""
+	if message != nil {
+		messageID = strings.TrimSpace(message.ID)
 	}
-
-	starterMessageID := strings.TrimSpace(thread.LastMessageID)
-	if starterMessageID == "" {
-		msgs, fetchErr := session.ChannelMessages(threadID, 1, "", "", "")
-		if fetchErr != nil {
-			return nil, fmt.Errorf("resolve starter message: %w", fetchErr)
-		}
-		if len(msgs) == 0 || strings.TrimSpace(msgs[0].ID) == "" {
-			return nil, fmt.Errorf("resolve starter message: discord returned no starter message")
-		}
-		starterMessageID = strings.TrimSpace(msgs[0].ID)
-	}
-
-	state := ThreadState{
-		Pinned: normalized.Pinned,
-		Locked: true,
-	}
-	if err := p.SetThreadState(ctx, session, threadID, state); err != nil {
-		return nil, err
+	if messageID == "" {
+		return nil, fmt.Errorf("create qotd message: missing message id")
 	}
 
 	publishedAt := time.Now().UTC()
 	return &PublishedOfficialPost{
-		ThreadID:         threadID,
-		StarterMessageID: starterMessageID,
+		StarterMessageID: messageID,
 		PublishedAt:      publishedAt,
-		ThreadURL:        BuildThreadJumpURL(normalized.GuildID, threadID),
+		PostURL:          BuildMessageJumpURL(normalized.GuildID, normalized.QuestionChannelID, messageID),
 	}, nil
 }
 
@@ -201,6 +196,65 @@ func (p *Publisher) CreateReplyPost(ctx context.Context, session *discordgo.Sess
 		ThreadID:         threadID,
 		StarterMessageID: starterMessageID,
 		ThreadURL:        BuildThreadJumpURL(normalized.GuildID, threadID),
+	}, nil
+}
+
+func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params UpsertAnswerMessageParams) (*UpsertedAnswerMessage, error) {
+	if session == nil {
+		return nil, fmt.Errorf("upsert qotd answer message: discord session is required")
+	}
+
+	normalized, err := normalizeUpsertAnswerMessageParams(params)
+	if err != nil {
+		return nil, fmt.Errorf("upsert qotd answer message: %w", err)
+	}
+
+	embed := buildAnswerEmbed(
+		normalized.OfficialPostID,
+		normalized.QuestionText,
+		normalized.QuestionURL,
+		normalized.AnswerText,
+		normalized.UserID,
+		normalized.UserDisplayName,
+	)
+
+	messageID := normalized.ExistingMessageID
+	updated := false
+	if messageID != "" {
+		_, err = session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			ID:      messageID,
+			Channel: normalized.ResponseChannelID,
+			Embeds:  &[]*discordgo.MessageEmbed{embed},
+		})
+		if err == nil {
+			updated = true
+		}
+	}
+	if !updated {
+		message, createErr := session.ChannelMessageSendComplex(
+			normalized.ResponseChannelID,
+			&discordgo.MessageSend{
+				Embeds:          []*discordgo.MessageEmbed{embed},
+				AllowedMentions: &discordgo.MessageAllowedMentions{},
+			},
+		)
+		if createErr != nil {
+			if err != nil {
+				return nil, fmt.Errorf("update answer message: %w", err)
+			}
+			return nil, fmt.Errorf("create answer message: %w", createErr)
+		}
+		if message == nil || strings.TrimSpace(message.ID) == "" {
+			return nil, fmt.Errorf("create answer message: missing message id")
+		}
+		messageID = strings.TrimSpace(message.ID)
+	}
+
+	return &UpsertedAnswerMessage{
+		ChannelID:  normalized.ResponseChannelID,
+		MessageID:  messageID,
+		MessageURL: BuildMessageJumpURL(normalized.GuildID, normalized.ResponseChannelID, messageID),
+		Updated:    updated,
 	}, nil
 }
 
@@ -286,6 +340,16 @@ func BuildThreadJumpURL(guildID, threadID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s", guildID, threadID)
 }
 
+func BuildMessageJumpURL(guildID, channelID, messageID string) string {
+	guildID = strings.TrimSpace(guildID)
+	channelID = strings.TrimSpace(channelID)
+	messageID = strings.TrimSpace(messageID)
+	if guildID == "" || channelID == "" || messageID == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, messageID)
+}
+
 func buildOfficialQuestionEmbed(questionText string, publishDateUTC time.Time) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "Question of the Day",
@@ -314,6 +378,50 @@ func buildReplyThreadEmbed(questionText, officialPostURL, provisioningNonce stri
 		}}
 	}
 	return embed
+}
+
+func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName string) *discordgo.MessageEmbed {
+	userDisplayName = strings.TrimSpace(userDisplayName)
+	if userDisplayName == "" {
+		userDisplayName = strings.TrimSpace(userID)
+	}
+	if userDisplayName == "" {
+		userDisplayName = "Member"
+	}
+
+	fields := []*discordgo.MessageEmbedField{
+		{
+			Name:   "Question ID",
+			Value:  fmt.Sprintf("%d", officialPostID),
+			Inline: true,
+		},
+		{
+			Name:   "User",
+			Value:  userDisplayName,
+			Inline: true,
+		},
+	}
+	if trimmedQuestion := strings.TrimSpace(questionText); trimmedQuestion != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Question",
+			Value:  trimmedQuestion,
+			Inline: false,
+		})
+	}
+	if trimmedQuestionURL := strings.TrimSpace(questionURL); trimmedQuestionURL != "" {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   "Original post",
+			Value:  trimmedQuestionURL,
+			Inline: false,
+		})
+	}
+
+	return &discordgo.MessageEmbed{
+		Title:       "QOTD answer",
+		Description: strings.TrimSpace(answerText),
+		Color:       0x3BA55D,
+		Fields:      fields,
+	}
 }
 
 func buildOfficialPostName(publishDateUTC time.Time, explicitName string) string {
@@ -350,8 +458,7 @@ func buildReplyThreadName(publishDateUTC time.Time, userDisplayName, userID, pro
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
-	params.ForumChannelID = strings.TrimSpace(params.ForumChannelID)
-	params.QuestionTagID = strings.TrimSpace(params.QuestionTagID)
+	params.QuestionChannelID = strings.TrimSpace(params.QuestionChannelID)
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.ThreadName = strings.TrimSpace(params.ThreadName)
 	params.PublishDateUTC = params.PublishDateUTC.UTC()
@@ -361,14 +468,12 @@ func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (Publi
 		return PublishOfficialPostParams{}, fmt.Errorf("guild id is required")
 	case params.OfficialPostID <= 0:
 		return PublishOfficialPostParams{}, fmt.Errorf("official post id is required")
-	case params.ForumChannelID == "":
-		return PublishOfficialPostParams{}, fmt.Errorf("forum channel id is required")
-	case params.QuestionTagID == "":
-		return PublishOfficialPostParams{}, fmt.Errorf("question tag id is required")
 	case params.QuestionText == "":
 		return PublishOfficialPostParams{}, fmt.Errorf("question text is required")
 	case params.PublishDateUTC.IsZero():
 		return PublishOfficialPostParams{}, fmt.Errorf("publish date is required")
+	case params.QuestionChannelID == "":
+		return PublishOfficialPostParams{}, fmt.Errorf("question channel id is required")
 	default:
 		return params, nil
 	}
@@ -424,6 +529,32 @@ func normalizeFindReplyPostByNonceParams(params FindReplyPostByNonceParams) (Fin
 		params.Since = params.Since.UTC()
 	}
 	return params, nil
+}
+
+func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (UpsertAnswerMessageParams, error) {
+	params.GuildID = strings.TrimSpace(params.GuildID)
+	params.ResponseChannelID = strings.TrimSpace(params.ResponseChannelID)
+	params.QuestionText = strings.TrimSpace(params.QuestionText)
+	params.QuestionURL = strings.TrimSpace(params.QuestionURL)
+	params.AnswerText = strings.TrimSpace(params.AnswerText)
+	params.UserID = strings.TrimSpace(params.UserID)
+	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
+	params.ExistingMessageID = strings.TrimSpace(params.ExistingMessageID)
+
+	switch {
+	case params.GuildID == "":
+		return UpsertAnswerMessageParams{}, fmt.Errorf("guild id is required")
+	case params.OfficialPostID <= 0:
+		return UpsertAnswerMessageParams{}, fmt.Errorf("official post id is required")
+	case params.ResponseChannelID == "":
+		return UpsertAnswerMessageParams{}, fmt.Errorf("response channel id is required")
+	case params.AnswerText == "":
+		return UpsertAnswerMessageParams{}, fmt.Errorf("answer text is required")
+	case params.UserID == "":
+		return UpsertAnswerMessageParams{}, fmt.Errorf("user id is required")
+	default:
+		return params, nil
+	}
 }
 
 func replyNonceFooterText(provisioningNonce string) string {

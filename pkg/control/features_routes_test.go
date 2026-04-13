@@ -65,6 +65,15 @@ func TestFeatureCatalogAndWorkspaceRoutes(t *testing.T) {
 	if catalog.Catalog[0].ID == "" || catalog.Catalog[0].Label == "" {
 		t.Fatalf("expected populated catalog entry, got %+v", catalog.Catalog[0])
 	}
+	commandsCatalog, ok := slicesIndexBy(catalog.Catalog, func(item featureCatalogEntry) bool {
+		return item.ID == "services.commands"
+	})
+	if !ok {
+		t.Fatal("expected services.commands in catalog response")
+	}
+	if commandsCatalog.Area != featureAreaCommands || len(commandsCatalog.Tags) != 2 {
+		t.Fatalf("expected area/tags metadata for services.commands, got %+v", commandsCatalog)
+	}
 
 	listRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/features", nil)
 	if listRec.Code != http.StatusOK {
@@ -91,6 +100,15 @@ func TestFeatureCatalogAndWorkspaceRoutes(t *testing.T) {
 	if len(guildWorkspace.Workspace.Features) != len(featureDefinitions) {
 		t.Fatalf("unexpected guild feature count: got=%d want=%d", len(guildWorkspace.Workspace.Features), len(featureDefinitions))
 	}
+	statsFeature, ok := slicesIndexBy(guildWorkspace.Workspace.Features, func(item featureRecord) bool {
+		return item.ID == "stats_channels"
+	})
+	if !ok {
+		t.Fatal("expected stats_channels in guild workspace response")
+	}
+	if statsFeature.Area != featureAreaStats || len(statsFeature.Tags) != 2 {
+		t.Fatalf("expected area/tags metadata for stats_channels, got %+v", statsFeature)
+	}
 
 	singleRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/features/services.monitoring", nil)
 	if singleRec.Code != http.StatusOK {
@@ -101,6 +119,16 @@ func TestFeatureCatalogAndWorkspaceRoutes(t *testing.T) {
 	if single.Feature.ID != "services.monitoring" {
 		t.Fatalf("unexpected feature payload: %+v", single.Feature)
 	}
+}
+
+func slicesIndexBy[T any](items []T, match func(T) bool) (T, bool) {
+	var zero T
+	for _, item := range items {
+		if match(item) {
+			return item, true
+		}
+	}
+	return zero, false
 }
 
 func TestFeaturePatchInheritanceAndClears(t *testing.T) {

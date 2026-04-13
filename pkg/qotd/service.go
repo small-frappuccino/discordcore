@@ -2,8 +2,6 @@ package qotd
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -19,25 +17,21 @@ import (
 )
 
 var (
-	ErrServiceUnavailable      = errors.New("qotd service unavailable")
-	ErrQOTDDisabled            = errors.New("qotd is disabled")
-	ErrAlreadyPublished        = errors.New("qotd already published for the current slot")
-	ErrNoQuestionsAvailable    = errors.New("no qotd questions available")
-	ErrImmutableQuestion       = errors.New("qotd question is already scheduled or used")
-	ErrQuestionNotFound        = errors.New("qotd question not found")
-	ErrDiscordUnavailable      = errors.New("discord session unavailable")
-	ErrOfficialPostNotFound    = discordqotd.ErrOfficialPostNotFound
-	ErrAnswerWindowClosed      = discordqotd.ErrAnswerWindowClosed
-	ErrReplyThreadProvisioning = discordqotd.ErrReplyThreadProvisioning
-	ErrReplyThreadUnavailable  = discordqotd.ErrReplyThreadUnavailable
+	ErrServiceUnavailable     = errors.New("qotd service unavailable")
+	ErrQOTDDisabled           = errors.New("qotd is disabled")
+	ErrAlreadyPublished       = errors.New("qotd already published for the current slot")
+	ErrNoQuestionsAvailable   = errors.New("no qotd questions available")
+	ErrImmutableQuestion      = errors.New("qotd question is already scheduled or used")
+	ErrQuestionNotFound       = errors.New("qotd question not found")
+	ErrDiscordUnavailable     = errors.New("discord session unavailable")
+	ErrOfficialPostNotFound   = discordqotd.ErrOfficialPostNotFound
+	ErrAnswerWindowClosed     = discordqotd.ErrAnswerWindowClosed
+	ErrReplyThreadUnavailable = discordqotd.ErrReplyThreadUnavailable
 )
-
-var replyThreadProvisioningTTL = 10 * time.Minute
 
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
-	CreateReplyPost(ctx context.Context, session *discordgo.Session, params discordqotd.CreateReplyPostParams) (*discordqotd.CreatedReplyPost, error)
-	FindReplyPostByNonce(ctx context.Context, session *discordgo.Session, params discordqotd.FindReplyPostByNonceParams) (*discordqotd.FoundReplyPost, error)
+	UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 	FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error)
 }
@@ -68,7 +62,7 @@ type Summary struct {
 type PublishResult struct {
 	Question     storage.QOTDQuestionRecord
 	OfficialPost storage.QOTDOfficialPostRecord
-	ThreadURL    string
+	PostURL      string
 }
 
 type Service struct {
@@ -228,7 +222,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 		Settings:                settings,
 		Counts:                  countQuestions(questions),
 		CurrentPublishDateUTC:   currentPublishDate,
-		PublishedForCurrentSlot: currentSlotPost != nil && strings.TrimSpace(currentSlotPost.DiscordThreadID) != "",
+		PublishedForCurrentSlot: hasPublishedOfficialPostTarget(currentSlotPost),
 	}
 
 	for idx := range posts {
@@ -263,7 +257,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.Enabled || strings.TrimSpace(cfg.ForumChannelID) == "" || strings.TrimSpace(cfg.QuestionTagID) == "" {
+	if !cfg.Enabled || !canPublishQOTD(cfg) {
 		return nil, ErrQOTDDisabled
 	}
 
@@ -282,7 +276,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		PublishMode:          string(PublishModeManual),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       cfg.ForumChannelID,
+		ForumChannelID:       strings.TrimSpace(cfg.QuestionChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -295,14 +289,13 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	}
 
 	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
-		GuildID:        guildID,
-		OfficialPostID: provisioned.ID,
-		ForumChannelID: cfg.ForumChannelID,
-		QuestionTagID:  cfg.QuestionTagID,
-		QuestionText:   question.Body,
-		PublishDateUTC: publishDate,
-		ThreadName:     buildManualThreadName(now),
-		Pinned:         false,
+		GuildID:           guildID,
+		OfficialPostID:    provisioned.ID,
+		QuestionChannelID: strings.TrimSpace(cfg.QuestionChannelID),
+		QuestionText:      question.Body,
+		PublishDateUTC:    publishDate,
+		ThreadName:        buildManualThreadName(now),
+		Pinned:            false,
 	})
 	if err != nil {
 		if deleteErr := s.store.DeleteQOTDOfficialPost(ctx, provisioned.ID); deleteErr != nil {
@@ -339,11 +332,11 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	return &PublishResult{
 		Question:     *question,
 		OfficialPost: *finalized,
-		ThreadURL:    published.ThreadURL,
+		PostURL:      published.PostURL,
 	}, nil
 }
 
-func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Session, params discordqotd.EnsureReplyThreadParams) (*discordqotd.EnsureReplyThreadResult, error) {
+func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, params discordqotd.SubmitAnswerParams) (*discordqotd.SubmitAnswerResult, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
@@ -351,19 +344,16 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 		return nil, ErrDiscordUnavailable
 	}
 
-	normalized, err := normalizeEnsureReplyThreadParams(params)
+	normalized, err := normalizeSubmitAnswerParams(params)
 	if err != nil {
 		return nil, err
 	}
 
-	officialPost, err := s.store.GetQOTDOfficialPostByThreadID(ctx, normalized.OfficialThreadID)
+	officialPost, err := s.store.GetQOTDOfficialPostByID(ctx, normalized.OfficialPostID)
 	if err != nil {
 		return nil, err
 	}
 	if officialPost == nil || officialPost.GuildID != normalized.GuildID {
-		return nil, ErrOfficialPostNotFound
-	}
-	if normalized.OfficialPostID > 0 && officialPost.ID != normalized.OfficialPostID {
 		return nil, ErrOfficialPostNotFound
 	}
 
@@ -378,65 +368,31 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 		return nil, ErrAnswerWindowClosed
 	}
 
-	lock := s.replyThreadLock(officialPost.ID, normalized.UserID)
-	lock.Lock()
-	defer lock.Unlock()
-
-	existing, err := s.store.GetQOTDReplyThreadByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
-	if err != nil {
-		return nil, err
-	}
-	if result, ok := buildExistingReplyThreadResult(officialPost.GuildID, existing); ok {
-		return result, nil
-	}
-
 	cfg, err := s.configManager.GetQOTDConfig(officialPost.GuildID)
 	if err != nil {
 		return nil, err
 	}
-	replyTagID := strings.TrimSpace(cfg.ReplyTagID)
-	forumChannelID := strings.TrimSpace(officialPost.ForumChannelID)
-	if forumChannelID == "" {
-		forumChannelID = strings.TrimSpace(cfg.ForumChannelID)
-	}
-	if replyTagID == "" || forumChannelID == "" {
+	responseChannelID := strings.TrimSpace(cfg.ResponseChannelID)
+	if responseChannelID == "" {
 		return nil, ErrReplyThreadUnavailable
 	}
 
-	record := existing
-	now := s.clock()
-	if record != nil {
-		if recovered, err := s.recoverProvisioningReplyThread(ctx, session, officialPost.GuildID, record); err != nil {
-			return nil, err
-		} else if result, ok := buildExistingReplyThreadResult(officialPost.GuildID, recovered); ok {
-			return result, nil
-		}
+	lock := s.replyThreadLock(officialPost.ID, normalized.UserID)
+	lock.Lock()
+	defer lock.Unlock()
 
-		if strings.TrimSpace(record.State) == string(ReplyThreadStateProvisioning) && !replyThreadProvisioningExpired(*record, now) {
-			return nil, ErrReplyThreadProvisioning
-		}
-
-		if strings.TrimSpace(record.State) == string(ReplyThreadStateProvisioning) {
-			if _, err := s.store.UpdateQOTDReplyThreadState(ctx, record.ID, string(ReplyThreadStateFailed), nil, nil); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	provisioningNonce, err := generateProvisioningNonce()
+	record, err := s.store.GetQOTDReplyThreadByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
 	if err != nil {
 		return nil, err
 	}
-
 	if record == nil {
 		record, err = s.store.CreateQOTDReplyThreadProvisioning(ctx, storage.QOTDReplyThreadRecord{
 			GuildID:                 officialPost.GuildID,
 			OfficialPostID:          officialPost.ID,
 			UserID:                  normalized.UserID,
-			State:                   string(ReplyThreadStateProvisioning),
-			ForumChannelID:          forumChannelID,
+			State:                   string(ReplyThreadStateActive),
+			ForumChannelID:          responseChannelID,
 			CreatedViaInteractionID: normalized.InteractionID,
-			ProvisioningNonce:       provisioningNonce,
 		})
 		if err != nil {
 			if !isQOTDUniqueConstraintError(err) {
@@ -446,61 +402,52 @@ func (s *Service) EnsureReplyThread(ctx context.Context, session *discordgo.Sess
 			if err != nil {
 				return nil, err
 			}
-			if result, ok := buildExistingReplyThreadResult(officialPost.GuildID, record); ok {
-				return result, nil
-			}
-			return nil, ErrReplyThreadProvisioning
 		}
-	} else {
-		record, err = s.store.PrepareQOTDReplyThreadProvisioning(ctx, record.ID, forumChannelID, normalized.InteractionID, provisioningNonce)
+	}
+	if record == nil {
+		return nil, ErrReplyThreadUnavailable
+	}
+
+	targetChannelID := strings.TrimSpace(record.ForumChannelID)
+	if targetChannelID == "" {
+		targetChannelID = responseChannelID
+	}
+
+	upserted, err := s.publisher.UpsertAnswerMessage(ctx, session, discordqotd.UpsertAnswerMessageParams{
+		GuildID:           officialPost.GuildID,
+		OfficialPostID:    officialPost.ID,
+		ResponseChannelID: targetChannelID,
+		QuestionText:      officialPost.QuestionTextSnapshot,
+		QuestionURL:       officialPostJumpURL(*officialPost),
+		AnswerText:        normalized.AnswerText,
+		UserID:            normalized.UserID,
+		UserDisplayName:   normalized.UserDisplayName,
+		ExistingMessageID: strings.TrimSpace(record.DiscordStarterMessageID),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(record.DiscordStarterMessageID) != upserted.MessageID || strings.TrimSpace(record.DiscordThreadID) != "" {
+		record, err = s.store.FinalizeQOTDReplyThread(ctx, record.ID, "", upserted.MessageID)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	created, err := s.publisher.CreateReplyPost(ctx, session, discordqotd.CreateReplyPostParams{
-		GuildID:           officialPost.GuildID,
-		OfficialPostID:    officialPost.ID,
-		OfficialThreadID:  officialPost.DiscordThreadID,
-		ForumChannelID:    forumChannelID,
-		ReplyTagID:        replyTagID,
-		QuestionText:      officialPost.QuestionTextSnapshot,
-		PublishDateUTC:    officialPost.PublishDateUTC,
-		UserID:            normalized.UserID,
-		UserDisplayName:   normalized.UserDisplayName,
-		ProvisioningNonce: record.ProvisioningNonce,
-	})
-	if err != nil {
-		if record != nil {
-			if _, updateErr := s.store.UpdateQOTDReplyThreadState(ctx, record.ID, string(ReplyThreadStateFailed), nil, nil); updateErr != nil {
-				log.ApplicationLogger().Warn("QOTD reply-thread failure state update failed", "officialPostID", officialPost.ID, "userID", normalized.UserID, "err", updateErr)
-			}
-		}
-		return nil, err
-	}
-
-	record, err = s.store.FinalizeQOTDReplyThread(ctx, record.ID, created.ThreadID, created.StarterMessageID)
-	if err != nil {
-		return nil, err
 	}
 	record, err = s.store.UpdateQOTDReplyThreadState(ctx, record.ID, string(ReplyThreadStateActive), nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return &discordqotd.EnsureReplyThreadResult{
-		ThreadID:         record.DiscordThreadID,
-		StarterMessageID: record.DiscordStarterMessageID,
-		ThreadURL:        created.ThreadURL,
-		Reused:           false,
+	return &discordqotd.SubmitAnswerResult{
+		MessageID:  upserted.MessageID,
+		ChannelID:  upserted.ChannelID,
+		MessageURL: upserted.MessageURL,
+		Updated:    upserted.Updated,
 	}, nil
 }
 
 func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {
-	if err := s.reconcileProvisioningReplyThreads(ctx, guildID, session, now); err != nil {
-		return err
-	}
-
 	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
 	if err != nil {
 		return err
@@ -715,37 +662,25 @@ func idsFromQuestions(questions []storage.QOTDQuestionRecord) []int64 {
 	return ids
 }
 
-func normalizeEnsureReplyThreadParams(params discordqotd.EnsureReplyThreadParams) (discordqotd.EnsureReplyThreadParams, error) {
+func normalizeSubmitAnswerParams(params discordqotd.SubmitAnswerParams) (discordqotd.SubmitAnswerParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
-	params.OfficialThreadID = strings.TrimSpace(params.OfficialThreadID)
 	params.UserID = strings.TrimSpace(params.UserID)
 	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
 	params.InteractionID = strings.TrimSpace(params.InteractionID)
+	params.AnswerText = strings.TrimSpace(params.AnswerText)
 
 	switch {
 	case params.GuildID == "":
-		return discordqotd.EnsureReplyThreadParams{}, fmt.Errorf("%w: guild id is required", files.ErrInvalidQOTDInput)
+		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: guild id is required", files.ErrInvalidQOTDInput)
 	case params.OfficialPostID <= 0:
-		return discordqotd.EnsureReplyThreadParams{}, fmt.Errorf("%w: official post id is required", files.ErrInvalidQOTDInput)
-	case params.OfficialThreadID == "":
-		return discordqotd.EnsureReplyThreadParams{}, fmt.Errorf("%w: official thread id is required", files.ErrInvalidQOTDInput)
+		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: official post id is required", files.ErrInvalidQOTDInput)
 	case params.UserID == "":
-		return discordqotd.EnsureReplyThreadParams{}, fmt.Errorf("%w: user id is required", files.ErrInvalidQOTDInput)
+		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: user id is required", files.ErrInvalidQOTDInput)
+	case params.AnswerText == "":
+		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: answer text is required", files.ErrInvalidQOTDInput)
 	default:
 		return params, nil
 	}
-}
-
-func buildExistingReplyThreadResult(guildID string, record *storage.QOTDReplyThreadRecord) (*discordqotd.EnsureReplyThreadResult, bool) {
-	if record == nil || strings.TrimSpace(record.DiscordThreadID) == "" {
-		return nil, false
-	}
-	return &discordqotd.EnsureReplyThreadResult{
-		ThreadID:         record.DiscordThreadID,
-		StarterMessageID: record.DiscordStarterMessageID,
-		ThreadURL:        discordqotd.BuildThreadJumpURL(guildID, record.DiscordThreadID),
-		Reused:           true,
-	}, true
 }
 
 func (s *Service) replyThreadLock(officialPostID int64, userID string) *sync.Mutex {
@@ -768,20 +703,25 @@ func isQOTDUniqueConstraintError(err error) bool {
 	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
 }
 
-func generateProvisioningNonce() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", fmt.Errorf("generate qotd provisioning nonce: %w", err)
-	}
-	return hex.EncodeToString(raw[:]), nil
+func canPublishQOTD(cfg files.QOTDConfig) bool {
+	return strings.TrimSpace(cfg.QuestionChannelID) != "" && strings.TrimSpace(cfg.ResponseChannelID) != ""
 }
 
-func replyThreadProvisioningExpired(record storage.QOTDReplyThreadRecord, now time.Time) bool {
-	if strings.TrimSpace(record.State) != string(ReplyThreadStateProvisioning) {
+func hasPublishedOfficialPostTarget(post *storage.QOTDOfficialPostRecord) bool {
+	if post == nil {
 		return false
 	}
-	if record.UpdatedAt.IsZero() {
-		return true
+	return strings.TrimSpace(post.DiscordThreadID) != "" || strings.TrimSpace(post.DiscordStarterMessageID) != ""
+}
+
+func officialPostJumpURL(post storage.QOTDOfficialPostRecord) string {
+	if threadID := strings.TrimSpace(post.DiscordThreadID); threadID != "" {
+		return discordqotd.BuildThreadJumpURL(post.GuildID, threadID)
 	}
-	return !now.UTC().Before(record.UpdatedAt.UTC().Add(replyThreadProvisioningTTL))
+	channelID := strings.TrimSpace(post.ForumChannelID)
+	messageID := strings.TrimSpace(post.DiscordStarterMessageID)
+	if channelID == "" || messageID == "" {
+		return ""
+	}
+	return discordqotd.BuildMessageJumpURL(post.GuildID, channelID, messageID)
 }

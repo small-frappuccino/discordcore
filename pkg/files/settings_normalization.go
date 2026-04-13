@@ -75,36 +75,32 @@ func NormalizePartnerBoardConfig(in PartnerBoardConfig) (PartnerBoardConfig, err
 // broad config writes can share the same validation behavior.
 func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	out := QOTDConfig{
-		Enabled:        in.Enabled,
-		ForumChannelID: strings.TrimSpace(in.ForumChannelID),
-		QuestionTagID:  strings.TrimSpace(in.QuestionTagID),
-		ReplyTagID:     strings.TrimSpace(in.ReplyTagID),
+		Enabled:           in.Enabled,
+		QuestionChannelID: strings.TrimSpace(in.QuestionChannelID),
+		ResponseChannelID: strings.TrimSpace(in.ResponseChannelID),
 	}
 
 	if out.IsZero() {
 		return QOTDConfig{}, nil
 	}
-	if out.ForumChannelID != "" && !isAllDigits(out.ForumChannelID) {
-		return QOTDConfig{}, invalidQOTDInput("forum_channel_id must be numeric")
+	if out.QuestionChannelID != "" && !isAllDigits(out.QuestionChannelID) {
+		return QOTDConfig{}, invalidQOTDInput("question_channel_id must be numeric")
 	}
-	if out.QuestionTagID != "" && !isAllDigits(out.QuestionTagID) {
-		return QOTDConfig{}, invalidQOTDInput("question_tag_id must be numeric")
+	if out.ResponseChannelID != "" && !isAllDigits(out.ResponseChannelID) {
+		return QOTDConfig{}, invalidQOTDInput("response_channel_id must be numeric")
 	}
-	if out.ReplyTagID != "" && !isAllDigits(out.ReplyTagID) {
-		return QOTDConfig{}, invalidQOTDInput("reply_tag_id must be numeric")
+	if out.QuestionChannelID == "" && out.ResponseChannelID != "" {
+		return QOTDConfig{}, invalidQOTDInput("question_channel_id is required when response_channel_id is set")
 	}
-	if out.QuestionTagID != "" && out.QuestionTagID == out.ReplyTagID {
-		return QOTDConfig{}, invalidQOTDInput("question_tag_id and reply_tag_id must differ")
+	if out.ResponseChannelID == "" && out.QuestionChannelID != "" {
+		return QOTDConfig{}, invalidQOTDInput("response_channel_id is required when question_channel_id is set")
 	}
 	if out.Enabled {
-		if out.ForumChannelID == "" {
-			return QOTDConfig{}, invalidQOTDInput("forum_channel_id is required when enabled")
+		if out.QuestionChannelID == "" {
+			return QOTDConfig{}, invalidQOTDInput("question_channel_id is required when enabled")
 		}
-		if out.QuestionTagID == "" {
-			return QOTDConfig{}, invalidQOTDInput("question_tag_id is required when enabled")
-		}
-		if out.ReplyTagID == "" {
-			return QOTDConfig{}, invalidQOTDInput("reply_tag_id is required when enabled")
+		if out.ResponseChannelID == "" {
+			return QOTDConfig{}, invalidQOTDInput("response_channel_id is required when enabled")
 		}
 	}
 

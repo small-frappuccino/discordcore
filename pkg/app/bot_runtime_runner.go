@@ -29,7 +29,7 @@ type botRuntimeOptions struct {
 	runtimeApplier       *runtimeapply.Manager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
-	qotdReplyService     discordqotd.ReplyThreadService
+	qotdReplyService     discordqotd.AnswerSubmissionService
 	qotdLifecycleService discordqotd.GuildLifecycleService
 	startupTasks         *startupTaskOrchestrator
 }

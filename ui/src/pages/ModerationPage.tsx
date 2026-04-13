@@ -24,6 +24,10 @@ import {
   getFeatureAreaRecords,
 } from "../features/features/areas";
 import {
+  featureTags,
+  findFeatureByTag,
+} from "../features/features/featureContract";
+import {
   getLoggingFeatureDetails,
   summarizeLoggingGuidance,
 } from "../features/features/logging";
@@ -62,11 +66,14 @@ export function ModerationPage() {
   const nextPath = `${location.pathname}${location.search}${location.hash}`;
   const areaFeatures = getFeatureAreaRecords(workspace.features, "moderation");
   const workspaceNotice = mutation.notice ?? workspace.notice;
-  const automodFeature =
-    areaFeatures.find((feature) => feature.id === "services.automod") ?? null;
-  const muteRoleFeature =
-    areaFeatures.find((feature) => feature.id === "moderation.mute_role") ??
-    null;
+  const automodFeature = findFeatureByTag(
+    areaFeatures,
+    featureTags.moderationAutomod,
+  );
+  const muteRoleFeature = findFeatureByTag(
+    areaFeatures,
+    featureTags.moderationMuteRole,
+  );
   const moderationCommandFeatures = getModerationCommandFeatures(areaFeatures);
   const moderationRouteFeatures = getModerationLogFeatures(areaFeatures);
   const messageRouteChannelOptions = useMemo(

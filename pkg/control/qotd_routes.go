@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -68,13 +67,6 @@ func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, g
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-		return
-	case len(tail) == 2 && tail[1] == "forum-tags":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.handleQOTDForumTagsGet(w, r, guildID)
 		return
 	case len(tail) == 3 && tail[1] == "actions" && tail[2] == "publish-now":
 		if r.Method != http.MethodPost {
@@ -249,54 +241,6 @@ func (s *Server) handleQOTDQuestionsReorder(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (s *Server) handleQOTDForumTagsGet(w http.ResponseWriter, r *http.Request, guildID string) {
-	channelID := strings.TrimSpace(r.URL.Query().Get("channel_id"))
-	if channelID == "" {
-		http.Error(w, "channel_id is required", http.StatusBadRequest)
-		return
-	}
-
-	session, err := s.discordSessionForGuild(guildID)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to resolve qotd forum tags: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	if session == nil {
-		http.Error(w, "discord session unavailable", http.StatusServiceUnavailable)
-		return
-	}
-
-	channel, err := session.Channel(channelID)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to read forum tags: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-	if channel == nil || channel.Type != discordgo.ChannelTypeGuildForum {
-		http.Error(w, "selected channel is not a forum channel", http.StatusBadRequest)
-		return
-	}
-
-	tags := make([]qotdForumTagResponse, 0, len(channel.AvailableTags))
-	for _, tag := range channel.AvailableTags {
-		tagID := strings.TrimSpace(tag.ID)
-		tagName := strings.TrimSpace(tag.Name)
-		if tagID == "" || tagName == "" {
-			continue
-		}
-		tags = append(tags, qotdForumTagResponse{
-			ID:        tagID,
-			Name:      tagName,
-			Moderated: tag.Moderated,
-		})
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"tags":     tags,
-	})
-}
-
 func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
 	session, err := s.discordSessionForGuild(guildID)
 	if err != nil {
@@ -322,7 +266,7 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 		"status":   "ok",
 		"guild_id": guildID,
 		"result": map[string]any{
-			"thread_url":    result.ThreadURL,
+			"post_url":      result.PostURL,
 			"question":      buildQOTDQuestionsResponse([]storage.QOTDQuestionRecord{result.Question})[0],
 			"official_post": buildQOTDOfficialPostResponse(guildID, &result.OfficialPost),
 		},

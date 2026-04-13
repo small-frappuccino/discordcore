@@ -141,6 +141,8 @@ func (builder *featureWorkspaceBuilder) buildFeatureRecord(
 		Label:                 def.Label,
 		Description:           def.Description,
 		Scope:                 scope,
+		Area:                  def.Area,
+		Tags:                  slices.Clone(def.Tags),
 		SupportsGuildOverride: def.SupportsGuildOverride,
 		OverrideState:         featureOverrideState(&cfg, guildID, def.ID),
 		EffectiveEnabled:      effectiveEnabled,

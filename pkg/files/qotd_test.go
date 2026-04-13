@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-func TestNormalizeQOTDConfigRequiresForumAndTagsWhenEnabled(t *testing.T) {
+func TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled(t *testing.T) {
 	t.Parallel()
 
 	if _, err := NormalizeQOTDConfig(QOTDConfig{Enabled: true}); err == nil {
-		t.Fatal("expected enabled qotd config without forum/tag ids to fail")
+		t.Fatal("expected enabled qotd config without delivery targets to fail")
 	}
 }
 
-func TestSetQOTDConfigCanonicalizesCoreFields(t *testing.T) {
+func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	t.Parallel()
 
 	mgr, _ := newTransactionalTestManager(t, &BotConfig{
@@ -21,10 +21,9 @@ func TestSetQOTDConfigCanonicalizesCoreFields(t *testing.T) {
 	}, nil)
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
-		Enabled:        true,
-		ForumChannelID: " 123456789012345678 ",
-		QuestionTagID:  " 223456789012345678 ",
-		ReplyTagID:     " 323456789012345678 ",
+		Enabled:           true,
+		QuestionChannelID: " 123456789012345678 ",
+		ResponseChannelID: " 223456789012345678 ",
 	})
 	if err != nil {
 		t.Fatalf("SetQOTDConfig() failed: %v", err)
@@ -37,14 +36,11 @@ func TestSetQOTDConfigCanonicalizesCoreFields(t *testing.T) {
 	if !cfg.Enabled {
 		t.Fatal("expected qotd config to remain enabled")
 	}
-	if cfg.ForumChannelID != "123456789012345678" {
-		t.Fatalf("expected trimmed forum channel id, got %q", cfg.ForumChannelID)
+	if cfg.QuestionChannelID != "123456789012345678" {
+		t.Fatalf("expected trimmed question channel id, got %q", cfg.QuestionChannelID)
 	}
-	if cfg.QuestionTagID != "223456789012345678" {
-		t.Fatalf("expected trimmed question tag id, got %q", cfg.QuestionTagID)
-	}
-	if cfg.ReplyTagID != "323456789012345678" {
-		t.Fatalf("expected trimmed reply tag id, got %q", cfg.ReplyTagID)
+	if cfg.ResponseChannelID != "223456789012345678" {
+		t.Fatalf("expected trimmed response channel id, got %q", cfg.ResponseChannelID)
 	}
 }
 
@@ -57,10 +53,9 @@ func TestSetQOTDConfigRollsBackOnSaveError(t *testing.T) {
 	}, saveErr)
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
-		Enabled:        true,
-		ForumChannelID: "123456789012345678",
-		QuestionTagID:  "223456789012345678",
-		ReplyTagID:     "323456789012345678",
+		Enabled:           true,
+		QuestionChannelID: "123456789012345678",
+		ResponseChannelID: "223456789012345678",
 	})
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected save error, got %v", err)

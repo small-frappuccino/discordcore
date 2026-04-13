@@ -18,7 +18,6 @@ import (
 const (
 	qotdArchiveSourceOfficial = "official"
 	qotdArchiveSourceReply    = "reply"
-	replyThreadRecoverySkew   = time.Minute
 )
 
 // PublishScheduledIfDue publishes the scheduled QOTD for the active slot when
@@ -57,7 +56,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if err != nil {
 		return false, err
 	}
-	if !cfg.Enabled || strings.TrimSpace(cfg.ForumChannelID) == "" || strings.TrimSpace(cfg.QuestionTagID) == "" {
+	if !cfg.Enabled || !canPublishQOTD(cfg) {
 		return false, ErrQOTDDisabled
 	}
 
@@ -76,7 +75,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       cfg.ForumChannelID,
+		ForumChannelID:       strings.TrimSpace(cfg.QuestionChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -92,13 +91,12 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	}
 
 	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
-		GuildID:        guildID,
-		OfficialPostID: provisioned.ID,
-		ForumChannelID: cfg.ForumChannelID,
-		QuestionTagID:  cfg.QuestionTagID,
-		QuestionText:   question.Body,
-		PublishDateUTC: publishDate,
-		Pinned:         lifecycle.State == OfficialPostStateCurrent,
+		GuildID:           guildID,
+		OfficialPostID:    provisioned.ID,
+		QuestionChannelID: strings.TrimSpace(cfg.QuestionChannelID),
+		QuestionText:      question.Body,
+		PublishDateUTC:    publishDate,
+		Pinned:            lifecycle.State == OfficialPostStateCurrent,
 	})
 	if err != nil {
 		if deleteErr := s.store.DeleteQOTDOfficialPost(ctx, provisioned.ID); deleteErr != nil {
@@ -151,75 +149,12 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	return s.reconcileOfficialPostWindow(ctx, guildID, session, s.clock(), 0)
 }
 
-func (s *Service) reconcileProvisioningReplyThreads(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) error {
-	replyThreads, err := s.store.ListQOTDReplyThreadsPendingRecovery(ctx, guildID)
-	if err != nil {
+func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
+	if strings.TrimSpace(post.DiscordThreadID) == "" {
+		_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), false, nil, nil)
 		return err
 	}
-	for idx := range replyThreads {
-		record := replyThreads[idx]
-		if recovered, err := s.recoverProvisioningReplyThread(ctx, session, guildID, &record); err != nil {
-			return err
-		} else if recovered != nil {
-			continue
-		}
-		if !replyThreadProvisioningExpired(record, now) {
-			continue
-		}
-		if _, err := s.store.UpdateQOTDReplyThreadState(ctx, record.ID, string(ReplyThreadStateFailed), nil, nil); err != nil {
-			return err
-		}
-		log.ApplicationLogger().Warn(
-			"QOTD reply-thread provisioning expired without Discord recovery",
-			"guildID", guildID,
-			"officialPostID", record.OfficialPostID,
-			"userID", record.UserID,
-			"replyThreadID", record.ID,
-		)
-	}
-	return nil
-}
 
-func (s *Service) recoverProvisioningReplyThread(ctx context.Context, session *discordgo.Session, guildID string, record *storage.QOTDReplyThreadRecord) (*storage.QOTDReplyThreadRecord, error) {
-	if record == nil {
-		return nil, nil
-	}
-	if strings.TrimSpace(record.DiscordThreadID) != "" {
-		return record, nil
-	}
-	if strings.TrimSpace(record.State) != string(ReplyThreadStateProvisioning) {
-		return nil, nil
-	}
-	provisioningNonce := strings.TrimSpace(record.ProvisioningNonce)
-	if provisioningNonce == "" {
-		return nil, nil
-	}
-
-	found, err := s.publisher.FindReplyPostByNonce(ctx, session, discordqotd.FindReplyPostByNonceParams{
-		GuildID:           guildID,
-		ForumChannelID:    record.ForumChannelID,
-		ProvisioningNonce: provisioningNonce,
-		Since:             replyThreadRecoverySince(*record),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if found == nil {
-		return nil, nil
-	}
-
-	recovered, err := s.store.FinalizeQOTDReplyThread(ctx, record.ID, found.ThreadID, found.StarterMessageID)
-	if err != nil {
-		return nil, err
-	}
-	recovered, err = s.store.UpdateQOTDReplyThreadState(ctx, recovered.ID, string(ReplyThreadStateActive), nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return recovered, nil
-}
-
-func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
 	if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
 		Pinned:   lifecycle.State == OfficialPostStateCurrent,
 		Locked:   true,
@@ -240,15 +175,20 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 		return err
 	}
 
-	missingOfficial, err := s.archiveThreadMessages(ctx, session, storage.QOTDThreadArchiveRecord{
-		GuildID:         post.GuildID,
-		OfficialPostID:  post.ID,
-		SourceKind:      qotdArchiveSourceOfficial,
-		DiscordThreadID: post.DiscordThreadID,
-		ArchivedAt:      archivedAt,
-	})
-	if err != nil {
-		return err
+	messageMode := strings.TrimSpace(post.DiscordThreadID) == ""
+	missingOfficial := false
+	if !messageMode {
+		var err error
+		missingOfficial, err = s.archiveThreadMessages(ctx, session, storage.QOTDThreadArchiveRecord{
+			GuildID:         post.GuildID,
+			OfficialPostID:  post.ID,
+			SourceKind:      qotdArchiveSourceOfficial,
+			DiscordThreadID: post.DiscordThreadID,
+			ArchivedAt:      archivedAt,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	replyThreads, err := s.store.ListQOTDReplyThreadsByOfficialPost(ctx, post.ID)
@@ -262,6 +202,10 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	}
 
 	state := string(OfficialPostStateArchived)
+	if messageMode {
+		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, false, &archivedAt, &archivedAt)
+		return err
+	}
 	if missingOfficial {
 		state = string(OfficialPostStateMissingDiscord)
 	} else if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
@@ -418,17 +362,6 @@ func normalizeArchivedMessageTime(value time.Time) time.Time {
 		return time.Now().UTC()
 	}
 	return value.UTC()
-}
-
-func replyThreadRecoverySince(record storage.QOTDReplyThreadRecord) time.Time {
-	base := record.UpdatedAt.UTC()
-	if base.IsZero() {
-		base = record.CreatedAt.UTC()
-	}
-	if base.IsZero() {
-		return time.Time{}
-	}
-	return base.Add(-replyThreadRecoverySkew)
 }
 
 func isMissingDiscordThreadError(err error) bool {

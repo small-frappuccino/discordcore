@@ -14,9 +14,8 @@ var (
 // IsZero reports whether all QOTD fields are unset.
 func (cfg QOTDConfig) IsZero() bool {
 	return !cfg.Enabled &&
-		strings.TrimSpace(cfg.ForumChannelID) == "" &&
-		strings.TrimSpace(cfg.QuestionTagID) == "" &&
-		strings.TrimSpace(cfg.ReplyTagID) == ""
+		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
+		strings.TrimSpace(cfg.ResponseChannelID) == ""
 }
 
 // GetQOTDConfig returns the canonical QOTD config for one guild.

@@ -37,6 +37,8 @@ func (svc *featureControlService) catalog() []featureCatalogEntry {
 			Category:              def.Category,
 			Label:                 def.Label,
 			Description:           def.Description,
+			Area:                  def.Area,
+			Tags:                  slices.Clone(def.Tags),
 			SupportsGuildOverride: def.SupportsGuildOverride,
 			GlobalEditableFields:  slices.Clone(def.GlobalEditableFields),
 			GuildEditableFields:   slices.Clone(def.GuildEditableFields),

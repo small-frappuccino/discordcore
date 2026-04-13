@@ -557,8 +557,8 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, discordT
 	}
 	discordThreadID = strings.TrimSpace(discordThreadID)
 	starterMessageID = strings.TrimSpace(starterMessageID)
-	if discordThreadID == "" || starterMessageID == "" {
-		return nil, fmt.Errorf("finalize qotd official post: discord ids are required")
+	if starterMessageID == "" {
+		return nil, fmt.Errorf("finalize qotd official post: starter message id is required")
 	}
 	if publishedAt.IsZero() {
 		return nil, fmt.Errorf("finalize qotd official post: published_at is required")
@@ -595,7 +595,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, discordT
 			last_reconciled_at,
 			created_at,
 			updated_at`,
-		discordThreadID,
+		zeroEmptyString(discordThreadID),
 		starterMessageID,
 		publishedAt.UTC(),
 		id,
@@ -605,6 +605,51 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, discordT
 		return nil, fmt.Errorf("finalize qotd official post: %w", err)
 	}
 	return updated, nil
+}
+
+func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOfficialPostRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	if id <= 0 {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	row := s.queryRowContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			question_id,
+			publish_mode,
+			publish_date_utc,
+			state,
+			forum_channel_id,
+			discord_thread_id,
+			discord_starter_message_id,
+			question_text_snapshot,
+			is_pinned,
+			published_at,
+			grace_until,
+			archive_at,
+			closed_at,
+			archived_at,
+			last_reconciled_at,
+			created_at,
+			updated_at
+		FROM qotd_official_posts
+		WHERE id = ?`,
+		id,
+	)
+	record, err := scanQOTDOfficialPostRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get qotd official post by id: %w", err)
+	}
+	return record, nil
 }
 
 func (s *Store) DeleteQOTDOfficialPost(ctx context.Context, id int64) error {
@@ -976,8 +1021,8 @@ func (s *Store) FinalizeQOTDReplyThread(ctx context.Context, id int64, discordTh
 	}
 	discordThreadID = strings.TrimSpace(discordThreadID)
 	starterMessageID = strings.TrimSpace(starterMessageID)
-	if discordThreadID == "" || starterMessageID == "" {
-		return nil, fmt.Errorf("finalize qotd reply thread: discord ids are required")
+	if starterMessageID == "" {
+		return nil, fmt.Errorf("finalize qotd reply thread: starter message id is required")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -1005,7 +1050,7 @@ func (s *Store) FinalizeQOTDReplyThread(ctx context.Context, id int64, discordTh
 			updated_at,
 			closed_at,
 			archived_at`,
-		discordThreadID,
+		zeroEmptyString(discordThreadID),
 		starterMessageID,
 		id,
 	)

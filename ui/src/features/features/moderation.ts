@@ -1,23 +1,17 @@
 import type { FeatureRecord } from "../../api/control";
+import {
+  featureTags,
+  filterFeaturesByTag,
+  getFeatureIDsByTag,
+} from "./featureContract";
 
-export const moderationCommandFeatureIDs = [
-  "moderation.ban",
-  "moderation.massban",
-  "moderation.kick",
-  "moderation.timeout",
-  "moderation.warn",
-  "moderation.warnings",
-] as const;
+export const moderationCommandFeatureIDs = getFeatureIDsByTag(
+  featureTags.moderationCommand,
+) as readonly string[];
 
-export const moderationRouteFeatureIDs = [
-  "logging.automod_action",
-  "logging.moderation_case",
-] as const;
-
-const moderationCommandFeatureIDSet = new Set<string>(
-  moderationCommandFeatureIDs,
-);
-const moderationRouteFeatureIDSet = new Set<string>(moderationRouteFeatureIDs);
+export const moderationRouteFeatureIDs = getFeatureIDsByTag(
+  featureTags.moderationRoute,
+) as readonly string[];
 
 interface AutomodFeatureDetails {
   mode: string;
@@ -48,15 +42,11 @@ export function getMuteRoleFeatureDetails(
 }
 
 export function getModerationCommandFeatures(features: FeatureRecord[]) {
-  return features.filter((feature) =>
-    moderationCommandFeatureIDSet.has(feature.id),
-  );
+  return filterFeaturesByTag(features, featureTags.moderationCommand);
 }
 
 export function getModerationLogFeatures(features: FeatureRecord[]) {
-  return features.filter((feature) =>
-    moderationRouteFeatureIDSet.has(feature.id),
-  );
+  return filterFeaturesByTag(features, featureTags.moderationRoute);
 }
 
 export function getActionableFeatureBlocker(feature: FeatureRecord) {

@@ -28,7 +28,7 @@ type qotdOfficialPostResponse struct {
 	PublishMode             string     `json:"publish_mode"`
 	PublishDateUTC          time.Time  `json:"publish_date_utc"`
 	State                   string     `json:"state"`
-	ForumChannelID          string     `json:"forum_channel_id"`
+	QuestionChannelID       string     `json:"question_channel_id"`
 	DiscordThreadID         string     `json:"discord_thread_id,omitempty"`
 	DiscordStarterMessageID string     `json:"discord_starter_message_id,omitempty"`
 	QuestionTextSnapshot    string     `json:"question_text_snapshot"`
@@ -38,13 +38,7 @@ type qotdOfficialPostResponse struct {
 	ArchiveAt               time.Time  `json:"archive_at"`
 	ClosedAt                *time.Time `json:"closed_at,omitempty"`
 	ArchivedAt              *time.Time `json:"archived_at,omitempty"`
-	ThreadURL               string     `json:"thread_url,omitempty"`
-}
-
-type qotdForumTagResponse struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Moderated bool   `json:"moderated"`
+	PostURL                 string     `json:"post_url,omitempty"`
 }
 
 type qotdSummaryResponse struct {
@@ -105,7 +99,7 @@ func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialP
 		PublishMode:             strings.TrimSpace(record.PublishMode),
 		PublishDateUTC:          publishDate,
 		State:                   strings.TrimSpace(state),
-		ForumChannelID:          strings.TrimSpace(record.ForumChannelID),
+		QuestionChannelID:       strings.TrimSpace(record.ForumChannelID),
 		DiscordThreadID:         strings.TrimSpace(record.DiscordThreadID),
 		DiscordStarterMessageID: strings.TrimSpace(record.DiscordStarterMessageID),
 		QuestionTextSnapshot:    record.QuestionTextSnapshot,
@@ -115,7 +109,7 @@ func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialP
 		ArchiveAt:               record.ArchiveAt.UTC(),
 		ClosedAt:                record.ClosedAt,
 		ArchivedAt:              record.ArchivedAt,
-		ThreadURL:               discordqotd.BuildThreadJumpURL(guildID, record.DiscordThreadID),
+		PostURL:                 buildQOTDOfficialPostJumpURL(guildID, record),
 	}
 }
 
@@ -128,4 +122,19 @@ func buildQOTDSummaryResponse(guildID string, summary qotd.Summary) qotdSummaryR
 		CurrentPost:             buildQOTDOfficialPostResponse(guildID, summary.CurrentPost),
 		PreviousPost:            buildQOTDOfficialPostResponse(guildID, summary.PreviousPost),
 	}
+}
+
+func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPostRecord) string {
+	if record == nil {
+		return ""
+	}
+	if threadID := strings.TrimSpace(record.DiscordThreadID); threadID != "" {
+		return discordqotd.BuildThreadJumpURL(guildID, threadID)
+	}
+	channelID := strings.TrimSpace(record.ForumChannelID)
+	messageID := strings.TrimSpace(record.DiscordStarterMessageID)
+	if channelID == "" || messageID == "" {
+		return ""
+	}
+	return discordqotd.BuildMessageJumpURL(guildID, channelID, messageID)
 }

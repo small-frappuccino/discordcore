@@ -284,10 +284,9 @@ type PartnerBoardConfig struct {
 
 // QOTDConfig stores per-guild question-of-the-day forum settings.
 type QOTDConfig struct {
-	Enabled        bool   `json:"enabled,omitempty"`
-	ForumChannelID string `json:"forum_channel_id,omitempty"`
-	QuestionTagID  string `json:"question_tag_id,omitempty"`
-	ReplyTagID     string `json:"reply_tag_id,omitempty"`
+	Enabled           bool   `json:"enabled,omitempty"`
+	QuestionChannelID string `json:"question_channel_id,omitempty"`
+	ResponseChannelID string `json:"response_channel_id,omitempty"`
 }
 
 // UserPruneConfig controls periodic user pruning per guild.

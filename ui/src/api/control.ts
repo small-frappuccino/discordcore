@@ -78,9 +78,8 @@ export type QOTDQuestionStatus =
 
 export interface QOTDConfig {
   enabled?: boolean;
-  forum_channel_id?: string;
-  question_tag_id?: string;
-  reply_tag_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
 }
 
 export interface QOTDQuestion {
@@ -110,7 +109,7 @@ export interface QOTDOfficialPost {
   publish_mode: string;
   publish_date_utc: string;
   state: string;
-  forum_channel_id: string;
+  question_channel_id: string;
   discord_thread_id?: string;
   discord_starter_message_id?: string;
   question_text_snapshot: string;
@@ -120,7 +119,7 @@ export interface QOTDOfficialPost {
   archive_at: string;
   closed_at?: string;
   archived_at?: string;
-  thread_url?: string;
+  post_url?: string;
 }
 
 export interface QOTDSummary {
@@ -156,20 +155,8 @@ export interface QOTDSummaryResponse {
   summary: QOTDSummary;
 }
 
-export interface QOTDForumTagOption {
-  id: string;
-  name: string;
-  moderated: boolean;
-}
-
-export interface QOTDForumTagsResponse {
-  status: string;
-  guild_id: string;
-  tags: QOTDForumTagOption[];
-}
-
 export interface QOTDPublishResult {
-  thread_url?: string;
+  post_url?: string;
   question: QOTDQuestion;
   official_post: QOTDOfficialPost;
 }
@@ -222,6 +209,8 @@ export interface FeatureCatalogEntry {
   category: string;
   label: string;
   description: string;
+  area?: FeatureAreaID;
+  tags?: string[];
   supports_guild_override: boolean;
   global_editable_fields?: string[];
   guild_editable_fields?: string[];
@@ -239,6 +228,8 @@ export interface FeatureRecord {
   label: string;
   description: string;
   scope: string;
+  area?: FeatureAreaID;
+  tags?: string[];
   supports_guild_override: boolean;
   override_state: string;
   effective_enabled: boolean;
@@ -254,6 +245,14 @@ export interface FeatureWorkspace {
   guild_id?: string;
   features: FeatureRecord[];
 }
+
+export type FeatureAreaID =
+  | "commands"
+  | "moderation"
+  | "logging"
+  | "roles"
+  | "maintenance"
+  | "stats";
 
 export interface FeatureCatalogResponse {
   status: string;
@@ -542,16 +541,6 @@ export class ControlApiClient {
       {
         ordered_ids: orderedIDs,
       },
-    );
-  }
-
-  async listQOTDForumTags(
-    guildId: string,
-    channelId: string,
-  ): Promise<QOTDForumTagsResponse> {
-    return this.request<QOTDForumTagsResponse>(
-      "GET",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/forum-tags?channel_id=${encodeURIComponent(channelId)}`,
     );
   }
 
