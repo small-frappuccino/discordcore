@@ -28,6 +28,7 @@ type SubmitAnswerParams struct {
 	OfficialPostID  int64
 	UserID          string
 	UserDisplayName string
+	UserAvatarURL   string
 	InteractionID   string
 	AnswerText      string
 }
@@ -122,6 +123,7 @@ func handleAnswerModalSubmit(service AnswerSubmissionService, s *discordgo.Sessi
 		OfficialPostID:  officialPostID,
 		UserID:          userID,
 		UserDisplayName: interactionUserDisplayName(i),
+		UserAvatarURL:   interactionUserAvatarURL(i),
 		InteractionID:   strings.TrimSpace(i.ID),
 		AnswerText:      extractModalValue(modalData, answerModalFieldID),
 	})
@@ -246,6 +248,19 @@ func interactionUserDisplayName(i *discordgo.InteractionCreate) string {
 		if value := strings.TrimSpace(i.User.Username); value != "" {
 			return value
 		}
+	}
+	return ""
+}
+
+func interactionUserAvatarURL(i *discordgo.InteractionCreate) string {
+	if i == nil || i.Interaction == nil {
+		return ""
+	}
+	if i.Member != nil && i.Member.User != nil {
+		return strings.TrimSpace(i.Member.User.AvatarURL("256"))
+	}
+	if i.User != nil {
+		return strings.TrimSpace(i.User.AvatarURL("256"))
 	}
 	return ""
 }

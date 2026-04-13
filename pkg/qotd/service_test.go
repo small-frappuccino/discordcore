@@ -16,6 +16,7 @@ import (
 
 type fakePublisher struct {
 	publishedParams []discordqotd.PublishOfficialPostParams
+	answerParams    []discordqotd.UpsertAnswerMessageParams
 	threadStates    map[string]discordqotd.ThreadState
 	fetchCalls      []string
 	threadMessages  map[string][]discordqotd.ArchivedMessage
@@ -41,6 +42,7 @@ func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, 
 }
 
 func (p *fakePublisher) UpsertAnswerMessage(_ context.Context, _ *discordgo.Session, params discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error) {
+	p.answerParams = append(p.answerParams, params)
 	messageID := "answer-message-" + timePtrString(params.OfficialPostID) + "-" + params.UserID
 	if strings.TrimSpace(params.ExistingMessageID) != "" {
 		messageID = strings.TrimSpace(params.ExistingMessageID)
@@ -246,7 +248,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 }
 
 func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
-	service, store, _ := newTestQOTDService(t)
+	service, store, fake := newTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -297,6 +299,7 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 		OfficialPostID:  official.ID,
 		UserID:          "user-7",
 		UserDisplayName: "Answerer",
+		UserAvatarURL:   "https://cdn.discordapp.com/avatars/user-7/avatar-hash.png?size=256",
 		InteractionID:   "interaction-1",
 		AnswerText:      "First answer",
 	})
@@ -308,6 +311,9 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	}
 	if first.MessageURL == "" {
 		t.Fatalf("expected first answer to return a message url, got %+v", first)
+	}
+	if len(fake.answerParams) != 1 || fake.answerParams[0].UserAvatarURL != "https://cdn.discordapp.com/avatars/user-7/avatar-hash.png?size=256" {
+		t.Fatalf("expected answer publisher params to carry avatar url, got %+v", fake.answerParams)
 	}
 
 	stored, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-7")
@@ -326,6 +332,7 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 		OfficialPostID:  official.ID,
 		UserID:          "user-7",
 		UserDisplayName: "Answerer",
+		UserAvatarURL:   "https://cdn.discordapp.com/avatars/user-7/avatar-hash.png?size=256",
 		InteractionID:   "interaction-2",
 		AnswerText:      "Edited answer",
 	})

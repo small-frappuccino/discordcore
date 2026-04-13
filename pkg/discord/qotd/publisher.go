@@ -74,6 +74,7 @@ type UpsertAnswerMessageParams struct {
 	AnswerText        string
 	UserID            string
 	UserDisplayName   string
+	UserAvatarURL     string
 	ExistingMessageID string
 }
 
@@ -111,7 +112,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		normalized.QuestionChannelID,
 		&discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{
-				buildOfficialQuestionEmbed(normalized.QuestionText, normalized.PublishDateUTC),
+				buildOfficialQuestionEmbed(normalized.OfficialPostID, normalized.QuestionText, normalized.PublishDateUTC),
 			},
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
@@ -216,6 +217,7 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 		normalized.AnswerText,
 		normalized.UserID,
 		normalized.UserDisplayName,
+		normalized.UserAvatarURL,
 	)
 
 	messageID := normalized.ExistingMessageID
@@ -350,14 +352,43 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, messageID)
 }
 
-func buildOfficialQuestionEmbed(questionText string, publishDateUTC time.Time) *discordgo.MessageEmbed {
+func buildOfficialQuestionEmbed(officialPostID int64, questionText string, publishDateUTC time.Time) *discordgo.MessageEmbed {
+	description := strings.Join([]string{
+		quoteEmbedText(questionText, 2800),
+		"*Daily prompt*",
+		fmt.Sprintf("Use **%s** below to open the reply form and send your answer.", answerButtonLabel),
+	}, "\n\n")
+
 	return &discordgo.MessageEmbed{
-		Title:       "Question of the Day",
-		Description: questionText,
-		Color:       0x5B9CF6,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: publishDateUTC.UTC().Format("2006-01-02"),
+		Title:       "Question Of The Day",
+		Description: description,
+		Color:       0x89E5D1,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Prompt Type",
+				Value:  "Daily question",
+				Inline: true,
+			},
+			{
+				Name:   "Question ID",
+				Value:  fmt.Sprintf("`#%d`", officialPostID),
+				Inline: true,
+			},
+			{
+				Name:   "Publish Date",
+				Value:  fmt.Sprintf("`%s`", publishDateUTC.UTC().Format("2006-01-02")),
+				Inline: true,
+			},
+			{
+				Name:   "How It Works",
+				Value:  "The button below opens a private form so members can write a complete answer before it is posted in the response channel.",
+				Inline: false,
+			},
 		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Official QOTD #%d", officialPostID),
+		},
+		Timestamp: publishDateUTC.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -380,7 +411,7 @@ func buildReplyThreadEmbed(questionText, officialPostURL, provisioningNonce stri
 	return embed
 }
 
-func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName string) *discordgo.MessageEmbed {
+func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -391,37 +422,62 @@ func buildAnswerEmbed(officialPostID int64, questionText, questionURL, answerTex
 
 	fields := []*discordgo.MessageEmbedField{
 		{
-			Name:   "Question ID",
-			Value:  fmt.Sprintf("%d", officialPostID),
-			Inline: true,
-		},
-		{
-			Name:   "User",
-			Value:  userDisplayName,
-			Inline: true,
+			Name:   "Responder",
+			Value:  formatQOTDResponder(userDisplayName, userID),
+			Inline: false,
 		},
 	}
 	if trimmedQuestion := strings.TrimSpace(questionText); trimmedQuestion != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Question",
-			Value:  trimmedQuestion,
+			Value:  truncateEmbedText(trimmedQuestion, 1024),
 			Inline: false,
 		})
 	}
 	if trimmedQuestionURL := strings.TrimSpace(questionURL); trimmedQuestionURL != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   "Original post",
-			Value:  trimmedQuestionURL,
+			Name:   "Original Post",
+			Value:  "[Jump to the official question](" + trimmedQuestionURL + ")",
 			Inline: false,
 		})
 	}
+	fields = append(fields,
+		&discordgo.MessageEmbedField{
+			Name:   "Response Type",
+			Value:  "Member response",
+			Inline: true,
+		},
+		&discordgo.MessageEmbedField{
+			Name:   "Question ID",
+			Value:  fmt.Sprintf("`#%d`", officialPostID),
+			Inline: true,
+		},
+	)
 
-	return &discordgo.MessageEmbed{
-		Title:       "QOTD answer",
-		Description: strings.TrimSpace(answerText),
-		Color:       0x3BA55D,
-		Fields:      fields,
+	embed := &discordgo.MessageEmbed{
+		Title: "QOTD Answer",
+		Author: &discordgo.MessageEmbedAuthor{
+			Name:    "Submitted by " + userDisplayName,
+			IconURL: strings.TrimSpace(userAvatarURL),
+		},
+		Description: strings.Join([]string{
+			"**Submitted answer**",
+			quoteEmbedText(answerText, 3600),
+			"*Shared through the QOTD answer form.*",
+		}, "\n\n"),
+		Color:     0x68C77C,
+		Fields:    fields,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("QOTD response for question #%d", officialPostID),
+		},
 	}
+	if strings.TrimSpace(userAvatarURL) != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
+			URL: strings.TrimSpace(userAvatarURL),
+		}
+	}
+	return embed
 }
 
 func buildOfficialPostName(publishDateUTC time.Time, explicitName string) string {
@@ -539,6 +595,7 @@ func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (Upser
 	params.AnswerText = strings.TrimSpace(params.AnswerText)
 	params.UserID = strings.TrimSpace(params.UserID)
 	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
+	params.UserAvatarURL = strings.TrimSpace(params.UserAvatarURL)
 	params.ExistingMessageID = strings.TrimSpace(params.ExistingMessageID)
 
 	switch {
@@ -597,4 +654,46 @@ func starterMessageMatchesReplyNonce(message *discordgo.Message, footerMarker st
 		}
 	}
 	return false
+}
+
+func quoteEmbedText(text string, limit int) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "> -"
+	}
+	lines := strings.Split(text, "\n")
+	for idx := range lines {
+		line := strings.TrimSpace(lines[idx])
+		if line == "" {
+			lines[idx] = ">"
+			continue
+		}
+		lines[idx] = "> " + line
+	}
+	return truncateEmbedText(strings.Join(lines, "\n"), limit)
+}
+
+func truncateEmbedText(text string, limit int) string {
+	if limit <= 0 || len(text) <= limit {
+		return text
+	}
+	if limit <= 3 {
+		return text[:limit]
+	}
+	return strings.TrimSpace(text[:limit-3]) + "..."
+}
+
+func formatQOTDResponder(userDisplayName, userID string) string {
+	userDisplayName = strings.TrimSpace(userDisplayName)
+	userID = strings.TrimSpace(userID)
+	if userDisplayName == "" && userID == "" {
+		return "Member"
+	}
+	if userID == "" {
+		return "**" + userDisplayName + "**"
+	}
+	if userDisplayName == "" {
+		return "<@" + userID + ">\n`" + userID + "`"
+	}
+	return fmt.Sprintf("**%s**\n<@%s> · `%s`", userDisplayName, userID, userID)
 }

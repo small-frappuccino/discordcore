@@ -422,6 +422,7 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		AnswerText:        normalized.AnswerText,
 		UserID:            normalized.UserID,
 		UserDisplayName:   normalized.UserDisplayName,
+		UserAvatarURL:     normalized.UserAvatarURL,
 		ExistingMessageID: strings.TrimSpace(record.DiscordStarterMessageID),
 	})
 	if err != nil {
@@ -666,6 +667,7 @@ func normalizeSubmitAnswerParams(params discordqotd.SubmitAnswerParams) (discord
 	params.GuildID = strings.TrimSpace(params.GuildID)
 	params.UserID = strings.TrimSpace(params.UserID)
 	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
+	params.UserAvatarURL = strings.TrimSpace(params.UserAvatarURL)
 	params.InteractionID = strings.TrimSpace(params.InteractionID)
 	params.AnswerText = strings.TrimSpace(params.AnswerText)
 

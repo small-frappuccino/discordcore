@@ -124,6 +124,7 @@ func newQOTDComponentInteraction(customID string) *discordgo.InteractionCreate {
 				User: &discordgo.User{
 					ID:       "user-1",
 					Username: "fallback-name",
+					Avatar:   "avatar-hash",
 				},
 			},
 			Data: discordgo.MessageComponentInteractionData{
@@ -147,6 +148,7 @@ func newQOTDModalInteraction(customID, answer string) *discordgo.InteractionCrea
 				User: &discordgo.User{
 					ID:       "user-1",
 					Username: "fallback-name",
+					Avatar:   "avatar-hash",
 				},
 			},
 			Data: discordgo.ModalSubmitInteractionData{
@@ -211,6 +213,9 @@ func TestHandleQOTDInteractionsSubmitsAnswerDeferredEphemeralAndEditsSuccess(t *
 	}
 	if call.UserDisplayName != "Display Name" {
 		t.Fatalf("expected nick to be used as display name, got %+v", call)
+	}
+	if got, want := call.UserAvatarURL, (&discordgo.User{ID: "user-1", Avatar: "avatar-hash"}).AvatarURL("256"); got != want {
+		t.Fatalf("expected avatar url to be forwarded, got %q want %q", got, want)
 	}
 	if call.AnswerText != "My final answer" {
 		t.Fatalf("expected answer text from modal, got %+v", call)
