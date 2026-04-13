@@ -277,6 +277,75 @@ describe("QOTD UI", () => {
     ).toBeInTheDocument();
   });
 
+  it("allows deleting a deck with questions and explains the cascade", () => {
+    qotdMock.settings = createQOTDSettings({
+      decks: [
+        {
+          id: "default",
+          name: "Default",
+          enabled: true,
+          question_channel_id: "question-channel-1",
+          response_channel_id: "answers-channel-1",
+        },
+        {
+          id: "deck-b",
+          name: "Deck B",
+          enabled: false,
+          question_channel_id: "question-channel-1",
+          response_channel_id: "answers-channel-1",
+        },
+      ],
+    });
+    qotdMock.summary = createQOTDSummary({
+      settings: qotdMock.settings,
+      decks: [
+        createQOTDDeckSummaries({
+          counts: {
+            total: 0,
+            draft: 0,
+            ready: 0,
+            reserved: 0,
+            used: 0,
+            disabled: 0,
+          },
+          cards_remaining: 0,
+        })[0],
+        {
+          id: "deck-b",
+          name: "Deck B",
+          enabled: false,
+          counts: {
+            total: 2,
+            draft: 1,
+            ready: 1,
+            reserved: 0,
+            used: 0,
+            disabled: 0,
+          },
+          cards_remaining: 2,
+          is_active: false,
+          can_publish: false,
+        },
+      ],
+    });
+    qotdMock.deckSummaries = qotdMock.summary.decks;
+
+    render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("Deleting this deck also removes 2 questions from this bank."),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("group", { name: "Deck B" })).getByRole("button", {
+        name: "Delete deck",
+      }),
+    ).toBeEnabled();
+  });
+
   it("renders the queue editor with question cards and local actions", () => {
     render(
       <MemoryRouter>

@@ -24,7 +24,6 @@ var (
 	ErrImmutableQuestion      = errors.New("qotd question is already scheduled or used")
 	ErrQuestionNotFound       = errors.New("qotd question not found")
 	ErrDeckNotFound           = errors.New("qotd deck not found")
-	ErrDeckInUse             = errors.New("qotd deck is still in use")
 	ErrDiscordUnavailable     = errors.New("discord session unavailable")
 	ErrOfficialPostNotFound   = discordqotd.ErrOfficialPostNotFound
 	ErrAnswerWindowClosed     = discordqotd.ErrAnswerWindowClosed
@@ -107,6 +106,11 @@ func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QO
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, err
 	}
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
 	normalized, err := files.NormalizeQOTDConfig(cfg)
 	if err != nil {
 		return files.QOTDConfig{}, err
@@ -115,10 +119,15 @@ func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QO
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
-	if err := s.ensureRemovedDecksAreEmpty(context.Background(), guildID, files.DashboardQOTDConfig(current), files.DashboardQOTDConfig(normalized)); err != nil {
+	currentDashboard := files.DashboardQOTDConfig(current)
+	nextDashboard := files.DashboardQOTDConfig(normalized)
+	if err := s.configManager.SetQOTDConfig(guildID, normalized); err != nil {
 		return files.QOTDConfig{}, err
 	}
-	if err := s.configManager.SetQOTDConfig(guildID, normalized); err != nil {
+	if err := s.deleteRemovedDeckQuestions(context.Background(), guildID, currentDashboard, nextDashboard); err != nil {
+		if rollbackErr := s.configManager.SetQOTDConfig(guildID, current); rollbackErr != nil {
+			return files.QOTDConfig{}, fmt.Errorf("delete removed qotd deck questions: %w (rollback qotd config: %v)", err, rollbackErr)
+		}
 		return files.QOTDConfig{}, err
 	}
 	updated, err := s.configManager.GetQOTDConfig(guildID)
@@ -821,16 +830,13 @@ func (s *Service) resolveDashboardDeck(guildID, deckID string) (files.QOTDDeckCo
 	return deck, nil
 }
 
-func (s *Service) ensureRemovedDecksAreEmpty(ctx context.Context, guildID string, current, next files.QOTDConfig) error {
+func (s *Service) deleteRemovedDeckQuestions(ctx context.Context, guildID string, current, next files.QOTDConfig) error {
 	removedDeckIDs := missingDeckIDs(current.Decks, next.Decks)
-	for _, deckID := range removedDeckIDs {
-		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
-		if err != nil {
-			return err
-		}
-		if len(questions) > 0 {
-			return fmt.Errorf("%w: move or delete all questions from deck %s before removing it", ErrDeckInUse, deckID)
-		}
+	if len(removedDeckIDs) == 0 {
+		return nil
+	}
+	if err := s.store.DeleteQOTDQuestionsByDecks(ctx, guildID, removedDeckIDs); err != nil {
+		return fmt.Errorf("delete removed qotd deck questions: %w", err)
 	}
 	return nil
 }

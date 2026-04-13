@@ -155,7 +155,8 @@ export function QOTDSettingsPage() {
           <GroupedSettingsGroup>
             {draft.decks.map((deck) => {
               const summary = findDeckSummary(deckSummaries, deck.id);
-              const canDelete = draft.decks.length > 1 && (summary?.counts.total ?? 0) === 0;
+              const questionCount = summary?.counts.total ?? 0;
+              const canDelete = draft.decks.length > 1;
 
               return (
                 <GroupedSettingsItem
@@ -302,10 +303,17 @@ export function QOTDSettingsPage() {
                   {!canDelete ? (
                     <GroupedSettingsSubrow>
                       <GroupedSettingsInlineMessage
+                        message="At least one deck must remain configured."
+                        tone="info"
+                      />
+                    </GroupedSettingsSubrow>
+                  ) : questionCount > 0 ? (
+                    <GroupedSettingsSubrow>
+                      <GroupedSettingsInlineMessage
                         message={
-                          draft.decks.length <= 1
-                            ? "At least one deck must remain configured."
-                            : "Move or delete all questions from this deck before removing it."
+                          questionCount === 1
+                            ? "Deleting this deck also removes 1 question from this bank."
+                            : `Deleting this deck also removes ${questionCount} questions from this bank.`
                         }
                         tone="info"
                       />

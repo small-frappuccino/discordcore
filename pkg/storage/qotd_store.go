@@ -166,6 +166,44 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	return nil
 }
 
+func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, deckIDs []string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil
+	}
+	normalizedDeckIDs := normalizeQOTDDeckIDs(deckIDs)
+	if len(normalizedDeckIDs) == 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("delete qotd questions by decks: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, deckID := range normalizedDeckIDs {
+		if _, err := txExecContext(ctx, tx,
+			`DELETE FROM qotd_questions WHERE guild_id = ? AND deck_id = ?`,
+			guildID,
+			deckID,
+		); err != nil {
+			return fmt.Errorf("delete qotd questions by decks: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("delete qotd questions by decks: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) ([]QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -1728,6 +1766,26 @@ func normalizeQOTDOrderedIDs(ids []int64) ([]int64, error) {
 		normalized = append(normalized, id)
 	}
 	return normalized, nil
+}
+
+func normalizeQOTDDeckIDs(deckIDs []string) []string {
+	if len(deckIDs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(deckIDs))
+	normalized := make([]string, 0, len(deckIDs))
+	for _, deckID := range deckIDs {
+		deckID = strings.TrimSpace(deckID)
+		if deckID == "" {
+			continue
+		}
+		if _, ok := seen[deckID]; ok {
+			continue
+		}
+		seen[deckID] = struct{}{}
+		normalized = append(normalized, deckID)
+	}
+	return normalized
 }
 
 func sameQOTDIDSet(current, ordered []int64) bool {

@@ -325,8 +325,7 @@ func qotdErrorStatus(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, qotd.ErrQOTDDisabled),
 		errors.Is(err, qotd.ErrAlreadyPublished),
-		errors.Is(err, qotd.ErrNoQuestionsAvailable),
-		errors.Is(err, qotd.ErrDeckInUse):
+		errors.Is(err, qotd.ErrNoQuestionsAvailable):
 		return http.StatusConflict
 	case errors.Is(err, qotd.ErrDiscordUnavailable):
 		return http.StatusServiceUnavailable

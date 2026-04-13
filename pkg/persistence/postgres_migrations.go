@@ -404,4 +404,16 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_questions DROP COLUMN IF EXISTS deck_id`,
 		},
 	},
+	{
+		Version: 11,
+		UpSQL: []string{
+			`ALTER TABLE qotd_official_posts
+			 DROP CONSTRAINT IF EXISTS qotd_official_posts_question_id_fkey`,
+		},
+		DownSQL: []string{
+			`ALTER TABLE qotd_official_posts
+			 ADD CONSTRAINT qotd_official_posts_question_id_fkey
+			 FOREIGN KEY (question_id) REFERENCES qotd_questions(id) ON DELETE RESTRICT`,
+		},
+	},
 }

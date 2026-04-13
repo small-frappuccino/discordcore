@@ -140,6 +140,85 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 	}
 }
 
+func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
+	service, store, _ := newTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{
+			{
+				ID:                files.LegacyQOTDDefaultDeckID,
+				Name:              files.LegacyQOTDDefaultDeckName,
+				Enabled:           true,
+				QuestionChannelID: "question-channel-1",
+				ResponseChannelID: "answers-channel-1",
+			},
+			{
+				ID:                "deck-b",
+				Name:              "Deck B",
+				Enabled:           false,
+				QuestionChannelID: "question-channel-2",
+				ResponseChannelID: "answers-channel-2",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpdateSettings(initial) failed: %v", err)
+	}
+
+	defaultQuestion, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		DeckID: "default",
+		Body:   "Default question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(default) failed: %v", err)
+	}
+	deckBQuestion, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		DeckID: "deck-b",
+		Body:   "Deck B question",
+		Status: QuestionStatusDraft,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(deck-b) failed: %v", err)
+	}
+
+	updated, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{
+			{
+				ID:                files.LegacyQOTDDefaultDeckID,
+				Name:              files.LegacyQOTDDefaultDeckName,
+				Enabled:           true,
+				QuestionChannelID: "question-channel-1",
+				ResponseChannelID: "answers-channel-1",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings(remove deck) failed: %v", err)
+	}
+
+	if len(updated.Decks) != 1 || updated.Decks[0].ID != files.LegacyQOTDDefaultDeckID {
+		t.Fatalf("expected only default deck to remain, got %+v", updated.Decks)
+	}
+
+	allQuestions, err := store.ListQOTDQuestions(context.Background(), "g1", "")
+	if err != nil {
+		t.Fatalf("ListQOTDQuestions(all) failed: %v", err)
+	}
+	if len(allQuestions) != 1 || allQuestions[0].ID != defaultQuestion.ID {
+		t.Fatalf("expected only default-deck questions to remain, got %+v", allQuestions)
+	}
+
+	deletedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", deckBQuestion.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(deck-b) failed: %v", err)
+	}
+	if deletedQuestion != nil {
+		t.Fatalf("expected removed deck question to be deleted, got %+v", deletedQuestion)
+	}
+}
+
 func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	service, store, fake := newTestQOTDService(t)
 	service.now = func() time.Time {

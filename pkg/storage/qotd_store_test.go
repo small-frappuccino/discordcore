@@ -225,3 +225,66 @@ func TestQOTDReplyThreadProvisioningNonceLifecycle(t *testing.T) {
 		t.Fatalf("expected pending recovery list to include updated nonce, got %+v", pending)
 	}
 }
+
+func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "deck-a",
+		Body:    "Question one",
+		Status:  "used",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
+	}
+	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "deck-a",
+		DeckNameSnapshot:     "Deck A",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		State:                "published",
+		ForumChannelID:       "question-channel-1",
+		ResponseChannelID:    "answers-channel-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	if err := store.DeleteQOTDQuestionsByDecks(ctx, "g1", []string{"deck-a"}); err != nil {
+		t.Fatalf("DeleteQOTDQuestionsByDecks() failed: %v", err)
+	}
+
+	deletedQuestion, err := store.GetQOTDQuestion(ctx, "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if deletedQuestion != nil {
+		t.Fatalf("expected question to be deleted, got %+v", deletedQuestion)
+	}
+
+	questions, err := store.ListQOTDQuestions(ctx, "g1", "deck-a")
+	if err != nil {
+		t.Fatalf("ListQOTDQuestions() failed: %v", err)
+	}
+	if len(questions) != 0 {
+		t.Fatalf("expected deck questions to be deleted, got %+v", questions)
+	}
+
+	preservedOfficial, err := store.GetQOTDOfficialPostByDate(ctx, "g1", official.PublishDateUTC)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if preservedOfficial == nil {
+		t.Fatal("expected official post history to remain after deleting deck questions")
+	}
+	if preservedOfficial.QuestionID != question.ID || preservedOfficial.QuestionTextSnapshot != question.Body {
+		t.Fatalf("expected official post snapshot to remain intact, got %+v", preservedOfficial)
+	}
+}
