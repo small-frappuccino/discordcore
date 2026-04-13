@@ -31,6 +31,7 @@ var (
 	newCommandHandler            = commands.NewCommandHandler
 	newCommandHandlerForBot      = commands.NewCommandHandlerForBot
 	setupCommandHandler          = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
+	setupQOTDInteractionHandler  = func(ch *commands.CommandHandler) error { return ch.SetupQOTDInteractions() }
 	shutdownCommandHandler       = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
 	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
 	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }

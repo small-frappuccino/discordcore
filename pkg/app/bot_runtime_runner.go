@@ -221,6 +221,14 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 			adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 		}
 		runtime.commandHandler = commandHandler
+	} else if runtime.capabilities.qotd && opts.qotdReplyService != nil {
+		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+		commandHandler.SetQOTDReplyService(opts.qotdReplyService)
+		if err := setupQOTDInteractionHandler(commandHandler); err != nil {
+			return fmt.Errorf("configure qotd interactions for %s: %w", runtime.instanceID, err)
+		}
+		runtime.commandHandler = commandHandler
+		log.ApplicationLogger().Info("Commands skipped; QOTD interaction handler enabled", "botInstanceID", runtime.instanceID)
 	} else {
 		log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
 	}
