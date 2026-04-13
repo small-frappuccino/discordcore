@@ -23,6 +23,8 @@ var (
 	ErrNoQuestionsAvailable   = errors.New("no qotd questions available")
 	ErrImmutableQuestion      = errors.New("qotd question is already scheduled or used")
 	ErrQuestionNotFound       = errors.New("qotd question not found")
+	ErrDeckNotFound           = errors.New("qotd deck not found")
+	ErrDeckInUse             = errors.New("qotd deck is still in use")
 	ErrDiscordUnavailable     = errors.New("discord session unavailable")
 	ErrOfficialPostNotFound   = discordqotd.ErrOfficialPostNotFound
 	ErrAnswerWindowClosed     = discordqotd.ErrAnswerWindowClosed
@@ -37,6 +39,7 @@ type Publisher interface {
 }
 
 type QuestionMutation struct {
+	DeckID string
 	Body   string
 	Status QuestionStatus
 }
@@ -53,6 +56,7 @@ type QuestionCounts struct {
 type Summary struct {
 	Settings                files.QOTDConfig
 	Counts                  QuestionCounts
+	Decks                   []DeckSummary
 	CurrentPublishDateUTC   time.Time
 	PublishedForCurrentSlot bool
 	CurrentPost             *storage.QOTDOfficialPostRecord
@@ -92,28 +96,55 @@ func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, err
 	}
-	return s.configManager.GetQOTDConfig(guildID)
+	settings, err := s.configManager.GetQOTDConfig(guildID)
+	if err != nil {
+		return files.QOTDConfig{}, err
+	}
+	return files.DashboardQOTDConfig(settings), nil
 }
 
 func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, err
 	}
-	if err := s.configManager.SetQOTDConfig(guildID, cfg); err != nil {
+	normalized, err := files.NormalizeQOTDConfig(cfg)
+	if err != nil {
 		return files.QOTDConfig{}, err
 	}
-	return s.configManager.GetQOTDConfig(guildID)
+	current, err := s.configManager.GetQOTDConfig(guildID)
+	if err != nil {
+		return files.QOTDConfig{}, err
+	}
+	if err := s.ensureRemovedDecksAreEmpty(context.Background(), guildID, files.DashboardQOTDConfig(current), files.DashboardQOTDConfig(normalized)); err != nil {
+		return files.QOTDConfig{}, err
+	}
+	if err := s.configManager.SetQOTDConfig(guildID, normalized); err != nil {
+		return files.QOTDConfig{}, err
+	}
+	updated, err := s.configManager.GetQOTDConfig(guildID)
+	if err != nil {
+		return files.QOTDConfig{}, err
+	}
+	return files.DashboardQOTDConfig(updated), nil
 }
 
-func (s *Service) ListQuestions(ctx context.Context, guildID string) ([]storage.QOTDQuestionRecord, error) {
+func (s *Service) ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
-	return s.store.ListQOTDQuestions(ctx, guildID)
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return nil, err
+	}
+	return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 }
 
 func (s *Service) CreateQuestion(ctx context.Context, guildID, actorID string, mutation QuestionMutation) (*storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
+		return nil, err
+	}
+	deck, err := s.resolveDashboardDeck(guildID, mutation.DeckID)
+	if err != nil {
 		return nil, err
 	}
 	body, status, err := normalizeQuestionMutation(mutation)
@@ -123,6 +154,7 @@ func (s *Service) CreateQuestion(ctx context.Context, guildID, actorID string, m
 
 	return s.store.CreateQOTDQuestion(ctx, storage.QOTDQuestionRecord{
 		GuildID:   strings.TrimSpace(guildID),
+		DeckID:    deck.ID,
 		Body:      body,
 		Status:    string(status),
 		CreatedBy: normalizeActorID(actorID),
@@ -144,11 +176,18 @@ func (s *Service) UpdateQuestion(ctx context.Context, guildID string, questionID
 		return nil, ErrImmutableQuestion
 	}
 
+	deckID := strings.TrimSpace(mutation.DeckID)
+	if deckID == "" {
+		deckID = current.DeckID
+	} else if _, err := s.resolveDashboardDeck(guildID, deckID); err != nil {
+		return nil, err
+	}
 	body, status, err := normalizeQuestionMutation(mutation)
 	if err != nil {
 		return nil, err
 	}
 
+	current.DeckID = deckID
 	current.Body = body
 	current.Status = string(status)
 	return s.store.UpdateQOTDQuestion(ctx, *current)
@@ -171,12 +210,16 @@ func (s *Service) DeleteQuestion(ctx context.Context, guildID string, questionID
 	return s.store.DeleteQOTDQuestion(ctx, guildID, questionID)
 }
 
-func (s *Service) ReorderQuestions(ctx context.Context, guildID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
+func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return nil, err
+	}
 
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID)
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -188,10 +231,10 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID string, orderedI
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.ReorderQOTDQuestions(ctx, guildID, fullOrder); err != nil {
+	if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, fullOrder); err != nil {
 		return nil, err
 	}
-	return s.store.ListQOTDQuestions(ctx, guildID)
+	return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 }
 
 func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, error) {
@@ -204,7 +247,8 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	if err != nil {
 		return Summary{}, err
 	}
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID)
+	displaySettings := files.DashboardQOTDConfig(settings)
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, "")
 	if err != nil {
 		return Summary{}, err
 	}
@@ -219,8 +263,9 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	}
 
 	summary := Summary{
-		Settings:                settings,
-		Counts:                  countQuestions(questions),
+		Settings:                displaySettings,
+		Counts:                  summarizeActiveDeckQuestions(displaySettings, questions),
+		Decks:                   buildDeckSummaries(displaySettings, questions),
 		CurrentPublishDateUTC:   currentPublishDate,
 		PublishedForCurrentSlot: hasPublishedOfficialPostTarget(currentSlotPost),
 	}
@@ -257,18 +302,19 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.Enabled || !canPublishQOTD(cfg) {
+	deck, ok := cfg.ActiveDeck()
+	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return nil, ErrQOTDDisabled
 	}
 
-	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID)
+	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)
 	if err != nil {
 		return nil, err
 	}
 	if question == nil {
 		return nil, ErrNoQuestionsAvailable
 	}
-	availableQuestions, err := s.availableQuestionCount(ctx, guildID)
+	availableQuestions, err := s.availableQuestionCount(ctx, guildID, deck.ID)
 	if err != nil {
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
@@ -278,15 +324,18 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 
 	lifecycle := EvaluateManualOfficialPost(now, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
-		GuildID:              guildID,
-		QuestionID:           question.ID,
-		PublishMode:          string(PublishModeManual),
-		PublishDateUTC:       publishDate,
-		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       strings.TrimSpace(cfg.QuestionChannelID),
+		GuildID:            guildID,
+		DeckID:             deck.ID,
+		DeckNameSnapshot:   deck.Name,
+		QuestionID:         question.ID,
+		PublishMode:        string(PublishModeManual),
+		PublishDateUTC:     publishDate,
+		State:              string(OfficialPostStateProvisioning),
+		ForumChannelID:     strings.TrimSpace(deck.QuestionChannelID),
+		ResponseChannelID:  strings.TrimSpace(deck.ResponseChannelID),
 		QuestionTextSnapshot: question.Body,
-		GraceUntil:           lifecycle.BecomesPreviousAt,
-		ArchiveAt:            lifecycle.ArchiveAt,
+		GraceUntil:         lifecycle.BecomesPreviousAt,
+		ArchiveAt:          lifecycle.ArchiveAt,
 	})
 	if err != nil {
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
@@ -298,8 +347,9 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
 		GuildID:            guildID,
 		OfficialPostID:     provisioned.ID,
+		DeckName:           deck.Name,
 		AvailableQuestions: availableQuestions,
-		QuestionChannelID:  strings.TrimSpace(cfg.QuestionChannelID),
+		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
 		QuestionText:       question.Body,
 		PublishDateUTC:     publishDate,
 		ThreadName:         buildManualThreadName(now),
@@ -376,11 +426,18 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		return nil, ErrAnswerWindowClosed
 	}
 
-	cfg, err := s.configManager.GetQOTDConfig(officialPost.GuildID)
-	if err != nil {
-		return nil, err
+	responseChannelID := strings.TrimSpace(officialPost.ResponseChannelID)
+	if responseChannelID == "" {
+		cfg, err := s.configManager.GetQOTDConfig(officialPost.GuildID)
+		if err != nil {
+			return nil, err
+		}
+		if deck, ok := cfg.DeckByID(officialPost.DeckID); ok {
+			responseChannelID = strings.TrimSpace(deck.ResponseChannelID)
+		} else if activeDeck, ok := cfg.ActiveDeck(); ok {
+			responseChannelID = strings.TrimSpace(activeDeck.ResponseChannelID)
+		}
 	}
-	responseChannelID := strings.TrimSpace(cfg.ResponseChannelID)
 	if responseChannelID == "" {
 		return nil, ErrReplyThreadUnavailable
 	}
@@ -693,13 +750,108 @@ func normalizeSubmitAnswerParams(params discordqotd.SubmitAnswerParams) (discord
 	}
 }
 
-func (s *Service) availableQuestionCount(ctx context.Context, guildID string) (int, error) {
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID)
+func (s *Service) availableQuestionCount(ctx context.Context, guildID, deckID string) (int, error) {
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
 	if err != nil {
 		return 0, err
 	}
 	counts := countQuestions(questions)
 	return counts.Ready + counts.Draft, nil
+}
+
+func summarizeActiveDeckQuestions(settings files.QOTDConfig, questions []storage.QOTDQuestionRecord) QuestionCounts {
+	deck, ok := settings.ActiveDeck()
+	if !ok {
+		return QuestionCounts{}
+	}
+	return countQuestions(filterQuestionsByDeck(questions, deck.ID))
+}
+
+func buildDeckSummaries(settings files.QOTDConfig, questions []storage.QOTDQuestionRecord) []DeckSummary {
+	decks := settings.Decks
+	if len(decks) == 0 {
+		return nil
+	}
+	activeDeck, hasActiveDeck := settings.ActiveDeck()
+	summaries := make([]DeckSummary, 0, len(decks))
+	for _, deck := range decks {
+		counts := countQuestions(filterQuestionsByDeck(questions, deck.ID))
+		summaries = append(summaries, DeckSummary{
+			Deck:           deck,
+			Counts:         counts,
+			CardsRemaining: counts.Ready + counts.Draft,
+			IsActive:       hasActiveDeck && deck.ID == activeDeck.ID,
+			CanPublish:     deck.Enabled && canPublishQOTD(deck),
+		})
+	}
+	return summaries
+}
+
+func filterQuestionsByDeck(questions []storage.QOTDQuestionRecord, deckID string) []storage.QOTDQuestionRecord {
+	deckID = strings.TrimSpace(deckID)
+	if deckID == "" || len(questions) == 0 {
+		return nil
+	}
+	filtered := make([]storage.QOTDQuestionRecord, 0, len(questions))
+	for _, question := range questions {
+		if strings.TrimSpace(question.DeckID) == deckID {
+			filtered = append(filtered, question)
+		}
+	}
+	return filtered
+}
+
+func (s *Service) resolveDashboardDeck(guildID, deckID string) (files.QOTDDeckConfig, error) {
+	settings, err := s.GetSettings(guildID)
+	if err != nil {
+		return files.QOTDDeckConfig{}, err
+	}
+	deckID = strings.TrimSpace(deckID)
+	if deckID != "" {
+		deck, ok := settings.DeckByID(deckID)
+		if !ok {
+			return files.QOTDDeckConfig{}, ErrDeckNotFound
+		}
+		return deck, nil
+	}
+	deck, ok := settings.ActiveDeck()
+	if !ok {
+		return files.QOTDDeckConfig{}, ErrDeckNotFound
+	}
+	return deck, nil
+}
+
+func (s *Service) ensureRemovedDecksAreEmpty(ctx context.Context, guildID string, current, next files.QOTDConfig) error {
+	removedDeckIDs := missingDeckIDs(current.Decks, next.Decks)
+	for _, deckID := range removedDeckIDs {
+		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
+		if err != nil {
+			return err
+		}
+		if len(questions) > 0 {
+			return fmt.Errorf("%w: move or delete all questions from deck %s before removing it", ErrDeckInUse, deckID)
+		}
+	}
+	return nil
+}
+
+func missingDeckIDs(current, next []files.QOTDDeckConfig) []string {
+	nextIDs := make(map[string]struct{}, len(next))
+	for _, deck := range next {
+		nextIDs[strings.TrimSpace(deck.ID)] = struct{}{}
+	}
+	removed := make([]string, 0)
+	for _, deck := range current {
+		deckID := strings.TrimSpace(deck.ID)
+		if deckID == "" {
+			continue
+		}
+		if _, ok := nextIDs[deckID]; ok {
+			continue
+		}
+		removed = append(removed, deckID)
+	}
+	return removed
 }
 
 func (s *Service) replyThreadLock(officialPostID int64, userID string) *sync.Mutex {
@@ -722,8 +874,8 @@ func isQOTDUniqueConstraintError(err error) bool {
 	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
 }
 
-func canPublishQOTD(cfg files.QOTDConfig) bool {
-	return strings.TrimSpace(cfg.QuestionChannelID) != "" && strings.TrimSpace(cfg.ResponseChannelID) != ""
+func canPublishQOTD(deck files.QOTDDeckConfig) bool {
+	return strings.TrimSpace(deck.QuestionChannelID) != "" && strings.TrimSpace(deck.ResponseChannelID) != ""
 }
 
 func hasPublishedOfficialPostTarget(post *storage.QOTDOfficialPostRecord) bool {

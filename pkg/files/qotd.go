@@ -11,11 +11,106 @@ var (
 	ErrInvalidQOTDInput = errors.New("invalid qotd input")
 )
 
+const (
+	LegacyQOTDDefaultDeckID   = "default"
+	LegacyQOTDDefaultDeckName = "Default"
+)
+
+// IsZero reports whether all QOTD deck fields are unset.
+func (cfg QOTDDeckConfig) IsZero() bool {
+	return strings.TrimSpace(cfg.ID) == "" &&
+		strings.TrimSpace(cfg.Name) == "" &&
+		!cfg.Enabled &&
+		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
+		strings.TrimSpace(cfg.ResponseChannelID) == ""
+}
+
 // IsZero reports whether all QOTD fields are unset.
 func (cfg QOTDConfig) IsZero() bool {
+	if len(cfg.deckConfigs()) > 0 {
+		if len(cfg.deckConfigs()) == 1 && isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) {
+			return true
+		}
+		return false
+	}
 	return !cfg.Enabled &&
 		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
 		strings.TrimSpace(cfg.ResponseChannelID) == ""
+}
+
+// DashboardQOTDConfig returns a stable deck-aware settings payload for the
+// dashboard, even when the persisted config is still empty.
+func DashboardQOTDConfig(cfg QOTDConfig) QOTDConfig {
+	if !cfg.IsZero() {
+		return cfg
+	}
+	return QOTDConfig{
+		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Decks: []QOTDDeckConfig{{
+			ID:   LegacyQOTDDefaultDeckID,
+			Name: LegacyQOTDDefaultDeckName,
+		}},
+	}
+}
+
+// DeckByID resolves one configured deck by ID.
+func (cfg QOTDConfig) DeckByID(deckID string) (QOTDDeckConfig, bool) {
+	deckID = strings.TrimSpace(deckID)
+	for _, deck := range cfg.deckConfigs() {
+		if strings.TrimSpace(deck.ID) == deckID {
+			return deck, true
+		}
+	}
+	return QOTDDeckConfig{}, false
+}
+
+// ActiveDeck resolves the active configured deck, if any.
+func (cfg QOTDConfig) ActiveDeck() (QOTDDeckConfig, bool) {
+	decks := cfg.deckConfigs()
+	if len(decks) == 0 {
+		return QOTDDeckConfig{}, false
+	}
+	activeDeckID := strings.TrimSpace(cfg.ActiveDeckID)
+	if activeDeckID != "" {
+		for _, deck := range decks {
+			if strings.TrimSpace(deck.ID) == activeDeckID {
+				return deck, true
+			}
+		}
+	}
+	for _, deck := range decks {
+		if deck.Enabled {
+			return deck, true
+		}
+	}
+	return decks[0], true
+}
+
+func (cfg QOTDConfig) deckConfigs() []QOTDDeckConfig {
+	if len(cfg.Decks) > 0 {
+		return cloneQOTDDeckConfigs(cfg.Decks)
+	}
+	if !cfg.Enabled &&
+		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
+		strings.TrimSpace(cfg.ResponseChannelID) == "" {
+		return nil
+	}
+	return []QOTDDeckConfig{{
+		ID:                LegacyQOTDDefaultDeckID,
+		Name:              LegacyQOTDDefaultDeckName,
+		Enabled:           cfg.Enabled,
+		QuestionChannelID: cfg.QuestionChannelID,
+		ResponseChannelID: cfg.ResponseChannelID,
+	}}
+}
+
+func isImplicitDefaultQOTDDeck(deck QOTDDeckConfig, activeDeckID string) bool {
+	return strings.TrimSpace(deck.ID) == LegacyQOTDDefaultDeckID &&
+		strings.TrimSpace(deck.Name) == LegacyQOTDDefaultDeckName &&
+		!deck.Enabled &&
+		strings.TrimSpace(deck.QuestionChannelID) == "" &&
+		strings.TrimSpace(deck.ResponseChannelID) == "" &&
+		(activeDeckID == "" || activeDeckID == LegacyQOTDDefaultDeckID)
 }
 
 // GetQOTDConfig returns the canonical QOTD config for one guild.

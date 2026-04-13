@@ -183,7 +183,8 @@ func (s *RuntimeService) configuredGuildIDs(requireEnabled bool) []string {
 			continue
 		}
 		if requireEnabled {
-			if !guild.QOTD.Enabled {
+			deck, ok := guild.QOTD.ActiveDeck()
+			if !ok || !deck.Enabled {
 				continue
 			}
 		} else if guild.QOTD.IsZero() {

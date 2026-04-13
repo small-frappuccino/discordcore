@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AccessibleGuild,
   QOTDConfig,
+  QOTDDeckSummary,
   QOTDQuestion,
   QOTDSummary,
 } from "../../api/control";
@@ -36,23 +37,27 @@ const dashboardSessionMock: {
 
 const qotdMock = {
   busyLabel: "",
+  deckSummaries: createQOTDDeckSummaries(),
   hasLoadedAttempt: true,
   loading: false,
   notice: null,
   questions: [
     createQuestion({
       id: 1,
+      deck_id: "default",
       queue_position: 1,
       body: "What is one thing you shipped this week?",
       status: "ready",
     }),
     createQuestion({
       id: 2,
+      deck_id: "default",
       queue_position: 2,
       body: "What UI detail still feels off?",
       status: "draft",
     }),
   ] as QOTDQuestion[],
+  selectedDeckID: "default",
   settings: createQOTDSettings(),
   summary: createQOTDSummary(),
   workspaceState: "ready",
@@ -63,6 +68,7 @@ const qotdMock = {
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
+  selectDeck: vi.fn(),
   updateQuestion: vi.fn(),
 };
 
@@ -107,12 +113,15 @@ vi.mock("../features/useGuildChannelOptions", () => ({
 describe("QOTD UI", () => {
   beforeEach(() => {
     qotdMock.busyLabel = "";
+    qotdMock.deckSummaries = createQOTDDeckSummaries();
     qotdMock.loading = false;
     qotdMock.notice = null;
+    qotdMock.selectedDeckID = "default";
     qotdMock.settings = createQOTDSettings();
     qotdMock.summary = createQOTDSummary();
     qotdMock.workspaceState = "ready";
     qotdMock.saveSettings.mockReset().mockResolvedValue(undefined);
+    qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
   });
 
   it("keeps refresh actions out of the ready settings shell", () => {
@@ -164,7 +173,7 @@ describe("QOTD UI", () => {
     );
 
     const enabledToggle = within(view.container).getByRole("checkbox", {
-      name: /Enable QOTD workflow/,
+      name: /Enable Default/,
     });
 
     expect(enabledToggle).toBeChecked();
@@ -200,7 +209,7 @@ describe("QOTD UI", () => {
 
     await user.click(
       within(view.container).getByRole("checkbox", {
-        name: /Enable QOTD workflow/,
+        name: /Enable Default/,
       }),
     );
     await user.click(
@@ -209,9 +218,16 @@ describe("QOTD UI", () => {
 
     expect(qotdMock.saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        enabled: false,
-        question_channel_id: "question-channel-1",
-        response_channel_id: "answers-channel-1",
+        active_deck_id: "default",
+        decks: expect.arrayContaining([
+          expect.objectContaining({
+            id: "default",
+            name: "Default",
+            enabled: false,
+            question_channel_id: "question-channel-1",
+            response_channel_id: "answers-channel-1",
+          }),
+        ]),
       }),
     );
   });
@@ -226,17 +242,25 @@ describe("QOTD UI", () => {
 
     await user.click(
       within(view.container).getByRole("checkbox", {
-        name: /Enable QOTD workflow/,
+        name: /Enable Default/,
       }),
     );
 
-    qotdMock.settings = {
-      ...createQOTDSettings(),
-      question_channel_id: "question-channel-2",
-    };
+    qotdMock.settings = createQOTDSettings({
+      decks: [
+        {
+          id: "default",
+          name: "Default",
+          enabled: true,
+          question_channel_id: "question-channel-2",
+          response_channel_id: "answers-channel-1",
+        },
+      ],
+    });
     qotdMock.summary = createQOTDSummary({
       settings: qotdMock.settings,
     });
+    qotdMock.deckSummaries = qotdMock.summary.decks;
     view.rerender(
       <MemoryRouter>
         <QOTDSettingsPage />
@@ -245,7 +269,7 @@ describe("QOTD UI", () => {
 
     expect(
       within(view.container).getByRole("checkbox", {
-        name: /Enable QOTD workflow/,
+        name: /Enable Default/,
       }),
     ).not.toBeChecked();
     expect(
@@ -288,6 +312,7 @@ describe("QOTD UI", () => {
 function createQuestion(overrides: Partial<QOTDQuestion>): QOTDQuestion {
   return {
     id: 1,
+    deck_id: "default",
     body: "Question",
     status: "ready",
     queue_position: 1,
@@ -299,17 +324,49 @@ function createQuestion(overrides: Partial<QOTDQuestion>): QOTDQuestion {
 
 function createQOTDSettings(overrides: Partial<QOTDConfig> = {}): QOTDConfig {
   return {
-    enabled: true,
-    question_channel_id: "question-channel-1",
-    response_channel_id: "answers-channel-1",
+    active_deck_id: "default",
+    decks: [
+      {
+        id: "default",
+        name: "Default",
+        enabled: true,
+        question_channel_id: "question-channel-1",
+        response_channel_id: "answers-channel-1",
+      },
+    ],
     ...overrides,
   };
+}
+
+function createQOTDDeckSummaries(
+  overrides: Partial<QOTDDeckSummary> = {},
+): QOTDDeckSummary[] {
+  return [
+    {
+      id: "default",
+      name: "Default",
+      enabled: true,
+      counts: {
+        total: 2,
+        draft: 1,
+        ready: 1,
+        reserved: 0,
+        used: 0,
+        disabled: 0,
+      },
+      cards_remaining: 2,
+      is_active: true,
+      can_publish: true,
+      ...overrides,
+    },
+  ];
 }
 
 function createQOTDSummary(
   overrides: Partial<QOTDSummary> = {},
 ): QOTDSummary {
   const settings = overrides.settings ?? createQOTDSettings();
+  const decks = overrides.decks ?? createQOTDDeckSummaries();
   return {
     counts: {
       total: 2,
@@ -320,9 +377,12 @@ function createQOTDSummary(
       disabled: 0,
     },
     current_publish_date_utc: "2026-04-04T00:00:00Z",
+    decks,
     published_for_current_slot: false,
     previous_post: {
       id: 8,
+      deck_id: "default",
+      deck_name: "Default",
       question_id: 22,
       publish_mode: "scheduled",
       publish_date_utc: "2026-04-03T00:00:00Z",

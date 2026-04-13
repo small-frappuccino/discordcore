@@ -359,4 +359,49 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_reply_threads DROP COLUMN IF EXISTS provisioning_nonce`,
 		},
 	},
+	{
+		Version: 10,
+		UpSQL: []string{
+			`ALTER TABLE qotd_questions ADD COLUMN IF NOT EXISTS deck_id TEXT`,
+			`UPDATE qotd_questions
+			 SET deck_id = 'default'
+			 WHERE deck_id IS NULL OR deck_id = ''`,
+			`ALTER TABLE qotd_questions ALTER COLUMN deck_id SET DEFAULT 'default'`,
+			`ALTER TABLE qotd_questions ALTER COLUMN deck_id SET NOT NULL`,
+			`DROP INDEX IF EXISTS idx_qotd_questions_queue`,
+			`DROP INDEX IF EXISTS idx_qotd_questions_status`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_questions_queue
+			 ON qotd_questions(guild_id, deck_id, queue_position)`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_questions_status
+			 ON qotd_questions(guild_id, deck_id, status, queue_position)`,
+			`ALTER TABLE qotd_official_posts ADD COLUMN IF NOT EXISTS deck_id TEXT`,
+			`UPDATE qotd_official_posts
+			 SET deck_id = 'default'
+			 WHERE deck_id IS NULL OR deck_id = ''`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN deck_id SET DEFAULT 'default'`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN deck_id SET NOT NULL`,
+			`ALTER TABLE qotd_official_posts ADD COLUMN IF NOT EXISTS deck_name_snapshot TEXT`,
+			`UPDATE qotd_official_posts
+			 SET deck_name_snapshot = 'Default'
+			 WHERE deck_name_snapshot IS NULL OR deck_name_snapshot = ''`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN deck_name_snapshot SET DEFAULT 'Default'`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN deck_name_snapshot SET NOT NULL`,
+			`ALTER TABLE qotd_official_posts ADD COLUMN IF NOT EXISTS response_channel_id_snapshot TEXT`,
+			`UPDATE qotd_official_posts
+			 SET response_channel_id_snapshot = ''
+			 WHERE response_channel_id_snapshot IS NULL`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN response_channel_id_snapshot SET DEFAULT ''`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN response_channel_id_snapshot SET NOT NULL`,
+		},
+		DownSQL: []string{
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS response_channel_id_snapshot`,
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS deck_name_snapshot`,
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS deck_id`,
+			`DROP INDEX IF EXISTS idx_qotd_questions_status`,
+			`DROP INDEX IF EXISTS idx_qotd_questions_queue`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_questions_queue ON qotd_questions(guild_id, queue_position)`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_questions_status ON qotd_questions(guild_id, status, queue_position)`,
+			`ALTER TABLE qotd_questions DROP COLUMN IF EXISTS deck_id`,
+		},
+	},
 }

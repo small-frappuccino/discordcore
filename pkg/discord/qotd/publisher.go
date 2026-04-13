@@ -19,6 +19,7 @@ const (
 type PublishOfficialPostParams struct {
 	GuildID            string
 	OfficialPostID     int64
+	DeckName           string
 	AvailableQuestions int
 	QuestionChannelID  string
 	QuestionText       string
@@ -113,7 +114,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		normalized.QuestionChannelID,
 		&discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{
-				buildOfficialQuestionEmbed(normalized.OfficialPostID, normalized.AvailableQuestions, normalized.QuestionText),
+				buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText),
 			},
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
@@ -353,13 +354,13 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID, messageID)
 }
 
-func buildOfficialQuestionEmbed(officialPostID int64, availableQuestions int, questionText string) *discordgo.MessageEmbed {
+func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
-		Title:       "Question Of The Day",
+		Title:       "☆ question!! ☆",
 		Description: quoteEmbedText(questionText, 3800),
 		Color:       0x89E5D1,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildOfficialQuestionFooter(officialPostID, availableQuestions),
+			Text: buildOfficialQuestionFooter(deckName, availableQuestions),
 		},
 	}
 }
@@ -450,6 +451,7 @@ func buildReplyThreadName(publishDateUTC time.Time, userDisplayName, userID, pro
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
+	params.DeckName = strings.TrimSpace(params.DeckName)
 	params.QuestionChannelID = strings.TrimSpace(params.QuestionChannelID)
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.ThreadName = strings.TrimSpace(params.ThreadName)
@@ -622,9 +624,13 @@ func truncateEmbedText(text string, limit int) string {
 	return strings.TrimSpace(text[:limit-3]) + "..."
 }
 
-func buildOfficialQuestionFooter(officialPostID int64, availableQuestions int) string {
+func buildOfficialQuestionFooter(deckName string, availableQuestions int) string {
+	deckName = strings.TrimSpace(deckName)
+	if deckName == "" {
+		deckName = "Default"
+	}
 	if availableQuestions < 0 {
 		availableQuestions = 0
 	}
-	return fmt.Sprintf("Official QOTD #%d • %d available", officialPostID, availableQuestions)
+	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
 }

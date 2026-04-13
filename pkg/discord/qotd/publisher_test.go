@@ -36,15 +36,15 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 	t.Parallel()
 
 	embed := buildOfficialQuestionEmbed(
-		80,
+		"Final Mix",
 		62,
 		"What song best represents the current mood you are in?",
 	)
 
-	if embed.Title != "Question Of The Day" {
+	if embed.Title != "☆ question!! ☆" {
 		t.Fatalf("unexpected title: %+v", embed)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Official QOTD #80 • 62 available" {
+	if embed.Footer == nil || embed.Footer.Text != "Deck: Final Mix -- 62 Cards Remaining" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {

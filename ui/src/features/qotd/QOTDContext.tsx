@@ -3,10 +3,18 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import type { QOTDConfig, QOTDQuestion, QOTDSummary } from "../../api/control";
+import type {
+  QOTDConfig,
+  QOTDDeck,
+  QOTDDeckSummary,
+  QOTDQuestion,
+  QOTDQuestionMutation,
+  QOTDSummary,
+} from "../../api/control";
 import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
@@ -31,31 +39,40 @@ export const QOTD_BUSY_LABELS = {
 
 interface QOTDContextValue {
   busyLabel: string;
+  deckSummaries: QOTDDeckSummary[];
   hasLoadedAttempt: boolean;
   loading: boolean;
   notice: Notice | null;
   questions: QOTDQuestion[];
+  selectedDeckID: string;
   settings: QOTDConfig;
   summary: QOTDSummary | null;
   workspaceState: WorkspaceState;
   clearNotice: () => void;
-  createQuestion: (payload: Pick<QOTDQuestion, "body" | "status">) => Promise<void>;
+  createQuestion: (payload: QOTDQuestionMutation) => Promise<void>;
   deleteQuestion: (questionId: number) => Promise<void>;
   publishNow: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<void>;
-  updateQuestion: (
-    questionId: number,
-    payload: Pick<QOTDQuestion, "body" | "status">,
-  ) => Promise<void>;
+  selectDeck: (deckId: string) => Promise<void>;
+  updateQuestion: (questionId: number, payload: QOTDQuestionMutation) => Promise<void>;
 }
 
-const emptySettings: QOTDConfig = {
+const defaultDeck: QOTDDeck = {
+  id: "default",
+  name: "Default",
   enabled: false,
   question_channel_id: "",
   response_channel_id: "",
 };
+
+const emptySettings: QOTDConfig = {
+  active_deck_id: defaultDeck.id,
+  decks: [defaultDeck],
+};
+
+const emptySummary: QOTDSummary | null = null;
 
 const QOTDContext = createContext<QOTDContextValue | null>(null);
 
@@ -70,11 +87,19 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
   const normalizedGuildID = selectedGuildID.trim();
   const [settings, setSettings] = useState<QOTDConfig>(emptySettings);
   const [questions, setQuestions] = useState<QOTDQuestion[]>([]);
-  const [summary, setSummary] = useState<QOTDSummary | null>(null);
+  const [summary, setSummary] = useState<QOTDSummary | null>(emptySummary);
+  const [selectedDeckID, setSelectedDeckID] = useState("");
   const [loading, setLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [hasLoadedAttempt, setHasLoadedAttempt] = useState(false);
+  const selectedDeckRef = useRef("");
+
+  useEffect(() => {
+    selectedDeckRef.current = selectedDeckID.trim();
+  }, [selectedDeckID]);
+
+  const deckSummaries = summary?.decks ?? [];
 
   let workspaceState: WorkspaceState = "ready";
   if (authState === "checking") {
@@ -92,14 +117,15 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
   function resetWorkspace() {
     setSettings(emptySettings);
     setQuestions([]);
-    setSummary(null);
+    setSummary(emptySummary);
+    setSelectedDeckID("");
     setLoading(false);
     setBusyLabel("");
     setNotice(null);
     setHasLoadedAttempt(false);
   }
 
-  async function loadWorkspace() {
+  async function loadWorkspace(preferredDeckID = "") {
     if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
     }
@@ -107,17 +133,23 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setLoading(true);
 
     try {
-      const [settingsResponse, questionsResponse, summaryResponse] = await Promise.all([
+      const [settingsResponse, summaryResponse] = await Promise.all([
         client.getQOTDSettings(normalizedGuildID),
-        client.listQOTDQuestions(normalizedGuildID),
         client.getQOTDSummary(normalizedGuildID),
       ]);
-      setSettings({
-        ...emptySettings,
-        ...settingsResponse.settings,
-      });
+      const nextSettings = normalizeQOTDSettings(settingsResponse.settings);
+      const nextDeckID = chooseDeckID(
+        preferredDeckID || selectedDeckRef.current,
+        nextSettings,
+      );
+      const questionsResponse = await client.listQOTDQuestions(
+        normalizedGuildID,
+        nextDeckID,
+      );
+      setSettings(nextSettings);
+      setSummary(normalizeQOTDSummary(summaryResponse.summary, nextSettings));
+      setSelectedDeckID(nextDeckID);
       setQuestions(questionsResponse.questions);
-      setSummary(summaryResponse.summary);
       setHasLoadedAttempt(true);
       setNotice(null);
     } catch (error) {
@@ -146,20 +178,23 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
     async function autoLoadWorkspace() {
       try {
-        const [settingsResponse, questionsResponse, summaryResponse] = await Promise.all([
+        const [settingsResponse, summaryResponse] = await Promise.all([
           client.getQOTDSettings(normalizedGuildID),
-          client.listQOTDQuestions(normalizedGuildID),
           client.getQOTDSummary(normalizedGuildID),
         ]);
+        const nextSettings = normalizeQOTDSettings(settingsResponse.settings);
+        const nextDeckID = chooseDeckID(selectedDeckRef.current, nextSettings);
+        const questionsResponse = await client.listQOTDQuestions(
+          normalizedGuildID,
+          nextDeckID,
+        );
         if (cancelled) {
           return;
         }
-        setSettings({
-          ...emptySettings,
-          ...settingsResponse.settings,
-        });
+        setSettings(nextSettings);
+        setSummary(normalizeQOTDSummary(summaryResponse.summary, nextSettings));
+        setSelectedDeckID(nextDeckID);
         setQuestions(questionsResponse.questions);
-        setSummary(summaryResponse.summary);
         setHasLoadedAttempt(true);
         setNotice(null);
       } catch (error) {
@@ -184,11 +219,11 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [authState, client, normalizedGuildID]);
+  }, [authState, client, normalizedGuildID, selectedGuildID]);
 
   async function refreshWorkspace() {
     setBusyLabel(QOTD_BUSY_LABELS.refreshWorkspace);
-    await loadWorkspace();
+    await loadWorkspace(selectedDeckRef.current);
   }
 
   async function saveSettings(nextSettings: QOTDConfig) {
@@ -198,20 +233,13 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
     setBusyLabel(QOTD_BUSY_LABELS.saveSettings);
     try {
-      const response = await client.updateQOTDSettings(normalizedGuildID, nextSettings);
-      const updatedSettings = {
-        ...emptySettings,
-        ...response.settings,
-      };
-      setSettings(updatedSettings);
-      setSummary((currentSummary) =>
-        currentSummary === null
-          ? currentSummary
-          : {
-              ...currentSummary,
-              settings: updatedSettings,
-            },
+      const response = await client.updateQOTDSettings(
+        normalizedGuildID,
+        normalizeQOTDSettings(nextSettings),
       );
+      const updatedSettings = normalizeQOTDSettings(response.settings);
+      setSettings(updatedSettings);
+      await loadWorkspace(chooseDeckID(selectedDeckRef.current, updatedSettings));
       setNotice(null);
     } catch (error) {
       setNotice({
@@ -223,15 +251,23 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function createQuestion(payload: Pick<QOTDQuestion, "body" | "status">) {
+  async function createQuestion(payload: QOTDQuestionMutation) {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
+      return;
+    }
+
+    const targetDeckID = chooseDeckID(payload.deck_id ?? selectedDeckRef.current, settings);
+    if (targetDeckID === "") {
       return;
     }
 
     setBusyLabel(QOTD_BUSY_LABELS.createQuestion);
     try {
-      await client.createQOTDQuestion(normalizedGuildID, payload);
-      await loadWorkspace();
+      await client.createQOTDQuestion(normalizedGuildID, {
+        ...payload,
+        deck_id: targetDeckID,
+      });
+      await loadWorkspace(targetDeckID);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -242,18 +278,20 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function updateQuestion(
-    questionId: number,
-    payload: Pick<QOTDQuestion, "body" | "status">,
-  ) {
+  async function updateQuestion(questionId: number, payload: QOTDQuestionMutation) {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
       return;
     }
 
+    const targetDeckID =
+      payload.deck_id && payload.deck_id.trim() !== ""
+        ? payload.deck_id.trim()
+        : selectedDeckRef.current;
+
     setBusyLabel(QOTD_BUSY_LABELS.updateQuestion);
     try {
       await client.updateQOTDQuestion(normalizedGuildID, questionId, payload);
-      await loadWorkspace();
+      await loadWorkspace(targetDeckID);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -272,7 +310,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.deleteQuestion);
     try {
       await client.deleteQOTDQuestion(normalizedGuildID, questionId);
-      await loadWorkspace();
+      await loadWorkspace(selectedDeckRef.current);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -288,11 +326,20 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const targetDeckID = chooseDeckID(selectedDeckRef.current, settings);
+    if (targetDeckID === "") {
+      return;
+    }
+
     setBusyLabel(QOTD_BUSY_LABELS.reorderQuestions);
     try {
-      const response = await client.reorderQOTDQuestions(normalizedGuildID, orderedIDs);
+      const response = await client.reorderQOTDQuestions(
+        normalizedGuildID,
+        targetDeckID,
+        orderedIDs,
+      );
       setQuestions(response.questions);
-      await loadWorkspace();
+      await loadWorkspace(targetDeckID);
     } catch (error) {
       setNotice({
         tone: "error",
@@ -311,7 +358,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     setBusyLabel(QOTD_BUSY_LABELS.publishNow);
     try {
       const response = await client.publishQOTDNow(normalizedGuildID);
-      await loadWorkspace();
+      await loadWorkspace(selectedDeckRef.current);
       setNotice({
         tone: "success",
         message: response.result.post_url
@@ -328,14 +375,41 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function selectDeck(deckId: string) {
+    if (!canReadSelectedGuild || normalizedGuildID === "") {
+      return;
+    }
+    const nextDeckID = chooseDeckID(deckId, settings);
+    if (nextDeckID === "" || nextDeckID === selectedDeckRef.current) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await client.listQOTDQuestions(normalizedGuildID, nextDeckID);
+      setSelectedDeckID(nextDeckID);
+      setQuestions(response.questions);
+      setNotice(null);
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: formatError(error),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <QOTDContext.Provider
       value={{
         busyLabel,
+        deckSummaries,
         hasLoadedAttempt,
         loading,
         notice,
         questions,
+        selectedDeckID,
         settings,
         summary,
         workspaceState,
@@ -346,12 +420,67 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         refreshWorkspace,
         reorderQuestions,
         saveSettings,
+        selectDeck,
         updateQuestion,
       }}
     >
       {children}
     </QOTDContext.Provider>
   );
+}
+
+function normalizeQOTDSummary(
+  summary: QOTDSummary,
+  settings: QOTDConfig,
+): QOTDSummary {
+  return {
+    ...summary,
+    settings,
+    decks: Array.isArray(summary.decks) ? summary.decks : [],
+  };
+}
+
+function normalizeQOTDSettings(settings?: QOTDConfig | null): QOTDConfig {
+  const decks =
+    Array.isArray(settings?.decks) && settings.decks.length > 0
+      ? settings.decks.map(normalizeQOTDDeck)
+      : [defaultDeck];
+  const activeDeckID = chooseDeckID(String(settings?.active_deck_id ?? ""), {
+    active_deck_id: settings?.active_deck_id,
+    decks,
+  });
+  return {
+    active_deck_id: activeDeckID,
+    decks,
+  };
+}
+
+function normalizeQOTDDeck(deck: QOTDDeck): QOTDDeck {
+  const id = String(deck.id ?? "").trim();
+  const name = String(deck.name ?? "").trim();
+  return {
+    id: id === "" ? defaultDeck.id : id,
+    name: name === "" ? defaultDeck.name : name,
+    enabled: Boolean(deck.enabled),
+    question_channel_id: String(deck.question_channel_id ?? ""),
+    response_channel_id: String(deck.response_channel_id ?? ""),
+  };
+}
+
+function chooseDeckID(preferredDeckID: string, settings: QOTDConfig): string {
+  const decks = settings.decks ?? [];
+  if (decks.length === 0) {
+    return "";
+  }
+  const preferred = preferredDeckID.trim();
+  if (preferred !== "" && decks.some((deck) => deck.id === preferred)) {
+    return preferred;
+  }
+  const active = String(settings.active_deck_id ?? "").trim();
+  if (active !== "" && decks.some((deck) => deck.id === active)) {
+    return active;
+  }
+  return decks[0]?.id ?? "";
 }
 
 export function useQOTD() {

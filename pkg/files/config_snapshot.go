@@ -321,10 +321,21 @@ func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 
 func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 	return QOTDConfig{
+		ActiveDeckID:      in.ActiveDeckID,
+		Decks:             cloneQOTDDeckConfigs(in.Decks),
 		Enabled:           in.Enabled,
 		QuestionChannelID: in.QuestionChannelID,
 		ResponseChannelID: in.ResponseChannelID,
 	}
+}
+
+func cloneQOTDDeckConfigs(in []QOTDDeckConfig) []QOTDDeckConfig {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]QOTDDeckConfig, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneStringSlice(in []string) []string {

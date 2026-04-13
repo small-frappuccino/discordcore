@@ -34,6 +34,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_questions (
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -45,9 +46,10 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			?,
 			?,
 			?,
+			?,
 			CASE
 				WHEN ? > 0 THEN ?
-				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = ?), 1)
+				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
 			END,
 			?,
 			?,
@@ -56,6 +58,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -65,11 +68,13 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			created_at,
 			updated_at`,
 		normalized.GuildID,
+		normalized.DeckID,
 		normalized.Body,
 		normalized.Status,
 		position,
 		position,
 		normalized.GuildID,
+		normalized.DeckID,
 		normalized.CreatedBy,
 		nullableTime(normalized.ScheduledForDateUTC),
 		nullableTime(normalized.UsedAt),
@@ -104,6 +109,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_questions
 		SET
+			deck_id = ?,
 			body = ?,
 			status = ?,
 			queue_position = CASE WHEN ? > 0 THEN ? ELSE queue_position END,
@@ -115,6 +121,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -123,6 +130,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			used_at,
 			created_at,
 			updated_at`,
+		normalized.DeckID,
 		normalized.Body,
 		normalized.Status,
 		position,
@@ -158,11 +166,12 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	return nil
 }
 
-func (s *Store) ListQOTDQuestions(ctx context.Context, guildID string) ([]QOTDQuestionRecord, error) {
+func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) ([]QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
 	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
 		return nil, nil
 	}
@@ -174,6 +183,7 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID string) ([]QOTDQu
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -184,8 +194,11 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID string) ([]QOTDQu
 			updated_at
 		FROM qotd_questions
 		WHERE guild_id = ?
+		  AND (? = '' OR deck_id = ?)
 		ORDER BY queue_position ASC, id ASC`,
 		guildID,
+		deckID,
+		deckID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list qotd questions: %w", err)
@@ -222,6 +235,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -245,13 +259,17 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 	return record, nil
 }
 
-func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID string, orderedIDs []int64) error {
+func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) error {
 	if s.db == nil {
 		return fmt.Errorf("store not initialized")
 	}
 	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
 		return fmt.Errorf("reorder qotd questions: guild_id is required")
+	}
+	if deckID == "" {
+		return fmt.Errorf("reorder qotd questions: deck_id is required")
 	}
 	normalizedIDs, err := normalizeQOTDOrderedIDs(orderedIDs)
 	if err != nil {
@@ -271,9 +289,11 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID string, ordere
 		`SELECT id
 		FROM qotd_questions
 		WHERE guild_id = ?
+		  AND deck_id = ?
 		ORDER BY queue_position ASC, id ASC
 		FOR UPDATE`,
 		guildID,
+		deckID,
 	)
 	if err != nil {
 		return fmt.Errorf("reorder qotd questions: %w", err)
@@ -297,9 +317,10 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID string, ordere
 
 	for idx, id := range normalizedIDs {
 		if _, err := txExecContext(ctx, tx,
-			`UPDATE qotd_questions SET queue_position = ?, updated_at = NOW() WHERE guild_id = ? AND id = ?`,
+			`UPDATE qotd_questions SET queue_position = ?, updated_at = NOW() WHERE guild_id = ? AND deck_id = ? AND id = ?`,
 			idx+1,
 			guildID,
+			deckID,
 			id,
 		); err != nil {
 			return fmt.Errorf("reorder qotd questions: %w", err)
@@ -311,13 +332,17 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID string, ordere
 	return nil
 }
 
-func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDQuestionRecord, error) {
+func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time) (*QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
 	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
 		return nil, fmt.Errorf("reserve qotd question: guild_id is required")
+	}
+	if deckID == "" {
+		return nil, fmt.Errorf("reserve qotd question: deck_id is required")
 	}
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if publishDateUTC.IsZero() {
@@ -337,6 +362,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID string, pub
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -347,12 +373,14 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID string, pub
 			updated_at
 		FROM qotd_questions
 		WHERE guild_id = ?
+		  AND deck_id = ?
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
 		ORDER BY queue_position ASC, id ASC
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
 		guildID,
+		deckID,
 	)
 	record, err := scanQOTDQuestionRecord(row)
 	if err != nil {
@@ -372,6 +400,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID string, pub
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -393,13 +422,17 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID string, pub
 	return record, nil
 }
 
-func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID string) (*QOTDQuestionRecord, error) {
+func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string) (*QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
 	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
 		return nil, fmt.Errorf("reserve ready qotd question: guild_id is required")
+	}
+	if deckID == "" {
+		return nil, fmt.Errorf("reserve ready qotd question: deck_id is required")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -415,6 +448,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID string
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -425,12 +459,14 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID string
 			updated_at
 		FROM qotd_questions
 		WHERE guild_id = ?
+		  AND deck_id = ?
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
 		ORDER BY queue_position ASC, id ASC
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
 		guildID,
+		deckID,
 	)
 	record, err := scanQOTDQuestionRecord(row)
 	if err != nil {
@@ -449,6 +485,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID string
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
 			body,
 			status,
 			queue_position,
@@ -487,11 +524,14 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_official_posts (
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -503,15 +543,18 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			archived_at,
 			last_reconciled_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -525,11 +568,14 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			created_at,
 			updated_at`,
 		normalized.GuildID,
+		normalized.DeckID,
+		normalized.DeckNameSnapshot,
 		normalized.QuestionID,
 		normalized.PublishMode,
 		normalized.PublishDateUTC,
 		normalized.State,
 		normalized.ForumChannelID,
+		normalized.ResponseChannelID,
 		zeroEmptyString(normalized.DiscordThreadID),
 		zeroEmptyString(normalized.DiscordStarterMessageID),
 		normalized.QuestionTextSnapshot,
@@ -578,11 +624,14 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, discordT
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -621,11 +670,14 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -684,11 +736,14 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -733,11 +788,14 @@ func (s *Store) GetQOTDOfficialPostByThreadID(ctx context.Context, discordThread
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -785,11 +843,14 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -848,11 +909,14 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 		`SELECT
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -918,11 +982,14 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 		RETURNING
 			id,
 			guild_id,
+			deck_id,
+			deck_name_snapshot,
 			question_id,
 			publish_mode,
 			publish_date_utc,
 			state,
 			forum_channel_id,
+			response_channel_id_snapshot,
 			discord_thread_id,
 			discord_starter_message_id,
 			question_text_snapshot,
@@ -1471,6 +1538,7 @@ func (s *Store) GetQOTDThreadArchiveByThreadID(ctx context.Context, discordThrea
 
 func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, error) {
 	rec.GuildID = strings.TrimSpace(rec.GuildID)
+	rec.DeckID = strings.TrimSpace(rec.DeckID)
 	rec.Body = strings.TrimSpace(rec.Body)
 	rec.Status = strings.TrimSpace(rec.Status)
 	rec.CreatedBy = strings.TrimSpace(rec.CreatedBy)
@@ -1480,6 +1548,9 @@ func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, er
 
 	if rec.GuildID == "" {
 		return QOTDQuestionRecord{}, fmt.Errorf("guild_id is required")
+	}
+	if rec.DeckID == "" {
+		return QOTDQuestionRecord{}, fmt.Errorf("deck_id is required")
 	}
 	if rec.Body == "" {
 		return QOTDQuestionRecord{}, fmt.Errorf("body is required")
@@ -1492,9 +1563,12 @@ func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, er
 
 func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPostRecord, error) {
 	rec.GuildID = strings.TrimSpace(rec.GuildID)
+	rec.DeckID = strings.TrimSpace(rec.DeckID)
+	rec.DeckNameSnapshot = strings.TrimSpace(rec.DeckNameSnapshot)
 	rec.PublishMode = strings.TrimSpace(rec.PublishMode)
 	rec.State = strings.TrimSpace(rec.State)
 	rec.ForumChannelID = strings.TrimSpace(rec.ForumChannelID)
+	rec.ResponseChannelID = strings.TrimSpace(rec.ResponseChannelID)
 	rec.DiscordThreadID = strings.TrimSpace(rec.DiscordThreadID)
 	rec.DiscordStarterMessageID = strings.TrimSpace(rec.DiscordStarterMessageID)
 	rec.QuestionTextSnapshot = strings.TrimSpace(rec.QuestionTextSnapshot)
@@ -1513,6 +1587,12 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 	if rec.GuildID == "" {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("guild_id is required")
 	}
+	if rec.DeckID == "" {
+		return QOTDOfficialPostRecord{}, fmt.Errorf("deck_id is required")
+	}
+	if rec.DeckNameSnapshot == "" {
+		return QOTDOfficialPostRecord{}, fmt.Errorf("deck_name_snapshot is required")
+	}
 	if rec.QuestionID <= 0 {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("question_id is required")
 	}
@@ -1524,6 +1604,9 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 	}
 	if rec.ForumChannelID == "" {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("forum_channel_id is required")
+	}
+	if rec.ResponseChannelID == "" {
+		return QOTDOfficialPostRecord{}, fmt.Errorf("response_channel_id is required")
 	}
 	if rec.QuestionTextSnapshot == "" {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("question_text_snapshot is required")
@@ -1670,6 +1753,7 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 	if err := scanner.Scan(
 		&record.ID,
 		&record.GuildID,
+		&record.DeckID,
 		&record.Body,
 		&record.Status,
 		&record.QueuePosition,
@@ -1697,11 +1781,14 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	if err := scanner.Scan(
 		&record.ID,
 		&record.GuildID,
+		&record.DeckID,
+		&record.DeckNameSnapshot,
 		&record.QuestionID,
 		&record.PublishMode,
 		&record.PublishDateUTC,
 		&record.State,
 		&record.ForumChannelID,
+		&record.ResponseChannelID,
 		&threadID,
 		&starterMessageID,
 		&record.QuestionTextSnapshot,

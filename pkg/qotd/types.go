@@ -1,6 +1,10 @@
 package qotd
 
-import "time"
+import (
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
 
 type QuestionStatus string
 
@@ -55,4 +59,12 @@ type OfficialPostLifecycle struct {
 	ArchiveAt         time.Time
 	State             OfficialPostState
 	AnswerWindow      AnswerWindow
+}
+
+type DeckSummary struct {
+	Deck           files.QOTDDeckConfig
+	Counts         QuestionCounts
+	CardsRemaining int
+	IsActive       bool
+	CanPublish     bool
 }

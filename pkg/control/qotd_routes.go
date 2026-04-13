@@ -139,7 +139,7 @@ func (s *Server) handleQOTDSettingsPut(w http.ResponseWriter, r *http.Request, g
 }
 
 func (s *Server) handleQOTDQuestionsGet(w http.ResponseWriter, r *http.Request, guildID string) {
-	questions, err := s.qotdService.ListQuestions(r.Context(), guildID)
+	questions, err := s.qotdService.ListQuestions(r.Context(), guildID, r.URL.Query().Get("deck_id"))
 	if err != nil {
 		status := qotdErrorStatus(err)
 		http.Error(w, fmt.Sprintf("failed to list qotd questions: %v", err), status)
@@ -155,6 +155,7 @@ func (s *Server) handleQOTDQuestionsGet(w http.ResponseWriter, r *http.Request, 
 
 func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
 	var payload struct {
+		DeckID string `json:"deck_id"`
 		Body   string `json:"body"`
 		Status string `json:"status"`
 	}
@@ -163,6 +164,7 @@ func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Reques
 	}
 
 	question, err := s.qotdService.CreateQuestion(r.Context(), guildID, settingsRequestUserID(auth), qotd.QuestionMutation{
+		DeckID: strings.TrimSpace(payload.DeckID),
 		Body:   payload.Body,
 		Status: qotd.QuestionStatus(strings.TrimSpace(payload.Status)),
 	})
@@ -181,6 +183,7 @@ func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Request, guildID string, questionID int64) {
 	var payload struct {
+		DeckID string `json:"deck_id"`
 		Body   string `json:"body"`
 		Status string `json:"status"`
 	}
@@ -189,6 +192,7 @@ func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	question, err := s.qotdService.UpdateQuestion(r.Context(), guildID, questionID, qotd.QuestionMutation{
+		DeckID: strings.TrimSpace(payload.DeckID),
 		Body:   payload.Body,
 		Status: qotd.QuestionStatus(strings.TrimSpace(payload.Status)),
 	})
@@ -221,13 +225,14 @@ func (s *Server) handleQOTDQuestionsDelete(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleQOTDQuestionsReorder(w http.ResponseWriter, r *http.Request, guildID string) {
 	var payload struct {
+		DeckID    string  `json:"deck_id"`
 		OrderedIDs []int64 `json:"ordered_ids"`
 	}
 	if err := decodeJSONBody(w, r, &payload); err != nil {
 		return
 	}
 
-	questions, err := s.qotdService.ReorderQuestions(r.Context(), guildID, payload.OrderedIDs)
+	questions, err := s.qotdService.ReorderQuestions(r.Context(), guildID, strings.TrimSpace(payload.DeckID), payload.OrderedIDs)
 	if err != nil {
 		status := qotdErrorStatus(err)
 		http.Error(w, fmt.Sprintf("failed to reorder qotd questions: %v", err), status)
@@ -312,14 +317,16 @@ func qotdErrorStatus(err error) int {
 	case err == nil:
 		return http.StatusInternalServerError
 	case errors.Is(err, files.ErrGuildConfigNotFound),
-		errors.Is(err, qotd.ErrQuestionNotFound):
+		errors.Is(err, qotd.ErrQuestionNotFound),
+		errors.Is(err, qotd.ErrDeckNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, files.ErrInvalidQOTDInput),
 		errors.Is(err, qotd.ErrImmutableQuestion):
 		return http.StatusBadRequest
 	case errors.Is(err, qotd.ErrQOTDDisabled),
 		errors.Is(err, qotd.ErrAlreadyPublished),
-		errors.Is(err, qotd.ErrNoQuestionsAvailable):
+		errors.Is(err, qotd.ErrNoQuestionsAvailable),
+		errors.Is(err, qotd.ErrDeckInUse):
 		return http.StatusConflict
 	case errors.Is(err, qotd.ErrDiscordUnavailable):
 		return http.StatusServiceUnavailable

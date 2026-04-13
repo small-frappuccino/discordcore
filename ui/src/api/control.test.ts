@@ -291,7 +291,16 @@ describe("ControlApiClient feature routes", () => {
             guild_id: "guild-1",
             summary: {
               settings: {
-                enabled: true,
+                active_deck_id: "default",
+                decks: [
+                  {
+                    id: "default",
+                    name: "Default",
+                    enabled: true,
+                    question_channel_id: "question-channel-1",
+                    response_channel_id: "answers-channel-1",
+                  },
+                ],
               },
               counts: {
                 total: 1,
@@ -301,6 +310,24 @@ describe("ControlApiClient feature routes", () => {
                 used: 0,
                 disabled: 0,
               },
+              decks: [
+                {
+                  id: "default",
+                  name: "Default",
+                  enabled: true,
+                  counts: {
+                    total: 1,
+                    draft: 0,
+                    ready: 1,
+                    reserved: 0,
+                    used: 0,
+                    disabled: 0,
+                  },
+                  cards_remaining: 1,
+                  is_active: true,
+                  can_publish: true,
+                },
+              ],
               current_publish_date_utc: "2026-04-03T00:00:00Z",
               published_for_current_slot: false,
             },
@@ -321,9 +348,9 @@ describe("ControlApiClient feature routes", () => {
     });
 
     const summary = await client.getQOTDSummary("guild-1");
-    await client.reorderQOTDQuestions("guild-1", [3, 1, 2]);
+    await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
-    expect(summary.summary.settings.enabled).toBe(true);
+    expect(summary.summary.settings.active_deck_id).toBe("default");
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/v1/guilds/guild-1/qotd",
@@ -344,6 +371,7 @@ describe("ControlApiClient feature routes", () => {
         }),
         credentials: "include",
         body: JSON.stringify({
+          deck_id: "default",
           ordered_ids: [3, 1, 2],
         }),
       },

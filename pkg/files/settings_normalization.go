@@ -74,37 +74,112 @@ func NormalizePartnerBoardConfig(in PartnerBoardConfig) (PartnerBoardConfig, err
 // NormalizeQOTDConfig canonicalizes guild QOTD settings so dedicated routes and
 // broad config writes can share the same validation behavior.
 func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
-	out := QOTDConfig{
+	activeDeckID := strings.TrimSpace(in.ActiveDeckID)
+	decks := cloneQOTDDeckConfigs(in.Decks)
+	if len(decks) == 0 {
+		legacy := QOTDDeckConfig{
+			ID:                LegacyQOTDDefaultDeckID,
+			Name:              LegacyQOTDDefaultDeckName,
+			Enabled:           in.Enabled,
+			QuestionChannelID: strings.TrimSpace(in.QuestionChannelID),
+			ResponseChannelID: strings.TrimSpace(in.ResponseChannelID),
+		}
+		if !legacy.IsZero() {
+			decks = []QOTDDeckConfig{legacy}
+		}
+	}
+
+	if len(decks) == 0 {
+		return QOTDConfig{}, nil
+	}
+
+	normalizedDecks := make([]QOTDDeckConfig, 0, len(decks))
+	seenIDs := make(map[string]struct{}, len(decks))
+	seenNames := make(map[string]struct{}, len(decks))
+	for idx, deck := range decks {
+		normalized, err := normalizeQOTDDeckConfig(deck)
+		if err != nil {
+			return QOTDConfig{}, invalidQOTDInput("decks[%d]: %v", idx, err)
+		}
+		if _, exists := seenIDs[normalized.ID]; exists {
+			return QOTDConfig{}, invalidQOTDInput("deck ids must be unique")
+		}
+		seenIDs[normalized.ID] = struct{}{}
+		nameKey := strings.ToLower(normalized.Name)
+		if _, exists := seenNames[nameKey]; exists {
+			return QOTDConfig{}, invalidQOTDInput("deck names must be unique")
+		}
+		seenNames[nameKey] = struct{}{}
+		normalizedDecks = append(normalizedDecks, normalized)
+	}
+
+	if activeDeckID == "" {
+		activeDeckID = firstEnabledQOTDDeckID(normalizedDecks)
+	}
+	if activeDeckID == "" && len(normalizedDecks) > 0 {
+		activeDeckID = normalizedDecks[0].ID
+	}
+	if activeDeckID != "" {
+		if _, ok := seenIDs[activeDeckID]; !ok {
+			return QOTDConfig{}, invalidQOTDInput("active_deck_id must refer to a configured deck")
+		}
+	}
+
+	if len(normalizedDecks) == 1 && isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) {
+		return QOTDConfig{}, nil
+	}
+
+	return QOTDConfig{
+		ActiveDeckID: activeDeckID,
+		Decks:        normalizedDecks,
+	}, nil
+}
+
+func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
+	out := QOTDDeckConfig{
+		ID:                strings.TrimSpace(in.ID),
+		Name:              strings.TrimSpace(in.Name),
 		Enabled:           in.Enabled,
 		QuestionChannelID: strings.TrimSpace(in.QuestionChannelID),
 		ResponseChannelID: strings.TrimSpace(in.ResponseChannelID),
 	}
 
-	if out.IsZero() {
-		return QOTDConfig{}, nil
+	if out.ID == "" {
+		return QOTDDeckConfig{}, fmt.Errorf("id is required")
+	}
+	if out.Name == "" {
+		return QOTDDeckConfig{}, fmt.Errorf("name is required")
 	}
 	if out.QuestionChannelID != "" && !isAllDigits(out.QuestionChannelID) {
-		return QOTDConfig{}, invalidQOTDInput("question_channel_id must be numeric")
+		return QOTDDeckConfig{}, fmt.Errorf("question_channel_id must be numeric")
 	}
 	if out.ResponseChannelID != "" && !isAllDigits(out.ResponseChannelID) {
-		return QOTDConfig{}, invalidQOTDInput("response_channel_id must be numeric")
+		return QOTDDeckConfig{}, fmt.Errorf("response_channel_id must be numeric")
 	}
 	if out.QuestionChannelID == "" && out.ResponseChannelID != "" {
-		return QOTDConfig{}, invalidQOTDInput("question_channel_id is required when response_channel_id is set")
+		return QOTDDeckConfig{}, fmt.Errorf("question_channel_id is required when response_channel_id is set")
 	}
 	if out.ResponseChannelID == "" && out.QuestionChannelID != "" {
-		return QOTDConfig{}, invalidQOTDInput("response_channel_id is required when question_channel_id is set")
+		return QOTDDeckConfig{}, fmt.Errorf("response_channel_id is required when question_channel_id is set")
 	}
 	if out.Enabled {
 		if out.QuestionChannelID == "" {
-			return QOTDConfig{}, invalidQOTDInput("question_channel_id is required when enabled")
+			return QOTDDeckConfig{}, fmt.Errorf("question_channel_id is required when enabled")
 		}
 		if out.ResponseChannelID == "" {
-			return QOTDConfig{}, invalidQOTDInput("response_channel_id is required when enabled")
+			return QOTDDeckConfig{}, fmt.Errorf("response_channel_id is required when enabled")
 		}
 	}
-
 	return out, nil
+}
+
+func firstEnabledQOTDDeckID(decks []QOTDDeckConfig) string {
+	for _, deck := range decks {
+		if deck.Enabled {
+			return deck.ID
+		}
+	}
+	return ""
 }
 
 func normalizeRuntimeDatabaseConfig(in DatabaseRuntimeConfig) (DatabaseRuntimeConfig, bool, error) {

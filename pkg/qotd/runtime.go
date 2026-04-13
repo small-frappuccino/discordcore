@@ -56,18 +56,19 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if err != nil {
 		return false, err
 	}
-	if !cfg.Enabled || !canPublishQOTD(cfg) {
+	deck, ok := cfg.ActiveDeck()
+	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return false, ErrQOTDDisabled
 	}
 
-	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, publishDate)
+	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, publishDate)
 	if err != nil {
 		return false, err
 	}
 	if question == nil {
 		return false, ErrNoQuestionsAvailable
 	}
-	availableQuestions, err := s.availableQuestionCount(ctx, guildID)
+	availableQuestions, err := s.availableQuestionCount(ctx, guildID, deck.ID)
 	if err != nil {
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
@@ -78,11 +79,14 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	lifecycle := EvaluateOfficialPost(publishDate, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
 		GuildID:              guildID,
+		DeckID:               deck.ID,
+		DeckNameSnapshot:     deck.Name,
 		QuestionID:           question.ID,
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       strings.TrimSpace(cfg.QuestionChannelID),
+		ForumChannelID:       strings.TrimSpace(deck.QuestionChannelID),
+		ResponseChannelID:    strings.TrimSpace(deck.ResponseChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -100,8 +104,9 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
 		GuildID:            guildID,
 		OfficialPostID:     provisioned.ID,
+		DeckName:           deck.Name,
 		AvailableQuestions: availableQuestions,
-		QuestionChannelID:  strings.TrimSpace(cfg.QuestionChannelID),
+		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
 		QuestionText:       question.Body,
 		PublishDateUTC:     publishDate,
 		Pinned:             lifecycle.State == OfficialPostStateCurrent,

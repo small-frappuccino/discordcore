@@ -33,14 +33,21 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQOTDConfig() failed: %v", err)
 	}
-	if !cfg.Enabled {
-		t.Fatal("expected qotd config to remain enabled")
+	deck, ok := cfg.ActiveDeck()
+	if !ok {
+		t.Fatal("expected qotd config to expose an active deck")
 	}
-	if cfg.QuestionChannelID != "123456789012345678" {
-		t.Fatalf("expected trimmed question channel id, got %q", cfg.QuestionChannelID)
+	if !deck.Enabled {
+		t.Fatal("expected qotd deck to remain enabled")
 	}
-	if cfg.ResponseChannelID != "223456789012345678" {
-		t.Fatalf("expected trimmed response channel id, got %q", cfg.ResponseChannelID)
+	if deck.QuestionChannelID != "123456789012345678" {
+		t.Fatalf("expected trimmed question channel id, got %q", deck.QuestionChannelID)
+	}
+	if deck.ResponseChannelID != "223456789012345678" {
+		t.Fatalf("expected trimmed response channel id, got %q", deck.ResponseChannelID)
+	}
+	if cfg.ActiveDeckID != LegacyQOTDDefaultDeckID {
+		t.Fatalf("expected default deck to become active, got %q", cfg.ActiveDeckID)
 	}
 }
 

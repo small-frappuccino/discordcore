@@ -76,14 +76,22 @@ export type QOTDQuestionStatus =
   | "used"
   | "disabled";
 
-export interface QOTDConfig {
+export interface QOTDDeck {
+  id: string;
+  name: string;
   enabled?: boolean;
   question_channel_id?: string;
   response_channel_id?: string;
 }
 
+export interface QOTDConfig {
+  active_deck_id?: string;
+  decks?: QOTDDeck[];
+}
+
 export interface QOTDQuestion {
   id: number;
+  deck_id: string;
   body: string;
   status: QOTDQuestionStatus;
   queue_position: number;
@@ -103,8 +111,20 @@ export interface QOTDQuestionCounts {
   disabled: number;
 }
 
+export interface QOTDDeckSummary {
+  id: string;
+  name: string;
+  enabled: boolean;
+  counts: QOTDQuestionCounts;
+  cards_remaining: number;
+  is_active: boolean;
+  can_publish: boolean;
+}
+
 export interface QOTDOfficialPost {
   id: number;
+  deck_id: string;
+  deck_name: string;
   question_id: number;
   publish_mode: string;
   publish_date_utc: string;
@@ -125,6 +145,7 @@ export interface QOTDOfficialPost {
 export interface QOTDSummary {
   settings: QOTDConfig;
   counts: QOTDQuestionCounts;
+  decks: QOTDDeckSummary[];
   current_publish_date_utc: string;
   published_for_current_slot: boolean;
   current_post?: QOTDOfficialPost;
@@ -159,6 +180,12 @@ export interface QOTDPublishResult {
   post_url?: string;
   question: QOTDQuestion;
   official_post: QOTDOfficialPost;
+}
+
+export interface QOTDQuestionMutation {
+  deck_id?: string;
+  body: string;
+  status: QOTDQuestionStatus;
 }
 
 export interface QOTDPublishResponse {
@@ -491,16 +518,23 @@ export class ControlApiClient {
     );
   }
 
-  async listQOTDQuestions(guildId: string): Promise<QOTDQuestionsResponse> {
+  async listQOTDQuestions(
+    guildId: string,
+    deckId?: string,
+  ): Promise<QOTDQuestionsResponse> {
+    const params = new URLSearchParams();
+    if (deckId && deckId.trim() !== "") {
+      params.set("deck_id", deckId.trim());
+    }
     return this.request<QOTDQuestionsResponse>(
       "GET",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions`,
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions${params.size > 0 ? `?${params.toString()}` : ""}`,
     );
   }
 
   async createQOTDQuestion(
     guildId: string,
-    payload: Pick<QOTDQuestion, "body" | "status">,
+    payload: QOTDQuestionMutation,
   ): Promise<QOTDQuestionResponse> {
     return this.request<QOTDQuestionResponse>(
       "POST",
@@ -512,7 +546,7 @@ export class ControlApiClient {
   async updateQOTDQuestion(
     guildId: string,
     questionId: number,
-    payload: Pick<QOTDQuestion, "body" | "status">,
+    payload: QOTDQuestionMutation,
   ): Promise<QOTDQuestionResponse> {
     return this.request<QOTDQuestionResponse>(
       "PUT",
@@ -533,12 +567,14 @@ export class ControlApiClient {
 
   async reorderQOTDQuestions(
     guildId: string,
+    deckId: string,
     orderedIDs: number[],
   ): Promise<QOTDQuestionsResponse> {
     return this.request<QOTDQuestionsResponse>(
       "POST",
       `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/reorder`,
       {
+        deck_id: deckId,
         ordered_ids: orderedIDs,
       },
     );

@@ -128,7 +128,7 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 		t.Fatalf("CreateQuestion(third) failed: %v", err)
 	}
 
-	questions, err := service.ReorderQuestions(context.Background(), "g1", []int64{third.ID, first.ID, second.ID})
+	questions, err := service.ReorderQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, []int64{third.ID, first.ID, second.ID})
 	if err != nil {
 		t.Fatalf("ReorderQuestions() failed: %v", err)
 	}
@@ -173,11 +173,14 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	oldLifecycle := EvaluateOfficialPost(time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC), service.clock())
 	oldOfficial, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
 		QuestionID:           oldQuestion.ID,
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC),
 		State:                string(OfficialPostStateCurrent),
 		ForumChannelID:       "123456789012345678",
+		ResponseChannelID:    "223456789012345679",
 		QuestionTextSnapshot: oldQuestion.Body,
 		IsPinned:             true,
 		GraceUntil:           oldLifecycle.BecomesPreviousAt,
@@ -277,11 +280,14 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	lifecycle := EvaluateOfficialPost(publishDate, service.clock())
 	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
 		QuestionID:           question.ID,
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateCurrent),
 		ForumChannelID:       "question-channel-1",
+		ResponseChannelID:    "response-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -457,11 +463,14 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) 
 	lifecycle := EvaluateOfficialPost(publishDate, service.clock())
 	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
 		QuestionID:           question.ID,
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStatePrevious),
 		ForumChannelID:       "forum-1",
+		ResponseChannelID:    "response-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,

@@ -282,8 +282,23 @@ type PartnerBoardConfig struct {
 	Partners []PartnerEntryConfig       `json:"partners,omitempty"`
 }
 
-// QOTDConfig stores per-guild question-of-the-day forum settings.
+// QOTDDeckConfig stores one named QOTD deck plus its delivery targets.
+type QOTDDeckConfig struct {
+	ID                string `json:"id,omitempty"`
+	Name              string `json:"name,omitempty"`
+	Enabled           bool   `json:"enabled,omitempty"`
+	QuestionChannelID string `json:"question_channel_id,omitempty"`
+	ResponseChannelID string `json:"response_channel_id,omitempty"`
+}
+
+// QOTDConfig stores per-guild question-of-the-day deck settings.
+//
+// Legacy single-deck fields remain for backwards compatibility with older
+// persisted configs and are normalized into Decks by NormalizeQOTDConfig.
 type QOTDConfig struct {
+	ActiveDeckID string           `json:"active_deck_id,omitempty"`
+	Decks        []QOTDDeckConfig `json:"decks,omitempty"`
+
 	Enabled           bool   `json:"enabled,omitempty"`
 	QuestionChannelID string `json:"question_channel_id,omitempty"`
 	ResponseChannelID string `json:"response_channel_id,omitempty"`

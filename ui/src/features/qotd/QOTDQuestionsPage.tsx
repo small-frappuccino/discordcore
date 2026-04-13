@@ -1,5 +1,9 @@
 import { useEffect, useId, useState } from "react";
-import type { QOTDQuestion, QOTDQuestionStatus } from "../../api/control";
+import type {
+  QOTDDeck,
+  QOTDQuestion,
+  QOTDQuestionStatus,
+} from "../../api/control";
 import {
   GroupedSettingsCopy,
   GroupedSettingsGroup,
@@ -17,10 +21,23 @@ const editableStatuses: QOTDQuestionStatus[] = ["draft", "ready", "disabled"];
 
 export function QOTDQuestionsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
-  const { createQuestion, deleteQuestion, questions, reorderQuestions, updateQuestion } =
-    useQOTD();
+  const {
+    createQuestion,
+    deckSummaries,
+    deleteQuestion,
+    questions,
+    reorderQuestions,
+    selectDeck,
+    selectedDeckID,
+    settings,
+    updateQuestion,
+  } = useQOTD();
   const composerHeadingId = useId();
   const queueHeadingId = useId();
+  const availableDecks = settings.decks ?? [];
+  const selectedDeck = availableDecks.find((deck) => deck.id === selectedDeckID) ?? null;
+  const selectedDeckSummary =
+    deckSummaries.find((deck) => deck.id === selectedDeckID) ?? null;
   const orderedQuestions = [...questions].sort((left, right) => {
     if (left.queue_position !== right.queue_position) {
       return left.queue_position - right.queue_position;
@@ -32,6 +49,7 @@ export function QOTDQuestionsPage() {
   const [editingQuestionID, setEditingQuestionID] = useState<number | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [editingStatus, setEditingStatus] = useState<QOTDQuestionStatus>("ready");
+  const [editingDeckID, setEditingDeckID] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -44,17 +62,19 @@ export function QOTDQuestionsPage() {
       setEditingQuestionID(null);
       setEditingBody("");
       setEditingStatus("ready");
+      setEditingDeckID("");
     }
   }, [editingQuestionID, orderedQuestions]);
 
   async function handleCreate() {
-    if (!canEditSelectedGuild || draftBody.trim() === "") {
+    if (!canEditSelectedGuild || draftBody.trim() === "" || selectedDeckID.trim() === "") {
       return;
     }
 
     setSubmitting(true);
     try {
       await createQuestion({
+        deck_id: selectedDeckID,
         body: draftBody,
         status: draftStatus,
       });
@@ -66,19 +86,26 @@ export function QOTDQuestionsPage() {
   }
 
   async function handleUpdate() {
-    if (!canEditSelectedGuild || editingQuestionID === null || editingBody.trim() === "") {
+    if (
+      !canEditSelectedGuild ||
+      editingQuestionID === null ||
+      editingBody.trim() === "" ||
+      editingDeckID.trim() === ""
+    ) {
       return;
     }
 
     setSubmitting(true);
     try {
       await updateQuestion(editingQuestionID, {
+        deck_id: editingDeckID,
         body: editingBody,
         status: editingStatus,
       });
       setEditingQuestionID(null);
       setEditingBody("");
       setEditingStatus("ready");
+      setEditingDeckID("");
     } finally {
       setSubmitting(false);
     }
@@ -95,6 +122,7 @@ export function QOTDQuestionsPage() {
         setEditingQuestionID(null);
         setEditingBody("");
         setEditingStatus("ready");
+        setEditingDeckID("");
       }
     } finally {
       setSubmitting(false);
@@ -132,56 +160,40 @@ export function QOTDQuestionsPage() {
       <GroupedSettingsStack className="qotd-grouped-stack">
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
-            <p className="section-label">Question bank</p>
+            <p className="section-label">Deck</p>
             <GroupedSettingsHeading as="h2" variant="section" id={composerHeadingId}>
-              Add a question
+              Question source
             </GroupedSettingsHeading>
           </GroupedSettingsCopy>
 
           <GroupedSettingsGroup>
             <GroupedSettingsItem role="group" aria-labelledby={composerHeadingId}>
               <GroupedSettingsSubrow>
-                <div className="qotd-composer-grid">
+                <div className="qotd-deck-toolbar">
                   <label className="field-stack">
-                    <span className="field-label">Question text</span>
-                    <textarea
-                      value={draftBody}
-                      disabled={!canEditSelectedGuild || submitting}
-                      onChange={(event) => setDraftBody(event.target.value)}
-                      placeholder="Write the next question of the day"
-                      rows={4}
-                    />
+                    <span className="field-label">Selected deck</span>
+                    <select
+                      value={selectedDeckID}
+                      disabled={submitting || availableDecks.length === 0}
+                      onChange={(event) => void selectDeck(event.target.value)}
+                    >
+                      {availableDecks.map((deck) => (
+                        <option key={deck.id} value={deck.id}>
+                          {deck.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
-                  <div className="qotd-composer-side">
-                    <label className="field-stack">
-                      <span className="field-label">Initial status</span>
-                      <select
-                        value={draftStatus}
-                        disabled={!canEditSelectedGuild || submitting}
-                        onChange={(event) =>
-                          setDraftStatus(event.target.value as QOTDQuestionStatus)
-                        }
-                      >
-                        {editableStatuses.map((status) => (
-                          <option key={status} value={status}>
-                            {formatStatusLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <div className="workspace-footer">
-                      <button
-                        className="button-primary"
-                        type="button"
-                        disabled={!canEditSelectedGuild || submitting || draftBody.trim() === ""}
-                        onClick={() => void handleCreate()}
-                      >
-                        {submitting ? "Saving..." : "Add question"}
-                      </button>
+                  {selectedDeckSummary ? (
+                    <div className="qotd-deck-summary">
+                      <span>{selectedDeckSummary.cards_remaining} cards remaining</span>
+                      <span>{selectedDeckSummary.counts.used} used</span>
+                      <span>
+                        {selectedDeckSummary.enabled ? "Enabled deck" : "Disabled deck"}
+                      </span>
                     </div>
-                  </div>
+                  ) : null}
                 </div>
               </GroupedSettingsSubrow>
             </GroupedSettingsItem>
@@ -190,8 +202,78 @@ export function QOTDQuestionsPage() {
 
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
-            <p className="section-label">Queue</p>
+            <p className="section-label">Question bank</p>
             <GroupedSettingsHeading as="h2" variant="section" id={queueHeadingId}>
+              Add a question
+            </GroupedSettingsHeading>
+          </GroupedSettingsCopy>
+
+          <GroupedSettingsGroup>
+            <GroupedSettingsItem role="group" aria-labelledby={queueHeadingId}>
+              <GroupedSettingsSubrow>
+                {selectedDeck === null ? (
+                  <GroupedSettingsInlineMessage
+                    message="Create a deck in Settings before adding questions."
+                    tone="info"
+                  />
+                ) : (
+                  <div className="qotd-composer-grid">
+                    <label className="field-stack">
+                      <span className="field-label">Question text</span>
+                      <textarea
+                        value={draftBody}
+                        disabled={!canEditSelectedGuild || submitting}
+                        onChange={(event) => setDraftBody(event.target.value)}
+                        placeholder={`Write the next question for ${selectedDeck.name}`}
+                        rows={4}
+                      />
+                    </label>
+
+                    <div className="qotd-composer-side">
+                      <label className="field-stack">
+                        <span className="field-label">Initial status</span>
+                        <select
+                          value={draftStatus}
+                          disabled={!canEditSelectedGuild || submitting}
+                          onChange={(event) =>
+                            setDraftStatus(event.target.value as QOTDQuestionStatus)
+                          }
+                        >
+                          {editableStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {formatStatusLabel(status)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="workspace-footer">
+                        <button
+                          className="button-primary"
+                          type="button"
+                          disabled={
+                            !canEditSelectedGuild ||
+                            submitting ||
+                            draftBody.trim() === "" ||
+                            selectedDeckID.trim() === ""
+                          }
+                          onClick={() => void handleCreate()}
+                        >
+                          {submitting ? "Saving..." : "Add question"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </GroupedSettingsSubrow>
+            </GroupedSettingsItem>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
+
+        <GroupedSettingsSection>
+          <GroupedSettingsCopy>
+            <p className="section-label">Queue</p>
+            <GroupedSettingsHeading as="h2" variant="section">
               Question order
             </GroupedSettingsHeading>
           </GroupedSettingsCopy>
@@ -201,7 +283,7 @@ export function QOTDQuestionsPage() {
               <GroupedSettingsSubrow>
                 {orderedQuestions.length === 0 ? (
                   <GroupedSettingsInlineMessage
-                    message="No questions have been added yet."
+                    message="No questions have been added for this deck yet."
                     tone="info"
                   />
                 ) : (
@@ -259,6 +341,7 @@ export function QOTDQuestionsPage() {
                                   setEditingQuestionID(question.id);
                                   setEditingBody(question.body);
                                   setEditingStatus(normalizeEditableStatus(question.status));
+                                  setEditingDeckID(question.deck_id);
                                 }}
                               >
                                 Edit
@@ -275,7 +358,7 @@ export function QOTDQuestionsPage() {
                           </div>
 
                           <div className="qotd-question-meta">
-                            {buildQuestionMeta(question).map((item) => (
+                            {buildQuestionMeta(question, availableDecks).map((item) => (
                               <span key={item}>{item}</span>
                             ))}
                           </div>
@@ -290,6 +373,21 @@ export function QOTDQuestionsPage() {
                                   onChange={(event) => setEditingBody(event.target.value)}
                                   rows={4}
                                 />
+                              </label>
+
+                              <label className="field-stack">
+                                <span className="field-label">Deck</span>
+                                <select
+                                  value={editingDeckID}
+                                  disabled={submitting}
+                                  onChange={(event) => setEditingDeckID(event.target.value)}
+                                >
+                                  {availableDecks.map((deck) => (
+                                    <option key={deck.id} value={deck.id}>
+                                      {deck.name}
+                                    </option>
+                                  ))}
+                                </select>
                               </label>
 
                               <label className="field-stack">
@@ -313,7 +411,11 @@ export function QOTDQuestionsPage() {
                                 <button
                                   className="button-primary"
                                   type="button"
-                                  disabled={submitting || editingBody.trim() === ""}
+                                  disabled={
+                                    submitting ||
+                                    editingBody.trim() === "" ||
+                                    editingDeckID.trim() === ""
+                                  }
                                   onClick={() => void handleUpdate()}
                                 >
                                   {submitting ? "Saving..." : "Save changes"}
@@ -326,6 +428,7 @@ export function QOTDQuestionsPage() {
                                     setEditingQuestionID(null);
                                     setEditingBody("");
                                     setEditingStatus("ready");
+                                    setEditingDeckID("");
                                   }}
                                 >
                                   Cancel
@@ -391,8 +494,12 @@ function getQuestionToneClass(status: QOTDQuestionStatus) {
   }
 }
 
-function buildQuestionMeta(question: QOTDQuestion) {
+function buildQuestionMeta(question: QOTDQuestion, decks: QOTDDeck[]) {
   const meta: string[] = [];
+  const deck = decks.find((entry) => entry.id === question.deck_id);
+  if (deck) {
+    meta.push(`Deck ${deck.name}`);
+  }
   if (question.scheduled_for_date_utc) {
     meta.push(`Scheduled ${question.scheduled_for_date_utc.slice(0, 10)}`);
   }

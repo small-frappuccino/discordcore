@@ -12,6 +12,7 @@ import (
 
 type qotdQuestionResponse struct {
 	ID                  int64      `json:"id"`
+	DeckID              string     `json:"deck_id"`
 	Body                string     `json:"body"`
 	Status              string     `json:"status"`
 	QueuePosition       int64      `json:"queue_position"`
@@ -24,6 +25,8 @@ type qotdQuestionResponse struct {
 
 type qotdOfficialPostResponse struct {
 	ID                      int64      `json:"id"`
+	DeckID                  string     `json:"deck_id"`
+	DeckName                string     `json:"deck_name"`
 	QuestionID              int64      `json:"question_id"`
 	PublishMode             string     `json:"publish_mode"`
 	PublishDateUTC          time.Time  `json:"publish_date_utc"`
@@ -41,9 +44,20 @@ type qotdOfficialPostResponse struct {
 	PostURL                 string     `json:"post_url,omitempty"`
 }
 
+type qotdDeckSummaryResponse struct {
+	ID             string              `json:"id"`
+	Name           string              `json:"name"`
+	Enabled        bool                `json:"enabled"`
+	QuestionCounts qotd.QuestionCounts `json:"counts"`
+	CardsRemaining int                 `json:"cards_remaining"`
+	IsActive       bool                `json:"is_active"`
+	CanPublish     bool                `json:"can_publish"`
+}
+
 type qotdSummaryResponse struct {
 	Settings                files.QOTDConfig          `json:"settings"`
 	Counts                  qotd.QuestionCounts       `json:"counts"`
+	Decks                   []qotdDeckSummaryResponse `json:"decks,omitempty"`
 	CurrentPublishDateUTC   time.Time                 `json:"current_publish_date_utc"`
 	PublishedForCurrentSlot bool                      `json:"published_for_current_slot"`
 	CurrentPost             *qotdOfficialPostResponse `json:"current_post,omitempty"`
@@ -56,6 +70,7 @@ func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQues
 		record := record
 		out = append(out, qotdQuestionResponse{
 			ID:                  record.ID,
+			DeckID:              strings.TrimSpace(record.DeckID),
 			Body:                record.Body,
 			Status:              strings.TrimSpace(record.Status),
 			QueuePosition:       record.QueuePosition,
@@ -95,6 +110,8 @@ func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialP
 	}
 	return &qotdOfficialPostResponse{
 		ID:                      record.ID,
+		DeckID:                  strings.TrimSpace(record.DeckID),
+		DeckName:                strings.TrimSpace(record.DeckNameSnapshot),
 		QuestionID:              record.QuestionID,
 		PublishMode:             strings.TrimSpace(record.PublishMode),
 		PublishDateUTC:          publishDate,
@@ -117,11 +134,31 @@ func buildQOTDSummaryResponse(guildID string, summary qotd.Summary) qotdSummaryR
 	return qotdSummaryResponse{
 		Settings:                summary.Settings,
 		Counts:                  summary.Counts,
+		Decks:                   buildQOTDDeckSummaryResponse(summary.Decks),
 		CurrentPublishDateUTC:   summary.CurrentPublishDateUTC.UTC(),
 		PublishedForCurrentSlot: summary.PublishedForCurrentSlot,
 		CurrentPost:             buildQOTDOfficialPostResponse(guildID, summary.CurrentPost),
 		PreviousPost:            buildQOTDOfficialPostResponse(guildID, summary.PreviousPost),
 	}
+}
+
+func buildQOTDDeckSummaryResponse(decks []qotd.DeckSummary) []qotdDeckSummaryResponse {
+	if len(decks) == 0 {
+		return nil
+	}
+	out := make([]qotdDeckSummaryResponse, 0, len(decks))
+	for _, deck := range decks {
+		out = append(out, qotdDeckSummaryResponse{
+			ID:             strings.TrimSpace(deck.Deck.ID),
+			Name:           strings.TrimSpace(deck.Deck.Name),
+			Enabled:        deck.Deck.Enabled,
+			QuestionCounts: deck.Counts,
+			CardsRemaining: deck.CardsRemaining,
+			IsActive:       deck.IsActive,
+			CanPublish:     deck.CanPublish,
+		})
+	}
+	return out
 }
 
 func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPostRecord) string {

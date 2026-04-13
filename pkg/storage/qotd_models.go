@@ -8,6 +8,7 @@ import (
 type QOTDQuestionRecord struct {
 	ID                  int64
 	GuildID             string
+	DeckID              string
 	Body                string
 	Status              string
 	QueuePosition       int64
@@ -21,11 +22,14 @@ type QOTDQuestionRecord struct {
 type QOTDOfficialPostRecord struct {
 	ID                      int64
 	GuildID                 string
+	DeckID                  string
+	DeckNameSnapshot        string
 	QuestionID              int64
 	PublishMode             string
 	PublishDateUTC          time.Time
 	State                   string
 	ForumChannelID          string
+	ResponseChannelID       string
 	DiscordThreadID         string
 	DiscordStarterMessageID string
 	QuestionTextSnapshot    string
