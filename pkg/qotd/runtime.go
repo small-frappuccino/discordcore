@@ -67,6 +67,13 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if question == nil {
 		return false, ErrNoQuestionsAvailable
 	}
+	availableQuestions, err := s.availableQuestionCount(ctx, guildID)
+	if err != nil {
+		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+		}
+		return false, err
+	}
 
 	lifecycle := EvaluateOfficialPost(publishDate, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
@@ -91,12 +98,13 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	}
 
 	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
-		GuildID:           guildID,
-		OfficialPostID:    provisioned.ID,
-		QuestionChannelID: strings.TrimSpace(cfg.QuestionChannelID),
-		QuestionText:      question.Body,
-		PublishDateUTC:    publishDate,
-		Pinned:            lifecycle.State == OfficialPostStateCurrent,
+		GuildID:            guildID,
+		OfficialPostID:     provisioned.ID,
+		AvailableQuestions: availableQuestions,
+		QuestionChannelID:  strings.TrimSpace(cfg.QuestionChannelID),
+		QuestionText:       question.Body,
+		PublishDateUTC:     publishDate,
+		Pinned:             lifecycle.State == OfficialPostStateCurrent,
 	})
 	if err != nil {
 		if deleteErr := s.store.DeleteQOTDOfficialPost(ctx, provisioned.ID); deleteErr != nil {

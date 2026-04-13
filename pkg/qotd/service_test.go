@@ -214,6 +214,9 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if fake.publishedParams[0].QuestionText != "Today question" {
 		t.Fatalf("unexpected published question text: %+v", fake.publishedParams[0])
 	}
+	if fake.publishedParams[0].AvailableQuestions != 0 {
+		t.Fatalf("expected no remaining available questions after manual publish, got %+v", fake.publishedParams[0])
+	}
 	if fake.publishedParams[0].Pinned {
 		t.Fatalf("expected manual publish to stay unpinned, got %+v", fake.publishedParams[0])
 	}
@@ -371,6 +374,12 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQuestion() failed: %v", err)
 	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		Body:   "Reserve for later",
+		Status: QuestionStatusDraft,
+	}); err != nil {
+		t.Fatalf("CreateQuestion(draft) failed: %v", err)
+	}
 
 	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
 	if err != nil {
@@ -384,6 +393,9 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	}
 	if got := fake.publishedParams[0].PublishDateUTC; !got.Equal(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("unexpected scheduled publish date: %s", got.Format(time.RFC3339))
+	}
+	if fake.publishedParams[0].AvailableQuestions != 1 {
+		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
 	if !fake.publishedParams[0].Pinned {
 		t.Fatalf("expected scheduled publish to pin the current slot thread, got %+v", fake.publishedParams[0])

@@ -268,6 +268,13 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if question == nil {
 		return nil, ErrNoQuestionsAvailable
 	}
+	availableQuestions, err := s.availableQuestionCount(ctx, guildID)
+	if err != nil {
+		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+		}
+		return nil, err
+	}
 
 	lifecycle := EvaluateManualOfficialPost(now, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
@@ -289,13 +296,14 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	}
 
 	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
-		GuildID:           guildID,
-		OfficialPostID:    provisioned.ID,
-		QuestionChannelID: strings.TrimSpace(cfg.QuestionChannelID),
-		QuestionText:      question.Body,
-		PublishDateUTC:    publishDate,
-		ThreadName:        buildManualThreadName(now),
-		Pinned:            false,
+		GuildID:            guildID,
+		OfficialPostID:     provisioned.ID,
+		AvailableQuestions: availableQuestions,
+		QuestionChannelID:  strings.TrimSpace(cfg.QuestionChannelID),
+		QuestionText:       question.Body,
+		PublishDateUTC:     publishDate,
+		ThreadName:         buildManualThreadName(now),
+		Pinned:             false,
 	})
 	if err != nil {
 		if deleteErr := s.store.DeleteQOTDOfficialPost(ctx, provisioned.ID); deleteErr != nil {
@@ -683,6 +691,15 @@ func normalizeSubmitAnswerParams(params discordqotd.SubmitAnswerParams) (discord
 	default:
 		return params, nil
 	}
+}
+
+func (s *Service) availableQuestionCount(ctx context.Context, guildID string) (int, error) {
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID)
+	if err != nil {
+		return 0, err
+	}
+	counts := countQuestions(questions)
+	return counts.Ready + counts.Draft, nil
 }
 
 func (s *Service) replyThreadLock(officialPostID int64, userID string) *sync.Mutex {

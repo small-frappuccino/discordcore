@@ -37,14 +37,14 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 
 	embed := buildOfficialQuestionEmbed(
 		80,
+		62,
 		"What song best represents the current mood you are in?",
-		time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC),
 	)
 
 	if embed.Title != "Question Of The Day" {
 		t.Fatalf("unexpected title: %+v", embed)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Official QOTD #80" {
+	if embed.Footer == nil || embed.Footer.Text != "Official QOTD #80 • 62 available" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {
