@@ -75,3 +75,18 @@ func TestBuildAnswerEmbedIncludesAvatarAndContext(t *testing.T) {
 		t.Fatalf("expected submitted answer label to be removed, got %q", embed.Description)
 	}
 }
+
+func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
+	t.Parallel()
+
+	got := buildOfficialPostName(
+		time.Date(2026, 4, 14, 0, 0, 0, 0, time.UTC),
+		"What's your go-to comfort drink?",
+		1,
+		"",
+	)
+
+	if got != "What's your go-to comfort drink? - qotd #1" {
+		t.Fatalf("unexpected official post name: %q", got)
+	}
+}

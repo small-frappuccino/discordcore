@@ -21,7 +21,7 @@ import {
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useGuildChannelOptions } from "../features/useGuildChannelOptions";
-import { useQOTD } from "./QOTDContext";
+import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
 interface SettingsDraft {
   active_deck_id: string;
@@ -31,7 +31,7 @@ interface SettingsDraft {
 
 export function QOTDSettingsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
-  const { deckSummaries, saveSettings, settings } = useQOTD();
+  const { busyLabel, deckSummaries, saveSettings, settings, setupForum } = useQOTD();
   const channelOptions = useGuildChannelOptions();
   const workflowHeadingId = useId();
   const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
@@ -59,7 +59,16 @@ export function QOTDSettingsPage() {
       description: "Forum channel that hosts `questions list!` and the daily QOTD posts.",
     }));
   const hasUnsavedChanges = settingsDraftChanged(savedDraftRef.current, draft);
-  const controlsDisabled = !canEditSelectedGuild || saving;
+  const setupBusy = busyLabel === QOTD_BUSY_LABELS.setupForum;
+  const controlsDisabled = !canEditSelectedGuild || saving || setupBusy;
+  const activeDeckDraft = draft.decks.find((deck) => deck.id === draft.active_deck_id);
+  const hasConfiguredForumChannel =
+    (activeDeckDraft?.forum_channel_id ?? "").trim() !== "";
+  const setupDisabled =
+    !canEditSelectedGuild ||
+    saving ||
+    setupBusy ||
+    hasUnsavedChanges;
   const channelPlaceholder = channelOptions.loading
     ? "Loading forum channels..."
     : forumChannelOptions.length === 0
@@ -117,6 +126,51 @@ export function QOTDSettingsPage() {
           ) : null}
 
           <GroupedSettingsGroup>
+            <GroupedSettingsItem
+              stacked
+              role="group"
+              aria-labelledby={`${workflowHeadingId}-setup`}
+            >
+              <GroupedSettingsSubrow>
+                <GroupedSettingsMainRow>
+                  <GroupedSettingsCopy>
+                    <GroupedSettingsHeading id={`${workflowHeadingId}-setup`}>
+                      Automatic setup
+                    </GroupedSettingsHeading>
+                    <p className="field-note">
+                      Creates the forum <code>☆-qotd-☆</code>, seals the pinned post <code>questions list!</code>, and prepares future daily posts as <code>[question] - qotd #[n]</code>.
+                    </p>
+                  </GroupedSettingsCopy>
+                  <button
+                    className="button-primary"
+                    type="button"
+                    disabled={setupDisabled}
+                    onClick={() => {
+                      void (async () => {
+                        await setupForum(draft.active_deck_id);
+                        await channelOptions.refresh();
+                      })().catch(() => undefined);
+                    }}
+                  >
+                    {setupBusy
+                      ? "Setting up..."
+                      : hasConfiguredForumChannel
+                        ? "Repair QOTD setup"
+                        : "Create QOTD forum"}
+                  </button>
+                </GroupedSettingsMainRow>
+              </GroupedSettingsSubrow>
+
+              {hasUnsavedChanges ? (
+                <GroupedSettingsSubrow>
+                  <GroupedSettingsInlineMessage
+                    message="Save the current deck changes before running automatic setup."
+                    tone="info"
+                  />
+                </GroupedSettingsSubrow>
+              ) : null}
+            </GroupedSettingsItem>
+
             <GroupedSettingsItem
               stacked
               role="group"

@@ -82,6 +82,7 @@ const qotdMock = {
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
+  setupForum: vi.fn(),
   selectDeck: vi.fn(),
   updateQuestion: vi.fn(),
 };
@@ -169,7 +170,9 @@ describe("QOTD UI", () => {
     qotdMock.workspaceState = "ready";
     qotdMock.createQuestions.mockReset().mockResolvedValue(true);
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
+    qotdMock.setupForum.mockReset().mockResolvedValue(undefined);
     qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
+    channelOptionsMock.refresh.mockReset();
     dashboardSessionMock.client.getQOTDCollectorSummary = vi
       .fn()
       .mockResolvedValue({
@@ -270,6 +273,28 @@ describe("QOTD UI", () => {
     expect(
       screen.queryByRole("button", { name: "Save changes" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Repair QOTD setup" }),
+    ).toBeInTheDocument();
+  });
+
+  it("runs the automatic setup flow from the settings page", async () => {
+    const user = userEvent.setup();
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(view.container).getByRole("button", { name: "Repair QOTD setup" }),
+    );
+
+    await waitFor(() => {
+      expect(qotdMock.setupForum).toHaveBeenCalledWith("default");
+      expect(channelOptionsMock.refresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("shows the unsaved changes bar and resets the local draft", async () => {

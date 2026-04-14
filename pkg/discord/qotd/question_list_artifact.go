@@ -103,6 +103,26 @@ func (p questionListArtifactPublisher) Publish(ctx context.Context, params quest
 	return result, nil
 }
 
+func (p questionListArtifactPublisher) EnsureSealedThread(ctx context.Context, forumChannelID, preferredThreadID string) (string, error) {
+	forumChannelID = strings.TrimSpace(forumChannelID)
+	preferredThreadID = strings.TrimSpace(preferredThreadID)
+	if forumChannelID == "" {
+		return "", fmt.Errorf("forum channel id is required")
+	}
+	if p.transport == nil {
+		return "", fmt.Errorf("question list artifact publisher: transport is required")
+	}
+
+	threadID, err := p.transport.EnsureThread(ctx, forumChannelID, preferredThreadID)
+	if err != nil {
+		return "", err
+	}
+	if err := p.transport.SetThreadState(ctx, threadID, questionListThreadSealedState); err != nil {
+		return "", fmt.Errorf("lock qotd questions list thread: %w", err)
+	}
+	return threadID, nil
+}
+
 func (p questionListArtifactPublisher) appendEntry(ctx context.Context, threadID string, params questionListArtifactPublishParams) (string, error) {
 	var entryMessageID string
 	err := p.withWritableThread(ctx, threadID, func() error {

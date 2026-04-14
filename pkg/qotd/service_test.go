@@ -20,6 +20,8 @@ var errFakePublishFailed = errors.New("fake publish failed")
 type fakePublisher struct {
 	publishedParams  []discordqotd.PublishOfficialPostParams
 	publishResponses []fakePublishResponse
+	setupParams      []discordqotd.SetupForumParams
+	setupResults     []fakeSetupForumResponse
 	answerParams     []discordqotd.UpsertAnswerMessageParams
 	threadStates     map[string]discordqotd.ThreadState
 	fetchCalls       []string
@@ -30,6 +32,11 @@ type fakePublisher struct {
 
 type fakePublishResponse struct {
 	result *discordqotd.PublishedOfficialPost
+	err    error
+}
+
+type fakeSetupForumResponse struct {
+	result *discordqotd.SetupForumResult
 	err    error
 }
 
@@ -81,6 +88,34 @@ func defaultFakePublishedOfficialPost(params discordqotd.PublishOfficialPostPara
 		PublishedAt:                publishedAt,
 		PostURL:                    discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
 	}
+}
+
+func (p *fakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, params discordqotd.SetupForumParams) (*discordqotd.SetupForumResult, error) {
+	p.setupParams = append(p.setupParams, params)
+	if len(p.setupResults) > 0 {
+		response := p.setupResults[0]
+		p.setupResults = p.setupResults[1:]
+		if response.result == nil {
+			return nil, response.err
+		}
+		out := *response.result
+		return &out, response.err
+	}
+	forumChannelID := strings.TrimSpace(params.PreferredForumChannelID)
+	if forumChannelID == "" {
+		forumChannelID = "forum-setup-1"
+	}
+	questionListThreadID := strings.TrimSpace(params.PreferredQuestionListThreadID)
+	if questionListThreadID == "" {
+		questionListThreadID = "questions-list-thread"
+	}
+	return &discordqotd.SetupForumResult{
+		ForumChannelID:       forumChannelID,
+		ForumChannelName:     "☆-qotd-☆",
+		ForumChannelURL:      discordqotd.BuildChannelJumpURL(params.GuildID, forumChannelID),
+		QuestionListThreadID: questionListThreadID,
+		QuestionListPostURL:  discordqotd.BuildChannelJumpURL(params.GuildID, questionListThreadID),
+	}, nil
 }
 
 func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, threadID string, state discordqotd.ThreadState) error {
@@ -224,8 +259,62 @@ func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	t.Parallel()
 
 	got := buildOfficialThreadName("What's your go-to comfort drink?", 1)
-	if got != "What's your go-to comfort drink? - QOTD #1" {
+	if got != "What's your go-to comfort drink? - qotd #1" {
 		t.Fatalf("unexpected official thread title: %q", got)
+	}
+}
+
+func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
+	t.Parallel()
+
+	service, store, fake := newTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:      files.LegacyQOTDDefaultDeckID,
+			Name:    files.LegacyQOTDDefaultDeckName,
+			Enabled: false,
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings(initial) failed: %v", err)
+	}
+
+	result, err := service.SetupForum(context.Background(), "g1", "", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("SetupForum() failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected setup result")
+	}
+	if len(fake.setupParams) != 1 {
+		t.Fatalf("expected one setup publisher call, got %+v", fake.setupParams)
+	}
+	if fake.setupParams[0].GuildID != "g1" {
+		t.Fatalf("unexpected setup params: %+v", fake.setupParams[0])
+	}
+	if result.ForumChannelID != "forum-setup-1" || result.QuestionListThreadID != "questions-list-thread" {
+		t.Fatalf("unexpected setup result: %+v", result)
+	}
+
+	settings, err := service.GetSettings("g1")
+	if err != nil {
+		t.Fatalf("GetSettings() failed: %v", err)
+	}
+	deck, ok := settings.ActiveDeck()
+	if !ok {
+		t.Fatalf("expected active deck after setup: %+v", settings)
+	}
+	if !deck.Enabled || deck.ForumChannelID != "forum-setup-1" {
+		t.Fatalf("expected setup to enable active deck and persist forum id, got %+v", deck)
+	}
+
+	surface, err := store.GetQOTDForumSurfaceByDeck(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("GetQOTDForumSurfaceByDeck() failed: %v", err)
+	}
+	if surface == nil || surface.ForumChannelID != "forum-setup-1" || surface.QuestionListThreadID != "questions-list-thread" {
+		t.Fatalf("unexpected persisted forum surface: %+v", surface)
 	}
 }
 
@@ -387,7 +476,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 0 {
 		t.Fatalf("expected no remaining available questions after manual publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Today question - QOTD #2" {
+	if fake.publishedParams[0].ThreadName != "Today question - qotd #2" {
 		t.Fatalf("expected manual publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 	if result.Question.Status != string(QuestionStatusUsed) {
@@ -734,7 +823,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Scheduled question - QOTD #1" {
+	if fake.publishedParams[0].ThreadName != "Scheduled question - qotd #1" {
 		t.Fatalf("expected scheduled publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 

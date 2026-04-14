@@ -16,13 +16,13 @@ import (
 )
 
 type qotdRouteResponse struct {
-	Status          string                         `json:"status"`
-	GuildID         string                         `json:"guild_id"`
-	Settings        files.QOTDConfig               `json:"settings"`
-	Summary         qotdSummaryResponse            `json:"summary"`
-	Question        qotdQuestionResponse           `json:"question"`
-	Questions       []qotdQuestionResponse         `json:"questions"`
-	CollectorResult qotdCollectorRunResultResponse `json:"result"`
+	Status      string                   `json:"status"`
+	GuildID     string                   `json:"guild_id"`
+	Settings    files.QOTDConfig         `json:"settings"`
+	Summary     qotdSummaryResponse      `json:"summary"`
+	Question    qotdQuestionResponse     `json:"question"`
+	Questions   []qotdQuestionResponse   `json:"questions"`
+	SetupResult *qotdSetupResultResponse `json:"result"`
 }
 
 type qotdCollectorRouteResponse struct {
@@ -47,6 +47,24 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 		AnswerChannelID:            threadID,
 		PublishedAt:                qotd.PublishTimeUTC(params.PublishDateUTC),
 		PostURL:                    discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
+	}, nil
+}
+
+func (routeFakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, params discordqotd.SetupForumParams) (*discordqotd.SetupForumResult, error) {
+	forumChannelID := strings.TrimSpace(params.PreferredForumChannelID)
+	if forumChannelID == "" {
+		forumChannelID = "forum-setup-1"
+	}
+	questionListThreadID := strings.TrimSpace(params.PreferredQuestionListThreadID)
+	if questionListThreadID == "" {
+		questionListThreadID = "questions-list-thread"
+	}
+	return &discordqotd.SetupForumResult{
+		ForumChannelID:       forumChannelID,
+		ForumChannelName:     "☆-qotd-☆",
+		ForumChannelURL:      discordqotd.BuildChannelJumpURL(params.GuildID, forumChannelID),
+		QuestionListThreadID: questionListThreadID,
+		QuestionListPostURL:  discordqotd.BuildChannelJumpURL(params.GuildID, questionListThreadID),
 	}, nil
 }
 
@@ -231,6 +249,35 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	activeDeck, ok := summaryResp.Summary.Settings.ActiveDeck()
 	if !ok || !activeDeck.Enabled {
 		t.Fatalf("expected summary settings to include an enabled active deck: %+v", summaryResp.Summary.Settings)
+	}
+}
+
+func TestQOTDRoutesSetupBootstrapsForumAndSettings(t *testing.T) {
+	t.Parallel()
+
+	srv, _, _, _ := newQOTDControlTestServer(t)
+	handler := srv.httpServer.Handler
+
+	setupRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/actions/setup", map[string]any{
+		"deck_id": "default",
+	})
+	if setupRec.Code != 200 {
+		t.Fatalf("setup qotd status=%d body=%q", setupRec.Code, setupRec.Body.String())
+	}
+
+	setupResp := decodeQOTDRouteResponse(t, setupRec.Body.String())
+	if setupResp.SetupResult == nil {
+		t.Fatalf("expected setup result payload, got body=%q", setupRec.Body.String())
+	}
+	if setupResp.SetupResult.ForumChannelID != "forum-setup-1" {
+		t.Fatalf("unexpected setup forum channel id: %+v", setupResp.SetupResult)
+	}
+	deck, ok := setupResp.Settings.ActiveDeck()
+	if !ok {
+		t.Fatalf("expected active deck in setup settings response: %+v", setupResp.Settings)
+	}
+	if !deck.Enabled || deck.ForumChannelID != "forum-setup-1" {
+		t.Fatalf("expected setup to enable active deck and persist forum channel, got %+v", deck)
 	}
 }
 

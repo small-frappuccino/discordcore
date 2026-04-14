@@ -280,6 +280,10 @@ func BuildThreadJumpURL(guildID, threadID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s", guildID, threadID)
 }
 
+func BuildChannelJumpURL(guildID, channelID string) string {
+	return BuildThreadJumpURL(guildID, channelID)
+}
+
 func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 	guildID = strings.TrimSpace(guildID)
 	channelID = strings.TrimSpace(channelID)
@@ -341,12 +345,12 @@ func buildOfficialPostName(publishDateUTC time.Time, questionText string, queueP
 		base = "Question of the Day"
 	}
 	if queuePosition > 0 {
-		return truncateThreadName(fmt.Sprintf("%s - QOTD #%d", base, queuePosition))
+		return truncateThreadName(fmt.Sprintf("%s - qotd #%d", base, queuePosition))
 	}
 	if !publishDateUTC.IsZero() {
-		return truncateThreadName(fmt.Sprintf("%s - QOTD %s", base, publishDateUTC.UTC().Format("2006-01-02")))
+		return truncateThreadName(fmt.Sprintf("%s - qotd %s", base, publishDateUTC.UTC().Format("2006-01-02")))
 	}
-	return truncateThreadName(base + " - QOTD")
+	return truncateThreadName(base + " - qotd")
 }
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {

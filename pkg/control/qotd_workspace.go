@@ -83,6 +83,14 @@ type qotdCollectorRunResultResponse struct {
 	TotalQuestions  int `json:"total_questions"`
 }
 
+type qotdSetupResultResponse struct {
+	DeckID               string `json:"deck_id"`
+	ForumChannelID       string `json:"forum_channel_id"`
+	ForumChannelURL      string `json:"forum_channel_url,omitempty"`
+	QuestionListThreadID string `json:"question_list_thread_id"`
+	QuestionListPostURL  string `json:"question_list_post_url,omitempty"`
+}
+
 func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQuestionResponse {
 	out := make([]qotdQuestionResponse, 0, len(records))
 	for _, record := range records {
@@ -209,6 +217,19 @@ func buildQOTDCollectorRunResultResponse(result qotd.CollectorRunResult) qotdCol
 		MatchedMessages: result.MatchedMessages,
 		NewQuestions:    result.NewQuestions,
 		TotalQuestions:  result.TotalQuestions,
+	}
+}
+
+func buildQOTDSetupResultResponse(result *qotd.SetupResult) *qotdSetupResultResponse {
+	if result == nil {
+		return nil
+	}
+	return &qotdSetupResultResponse{
+		DeckID:               strings.TrimSpace(result.DeckID),
+		ForumChannelID:       strings.TrimSpace(result.ForumChannelID),
+		ForumChannelURL:      strings.TrimSpace(result.ForumChannelURL),
+		QuestionListThreadID: strings.TrimSpace(result.QuestionListThreadID),
+		QuestionListPostURL:  strings.TrimSpace(result.QuestionListPostURL),
 	}
 }
 

@@ -31,6 +31,7 @@ type WorkspaceState =
 export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
   saveSettings: "Saving QOTD settings...",
+  setupForum: "Setting up QOTD forum...",
   createQuestion: "Creating question...",
   createQuestions: "Importing questions...",
   updateQuestion: "Updating question...",
@@ -58,6 +59,7 @@ interface QOTDContextValue {
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<QOTDConfig | null>;
+  setupForum: (deckId?: string) => Promise<void>;
   selectDeck: (deckId: string) => Promise<void>;
   updateQuestion: (
     questionId: number,
@@ -469,6 +471,36 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function setupForum(deckId = "") {
+    if (!canEditSelectedGuild || normalizedGuildID === "") {
+      return;
+    }
+
+    setBusyLabel(QOTD_BUSY_LABELS.setupForum);
+    try {
+      const response = await client.setupQOTD(normalizedGuildID, {
+        deck_id: deckId.trim() || undefined,
+      });
+      const updatedSettings = normalizeQOTDSettings(response.settings);
+      setSettings(updatedSettings);
+      setSummary(normalizeQOTDSummary(response.summary, updatedSettings));
+      await loadWorkspace(chooseDeckID(deckId || selectedDeckRef.current, updatedSettings));
+      setNotice({
+        tone: "success",
+        message: response.result.question_list_post_url
+          ? "QOTD forum setup is ready. Use the questions list post to verify the bootstrap."
+          : "QOTD forum setup is ready.",
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: formatError(error),
+      });
+    } finally {
+      setBusyLabel("");
+    }
+  }
+
   async function selectDeck(deckId: string) {
     if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
@@ -518,6 +550,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         refreshWorkspace,
         reorderQuestions,
         saveSettings,
+        setupForum,
         selectDeck,
         updateQuestion,
       }}

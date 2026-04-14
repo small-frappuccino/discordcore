@@ -333,6 +333,73 @@ describe("ControlApiClient feature routes", () => {
           });
         }
 
+        if (url.endsWith("/qotd/actions/setup")) {
+          return jsonResponse({
+            status: "ok",
+            guild_id: "guild-1",
+            settings: {
+              active_deck_id: "default",
+              decks: [
+                {
+                  id: "default",
+                  name: "Default",
+                  enabled: true,
+                  forum_channel_id: "forum-setup-1",
+                },
+              ],
+            },
+            summary: {
+              settings: {
+                active_deck_id: "default",
+                decks: [
+                  {
+                    id: "default",
+                    name: "Default",
+                    enabled: true,
+                    forum_channel_id: "forum-setup-1",
+                  },
+                ],
+              },
+              counts: {
+                total: 1,
+                draft: 0,
+                ready: 1,
+                reserved: 0,
+                used: 0,
+                disabled: 0,
+              },
+              decks: [
+                {
+                  id: "default",
+                  name: "Default",
+                  enabled: true,
+                  counts: {
+                    total: 1,
+                    draft: 0,
+                    ready: 1,
+                    reserved: 0,
+                    used: 0,
+                    disabled: 0,
+                  },
+                  cards_remaining: 1,
+                  is_active: true,
+                  can_publish: true,
+                },
+              ],
+              current_publish_date_utc: "2026-04-03T00:00:00Z",
+              published_for_current_slot: false,
+            },
+            result: {
+              deck_id: "default",
+              forum_channel_id: "forum-setup-1",
+              forum_channel_url: "https://discord.com/channels/guild-1/forum-setup-1",
+              question_list_thread_id: "questions-list-thread",
+              question_list_post_url:
+                "https://discord.com/channels/guild-1/questions-list-thread",
+            },
+          });
+        }
+
         return jsonResponse({
           status: "ok",
           guild_id: "guild-1",
@@ -347,9 +414,11 @@ describe("ControlApiClient feature routes", () => {
     });
 
     const summary = await client.getQOTDSummary("guild-1");
+    const setup = await client.setupQOTD("guild-1", { deck_id: "default" });
     await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
     expect(summary.summary.settings.active_deck_id).toBe("default");
+    expect(setup.result.forum_channel_id).toBe("forum-setup-1");
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/v1/guilds/guild-1/qotd",
@@ -362,6 +431,20 @@ describe("ControlApiClient feature routes", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "/v1/guilds/guild-1/qotd/actions/setup",
+      {
+        method: "POST",
+        headers: expect.objectContaining({
+          get: expect.any(Function),
+        }),
+        credentials: "include",
+        body: JSON.stringify({
+          deck_id: "default",
+        }),
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       "/v1/guilds/guild-1/qotd/questions/reorder",
       {
         method: "POST",

@@ -32,6 +32,7 @@ var (
 
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
+	SetupForum(ctx context.Context, session *discordgo.Session, params discordqotd.SetupForumParams) (*discordqotd.SetupForumResult, error)
 	UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 	FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error)
@@ -111,31 +112,7 @@ func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QO
 	lifecycleLock := s.guildLifecycleLock(guildID)
 	lifecycleLock.Lock()
 	defer lifecycleLock.Unlock()
-
-	normalized, err := files.NormalizeQOTDConfig(cfg)
-	if err != nil {
-		return files.QOTDConfig{}, err
-	}
-	current, err := s.configManager.GetQOTDConfig(guildID)
-	if err != nil {
-		return files.QOTDConfig{}, err
-	}
-	currentDashboard := files.DashboardQOTDConfig(current)
-	nextDashboard := files.DashboardQOTDConfig(normalized)
-	if err := s.configManager.SetQOTDConfig(guildID, normalized); err != nil {
-		return files.QOTDConfig{}, err
-	}
-	if err := s.deleteRemovedDeckQuestions(context.Background(), guildID, currentDashboard, nextDashboard); err != nil {
-		if rollbackErr := s.configManager.SetQOTDConfig(guildID, current); rollbackErr != nil {
-			return files.QOTDConfig{}, fmt.Errorf("delete removed qotd deck questions: %w (rollback qotd config: %v)", err, rollbackErr)
-		}
-		return files.QOTDConfig{}, err
-	}
-	updated, err := s.configManager.GetQOTDConfig(guildID)
-	if err != nil {
-		return files.QOTDConfig{}, err
-	}
-	return files.DashboardQOTDConfig(updated), nil
+	return s.updateSettingsLocked(guildID, cfg)
 }
 
 func (s *Service) ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error) {
@@ -632,9 +609,9 @@ func buildOfficialThreadName(questionText string, queuePosition int64) string {
 		title = "Question of the Day"
 	}
 	if queuePosition > 0 {
-		return fmt.Sprintf("%s - QOTD #%d", title, queuePosition)
+		return fmt.Sprintf("%s - qotd #%d", title, queuePosition)
 	}
-	return title + " - QOTD"
+	return title + " - qotd"
 }
 
 func normalizeQuestionMutation(mutation QuestionMutation) (string, QuestionStatus, error) {
