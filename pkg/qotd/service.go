@@ -17,17 +17,17 @@ import (
 )
 
 var (
-	ErrServiceUnavailable     = errors.New("qotd service unavailable")
-	ErrQOTDDisabled           = errors.New("qotd is disabled")
-	ErrAlreadyPublished       = errors.New("qotd already published for the current slot")
-	ErrNoQuestionsAvailable   = errors.New("no qotd questions available")
-	ErrImmutableQuestion      = errors.New("qotd question is already scheduled or used")
-	ErrQuestionNotFound       = errors.New("qotd question not found")
-	ErrDeckNotFound           = errors.New("qotd deck not found")
-	ErrDiscordUnavailable     = errors.New("discord session unavailable")
-	ErrOfficialPostNotFound   = discordqotd.ErrOfficialPostNotFound
-	ErrAnswerWindowClosed     = discordqotd.ErrAnswerWindowClosed
-	ErrReplyThreadUnavailable = discordqotd.ErrReplyThreadUnavailable
+	ErrServiceUnavailable       = errors.New("qotd service unavailable")
+	ErrQOTDDisabled             = errors.New("qotd is disabled")
+	ErrAlreadyPublished         = errors.New("qotd already published for the current slot")
+	ErrNoQuestionsAvailable     = errors.New("no qotd questions available")
+	ErrImmutableQuestion        = errors.New("qotd question is already scheduled or used")
+	ErrQuestionNotFound         = errors.New("qotd question not found")
+	ErrDeckNotFound             = errors.New("qotd deck not found")
+	ErrDiscordUnavailable       = errors.New("discord session unavailable")
+	ErrOfficialPostNotFound     = discordqotd.ErrOfficialPostNotFound
+	ErrAnswerWindowClosed       = discordqotd.ErrAnswerWindowClosed
+	ErrAnswerChannelUnavailable = discordqotd.ErrAnswerChannelUnavailable
 )
 
 type Publisher interface {
@@ -443,7 +443,7 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		return nil, ErrOfficialPostNotFound
 	}
 	if !isOfficialPostPublished(*officialPost) {
-		return nil, ErrReplyThreadUnavailable
+		return nil, ErrAnswerChannelUnavailable
 	}
 
 	lifecycle := EvaluateOfficialPostWindow(
@@ -462,7 +462,7 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		defaultAnswerChannelID = strings.TrimSpace(officialPost.DiscordThreadID)
 	}
 	if defaultAnswerChannelID == "" {
-		return nil, ErrReplyThreadUnavailable
+		return nil, ErrAnswerChannelUnavailable
 	}
 
 	lock := s.answerRecordLock(officialPost.ID, normalized.UserID)
@@ -493,7 +493,7 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		}
 	}
 	if record == nil {
-		return nil, ErrReplyThreadUnavailable
+		return nil, ErrAnswerChannelUnavailable
 	}
 
 	targetChannelID := strings.TrimSpace(record.AnswerChannelID)

@@ -952,22 +952,6 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 	return record, nil
 }
 
-func (s *Store) DeleteQOTDOfficialPost(ctx context.Context, id int64) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if id <= 0 {
-		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if _, err := s.execContext(ctx, `DELETE FROM qotd_official_posts WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("delete qotd official post: %w", err)
-	}
-	return nil
-}
-
 func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -1018,56 +1002,6 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get qotd official post by date: %w", err)
-	}
-	return record, nil
-}
-
-func (s *Store) GetQOTDOfficialPostByThreadID(ctx context.Context, discordThreadID string) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
-	discordThreadID = strings.TrimSpace(discordThreadID)
-	if discordThreadID == "" {
-		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	row := s.queryRowContext(ctx,
-		`SELECT
-			id,
-			guild_id,
-			deck_id,
-			deck_name_snapshot,
-			question_id,
-			publish_mode,
-			publish_date_utc,
-			state,
-			forum_channel_id,
-			question_list_thread_id,
-			question_list_entry_message_id,
-			discord_thread_id,
-			discord_starter_message_id,
-			answer_channel_id,
-			question_text_snapshot,
-			published_at,
-			grace_until,
-			archive_at,
-			closed_at,
-			archived_at,
-			last_reconciled_at,
-			created_at,
-			updated_at
-		FROM qotd_official_posts
-		WHERE discord_thread_id = ?`,
-		discordThreadID,
-	)
-	record, err := scanQOTDOfficialPostRecord(row)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("get qotd official post by thread: %w", err)
 	}
 	return record, nil
 }

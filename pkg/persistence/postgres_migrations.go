@@ -247,7 +247,6 @@ var postgresMigrations = []migration{
 				discord_thread_id          TEXT,
 				discord_starter_message_id TEXT,
 				question_text_snapshot     TEXT NOT NULL,
-				is_pinned                  BOOLEAN NOT NULL DEFAULT FALSE,
 				published_at               TIMESTAMPTZ,
 				grace_until                TIMESTAMPTZ NOT NULL,
 				archive_at                 TIMESTAMPTZ NOT NULL,
@@ -260,29 +259,10 @@ var postgresMigrations = []migration{
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_official_posts_publish_date ON qotd_official_posts(guild_id, publish_date_utc)`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_official_posts_thread ON qotd_official_posts(discord_thread_id) WHERE discord_thread_id IS NOT NULL`,
 			`CREATE INDEX IF NOT EXISTS idx_qotd_official_posts_archive ON qotd_official_posts(archived_at, archive_at)`,
-			`CREATE TABLE IF NOT EXISTS qotd_reply_threads (
-				id                         BIGSERIAL PRIMARY KEY,
-				guild_id                   TEXT NOT NULL,
-				official_post_id           BIGINT NOT NULL REFERENCES qotd_official_posts(id) ON DELETE CASCADE,
-				user_id                    TEXT NOT NULL,
-				state                      TEXT NOT NULL,
-				forum_channel_id           TEXT NOT NULL,
-				discord_thread_id          TEXT,
-				discord_starter_message_id TEXT,
-				created_via_interaction_id TEXT,
-				created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-				updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-				closed_at                  TIMESTAMPTZ,
-				archived_at                TIMESTAMPTZ
-			)`,
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_reply_threads_unique_user ON qotd_reply_threads(official_post_id, user_id)`,
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_reply_threads_thread ON qotd_reply_threads(discord_thread_id) WHERE discord_thread_id IS NOT NULL`,
-			`CREATE INDEX IF NOT EXISTS idx_qotd_reply_threads_state ON qotd_reply_threads(official_post_id, state, created_at)`,
 			`CREATE TABLE IF NOT EXISTS qotd_thread_archives (
 				id                BIGSERIAL PRIMARY KEY,
 				guild_id          TEXT NOT NULL,
 				official_post_id  BIGINT NOT NULL REFERENCES qotd_official_posts(id) ON DELETE CASCADE,
-				reply_thread_id   BIGINT REFERENCES qotd_reply_threads(id) ON DELETE CASCADE,
 				source_kind       TEXT NOT NULL,
 				discord_thread_id TEXT NOT NULL,
 				archived_at       TIMESTAMPTZ NOT NULL,
@@ -312,10 +292,6 @@ var postgresMigrations = []migration{
 			`DROP INDEX IF EXISTS idx_qotd_thread_archives_post`,
 			`DROP INDEX IF EXISTS idx_qotd_thread_archives_thread`,
 			`DROP TABLE IF EXISTS qotd_thread_archives`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_state`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_thread`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_unique_user`,
-			`DROP TABLE IF EXISTS qotd_reply_threads`,
 			`DROP INDEX IF EXISTS idx_qotd_official_posts_archive`,
 			`DROP INDEX IF EXISTS idx_qotd_official_posts_thread`,
 			`DROP INDEX IF EXISTS idx_qotd_official_posts_publish_date`,
@@ -348,16 +324,8 @@ var postgresMigrations = []migration{
 	},
 	{
 		Version: 9,
-		UpSQL: []string{
-			`ALTER TABLE qotd_reply_threads ADD COLUMN IF NOT EXISTS provisioning_nonce TEXT`,
-			`CREATE INDEX IF NOT EXISTS idx_qotd_reply_threads_provisioning_recovery
-			 ON qotd_reply_threads(guild_id, state, updated_at)
-			 WHERE discord_thread_id IS NULL`,
-		},
-		DownSQL: []string{
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_provisioning_recovery`,
-			`ALTER TABLE qotd_reply_threads DROP COLUMN IF EXISTS provisioning_nonce`,
-		},
+		UpSQL:   []string{},
+		DownSQL: []string{},
 	},
 	{
 		Version: 10,
@@ -386,15 +354,8 @@ var postgresMigrations = []migration{
 			 WHERE deck_name_snapshot IS NULL OR deck_name_snapshot = ''`,
 			`ALTER TABLE qotd_official_posts ALTER COLUMN deck_name_snapshot SET DEFAULT 'Default'`,
 			`ALTER TABLE qotd_official_posts ALTER COLUMN deck_name_snapshot SET NOT NULL`,
-			`ALTER TABLE qotd_official_posts ADD COLUMN IF NOT EXISTS response_channel_id_snapshot TEXT`,
-			`UPDATE qotd_official_posts
-			 SET response_channel_id_snapshot = ''
-			 WHERE response_channel_id_snapshot IS NULL`,
-			`ALTER TABLE qotd_official_posts ALTER COLUMN response_channel_id_snapshot SET DEFAULT ''`,
-			`ALTER TABLE qotd_official_posts ALTER COLUMN response_channel_id_snapshot SET NOT NULL`,
 		},
 		DownSQL: []string{
-			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS response_channel_id_snapshot`,
 			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS deck_name_snapshot`,
 			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS deck_id`,
 			`DROP INDEX IF EXISTS idx_qotd_questions_status`,
@@ -467,7 +428,7 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_official_posts
 			 ADD COLUMN IF NOT EXISTS answer_channel_id TEXT`,
 			`UPDATE qotd_official_posts
-			 SET answer_channel_id = COALESCE(NULLIF(discord_thread_id, ''), NULLIF(response_channel_id_snapshot, ''), forum_channel_id)
+			 SET answer_channel_id = COALESCE(NULLIF(discord_thread_id, ''), forum_channel_id)
 			 WHERE answer_channel_id IS NULL OR answer_channel_id = ''`,
 			`UPDATE qotd_official_posts
 			 SET answer_channel_id = ''
@@ -497,33 +458,6 @@ var postgresMigrations = []migration{
 			 WHERE discord_message_id IS NOT NULL AND discord_message_id <> ''`,
 			`CREATE INDEX IF NOT EXISTS idx_qotd_answer_messages_state
 			 ON qotd_answer_messages(official_post_id, state, created_at)`,
-			`INSERT INTO qotd_answer_messages (
-				guild_id,
-				official_post_id,
-				user_id,
-				state,
-				answer_channel_id,
-				discord_message_id,
-				created_via_interaction_id,
-				created_at,
-				updated_at,
-				closed_at,
-				archived_at
-			)
-			SELECT
-				guild_id,
-				official_post_id,
-				user_id,
-				state,
-				forum_channel_id,
-				discord_starter_message_id,
-				created_via_interaction_id,
-				created_at,
-				updated_at,
-				closed_at,
-				archived_at
-			FROM qotd_reply_threads
-			ON CONFLICT (official_post_id, user_id) DO NOTHING`,
 		},
 		DownSQL: []string{
 			`DROP INDEX IF EXISTS idx_qotd_answer_messages_state`,
@@ -540,57 +474,7 @@ var postgresMigrations = []migration{
 	},
 	{
 		Version: 14,
-		UpSQL: []string{
-			`ALTER TABLE qotd_thread_archives
-			 DROP CONSTRAINT IF EXISTS qotd_thread_archives_reply_thread_id_fkey`,
-			`ALTER TABLE qotd_thread_archives
-			 DROP COLUMN IF EXISTS reply_thread_id`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_provisioning_recovery`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_state`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_thread`,
-			`DROP INDEX IF EXISTS idx_qotd_reply_threads_unique_user`,
-			`DROP TABLE IF EXISTS qotd_reply_threads`,
-			`ALTER TABLE qotd_official_posts
-			 DROP COLUMN IF EXISTS response_channel_id_snapshot`,
-			`ALTER TABLE qotd_official_posts
-			 DROP COLUMN IF EXISTS is_pinned`,
-		},
-		DownSQL: []string{
-			`ALTER TABLE qotd_official_posts
-			 ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE`,
-			`ALTER TABLE qotd_official_posts
-			 ADD COLUMN IF NOT EXISTS response_channel_id_snapshot TEXT NOT NULL DEFAULT ''`,
-			`CREATE TABLE IF NOT EXISTS qotd_reply_threads (
-				id                         BIGSERIAL PRIMARY KEY,
-				guild_id                   TEXT NOT NULL,
-				official_post_id           BIGINT NOT NULL REFERENCES qotd_official_posts(id) ON DELETE CASCADE,
-				user_id                    TEXT NOT NULL,
-				state                      TEXT NOT NULL,
-				forum_channel_id           TEXT NOT NULL,
-				discord_thread_id          TEXT,
-				discord_starter_message_id TEXT,
-				created_via_interaction_id TEXT,
-				provisioning_nonce         TEXT,
-				created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-				updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-				closed_at                  TIMESTAMPTZ,
-				archived_at                TIMESTAMPTZ
-			)`,
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_reply_threads_unique_user
-			 ON qotd_reply_threads(official_post_id, user_id)`,
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_reply_threads_thread
-			 ON qotd_reply_threads(discord_thread_id)
-			 WHERE discord_thread_id IS NOT NULL`,
-			`CREATE INDEX IF NOT EXISTS idx_qotd_reply_threads_state
-			 ON qotd_reply_threads(official_post_id, state, created_at)`,
-			`CREATE INDEX IF NOT EXISTS idx_qotd_reply_threads_provisioning_recovery
-			 ON qotd_reply_threads(guild_id, state, updated_at)
-			 WHERE discord_thread_id IS NULL`,
-			`ALTER TABLE qotd_thread_archives
-			 ADD COLUMN IF NOT EXISTS reply_thread_id BIGINT`,
-			`ALTER TABLE qotd_thread_archives
-			 ADD CONSTRAINT qotd_thread_archives_reply_thread_id_fkey
-			 FOREIGN KEY (reply_thread_id) REFERENCES qotd_reply_threads(id) ON DELETE CASCADE`,
-		},
+		UpSQL:   []string{},
+		DownSQL: []string{},
 	},
 }

@@ -24,26 +24,18 @@ type qotdQuestionResponse struct {
 }
 
 type qotdOfficialPostResponse struct {
-	ID                         int64      `json:"id"`
-	DeckID                     string     `json:"deck_id"`
-	DeckName                   string     `json:"deck_name"`
-	QuestionID                 int64      `json:"question_id"`
-	PublishMode                string     `json:"publish_mode"`
-	PublishDateUTC             time.Time  `json:"publish_date_utc"`
-	State                      string     `json:"state"`
-	ForumChannelID             string     `json:"forum_channel_id"`
-	QuestionListThreadID       string     `json:"question_list_thread_id,omitempty"`
-	QuestionListEntryMessageID string     `json:"question_list_entry_message_id,omitempty"`
-	DiscordThreadID            string     `json:"discord_thread_id,omitempty"`
-	DiscordStarterMessageID    string     `json:"discord_starter_message_id,omitempty"`
-	AnswerChannelID            string     `json:"answer_channel_id,omitempty"`
-	QuestionTextSnapshot       string     `json:"question_text_snapshot"`
-	PublishedAt                *time.Time `json:"published_at,omitempty"`
-	GraceUntil                 time.Time  `json:"grace_until"`
-	ArchiveAt                  time.Time  `json:"archive_at"`
-	ClosedAt                   *time.Time `json:"closed_at,omitempty"`
-	ArchivedAt                 *time.Time `json:"archived_at,omitempty"`
-	PostURL                    string     `json:"post_url,omitempty"`
+	DeckID            string     `json:"deck_id"`
+	DeckName          string     `json:"deck_name"`
+	PublishMode       string     `json:"publish_mode"`
+	PublishDateUTC    time.Time  `json:"publish_date_utc"`
+	State             string     `json:"state"`
+	QuestionText      string     `json:"question_text"`
+	PublishedAt       *time.Time `json:"published_at,omitempty"`
+	BecomesPreviousAt time.Time  `json:"becomes_previous_at"`
+	AnswersCloseAt    time.Time  `json:"answers_close_at"`
+	ClosedAt          *time.Time `json:"closed_at,omitempty"`
+	ArchivedAt        *time.Time `json:"archived_at,omitempty"`
+	PostURL           string     `json:"post_url,omitempty"`
 }
 
 type qotdDeckSummaryResponse struct {
@@ -136,26 +128,18 @@ func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialP
 		}
 	}
 	return &qotdOfficialPostResponse{
-		ID:                         record.ID,
-		DeckID:                     strings.TrimSpace(record.DeckID),
-		DeckName:                   strings.TrimSpace(record.DeckNameSnapshot),
-		QuestionID:                 record.QuestionID,
-		PublishMode:                strings.TrimSpace(record.PublishMode),
-		PublishDateUTC:             publishDate,
-		State:                      strings.TrimSpace(state),
-		ForumChannelID:             strings.TrimSpace(record.ForumChannelID),
-		QuestionListThreadID:       strings.TrimSpace(record.QuestionListThreadID),
-		QuestionListEntryMessageID: strings.TrimSpace(record.QuestionListEntryMessageID),
-		DiscordThreadID:            strings.TrimSpace(record.DiscordThreadID),
-		DiscordStarterMessageID:    strings.TrimSpace(record.DiscordStarterMessageID),
-		AnswerChannelID:            strings.TrimSpace(record.AnswerChannelID),
-		QuestionTextSnapshot:       record.QuestionTextSnapshot,
-		PublishedAt:                record.PublishedAt,
-		GraceUntil:                 record.GraceUntil.UTC(),
-		ArchiveAt:                  record.ArchiveAt.UTC(),
-		ClosedAt:                   record.ClosedAt,
-		ArchivedAt:                 record.ArchivedAt,
-		PostURL:                    buildQOTDOfficialPostJumpURL(guildID, record),
+		DeckID:            strings.TrimSpace(record.DeckID),
+		DeckName:          strings.TrimSpace(record.DeckNameSnapshot),
+		PublishMode:       strings.TrimSpace(record.PublishMode),
+		PublishDateUTC:    publishDate,
+		State:             strings.TrimSpace(state),
+		QuestionText:      record.QuestionTextSnapshot,
+		PublishedAt:       record.PublishedAt,
+		BecomesPreviousAt: record.GraceUntil.UTC(),
+		AnswersCloseAt:    record.ArchiveAt.UTC(),
+		ClosedAt:          record.ClosedAt,
+		ArchivedAt:        record.ArchivedAt,
+		PostURL:           buildQOTDOfficialPostJumpURL(guildID, record),
 	}
 }
 

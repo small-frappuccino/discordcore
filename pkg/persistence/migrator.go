@@ -71,6 +71,10 @@ func (m *postgresMigrator) Up(ctx context.Context) error {
 		current = mig.Version
 	}
 
+	if err := m.repairLegacySchemas(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -157,6 +161,29 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 	applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`); err != nil {
 		return fmt.Errorf("ensure schema_migrations table: %w", err)
+	}
+	return nil
+}
+
+func (m *postgresMigrator) repairLegacySchemas(ctx context.Context) error {
+	if m == nil || m.db == nil {
+		return fmt.Errorf("postgres migrator database handle is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin legacy schema repair tx: %w", err)
+	}
+	if err := repairQOTDLegacySchema(ctx, tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("commit legacy schema repair: %w", err)
 	}
 	return nil
 }

@@ -39,7 +39,6 @@ func TestBuildAnswerEmbedIncludesAvatarAndContext(t *testing.T) {
 	embed := buildAnswerEmbed(
 		"Final Mix",
 		time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
-		80,
 		"What song best represents the current mood you are in?",
 		"https://discord.com/channels/g1/c1/m1",
 		"Right now it is a late-night synthwave track.",

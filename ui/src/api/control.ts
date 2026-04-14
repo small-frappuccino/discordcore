@@ -129,23 +129,15 @@ export interface QOTDDeckSummary {
 }
 
 export interface QOTDOfficialPost {
-  id: number;
   deck_id: string;
   deck_name: string;
-  question_id: number;
   publish_mode: string;
   publish_date_utc: string;
   state: string;
-  forum_channel_id: string;
-  question_list_thread_id?: string;
-  question_list_entry_message_id?: string;
-  discord_thread_id?: string;
-  discord_starter_message_id?: string;
-  answer_channel_id?: string;
-  question_text_snapshot: string;
+  question_text: string;
   published_at?: string;
-  grace_until: string;
-  archive_at: string;
+  becomes_previous_at: string;
+  answers_close_at: string;
   closed_at?: string;
   archived_at?: string;
   post_url?: string;

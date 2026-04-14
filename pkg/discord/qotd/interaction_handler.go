@@ -12,15 +12,15 @@ import (
 )
 
 var (
-	ErrOfficialPostNotFound   = errors.New("qotd official post not found")
-	ErrAnswerWindowClosed     = errors.New("qotd answer window closed")
-	ErrReplyThreadUnavailable = errors.New("qotd reply thread creation is unavailable")
+	ErrOfficialPostNotFound     = errors.New("qotd official post not found")
+	ErrAnswerWindowClosed       = errors.New("qotd answer window closed")
+	ErrAnswerChannelUnavailable = errors.New("qotd answer channel is unavailable")
 )
 
 const (
 	answerModalCustomID = "qotd:answer:submit:%d"
 	answerModalFieldID  = "qotd:answer:body"
-	answerModalTitleFmt = "Answer QOTD #%d"
+	answerModalTitle    = "Answer QOTD"
 )
 
 type SubmitAnswerParams struct {
@@ -69,7 +69,7 @@ func handleAnswerButtonInteraction(s *discordgo.Session, i *discordgo.Interactio
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{
 			CustomID: fmt.Sprintf(answerModalCustomID, officialPostID),
-			Title:    fmt.Sprintf(answerModalTitleFmt, officialPostID),
+			Title:    answerModalTitle,
 			Components: []discordgo.MessageComponent{
 				discordgo.ActionsRow{
 					Components: []discordgo.MessageComponent{
@@ -206,6 +206,8 @@ func qotdInteractionErrorMessage(err error) string {
 		return "This QOTD post could not be resolved anymore."
 	case errors.Is(err, ErrAnswerWindowClosed):
 		return "This question is no longer accepting replies."
+	case errors.Is(err, ErrAnswerChannelUnavailable):
+		return "This question is not ready to accept answers right now."
 	default:
 		return "Could not post your QOTD answer right now."
 	}

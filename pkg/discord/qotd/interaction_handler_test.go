@@ -186,7 +186,7 @@ func TestHandleQOTDInteractionsOpensAnswerModal(t *testing.T) {
 	if resp.Data == nil || resp.Data.CustomID != "qotd:answer:submit:42" {
 		t.Fatalf("expected modal custom id for official post, got %+v", resp.Data)
 	}
-	if resp.Data.Title != "Answer QOTD #42" {
+	if resp.Data.Title != "Answer QOTD" {
 		t.Fatalf("unexpected modal title: %+v", resp.Data)
 	}
 }

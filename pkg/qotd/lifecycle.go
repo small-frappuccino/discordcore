@@ -130,11 +130,6 @@ func EvaluateManualOfficialPost(publishedAt, now time.Time) OfficialPostLifecycl
 	)
 }
 
-// CanAnswer reports whether new reply threads may still be created for a post.
-func CanAnswer(publishDate, now time.Time) bool {
-	return EvaluateOfficialPost(publishDate, now).AnswerWindow.IsOpen
-}
-
 // ShouldArchive reports whether the post should be archived now, ignoring already-archived rows.
 func ShouldArchive(publishDate, now time.Time, archivedAt *time.Time) bool {
 	if archivedAt != nil && !archivedAt.IsZero() {

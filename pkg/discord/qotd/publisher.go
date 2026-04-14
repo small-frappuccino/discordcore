@@ -101,14 +101,6 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		PublishedAt:                normalized.ExistingPublishedAt,
 	}
 
-	if result.QuestionListThreadID == "" {
-		listThreadID, err := p.ensureOfficialQuestionListThread(ctx, session, normalized.ForumChannelID, normalized.QuestionListThreadID)
-		if err != nil {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("publish official qotd post: %w", err)
-		}
-		result.QuestionListThreadID = listThreadID
-	}
-
 	if result.ThreadID == "" {
 		thread, err := session.ForumThreadStartComplex(
 			normalized.ForumChannelID,
@@ -156,65 +148,23 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		result.AnswerChannelID = result.ThreadID
 	}
 
-	if result.QuestionListEntryMessageID == "" {
-		if err := p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
-			Pinned:   true,
-			Locked:   false,
-			Archived: false,
-		}); err != nil {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("prepare qotd questions list thread: %w", err)
-		}
-
-		listMessage, sendErr := session.ChannelMessageSendComplex(
-			result.QuestionListThreadID,
-			&discordgo.MessageSend{
-				Embeds: []*discordgo.MessageEmbed{questionEmbed},
-				Components: []discordgo.MessageComponent{
-					discordgo.ActionsRow{
-						Components: []discordgo.MessageComponent{
-							discordgo.Button{
-								Label:    answerButtonLabel,
-								Style:    discordgo.PrimaryButton,
-								CustomID: fmt.Sprintf(answerButtonCustomID, normalized.OfficialPostID),
-							},
-						},
-					},
-				},
-				AllowedMentions: &discordgo.MessageAllowedMentions{},
-			},
-		)
-		if listMessage != nil {
-			result.QuestionListEntryMessageID = strings.TrimSpace(listMessage.ID)
-			if result.PublishedAt.IsZero() {
-				result.PublishedAt = time.Now().UTC()
-			}
-		}
-		if sendErr != nil {
-			_ = p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
-				Pinned:   true,
-				Locked:   true,
-				Archived: false,
-			})
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("append qotd message to questions list: %w", sendErr)
-		}
-		if result.QuestionListEntryMessageID == "" {
-			_ = p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
-				Pinned:   true,
-				Locked:   true,
-				Archived: false,
-			})
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("append qotd message to questions list: missing message id")
+	listArtifact, err := newQuestionListArtifactPublisher(p, session).Publish(ctx, questionListArtifactPublishParams{
+		ForumChannelID:      normalized.ForumChannelID,
+		PreferredThreadID:   result.QuestionListThreadID,
+		EntryMessageID:      result.QuestionListEntryMessageID,
+		OfficialPostID:      normalized.OfficialPostID,
+		QuestionEmbed:       questionEmbed,
+		ExistingPublishedAt: result.PublishedAt,
+	})
+	if listArtifact != nil {
+		result.QuestionListThreadID = listArtifact.ThreadID
+		result.QuestionListEntryMessageID = listArtifact.EntryMessageID
+		if result.PublishedAt.IsZero() {
+			result.PublishedAt = listArtifact.PublishedAt
 		}
 	}
-
-	if result.QuestionListEntryMessageID != "" {
-		if err := p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
-			Pinned:   true,
-			Locked:   true,
-			Archived: false,
-		}); err != nil {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("lock qotd questions list thread: %w", err)
-		}
+	if err != nil {
+		return result.withPostURL(normalized.GuildID), fmt.Errorf("publish qotd questions list artifact: %w", err)
 	}
 
 	return result.withPostURL(normalized.GuildID), nil
@@ -245,7 +195,6 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 	embed := buildAnswerEmbed(
 		normalized.DeckName,
 		normalized.PublishDateUTC,
-		normalized.OfficialPostID,
 		normalized.QuestionText,
 		normalized.QuestionURL,
 		normalized.AnswerText,
@@ -352,7 +301,7 @@ func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questio
 	}
 }
 
-func buildAnswerEmbed(deckName string, publishDateUTC time.Time, officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
+func buildAnswerEmbed(deckName string, publishDateUTC time.Time, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -376,7 +325,7 @@ func buildAnswerEmbed(deckName string, publishDateUTC time.Time, officialPostID 
 		Description: description,
 		Color:       0x68C77C,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildAnswerFooter(deckName, publishDateUTC, officialPostID),
+			Text: buildAnswerFooter(deckName, publishDateUTC),
 		},
 	}
 	return embed
@@ -507,7 +456,7 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, queueP
 	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
 }
 
-func buildAnswerFooter(deckName string, publishDateUTC time.Time, officialPostID int64) string {
+func buildAnswerFooter(deckName string, publishDateUTC time.Time) string {
 	deckName = strings.TrimSpace(deckName)
 	if !publishDateUTC.IsZero() {
 		publishDateUTC = publishDateUTC.UTC()
@@ -524,8 +473,6 @@ func buildAnswerFooter(deckName string, publishDateUTC time.Time, officialPostID
 		return deckName
 	case publishDateText != "":
 		return publishDateText
-	case officialPostID > 0:
-		return fmt.Sprintf("Official QOTD #%d", officialPostID)
 	default:
 		return "Official QOTD"
 	}
@@ -559,14 +506,6 @@ func (p *Publisher) ensureOfficialQuestionListThread(ctx context.Context, sessio
 	}
 	if threadID == "" {
 		return "", fmt.Errorf("resolve qotd questions list thread: missing thread id")
-	}
-
-	if err := p.SetThreadState(ctx, session, threadID, ThreadState{
-		Pinned:   true,
-		Locked:   false,
-		Archived: false,
-	}); err != nil {
-		return "", fmt.Errorf("prepare qotd questions list thread: %w", err)
 	}
 	return threadID, nil
 }
