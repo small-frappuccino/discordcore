@@ -11,12 +11,12 @@ import (
 
 var (
 	questionListThreadWritableState = ThreadState{
-		Pinned:   true,
+		Pinned:   false,
 		Locked:   false,
 		Archived: false,
 	}
 	questionListThreadSealedState = ThreadState{
-		Pinned:   true,
+		Pinned:   false,
 		Locked:   true,
 		Archived: false,
 	}

@@ -252,23 +252,27 @@ func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Sessi
 		return fmt.Errorf("set qotd thread state: thread id is required")
 	}
 
-	flags := discordgo.ChannelFlags(0)
-	if state.Pinned {
-		flags = discordgo.ChannelFlagPinned
-	}
-	locked := state.Locked
-	archived := state.Archived
 	if _, err := session.ChannelEditComplex(
 		threadID,
-		&discordgo.ChannelEdit{
-			Flags:    &flags,
-			Locked:   &locked,
-			Archived: &archived,
-		},
+		buildThreadStateChannelEdit(state),
 	); err != nil {
 		return fmt.Errorf("set qotd thread state: %w", err)
 	}
 	return nil
+}
+
+func buildThreadStateChannelEdit(state ThreadState) *discordgo.ChannelEdit {
+	locked := state.Locked
+	archived := state.Archived
+	edit := &discordgo.ChannelEdit{
+		Locked:   &locked,
+		Archived: &archived,
+	}
+	if state.Pinned {
+		flags := discordgo.ChannelFlagPinned
+		edit.Flags = &flags
+	}
+	return edit
 }
 
 func BuildThreadJumpURL(guildID, threadID string) string {

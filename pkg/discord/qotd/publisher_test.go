@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
@@ -88,5 +90,44 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 
 	if got != "What's your go-to comfort drink? - qotd #1" {
 		t.Fatalf("unexpected official post name: %q", got)
+	}
+}
+
+func TestBuildThreadStateChannelEditOmitsFlagsWhenPinIsFalse(t *testing.T) {
+	t.Parallel()
+
+	edit := buildThreadStateChannelEdit(ThreadState{
+		Locked:   true,
+		Archived: false,
+	})
+
+	if edit == nil {
+		t.Fatal("expected channel edit")
+	}
+	if edit.Flags != nil {
+		t.Fatalf("expected flags to be omitted, got %+v", *edit.Flags)
+	}
+	if edit.Locked == nil || !*edit.Locked {
+		t.Fatalf("expected locked=true, got %+v", edit.Locked)
+	}
+	if edit.Archived == nil || *edit.Archived {
+		t.Fatalf("expected archived=false, got %+v", edit.Archived)
+	}
+}
+
+func TestBuildThreadStateChannelEditIncludesPinnedFlagsWhenRequested(t *testing.T) {
+	t.Parallel()
+
+	edit := buildThreadStateChannelEdit(ThreadState{
+		Pinned:   true,
+		Locked:   true,
+		Archived: true,
+	})
+
+	if edit == nil || edit.Flags == nil {
+		t.Fatalf("expected pinned flags, got %+v", edit)
+	}
+	if *edit.Flags != discordgo.ChannelFlagPinned {
+		t.Fatalf("expected pinned flag, got %+v", *edit.Flags)
 	}
 }
