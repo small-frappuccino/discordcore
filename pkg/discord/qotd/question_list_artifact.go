@@ -191,7 +191,7 @@ func buildQuestionListEntryMessage(embed *discordgo.MessageEmbed, officialPostID
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
 						Label:    answerButtonLabel,
-						Style:    discordgo.PrimaryButton,
+						Style:    discordgo.SecondaryButton,
 						CustomID: fmt.Sprintf(answerButtonCustomID, officialPostID),
 					},
 				},

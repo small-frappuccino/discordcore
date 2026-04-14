@@ -30,7 +30,7 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 	if len(embed.Fields) != 0 {
 		t.Fatalf("expected prompt metadata fields to be removed, got %+v", embed.Fields)
 	}
-	if !strings.Contains(embed.Description, "What song best represents") {
+	if !strings.Contains(embed.Description, "what song best represents") {
 		t.Fatalf("expected question text in description, got %q", embed.Description)
 	}
 }
@@ -88,7 +88,7 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 		"",
 	)
 
-	if got != "What's your go-to comfort drink? - qotd #1" {
+	if got != "what's your go-to comfort drink? - qotd #1" {
 		t.Fatalf("unexpected official post name: %q", got)
 	}
 }

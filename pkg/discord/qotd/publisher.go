@@ -10,12 +10,13 @@ import (
 )
 
 const (
-	answerButtonLabel    = "Answer"
+	answerButtonLabel    = "answer"
 	answerButtonCustomID = "qotd:answer:%d"
 
 	officialQuestionListThreadName    = "questions list!"
-	officialQuestionListThreadMessage = "Daily QOTD prompts are posted here."
+	officialQuestionListThreadMessage = "you can send your answers to the questions through the embed here, by clicking on the 'answer' button!"
 	defaultThreadAutoArchiveMinutes   = 4320
+	forumThreadBlankMessage           = "\u200b"
 )
 
 type PublishOfficialPostParams struct {
@@ -108,10 +109,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.QuestionText, normalized.QueuePosition, normalized.ThreadName),
 				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
 			},
-			&discordgo.MessageSend{
-				Embeds:          []*discordgo.MessageEmbed{questionEmbed},
-				AllowedMentions: &discordgo.MessageAllowedMentions{},
-			},
+			buildOfficialPostStarterMessage(),
 		)
 		if err != nil {
 			return result.withPostURL(normalized.GuildID), fmt.Errorf("create qotd forum thread: %w", err)
@@ -301,7 +299,7 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string, queuePosition int64) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "☆ question!! ☆",
-		Description: quoteEmbedText(questionText, 3800),
+		Description: quoteEmbedText(normalizeOfficialQuestionText(questionText), 3800),
 		Color:       0x89E5D1,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: buildOfficialQuestionFooter(deckName, availableQuestions, queuePosition),
@@ -344,7 +342,7 @@ func buildOfficialPostName(publishDateUTC time.Time, questionText string, queueP
 	if explicitName != "" {
 		return truncateThreadName(explicitName)
 	}
-	base := compactThreadNameBase(questionText)
+	base := compactThreadNameBase(normalizeOfficialQuestionText(questionText))
 	if base == "" {
 		base = "Question of the Day"
 	}
@@ -355,6 +353,13 @@ func buildOfficialPostName(publishDateUTC time.Time, questionText string, queueP
 		return truncateThreadName(fmt.Sprintf("%s - qotd %s", base, publishDateUTC.UTC().Format("2006-01-02")))
 	}
 	return truncateThreadName(base + " - qotd")
+}
+
+func buildOfficialPostStarterMessage() *discordgo.MessageSend {
+	return &discordgo.MessageSend{
+		Content:         forumThreadBlankMessage,
+		AllowedMentions: &discordgo.MessageAllowedMentions{},
+	}
 }
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {
@@ -551,6 +556,10 @@ func resolveForumThreadByID(ctx context.Context, session *discordgo.Session, for
 func compactThreadNameBase(questionText string) string {
 	questionText = strings.ReplaceAll(questionText, "\n", " ")
 	return strings.Join(strings.Fields(strings.TrimSpace(questionText)), " ")
+}
+
+func normalizeOfficialQuestionText(questionText string) string {
+	return strings.ToLower(strings.TrimSpace(questionText))
 }
 
 func truncateThreadName(name string) string {

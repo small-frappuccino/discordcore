@@ -259,7 +259,7 @@ func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	t.Parallel()
 
 	got := buildOfficialThreadName("What's your go-to comfort drink?", 1)
-	if got != "What's your go-to comfort drink? - qotd #1" {
+	if got != "what's your go-to comfort drink? - qotd #1" {
 		t.Fatalf("unexpected official thread title: %q", got)
 	}
 }

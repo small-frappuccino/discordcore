@@ -90,6 +90,24 @@ func TestQuestionListArtifactPublisherAppendsAndSealsThread(t *testing.T) {
 	if transport.lastSentMessage == nil || len(transport.lastSentMessage.Components) == 0 {
 		t.Fatalf("expected answer button on list entry message, got %+v", transport.lastSentMessage)
 	}
+	if transport.lastSentMessage == nil || len(transport.lastSentMessage.Embeds) != 1 {
+		t.Fatalf("expected one embed in list entry, got %+v", transport.lastSentMessage)
+	}
+	buttons := transport.lastSentMessage.Components
+	if len(buttons) == 0 {
+		t.Fatalf("expected answer button on list entry message, got %+v", transport.lastSentMessage)
+	}
+	row, ok := buttons[0].(discordgo.ActionsRow)
+	if !ok || len(row.Components) != 1 {
+		t.Fatalf("expected one answer button row, got %+v", buttons)
+	}
+	button, ok := row.Components[0].(discordgo.Button)
+	if !ok {
+		t.Fatalf("expected button component, got %+v", row.Components[0])
+	}
+	if button.Label != "answer" || button.Style != discordgo.SecondaryButton {
+		t.Fatalf("expected gray answer button, got %+v", button)
+	}
 }
 
 func TestQuestionListArtifactPublisherSealsExistingEntryWithoutAppend(t *testing.T) {

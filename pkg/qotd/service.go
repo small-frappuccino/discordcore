@@ -604,7 +604,7 @@ func derefTime(value *time.Time) time.Time {
 }
 
 func buildOfficialThreadName(questionText string, queuePosition int64) string {
-	title := strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(questionText), "\n", " ")), " ")
+	title := strings.Join(strings.Fields(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(questionText)), "\n", " ")), " ")
 	if title == "" {
 		title = "Question of the Day"
 	}
