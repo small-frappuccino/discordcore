@@ -88,8 +88,27 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 		"",
 	)
 
-	if got != "what's your go-to comfort drink? - qotd #1" {
+	if got != "question of the day #1" {
 		t.Fatalf("unexpected official post name: %q", got)
+	}
+}
+
+func TestBuildOfficialPostStarterMessageUsesEmbedWithoutComponents(t *testing.T) {
+	t.Parallel()
+
+	embed := buildOfficialQuestionEmbed(
+		"Final Mix",
+		62,
+		"What song best represents the current mood you are in?",
+		345,
+	)
+	message := buildOfficialPostStarterMessage(embed)
+
+	if message == nil || len(message.Embeds) != 1 {
+		t.Fatalf("expected one embed starter message, got %+v", message)
+	}
+	if len(message.Components) != 0 {
+		t.Fatalf("expected no components on official post starter message, got %+v", message.Components)
 	}
 }
 

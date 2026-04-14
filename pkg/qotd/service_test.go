@@ -259,7 +259,7 @@ func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	t.Parallel()
 
 	got := buildOfficialThreadName("What's your go-to comfort drink?", 1)
-	if got != "what's your go-to comfort drink? - qotd #1" {
+	if got != "question of the day #1" {
 		t.Fatalf("unexpected official thread title: %q", got)
 	}
 }
@@ -476,7 +476,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 0 {
 		t.Fatalf("expected no remaining available questions after manual publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Today question - qotd #2" {
+	if fake.publishedParams[0].ThreadName != "question of the day #2" {
 		t.Fatalf("expected manual publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 	if result.Question.Status != string(QuestionStatusUsed) {
@@ -823,7 +823,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Scheduled question - qotd #1" {
+	if fake.publishedParams[0].ThreadName != "question of the day #1" {
 		t.Fatalf("expected scheduled publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 

@@ -604,14 +604,10 @@ func derefTime(value *time.Time) time.Time {
 }
 
 func buildOfficialThreadName(questionText string, queuePosition int64) string {
-	title := strings.Join(strings.Fields(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(questionText)), "\n", " ")), " ")
-	if title == "" {
-		title = "Question of the Day"
-	}
 	if queuePosition > 0 {
-		return fmt.Sprintf("%s - qotd #%d", title, queuePosition)
+		return fmt.Sprintf("question of the day #%d", queuePosition)
 	}
-	return title + " - qotd"
+	return "question of the day"
 }
 
 func normalizeQuestionMutation(mutation QuestionMutation) (string, QuestionStatus, error) {

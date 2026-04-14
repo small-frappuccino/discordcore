@@ -16,7 +16,6 @@ const (
 	officialQuestionListThreadName    = "questions list!"
 	officialQuestionListThreadMessage = "you can send your answers to the questions through the embed here, by clicking on the 'answer' button!"
 	defaultThreadAutoArchiveMinutes   = 4320
-	forumThreadBlankMessage           = "\u200b"
 )
 
 type PublishOfficialPostParams struct {
@@ -109,7 +108,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.QuestionText, normalized.QueuePosition, normalized.ThreadName),
 				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
 			},
-			buildOfficialPostStarterMessage(),
+			buildOfficialPostStarterMessage(questionEmbed),
 		)
 		if err != nil {
 			return result.withPostURL(normalized.GuildID), fmt.Errorf("create qotd forum thread: %w", err)
@@ -342,22 +341,18 @@ func buildOfficialPostName(publishDateUTC time.Time, questionText string, queueP
 	if explicitName != "" {
 		return truncateThreadName(explicitName)
 	}
-	base := compactThreadNameBase(normalizeOfficialQuestionText(questionText))
-	if base == "" {
-		base = "Question of the Day"
-	}
 	if queuePosition > 0 {
-		return truncateThreadName(fmt.Sprintf("%s - qotd #%d", base, queuePosition))
+		return truncateThreadName(fmt.Sprintf("question of the day #%d", queuePosition))
 	}
 	if !publishDateUTC.IsZero() {
-		return truncateThreadName(fmt.Sprintf("%s - qotd %s", base, publishDateUTC.UTC().Format("2006-01-02")))
+		return truncateThreadName(fmt.Sprintf("question of the day %s", publishDateUTC.UTC().Format("2006-01-02")))
 	}
-	return truncateThreadName(base + " - qotd")
+	return "question of the day"
 }
 
-func buildOfficialPostStarterMessage() *discordgo.MessageSend {
+func buildOfficialPostStarterMessage(embed *discordgo.MessageEmbed) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
-		Content:         forumThreadBlankMessage,
+		Embeds:          []*discordgo.MessageEmbed{embed},
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	}
 }
