@@ -80,8 +80,7 @@ export interface QOTDDeck {
   id: string;
   name: string;
   enabled?: boolean;
-  question_channel_id?: string;
-  response_channel_id?: string;
+  forum_channel_id?: string;
 }
 
 export interface QOTDCollectorConfig {
@@ -137,11 +136,13 @@ export interface QOTDOfficialPost {
   publish_mode: string;
   publish_date_utc: string;
   state: string;
-  question_channel_id: string;
+  forum_channel_id: string;
+  question_list_thread_id?: string;
+  question_list_entry_message_id?: string;
   discord_thread_id?: string;
   discord_starter_message_id?: string;
+  answer_channel_id?: string;
   question_text_snapshot: string;
-  is_pinned: boolean;
   published_at?: string;
   grace_until: string;
   archive_at: string;

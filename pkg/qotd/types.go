@@ -35,15 +35,15 @@ const (
 	OfficialPostStateFailed         OfficialPostState = "failed"
 )
 
-type ReplyThreadState string
+type AnswerRecordState string
 
 const (
-	ReplyThreadStateProvisioning   ReplyThreadState = "provisioning"
-	ReplyThreadStateActive         ReplyThreadState = "active"
-	ReplyThreadStateArchiving      ReplyThreadState = "archiving"
-	ReplyThreadStateArchived       ReplyThreadState = "archived"
-	ReplyThreadStateMissingDiscord ReplyThreadState = "missing_discord"
-	ReplyThreadStateFailed         ReplyThreadState = "failed"
+	AnswerRecordStateProvisioning   AnswerRecordState = "provisioning"
+	AnswerRecordStateActive         AnswerRecordState = "active"
+	AnswerRecordStateArchiving      AnswerRecordState = "archiving"
+	AnswerRecordStateArchived       AnswerRecordState = "archived"
+	AnswerRecordStateMissingDiscord AnswerRecordState = "missing_discord"
+	AnswerRecordStateFailed         AnswerRecordState = "failed"
 )
 
 type AnswerWindow struct {

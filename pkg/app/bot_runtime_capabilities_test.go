@@ -54,9 +54,13 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 					},
 				},
 				QOTD: files.QOTDConfig{
-					Enabled:           true,
-					QuestionChannelID: "question-alice",
-					ResponseChannelID: "answers-alice",
+					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+					Decks: []files.QOTDDeckConfig{{
+						ID:             files.LegacyQOTDDefaultDeckID,
+						Name:           files.LegacyQOTDDefaultDeckName,
+						Enabled:        true,
+						ForumChannelID: "question-alice",
+					}},
 				},
 			},
 			{
@@ -75,9 +79,13 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 				UserPrune: files.UserPruneConfig{Enabled: true},
 				QOTD: files.QOTDConfig{
-					Enabled:           true,
-					QuestionChannelID: "question-yuzuha",
-					ResponseChannelID: "answers-yuzuha",
+					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+					Decks: []files.QOTDDeckConfig{{
+						ID:             files.LegacyQOTDDefaultDeckID,
+						Name:           files.LegacyQOTDDefaultDeckName,
+						Enabled:        true,
+						ForumChannelID: "question-yuzuha",
+					}},
 				},
 			},
 		},
@@ -151,9 +159,13 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 					},
 				},
 				QOTD: files.QOTDConfig{
-					Enabled:           true,
-					QuestionChannelID: "question-1",
-					ResponseChannelID: "answers-1",
+					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+					Decks: []files.QOTDDeckConfig{{
+						ID:             files.LegacyQOTDDefaultDeckID,
+						Name:           files.LegacyQOTDDefaultDeckName,
+						Enabled:        true,
+						ForumChannelID: "question-1",
+					}},
 				},
 			},
 			{
@@ -168,8 +180,12 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 					},
 				},
 				QOTD: files.QOTDConfig{
-					QuestionChannelID: "question-2",
-					ResponseChannelID: "answers-2",
+					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+					Decks: []files.QOTDDeckConfig{{
+						ID:             files.LegacyQOTDDefaultDeckID,
+						Name:           files.LegacyQOTDDefaultDeckName,
+						ForumChannelID: "question-2",
+					}},
 				},
 			},
 		},

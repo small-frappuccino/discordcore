@@ -282,13 +282,12 @@ type PartnerBoardConfig struct {
 	Partners []PartnerEntryConfig       `json:"partners,omitempty"`
 }
 
-// QOTDDeckConfig stores one named QOTD deck plus its delivery targets.
+// QOTDDeckConfig stores one named QOTD deck plus its forum delivery target.
 type QOTDDeckConfig struct {
-	ID                string `json:"id,omitempty"`
-	Name              string `json:"name,omitempty"`
-	Enabled           bool   `json:"enabled,omitempty"`
-	QuestionChannelID string `json:"question_channel_id,omitempty"`
-	ResponseChannelID string `json:"response_channel_id,omitempty"`
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Enabled        bool   `json:"enabled,omitempty"`
+	ForumChannelID string `json:"forum_channel_id,omitempty"`
 }
 
 // QOTDCollectorConfig stores channel-history collection settings used to
@@ -301,17 +300,10 @@ type QOTDCollectorConfig struct {
 }
 
 // QOTDConfig stores per-guild question-of-the-day deck settings.
-//
-// Legacy single-deck fields remain for backwards compatibility with older
-// persisted configs and are normalized into Decks by NormalizeQOTDConfig.
 type QOTDConfig struct {
 	ActiveDeckID string              `json:"active_deck_id,omitempty"`
 	Decks        []QOTDDeckConfig    `json:"decks,omitempty"`
 	Collector    QOTDCollectorConfig `json:"collector,omitempty"`
-
-	Enabled           bool   `json:"enabled,omitempty"`
-	QuestionChannelID string `json:"question_channel_id,omitempty"`
-	ResponseChannelID string `json:"response_channel_id,omitempty"`
 }
 
 // UserPruneConfig controls periodic user pruning per guild.

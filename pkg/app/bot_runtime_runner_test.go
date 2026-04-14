@@ -35,9 +35,13 @@ func TestInitializeBotRuntimeRegistersQOTDInteractionsWithoutCommands(t *testing
 					},
 				},
 				QOTD: files.QOTDConfig{
-					Enabled:           true,
-					QuestionChannelID: "question-1",
-					ResponseChannelID: "answers-1",
+					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+					Decks: []files.QOTDDeckConfig{{
+						ID:             files.LegacyQOTDDefaultDeckID,
+						Name:           files.LegacyQOTDDefaultDeckName,
+						Enabled:        true,
+						ForumChannelID: "question-1",
+					}},
 				},
 			},
 		}

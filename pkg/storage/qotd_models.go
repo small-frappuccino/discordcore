@@ -20,41 +20,50 @@ type QOTDQuestionRecord struct {
 }
 
 type QOTDOfficialPostRecord struct {
-	ID                      int64
-	GuildID                 string
-	DeckID                  string
-	DeckNameSnapshot        string
-	QuestionID              int64
-	PublishMode             string
-	PublishDateUTC          time.Time
-	State                   string
-	ForumChannelID          string
-	ResponseChannelID       string
-	DiscordThreadID         string
-	DiscordStarterMessageID string
-	QuestionTextSnapshot    string
-	IsPinned                bool
-	PublishedAt             *time.Time
-	GraceUntil              time.Time
-	ArchiveAt               time.Time
-	ClosedAt                *time.Time
-	ArchivedAt              *time.Time
-	LastReconciledAt        *time.Time
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
+	ID                         int64
+	GuildID                    string
+	DeckID                     string
+	DeckNameSnapshot           string
+	QuestionID                 int64
+	PublishMode                string
+	PublishDateUTC             time.Time
+	State                      string
+	ForumChannelID             string
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	DiscordThreadID            string
+	DiscordStarterMessageID    string
+	AnswerChannelID            string
+	QuestionTextSnapshot       string
+	PublishedAt                *time.Time
+	GraceUntil                 time.Time
+	ArchiveAt                  time.Time
+	ClosedAt                   *time.Time
+	ArchivedAt                 *time.Time
+	LastReconciledAt           *time.Time
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
 }
 
-type QOTDReplyThreadRecord struct {
+type QOTDForumSurfaceRecord struct {
+	ID                   int64
+	GuildID              string
+	DeckID               string
+	ForumChannelID       string
+	QuestionListThreadID string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type QOTDAnswerMessageRecord struct {
 	ID                      int64
 	GuildID                 string
 	OfficialPostID          int64
 	UserID                  string
 	State                   string
-	ForumChannelID          string
-	DiscordThreadID         string
-	DiscordStarterMessageID string
+	AnswerChannelID         string
+	DiscordMessageID        string
 	CreatedViaInteractionID string
-	ProvisioningNonce       string
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 	ClosedAt                *time.Time
@@ -65,7 +74,6 @@ type QOTDThreadArchiveRecord struct {
 	ID              int64
 	GuildID         string
 	OfficialPostID  int64
-	ReplyThreadID   *int64
 	SourceKind      string
 	DiscordThreadID string
 	ArchivedAt      time.Time

@@ -33,26 +33,38 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 			GuildID:       "g-enabled",
 			BotInstanceID: "alice",
 			QOTD: files.QOTDConfig{
-				Enabled:           true,
-				QuestionChannelID: "question-enabled",
-				ResponseChannelID: "answers-enabled",
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:             files.LegacyQOTDDefaultDeckID,
+					Name:           files.LegacyQOTDDefaultDeckName,
+					Enabled:        true,
+					ForumChannelID: "question-enabled",
+				}},
 			},
 		},
 		{
 			GuildID:       "g-configured-disabled",
 			BotInstanceID: "alice",
 			QOTD: files.QOTDConfig{
-				QuestionChannelID: "question-disabled",
-				ResponseChannelID: "answers-disabled",
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:             files.LegacyQOTDDefaultDeckID,
+					Name:           files.LegacyQOTDDefaultDeckName,
+					ForumChannelID: "question-disabled",
+				}},
 			},
 		},
 		{
 			GuildID:       "g-other-runtime",
 			BotInstanceID: "other",
 			QOTD: files.QOTDConfig{
-				Enabled:           true,
-				QuestionChannelID: "question-other",
-				ResponseChannelID: "answers-other",
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:             files.LegacyQOTDDefaultDeckID,
+					Name:           files.LegacyQOTDDefaultDeckName,
+					Enabled:        true,
+					ForumChannelID: "question-other",
+				}},
 			},
 		},
 		{

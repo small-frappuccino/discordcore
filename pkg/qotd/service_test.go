@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,24 +15,72 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
+var errFakePublishFailed = errors.New("fake publish failed")
+
 type fakePublisher struct {
-	publishedParams []discordqotd.PublishOfficialPostParams
-	answerParams    []discordqotd.UpsertAnswerMessageParams
-	threadStates    map[string]discordqotd.ThreadState
-	fetchCalls      []string
-	threadMessages  map[string][]discordqotd.ArchivedMessage
-	channelMessages map[string][]discordqotd.ArchivedMessage
-	fetchErrs       map[string]error
+	publishedParams  []discordqotd.PublishOfficialPostParams
+	publishResponses []fakePublishResponse
+	answerParams     []discordqotd.UpsertAnswerMessageParams
+	threadStates     map[string]discordqotd.ThreadState
+	fetchCalls       []string
+	threadMessages   map[string][]discordqotd.ArchivedMessage
+	channelMessages  map[string][]discordqotd.ArchivedMessage
+	fetchErrs        map[string]error
+}
+
+type fakePublishResponse struct {
+	result *discordqotd.PublishedOfficialPost
+	err    error
 }
 
 func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
 	p.publishedParams = append(p.publishedParams, params)
-	messageID := "message-" + timePtrString(params.OfficialPostID)
+	if len(p.publishResponses) > 0 {
+		response := p.publishResponses[0]
+		p.publishResponses = p.publishResponses[1:]
+		if response.result == nil {
+			return nil, response.err
+		}
+		out := *response.result
+		return &out, response.err
+	}
+	return defaultFakePublishedOfficialPost(params), nil
+}
+
+func defaultFakePublishedOfficialPost(params discordqotd.PublishOfficialPostParams) *discordqotd.PublishedOfficialPost {
+	listThreadID := strings.TrimSpace(params.QuestionListThreadID)
+	if listThreadID == "" {
+		listThreadID = "questions-list-thread"
+	}
+	listEntryID := strings.TrimSpace(params.QuestionListEntryMessageID)
+	if listEntryID == "" {
+		listEntryID = "list-entry-" + timePtrString(params.OfficialPostID)
+	}
+	threadID := strings.TrimSpace(params.OfficialThreadID)
+	if threadID == "" {
+		threadID = "thread-" + timePtrString(params.OfficialPostID)
+	}
+	messageID := strings.TrimSpace(params.OfficialStarterMessageID)
+	if messageID == "" {
+		messageID = "message-" + timePtrString(params.OfficialPostID)
+	}
+	answerChannelID := strings.TrimSpace(params.OfficialAnswerChannelID)
+	if answerChannelID == "" {
+		answerChannelID = threadID
+	}
+	publishedAt := params.ExistingPublishedAt
+	if publishedAt.IsZero() {
+		publishedAt = time.Date(params.PublishDateUTC.Year(), params.PublishDateUTC.Month(), params.PublishDateUTC.Day(), 12, 43, 0, 0, time.UTC)
+	}
 	return &discordqotd.PublishedOfficialPost{
-		StarterMessageID: messageID,
-		PublishedAt:      time.Date(params.PublishDateUTC.Year(), params.PublishDateUTC.Month(), params.PublishDateUTC.Day(), 12, 43, 0, 0, time.UTC),
-		PostURL:          discordqotd.BuildMessageJumpURL(params.GuildID, params.QuestionChannelID, messageID),
-	}, nil
+		QuestionListThreadID:       listThreadID,
+		QuestionListEntryMessageID: listEntryID,
+		ThreadID:                   threadID,
+		StarterMessageID:           messageID,
+		AnswerChannelID:            answerChannelID,
+		PublishedAt:                publishedAt,
+		PostURL:                    discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
+	}
 }
 
 func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, threadID string, state discordqotd.ThreadState) error {
@@ -49,9 +98,9 @@ func (p *fakePublisher) UpsertAnswerMessage(_ context.Context, _ *discordgo.Sess
 		messageID = strings.TrimSpace(params.ExistingMessageID)
 	}
 	return &discordqotd.UpsertedAnswerMessage{
-		ChannelID:  params.ResponseChannelID,
+		ChannelID:  params.AnswerChannelID,
 		MessageID:  messageID,
-		MessageURL: discordqotd.BuildMessageJumpURL(params.GuildID, params.ResponseChannelID, messageID),
+		MessageURL: discordqotd.BuildMessageJumpURL(params.GuildID, params.AnswerChannelID, messageID),
 		Updated:    strings.TrimSpace(params.ExistingMessageID) != "",
 	}, nil
 }
@@ -171,6 +220,15 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 	}
 }
 
+func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
+	t.Parallel()
+
+	got := buildOfficialThreadName("What's your go-to comfort drink?", 1)
+	if got != "What's your go-to comfort drink? - QOTD #1" {
+		t.Fatalf("unexpected official thread title: %q", got)
+	}
+}
+
 func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 	service, store, _ := newTestQOTDService(t)
 
@@ -178,18 +236,16 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{
 			{
-				ID:                files.LegacyQOTDDefaultDeckID,
-				Name:              files.LegacyQOTDDefaultDeckName,
-				Enabled:           true,
-				QuestionChannelID: "question-channel-1",
-				ResponseChannelID: "answers-channel-1",
+				ID:             files.LegacyQOTDDefaultDeckID,
+				Name:           files.LegacyQOTDDefaultDeckName,
+				Enabled:        true,
+				ForumChannelID: "question-channel-1",
 			},
 			{
-				ID:                "deck-b",
-				Name:              "Deck B",
-				Enabled:           false,
-				QuestionChannelID: "question-channel-2",
-				ResponseChannelID: "answers-channel-2",
+				ID:             "deck-b",
+				Name:           "Deck B",
+				Enabled:        false,
+				ForumChannelID: "question-channel-2",
 			},
 		},
 	}); err != nil {
@@ -217,11 +273,10 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{
 			{
-				ID:                files.LegacyQOTDDefaultDeckID,
-				Name:              files.LegacyQOTDDefaultDeckName,
-				Enabled:           true,
-				QuestionChannelID: "question-channel-1",
-				ResponseChannelID: "answers-channel-1",
+				ID:             files.LegacyQOTDDefaultDeckID,
+				Name:           files.LegacyQOTDDefaultDeckName,
+				Enabled:        true,
+				ForumChannelID: "question-channel-1",
 			},
 		},
 	})
@@ -257,9 +312,13 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	}
 
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: "123456789012345678",
-		ResponseChannelID: "223456789012345679",
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "123456789012345678",
+		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -290,20 +349,18 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 		PublishDateUTC:       time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC),
 		State:                string(OfficialPostStateCurrent),
 		ForumChannelID:       "123456789012345678",
-		ResponseChannelID:    "223456789012345679",
 		QuestionTextSnapshot: oldQuestion.Body,
-		IsPinned:             true,
 		GraceUntil:           oldLifecycle.BecomesPreviousAt,
 		ArchiveAt:            oldLifecycle.ArchiveAt,
 	})
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(old) failed: %v", err)
 	}
-	oldOfficial, err = store.FinalizeQOTDOfficialPost(context.Background(), oldOfficial.ID, "thread-previous", "message-previous", oldUsedAt)
+	oldOfficial, err = store.FinalizeQOTDOfficialPost(context.Background(), oldOfficial.ID, "questions-list-thread", "questions-list-entry-previous", "thread-previous", "message-previous", "thread-previous", oldUsedAt)
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost(old) failed: %v", err)
 	}
-	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), oldOfficial.ID, string(OfficialPostStateCurrent), true, nil, nil); err != nil {
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), oldOfficial.ID, string(OfficialPostStateCurrent), nil, nil); err != nil {
 		t.Fatalf("UpdateQOTDOfficialPostState(old) failed: %v", err)
 	}
 
@@ -330,8 +387,8 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 0 {
 		t.Fatalf("expected no remaining available questions after manual publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].Pinned {
-		t.Fatalf("expected manual publish to stay unpinned, got %+v", fake.publishedParams[0])
+	if fake.publishedParams[0].ThreadName != "Today question - QOTD #2" {
+		t.Fatalf("expected manual publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 	if result.Question.Status != string(QuestionStatusUsed) {
 		t.Fatalf("expected published question to be marked used, got %+v", result.Question)
@@ -342,24 +399,20 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if result.OfficialPost.PublishMode != string(PublishModeManual) {
 		t.Fatalf("expected manual publish mode, got %+v", result.OfficialPost)
 	}
-	if result.OfficialPost.IsPinned {
-		t.Fatalf("expected manual official post to remain unpinned, got %+v", result.OfficialPost)
-	}
-
 	currentState, ok := fake.threadStates["thread-previous"]
 	if !ok {
 		t.Fatalf("expected scheduled thread state update, got %+v", fake.threadStates)
 	}
-	if !currentState.Pinned || !currentState.Locked || currentState.Archived {
-		t.Fatalf("expected scheduled current thread to stay pinned locked and unarchived, got %+v", currentState)
+	if currentState.Pinned || currentState.Locked || currentState.Archived {
+		t.Fatalf("expected scheduled current thread to stay open and unpinned, got %+v", currentState)
 	}
 
 	previousOfficial, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate(previous) failed: %v", err)
 	}
-	if previousOfficial == nil || previousOfficial.State != string(OfficialPostStateCurrent) || !previousOfficial.IsPinned {
-		t.Fatalf("expected scheduled official post to remain current/pinned before the boundary, got %+v", previousOfficial)
+	if previousOfficial == nil || previousOfficial.State != string(OfficialPostStateCurrent) {
+		t.Fatalf("expected scheduled official post to remain current and unpinned before the boundary, got %+v", previousOfficial)
 	}
 }
 
@@ -370,9 +423,13 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	}
 
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: "question-channel-1",
-		ResponseChannelID: "answers-channel-1",
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "question-channel-1",
+		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -397,7 +454,6 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateCurrent),
 		ForumChannelID:       "question-channel-1",
-		ResponseChannelID:    "response-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -405,11 +461,11 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
-	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "", "question-message-1", publishedAt)
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "question-entry-1", "", "question-message-1", "response-channel-1", publishedAt)
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}
-	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStateCurrent), false, nil, nil); err != nil {
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStateCurrent), nil, nil); err != nil {
 		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
 	}
 
@@ -437,21 +493,17 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	if fake.answerParams[0].DeckName != files.LegacyQOTDDefaultDeckName {
 		t.Fatalf("expected answer publisher params to carry deck name snapshot, got %+v", fake.answerParams[0])
 	}
-	if fake.answerParams[0].QuestionNumber != question.QueuePosition {
-		t.Fatalf("expected answer publisher params to carry question number, got %+v", fake.answerParams[0])
+	if got := fake.answerParams[0].PublishDateUTC; !got.Equal(publishDate) {
+		t.Fatalf("expected answer publisher params to carry publish date, got %v", got)
 	}
 
-	stored, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-7")
+	stored, err := store.GetQOTDAnswerMessageByOfficialPostAndUser(context.Background(), official.ID, "user-7")
 	if err != nil {
-		t.Fatalf("GetQOTDReplyThreadByOfficialPostAndUser() failed: %v", err)
+		t.Fatalf("GetQOTDAnswerMessageByOfficialPostAndUser() failed: %v", err)
 	}
-	if stored == nil || stored.State != string(ReplyThreadStateActive) || stored.DiscordStarterMessageID == "" {
+	if stored == nil || stored.State != string(AnswerRecordStateActive) || stored.DiscordMessageID == "" {
 		t.Fatalf("expected active stored answer record, got %+v", stored)
 	}
-	if stored.DiscordThreadID != "" {
-		t.Fatalf("expected message-based answers to avoid thread ids, got %+v", stored)
-	}
-
 	second, err := service.SubmitAnswer(context.Background(), &discordgo.Session{}, discordqotd.SubmitAnswerParams{
 		GuildID:         "g1",
 		OfficialPostID:  official.ID,
@@ -470,8 +522,88 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	if second.MessageURL != first.MessageURL {
 		t.Fatalf("expected updated answer to keep the same message url, got %q want %q", second.MessageURL, first.MessageURL)
 	}
-	if strings.TrimSpace(stored.ForumChannelID) != "answers-channel-1" {
+	if strings.TrimSpace(stored.AnswerChannelID) != "response-channel-1" {
 		t.Fatalf("expected stored answer record to track the response channel, got %+v", stored)
+	}
+}
+
+func TestServiceSubmitAnswerTargetsOfficialThreadWhenAvailable(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "question-channel-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Thread-backed question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	publishedAt := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
+	lifecycle := EvaluateOfficialPost(publishDate, service.clock())
+	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeScheduled),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStateCurrent),
+		ForumChannelID:       "question-channel-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "question-entry-1", "official-thread-1", "question-message-1", "official-thread-1", publishedAt)
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStateCurrent), nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
+	}
+
+	result, err := service.SubmitAnswer(context.Background(), &discordgo.Session{}, discordqotd.SubmitAnswerParams{
+		GuildID:         "g1",
+		OfficialPostID:  official.ID,
+		UserID:          "user-7",
+		UserDisplayName: "Answerer",
+		InteractionID:   "interaction-1",
+		AnswerText:      "Thread answer",
+	})
+	if err != nil {
+		t.Fatalf("SubmitAnswer() failed: %v", err)
+	}
+	if result.ChannelID != "official-thread-1" {
+		t.Fatalf("expected answer to target the official thread, got %+v", result)
+	}
+	if len(fake.answerParams) != 1 || fake.answerParams[0].AnswerChannelID != "official-thread-1" {
+		t.Fatalf("expected publisher params to target the official thread, got %+v", fake.answerParams)
+	}
+
+	stored, err := store.GetQOTDAnswerMessageByOfficialPostAndUser(context.Background(), official.ID, "user-7")
+	if err != nil {
+		t.Fatalf("GetQOTDAnswerMessageByOfficialPostAndUser() failed: %v", err)
+	}
+	if stored == nil || strings.TrimSpace(stored.AnswerChannelID) != "official-thread-1" {
+		t.Fatalf("expected stored answer record to track the official thread id, got %+v", stored)
 	}
 }
 
@@ -561,9 +693,13 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	}
 
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: "question-channel-1",
-		ResponseChannelID: "answers-channel-1",
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "question-channel-1",
+		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -598,16 +734,22 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if !fake.publishedParams[0].Pinned {
-		t.Fatalf("expected scheduled publish to pin the current slot thread, got %+v", fake.publishedParams[0])
+	if fake.publishedParams[0].ThreadName != "Scheduled question - QOTD #1" {
+		t.Fatalf("expected scheduled publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 
 	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if official == nil || official.State != string(OfficialPostStateCurrent) || !official.IsPinned {
-		t.Fatalf("expected current pinned scheduled official post, got %+v", official)
+	if official == nil || official.State != string(OfficialPostStateCurrent) {
+		t.Fatalf("expected current unpinned scheduled official post, got %+v", official)
+	}
+	if official.DiscordThreadID == "" {
+		t.Fatalf("expected scheduled publish to persist the official thread id, got %+v", official)
+	}
+	if fake.threadStates[official.DiscordThreadID] != (discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}) {
+		t.Fatalf("expected the daily thread to remain open for answers, got %+v", fake.threadStates[official.DiscordThreadID])
 	}
 
 	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
@@ -619,7 +761,200 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	}
 }
 
-func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) {
+func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "123456789012345678",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Recoverable scheduled question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	fake.publishResponses = []fakePublishResponse{
+		{
+			result: &discordqotd.PublishedOfficialPost{
+				QuestionListThreadID: "questions-list-thread",
+				ThreadID:             "thread-partial",
+				StarterMessageID:     "starter-partial",
+				AnswerChannelID:      "thread-partial",
+				PostURL:              discordqotd.BuildThreadJumpURL("g1", "thread-partial"),
+			},
+			err: errFakePublishFailed,
+		},
+		{
+			result: &discordqotd.PublishedOfficialPost{
+				QuestionListThreadID:       "questions-list-thread",
+				QuestionListEntryMessageID: "list-entry-recovered",
+				ThreadID:                   "thread-partial",
+				StarterMessageID:           "starter-partial",
+				AnswerChannelID:            "thread-partial",
+				PublishedAt:                time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC),
+				PostURL:                    discordqotd.BuildThreadJumpURL("g1", "thread-partial"),
+			},
+		},
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err == nil || !strings.Contains(err.Error(), errFakePublishFailed.Error()) {
+		t.Fatalf("expected publish failure to surface, got published=%v err=%v", published, err)
+	}
+
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	stored, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", publishDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(partial) failed: %v", err)
+	}
+	if stored == nil || stored.State != string(OfficialPostStateFailed) {
+		t.Fatalf("expected failed provisioning record to remain stored, got %+v", stored)
+	}
+	if stored.DiscordThreadID != "thread-partial" || stored.DiscordStarterMessageID != "starter-partial" {
+		t.Fatalf("expected partial discord artifacts to persist, got %+v", stored)
+	}
+	if strings.TrimSpace(stored.QuestionListEntryMessageID) != "" {
+		t.Fatalf("expected list entry to remain missing after partial failure, got %+v", stored)
+	}
+
+	reservedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(reserved) failed: %v", err)
+	}
+	if reservedQuestion == nil || reservedQuestion.Status != string(QuestionStatusReserved) {
+		t.Fatalf("expected question to stay reserved during failed provisioning, got %+v", reservedQuestion)
+	}
+
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(recovery) failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected recovery publish to report work performed")
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected two publish attempts, got %d", len(fake.publishedParams))
+	}
+	if fake.publishedParams[1].OfficialThreadID != "thread-partial" || fake.publishedParams[1].OfficialStarterMessageID != "starter-partial" {
+		t.Fatalf("expected recovery attempt to reuse persisted discord artifacts, got %+v", fake.publishedParams[1])
+	}
+
+	recovered, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", publishDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(recovered) failed: %v", err)
+	}
+	if recovered == nil || recovered.State != string(OfficialPostStateCurrent) || recovered.ID != stored.ID {
+		t.Fatalf("expected same official post to recover into current state, got %+v", recovered)
+	}
+	if recovered.QuestionListEntryMessageID != "list-entry-recovered" || recovered.PublishedAt == nil {
+		t.Fatalf("expected recovered official post to finalize list entry and published timestamp, got %+v", recovered)
+	}
+
+	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(used) failed: %v", err)
+	}
+	if usedQuestion == nil || usedQuestion.Status != string(QuestionStatusUsed) || usedQuestion.UsedAt == nil {
+		t.Fatalf("expected recovered publish to mark question used, got %+v", usedQuestion)
+	}
+}
+
+func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Pending recovery question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+	question.Status = string(QuestionStatusReserved)
+	if question, err = store.UpdateQOTDQuestion(context.Background(), *question); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(reserved) failed: %v", err)
+	}
+
+	lifecycle := EvaluateOfficialPost(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC), service.clock())
+	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:                    "g1",
+		DeckID:                     files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:           files.LegacyQOTDDefaultDeckName,
+		QuestionID:                 question.ID,
+		PublishMode:                string(PublishModeScheduled),
+		PublishDateUTC:             time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		State:                      string(OfficialPostStateFailed),
+		ForumChannelID:             "123456789012345678",
+		QuestionListThreadID:       "questions-list-thread",
+		DiscordThreadID:            "thread-recover",
+		DiscordStarterMessageID:    "starter-recover",
+		AnswerChannelID:            "thread-recover",
+		QuestionTextSnapshot:       question.Body,
+		GraceUntil:                 lifecycle.BecomesPreviousAt,
+		ArchiveAt:                  lifecycle.ArchiveAt,
+		QuestionListEntryMessageID: "",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	fake.publishResponses = []fakePublishResponse{{
+		result: &discordqotd.PublishedOfficialPost{
+			QuestionListThreadID:       "questions-list-thread",
+			QuestionListEntryMessageID: "list-entry-recovered",
+			ThreadID:                   "thread-recover",
+			StarterMessageID:           "starter-recover",
+			AnswerChannelID:            "thread-recover",
+			PublishedAt:                time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC),
+			PostURL:                    discordqotd.BuildThreadJumpURL("g1", "thread-recover"),
+		},
+	}}
+
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() failed: %v", err)
+	}
+
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected one recovery publish attempt, got %d", len(fake.publishedParams))
+	}
+	if fake.publishedParams[0].OfficialThreadID != "thread-recover" || fake.publishedParams[0].QuestionListThreadID != "questions-list-thread" {
+		t.Fatalf("expected reconcile to reuse stored artifacts, got %+v", fake.publishedParams[0])
+	}
+
+	recovered, err := store.GetQOTDOfficialPostByID(context.Background(), official.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByID() failed: %v", err)
+	}
+	if recovered == nil || recovered.State != string(OfficialPostStateCurrent) || recovered.QuestionListEntryMessageID != "list-entry-recovered" {
+		t.Fatalf("expected reconcile to finalize pending official post, got %+v", recovered)
+	}
+
+	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if usedQuestion == nil || usedQuestion.Status != string(QuestionStatusUsed) || usedQuestion.UsedAt == nil {
+		t.Fatalf("expected reconcile to mark the recovered question used, got %+v", usedQuestion)
+	}
+}
+
+func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T) {
 	service, store, fake := newTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -632,15 +967,6 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) 
 				AuthorNameSnapshot: "Author One",
 				Content:            "Official archive snapshot",
 				CreatedAt:          time.Date(2026, 4, 1, 12, 43, 0, 0, time.UTC),
-			},
-		},
-		"reply-thread-archive": {
-			{
-				MessageID:          "reply-message-1",
-				AuthorID:           "user-2",
-				AuthorNameSnapshot: "Answerer",
-				Content:            "Reply archive snapshot",
-				CreatedAt:          time.Date(2026, 4, 2, 14, 0, 0, 0, time.UTC),
 			},
 		},
 	}
@@ -665,7 +991,6 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) 
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStatePrevious),
 		ForumChannelID:       "forum-1",
-		ResponseChannelID:    "response-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -673,30 +998,30 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
-	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "official-thread-archive", "official-message-archive", publishedAt)
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "questions-list-entry-archive", "official-thread-archive", "official-message-archive", "official-thread-archive", publishedAt)
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}
-	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStatePrevious), false, nil, nil); err != nil {
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(OfficialPostStatePrevious), nil, nil); err != nil {
 		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
 	}
 
-	replyThread, err := store.CreateQOTDReplyThreadProvisioning(context.Background(), storage.QOTDReplyThreadRecord{
-		GuildID:        "g1",
-		OfficialPostID: official.ID,
-		UserID:         "user-2",
-		State:          string(ReplyThreadStateActive),
-		ForumChannelID: "forum-1",
+	answerRecord, err := store.CreateQOTDAnswerMessage(context.Background(), storage.QOTDAnswerMessageRecord{
+		GuildID:         "g1",
+		OfficialPostID:  official.ID,
+		UserID:          "user-2",
+		State:           string(AnswerRecordStateActive),
+		AnswerChannelID: "official-thread-archive",
 	})
 	if err != nil {
-		t.Fatalf("CreateQOTDReplyThreadProvisioning() failed: %v", err)
+		t.Fatalf("CreateQOTDAnswerMessage() failed: %v", err)
 	}
-	replyThread, err = store.FinalizeQOTDReplyThread(context.Background(), replyThread.ID, "reply-thread-archive", "reply-message-starter")
+	answerRecord, err = store.FinalizeQOTDAnswerMessage(context.Background(), answerRecord.ID, "reply-message-starter")
 	if err != nil {
-		t.Fatalf("FinalizeQOTDReplyThread() failed: %v", err)
+		t.Fatalf("FinalizeQOTDAnswerMessage() failed: %v", err)
 	}
-	if _, err := store.UpdateQOTDReplyThreadState(context.Background(), replyThread.ID, string(ReplyThreadStateActive), nil, nil); err != nil {
-		t.Fatalf("UpdateQOTDReplyThreadState() failed: %v", err)
+	if _, err := store.UpdateQOTDAnswerMessageState(context.Background(), answerRecord.ID, string(AnswerRecordStateActive), nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDAnswerMessageState() failed: %v", err)
 	}
 
 	if _, err := store.CreateQOTDThreadArchive(context.Background(), storage.QOTDThreadArchiveRecord{
@@ -721,12 +1046,12 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) 
 		t.Fatalf("expected archived official post after reconcile, got %+v", updatedOfficial)
 	}
 
-	updatedReply, err := store.GetQOTDReplyThreadByOfficialPostAndUser(context.Background(), official.ID, "user-2")
+	updatedReply, err := store.GetQOTDAnswerMessageByOfficialPostAndUser(context.Background(), official.ID, "user-2")
 	if err != nil {
-		t.Fatalf("GetQOTDReplyThreadByOfficialPostAndUser() failed: %v", err)
+		t.Fatalf("GetQOTDAnswerMessageByOfficialPostAndUser() failed: %v", err)
 	}
-	if updatedReply == nil || updatedReply.State != string(ReplyThreadStateArchived) || updatedReply.ArchivedAt == nil {
-		t.Fatalf("expected archived reply thread after reconcile, got %+v", updatedReply)
+	if updatedReply == nil || updatedReply.State != string(AnswerRecordStateArchived) || updatedReply.ArchivedAt == nil {
+		t.Fatalf("expected archived answer record after reconcile, got %+v", updatedReply)
 	}
 
 	officialArchive, err := store.GetQOTDThreadArchiveByThreadID(context.Background(), "official-thread-archive")
@@ -736,28 +1061,17 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndReplyThreads(t *testing.T) 
 	if officialArchive == nil {
 		t.Fatal("expected official archive record to exist after reconcile")
 	}
-	replyArchive, err := store.GetQOTDThreadArchiveByThreadID(context.Background(), "reply-thread-archive")
-	if err != nil {
-		t.Fatalf("GetQOTDThreadArchiveByThreadID(reply) failed: %v", err)
-	}
-	if replyArchive == nil {
-		t.Fatal("expected reply archive record to exist after reconcile")
-	}
-
-	if len(fake.fetchCalls) != 2 {
-		t.Fatalf("expected reconcile to fetch both official and reply thread archives, got %v", fake.fetchCalls)
+	if len(fake.fetchCalls) != 1 {
+		t.Fatalf("expected reconcile to fetch the official thread archive only, got %v", fake.fetchCalls)
 	}
 	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
 		t.Fatalf("expected archived official thread state, got %+v", fake.threadStates["official-thread-archive"])
-	}
-	if fake.threadStates["reply-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
-		t.Fatalf("expected archived reply thread state, got %+v", fake.threadStates["reply-thread-archive"])
 	}
 
 	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
 		t.Fatalf("ReconcileGuild(second) failed: %v", err)
 	}
-	if len(fake.fetchCalls) != 2 {
+	if len(fake.fetchCalls) != 1 {
 		t.Fatalf("expected archived posts to be skipped on repeat reconcile, got fetches=%v", fake.fetchCalls)
 	}
 }

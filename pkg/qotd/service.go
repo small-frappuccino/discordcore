@@ -74,7 +74,7 @@ type Service struct {
 	store               *storage.Store
 	publisher           Publisher
 	now                 func() time.Time
-	replyThreadLocks    sync.Map
+	answerRecordLocks   sync.Map
 	guildLifecycleLocks sync.Map
 }
 
@@ -350,6 +350,14 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return nil, ErrQOTDDisabled
 	}
+	if recovered, err := s.resumeOldestPendingOfficialPost(ctx, guildID, session, now); err != nil {
+		return nil, err
+	} else if recovered != nil {
+		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+			return nil, err
+		}
+		return recovered, nil
+	}
 
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)
 	if err != nil {
@@ -375,8 +383,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		PublishMode:          string(PublishModeManual),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       strings.TrimSpace(deck.QuestionChannelID),
-		ResponseChannelID:    strings.TrimSpace(deck.ResponseChannelID),
+		ForumChannelID:       strings.TrimSpace(deck.ForumChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -388,43 +395,19 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		return nil, err
 	}
 
-	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
-		GuildID:            guildID,
-		OfficialPostID:     provisioned.ID,
-		DeckName:           deck.Name,
-		AvailableQuestions: availableQuestions,
-		QueuePosition:      question.QueuePosition,
-		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
-		QuestionText:       question.Body,
-		PublishDateUTC:     publishDate,
-		ThreadName:         buildManualThreadName(now),
-		Pinned:             false,
-	})
-	if err != nil {
-		if deleteErr := s.store.DeleteQOTDOfficialPost(ctx, provisioned.ID); deleteErr != nil {
-			log.ApplicationLogger().Warn("QOTD provisioning cleanup failed", "guildID", guildID, "officialPostID", provisioned.ID, "err", deleteErr)
-		}
-		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
-		}
-		return nil, err
-	}
-
-	finalized, err := s.store.FinalizeQOTDOfficialPost(ctx, provisioned.ID, published.ThreadID, published.StarterMessageID, published.PublishedAt)
+	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(
+		ctx,
+		session,
+		*provisioned,
+		question,
+		availableQuestions,
+		buildOfficialThreadName(question.Body, question.QueuePosition),
+		now,
+	)
 	if err != nil {
 		return nil, err
 	}
-	finalizedState := StateWithinWindow(finalized.GraceUntil, finalized.ArchiveAt, now)
-	finalized, err = s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(finalizedState), false, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	question.Status = string(QuestionStatusUsed)
-	question.UsedAt = &published.PublishedAt
-	if updatedQuestion, err := s.store.UpdateQOTDQuestion(ctx, *question); err != nil {
-		return nil, err
-	} else {
+	if updatedQuestion != nil {
 		question = updatedQuestion
 	}
 
@@ -435,7 +418,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	return &PublishResult{
 		Question:     *question,
 		OfficialPost: *finalized,
-		PostURL:      published.PostURL,
+		PostURL:      postURL,
 	}, nil
 }
 
@@ -459,6 +442,9 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 	if officialPost == nil || officialPost.GuildID != normalized.GuildID {
 		return nil, ErrOfficialPostNotFound
 	}
+	if !isOfficialPostPublished(*officialPost) {
+		return nil, ErrReplyThreadUnavailable
+	}
 
 	lifecycle := EvaluateOfficialPostWindow(
 		officialPost.PublishDateUTC,
@@ -471,55 +457,36 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		return nil, ErrAnswerWindowClosed
 	}
 
-	responseChannelID := strings.TrimSpace(officialPost.ResponseChannelID)
-	if responseChannelID == "" {
-		cfg, err := s.configManager.GetQOTDConfig(officialPost.GuildID)
-		if err != nil {
-			return nil, err
-		}
-		if deck, ok := cfg.DeckByID(officialPost.DeckID); ok {
-			responseChannelID = strings.TrimSpace(deck.ResponseChannelID)
-		} else if activeDeck, ok := cfg.ActiveDeck(); ok {
-			responseChannelID = strings.TrimSpace(activeDeck.ResponseChannelID)
-		}
+	defaultAnswerChannelID := strings.TrimSpace(officialPost.AnswerChannelID)
+	if defaultAnswerChannelID == "" {
+		defaultAnswerChannelID = strings.TrimSpace(officialPost.DiscordThreadID)
 	}
-	if responseChannelID == "" {
+	if defaultAnswerChannelID == "" {
 		return nil, ErrReplyThreadUnavailable
 	}
 
-	questionNumber := int64(0)
-	if officialPost.QuestionID > 0 {
-		question, err := s.store.GetQOTDQuestion(ctx, officialPost.GuildID, officialPost.QuestionID)
-		if err != nil {
-			return nil, err
-		}
-		if question != nil {
-			questionNumber = question.QueuePosition
-		}
-	}
-
-	lock := s.replyThreadLock(officialPost.ID, normalized.UserID)
+	lock := s.answerRecordLock(officialPost.ID, normalized.UserID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	record, err := s.store.GetQOTDReplyThreadByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
+	record, err := s.store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
 	if err != nil {
 		return nil, err
 	}
 	if record == nil {
-		record, err = s.store.CreateQOTDReplyThreadProvisioning(ctx, storage.QOTDReplyThreadRecord{
+		record, err = s.store.CreateQOTDAnswerMessage(ctx, storage.QOTDAnswerMessageRecord{
 			GuildID:                 officialPost.GuildID,
 			OfficialPostID:          officialPost.ID,
 			UserID:                  normalized.UserID,
-			State:                   string(ReplyThreadStateActive),
-			ForumChannelID:          responseChannelID,
+			State:                   string(AnswerRecordStateActive),
+			AnswerChannelID:         defaultAnswerChannelID,
 			CreatedViaInteractionID: normalized.InteractionID,
 		})
 		if err != nil {
 			if !isQOTDUniqueConstraintError(err) {
 				return nil, err
 			}
-			record, err = s.store.GetQOTDReplyThreadByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
+			record, err = s.store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
 			if err != nil {
 				return nil, err
 			}
@@ -529,36 +496,36 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 		return nil, ErrReplyThreadUnavailable
 	}
 
-	targetChannelID := strings.TrimSpace(record.ForumChannelID)
+	targetChannelID := strings.TrimSpace(record.AnswerChannelID)
 	if targetChannelID == "" {
-		targetChannelID = responseChannelID
+		targetChannelID = defaultAnswerChannelID
 	}
 
 	upserted, err := s.publisher.UpsertAnswerMessage(ctx, session, discordqotd.UpsertAnswerMessageParams{
 		GuildID:           officialPost.GuildID,
 		OfficialPostID:    officialPost.ID,
 		DeckName:          officialPost.DeckNameSnapshot,
-		QuestionNumber:    questionNumber,
-		ResponseChannelID: targetChannelID,
+		PublishDateUTC:    officialPost.PublishDateUTC,
+		AnswerChannelID:   targetChannelID,
 		QuestionText:      officialPost.QuestionTextSnapshot,
 		QuestionURL:       officialPostJumpURL(*officialPost),
 		AnswerText:        normalized.AnswerText,
 		UserID:            normalized.UserID,
 		UserDisplayName:   normalized.UserDisplayName,
 		UserAvatarURL:     normalized.UserAvatarURL,
-		ExistingMessageID: strings.TrimSpace(record.DiscordStarterMessageID),
+		ExistingMessageID: strings.TrimSpace(record.DiscordMessageID),
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	if strings.TrimSpace(record.DiscordStarterMessageID) != upserted.MessageID || strings.TrimSpace(record.DiscordThreadID) != "" {
-		record, err = s.store.FinalizeQOTDReplyThread(ctx, record.ID, "", upserted.MessageID)
+	if strings.TrimSpace(record.DiscordMessageID) != upserted.MessageID {
+		record, err = s.store.FinalizeQOTDAnswerMessage(ctx, record.ID, upserted.MessageID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	record, err = s.store.UpdateQOTDReplyThreadState(ctx, record.ID, string(ReplyThreadStateActive), nil, nil)
+	record, err = s.store.UpdateQOTDAnswerMessageState(ctx, record.ID, string(AnswerRecordStateActive), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -652,16 +619,22 @@ func normalizeActorID(actorID string) string {
 	return actorID
 }
 
-func buildManualThreadName(publishedAt time.Time) string {
-	publishedAt = publishedAt.UTC()
-	return fmt.Sprintf("QOTD - %s UTC", publishedAt.Format("2006-01-02 15:04"))
-}
-
 func derefTime(value *time.Time) time.Time {
 	if value == nil {
 		return time.Time{}
 	}
 	return value.UTC()
+}
+
+func buildOfficialThreadName(questionText string, queuePosition int64) string {
+	title := strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(questionText), "\n", " ")), " ")
+	if title == "" {
+		title = "Question of the Day"
+	}
+	if queuePosition > 0 {
+		return fmt.Sprintf("%s - QOTD #%d", title, queuePosition)
+	}
+	return title + " - QOTD"
 }
 
 func normalizeQuestionMutation(mutation QuestionMutation) (string, QuestionStatus, error) {
@@ -909,9 +882,9 @@ func missingDeckIDs(current, next []files.QOTDDeckConfig) []string {
 	return removed
 }
 
-func (s *Service) replyThreadLock(officialPostID int64, userID string) *sync.Mutex {
+func (s *Service) answerRecordLock(officialPostID int64, userID string) *sync.Mutex {
 	key := fmt.Sprintf("%d:%s", officialPostID, strings.TrimSpace(userID))
-	lock, _ := s.replyThreadLocks.LoadOrStore(key, &sync.Mutex{})
+	lock, _ := s.answerRecordLocks.LoadOrStore(key, &sync.Mutex{})
 	return lock.(*sync.Mutex)
 }
 
@@ -930,24 +903,31 @@ func isQOTDUniqueConstraintError(err error) bool {
 }
 
 func canPublishQOTD(deck files.QOTDDeckConfig) bool {
-	return strings.TrimSpace(deck.QuestionChannelID) != "" && strings.TrimSpace(deck.ResponseChannelID) != ""
+	return strings.TrimSpace(deck.ForumChannelID) != ""
 }
 
 func hasPublishedOfficialPostTarget(post *storage.QOTDOfficialPostRecord) bool {
 	if post == nil {
 		return false
 	}
-	return strings.TrimSpace(post.DiscordThreadID) != "" || strings.TrimSpace(post.DiscordStarterMessageID) != ""
+	return isOfficialPostPublished(*post)
 }
 
 func officialPostJumpURL(post storage.QOTDOfficialPostRecord) string {
 	if threadID := strings.TrimSpace(post.DiscordThreadID); threadID != "" {
 		return discordqotd.BuildThreadJumpURL(post.GuildID, threadID)
 	}
-	channelID := strings.TrimSpace(post.ForumChannelID)
-	messageID := strings.TrimSpace(post.DiscordStarterMessageID)
+	channelID := strings.TrimSpace(post.QuestionListThreadID)
+	messageID := strings.TrimSpace(post.QuestionListEntryMessageID)
 	if channelID == "" || messageID == "" {
 		return ""
 	}
 	return discordqotd.BuildMessageJumpURL(post.GuildID, channelID, messageID)
+}
+
+func qotdForumSurfaceQuestionListThreadID(surface *storage.QOTDForumSurfaceRecord) string {
+	if surface == nil {
+		return ""
+	}
+	return strings.TrimSpace(surface.QuestionListThreadID)
 }

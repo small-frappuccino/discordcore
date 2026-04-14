@@ -13,7 +13,8 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	required := []string{
 		"qotd_questions",
 		"qotd_official_posts",
-		"qotd_reply_threads",
+		"qotd_forum_surfaces",
+		"qotd_answer_messages",
 		"qotd_thread_archives",
 		"qotd_message_archives",
 		"qotd_collected_questions",
@@ -33,6 +34,53 @@ func TestQOTDTablesInitialized(t *testing.T) {
 		}
 		if !exists {
 			t.Fatalf("expected table %s to exist", tableName)
+		}
+	}
+
+	legacyTables := []string{"qotd_reply_threads"}
+	for _, tableName := range legacyTables {
+		var exists bool
+		if err := store.db.QueryRow(
+			`SELECT EXISTS(
+				SELECT 1
+				FROM information_schema.tables
+				WHERE table_schema = current_schema()
+				  AND table_name = $1
+			)`,
+			tableName,
+		).Scan(&exists); err != nil {
+			t.Fatalf("query legacy table %s existence: %v", tableName, err)
+		}
+		if exists {
+			t.Fatalf("expected legacy table %s to be removed", tableName)
+		}
+	}
+
+	legacyColumns := []struct {
+		tableName  string
+		columnName string
+	}{
+		{tableName: "qotd_official_posts", columnName: "response_channel_id_snapshot"},
+		{tableName: "qotd_official_posts", columnName: "is_pinned"},
+		{tableName: "qotd_thread_archives", columnName: "reply_thread_id"},
+	}
+	for _, legacyColumn := range legacyColumns {
+		var exists bool
+		if err := store.db.QueryRow(
+			`SELECT EXISTS(
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = current_schema()
+				  AND table_name = $1
+				  AND column_name = $2
+			)`,
+			legacyColumn.tableName,
+			legacyColumn.columnName,
+		).Scan(&exists); err != nil {
+			t.Fatalf("query legacy column %s.%s existence: %v", legacyColumn.tableName, legacyColumn.columnName, err)
+		}
+		if exists {
+			t.Fatalf("expected legacy column %s.%s to be removed", legacyColumn.tableName, legacyColumn.columnName)
 		}
 	}
 }
@@ -116,7 +164,6 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 		PublishDateUTC:       publishDate,
 		State:                "current",
 		ForumChannelID:       "forum-1",
-		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           graceUntil,
 		ArchiveAt:            archiveAt,
@@ -133,7 +180,6 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 		PublishDateUTC:       publishDate,
 		State:                "current",
 		ForumChannelID:       "forum-1",
-		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: second.Body,
 		GraceUntil:           graceUntil,
 		ArchiveAt:            archiveAt,
@@ -150,7 +196,6 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 		PublishDateUTC:       publishDate,
 		State:                "current",
 		ForumChannelID:       "forum-1",
-		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: second.Body,
 		GraceUntil:           graceUntil,
 		ArchiveAt:            archiveAt,
@@ -163,7 +208,7 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 	}
 }
 
-func TestQOTDReplyThreadProvisioningNonceLifecycle(t *testing.T) {
+func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -171,11 +216,12 @@ func TestQOTDReplyThreadProvisioningNonceLifecycle(t *testing.T) {
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question one",
-		Status:  "ready",
+		Status:  "reserved",
 	})
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
+
 	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
@@ -183,9 +229,8 @@ func TestQOTDReplyThreadProvisioningNonceLifecycle(t *testing.T) {
 		QuestionID:           question.ID,
 		PublishMode:          "scheduled",
 		PublishDateUTC:       time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
-		State:                "current",
+		State:                "provisioning",
 		ForumChannelID:       "forum-1",
-		ResponseChannelID:    "responses-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
 		ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
@@ -194,36 +239,52 @@ func TestQOTDReplyThreadProvisioningNonceLifecycle(t *testing.T) {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
 
-	replyThread, err := store.CreateQOTDReplyThreadProvisioning(ctx, QOTDReplyThreadRecord{
-		GuildID:                 "g1",
-		OfficialPostID:          official.ID,
-		UserID:                  "user-1",
-		State:                   "provisioning",
-		ForumChannelID:          "forum-1",
-		CreatedViaInteractionID: "interaction-1",
-		ProvisioningNonce:       "nonce-1",
+	progress, err := store.UpdateQOTDOfficialPostProgress(ctx, official.ID, QOTDOfficialPostRecord{
+		QuestionListThreadID:    "questions-list-thread",
+		DiscordThreadID:         "official-thread-1",
+		DiscordStarterMessageID: "starter-message-1",
+		AnswerChannelID:         "official-thread-1",
 	})
 	if err != nil {
-		t.Fatalf("CreateQOTDReplyThreadProvisioning() failed: %v", err)
+		t.Fatalf("UpdateQOTDOfficialPostProgress() failed: %v", err)
 	}
-	if replyThread.ProvisioningNonce != "nonce-1" {
-		t.Fatalf("expected provisioning nonce to persist on create, got %+v", replyThread)
+	if progress.QuestionListThreadID != "questions-list-thread" || progress.DiscordThreadID != "official-thread-1" || progress.DiscordStarterMessageID != "starter-message-1" {
+		t.Fatalf("expected progress update to persist partial artifacts, got %+v", progress)
 	}
-
-	prepared, err := store.PrepareQOTDReplyThreadProvisioning(ctx, replyThread.ID, "forum-2", "interaction-2", "nonce-2")
-	if err != nil {
-		t.Fatalf("PrepareQOTDReplyThreadProvisioning() failed: %v", err)
-	}
-	if prepared.ProvisioningNonce != "nonce-2" || prepared.ForumChannelID != "forum-2" || prepared.CreatedViaInteractionID != "interaction-2" {
-		t.Fatalf("expected provisioning refresh to replace nonce and metadata, got %+v", prepared)
+	if progress.PublishedAt != nil {
+		t.Fatalf("expected progress update to keep published_at unset until finalize, got %+v", progress)
 	}
 
-	pending, err := store.ListQOTDReplyThreadsPendingRecovery(ctx, "g1")
-	if err != nil {
-		t.Fatalf("ListQOTDReplyThreadsPendingRecovery() failed: %v", err)
+	if _, err := store.UpdateQOTDOfficialPostState(ctx, official.ID, "failed", nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState(failed) failed: %v", err)
 	}
-	if len(pending) != 1 || pending[0].ProvisioningNonce != "nonce-2" {
-		t.Fatalf("expected pending recovery list to include updated nonce, got %+v", pending)
+
+	pending, err := store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1")
+	if err != nil {
+		t.Fatalf("ListQOTDOfficialPostsPendingRecovery() failed: %v", err)
+	}
+	if len(pending) != 1 || pending[0].ID != official.ID {
+		t.Fatalf("expected failed provisioning record to be listed for recovery, got %+v", pending)
+	}
+
+	finalizedAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	finalized, err := store.FinalizeQOTDOfficialPost(ctx, official.ID, "questions-list-thread", "list-entry-1", "official-thread-1", "starter-message-1", "official-thread-1", finalizedAt)
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if finalized.PublishedAt == nil || !finalized.PublishedAt.Equal(finalizedAt) {
+		t.Fatalf("expected finalize to persist published_at, got %+v", finalized)
+	}
+
+	if _, err := store.UpdateQOTDOfficialPostState(ctx, official.ID, "current", nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState(current) failed: %v", err)
+	}
+	pending, err = store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1")
+	if err != nil {
+		t.Fatalf("ListQOTDOfficialPostsPendingRecovery(after finalize) failed: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("expected finalized post to disappear from pending recovery list, got %+v", pending)
 	}
 }
 
@@ -249,7 +310,6 @@ func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
 		PublishDateUTC:       time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
 		State:                "published",
 		ForumChannelID:       "question-channel-1",
-		ResponseChannelID:    "answers-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
 		ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),

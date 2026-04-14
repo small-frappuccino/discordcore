@@ -69,8 +69,7 @@ const defaultDeck: QOTDDeck = {
   id: "default",
   name: "Default",
   enabled: false,
-  question_channel_id: "",
-  response_channel_id: "",
+  forum_channel_id: "",
 };
 
 const emptySettings: QOTDConfig = {
@@ -596,12 +595,12 @@ function normalizeCollectorEntries(
 function normalizeQOTDDeck(deck: QOTDDeck): QOTDDeck {
   const id = String(deck.id ?? "").trim();
   const name = String(deck.name ?? "").trim();
+  const forumChannelID = String(deck.forum_channel_id ?? "").trim();
   return {
     id: id === "" ? defaultDeck.id : id,
     name: name === "" ? defaultDeck.name : name,
     enabled: Boolean(deck.enabled),
-    question_channel_id: String(deck.question_channel_id ?? ""),
-    response_channel_id: String(deck.response_channel_id ?? ""),
+    forum_channel_id: forumChannelID,
   };
 }
 

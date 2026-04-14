@@ -51,23 +51,20 @@ export function QOTDSettingsPage() {
     );
   }, [settings]);
 
-  const messageChannelOptions = channelOptions.channels
-    .filter((channel) => channel.supports_message_route)
+  const forumChannelOptions = channelOptions.channels
+    .filter((channel) => channel.kind === "forum")
     .map((channel) => ({
       value: channel.id,
       label: channel.display_name,
-      description:
-        channel.kind === "announcement"
-          ? "Announcement channel that accepts QOTD message posts."
-          : "Text channel that accepts QOTD message posts.",
+      description: "Forum channel that hosts `questions list!` and the daily QOTD posts.",
     }));
   const hasUnsavedChanges = settingsDraftChanged(savedDraftRef.current, draft);
   const controlsDisabled = !canEditSelectedGuild || saving;
   const channelPlaceholder = channelOptions.loading
-    ? "Loading message channels..."
-    : messageChannelOptions.length === 0
-      ? "No message channels available"
-      : "Select a channel";
+    ? "Loading forum channels..."
+    : forumChannelOptions.length === 0
+      ? "No forum channels available"
+      : "Select a forum channel";
 
   async function handleSave() {
     if (controlsDisabled) {
@@ -231,41 +228,25 @@ export function QOTDSettingsPage() {
                       </label>
 
                       <SettingsSelectField
-                        label="Question channel"
-                        value={deck.question_channel_id ?? ""}
+                        label="QOTD forum channel"
+                        value={deck.forum_channel_id ?? ""}
                         onChange={(value) =>
                           setDraft((current) => ({
                             ...current,
                             decks: current.decks.map((entry) =>
                               entry.id === deck.id
-                                ? { ...entry, question_channel_id: value }
+                                ? {
+                                    ...entry,
+                                    forum_channel_id: value,
+                                  }
                                 : entry,
                             ),
                           }))
                         }
-                        options={messageChannelOptions}
+                        options={forumChannelOptions}
                         placeholder={channelPlaceholder}
                         disabled={controlsDisabled || channelOptions.loading}
-                        note="Read-only channel where the deck prompt is posted."
-                      />
-
-                      <SettingsSelectField
-                        label="Response channel"
-                        value={deck.response_channel_id ?? ""}
-                        onChange={(value) =>
-                          setDraft((current) => ({
-                            ...current,
-                            decks: current.decks.map((entry) =>
-                              entry.id === deck.id
-                                ? { ...entry, response_channel_id: value }
-                                : entry,
-                            ),
-                          }))
-                        }
-                        options={messageChannelOptions}
-                        placeholder={channelPlaceholder}
-                        disabled={controlsDisabled || channelOptions.loading}
-                        note="Channel where answers for this deck are posted."
+                        note="Single forum channel used for `questions list!`, the daily QOTD post, and answer routing."
                       />
                     </div>
                   </GroupedSettingsSubrow>
@@ -375,9 +356,9 @@ export function QOTDSettingsPage() {
             </GroupedSettingsItem>
           </GroupedSettingsGroup>
 
-          {messageChannelOptions.length === 0 && !channelOptions.loading ? (
+          {forumChannelOptions.length === 0 && !channelOptions.loading ? (
             <GroupedSettingsInlineMessage
-              message="Create or expose at least one text or announcement channel to configure QOTD delivery."
+              message="Create or expose at least one forum channel to configure QOTD delivery."
               tone="info"
             />
           ) : null}
@@ -403,8 +384,7 @@ function createSettingsDraft(settings: QOTDConfig): SettingsDraft {
           id: String(deck.id ?? ""),
           name: String(deck.name ?? ""),
           enabled: Boolean(deck.enabled),
-          question_channel_id: String(deck.question_channel_id ?? ""),
-          response_channel_id: String(deck.response_channel_id ?? ""),
+          forum_channel_id: String(deck.forum_channel_id ?? ""),
         }))
       : [createDeckDraft([])];
   const activeDeckID =
@@ -432,8 +412,7 @@ function createDeckDraft(existingDecks: QOTDDeck[]): QOTDDeck {
     id: `deck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: `Deck ${suffix}`,
     enabled: false,
-    question_channel_id: "",
-    response_channel_id: "",
+    forum_channel_id: "",
   };
 }
 

@@ -1,6 +1,7 @@
 package files
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -21,8 +22,7 @@ func (cfg QOTDDeckConfig) IsZero() bool {
 	return strings.TrimSpace(cfg.ID) == "" &&
 		strings.TrimSpace(cfg.Name) == "" &&
 		!cfg.Enabled &&
-		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
-		strings.TrimSpace(cfg.ResponseChannelID) == ""
+		strings.TrimSpace(cfg.ForumChannelID) == ""
 }
 
 // IsZero reports whether all QOTD collector fields are unset.
@@ -46,9 +46,7 @@ func (cfg QOTDConfig) IsZero() bool {
 	if !cfg.Collector.IsZero() {
 		return false
 	}
-	return !cfg.Enabled &&
-		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
-		strings.TrimSpace(cfg.ResponseChannelID) == ""
+	return true
 }
 
 // DashboardQOTDConfig returns a stable deck-aware settings payload for the
@@ -62,16 +60,10 @@ func DashboardQOTDConfig(cfg QOTDConfig) QOTDConfig {
 			ID:   LegacyQOTDDefaultDeckID,
 			Name: LegacyQOTDDefaultDeckName,
 		}}
-		out.Enabled = false
-		out.QuestionChannelID = ""
-		out.ResponseChannelID = ""
 		return out
 	}
 
 	out.Decks = decks
-	out.Enabled = false
-	out.QuestionChannelID = ""
-	out.ResponseChannelID = ""
 	if strings.TrimSpace(out.ActiveDeckID) == "" {
 		if activeDeck, ok := (QOTDConfig{
 			ActiveDeckID: out.ActiveDeckID,
@@ -120,27 +112,92 @@ func (cfg QOTDConfig) deckConfigs() []QOTDDeckConfig {
 	if len(cfg.Decks) > 0 {
 		return cloneQOTDDeckConfigs(cfg.Decks)
 	}
-	if !cfg.Enabled &&
-		strings.TrimSpace(cfg.QuestionChannelID) == "" &&
-		strings.TrimSpace(cfg.ResponseChannelID) == "" {
-		return nil
-	}
-	return []QOTDDeckConfig{{
-		ID:                LegacyQOTDDefaultDeckID,
-		Name:              LegacyQOTDDefaultDeckName,
-		Enabled:           cfg.Enabled,
-		QuestionChannelID: cfg.QuestionChannelID,
-		ResponseChannelID: cfg.ResponseChannelID,
-	}}
+	return nil
 }
 
 func isImplicitDefaultQOTDDeck(deck QOTDDeckConfig, activeDeckID string) bool {
 	return strings.TrimSpace(deck.ID) == LegacyQOTDDefaultDeckID &&
 		strings.TrimSpace(deck.Name) == LegacyQOTDDefaultDeckName &&
 		!deck.Enabled &&
-		strings.TrimSpace(deck.QuestionChannelID) == "" &&
-		strings.TrimSpace(deck.ResponseChannelID) == "" &&
+		strings.TrimSpace(deck.ForumChannelID) == "" &&
 		(activeDeckID == "" || activeDeckID == LegacyQOTDDefaultDeckID)
+}
+
+func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
+	type rawQOTDDeckConfig struct {
+		ID                string `json:"id,omitempty"`
+		Name              string `json:"name,omitempty"`
+		Enabled           bool   `json:"enabled,omitempty"`
+		ForumChannelID    string `json:"forum_channel_id,omitempty"`
+		QuestionChannelID string `json:"question_channel_id,omitempty"`
+		ResponseChannelID string `json:"response_channel_id,omitempty"`
+	}
+
+	var raw rawQOTDDeckConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	forumChannelID := strings.TrimSpace(raw.ForumChannelID)
+	if forumChannelID == "" {
+		forumChannelID = strings.TrimSpace(raw.QuestionChannelID)
+	}
+	if forumChannelID == "" {
+		forumChannelID = strings.TrimSpace(raw.ResponseChannelID)
+	}
+
+	*cfg = QOTDDeckConfig{
+		ID:             raw.ID,
+		Name:           raw.Name,
+		Enabled:        raw.Enabled,
+		ForumChannelID: forumChannelID,
+	}
+	return nil
+}
+
+func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
+	type rawQOTDConfig struct {
+		ActiveDeckID      string              `json:"active_deck_id,omitempty"`
+		Decks             []QOTDDeckConfig    `json:"decks,omitempty"`
+		Collector         QOTDCollectorConfig `json:"collector,omitempty"`
+		Enabled           bool                `json:"enabled,omitempty"`
+		ForumChannelID    string              `json:"forum_channel_id,omitempty"`
+		QuestionChannelID string              `json:"question_channel_id,omitempty"`
+		ResponseChannelID string              `json:"response_channel_id,omitempty"`
+	}
+
+	var raw rawQOTDConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*cfg = QOTDConfig{
+		ActiveDeckID: raw.ActiveDeckID,
+		Decks:        raw.Decks,
+		Collector:    raw.Collector,
+	}
+	if len(raw.Decks) > 0 {
+		return nil
+	}
+
+	forumChannelID := strings.TrimSpace(raw.ForumChannelID)
+	if forumChannelID == "" {
+		forumChannelID = strings.TrimSpace(raw.QuestionChannelID)
+	}
+	if forumChannelID == "" {
+		forumChannelID = strings.TrimSpace(raw.ResponseChannelID)
+	}
+	if !raw.Enabled && forumChannelID == "" {
+		return nil
+	}
+
+	cfg.Decks = []QOTDDeckConfig{{
+		ID:             LegacyQOTDDefaultDeckID,
+		Name:           LegacyQOTDDefaultDeckName,
+		Enabled:        raw.Enabled,
+		ForumChannelID: forumChannelID,
+	}}
+	return nil
 }
 
 // GetQOTDConfig returns the canonical QOTD config for one guild.

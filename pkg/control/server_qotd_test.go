@@ -38,10 +38,15 @@ type routeFakePublisher struct {
 
 func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
 	messageID := "message-" + params.PublishDateUTC.Format("20060102")
+	threadID := "thread-" + params.PublishDateUTC.Format("20060102")
 	return &discordqotd.PublishedOfficialPost{
-		StarterMessageID: messageID,
-		PublishedAt:      qotd.PublishTimeUTC(params.PublishDateUTC),
-		PostURL:          discordqotd.BuildMessageJumpURL(params.GuildID, params.QuestionChannelID, messageID),
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-" + params.PublishDateUTC.Format("20060102"),
+		ThreadID:                   threadID,
+		StarterMessageID:           messageID,
+		AnswerChannelID:            threadID,
+		PublishedAt:                qotd.PublishTimeUTC(params.PublishDateUTC),
+		PostURL:                    discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
 	}, nil
 }
 
@@ -163,9 +168,13 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	handler := srv.httpServer.Handler
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: "123456789012345678",
-		ResponseChannelID: "223456789012345678",
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "123456789012345678",
+		}},
 	})
 	if settingsRec.Code != 200 {
 		t.Fatalf("put settings status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
@@ -175,7 +184,7 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected qotd settings response to expose an active deck: %+v", settingsResp.Settings)
 	}
-	if !deck.Enabled || deck.QuestionChannelID != "123456789012345678" || deck.ResponseChannelID != "223456789012345678" {
+	if !deck.Enabled || deck.ForumChannelID != "123456789012345678" {
 		t.Fatalf("unexpected qotd settings response: %+v", settingsResp.Settings)
 	}
 	if strings.Contains(settingsRec.Body.String(), "staff_role_ids") {
@@ -294,9 +303,13 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 
 	srv, service, store, _ := newQOTDControlTestServer(t)
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: "question-channel-1",
-		ResponseChannelID: "answers-channel-1",
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:             files.LegacyQOTDDefaultDeckID,
+			Name:           files.LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "question-channel-1",
+		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -327,11 +340,11 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
-	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "route-thread", "route-message", publishedAt)
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "questions-list-entry-route", "route-thread", "route-message", "route-thread", publishedAt)
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}
-	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(qotd.OfficialPostStatePrevious), false, nil, nil); err != nil {
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), official.ID, string(qotd.OfficialPostStatePrevious), nil, nil); err != nil {
 		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
 	}
 

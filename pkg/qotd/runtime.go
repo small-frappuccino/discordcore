@@ -46,6 +46,16 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, err
 	}
 	if existing != nil {
+		if !isOfficialPostPublished(*existing) {
+			recovered, err := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+			if err != nil {
+				return false, err
+			}
+			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
 		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, existing.ID); err != nil {
 			return false, err
 		}
@@ -85,8 +95,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       strings.TrimSpace(deck.QuestionChannelID),
-		ResponseChannelID:    strings.TrimSpace(deck.ResponseChannelID),
+		ForumChannelID:       strings.TrimSpace(deck.ForumChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -96,46 +105,38 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
 		if isQOTDUniqueConstraintError(err) {
+			existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+			if lookupErr != nil {
+				return false, lookupErr
+			}
+			if existing != nil && !isOfficialPostPublished(*existing) {
+				recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+				if recoverErr != nil {
+					return false, recoverErr
+				}
+				if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+					return false, err
+				}
+				return true, nil
+			}
 			return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
 		}
 		return false, err
 	}
 
-	published, err := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
-		GuildID:            guildID,
-		OfficialPostID:     provisioned.ID,
-		DeckName:           deck.Name,
-		AvailableQuestions: availableQuestions,
-		QueuePosition:      question.QueuePosition,
-		QuestionChannelID:  strings.TrimSpace(deck.QuestionChannelID),
-		QuestionText:       question.Body,
-		PublishDateUTC:     publishDate,
-		Pinned:             lifecycle.State == OfficialPostStateCurrent,
-	})
-	if err != nil {
-		if deleteErr := s.store.DeleteQOTDOfficialPost(ctx, provisioned.ID); deleteErr != nil {
-			log.ApplicationLogger().Warn("QOTD scheduled provisioning cleanup failed", "guildID", guildID, "officialPostID", provisioned.ID, "err", deleteErr)
-		}
-		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
-		}
-		return false, err
-	}
-
-	finalized, err := s.store.FinalizeQOTDOfficialPost(ctx, provisioned.ID, published.ThreadID, published.StarterMessageID, published.PublishedAt)
+	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(
+		ctx,
+		session,
+		*provisioned,
+		question,
+		availableQuestions,
+		buildOfficialThreadName(question.Body, question.QueuePosition),
+		now,
+	)
 	if err != nil {
 		return false, err
 	}
-	finalized, err = s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(lifecycle.State), lifecycle.State == OfficialPostStateCurrent, nil, nil)
-	if err != nil {
-		return false, err
-	}
-
-	question.Status = string(QuestionStatusUsed)
-	question.UsedAt = &published.PublishedAt
-	if updatedQuestion, err := s.store.UpdateQOTDQuestion(ctx, *question); err != nil {
-		return false, err
-	} else {
+	if updatedQuestion != nil {
 		question = updatedQuestion
 	}
 
@@ -160,32 +161,36 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	lifecycleLock.Lock()
 	defer lifecycleLock.Unlock()
 
-	return s.reconcileOfficialPostWindow(ctx, guildID, session, s.clock(), 0)
+	now := s.clock()
+	if err := s.reconcilePendingOfficialPosts(ctx, guildID, session, now); err != nil {
+		return err
+	}
+	return s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
 }
 
 func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
 	if strings.TrimSpace(post.DiscordThreadID) == "" {
-		_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), false, nil, nil)
+		_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), nil, nil)
 		return err
 	}
 
 	if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
-		Pinned:   lifecycle.State == OfficialPostStateCurrent,
-		Locked:   true,
+		Pinned:   false,
+		Locked:   !lifecycle.AnswerWindow.IsOpen,
 		Archived: false,
 	}); err != nil {
 		return err
 	} else if missing {
-		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateMissingDiscord), false, nil, nil)
+		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateMissingDiscord), nil, nil)
 		return err
 	}
 
-	_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), lifecycle.State == OfficialPostStateCurrent, nil, nil)
+	_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), nil, nil)
 	return err
 }
 
 func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, archivedAt time.Time) error {
-	if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchiving), false, nil, nil); err != nil {
+	if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchiving), nil, nil); err != nil {
 		return err
 	}
 
@@ -205,19 +210,19 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 		}
 	}
 
-	replyThreads, err := s.store.ListQOTDReplyThreadsByOfficialPost(ctx, post.ID)
+	answerRecords, err := s.store.ListQOTDAnswerMessagesByOfficialPost(ctx, post.ID)
 	if err != nil {
 		return err
 	}
-	for _, replyThread := range replyThreads {
-		if err := s.archiveReplyThread(ctx, session, post, replyThread, archivedAt); err != nil {
+	for _, answerRecord := range answerRecords {
+		if err := s.archiveAnswerRecord(ctx, answerRecord, archivedAt); err != nil {
 			return err
 		}
 	}
 
 	state := string(OfficialPostStateArchived)
 	if messageMode {
-		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, false, &archivedAt, &archivedAt)
+		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, &archivedAt, &archivedAt)
 		return err
 	}
 	if missingOfficial {
@@ -232,43 +237,15 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 		state = string(OfficialPostStateMissingDiscord)
 	}
 
-	_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, false, &archivedAt, &archivedAt)
+	_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, &archivedAt, &archivedAt)
 	return err
 }
 
-func (s *Service) archiveReplyThread(ctx context.Context, session *discordgo.Session, officialPost storage.QOTDOfficialPostRecord, replyThread storage.QOTDReplyThreadRecord, archivedAt time.Time) error {
-	if _, err := s.store.UpdateQOTDReplyThreadState(ctx, replyThread.ID, string(ReplyThreadStateArchiving), nil, nil); err != nil {
+func (s *Service) archiveAnswerRecord(ctx context.Context, answerRecord storage.QOTDAnswerMessageRecord, archivedAt time.Time) error {
+	if _, err := s.store.UpdateQOTDAnswerMessageState(ctx, answerRecord.ID, string(AnswerRecordStateArchiving), nil, nil); err != nil {
 		return err
 	}
-
-	state := string(ReplyThreadStateArchived)
-	if strings.TrimSpace(replyThread.DiscordThreadID) != "" {
-		missingReply, err := s.archiveThreadMessages(ctx, session, storage.QOTDThreadArchiveRecord{
-			GuildID:         replyThread.GuildID,
-			OfficialPostID:  officialPost.ID,
-			ReplyThreadID:   &replyThread.ID,
-			SourceKind:      qotdArchiveSourceReply,
-			DiscordThreadID: replyThread.DiscordThreadID,
-			ArchivedAt:      archivedAt,
-		})
-		if err != nil {
-			return err
-		}
-
-		if missingReply {
-			state = string(ReplyThreadStateMissingDiscord)
-		} else if missing, err := s.setThreadState(ctx, session, replyThread.DiscordThreadID, discordqotd.ThreadState{
-			Pinned:   false,
-			Locked:   true,
-			Archived: true,
-		}); err != nil {
-			return err
-		} else if missing {
-			state = string(ReplyThreadStateMissingDiscord)
-		}
-	}
-
-	_, err := s.store.UpdateQOTDReplyThreadState(ctx, replyThread.ID, state, &archivedAt, &archivedAt)
+	_, err := s.store.UpdateQOTDAnswerMessageState(ctx, answerRecord.ID, string(AnswerRecordStateArchived), &archivedAt, &archivedAt)
 	return err
 }
 

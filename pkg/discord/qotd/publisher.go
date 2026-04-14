@@ -12,68 +12,46 @@ import (
 const (
 	answerButtonLabel    = "Answer"
 	answerButtonCustomID = "qotd:answer:%d"
-	replyNonceFooterKey  = "QOTD reply ref:"
-	replyNonceNamePrefix = "qrp-"
+
+	officialQuestionListThreadName    = "questions list!"
+	officialQuestionListThreadMessage = "Daily QOTD prompts are posted here."
+	defaultThreadAutoArchiveMinutes   = 4320
 )
 
 type PublishOfficialPostParams struct {
-	GuildID            string
-	OfficialPostID     int64
-	QueuePosition      int64
-	DeckName           string
-	AvailableQuestions int
-	QuestionChannelID  string
-	QuestionText       string
-	PublishDateUTC     time.Time
-	ThreadName         string
-	Pinned             bool
+	GuildID                    string
+	OfficialPostID             int64
+	QueuePosition              int64
+	DeckName                   string
+	AvailableQuestions         int
+	ForumChannelID             string
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	OfficialThreadID           string
+	OfficialStarterMessageID   string
+	OfficialAnswerChannelID    string
+	ExistingPublishedAt        time.Time
+	QuestionText               string
+	PublishDateUTC             time.Time
+	ThreadName                 string
 }
 
 type PublishedOfficialPost struct {
-	ThreadID         string
-	StarterMessageID string
-	PublishedAt      time.Time
-	PostURL          string
-}
-
-type CreateReplyPostParams struct {
-	GuildID           string
-	OfficialPostID    int64
-	OfficialThreadID  string
-	ForumChannelID    string
-	ReplyTagID        string
-	QuestionText      string
-	PublishDateUTC    time.Time
-	UserID            string
-	UserDisplayName   string
-	ProvisioningNonce string
-}
-
-type CreatedReplyPost struct {
-	ThreadID         string
-	StarterMessageID string
-	ThreadURL        string
-}
-
-type FindReplyPostByNonceParams struct {
-	GuildID           string
-	ForumChannelID    string
-	ProvisioningNonce string
-	Since             time.Time
-}
-
-type FoundReplyPost struct {
-	ThreadID         string
-	StarterMessageID string
-	ThreadURL        string
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	ThreadID                   string
+	StarterMessageID           string
+	AnswerChannelID            string
+	PublishedAt                time.Time
+	PostURL                    string
 }
 
 type UpsertAnswerMessageParams struct {
 	GuildID           string
 	OfficialPostID    int64
 	DeckName          string
-	QuestionNumber    int64
-	ResponseChannelID string
+	PublishDateUTC    time.Time
+	AnswerChannelID   string
 	QuestionText      string
 	QuestionURL       string
 	AnswerText        string
@@ -113,96 +91,145 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		return nil, fmt.Errorf("publish official qotd post: %w", err)
 	}
 
-	message, err := session.ChannelMessageSendComplex(
-		normalized.QuestionChannelID,
-		&discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{
-				buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText, normalized.QueuePosition),
+	questionEmbed := buildOfficialQuestionEmbed(normalized.DeckName, normalized.AvailableQuestions, normalized.QuestionText, normalized.QueuePosition)
+	result := &PublishedOfficialPost{
+		QuestionListThreadID:       normalized.QuestionListThreadID,
+		QuestionListEntryMessageID: normalized.QuestionListEntryMessageID,
+		ThreadID:                   normalized.OfficialThreadID,
+		StarterMessageID:           normalized.OfficialStarterMessageID,
+		AnswerChannelID:            normalized.OfficialAnswerChannelID,
+		PublishedAt:                normalized.ExistingPublishedAt,
+	}
+
+	if result.QuestionListThreadID == "" {
+		listThreadID, err := p.ensureOfficialQuestionListThread(ctx, session, normalized.ForumChannelID, normalized.QuestionListThreadID)
+		if err != nil {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("publish official qotd post: %w", err)
+		}
+		result.QuestionListThreadID = listThreadID
+	}
+
+	if result.ThreadID == "" {
+		thread, err := session.ForumThreadStartComplex(
+			normalized.ForumChannelID,
+			&discordgo.ThreadStart{
+				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.QuestionText, normalized.QueuePosition, normalized.ThreadName),
+				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
 			},
-			Components: []discordgo.MessageComponent{
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						discordgo.Button{
-							Label:    answerButtonLabel,
-							Style:    discordgo.PrimaryButton,
-							CustomID: fmt.Sprintf(answerButtonCustomID, normalized.OfficialPostID),
+			&discordgo.MessageSend{
+				Embeds:          []*discordgo.MessageEmbed{questionEmbed},
+				AllowedMentions: &discordgo.MessageAllowedMentions{},
+			},
+		)
+		if err != nil {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("create qotd forum thread: %w", err)
+		}
+		if thread != nil {
+			result.ThreadID = strings.TrimSpace(thread.ID)
+			if result.StarterMessageID == "" {
+				result.StarterMessageID = strings.TrimSpace(thread.LastMessageID)
+			}
+		}
+		if result.ThreadID == "" {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("create qotd forum thread: missing thread id")
+		}
+		if result.AnswerChannelID == "" {
+			result.AnswerChannelID = result.ThreadID
+		}
+		if result.PublishedAt.IsZero() {
+			result.PublishedAt = time.Now().UTC()
+		}
+	}
+
+	if result.StarterMessageID == "" && result.ThreadID != "" {
+		msgs, fetchErr := session.ChannelMessages(result.ThreadID, 1, "", "", "")
+		if fetchErr != nil {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("resolve qotd starter message: %w", fetchErr)
+		}
+		if len(msgs) == 0 || strings.TrimSpace(msgs[0].ID) == "" {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("resolve qotd starter message: discord returned no starter message")
+		}
+		result.StarterMessageID = strings.TrimSpace(msgs[0].ID)
+	}
+
+	if result.AnswerChannelID == "" && result.ThreadID != "" {
+		result.AnswerChannelID = result.ThreadID
+	}
+
+	if result.QuestionListEntryMessageID == "" {
+		if err := p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
+			Pinned:   true,
+			Locked:   false,
+			Archived: false,
+		}); err != nil {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("prepare qotd questions list thread: %w", err)
+		}
+
+		listMessage, sendErr := session.ChannelMessageSendComplex(
+			result.QuestionListThreadID,
+			&discordgo.MessageSend{
+				Embeds: []*discordgo.MessageEmbed{questionEmbed},
+				Components: []discordgo.MessageComponent{
+					discordgo.ActionsRow{
+						Components: []discordgo.MessageComponent{
+							discordgo.Button{
+								Label:    answerButtonLabel,
+								Style:    discordgo.PrimaryButton,
+								CustomID: fmt.Sprintf(answerButtonCustomID, normalized.OfficialPostID),
+							},
 						},
 					},
 				},
+				AllowedMentions: &discordgo.MessageAllowedMentions{},
 			},
-			AllowedMentions: &discordgo.MessageAllowedMentions{},
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create qotd message: %w", err)
+		)
+		if listMessage != nil {
+			result.QuestionListEntryMessageID = strings.TrimSpace(listMessage.ID)
+			if result.PublishedAt.IsZero() {
+				result.PublishedAt = time.Now().UTC()
+			}
+		}
+		if sendErr != nil {
+			_ = p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
+				Pinned:   true,
+				Locked:   true,
+				Archived: false,
+			})
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("append qotd message to questions list: %w", sendErr)
+		}
+		if result.QuestionListEntryMessageID == "" {
+			_ = p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
+				Pinned:   true,
+				Locked:   true,
+				Archived: false,
+			})
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("append qotd message to questions list: missing message id")
+		}
 	}
 
-	messageID := ""
-	if message != nil {
-		messageID = strings.TrimSpace(message.ID)
-	}
-	if messageID == "" {
-		return nil, fmt.Errorf("create qotd message: missing message id")
+	if result.QuestionListEntryMessageID != "" {
+		if err := p.SetThreadState(ctx, session, result.QuestionListThreadID, ThreadState{
+			Pinned:   true,
+			Locked:   true,
+			Archived: false,
+		}); err != nil {
+			return result.withPostURL(normalized.GuildID), fmt.Errorf("lock qotd questions list thread: %w", err)
+		}
 	}
 
-	publishedAt := time.Now().UTC()
-	return &PublishedOfficialPost{
-		StarterMessageID: messageID,
-		PublishedAt:      publishedAt,
-		PostURL:          BuildMessageJumpURL(normalized.GuildID, normalized.QuestionChannelID, messageID),
-	}, nil
+	return result.withPostURL(normalized.GuildID), nil
 }
 
-func (p *Publisher) CreateReplyPost(ctx context.Context, session *discordgo.Session, params CreateReplyPostParams) (*CreatedReplyPost, error) {
-	if session == nil {
-		return nil, fmt.Errorf("create qotd reply post: discord session is required")
+func (post *PublishedOfficialPost) withPostURL(guildID string) *PublishedOfficialPost {
+	if post == nil {
+		return nil
 	}
-
-	normalized, err := normalizeCreateReplyPostParams(params)
-	if err != nil {
-		return nil, fmt.Errorf("create qotd reply post: %w", err)
-	}
-
-	thread, err := session.ForumThreadStartComplex(
-		normalized.ForumChannelID,
-		&discordgo.ThreadStart{
-			Name:                buildReplyThreadName(normalized.PublishDateUTC, normalized.UserDisplayName, normalized.UserID, normalized.ProvisioningNonce),
-			AutoArchiveDuration: 4320,
-			AppliedTags:         []string{normalized.ReplyTagID},
-		},
-		&discordgo.MessageSend{
-			Embeds: []*discordgo.MessageEmbed{
-				buildReplyThreadEmbed(normalized.QuestionText, BuildThreadJumpURL(normalized.GuildID, normalized.OfficialThreadID), normalized.ProvisioningNonce),
-			},
-			AllowedMentions: &discordgo.MessageAllowedMentions{},
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create qotd reply forum thread: %w", err)
-	}
-
-	threadID := strings.TrimSpace(thread.ID)
-	if threadID == "" {
-		return nil, fmt.Errorf("create qotd reply forum thread: missing thread id")
-	}
-
-	starterMessageID := strings.TrimSpace(thread.LastMessageID)
-	if starterMessageID == "" {
-		msgs, fetchErr := session.ChannelMessages(threadID, 1, "", "", "")
-		if fetchErr != nil {
-			return nil, fmt.Errorf("resolve qotd reply starter message: %w", fetchErr)
+	if strings.TrimSpace(post.PostURL) == "" {
+		if threadID := strings.TrimSpace(post.ThreadID); threadID != "" {
+			post.PostURL = BuildThreadJumpURL(guildID, threadID)
 		}
-		if len(msgs) == 0 || strings.TrimSpace(msgs[0].ID) == "" {
-			return nil, fmt.Errorf("resolve qotd reply starter message: discord returned no starter message")
-		}
-		starterMessageID = strings.TrimSpace(msgs[0].ID)
 	}
-
-	return &CreatedReplyPost{
-		ThreadID:         threadID,
-		StarterMessageID: starterMessageID,
-		ThreadURL:        BuildThreadJumpURL(normalized.GuildID, threadID),
-	}, nil
+	return post
 }
 
 func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params UpsertAnswerMessageParams) (*UpsertedAnswerMessage, error) {
@@ -217,7 +244,7 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 
 	embed := buildAnswerEmbed(
 		normalized.DeckName,
-		normalized.QuestionNumber,
+		normalized.PublishDateUTC,
 		normalized.OfficialPostID,
 		normalized.QuestionText,
 		normalized.QuestionURL,
@@ -232,7 +259,7 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 	if messageID != "" {
 		_, err = session.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			ID:      messageID,
-			Channel: normalized.ResponseChannelID,
+			Channel: normalized.AnswerChannelID,
 			Embeds:  &[]*discordgo.MessageEmbed{embed},
 		})
 		if err == nil {
@@ -241,7 +268,7 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 	}
 	if !updated {
 		message, createErr := session.ChannelMessageSendComplex(
-			normalized.ResponseChannelID,
+			normalized.AnswerChannelID,
 			&discordgo.MessageSend{
 				Embeds:          []*discordgo.MessageEmbed{embed},
 				AllowedMentions: &discordgo.MessageAllowedMentions{},
@@ -260,56 +287,11 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 	}
 
 	return &UpsertedAnswerMessage{
-		ChannelID:  normalized.ResponseChannelID,
+		ChannelID:  normalized.AnswerChannelID,
 		MessageID:  messageID,
-		MessageURL: BuildMessageJumpURL(normalized.GuildID, normalized.ResponseChannelID, messageID),
+		MessageURL: BuildMessageJumpURL(normalized.GuildID, normalized.AnswerChannelID, messageID),
 		Updated:    updated,
 	}, nil
-}
-
-func (p *Publisher) FindReplyPostByNonce(ctx context.Context, session *discordgo.Session, params FindReplyPostByNonceParams) (*FoundReplyPost, error) {
-	if session == nil {
-		return nil, fmt.Errorf("find qotd reply post by nonce: discord session is required")
-	}
-	normalized, err := normalizeFindReplyPostByNonceParams(params)
-	if err != nil {
-		return nil, fmt.Errorf("find qotd reply post by nonce: %w", err)
-	}
-
-	candidates, err := listRecoveryCandidateThreads(ctx, session, normalized.ForumChannelID, normalized.Since, replyNonceNameFragment(normalized.ProvisioningNonce))
-	if err != nil {
-		return nil, err
-	}
-	footerMarker := replyNonceFooterText(normalized.ProvisioningNonce)
-	for _, thread := range candidates {
-		if thread == nil {
-			continue
-		}
-		messages, err := fetchThreadMessagesRaw(ctx, session, thread.ID)
-		if err != nil {
-			if isNotFoundRESTError(err) {
-				continue
-			}
-			return nil, fmt.Errorf("find qotd reply post by nonce: fetch thread %s: %w", strings.TrimSpace(thread.ID), err)
-		}
-		for idx := range messages {
-			message := messages[idx]
-			if starterMessageMatchesReplyNonce(message, footerMarker) {
-				threadID := strings.TrimSpace(thread.ID)
-				starterMessageID := strings.TrimSpace(message.ID)
-				if threadID == "" || starterMessageID == "" {
-					continue
-				}
-				return &FoundReplyPost{
-					ThreadID:         threadID,
-					StarterMessageID: starterMessageID,
-					ThreadURL:        BuildThreadJumpURL(normalized.GuildID, threadID),
-				}, nil
-			}
-		}
-	}
-
-	return nil, nil
 }
 
 func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) error {
@@ -370,26 +352,7 @@ func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questio
 	}
 }
 
-func buildReplyThreadEmbed(questionText, officialPostURL, provisioningNonce string) *discordgo.MessageEmbed {
-	embed := &discordgo.MessageEmbed{
-		Title:       "Your QOTD Reply Thread",
-		Description: fmt.Sprintf("Write your answer in this thread.\n\n%s", questionText),
-		Color:       0x3BA55D,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: replyNonceFooterText(provisioningNonce),
-		},
-	}
-	if officialPostURL != "" {
-		embed.Fields = []*discordgo.MessageEmbedField{{
-			Name:   "Official Question",
-			Value:  officialPostURL,
-			Inline: false,
-		}}
-	}
-	return embed
-}
-
-func buildAnswerEmbed(deckName string, questionNumber, officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
+func buildAnswerEmbed(deckName string, publishDateUTC time.Time, officialPostID int64, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -413,52 +376,46 @@ func buildAnswerEmbed(deckName string, questionNumber, officialPostID int64, que
 		Description: description,
 		Color:       0x68C77C,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildAnswerFooter(deckName, questionNumber, officialPostID),
+			Text: buildAnswerFooter(deckName, publishDateUTC, officialPostID),
 		},
 	}
 	return embed
 }
 
-func buildOfficialPostName(publishDateUTC time.Time, explicitName string) string {
+func buildOfficialPostName(publishDateUTC time.Time, questionText string, queuePosition int64, explicitName string) string {
 	explicitName = strings.TrimSpace(explicitName)
 	if explicitName != "" {
-		return explicitName
+		return truncateThreadName(explicitName)
 	}
-	return fmt.Sprintf("QOTD - %s", publishDateUTC.UTC().Format("2006-01-02"))
-}
-
-func buildReplyThreadName(publishDateUTC time.Time, userDisplayName, userID, provisioningNonce string) string {
-	userDisplayName = strings.TrimSpace(userDisplayName)
-	if userDisplayName == "" {
-		userDisplayName = strings.TrimSpace(userID)
+	base := compactThreadNameBase(questionText)
+	if base == "" {
+		base = "Question of the Day"
 	}
-	if userDisplayName == "" {
-		userDisplayName = "Member"
+	if queuePosition > 0 {
+		return truncateThreadName(fmt.Sprintf("%s - QOTD #%d", base, queuePosition))
 	}
-
-	base := fmt.Sprintf("Reply - %s", userDisplayName)
 	if !publishDateUTC.IsZero() {
-		base = fmt.Sprintf("Reply - %s - %s", publishDateUTC.UTC().Format("2006-01-02"), userDisplayName)
+		return truncateThreadName(fmt.Sprintf("%s - QOTD %s", base, publishDateUTC.UTC().Format("2006-01-02")))
 	}
-	suffix := replyNonceNameSuffix(provisioningNonce)
-	maxLen := 100 - len(suffix)
-	if maxLen < 1 {
-		maxLen = 100
-	}
-	if len(base) > maxLen {
-		base = strings.TrimSpace(base[:maxLen])
-	}
-	return strings.TrimSpace(base) + suffix
+	return truncateThreadName(base + " - QOTD")
 }
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
 	params.DeckName = strings.TrimSpace(params.DeckName)
-	params.QuestionChannelID = strings.TrimSpace(params.QuestionChannelID)
+	params.ForumChannelID = strings.TrimSpace(params.ForumChannelID)
+	params.QuestionListThreadID = strings.TrimSpace(params.QuestionListThreadID)
+	params.QuestionListEntryMessageID = strings.TrimSpace(params.QuestionListEntryMessageID)
+	params.OfficialThreadID = strings.TrimSpace(params.OfficialThreadID)
+	params.OfficialStarterMessageID = strings.TrimSpace(params.OfficialStarterMessageID)
+	params.OfficialAnswerChannelID = strings.TrimSpace(params.OfficialAnswerChannelID)
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.ThreadName = strings.TrimSpace(params.ThreadName)
 	if params.AvailableQuestions < 0 {
 		params.AvailableQuestions = 0
+	}
+	if !params.ExistingPublishedAt.IsZero() {
+		params.ExistingPublishedAt = params.ExistingPublishedAt.UTC()
 	}
 	params.PublishDateUTC = params.PublishDateUTC.UTC()
 
@@ -471,69 +428,20 @@ func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (Publi
 		return PublishOfficialPostParams{}, fmt.Errorf("question text is required")
 	case params.PublishDateUTC.IsZero():
 		return PublishOfficialPostParams{}, fmt.Errorf("publish date is required")
-	case params.QuestionChannelID == "":
-		return PublishOfficialPostParams{}, fmt.Errorf("question channel id is required")
-	default:
-		return params, nil
-	}
-}
-
-func normalizeCreateReplyPostParams(params CreateReplyPostParams) (CreateReplyPostParams, error) {
-	params.GuildID = strings.TrimSpace(params.GuildID)
-	params.ForumChannelID = strings.TrimSpace(params.ForumChannelID)
-	params.ReplyTagID = strings.TrimSpace(params.ReplyTagID)
-	params.OfficialThreadID = strings.TrimSpace(params.OfficialThreadID)
-	params.QuestionText = strings.TrimSpace(params.QuestionText)
-	params.UserID = strings.TrimSpace(params.UserID)
-	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
-	params.ProvisioningNonce = strings.TrimSpace(params.ProvisioningNonce)
-	params.PublishDateUTC = params.PublishDateUTC.UTC()
-
-	switch {
-	case params.GuildID == "":
-		return CreateReplyPostParams{}, fmt.Errorf("guild id is required")
-	case params.OfficialPostID <= 0:
-		return CreateReplyPostParams{}, fmt.Errorf("official post id is required")
 	case params.ForumChannelID == "":
-		return CreateReplyPostParams{}, fmt.Errorf("forum channel id is required")
-	case params.ReplyTagID == "":
-		return CreateReplyPostParams{}, fmt.Errorf("reply tag id is required")
-	case params.OfficialThreadID == "":
-		return CreateReplyPostParams{}, fmt.Errorf("official thread id is required")
-	case params.QuestionText == "":
-		return CreateReplyPostParams{}, fmt.Errorf("question text is required")
-	case params.UserID == "":
-		return CreateReplyPostParams{}, fmt.Errorf("user id is required")
-	case params.ProvisioningNonce == "":
-		return CreateReplyPostParams{}, fmt.Errorf("provisioning nonce is required")
+		return PublishOfficialPostParams{}, fmt.Errorf("forum channel id is required")
 	default:
 		return params, nil
 	}
-}
-
-func normalizeFindReplyPostByNonceParams(params FindReplyPostByNonceParams) (FindReplyPostByNonceParams, error) {
-	params.GuildID = strings.TrimSpace(params.GuildID)
-	params.ForumChannelID = strings.TrimSpace(params.ForumChannelID)
-	params.ProvisioningNonce = strings.TrimSpace(params.ProvisioningNonce)
-	if params.GuildID == "" {
-		return FindReplyPostByNonceParams{}, fmt.Errorf("guild id is required")
-	}
-	if params.ForumChannelID == "" {
-		return FindReplyPostByNonceParams{}, fmt.Errorf("forum channel id is required")
-	}
-	if params.ProvisioningNonce == "" {
-		return FindReplyPostByNonceParams{}, fmt.Errorf("provisioning nonce is required")
-	}
-	if !params.Since.IsZero() {
-		params.Since = params.Since.UTC()
-	}
-	return params, nil
 }
 
 func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (UpsertAnswerMessageParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
 	params.DeckName = strings.TrimSpace(params.DeckName)
-	params.ResponseChannelID = strings.TrimSpace(params.ResponseChannelID)
+	if !params.PublishDateUTC.IsZero() {
+		params.PublishDateUTC = params.PublishDateUTC.UTC()
+	}
+	params.AnswerChannelID = strings.TrimSpace(params.AnswerChannelID)
 	params.QuestionText = strings.TrimSpace(params.QuestionText)
 	params.QuestionURL = strings.TrimSpace(params.QuestionURL)
 	params.AnswerText = strings.TrimSpace(params.AnswerText)
@@ -547,8 +455,8 @@ func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (Upser
 		return UpsertAnswerMessageParams{}, fmt.Errorf("guild id is required")
 	case params.OfficialPostID <= 0:
 		return UpsertAnswerMessageParams{}, fmt.Errorf("official post id is required")
-	case params.ResponseChannelID == "":
-		return UpsertAnswerMessageParams{}, fmt.Errorf("response channel id is required")
+	case params.AnswerChannelID == "":
+		return UpsertAnswerMessageParams{}, fmt.Errorf("answer channel id is required")
 	case params.AnswerText == "":
 		return UpsertAnswerMessageParams{}, fmt.Errorf("answer text is required")
 	case params.UserID == "":
@@ -556,48 +464,6 @@ func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (Upser
 	default:
 		return params, nil
 	}
-}
-
-func replyNonceFooterText(provisioningNonce string) string {
-	provisioningNonce = strings.TrimSpace(provisioningNonce)
-	if provisioningNonce == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s %s", replyNonceFooterKey, provisioningNonce)
-}
-
-func replyNonceNameSuffix(provisioningNonce string) string {
-	fragment := replyNonceNameFragment(provisioningNonce)
-	if fragment == "" {
-		return ""
-	}
-	return " [" + fragment + "]"
-}
-
-func replyNonceNameFragment(provisioningNonce string) string {
-	provisioningNonce = strings.TrimSpace(strings.ToLower(provisioningNonce))
-	if provisioningNonce == "" {
-		return ""
-	}
-	if len(provisioningNonce) > 8 {
-		provisioningNonce = provisioningNonce[:8]
-	}
-	return replyNonceNamePrefix + provisioningNonce
-}
-
-func starterMessageMatchesReplyNonce(message *discordgo.Message, footerMarker string) bool {
-	if message == nil || footerMarker == "" {
-		return false
-	}
-	for _, embed := range message.Embeds {
-		if embed == nil || embed.Footer == nil {
-			continue
-		}
-		if strings.TrimSpace(embed.Footer.Text) == footerMarker {
-			return true
-		}
-	}
-	return false
 }
 
 func quoteEmbedText(text string, limit int) string {
@@ -641,19 +507,109 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, queueP
 	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
 }
 
-func buildAnswerFooter(deckName string, questionNumber, officialPostID int64) string {
+func buildAnswerFooter(deckName string, publishDateUTC time.Time, officialPostID int64) string {
 	deckName = strings.TrimSpace(deckName)
+	if !publishDateUTC.IsZero() {
+		publishDateUTC = publishDateUTC.UTC()
+	}
+	publishDateText := ""
+	if !publishDateUTC.IsZero() {
+		publishDateText = publishDateUTC.Format("2006-01-02")
+	}
 
 	switch {
-	case deckName != "" && questionNumber > 0:
-		return fmt.Sprintf("%s | Question #%d", deckName, questionNumber)
+	case deckName != "" && publishDateText != "":
+		return fmt.Sprintf("%s | %s", deckName, publishDateText)
 	case deckName != "":
 		return deckName
-	case questionNumber > 0:
-		return fmt.Sprintf("Question #%d", questionNumber)
+	case publishDateText != "":
+		return publishDateText
 	case officialPostID > 0:
 		return fmt.Sprintf("Official QOTD #%d", officialPostID)
 	default:
 		return "Official QOTD"
 	}
+}
+
+func (p *Publisher) ensureOfficialQuestionListThread(ctx context.Context, session *discordgo.Session, forumChannelID, preferredThreadID string) (string, error) {
+	thread, err := resolveForumThreadByID(ctx, session, forumChannelID, preferredThreadID)
+	if err != nil {
+		return "", err
+	}
+	if thread == nil {
+		thread, err = session.ForumThreadStartComplex(
+			forumChannelID,
+			&discordgo.ThreadStart{
+				Name:                officialQuestionListThreadName,
+				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
+			},
+			&discordgo.MessageSend{
+				Content:         officialQuestionListThreadMessage,
+				AllowedMentions: &discordgo.MessageAllowedMentions{},
+			},
+		)
+		if err != nil {
+			return "", fmt.Errorf("create qotd questions list thread: %w", err)
+		}
+	}
+
+	threadID := ""
+	if thread != nil {
+		threadID = strings.TrimSpace(thread.ID)
+	}
+	if threadID == "" {
+		return "", fmt.Errorf("resolve qotd questions list thread: missing thread id")
+	}
+
+	if err := p.SetThreadState(ctx, session, threadID, ThreadState{
+		Pinned:   true,
+		Locked:   false,
+		Archived: false,
+	}); err != nil {
+		return "", fmt.Errorf("prepare qotd questions list thread: %w", err)
+	}
+	return threadID, nil
+}
+
+func resolveForumThreadByID(ctx context.Context, session *discordgo.Session, forumChannelID, threadID string) (*discordgo.Channel, error) {
+	forumChannelID = strings.TrimSpace(forumChannelID)
+	threadID = strings.TrimSpace(threadID)
+	if threadID == "" {
+		return nil, nil
+	}
+	if forumChannelID == "" {
+		return nil, fmt.Errorf("resolve qotd forum thread by id: forum channel id is required")
+	}
+	if session == nil {
+		return nil, fmt.Errorf("resolve qotd forum thread by id: discord session is required")
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	thread, err := session.Channel(threadID)
+	if err != nil {
+		if isNotFoundRESTError(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("resolve qotd forum thread by id: %w", err)
+	}
+	if thread == nil || strings.TrimSpace(thread.ParentID) != forumChannelID {
+		return nil, nil
+	}
+	return thread, nil
+}
+
+func compactThreadNameBase(questionText string) string {
+	questionText = strings.ReplaceAll(questionText, "\n", " ")
+	return strings.Join(strings.Fields(strings.TrimSpace(questionText)), " ")
+}
+
+func truncateThreadName(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) <= 100 {
+		return name
+	}
+	return strings.TrimSpace(name[:97]) + "..."
 }

@@ -81,20 +81,6 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	if err != nil {
 		return QOTDConfig{}, invalidQOTDInput("collector: %v", err)
 	}
-	if len(decks) == 0 {
-		legacyQuestionChannelID := strings.TrimSpace(in.QuestionChannelID)
-		legacyResponseChannelID := strings.TrimSpace(in.ResponseChannelID)
-		if in.Enabled || legacyQuestionChannelID != "" || legacyResponseChannelID != "" {
-			legacy := QOTDDeckConfig{
-				ID:                LegacyQOTDDefaultDeckID,
-				Name:              LegacyQOTDDefaultDeckName,
-				Enabled:           in.Enabled,
-				QuestionChannelID: legacyQuestionChannelID,
-				ResponseChannelID: legacyResponseChannelID,
-			}
-			decks = []QOTDDeckConfig{legacy}
-		}
-	}
 
 	if len(decks) == 0 {
 		if collector.IsZero() {
@@ -152,11 +138,10 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 
 func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 	out := QOTDDeckConfig{
-		ID:                strings.TrimSpace(in.ID),
-		Name:              strings.TrimSpace(in.Name),
-		Enabled:           in.Enabled,
-		QuestionChannelID: strings.TrimSpace(in.QuestionChannelID),
-		ResponseChannelID: strings.TrimSpace(in.ResponseChannelID),
+		ID:             strings.TrimSpace(in.ID),
+		Name:           strings.TrimSpace(in.Name),
+		Enabled:        in.Enabled,
+		ForumChannelID: strings.TrimSpace(in.ForumChannelID),
 	}
 
 	if out.ID == "" {
@@ -165,24 +150,12 @@ func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 	if out.Name == "" {
 		return QOTDDeckConfig{}, fmt.Errorf("name is required")
 	}
-	if out.QuestionChannelID != "" && !isAllDigits(out.QuestionChannelID) {
-		return QOTDDeckConfig{}, fmt.Errorf("question_channel_id must be numeric")
-	}
-	if out.ResponseChannelID != "" && !isAllDigits(out.ResponseChannelID) {
-		return QOTDDeckConfig{}, fmt.Errorf("response_channel_id must be numeric")
-	}
-	if out.QuestionChannelID == "" && out.ResponseChannelID != "" {
-		return QOTDDeckConfig{}, fmt.Errorf("question_channel_id is required when response_channel_id is set")
-	}
-	if out.ResponseChannelID == "" && out.QuestionChannelID != "" {
-		return QOTDDeckConfig{}, fmt.Errorf("response_channel_id is required when question_channel_id is set")
+	if out.ForumChannelID != "" && !isAllDigits(out.ForumChannelID) {
+		return QOTDDeckConfig{}, fmt.Errorf("forum_channel_id must be numeric")
 	}
 	if out.Enabled {
-		if out.QuestionChannelID == "" {
-			return QOTDDeckConfig{}, fmt.Errorf("question_channel_id is required when enabled")
-		}
-		if out.ResponseChannelID == "" {
-			return QOTDDeckConfig{}, fmt.Errorf("response_channel_id is required when enabled")
+		if out.ForumChannelID == "" {
+			return QOTDDeckConfig{}, fmt.Errorf("forum_channel_id is required when enabled")
 		}
 	}
 	return out, nil

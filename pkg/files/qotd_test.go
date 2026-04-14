@@ -1,6 +1,7 @@
 package files
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -8,7 +9,13 @@ import (
 func TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled(t *testing.T) {
 	t.Parallel()
 
-	if _, err := NormalizeQOTDConfig(QOTDConfig{Enabled: true}); err == nil {
+	if _, err := NormalizeQOTDConfig(QOTDConfig{
+		Decks: []QOTDDeckConfig{{
+			ID:      LegacyQOTDDefaultDeckID,
+			Name:    LegacyQOTDDefaultDeckName,
+			Enabled: true,
+		}},
+	}); err == nil {
 		t.Fatal("expected enabled qotd config without delivery targets to fail")
 	}
 }
@@ -21,9 +28,13 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	}, nil)
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: " 123456789012345678 ",
-		ResponseChannelID: " 223456789012345678 ",
+		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Decks: []QOTDDeckConfig{{
+			ID:             LegacyQOTDDefaultDeckID,
+			Name:           LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: " 123456789012345678 ",
+		}},
 	})
 	if err != nil {
 		t.Fatalf("SetQOTDConfig() failed: %v", err)
@@ -40,11 +51,8 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	if !deck.Enabled {
 		t.Fatal("expected qotd deck to remain enabled")
 	}
-	if deck.QuestionChannelID != "123456789012345678" {
-		t.Fatalf("expected trimmed question channel id, got %q", deck.QuestionChannelID)
-	}
-	if deck.ResponseChannelID != "223456789012345678" {
-		t.Fatalf("expected trimmed response channel id, got %q", deck.ResponseChannelID)
+	if deck.ForumChannelID != "123456789012345678" {
+		t.Fatalf("expected canonical forum channel id, got %q", deck.ForumChannelID)
 	}
 	if cfg.ActiveDeckID != LegacyQOTDDefaultDeckID {
 		t.Fatalf("expected default deck to become active, got %q", cfg.ActiveDeckID)
@@ -60,9 +68,13 @@ func TestSetQOTDConfigRollsBackOnSaveError(t *testing.T) {
 	}, saveErr)
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
-		Enabled:           true,
-		QuestionChannelID: "123456789012345678",
-		ResponseChannelID: "223456789012345678",
+		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Decks: []QOTDDeckConfig{{
+			ID:             LegacyQOTDDefaultDeckID,
+			Name:           LegacyQOTDDefaultDeckName,
+			Enabled:        true,
+			ForumChannelID: "123456789012345678",
+		}},
 	})
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected save error, got %v", err)
@@ -125,5 +137,28 @@ func TestDashboardQOTDConfigProvidesDefaultDeckForCollectorOnlySettings(t *testi
 	}
 	if display.Collector.SourceChannelID != "123456789012345678" {
 		t.Fatalf("expected collector settings to be preserved, got %+v", display.Collector)
+	}
+}
+
+func TestQOTDConfigUnmarshalMigratesLegacyChannelFields(t *testing.T) {
+	t.Parallel()
+
+	var cfg QOTDConfig
+	if err := json.Unmarshal([]byte(`{
+		"enabled": true,
+		"question_channel_id": "123456789012345678"
+	}`), &cfg); err != nil {
+		t.Fatalf("json.Unmarshal() failed: %v", err)
+	}
+
+	deck, ok := cfg.ActiveDeck()
+	if !ok {
+		t.Fatal("expected legacy payload to produce a default deck")
+	}
+	if !deck.Enabled {
+		t.Fatalf("expected legacy enabled flag to carry over, got %+v", deck)
+	}
+	if deck.ForumChannelID != "123456789012345678" {
+		t.Fatalf("expected legacy question channel to map to forum channel, got %+v", deck)
 	}
 }
