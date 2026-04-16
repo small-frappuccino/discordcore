@@ -93,175 +93,224 @@ Use it first for:
 - tracked-source pressure, hotspots, and workspace-noise review
 - explicit dashboard/backend contract checks
 - symbol/package/route lookup
-- scoped dependency tracing
-- hotspot discovery
-- prior observations and invariant recovery
+# AGENTS.md
 
-Required startup flow for a new coding session:
+Repository instructions for AI coding agents working in `discordcore`.
 
-1. `discordcore_repo_overview`
-2. if the index is stale, incomplete, or negative results look suspicious, run `discordcore_reindex`
-3. `discordcore_repo_audit` to surface tracked-source hotspots, noisy paths, and doc drift
-4. `discordcore_contract_checks` before route, feature-contract, or dashboard-boundary work
-5. `discordcore_task_context` for implementation, debugging, review, or architecture work
-6. `discordcore_find_nodes` to locate the exact package, route, feature, or page
-7. `discordcore_get_subgraph` before editing central files or changing boundaries
-8. `discordcore_list_observations` before touching sensitive areas
+This version is tuned for GitHub Copilot agents in VS Code, Copilot CLI, and related Copilot surfaces. Keep the file focused on durable repo facts, boundaries, contracts, and validation rules. Do not assume Codex-specific behavior such as isolated cloud sandboxes, mandatory auto-commits, clean worktrees, or custom citation syntax.
 
-After discovering a non-obvious invariant or drift point, add an observation with `discordcore_put_observation`.
+## 1. Mission
 
-`discordcore-mcp` narrows the search space. It does not replace source verification.
+Maintain this repository like a production system.
 
-## 6. Inspect Narrowly Vs Broadly
+Optimize for:
 
-Default to narrow inspection.
+1. correctness
+2. operational reliability
+3. maintainability
+4. observability
+5. low-drift changes that match local patterns
+
+Prefer narrow, source-backed changes over broad rewrites.
+
+## 2. Environment Assumptions
+
+Agents in this repo may be running inside VS Code against a live local workspace.
+
+Assume:
+
+- the worktree may already be dirty
+- the user may be editing files at the same time
+- generated assets may be present and modified locally
+- repo instructions are only one input alongside system, developer, user, skills, and memory
+
+Therefore:
+
+- never revert unrelated user changes
+- do not assume a clean branch or a disposable sandbox
+- verify live source before patching when MCP reports drift
+- keep instructions here durable and repo-specific, not tool-vendor-specific
+
+## 3. Repository Identity
+
+`discordcore` is the product repository. It owns:
+
+- the Go runtime and orchestration for Discord-facing behavior
+- the control API and dashboard-serving layer
+- canonical config and runtime state
+- Postgres-backed persistence and migrations
+- the embedded React dashboard under `ui/`
+
+Sibling repo:
+
+- `../alicebot` owns host bootstrap, machine-specific wiring, and final runtime packaging
+
+Boundary rule:
+
+- reusable product logic, state rules, contracts, and shared workflows belong in `discordcore`
+- host-specific setup belongs in `alicebot`
+
+## 4. Repo Map
+
+Use this responsibility map before editing:
+
+- `cmd/discordcore/`: example runner only
+- `pkg/app/`: runtime orchestration and startup wiring
+- `pkg/control/`: control API, auth/session handling, dashboard serving, guild/settings/feature routes
+- `pkg/files/`: canonical config model, normalization, persistence adapters, `ConfigManager`
+- `pkg/discord/`: Discord runtime behavior, commands, logging, cache, services, session handling
+- `pkg/storage/`: durable Postgres-backed domain storage
+- `pkg/persistence/`: DB open/ping/migrations
+- `pkg/partners/`: partner board rendering and sync helpers
+- `pkg/task/`: task router and scheduled/background jobs
+- `ui/src/app/`: routes, navigation registry, app-level routing helpers
+- `ui/src/api/control.ts`: canonical dashboard API contracts and client behavior
+- `ui/src/context/`: dashboard session, guild selection, login/logout, base URL handling
+- `ui/src/features/features/`: shared feature-area adapters and workspace hooks
+- `ui/src/features/partner-board/`: self-contained partner board workflow
+- `ui/src/pages/`: route-level page surfaces
+- `ui/dist/`: embedded build output; `index.html` placeholder must remain present
+
+## 5. Discovery Workflow
+
+Use `smallfrappuccino-mcp` first. It is the default repo navigation layer.
+
+Recommended session startup flow:
+
+1. `repo_overview`
+2. `reindex` only if the index is stale, suspicious, or incomplete
+3. `repo_audit`
+4. `contract_checks` before route, dashboard-boundary, or feature-contract work
+5. `task_context`
+6. `find_nodes` to locate the package, route, feature, page, or symbol you actually need
+7. `get_subgraph` before editing hotspot files or changing boundaries
+8. `list_observations` before touching sensitive areas
+
+After finding a non-obvious invariant, hotspot, or drift point, store it with `put_observation`.
+
+MCP narrows the search space. It does not replace reading the live source.
+
+## 6. Workspace Noise
+
+Prefer tracked-source inspection over broad recursive scans. The local workspace may include noise such as:
+
+- `ui/node_modules/`
+- root `node_modules/`
+- `ui/debug-screenshots/`
+- build outputs and browser artifacts
+- large tracked artifacts like `diff.txt`
+
+Do not infer conventions from those paths.
+
+If the MCP index reports drift in generated assets, validate live source before changing anything and avoid widening the patch based on generated files.
+
+## 7. Inspect Narrowly Vs Broadly
 
 Inspect narrowly when:
 
 - the task is confined to one route, one feature, one hook, one settings section, or one page
-- MCP has already identified the relevant package/file cluster
-- the change is an extension of an existing local pattern
+- MCP already identified the relevant package or file cluster
+- the change extends an existing local pattern
 
 Inspect broadly when:
 
-- changing shared contracts between backend and dashboard
-- changing config/state semantics in `pkg/files/`
-- changing routing, auth, or dashboard mount behavior
-- changing feature IDs, editable fields, or settings workspace shapes
+- changing backend and UI contracts together
+- changing config or state semantics in `pkg/files/`
+- changing auth, routing, dashboard mount behavior, or embed behavior
+- changing feature IDs, editable fields, or workspace shapes
 - touching a hotspot file
 
-If the task is local, do not start by reading all of `pkg/control/`, `pkg/discord/logging/`, or `ui/src/pages/`.
+Do not start local changes by reading all of `pkg/control/`, `pkg/discord/logging/`, or `ui/src/pages/`.
 
-## 7. Canonical Runtime And Route Contracts
+## 8. Source Of Truth
 
-These are current source-backed contracts and should be preserved unless intentionally changed across all layers.
-
-- Canonical dashboard base path is `/manage/`
-- `/dashboard/` is a legacy compatibility alias, not the primary route
-- backend route handling for the embedded SPA lives in `pkg/control/dashboard_handler.go`
-- HTTP registration and redirects live in `pkg/control/http_routes.go`
-- route construction and legacy mapping live in `ui/src/app/routes.ts`
-- Vite build base lives in `ui/vite.config.ts`
-- the SPA must not intercept `/v1/*` or `/auth/*`
-
-If you change dashboard routing, update backend, frontend, tests, and docs together.
-
-## 8. Source Of Truth Rules
-
-When docs and code disagree:
+When docs and source disagree:
 
 - trust source code and current tests first
-- treat `README.md` and `UI_RULES.md` as intent/context, not infallible implementation truth
-- update stale docs instead of forcing the code to match outdated prose
+- treat `README.md` and `UI_RULES.md` as intent and context, not implementation truth
+- update stale docs instead of forcing code to match outdated prose
 
-For UI implementation details, current CSS variables and shell/layout components are the source of truth:
+For dashboard implementation details, the current source of truth is the live code in:
 
 - `ui/src/index.css`
 - `ui/src/shell.css`
 - `ui/src/components/ui.tsx`
 
-## 9. Go Conventions For This Repo
+## 9. Canonical Contracts
 
-### 9.1 Package roles
+These contracts are current and source-backed unless intentionally changed across all layers.
 
-Respect the existing package responsibilities.
+- canonical dashboard base path is `/manage/`
+- `/dashboard/` is a legacy compatibility alias, not the primary route
+- backend SPA handling lives in `pkg/control/dashboard_handler.go`
+- dashboard HTTP registration lives in `pkg/control/http_routes.go`
+- route construction and legacy mapping live in `ui/src/app/routes.ts`
+- Vite build base lives in `ui/vite.config.ts`
+- the SPA must not intercept `/v1/*` or `/auth/*`
 
-- do not move business logic into `cmd/`
-- do not reimplement config/state rules in `pkg/control/` if they belong in `pkg/files/`
-- do not put Discord runtime rules into the dashboard
+If dashboard routing changes, update backend, frontend, tests, docs, and embed assumptions together.
 
-### 9.2 Errors and control flow
+## 10. Backend Rules
 
-Current code consistently favors explicit error propagation.
+Respect package ownership.
 
-- wrap errors with operation context using `fmt.Errorf("operation: %w", err)`
+- do not move reusable logic into `cmd/`
+- do not reimplement config/state rules in `pkg/control/` when they belong in `pkg/files/`
+- do not move Discord runtime behavior into the dashboard layer
+
+Error handling and control flow:
+
+- prefer explicit error propagation
+- wrap with operation context using `fmt.Errorf("operation: %w", err)`
 - avoid `panic` for expected runtime failures
-- return early on bad auth, invalid input, and unavailable dependencies
+- return early on bad auth, invalid input, and missing dependencies
 
-### 9.3 Logging and observability
+Logging and observability:
 
-Use the repo logging facilities.
+- use existing repo logging facilities, especially `pkg/log` and area-specific helpers
+- include operation context and relevant guild, channel, or user identifiers
+- never log secrets, tokens, OAuth credentials, or private message content
 
-- prefer `pkg/log` loggers and existing control/runtime logging helpers
-- include operation context and guild/channel/user identifiers when relevant
-- never log secrets, bearer tokens, OAuth credentials, or private message content
-
-### 9.4 Config and state mutation
-
-`pkg/files` is the canonical config/state layer.
+Config and state mutation:
 
 - treat `ConfigManager.Config()` and `GuildConfig()` results as read-only snapshots
-- mutate persisted config through `ConfigManager.UpdateConfig`, `UpdateRuntimeConfig`, or the existing helpers
-- preserve normalization and validation paths when editing config structures
-- if you change config semantics, update the normalization, persistence, route layer, and tests together
+- persist via `UpdateConfig`, `UpdateRuntimeConfig`, or existing helpers
+- preserve normalization and validation when changing config semantics
+- if config semantics change, update normalization, persistence, route handling, and tests together
 
-### 9.5 Control API contracts
+Testing style:
 
-The dashboard depends on explicit JSON contracts.
+- keep tests close to the changed package
+- prefer deterministic seams already present in the repo
+- do not require live Discord access
+- only use isolated Postgres helpers where the package already follows that pattern
 
-- keep response/request shape changes synchronized with `ui/src/api/control.ts`
-- if you add or rename feature IDs, editable fields, or workspace sections, update both the Go route layer and the UI adapters/pages/tests in the same change
+## 11. Dashboard And TypeScript Rules
 
-### 9.6 Testing style
+Keep API and route contracts centralized.
 
-Existing Go tests are targeted and package-local.
-
-- keep tests close to the package being changed
-- prefer deterministic test seams already present in the codebase over new mocking frameworks
-- do not require live Discord access for tests
-- use isolated Postgres helpers only where the package already does so
-
-### 9.7 Go anti-patterns in this repo
-
-Do not:
-
-- mutate published config snapshots directly
-- bypass validation/normalization before persisting config
-- add ad hoc logger stacks when `pkg/log` already covers the use case
-- widen giant files further when a helper or sibling file is the clearer move
-- re-grow decomposed entrypoints such as `pkg/control/features_routes.go`, `pkg/control/discord_oauth.go`, `pkg/storage/postgres_store.go`, or `pkg/discord/logging/monitoring.go`
-- add new cross-cutting free functions to a hotspot root file when the area already has a focused internal service or sibling-file seam
-- put dashboard-only semantics into `pkg/app/`
-
-## 10. TypeScript Conventions For This Repo
-
-The TS codebase is already strict. Preserve that strictness.
-
-- keep API contracts in `ui/src/api/control.ts`
-- keep route strings and legacy path mapping in `ui/src/app/routes.ts`
+- keep dashboard request and response shapes in `ui/src/api/control.ts`
+- keep route strings and legacy mapping in `ui/src/app/routes.ts`
 - keep navigation registry data in `ui/src/app/navigation.ts`
-- keep shared feature/workspace interpretation in `ui/src/features/features/`
-- keep partner-board-specific state and transformations in `ui/src/features/partner-board/`
-- avoid `any`; prefer precise interface/type additions
-- avoid duplicating request/response shapes inside page files
+- keep shared feature interpretation in `ui/src/features/features/`
+- keep partner-board-specific logic in `ui/src/features/partner-board/`
+- avoid `any`
+- avoid duplicating contract types inside page files
 
 When a backend contract changes, update:
 
 1. `ui/src/api/control.ts`
-2. feature/page adapters that consume it
-3. tests that pin that behavior
+2. the feature adapters or pages that consume it
+3. tests that pin the behavior
 
-## 11. TSX / React Conventions For This Repo
+React and page boundaries:
 
-### 11.1 Component boundaries
+- route-level surfaces belong in `ui/src/pages/`
+- reusable shell pieces belong in `ui/src/components/ui.tsx`
+- shared domain hooks and helpers belong in `ui/src/features/*`
+- use `DashboardSessionContext` and existing feature hooks before adding ad hoc fetch logic
 
-Current structure is:
-
-- route-level surfaces in `ui/src/pages/`
-- reusable page shell pieces in `ui/src/components/ui.tsx`
-- shared domain hooks/helpers in `ui/src/features/*`
-
-Keep it that way.
-
-### 11.2 Session and fetch behavior
-
-- use `DashboardSessionContext` for auth state, selected guild, base URL, login/logout, and shared client access
-- use existing feature hooks such as `useFeatureWorkspace`, `useFeatureMutation`, `useGuildRoleOptions`, `useGuildChannelOptions`, and `useGuildMemberOptions`
-- do not add scattered `fetch` logic to page files when the existing client/hooks model covers the need
-
-### 11.3 Page growth
-
-Several pages are already large.
+Avoid widening already large pages unless the task is truly local to that page:
 
 - `ui/src/pages/RolesPage.tsx`
 - `ui/src/pages/ModerationPage.tsx`
@@ -269,43 +318,26 @@ Several pages are already large.
 - `ui/src/pages/StatsPage.tsx`
 - `ui/src/pages/LoggingCategoryPage.tsx`
 
-Do not make these pages broader by default. When adding a new sub-workflow or repeated block:
+If a page is already large, extract helpers or page-local subcomponents instead of growing the file further.
 
-- extract helpers into `ui/src/features/features/*`
-- extract page-local subcomponents when the file is already difficult to scan
-- keep raw `feature.details` parsing out of JSX where possible
+## 12. UI Semantics
 
-### 11.4 UI semantics
+Preserve the compact operational dashboard style already present in the app.
 
-- preserve the compact operational dashboard style already present in the app
-- prefer existing primitives such as `PageHeader`, `FeatureWorkspaceLayout`, `SurfaceCard`, `StatusBadge`, `EmptyState`, and picker fields before inventing new layout systems
-- use human-facing labels in the UI; avoid exposing raw internal enum or storage names unless the page is explicitly diagnostic
+- prefer existing primitives such as `PageHeader`, `FeatureWorkspaceLayout`, `SurfaceCard`, `StatusBadge`, and `EmptyState`
+- use human-facing labels instead of raw internal enum or storage names unless the page is explicitly diagnostic
 - use `import.meta.env.BASE_URL` for embedded asset paths
-- default settings-style pages to a direct composition: short title, visible control, optional one-line secondary text only when it prevents ambiguity
-- keep standard dashboard pages free of diagnostic metadata such as provenance, override state, raw IDs, fallback inputs, and repeated status badges when the control already shows the state
-- if low-level metadata is still needed for debugging, gate it behind explicit diagnostic UI instead of exposing it in the default page flow
-- when adjacent settings belong to the same workflow, prefer one subtle grouped surface with internal row dividers and whitespace between groups instead of full-width divider lines between unrelated sections
-- expanded child controls should stay inside the parent setting group; do not let an inline expansion escape into a separate decorative slab or detached field block
+- default settings-style pages to direct controls with minimal helper text
+- keep standard dashboard pages free of provenance noise, repeated state badges, raw IDs, or fallback-by-ID editors unless the screen is explicitly diagnostic
+- gate low-level diagnostic metadata behind explicit diagnostic UI instead of exposing it in the default flow
+- keep adjacent settings in grouped surfaces with internal row dividers when they belong to the same workflow
+- keep expanded child controls inside the same parent setting group
 
-### 11.5 CSS and styling
+When in doubt, follow `UI_RULES.md` and current source patterns rather than inventing a new dashboard visual language.
 
-- use the existing CSS variables and component classes in `ui/src/index.css` and `ui/src/shell.css`
-- do not reintroduce stale token values from docs when they disagree with code
-- keep shell/layout changes aligned with current `DashboardLayout` behavior rather than old static design rules
+## 13. Hotspots And Decomposition Invariants
 
-### 11.6 React anti-patterns in this repo
-
-Do not:
-
-- duplicate route or navigation definitions inside pages
-- bypass `ui/src/api/control.ts` with hand-rolled request code
-- move backend business rules into components
-- hardcode `/dashboard/` as if it were the primary dashboard path
-- keep expanding megafile pages when the logic belongs in hooks/helpers
-
-## 12. Known Hotspots
-
-These files are central and high-context. Read more of their neighborhood before editing them.
+These files are central and need more neighborhood reading before edits:
 
 - `pkg/discord/logging/monitoring.go`
 - `pkg/storage/postgres_store.go`
@@ -318,42 +350,30 @@ These files are central and high-context. Read more of their neighborhood before
 - `ui/src/pages/RolesPage.tsx`
 - `ui/src/pages/ModerationPage.tsx`
 
-If a change only needs one branch/helper inside a hotspot, avoid refactoring unrelated sections.
+These seams are intentional and should stay decomposed:
 
-## 12.1 Decomposition Invariants
+- `pkg/control/features_routes.go`: router and dispatch only; feature catalog, workspace shaping, readiness, blockers, patch flows, and toggle bindings belong in focused services or `features_*.go` siblings
+- `pkg/control/discord_oauth.go`: shared OAuth types, constants, provider construction, and permission parsing only; flow logic belongs in `discord_oauth_*.go` siblings or the dedicated service
+- `pkg/storage/postgres_store.go`: `Store` type, bootstrap, schema init entrypoint, and shared SQL helpers only; domain behavior belongs in focused `postgres_store_*.go` files
+- `pkg/discord/logging/monitoring.go`: lifecycle and orchestration only; gateway handlers, reactions, cache loops, and permission mirroring belong in focused `monitoring_*.go` files
 
-These seams are intentional and should be preserved when adding features or evolving existing code:
+When coordination spans multiple files, prefer extending an existing focused service or sibling-file seam instead of regrowing the root hotspot file.
 
-- `pkg/control/features_routes.go`
-  - router/dispatch only
-  - feature catalog, workspace shaping, readiness, blockers, patch flows, and toggle binding changes belong in `featureControlService` or focused `features_*.go` siblings
-- `pkg/control/discord_oauth.go`
-  - shared OAuth types, constants, provider construction, and permission parsing only
-  - login/callback/session/cookie/guild-access flows belong in `discordOAuthControlService` or focused `discord_oauth_*.go` siblings
-- `pkg/storage/postgres_store.go`
-  - `Store` type, bootstrap, schema init entrypoint, and shared SQL helpers only
-  - domain behavior belongs in focused `postgres_store_*.go` files
-- `pkg/discord/logging/monitoring.go`
-  - lifecycle/orchestration only
-  - gateway handlers, user/avatar/role reactions, state/cache loops, and bot permission mirroring belong in focused `monitoring_*.go` files
-
-When a workflow needs coordination across multiple sibling files, prefer adding or extending an explicit internal service instead of pushing more logic back into the root file.
-
-## 13. Preferred Modification Strategy
+## 14. Preferred Change Strategy
 
 For production changes:
 
 1. identify the exact contract or workflow being changed
-2. locate the minimal backend and UI files through MCP plus source verification
-3. preserve the existing local style in that area
+2. locate the minimal files through MCP plus source verification
+3. preserve local style and ownership boundaries
 4. update tests near the changed behavior
-5. validate the narrow change before considering any cleanup
+5. validate the narrow change before considering cleanup
 
 Do not combine unrelated refactors with a behavior fix unless the refactor is required to make the fix safe.
 
-## 14. Validation Expectations
+## 15. Validation Expectations
 
-At minimum, run the checks appropriate to the touched area.
+Run the checks that match the touched area.
 
 Backend changes:
 
@@ -374,33 +394,44 @@ Route or embed contract changes:
 - verify `pkg/control/dashboard_handler.go`
 - ensure `ui/dist/index.html` still exists
 
-Feature/settings contract changes:
+Feature or settings contract changes:
 
-- verify Go route/workspace builders
+- verify Go route and workspace builders
 - verify `ui/src/api/control.ts`
-- verify feature adapters/pages consuming the changed fields
+- verify the adapters or pages consuming the changed fields
 
-## 15. Pre-Merge Checklist
+If a relevant validation step was not run, say so explicitly.
 
-- correct repository boundary respected (`discordcore` vs `alicebot`)
-- MCP overview/context lookup used before broad edits
-- source files, not workspace artifacts, were used as the primary basis for changes
-- canonical `/manage/` routing preserved unless intentionally changed across layers
-- dashboard/backend contracts kept in sync
-- config mutations still normalize and validate
-- logging still carries operational context
-- no UI business logic added for backend-owned rules
-- tests/lint/build steps for the touched area were run or explicitly reported as not run
+## 16. Durable Instructions Vs Skills Or Memory
 
-## 16. Work Reporting
+Keep this file for stable repo rules.
 
-Every substantial change report should include:
+Good content for `AGENTS.md`:
+
+- repository boundaries
+- ownership rules
+- canonical contracts
+- validation expectations
+- hotspot and decomposition invariants
+
+Do not bloat this file with:
+
+- temporary task plans
+- prompt boilerplate
+- vendor-specific formatting rituals
+- ephemeral one-off implementation notes
+
+If the repo later adds Copilot skills or benefits from Copilot memory, keep those for specialized or learned workflows. Keep `AGENTS.md` as the durable baseline.
+
+## 17. Work Reporting
+
+Substantial work reports should include:
 
 - problem summary
 - files modified
 - previous behavior
 - new behavior
-- validation steps
+- validation run
 - remaining risks or follow-up drift
 
-If you discover stale repo guidance while working, call it out explicitly instead of silently working around it.
+If repo guidance is stale, call it out explicitly and update the guidance when appropriate.
