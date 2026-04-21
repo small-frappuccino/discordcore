@@ -13,6 +13,7 @@ export interface GuildRolesSettingsSnapshot {
   allowedRoleIds: string[];
   dashboardReadRoleIds: string[];
   dashboardWriteRoleIds: string[];
+  verificationRoleId: string;
 }
 
 const guildRolesSettingsCache = new Map<string, CachedGuildRolesSettings>();
@@ -21,6 +22,7 @@ const emptySnapshot: GuildRolesSettingsSnapshot = {
   allowedRoleIds: [],
   dashboardReadRoleIds: [],
   dashboardWriteRoleIds: [],
+  verificationRoleId: "",
 };
 
 export function useGuildRolesSettings() {
@@ -198,6 +200,7 @@ function mapGuildRolesSettings(roles: GuildRolesSettingsSection) {
     allowedRoleIds: normalizeRoleIds(roles.allowed),
     dashboardReadRoleIds: normalizeRoleIds(roles.dashboard_read),
     dashboardWriteRoleIds: normalizeRoleIds(roles.dashboard_write),
+    verificationRoleId: roles.verification_role ?? "",
   };
 }
 
@@ -215,6 +218,7 @@ function isRolesSettingsEmpty(roles: GuildRolesSettingsSnapshot) {
   return (
     roles.allowedRoleIds.length === 0 &&
     roles.dashboardReadRoleIds.length === 0 &&
-    roles.dashboardWriteRoleIds.length === 0
+    roles.dashboardWriteRoleIds.length === 0 &&
+    roles.verificationRoleId === ""
   );
 }

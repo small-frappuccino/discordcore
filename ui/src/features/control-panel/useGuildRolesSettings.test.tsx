@@ -57,6 +57,7 @@ describe("useGuildRolesSettings", () => {
       allowedRoleIds: [],
       dashboardReadRoleIds: [],
       dashboardWriteRoleIds: [],
+      verificationRoleId: "",
     });
 
     firstHook.unmount();
@@ -68,6 +69,7 @@ describe("useGuildRolesSettings", () => {
       allowedRoleIds: [],
       dashboardReadRoleIds: [],
       dashboardWriteRoleIds: [],
+      verificationRoleId: "",
     });
 
     await waitFor(() => {
