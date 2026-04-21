@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   DashboardPageSurface,
   EntityMultiPickerField,
-  EntityPickerField,
   EmptyState,
   PageHeader,
   UnsavedChangesBar,
@@ -31,18 +30,15 @@ export function ControlPanelPage() {
   const {
     dashboardReadRoleIds,
     dashboardWriteRoleIds,
-    verificationRoleId,
     hasUnsavedChanges,
     replaceDrafts,
     toggleDashboardReadRole,
     toggleDashboardWriteRole,
-    setVerificationRoleId,
   } = useDashboardAccessRoleDrafts({
     authState,
     selectedGuildID,
     dashboardReadRoleIds: rolesSettings.roles.dashboardReadRoleIds,
     dashboardWriteRoleIds: rolesSettings.roles.dashboardWriteRoleIds,
-    verificationRoleId: rolesSettings.roles.verificationRoleId,
   });
 
   const controlsDisabled =
@@ -68,7 +64,6 @@ export function ControlPanelPage() {
       const roles = {
         dashboard_read: normalizeRoleIds(dashboardReadRoleIds),
         dashboard_write: normalizeRoleIds(dashboardWriteRoleIds),
-        verification_role: verificationRoleId,
       };
       const response = await client.updateGuildSettings(selectedGuildID.trim(), {
         roles,
@@ -79,14 +74,11 @@ export function ControlPanelPage() {
       const nextWriteRoles = normalizeRoleIds(
         response.workspace.sections.roles.dashboard_write,
       );
-      const nextVerificationRoleId = response.workspace.sections.roles.verification_role ?? "";
-
-      replaceDrafts(nextReadRoles, nextWriteRoles, nextVerificationRoleId);
+      replaceDrafts(nextReadRoles, nextWriteRoles);
       rolesSettings.updateCachedRoles({
         ...rolesSettings.roles,
         dashboardReadRoleIds: nextReadRoles,
         dashboardWriteRoleIds: nextWriteRoles,
-        verificationRoleId: nextVerificationRoleId,
       });
       setNotice(null);
     } catch (error) {
@@ -103,7 +95,6 @@ export function ControlPanelPage() {
     replaceDrafts(
       normalizeRoleIds(rolesSettings.roles.dashboardReadRoleIds),
       normalizeRoleIds(rolesSettings.roles.dashboardWriteRoleIds),
-      rolesSettings.roles.verificationRoleId,
     );
     setNotice(null);
     rolesSettings.clearNotice();
@@ -212,29 +203,6 @@ export function ControlPanelPage() {
         <section className="control-panel-flat-section">
           <div className="workspace-view-header">
             <div className="card-copy">
-              <p className="section-label">Server roles</p>
-              <h2>Verification role</h2>
-              <p className="section-description">
-                Select the role assigned to verified members.
-              </p>
-            </div>
-          </div>
-
-          <div className="control-panel-grid">
-            <EntityPickerField
-              label="Verified role"
-              value={verificationRoleId}
-              onChange={setVerificationRoleId}
-              options={rolePickerOptions}
-              disabled={controlsDisabled}
-              placeholder="No primary role configured"
-            />
-          </div>
-        </section>
-
-        <section className="control-panel-flat-section">
-          <div className="workspace-view-header">
-            <div className="card-copy">
               <p className="section-label">Access rules</p>
               <h2>Implicit administrator access</h2>
               <p className="section-description">
@@ -285,14 +253,12 @@ interface DashboardAccessRoleDraftsArgs {
   selectedGuildID: string;
   dashboardReadRoleIds: string[];
   dashboardWriteRoleIds: string[];
-  verificationRoleId: string;
 }
 
 interface DashboardAccessRoleDraftsState {
   guildID: string;
   dashboardReadRoleIds: string[];
   dashboardWriteRoleIds: string[];
-  verificationRoleId: string;
   hasUnsavedChanges: boolean;
 }
 
@@ -301,7 +267,6 @@ function useDashboardAccessRoleDrafts({
   selectedGuildID,
   dashboardReadRoleIds,
   dashboardWriteRoleIds,
-  verificationRoleId,
 }: DashboardAccessRoleDraftsArgs) {
   const normalizedGuildID = selectedGuildID.trim();
   const [drafts, setDrafts] = useState<DashboardAccessRoleDraftsState>(() =>
@@ -310,7 +275,6 @@ function useDashboardAccessRoleDrafts({
       normalizedGuildID,
       dashboardReadRoleIds,
       dashboardWriteRoleIds,
-      verificationRoleId,
     ),
   );
 
@@ -321,7 +285,6 @@ function useDashboardAccessRoleDrafts({
         normalizedGuildID,
         dashboardReadRoleIds,
         dashboardWriteRoleIds,
-        verificationRoleId,
       );
 
       if (
@@ -341,20 +304,14 @@ function useDashboardAccessRoleDrafts({
     authState,
     dashboardReadRoleIds,
     dashboardWriteRoleIds,
-    verificationRoleId,
     normalizedGuildID,
   ]);
 
-  function replaceDrafts(
-    nextReadRoleIds: string[],
-    nextWriteRoleIds: string[],
-    nextVerificationRoleId: string,
-  ) {
+  function replaceDrafts(nextReadRoleIds: string[], nextWriteRoleIds: string[]) {
     setDrafts({
       guildID: normalizedGuildID,
       dashboardReadRoleIds: nextReadRoleIds,
       dashboardWriteRoleIds: nextWriteRoleIds,
-      verificationRoleId: nextVerificationRoleId,
       hasUnsavedChanges: false,
     });
   }
@@ -375,23 +332,13 @@ function useDashboardAccessRoleDrafts({
     }));
   }
 
-  function setVerificationRoleId(roleId: string) {
-    setDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      verificationRoleId: roleId,
-      hasUnsavedChanges: true,
-    }));
-  }
-
   return {
     dashboardReadRoleIds: drafts.dashboardReadRoleIds,
     dashboardWriteRoleIds: drafts.dashboardWriteRoleIds,
-    verificationRoleId: drafts.verificationRoleId,
     hasUnsavedChanges: drafts.hasUnsavedChanges,
     replaceDrafts,
     toggleDashboardReadRole,
     toggleDashboardWriteRole,
-    setVerificationRoleId,
   };
 }
 
@@ -400,14 +347,12 @@ function createDashboardAccessRoleDraftsState(
   normalizedGuildID: string,
   dashboardReadRoleIds: string[],
   dashboardWriteRoleIds: string[],
-  verificationRoleId: string,
 ): DashboardAccessRoleDraftsState {
   if (authState !== "signed_in" || normalizedGuildID === "") {
     return {
       guildID: "",
       dashboardReadRoleIds: [],
       dashboardWriteRoleIds: [],
-      verificationRoleId: "",
       hasUnsavedChanges: false,
     };
   }
@@ -416,7 +361,6 @@ function createDashboardAccessRoleDraftsState(
     guildID: normalizedGuildID,
     dashboardReadRoleIds,
     dashboardWriteRoleIds,
-    verificationRoleId,
     hasUnsavedChanges: false,
   };
 }
@@ -428,7 +372,6 @@ function areDashboardAccessRoleDraftsEqual(
   return (
     currentDrafts.guildID === nextDrafts.guildID &&
     currentDrafts.hasUnsavedChanges === nextDrafts.hasUnsavedChanges &&
-    currentDrafts.verificationRoleId === nextDrafts.verificationRoleId &&
     areStringListsEqual(
       currentDrafts.dashboardReadRoleIds,
       nextDrafts.dashboardReadRoleIds,

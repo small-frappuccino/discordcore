@@ -420,7 +420,6 @@ export interface GuildRolesSettingsSection {
   allowed?: string[];
   dashboard_read?: string[];
   dashboard_write?: string[];
-  verification_role?: string;
 }
 
 export interface GuildSettingsWorkspace {
