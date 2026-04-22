@@ -80,7 +80,8 @@ export interface QOTDDeck {
   id: string;
   name: string;
   enabled?: boolean;
-  forum_channel_id?: string;
+  channel_id?: string;
+  verified_role_id?: string;
 }
 
 export interface QOTDCollectorConfig {
@@ -91,6 +92,7 @@ export interface QOTDCollectorConfig {
 }
 
 export interface QOTDConfig {
+  verified_role_id?: string;
   active_deck_id?: string;
   decks?: QOTDDeck[];
   collector?: QOTDCollectorConfig;
