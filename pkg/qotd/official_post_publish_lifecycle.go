@@ -172,9 +172,9 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 		}
 	}
 
-	threadName := buildOfficialThreadName(post.QuestionTextSnapshot, 0)
+	threadName := buildOfficialThreadName(0)
 	if question != nil {
-		threadName = buildOfficialThreadName(question.Body, question.QueuePosition)
+		threadName = buildOfficialThreadName(question.QueuePosition)
 	}
 
 	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, post, question, availableQuestions, threadName, now)

@@ -28,7 +28,7 @@ var requiredSchemaTables = []string{
 }
 
 var requiredSchemaColumns = map[string][]string{
-	"member_joins": []string{"last_seen_at", "is_bot", "left_at"},
+	"member_joins": {"last_seen_at", "is_bot", "left_at"},
 }
 
 func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {

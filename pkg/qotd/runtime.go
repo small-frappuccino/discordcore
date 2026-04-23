@@ -129,7 +129,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		*provisioned,
 		question,
 		availableQuestions,
-		buildOfficialThreadName(question.Body, question.QueuePosition),
+		buildOfficialThreadName(question.QueuePosition),
 		now,
 	)
 	if err != nil {

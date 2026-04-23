@@ -114,7 +114,7 @@ func (s *Server) handleSettingsOverviewGet(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (s *Server) handleGlobalSettingsGet(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGlobalSettingsGet(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.configManager.SnapshotConfig()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",

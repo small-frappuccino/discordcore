@@ -138,7 +138,7 @@ func (s *Server) handleQOTDSummaryGet(w http.ResponseWriter, r *http.Request, gu
 	})
 }
 
-func (s *Server) handleQOTDSettingsGet(w http.ResponseWriter, r *http.Request, guildID string) {
+func (s *Server) handleQOTDSettingsGet(w http.ResponseWriter, _ *http.Request, guildID string) {
 	settings, err := s.qotdService.GetSettings(guildID)
 	if err != nil {
 		status := qotdErrorStatus(err)

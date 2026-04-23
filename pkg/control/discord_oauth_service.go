@@ -381,16 +381,6 @@ func (svc *discordOAuthControlService) resolveAccessibleGuilds(
 	return svc.guildAccessResolver.ResolveAccessibleGuilds(ctx, session)
 }
 
-func (svc *discordOAuthControlService) resolveAccessibleGuildsFresh(
-	ctx context.Context,
-	session discordOAuthSession,
-) ([]accessibleGuildResponse, error) {
-	if svc == nil || svc.guildAccessResolver == nil {
-		return nil, errDiscordOAuthUnavailable
-	}
-	return svc.guildAccessResolver.ResolveAccessibleGuildsFresh(ctx, session)
-}
-
 func (svc *discordOAuthControlService) resolveAccessibleGuildsRefreshed(
 	ctx context.Context,
 	session discordOAuthSession,

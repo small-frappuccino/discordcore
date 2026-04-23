@@ -124,7 +124,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 			normalized.ChannelID,
 			result.StarterMessageID,
 			&discordgo.ThreadStart{
-				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.QuestionText, normalized.QueuePosition, normalized.ThreadName),
+				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.QueuePosition, normalized.ThreadName),
 				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
 			},
 		)
@@ -181,7 +181,6 @@ func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.
 		normalized.DeckName,
 		normalized.PublishDateUTC,
 		normalized.QuestionText,
-		normalized.QuestionURL,
 		normalized.AnswerText,
 		normalized.UserID,
 		normalized.UserDisplayName,
@@ -294,7 +293,7 @@ func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questio
 	}
 }
 
-func buildAnswerEmbed(deckName string, publishDateUTC time.Time, questionText, questionURL, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
+func buildAnswerEmbed(deckName string, publishDateUTC time.Time, questionText, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
 	userDisplayName = strings.TrimSpace(userDisplayName)
 	if userDisplayName == "" {
 		userDisplayName = strings.TrimSpace(userID)
@@ -324,7 +323,7 @@ func buildAnswerEmbed(deckName string, publishDateUTC time.Time, questionText, q
 	return embed
 }
 
-func buildOfficialPostName(publishDateUTC time.Time, questionText string, queuePosition int64, explicitName string) string {
+func buildOfficialPostName(publishDateUTC time.Time, queuePosition int64, explicitName string) string {
 	explicitName = strings.TrimSpace(explicitName)
 	if explicitName != "" {
 		return truncateThreadName(explicitName)

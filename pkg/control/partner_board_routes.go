@@ -12,7 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 )
 
-func (s *Server) handlePartnerBoardGet(w http.ResponseWriter, r *http.Request, guildID string) {
+func (s *Server) handlePartnerBoardGet(w http.ResponseWriter, _ *http.Request, guildID string) {
 	board, err := s.partnerBoardService.GetPartnerBoard(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
@@ -27,7 +27,7 @@ func (s *Server) handlePartnerBoardGet(w http.ResponseWriter, r *http.Request, g
 	})
 }
 
-func (s *Server) handlePartnerBoardTargetGet(w http.ResponseWriter, r *http.Request, guildID string) {
+func (s *Server) handlePartnerBoardTargetGet(w http.ResponseWriter, _ *http.Request, guildID string) {
 	target, err := s.partnerBoardService.GetPartnerBoardTarget(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
@@ -67,7 +67,7 @@ func (s *Server) handlePartnerBoardTargetPut(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (s *Server) handlePartnerBoardTemplateGet(w http.ResponseWriter, r *http.Request, guildID string) {
+func (s *Server) handlePartnerBoardTemplateGet(w http.ResponseWriter, _ *http.Request, guildID string) {
 	template, err := s.partnerBoardService.GetPartnerBoardTemplate(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
@@ -107,7 +107,7 @@ func (s *Server) handlePartnerBoardTemplatePut(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (s *Server) handlePartnerBoardPartnersList(w http.ResponseWriter, r *http.Request, guildID string) {
+func (s *Server) handlePartnerBoardPartnersList(w http.ResponseWriter, _ *http.Request, guildID string) {
 	partners, err := s.partnerBoardService.ListPartners(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
