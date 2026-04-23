@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -90,6 +91,31 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 
 	if got != "question of the day #1" {
 		t.Fatalf("unexpected official post name: %q", got)
+	}
+}
+
+func TestTruncateEmbedTextPreservesUTF8Boundaries(t *testing.T) {
+	t.Parallel()
+
+	got := truncateEmbedText(strings.Repeat("á", 5), 4)
+	if got != "á..." {
+		t.Fatalf("unexpected truncated embed text: %q", got)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("expected valid utf-8 after truncation, got %q", got)
+	}
+}
+
+func TestTruncateThreadNamePreservesUTF8Boundaries(t *testing.T) {
+	t.Parallel()
+
+	got := truncateThreadName(strings.Repeat("😀", 100) + "!")
+	want := strings.Repeat("😀", 97) + "..."
+	if got != want {
+		t.Fatalf("unexpected truncated thread name: %q", got)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("expected valid utf-8 after truncation, got %q", got)
 	}
 }
 

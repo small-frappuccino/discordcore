@@ -20,8 +20,8 @@ var errFakePublishFailed = errors.New("fake publish failed")
 type fakePublisher struct {
 	publishedParams  []discordqotd.PublishOfficialPostParams
 	publishResponses []fakePublishResponse
-	setupParams      []discordqotd.SetupForumParams
-	setupResults     []fakeSetupForumResponse
+	setupParams      []discordqotd.SetupChannelParams
+	setupResults     []fakeSetupChannelResponse
 	answerParams     []discordqotd.UpsertAnswerMessageParams
 	threadStates     map[string]discordqotd.ThreadState
 	fetchCalls       []string
@@ -35,8 +35,8 @@ type fakePublishResponse struct {
 	err    error
 }
 
-type fakeSetupForumResponse struct {
-	result *discordqotd.SetupForumResult
+type fakeSetupChannelResponse struct {
+	result *discordqotd.SetupChannelResult
 	err    error
 }
 
@@ -86,11 +86,11 @@ func defaultFakePublishedOfficialPost(params discordqotd.PublishOfficialPostPara
 		StarterMessageID:           messageID,
 		AnswerChannelID:            answerChannelID,
 		PublishedAt:                publishedAt,
-		PostURL:                    discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
+		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}
 }
 
-func (p *fakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, params discordqotd.SetupForumParams) (*discordqotd.SetupForumResult, error) {
+func (p *fakePublisher) SetupChannel(_ context.Context, _ *discordgo.Session, params discordqotd.SetupChannelParams) (*discordqotd.SetupChannelResult, error) {
 	p.setupParams = append(p.setupParams, params)
 	if len(p.setupResults) > 0 {
 		response := p.setupResults[0]
@@ -105,16 +105,10 @@ func (p *fakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, para
 	if channelID == "" {
 		channelID = "channel-setup-1"
 	}
-	questionListThreadID := strings.TrimSpace(params.PreferredQuestionListThreadID)
-	if questionListThreadID == "" {
-		questionListThreadID = "questions-list-thread"
-	}
-	return &discordqotd.SetupForumResult{
-		ChannelID:            channelID,
-		ChannelName:          "☆-qotd-☆",
-		ChannelURL:           discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
-		QuestionListThreadID: questionListThreadID,
-		QuestionListPostURL:  discordqotd.BuildChannelJumpURL(params.GuildID, questionListThreadID),
+	return &discordqotd.SetupChannelResult{
+		ChannelID:   channelID,
+		ChannelName: "☆-qotd-☆",
+		ChannelURL:  discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
 	}, nil
 }
 
@@ -264,7 +258,7 @@ func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	}
 }
 
-func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
+func TestSetupChannelEnablesActiveDeckAndPersistsQOTDSurface(t *testing.T) {
 	t.Parallel()
 
 	service, store, fake := newTestQOTDService(t)
@@ -280,9 +274,9 @@ func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
 		t.Fatalf("UpdateSettings(initial) failed: %v", err)
 	}
 
-	result, err := service.SetupForum(context.Background(), "g1", "", &discordgo.Session{})
+	result, err := service.SetupChannel(context.Background(), "g1", "", &discordgo.Session{})
 	if err != nil {
-		t.Fatalf("SetupForum() failed: %v", err)
+		t.Fatalf("SetupChannel() failed: %v", err)
 	}
 	if result == nil {
 		t.Fatal("expected setup result")
@@ -293,7 +287,7 @@ func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
 	if fake.setupParams[0].GuildID != "g1" {
 		t.Fatalf("unexpected setup params: %+v", fake.setupParams[0])
 	}
-	if result.ChannelID != "channel-setup-1" || result.QuestionListThreadID != "questions-list-thread" {
+	if result.ChannelID != "channel-setup-1" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
 
@@ -313,7 +307,7 @@ func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQOTDSurfaceByDeck() failed: %v", err)
 	}
-	if surface == nil || surface.ChannelID != "channel-setup-1" || surface.QuestionListThreadID != "questions-list-thread" {
+	if surface == nil || surface.ChannelID != "channel-setup-1" || surface.QuestionListThreadID != "" {
 		t.Fatalf("unexpected persisted qotd surface: %+v", surface)
 	}
 }

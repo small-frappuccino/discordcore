@@ -161,3 +161,30 @@ func TestQuestionListArtifactPublisherRelocksAfterAppendFailure(t *testing.T) {
 		t.Fatalf("unexpected thread state sequence after failure: %+v", transport.stateCalls)
 	}
 }
+
+func TestQuestionListArtifactPublisherReturnsJoinedAppendAndRelockErrors(t *testing.T) {
+	t.Parallel()
+
+	sendErr := errors.New("discord write failed")
+	lockErr := errors.New("discord relock failed")
+	transport := &fakeQuestionListArtifactTransport{
+		sendErr: sendErr,
+		lockErr: lockErr,
+	}
+	publisher := questionListArtifactPublisher{transport: transport}
+
+	_, err := publisher.Publish(context.Background(), questionListArtifactPublishParams{
+		ForumChannelID: "forum-1",
+		OfficialPostID: 42,
+		QuestionEmbed:  buildOfficialQuestionEmbed("Default", 3, "What is your answer?", 1),
+	})
+	if err == nil {
+		t.Fatal("expected combined append and relock failure")
+	}
+	if !errors.Is(err, sendErr) {
+		t.Fatalf("expected combined error to match send error, got %v", err)
+	}
+	if !errors.Is(err, lockErr) {
+		t.Fatalf("expected combined error to match relock error, got %v", err)
+	}
+}

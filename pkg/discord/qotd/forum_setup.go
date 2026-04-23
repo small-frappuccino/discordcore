@@ -13,57 +13,50 @@ const (
 	canonicalQOTDChannelTopic = "Daily QOTD prompts and answer threads."
 )
 
-type SetupForumParams struct {
-	GuildID                       string
-	PreferredChannelID            string
-	PreferredQuestionListThreadID string
-	VerifiedRoleID                string
+type SetupChannelParams struct {
+	GuildID            string
+	PreferredChannelID string
+	VerifiedRoleID     string
 }
 
-type SetupForumResult struct {
-	ChannelID            string
-	ChannelName          string
-	ChannelURL           string
-	QuestionListThreadID string
-	QuestionListPostURL  string
+type SetupChannelResult struct {
+	ChannelID   string
+	ChannelName string
+	ChannelURL  string
 }
 
-type forumSetupTransport interface {
+type channelSetupTransport interface {
 	CurrentBotUserID(ctx context.Context) (string, error)
 	ResolveChannel(ctx context.Context, guildID, channelID string) (*discordgo.Channel, error)
 	ListTextChannels(ctx context.Context, guildID string) ([]*discordgo.Channel, error)
 	CreateTextChannel(ctx context.Context, guildID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error)
 	SyncChannel(ctx context.Context, channelID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error)
-	EnsureQuestionListThread(ctx context.Context, channelID, preferredThreadID string) (string, error)
 }
 
-type forumSetupCoordinator struct {
-	transport forumSetupTransport
+type channelSetupCoordinator struct {
+	transport channelSetupTransport
 }
 
-func newForumSetupCoordinator(p *Publisher, session *discordgo.Session) forumSetupCoordinator {
-	return forumSetupCoordinator{
-		transport: discordForumSetupTransport{
-			publisher: p,
-			session:   session,
-		},
+func newChannelSetupCoordinator(session *discordgo.Session) channelSetupCoordinator {
+	return channelSetupCoordinator{
+		transport: discordChannelSetupTransport{session: session},
 	}
 }
 
-func (p *Publisher) SetupForum(ctx context.Context, session *discordgo.Session, params SetupForumParams) (*SetupForumResult, error) {
+func (p *Publisher) SetupChannel(ctx context.Context, session *discordgo.Session, params SetupChannelParams) (*SetupChannelResult, error) {
 	if session == nil {
-		return nil, fmt.Errorf("setup qotd forum: discord session is required")
+		return nil, fmt.Errorf("setup qotd channel: discord session is required")
 	}
-	return newForumSetupCoordinator(p, session).Setup(ctx, params)
+	return newChannelSetupCoordinator(session).Setup(ctx, params)
 }
 
-func (c forumSetupCoordinator) Setup(ctx context.Context, params SetupForumParams) (*SetupForumResult, error) {
-	normalized, err := normalizeSetupForumParams(params)
+func (c channelSetupCoordinator) Setup(ctx context.Context, params SetupChannelParams) (*SetupChannelResult, error) {
+	normalized, err := normalizeSetupChannelParams(params)
 	if err != nil {
-		return nil, fmt.Errorf("setup qotd forum: %w", err)
+		return nil, fmt.Errorf("setup qotd channel: %w", err)
 	}
 	if c.transport == nil {
-		return nil, fmt.Errorf("setup qotd forum: transport is required")
+		return nil, fmt.Errorf("setup qotd channel: transport is required")
 	}
 
 	channel, err := c.ensureChannel(ctx, normalized)
@@ -72,17 +65,17 @@ func (c forumSetupCoordinator) Setup(ctx context.Context, params SetupForumParam
 	}
 	channelID := strings.TrimSpace(channel.ID)
 	if channelID == "" {
-		return nil, fmt.Errorf("setup qotd forum: missing channel id")
+		return nil, fmt.Errorf("setup qotd channel: missing channel id")
 	}
 
-	return &SetupForumResult{
+	return &SetupChannelResult{
 		ChannelID:   channelID,
 		ChannelName: canonicalQOTDChannelName,
 		ChannelURL:  BuildChannelJumpURL(normalized.GuildID, channelID),
 	}, nil
 }
 
-func (c forumSetupCoordinator) ensureChannel(ctx context.Context, params SetupForumParams) (*discordgo.Channel, error) {
+func (c channelSetupCoordinator) ensureChannel(ctx context.Context, params SetupChannelParams) (*discordgo.Channel, error) {
 	botUserID, err := c.transport.CurrentBotUserID(ctx)
 	if err != nil {
 		return nil, err
@@ -91,7 +84,7 @@ func (c forumSetupCoordinator) ensureChannel(ctx context.Context, params SetupFo
 
 	preferred, err := c.transport.ResolveChannel(ctx, params.GuildID, params.PreferredChannelID)
 	if err != nil {
-		return nil, fmt.Errorf("setup qotd forum: resolve preferred channel: %w", err)
+		return nil, fmt.Errorf("setup qotd channel: resolve preferred channel: %w", err)
 	}
 	if preferred != nil && strings.TrimSpace(preferred.Name) == canonicalQOTDChannelName {
 		return c.syncChannel(ctx, preferred.ID, overwrites)
@@ -99,7 +92,7 @@ func (c forumSetupCoordinator) ensureChannel(ctx context.Context, params SetupFo
 
 	channels, err := c.transport.ListTextChannels(ctx, params.GuildID)
 	if err != nil {
-		return nil, fmt.Errorf("setup qotd forum: list text channels: %w", err)
+		return nil, fmt.Errorf("setup qotd channel: list text channels: %w", err)
 	}
 	for _, channel := range channels {
 		if channel == nil {
@@ -122,15 +115,15 @@ func (c forumSetupCoordinator) ensureChannel(ctx context.Context, params SetupFo
 		overwrites,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("setup qotd forum: create channel: %w", err)
+		return nil, fmt.Errorf("setup qotd channel: create channel: %w", err)
 	}
 	if channel == nil || strings.TrimSpace(channel.ID) == "" {
-		return nil, fmt.Errorf("setup qotd forum: create channel: missing channel id")
+		return nil, fmt.Errorf("setup qotd channel: create channel: missing channel id")
 	}
 	return channel, nil
 }
 
-func (c forumSetupCoordinator) syncChannel(ctx context.Context, channelID string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+func (c channelSetupCoordinator) syncChannel(ctx context.Context, channelID string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	channel, err := c.transport.SyncChannel(
 		ctx,
 		strings.TrimSpace(channelID),
@@ -139,21 +132,20 @@ func (c forumSetupCoordinator) syncChannel(ctx context.Context, channelID string
 		overwrites,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("setup qotd forum: sync channel: %w", err)
+		return nil, fmt.Errorf("setup qotd channel: sync channel: %w", err)
 	}
 	if channel == nil || strings.TrimSpace(channel.ID) == "" {
-		return nil, fmt.Errorf("setup qotd forum: sync channel: missing channel id")
+		return nil, fmt.Errorf("setup qotd channel: sync channel: missing channel id")
 	}
 	return channel, nil
 }
 
-func normalizeSetupForumParams(params SetupForumParams) (SetupForumParams, error) {
+func normalizeSetupChannelParams(params SetupChannelParams) (SetupChannelParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
 	params.PreferredChannelID = strings.TrimSpace(params.PreferredChannelID)
-	params.PreferredQuestionListThreadID = strings.TrimSpace(params.PreferredQuestionListThreadID)
 	params.VerifiedRoleID = strings.TrimSpace(params.VerifiedRoleID)
 	if params.GuildID == "" {
-		return SetupForumParams{}, fmt.Errorf("guild id is required")
+		return SetupChannelParams{}, fmt.Errorf("guild id is required")
 	}
 	return params, nil
 }
@@ -206,12 +198,11 @@ func qotdBotChannelPermissions() int64 {
 		discordgo.PermissionManageThreads
 }
 
-type discordForumSetupTransport struct {
-	publisher *Publisher
-	session   *discordgo.Session
+type discordChannelSetupTransport struct {
+	session *discordgo.Session
 }
 
-func (t discordForumSetupTransport) CurrentBotUserID(ctx context.Context) (string, error) {
+func (t discordChannelSetupTransport) CurrentBotUserID(ctx context.Context) (string, error) {
 	if t.session == nil {
 		return "", fmt.Errorf("discord session is required")
 	}
@@ -235,7 +226,7 @@ func (t discordForumSetupTransport) CurrentBotUserID(ctx context.Context) (strin
 	return strings.TrimSpace(user.ID), nil
 }
 
-func (t discordForumSetupTransport) ResolveChannel(ctx context.Context, guildID, channelID string) (*discordgo.Channel, error) {
+func (t discordChannelSetupTransport) ResolveChannel(ctx context.Context, guildID, channelID string) (*discordgo.Channel, error) {
 	guildID = strings.TrimSpace(guildID)
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
@@ -265,7 +256,7 @@ func (t discordForumSetupTransport) ResolveChannel(ctx context.Context, guildID,
 	return channel, nil
 }
 
-func (t discordForumSetupTransport) ListTextChannels(ctx context.Context, guildID string) ([]*discordgo.Channel, error) {
+func (t discordChannelSetupTransport) ListTextChannels(ctx context.Context, guildID string) ([]*discordgo.Channel, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, fmt.Errorf("guild id is required")
@@ -292,7 +283,7 @@ func (t discordForumSetupTransport) ListTextChannels(ctx context.Context, guildI
 	return textChannels, nil
 }
 
-func (t discordForumSetupTransport) CreateTextChannel(ctx context.Context, guildID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+func (t discordChannelSetupTransport) CreateTextChannel(ctx context.Context, guildID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, fmt.Errorf("guild id is required")
@@ -313,7 +304,7 @@ func (t discordForumSetupTransport) CreateTextChannel(ctx context.Context, guild
 	})
 }
 
-func (t discordForumSetupTransport) SyncChannel(ctx context.Context, channelID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+func (t discordChannelSetupTransport) SyncChannel(ctx context.Context, channelID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return nil, fmt.Errorf("channel id is required")
@@ -331,11 +322,4 @@ func (t discordForumSetupTransport) SyncChannel(ctx context.Context, channelID, 
 		Topic:                topic,
 		PermissionOverwrites: overwrites,
 	})
-}
-
-func (t discordForumSetupTransport) EnsureQuestionListThread(ctx context.Context, channelID, preferredThreadID string) (string, error) {
-	if t.publisher == nil {
-		return "", fmt.Errorf("publisher is required")
-	}
-	return newQuestionListArtifactPublisher(t.publisher, t.session).EnsureSealedThread(ctx, channelID, preferredThreadID)
 }

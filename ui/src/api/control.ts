@@ -200,8 +200,6 @@ export interface QOTDSetupResult {
   deck_id: string;
   channel_id: string;
   channel_url?: string;
-  question_list_thread_id?: string;
-  question_list_post_url?: string;
 }
 
 export interface QOTDSetupResponse {

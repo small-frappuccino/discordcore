@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -443,13 +444,14 @@ func quoteEmbedText(text string, limit int) string {
 }
 
 func truncateEmbedText(text string, limit int) string {
-	if limit <= 0 || len(text) <= limit {
+	if limit <= 0 || utf8.RuneCountInString(text) <= limit {
 		return text
 	}
+	runes := []rune(text)
 	if limit <= 3 {
-		return text[:limit]
+		return string(runes[:limit])
 	}
-	return strings.TrimSpace(text[:limit-3]) + "..."
+	return strings.TrimSpace(string(runes[:limit-3])) + "..."
 }
 
 func buildOfficialQuestionFooter(deckName string, availableQuestions int, queuePosition int64) string {
@@ -561,8 +563,8 @@ func normalizeOfficialQuestionText(questionText string) string {
 
 func truncateThreadName(name string) string {
 	name = strings.TrimSpace(name)
-	if len(name) <= 100 {
+	if utf8.RuneCountInString(name) <= 100 {
 		return name
 	}
-	return strings.TrimSpace(name[:97]) + "..."
+	return strings.TrimSpace(string([]rune(name)[:97])) + "..."
 }

@@ -4,7 +4,6 @@ import (
 	"strings"
 	"time"
 
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -84,11 +83,9 @@ type qotdCollectorRunResultResponse struct {
 }
 
 type qotdSetupResultResponse struct {
-	DeckID               string `json:"deck_id"`
-	ChannelID            string `json:"channel_id"`
-	ChannelURL           string `json:"channel_url,omitempty"`
-	QuestionListThreadID string `json:"question_list_thread_id,omitempty"`
-	QuestionListPostURL  string `json:"question_list_post_url,omitempty"`
+	DeckID     string `json:"deck_id"`
+	ChannelID  string `json:"channel_id"`
+	ChannelURL string `json:"channel_url,omitempty"`
 }
 
 func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQuestionResponse {
@@ -225,11 +222,9 @@ func buildQOTDSetupResultResponse(result *qotd.SetupResult) *qotdSetupResultResp
 		return nil
 	}
 	return &qotdSetupResultResponse{
-		DeckID:               strings.TrimSpace(result.DeckID),
-		ChannelID:            strings.TrimSpace(result.ChannelID),
-		ChannelURL:           strings.TrimSpace(result.ChannelURL),
-		QuestionListThreadID: strings.TrimSpace(result.QuestionListThreadID),
-		QuestionListPostURL:  strings.TrimSpace(result.QuestionListPostURL),
+		DeckID:     strings.TrimSpace(result.DeckID),
+		ChannelID:  strings.TrimSpace(result.ChannelID),
+		ChannelURL: strings.TrimSpace(result.ChannelURL),
 	}
 }
 
@@ -237,13 +232,9 @@ func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPo
 	if record == nil {
 		return ""
 	}
-	if threadID := strings.TrimSpace(record.DiscordThreadID); threadID != "" {
-		return discordqotd.BuildThreadJumpURL(guildID, threadID)
+	resolved := *record
+	if strings.TrimSpace(resolved.GuildID) == "" {
+		resolved.GuildID = strings.TrimSpace(guildID)
 	}
-	channelID := strings.TrimSpace(record.QuestionListThreadID)
-	messageID := strings.TrimSpace(record.QuestionListEntryMessageID)
-	if channelID == "" || messageID == "" {
-		return ""
-	}
-	return discordqotd.BuildMessageJumpURL(guildID, channelID, messageID)
+	return qotd.OfficialPostJumpURL(resolved)
 }

@@ -12,16 +12,14 @@ import (
 )
 
 type SetupResult struct {
-	Settings             files.QOTDConfig
-	Summary              Summary
-	DeckID               string
-	ChannelID            string
-	ChannelURL           string
-	QuestionListThreadID string
-	QuestionListPostURL  string
+	Settings   files.QOTDConfig
+	Summary    Summary
+	DeckID     string
+	ChannelID  string
+	ChannelURL string
 }
 
-func (s *Service) SetupForum(ctx context.Context, guildID, deckID string, session *discordgo.Session) (*SetupResult, error) {
+func (s *Service) SetupChannel(ctx context.Context, guildID, deckID string, session *discordgo.Session) (*SetupResult, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
@@ -45,15 +43,10 @@ func (s *Service) SetupForum(ctx context.Context, guildID, deckID string, sessio
 		return nil, err
 	}
 
-	surface, err := s.store.GetQOTDSurfaceByDeck(ctx, guildID, deck.ID)
-	if err != nil {
-		return nil, err
-	}
-	setupResult, err := s.publisher.SetupForum(ctx, session, discordqotd.SetupForumParams{
-		GuildID:                       guildID,
-		PreferredChannelID:            strings.TrimSpace(deck.ChannelID),
-		PreferredQuestionListThreadID: qotdForumSurfaceQuestionListThreadID(surface),
-		VerifiedRoleID:                strings.TrimSpace(currentDashboard.VerifiedRoleID),
+	setupResult, err := s.publisher.SetupChannel(ctx, session, discordqotd.SetupChannelParams{
+		GuildID:            guildID,
+		PreferredChannelID: strings.TrimSpace(deck.ChannelID),
+		VerifiedRoleID:     strings.TrimSpace(currentDashboard.VerifiedRoleID),
 	})
 	if err != nil {
 		return nil, err
@@ -61,17 +54,16 @@ func (s *Service) SetupForum(ctx context.Context, guildID, deckID string, sessio
 
 	updatedSettings, err := s.updateSettingsLocked(
 		guildID,
-		applySetupForumSettings(currentDashboard, deck.ID, setupResult.ChannelID),
+		applySetupChannelSettings(currentDashboard, deck.ID, setupResult.ChannelID),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
-		GuildID:              guildID,
-		DeckID:               deck.ID,
-		ChannelID:            setupResult.ChannelID,
-		QuestionListThreadID: setupResult.QuestionListThreadID,
+		GuildID:   guildID,
+		DeckID:    deck.ID,
+		ChannelID: setupResult.ChannelID,
 	}); err != nil {
 		return nil, fmt.Errorf("upsert qotd surface: %w", err)
 	}
@@ -82,13 +74,11 @@ func (s *Service) SetupForum(ctx context.Context, guildID, deckID string, sessio
 	}
 
 	return &SetupResult{
-		Settings:             updatedSettings,
-		Summary:              summary,
-		DeckID:               deck.ID,
-		ChannelID:            setupResult.ChannelID,
-		ChannelURL:           setupResult.ChannelURL,
-		QuestionListThreadID: setupResult.QuestionListThreadID,
-		QuestionListPostURL:  setupResult.QuestionListPostURL,
+		Settings:   updatedSettings,
+		Summary:    summary,
+		DeckID:     deck.ID,
+		ChannelID:  setupResult.ChannelID,
+		ChannelURL: setupResult.ChannelURL,
 	}, nil
 }
 
@@ -134,7 +124,7 @@ func resolveSetupDeck(cfg files.QOTDConfig, deckID string) (files.QOTDDeckConfig
 	return deck, nil
 }
 
-func applySetupForumSettings(cfg files.QOTDConfig, deckID, channelID string) files.QOTDConfig {
+func applySetupChannelSettings(cfg files.QOTDConfig, deckID, channelID string) files.QOTDConfig {
 	next := files.DashboardQOTDConfig(cfg)
 	next.ActiveDeckID = deckID
 	next.Decks = append([]files.QOTDDeckConfig(nil), next.Decks...)

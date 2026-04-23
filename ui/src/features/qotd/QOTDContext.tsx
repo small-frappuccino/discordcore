@@ -31,7 +31,7 @@ type WorkspaceState =
 export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
   saveSettings: "Saving QOTD settings...",
-  setupForum: "Preparing QOTD channel...",
+  setupChannel: "Preparing QOTD channel...",
   createQuestion: "Creating question...",
   createQuestions: "Importing questions...",
   updateQuestion: "Updating question...",
@@ -59,7 +59,7 @@ interface QOTDContextValue {
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<QOTDConfig | null>;
-  setupForum: (deckId?: string) => Promise<void>;
+  setupChannel: (deckId?: string) => Promise<void>;
   selectDeck: (deckId: string) => Promise<void>;
   updateQuestion: (
     questionId: number,
@@ -471,12 +471,12 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function setupForum(deckId = "") {
+  async function setupChannel(deckId = "") {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
       return;
     }
 
-    setBusyLabel(QOTD_BUSY_LABELS.setupForum);
+    setBusyLabel(QOTD_BUSY_LABELS.setupChannel);
     try {
       const response = await client.setupQOTD(normalizedGuildID, {
         deck_id: deckId.trim() || undefined,
@@ -550,7 +550,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         refreshWorkspace,
         reorderQuestions,
         saveSettings,
-        setupForum,
+        setupChannel,
         selectDeck,
         updateQuestion,
       }}

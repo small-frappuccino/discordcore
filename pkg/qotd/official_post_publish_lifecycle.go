@@ -151,7 +151,7 @@ func (s *Service) completeOfficialPostProvisioning(
 		updatedQuestion = question
 	}
 
-	postURL := officialPostJumpURL(*finalized)
+	postURL := OfficialPostJumpURL(*finalized)
 	if published != nil && strings.TrimSpace(published.PostURL) != "" {
 		postURL = published.PostURL
 	}

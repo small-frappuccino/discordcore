@@ -440,7 +440,7 @@ func (s *Server) handleQOTDSetupPost(w http.ResponseWriter, r *http.Request, gui
 		}
 	}
 
-	result, err := s.qotdService.SetupForum(r.Context(), guildID, strings.TrimSpace(payload.DeckID), session)
+	result, err := s.qotdService.SetupChannel(r.Context(), guildID, strings.TrimSpace(payload.DeckID), session)
 	if err != nil {
 		status := qotdErrorStatus(err)
 		log.ApplicationLogger().Warn(
@@ -450,7 +450,7 @@ func (s *Server) handleQOTDSetupPost(w http.ResponseWriter, r *http.Request, gui
 			"userID", settingsRequestUserID(auth),
 			"err", err,
 		)
-		http.Error(w, fmt.Sprintf("failed to setup qotd: %v", err), status)
+		http.Error(w, fmt.Sprintf("failed to setup qotd channel: %v", err), status)
 		return
 	}
 

@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -153,7 +154,7 @@ func (p questionListArtifactPublisher) withWritableThread(ctx context.Context, t
 	lockErr := p.transport.SetThreadState(ctx, threadID, questionListThreadSealedState)
 	switch {
 	case runErr != nil && lockErr != nil:
-		return fmt.Errorf("%w (lock qotd questions list thread: %v)", runErr, lockErr)
+		return errors.Join(runErr, fmt.Errorf("lock qotd questions list thread: %w", lockErr))
 	case runErr != nil:
 		return runErr
 	case lockErr != nil:

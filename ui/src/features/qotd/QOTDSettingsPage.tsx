@@ -33,7 +33,7 @@ interface SettingsDraft {
 
 export function QOTDSettingsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
-  const { busyLabel, deckSummaries, saveSettings, settings, setupForum } = useQOTD();
+  const { busyLabel, deckSummaries, saveSettings, settings, setupChannel } = useQOTD();
   const channelOptions = useGuildChannelOptions();
   const roleOptions = useGuildRoleOptions();
   const workflowHeadingId = useId();
@@ -62,7 +62,7 @@ export function QOTDSettingsPage() {
       description: "Text channel that hosts the daily QOTD message and its answer thread.",
     }));
   const hasUnsavedChanges = settingsDraftChanged(savedDraftRef.current, draft);
-  const setupBusy = busyLabel === QOTD_BUSY_LABELS.setupForum;
+  const setupBusy = busyLabel === QOTD_BUSY_LABELS.setupChannel;
   const controlsDisabled = !canEditSelectedGuild || saving || setupBusy;
   const activeDeckDraft = draft.decks.find((deck) => deck.id === draft.active_deck_id);
   const hasConfiguredChannel =
@@ -150,7 +150,7 @@ export function QOTDSettingsPage() {
                     disabled={setupDisabled}
                     onClick={() => {
                       void (async () => {
-                        await setupForum(draft.active_deck_id);
+                        await setupChannel(draft.active_deck_id);
                         await channelOptions.refresh();
                       })().catch(() => undefined);
                     }}

@@ -46,22 +46,19 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 		StarterMessageID:           messageID,
 		AnswerChannelID:            threadID,
 		PublishedAt:                qotd.PublishTimeUTC(params.PublishDateUTC),
-		PostURL:                    discordqotd.BuildThreadJumpURL(params.GuildID, threadID),
+		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}, nil
 }
 
-func (routeFakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, params discordqotd.SetupForumParams) (*discordqotd.SetupForumResult, error) {
+func (routeFakePublisher) SetupChannel(_ context.Context, _ *discordgo.Session, params discordqotd.SetupChannelParams) (*discordqotd.SetupChannelResult, error) {
 	channelID := strings.TrimSpace(params.PreferredChannelID)
 	if channelID == "" {
 		channelID = "channel-setup-1"
 	}
-	questionListThreadID := strings.TrimSpace(params.PreferredQuestionListThreadID)
-	return &discordqotd.SetupForumResult{
-		ChannelID:            channelID,
-		ChannelName:          "☆-qotd-☆",
-		ChannelURL:           discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
-		QuestionListThreadID: questionListThreadID,
-		QuestionListPostURL:  discordqotd.BuildChannelJumpURL(params.GuildID, questionListThreadID),
+	return &discordqotd.SetupChannelResult{
+		ChannelID:   channelID,
+		ChannelName: "☆-qotd-☆",
+		ChannelURL:  discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
 	}, nil
 }
 
@@ -184,7 +181,7 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
 		VerifiedRoleID: "verified-role",
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		ActiveDeckID:   files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,

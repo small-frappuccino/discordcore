@@ -82,7 +82,7 @@ const qotdMock = {
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
-  setupForum: vi.fn(),
+  setupChannel: vi.fn(),
   selectDeck: vi.fn(),
   updateQuestion: vi.fn(),
 };
@@ -170,7 +170,7 @@ describe("QOTD UI", () => {
     qotdMock.workspaceState = "ready";
     qotdMock.createQuestions.mockReset().mockResolvedValue(true);
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
-    qotdMock.setupForum.mockReset().mockResolvedValue(undefined);
+    qotdMock.setupChannel.mockReset().mockResolvedValue(undefined);
     qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
     channelOptionsMock.refresh.mockReset();
     dashboardSessionMock.client.getQOTDCollectorSummary = vi
@@ -292,7 +292,7 @@ describe("QOTD UI", () => {
     );
 
     await waitFor(() => {
-      expect(qotdMock.setupForum).toHaveBeenCalledWith("default");
+      expect(qotdMock.setupChannel).toHaveBeenCalledWith("default");
       expect(channelOptionsMock.refresh).toHaveBeenCalledTimes(1);
     });
   });
