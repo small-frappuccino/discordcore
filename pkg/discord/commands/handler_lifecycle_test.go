@@ -204,10 +204,10 @@ func TestCommandHandlerHandlesQOTDGuildWithoutCommandsFeature(t *testing.T) {
 				QOTD: files.QOTDConfig{
 					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 					Decks: []files.QOTDDeckConfig{{
-						ID:             files.LegacyQOTDDefaultDeckID,
-						Name:           files.LegacyQOTDDefaultDeckName,
-						Enabled:        true,
-						ForumChannelID: "question-1",
+						ID:        files.LegacyQOTDDefaultDeckID,
+						Name:      files.LegacyQOTDDefaultDeckName,
+						Enabled:   true,
+						ChannelID: "question-1",
 					}},
 				},
 			},

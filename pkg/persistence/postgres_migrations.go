@@ -243,7 +243,7 @@ var postgresMigrations = []migration{
 				question_id                BIGINT NOT NULL REFERENCES qotd_questions(id) ON DELETE RESTRICT,
 				publish_date_utc           DATE NOT NULL,
 				state                      TEXT NOT NULL,
-				forum_channel_id           TEXT NOT NULL,
+				channel_id                 TEXT NOT NULL,
 				discord_thread_id          TEXT,
 				discord_starter_message_id TEXT,
 				question_text_snapshot     TEXT NOT NULL,
@@ -411,7 +411,7 @@ var postgresMigrations = []migration{
 				id                     BIGSERIAL PRIMARY KEY,
 				guild_id               TEXT NOT NULL,
 				deck_id                TEXT NOT NULL,
-				forum_channel_id       TEXT NOT NULL,
+				channel_id             TEXT NOT NULL,
 				question_list_thread_id TEXT,
 				created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 				updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -428,7 +428,7 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_official_posts
 			 ADD COLUMN IF NOT EXISTS answer_channel_id TEXT`,
 			`UPDATE qotd_official_posts
-			 SET answer_channel_id = COALESCE(NULLIF(discord_thread_id, ''), forum_channel_id)
+			 SET answer_channel_id = COALESCE(NULLIF(discord_thread_id, ''), channel_id)
 			 WHERE answer_channel_id IS NULL OR answer_channel_id = ''`,
 			`UPDATE qotd_official_posts
 			 SET answer_channel_id = ''

@@ -35,10 +35,10 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
-					ID:             files.LegacyQOTDDefaultDeckID,
-					Name:           files.LegacyQOTDDefaultDeckName,
-					Enabled:        true,
-					ForumChannelID: "question-enabled",
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-enabled",
 				}},
 			},
 		},
@@ -48,9 +48,9 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
-					ID:             files.LegacyQOTDDefaultDeckID,
-					Name:           files.LegacyQOTDDefaultDeckName,
-					ForumChannelID: "question-disabled",
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					ChannelID: "question-disabled",
 				}},
 			},
 		},
@@ -60,10 +60,10 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
-					ID:             files.LegacyQOTDDefaultDeckID,
-					Name:           files.LegacyQOTDDefaultDeckName,
-					Enabled:        true,
-					ForumChannelID: "question-other",
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-other",
 				}},
 			},
 		},

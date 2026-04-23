@@ -101,18 +101,18 @@ func (p *fakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, para
 		out := *response.result
 		return &out, response.err
 	}
-	forumChannelID := strings.TrimSpace(params.PreferredForumChannelID)
-	if forumChannelID == "" {
-		forumChannelID = "forum-setup-1"
+	channelID := strings.TrimSpace(params.PreferredChannelID)
+	if channelID == "" {
+		channelID = "channel-setup-1"
 	}
 	questionListThreadID := strings.TrimSpace(params.PreferredQuestionListThreadID)
 	if questionListThreadID == "" {
 		questionListThreadID = "questions-list-thread"
 	}
 	return &discordqotd.SetupForumResult{
-		ForumChannelID:       forumChannelID,
-		ForumChannelName:     "☆-qotd-☆",
-		ForumChannelURL:      discordqotd.BuildChannelJumpURL(params.GuildID, forumChannelID),
+		ChannelID:            channelID,
+		ChannelName:          "☆-qotd-☆",
+		ChannelURL:           discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
 		QuestionListThreadID: questionListThreadID,
 		QuestionListPostURL:  discordqotd.BuildChannelJumpURL(params.GuildID, questionListThreadID),
 	}, nil
@@ -293,7 +293,7 @@ func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
 	if fake.setupParams[0].GuildID != "g1" {
 		t.Fatalf("unexpected setup params: %+v", fake.setupParams[0])
 	}
-	if result.ForumChannelID != "forum-setup-1" || result.QuestionListThreadID != "questions-list-thread" {
+	if result.ChannelID != "channel-setup-1" || result.QuestionListThreadID != "questions-list-thread" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
 
@@ -305,16 +305,16 @@ func TestSetupForumEnablesActiveDeckAndPersistsForumSurface(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected active deck after setup: %+v", settings)
 	}
-	if !deck.Enabled || deck.ForumChannelID != "forum-setup-1" {
-		t.Fatalf("expected setup to enable active deck and persist forum id, got %+v", deck)
+	if !deck.Enabled || deck.ChannelID != "channel-setup-1" {
+		t.Fatalf("expected setup to enable active deck and persist channel id, got %+v", deck)
 	}
 
-	surface, err := store.GetQOTDForumSurfaceByDeck(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	surface, err := store.GetQOTDSurfaceByDeck(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
-		t.Fatalf("GetQOTDForumSurfaceByDeck() failed: %v", err)
+		t.Fatalf("GetQOTDSurfaceByDeck() failed: %v", err)
 	}
-	if surface == nil || surface.ForumChannelID != "forum-setup-1" || surface.QuestionListThreadID != "questions-list-thread" {
-		t.Fatalf("unexpected persisted forum surface: %+v", surface)
+	if surface == nil || surface.ChannelID != "channel-setup-1" || surface.QuestionListThreadID != "questions-list-thread" {
+		t.Fatalf("unexpected persisted qotd surface: %+v", surface)
 	}
 }
 
@@ -325,16 +325,16 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{
 			{
-				ID:             files.LegacyQOTDDefaultDeckID,
-				Name:           files.LegacyQOTDDefaultDeckName,
-				Enabled:        true,
-				ForumChannelID: "question-channel-1",
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "question-channel-1",
 			},
 			{
-				ID:             "deck-b",
-				Name:           "Deck B",
-				Enabled:        false,
-				ForumChannelID: "question-channel-2",
+				ID:        "deck-b",
+				Name:      "Deck B",
+				Enabled:   false,
+				ChannelID: "question-channel-2",
 			},
 		},
 	}); err != nil {
@@ -362,10 +362,10 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{
 			{
-				ID:             files.LegacyQOTDDefaultDeckID,
-				Name:           files.LegacyQOTDDefaultDeckName,
-				Enabled:        true,
-				ForumChannelID: "question-channel-1",
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "question-channel-1",
 			},
 		},
 	})
@@ -403,10 +403,10 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "123456789012345678",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -437,7 +437,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC),
 		State:                string(OfficialPostStateCurrent),
-		ForumChannelID:       "123456789012345678",
+		ChannelID:            "123456789012345678",
 		QuestionTextSnapshot: oldQuestion.Body,
 		GraceUntil:           oldLifecycle.BecomesPreviousAt,
 		ArchiveAt:            oldLifecycle.ArchiveAt,
@@ -514,10 +514,10 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "question-channel-1",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -542,7 +542,7 @@ func TestServiceSubmitAnswerCreatesAndUpdatesPerUserMessage(t *testing.T) {
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateCurrent),
-		ForumChannelID:       "question-channel-1",
+		ChannelID:            "question-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -625,10 +625,10 @@ func TestServiceSubmitAnswerTargetsOfficialThreadWhenAvailable(t *testing.T) {
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "question-channel-1",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -653,7 +653,7 @@ func TestServiceSubmitAnswerTargetsOfficialThreadWhenAvailable(t *testing.T) {
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateCurrent),
-		ForumChannelID:       "question-channel-1",
+		ChannelID:            "question-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -784,10 +784,10 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "question-channel-1",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -859,10 +859,10 @@ func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "123456789012345678",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -989,7 +989,7 @@ func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing
 		PublishMode:                string(PublishModeScheduled),
 		PublishDateUTC:             time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
 		State:                      string(OfficialPostStateFailed),
-		ForumChannelID:             "123456789012345678",
+		ChannelID:                  "123456789012345678",
 		QuestionListThreadID:       "questions-list-thread",
 		DiscordThreadID:            "thread-recover",
 		DiscordStarterMessageID:    "starter-recover",
@@ -1079,7 +1079,7 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStatePrevious),
-		ForumChannelID:       "forum-1",
+		ChannelID:            "forum-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,

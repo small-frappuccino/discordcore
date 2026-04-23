@@ -28,7 +28,7 @@ type QOTDOfficialPostRecord struct {
 	PublishMode                string
 	PublishDateUTC             time.Time
 	State                      string
-	ForumChannelID             string
+	ChannelID                  string
 	QuestionListThreadID       string
 	QuestionListEntryMessageID string
 	DiscordThreadID            string
@@ -45,11 +45,11 @@ type QOTDOfficialPostRecord struct {
 	UpdatedAt                  time.Time
 }
 
-type QOTDForumSurfaceRecord struct {
+type QOTDSurfaceRecord struct {
 	ID                   int64
 	GuildID              string
 	DeckID               string
-	ForumChannelID       string
+	ChannelID            string
 	QuestionListThreadID string
 	CreatedAt            time.Time
 	UpdatedAt            time.Time

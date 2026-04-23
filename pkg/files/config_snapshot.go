@@ -321,9 +321,10 @@ func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 
 func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 	return QOTDConfig{
-		ActiveDeckID: in.ActiveDeckID,
-		Decks:        cloneQOTDDeckConfigs(in.Decks),
-		Collector:    cloneQOTDCollectorConfig(in.Collector),
+		VerifiedRoleID: in.VerifiedRoleID,
+		ActiveDeckID:   in.ActiveDeckID,
+		Decks:          cloneQOTDDeckConfigs(in.Decks),
+		Collector:      cloneQOTDCollectorConfig(in.Collector),
 	}
 }
 

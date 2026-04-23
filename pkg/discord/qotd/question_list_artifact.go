@@ -186,17 +186,7 @@ func normalizeQuestionListArtifactPublishParams(params questionListArtifactPubli
 func buildQuestionListEntryMessage(embed *discordgo.MessageEmbed, officialPostID int64) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: []discordgo.MessageComponent{
-			discordgo.ActionsRow{
-				Components: []discordgo.MessageComponent{
-					discordgo.Button{
-						Label:    answerButtonLabel,
-						Style:    discordgo.SecondaryButton,
-						CustomID: fmt.Sprintf(answerButtonCustomID, officialPostID),
-					},
-				},
-			},
-		},
+		Components: buildAnswerButtonComponents(officialPostID),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	}
 }

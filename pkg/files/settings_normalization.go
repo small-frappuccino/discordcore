@@ -75,19 +75,24 @@ func NormalizePartnerBoardConfig(in PartnerBoardConfig) (PartnerBoardConfig, err
 // NormalizeQOTDConfig canonicalizes guild QOTD settings so dedicated routes and
 // broad config writes can share the same validation behavior.
 func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
+	verifiedRoleID := strings.TrimSpace(in.VerifiedRoleID)
 	activeDeckID := strings.TrimSpace(in.ActiveDeckID)
 	decks := cloneQOTDDeckConfigs(in.Decks)
 	collector, err := normalizeQOTDCollectorConfig(in.Collector)
 	if err != nil {
 		return QOTDConfig{}, invalidQOTDInput("collector: %v", err)
 	}
+	if verifiedRoleID != "" && !isAllDigits(verifiedRoleID) {
+		return QOTDConfig{}, invalidQOTDInput("verified_role_id must be numeric")
+	}
 
 	if len(decks) == 0 {
-		if collector.IsZero() {
+		if collector.IsZero() && verifiedRoleID == "" {
 			return QOTDConfig{}, nil
 		}
 		return QOTDConfig{
-			Collector: collector,
+			VerifiedRoleID: verifiedRoleID,
+			Collector:      collector,
 		}, nil
 	}
 
@@ -125,23 +130,25 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 
 	if len(normalizedDecks) == 1 &&
 		isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) &&
-		collector.IsZero() {
+		collector.IsZero() &&
+		verifiedRoleID == "" {
 		return QOTDConfig{}, nil
 	}
 
 	return QOTDConfig{
-		ActiveDeckID: activeDeckID,
-		Decks:        normalizedDecks,
-		Collector:    collector,
+		VerifiedRoleID: verifiedRoleID,
+		ActiveDeckID:   activeDeckID,
+		Decks:          normalizedDecks,
+		Collector:      collector,
 	}, nil
 }
 
 func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 	out := QOTDDeckConfig{
-		ID:             strings.TrimSpace(in.ID),
-		Name:           strings.TrimSpace(in.Name),
-		Enabled:        in.Enabled,
-		ForumChannelID: strings.TrimSpace(in.ForumChannelID),
+		ID:        strings.TrimSpace(in.ID),
+		Name:      strings.TrimSpace(in.Name),
+		Enabled:   in.Enabled,
+		ChannelID: strings.TrimSpace(in.ChannelID),
 	}
 
 	if out.ID == "" {
@@ -150,12 +157,12 @@ func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 	if out.Name == "" {
 		return QOTDDeckConfig{}, fmt.Errorf("name is required")
 	}
-	if out.ForumChannelID != "" && !isAllDigits(out.ForumChannelID) {
-		return QOTDDeckConfig{}, fmt.Errorf("forum_channel_id must be numeric")
+	if out.ChannelID != "" && !isAllDigits(out.ChannelID) {
+		return QOTDDeckConfig{}, fmt.Errorf("channel_id must be numeric")
 	}
 	if out.Enabled {
-		if out.ForumChannelID == "" {
-			return QOTDDeckConfig{}, fmt.Errorf("forum_channel_id is required when enabled")
+		if out.ChannelID == "" {
+			return QOTDDeckConfig{}, fmt.Errorf("channel_id is required when enabled")
 		}
 	}
 	return out, nil

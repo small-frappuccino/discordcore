@@ -81,7 +81,6 @@ export interface QOTDDeck {
   name: string;
   enabled?: boolean;
   channel_id?: string;
-  verified_role_id?: string;
 }
 
 export interface QOTDCollectorConfig {
@@ -199,9 +198,9 @@ export interface QOTDPublishResponse {
 
 export interface QOTDSetupResult {
   deck_id: string;
-  forum_channel_id: string;
-  forum_channel_url?: string;
-  question_list_thread_id: string;
+  channel_id: string;
+  channel_url?: string;
+  question_list_thread_id?: string;
   question_list_post_url?: string;
 }
 

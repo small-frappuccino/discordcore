@@ -85,9 +85,9 @@ type qotdCollectorRunResultResponse struct {
 
 type qotdSetupResultResponse struct {
 	DeckID               string `json:"deck_id"`
-	ForumChannelID       string `json:"forum_channel_id"`
-	ForumChannelURL      string `json:"forum_channel_url,omitempty"`
-	QuestionListThreadID string `json:"question_list_thread_id"`
+	ChannelID            string `json:"channel_id"`
+	ChannelURL           string `json:"channel_url,omitempty"`
+	QuestionListThreadID string `json:"question_list_thread_id,omitempty"`
 	QuestionListPostURL  string `json:"question_list_post_url,omitempty"`
 }
 
@@ -226,8 +226,8 @@ func buildQOTDSetupResultResponse(result *qotd.SetupResult) *qotdSetupResultResp
 	}
 	return &qotdSetupResultResponse{
 		DeckID:               strings.TrimSpace(result.DeckID),
-		ForumChannelID:       strings.TrimSpace(result.ForumChannelID),
-		ForumChannelURL:      strings.TrimSpace(result.ForumChannelURL),
+		ChannelID:            strings.TrimSpace(result.ChannelID),
+		ChannelURL:           strings.TrimSpace(result.ChannelURL),
 		QuestionListThreadID: strings.TrimSpace(result.QuestionListThreadID),
 		QuestionListPostURL:  strings.TrimSpace(result.QuestionListPostURL),
 	}

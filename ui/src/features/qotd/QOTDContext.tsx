@@ -31,7 +31,7 @@ type WorkspaceState =
 export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
   saveSettings: "Saving QOTD settings...",
-  setupForum: "Setting up QOTD forum...",
+  setupForum: "Preparing QOTD channel...",
   createQuestion: "Creating question...",
   createQuestions: "Importing questions...",
   updateQuestion: "Updating question...",
@@ -71,7 +71,7 @@ const defaultDeck: QOTDDeck = {
   id: "default",
   name: "Default",
   enabled: false,
-  forum_channel_id: "",
+  channel_id: "",
 };
 
 const emptySettings: QOTDConfig = {
@@ -487,9 +487,9 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       await loadWorkspace(chooseDeckID(deckId || selectedDeckRef.current, updatedSettings));
       setNotice({
         tone: "success",
-        message: response.result.question_list_post_url
-          ? "QOTD forum setup is ready. Use the questions list post to verify the bootstrap."
-          : "QOTD forum setup is ready.",
+        message: response.result.channel_url
+          ? "QOTD channel is ready. Verify the channel permissions and the next daily post thread."
+          : "QOTD channel is ready.",
       });
     } catch (error) {
       setNotice({
@@ -582,6 +582,7 @@ function normalizeQOTDSettings(settings?: QOTDConfig | null): QOTDConfig {
   });
   return {
     collector: normalizeQOTDCollectorConfig(settings?.collector),
+    verified_role_id: String(settings?.verified_role_id ?? "").trim(),
     active_deck_id: activeDeckID,
     decks,
   };
@@ -628,12 +629,12 @@ function normalizeCollectorEntries(
 function normalizeQOTDDeck(deck: QOTDDeck): QOTDDeck {
   const id = String(deck.id ?? "").trim();
   const name = String(deck.name ?? "").trim();
-  const forumChannelID = String(deck.forum_channel_id ?? "").trim();
+  const channelID = String(deck.channel_id ?? "").trim();
   return {
     id: id === "" ? defaultDeck.id : id,
     name: name === "" ? defaultDeck.name : name,
     enabled: Boolean(deck.enabled),
-    forum_channel_id: forumChannelID,
+    channel_id: channelID,
   };
 }
 

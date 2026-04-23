@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func (s *Store) GetQOTDForumSurfaceByDeck(ctx context.Context, guildID, deckID string) (*QOTDForumSurfaceRecord, error) {
+func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (*QOTDSurfaceRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
@@ -26,7 +26,7 @@ func (s *Store) GetQOTDForumSurfaceByDeck(ctx context.Context, guildID, deckID s
 			id,
 			guild_id,
 			deck_id,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			created_at,
 			updated_at
@@ -35,23 +35,23 @@ func (s *Store) GetQOTDForumSurfaceByDeck(ctx context.Context, guildID, deckID s
 		guildID,
 		deckID,
 	)
-	record, err := scanQOTDForumSurfaceRecord(row)
+	record, err := scanQOTDSurfaceRecord(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get qotd forum surface by deck: %w", err)
+		return nil, fmt.Errorf("get qotd surface by deck: %w", err)
 	}
 	return record, nil
 }
 
-func (s *Store) UpsertQOTDForumSurface(ctx context.Context, rec QOTDForumSurfaceRecord) (*QOTDForumSurfaceRecord, error) {
+func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (*QOTDSurfaceRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	normalized, err := normalizeQOTDForumSurfaceRecord(rec)
+	normalized, err := normalizeQOTDSurfaceRecord(rec)
 	if err != nil {
-		return nil, fmt.Errorf("upsert qotd forum surface: %w", err)
+		return nil, fmt.Errorf("upsert qotd surface: %w", err)
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -61,31 +61,31 @@ func (s *Store) UpsertQOTDForumSurface(ctx context.Context, rec QOTDForumSurface
 		`INSERT INTO qotd_forum_surfaces (
 			guild_id,
 			deck_id,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id
 		)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT (guild_id, deck_id) DO UPDATE
 		SET
-			forum_channel_id = EXCLUDED.forum_channel_id,
+			channel_id = EXCLUDED.channel_id,
 			question_list_thread_id = EXCLUDED.question_list_thread_id,
 			updated_at = NOW()
 		RETURNING
 			id,
 			guild_id,
 			deck_id,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			created_at,
 			updated_at`,
 		normalized.GuildID,
 		normalized.DeckID,
-		normalized.ForumChannelID,
+		normalized.ChannelID,
 		zeroEmptyString(normalized.QuestionListThreadID),
 	)
-	updated, err := scanQOTDForumSurfaceRecord(row)
+	updated, err := scanQOTDSurfaceRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("upsert qotd forum surface: %w", err)
+		return nil, fmt.Errorf("upsert qotd surface: %w", err)
 	}
 	return updated, nil
 }
@@ -327,20 +327,20 @@ func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, stat
 	return record, nil
 }
 
-func normalizeQOTDForumSurfaceRecord(rec QOTDForumSurfaceRecord) (QOTDForumSurfaceRecord, error) {
+func normalizeQOTDSurfaceRecord(rec QOTDSurfaceRecord) (QOTDSurfaceRecord, error) {
 	rec.GuildID = strings.TrimSpace(rec.GuildID)
 	rec.DeckID = strings.TrimSpace(rec.DeckID)
-	rec.ForumChannelID = strings.TrimSpace(rec.ForumChannelID)
+	rec.ChannelID = strings.TrimSpace(rec.ChannelID)
 	rec.QuestionListThreadID = strings.TrimSpace(rec.QuestionListThreadID)
 
 	if rec.GuildID == "" {
-		return QOTDForumSurfaceRecord{}, fmt.Errorf("guild_id is required")
+		return QOTDSurfaceRecord{}, fmt.Errorf("guild_id is required")
 	}
 	if rec.DeckID == "" {
-		return QOTDForumSurfaceRecord{}, fmt.Errorf("deck_id is required")
+		return QOTDSurfaceRecord{}, fmt.Errorf("deck_id is required")
 	}
-	if rec.ForumChannelID == "" {
-		return QOTDForumSurfaceRecord{}, fmt.Errorf("forum_channel_id is required")
+	if rec.ChannelID == "" {
+		return QOTDSurfaceRecord{}, fmt.Errorf("channel_id is required")
 	}
 	return rec, nil
 }
@@ -373,14 +373,14 @@ func normalizeQOTDAnswerMessageRecord(rec QOTDAnswerMessageRecord) (QOTDAnswerMe
 	return rec, nil
 }
 
-func scanQOTDForumSurfaceRecord(scanner qotdRowScanner) (*QOTDForumSurfaceRecord, error) {
-	var record QOTDForumSurfaceRecord
+func scanQOTDSurfaceRecord(scanner qotdRowScanner) (*QOTDSurfaceRecord, error) {
+	var record QOTDSurfaceRecord
 	var questionListThreadID sql.NullString
 	if err := scanner.Scan(
 		&record.ID,
 		&record.GuildID,
 		&record.DeckID,
-		&record.ForumChannelID,
+		&record.ChannelID,
 		&questionListThreadID,
 		&record.CreatedAt,
 		&record.UpdatedAt,

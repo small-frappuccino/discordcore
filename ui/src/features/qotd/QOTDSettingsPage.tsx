@@ -59,7 +59,7 @@ export function QOTDSettingsPage() {
     .map((channel) => ({
       value: channel.id,
       label: channel.display_name,
-      description: "Text channel that hosts `questions list!` and the daily QOTD posts.",
+      description: "Text channel that hosts the daily QOTD message and its answer thread.",
     }));
   const hasUnsavedChanges = settingsDraftChanged(savedDraftRef.current, draft);
   const setupBusy = busyLabel === QOTD_BUSY_LABELS.setupForum;
@@ -141,7 +141,7 @@ export function QOTDSettingsPage() {
                       Automatic setup
                     </GroupedSettingsHeading>
                     <p className="field-note">
-                      Creates the forum <code>☆-qotd-☆</code>, seals the pinned post <code>questions list!</code>, and prepares future daily posts as <code>[question] - qotd #[n]</code>.
+                      Creates or repairs the <code>☆-qotd-☆</code> text channel with verified-role permissions so each daily QOTD post can open its own answer thread.
                     </p>
                   </GroupedSettingsCopy>
                   <button
@@ -159,7 +159,7 @@ export function QOTDSettingsPage() {
                       ? "Setting up..."
                       : hasConfiguredChannel
                         ? "Repair QOTD setup"
-                        : "Create QOTD forum"}
+                        : "Create QOTD channel"}
                   </button>
                 </GroupedSettingsMainRow>
               </GroupedSettingsSubrow>
@@ -330,7 +330,7 @@ export function QOTDSettingsPage() {
                         options={textChannelOptions}
                         placeholder={channelPlaceholder}
                         disabled={controlsDisabled || channelOptions.loading}
-                        note="Single text channel used for `questions list!`, the daily QOTD post, and answer routing."
+                        note="Single text channel used for the daily QOTD post; each post opens a dedicated answer thread."
                       />
                     </div>
                   </GroupedSettingsSubrow>
@@ -419,33 +419,6 @@ export function QOTDSettingsPage() {
           <GroupedSettingsGroup>
             <GroupedSettingsItem>
               <GroupedSettingsSubrow>
-                <div className="input-group">
-                  <label>
-                    <GroupedSettingsHeading>Verified Role</GroupedSettingsHeading>
-                    <span className="field-note">The role required to view the QOTD text channels.</span>
-                  </label>
-                  <SettingsSelectField
-                    label="Verified role"
-                    value={draft.verified_role_id ?? ""}
-                    onChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        verified_role_id: value,
-                      }))
-                    }
-                    options={roleOptions.roles.map(r => ({ value: r.id, label: r.name }))}
-                    placeholder="Select a verified role (optional)"
-                    disabled={controlsDisabled || roleOptions.loading}
-                    note="Users without this role will not be able to read the QOTD text channel."
-                  />
-                </div>
-              </GroupedSettingsSubrow>
-            </GroupedSettingsItem>
-          </GroupedSettingsGroup>
-
-          <GroupedSettingsGroup>
-            <GroupedSettingsItem>
-              <GroupedSettingsSubrow>
                 <button
                   className="button-secondary"
                   type="button"
@@ -463,33 +436,6 @@ export function QOTDSettingsPage() {
                 >
                   Add deck
                 </button>
-              </GroupedSettingsSubrow>
-            </GroupedSettingsItem>
-          </GroupedSettingsGroup>
-
-          <GroupedSettingsGroup>
-            <GroupedSettingsItem>
-              <GroupedSettingsSubrow>
-                <div className="input-group">
-                  <label>
-                    <GroupedSettingsHeading>Verified Role</GroupedSettingsHeading>
-                    <span className="field-note">The role required to view the QOTD text channels.</span>
-                  </label>
-                  <SettingsSelectField
-                    label="Verified role"
-                    value={draft.verified_role_id ?? ""}
-                    onChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        verified_role_id: value,
-                      }))
-                    }
-                    options={roleOptions.roles.map(r => ({ value: r.id, label: r.name }))}
-                    placeholder="Select a verified role (optional)"
-                    disabled={controlsDisabled || roleOptions.loading}
-                    note="Users without this role will not be able to read the QOTD text channel."
-                  />
-                </div>
               </GroupedSettingsSubrow>
             </GroupedSettingsItem>
           </GroupedSettingsGroup>
@@ -529,6 +475,7 @@ function createSettingsDraft(settings: QOTDConfig): SettingsDraft {
     String(settings.active_deck_id ?? "").trim() || String(decks[0]?.id ?? "");
   return {
     active_deck_id: activeDeckID,
+    verified_role_id: String(settings.verified_role_id ?? "").trim(),
     decks,
     collector: normalizeCollectorConfig(settings.collector),
   };

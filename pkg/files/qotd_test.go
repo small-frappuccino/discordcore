@@ -28,12 +28,13 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	}, nil)
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
+		VerifiedRoleID: " 987654321098765432 ",
 		ActiveDeckID: LegacyQOTDDefaultDeckID,
 		Decks: []QOTDDeckConfig{{
-			ID:             LegacyQOTDDefaultDeckID,
-			Name:           LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: " 123456789012345678 ",
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: " 123456789012345678 ",
 		}},
 	})
 	if err != nil {
@@ -51,8 +52,11 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	if !deck.Enabled {
 		t.Fatal("expected qotd deck to remain enabled")
 	}
-	if deck.ForumChannelID != "123456789012345678" {
-		t.Fatalf("expected canonical forum channel id, got %q", deck.ForumChannelID)
+	if deck.ChannelID != "123456789012345678" {
+		t.Fatalf("expected canonical channel id, got %q", deck.ChannelID)
+	}
+	if cfg.VerifiedRoleID != "987654321098765432" {
+		t.Fatalf("expected canonical verified role id, got %q", cfg.VerifiedRoleID)
 	}
 	if cfg.ActiveDeckID != LegacyQOTDDefaultDeckID {
 		t.Fatalf("expected default deck to become active, got %q", cfg.ActiveDeckID)
@@ -70,10 +74,10 @@ func TestSetQOTDConfigRollsBackOnSaveError(t *testing.T) {
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
 		ActiveDeckID: LegacyQOTDDefaultDeckID,
 		Decks: []QOTDDeckConfig{{
-			ID:             LegacyQOTDDefaultDeckID,
-			Name:           LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "123456789012345678",
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
 		}},
 	})
 	if !errors.Is(err, saveErr) {
@@ -158,7 +162,7 @@ func TestQOTDConfigUnmarshalMigratesLegacyChannelFields(t *testing.T) {
 	if !deck.Enabled {
 		t.Fatalf("expected legacy enabled flag to carry over, got %+v", deck)
 	}
-	if deck.ForumChannelID != "123456789012345678" {
-		t.Fatalf("expected legacy question channel to map to forum channel, got %+v", deck)
+	if deck.ChannelID != "123456789012345678" {
+		t.Fatalf("expected legacy question channel to map to channel_id, got %+v", deck)
 	}
 }

@@ -22,7 +22,7 @@ func (cfg QOTDDeckConfig) IsZero() bool {
 	return strings.TrimSpace(cfg.ID) == "" &&
 		strings.TrimSpace(cfg.Name) == "" &&
 		!cfg.Enabled &&
-		strings.TrimSpace(cfg.ForumChannelID) == ""
+		strings.TrimSpace(cfg.ChannelID) == ""
 }
 
 // IsZero reports whether all QOTD collector fields are unset.
@@ -119,7 +119,7 @@ func isImplicitDefaultQOTDDeck(deck QOTDDeckConfig, activeDeckID string) bool {
 	return strings.TrimSpace(deck.ID) == LegacyQOTDDefaultDeckID &&
 		strings.TrimSpace(deck.Name) == LegacyQOTDDefaultDeckName &&
 		!deck.Enabled &&
-		strings.TrimSpace(deck.ForumChannelID) == "" &&
+		strings.TrimSpace(deck.ChannelID) == "" &&
 		(activeDeckID == "" || activeDeckID == LegacyQOTDDefaultDeckID)
 }
 
@@ -128,6 +128,7 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 		ID                string `json:"id,omitempty"`
 		Name              string `json:"name,omitempty"`
 		Enabled           bool   `json:"enabled,omitempty"`
+		ChannelID         string `json:"channel_id,omitempty"`
 		ForumChannelID    string `json:"forum_channel_id,omitempty"`
 		QuestionChannelID string `json:"question_channel_id,omitempty"`
 		ResponseChannelID string `json:"response_channel_id,omitempty"`
@@ -138,29 +139,34 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	forumChannelID := strings.TrimSpace(raw.ForumChannelID)
-	if forumChannelID == "" {
-		forumChannelID = strings.TrimSpace(raw.QuestionChannelID)
+	channelID := strings.TrimSpace(raw.ChannelID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(raw.ForumChannelID)
 	}
-	if forumChannelID == "" {
-		forumChannelID = strings.TrimSpace(raw.ResponseChannelID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(raw.QuestionChannelID)
+	}
+	if channelID == "" {
+		channelID = strings.TrimSpace(raw.ResponseChannelID)
 	}
 
 	*cfg = QOTDDeckConfig{
-		ID:             raw.ID,
-		Name:           raw.Name,
-		Enabled:        raw.Enabled,
-		ForumChannelID: forumChannelID,
+		ID:        raw.ID,
+		Name:      raw.Name,
+		Enabled:   raw.Enabled,
+		ChannelID: channelID,
 	}
 	return nil
 }
 
 func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	type rawQOTDConfig struct {
+		VerifiedRoleID   string              `json:"verified_role_id,omitempty"`
 		ActiveDeckID      string              `json:"active_deck_id,omitempty"`
 		Decks             []QOTDDeckConfig    `json:"decks,omitempty"`
 		Collector         QOTDCollectorConfig `json:"collector,omitempty"`
 		Enabled           bool                `json:"enabled,omitempty"`
+		ChannelID         string              `json:"channel_id,omitempty"`
 		ForumChannelID    string              `json:"forum_channel_id,omitempty"`
 		QuestionChannelID string              `json:"question_channel_id,omitempty"`
 		ResponseChannelID string              `json:"response_channel_id,omitempty"`
@@ -172,30 +178,34 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	*cfg = QOTDConfig{
-		ActiveDeckID: raw.ActiveDeckID,
-		Decks:        raw.Decks,
-		Collector:    raw.Collector,
+		VerifiedRoleID: raw.VerifiedRoleID,
+		ActiveDeckID:   raw.ActiveDeckID,
+		Decks:          raw.Decks,
+		Collector:      raw.Collector,
 	}
 	if len(raw.Decks) > 0 {
 		return nil
 	}
 
-	forumChannelID := strings.TrimSpace(raw.ForumChannelID)
-	if forumChannelID == "" {
-		forumChannelID = strings.TrimSpace(raw.QuestionChannelID)
+	channelID := strings.TrimSpace(raw.ChannelID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(raw.ForumChannelID)
 	}
-	if forumChannelID == "" {
-		forumChannelID = strings.TrimSpace(raw.ResponseChannelID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(raw.QuestionChannelID)
 	}
-	if !raw.Enabled && forumChannelID == "" {
+	if channelID == "" {
+		channelID = strings.TrimSpace(raw.ResponseChannelID)
+	}
+	if !raw.Enabled && channelID == "" {
 		return nil
 	}
 
 	cfg.Decks = []QOTDDeckConfig{{
-		ID:             LegacyQOTDDefaultDeckID,
-		Name:           LegacyQOTDDefaultDeckName,
-		Enabled:        raw.Enabled,
-		ForumChannelID: forumChannelID,
+		ID:        LegacyQOTDDefaultDeckID,
+		Name:      LegacyQOTDDefaultDeckName,
+		Enabled:   raw.Enabled,
+		ChannelID: channelID,
 	}}
 	return nil
 }

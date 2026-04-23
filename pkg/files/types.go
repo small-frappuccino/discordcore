@@ -288,7 +288,6 @@ type QOTDDeckConfig struct {
 	Name           string `json:"name,omitempty"`
 	Enabled        bool   `json:"enabled,omitempty"`
 	ChannelID      string `json:"channel_id,omitempty"`
-	VerifiedRoleID string `json:"verified_role_id,omitempty"`
 }
 
 // QOTDCollectorConfig stores channel-history collection settings used to
@@ -816,18 +815,3 @@ func IsRetryableError(err error) bool {
 // ## General Errors
 
 var ErrRateLimited = errors.New("rate limited")
-func (qdc *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
-        type alias QOTDDeckConfig
-        var parsed struct {
-                alias
-                ForumChannelID string "json:"forum_channel_id,omitempty""
-        }
-        if err := json.Unmarshal(data, &parsed); err != nil {
-                return err
-        }
-        *qdc = QOTDDeckConfig(parsed.alias)
-        if qdc.ChannelID == "" && parsed.ForumChannelID != "" {
-                qdc.ChannelID = parsed.ForumChannelID
-        }
-        return nil
-}

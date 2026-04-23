@@ -24,7 +24,7 @@ type PublishOfficialPostParams struct {
 	QueuePosition              int64
 	DeckName                   string
 	AvailableQuestions         int
-	ForumChannelID             string
+	ChannelID                  string
 	QuestionListThreadID       string
 	QuestionListEntryMessageID string
 	OfficialThreadID           string
@@ -101,77 +101,64 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 		PublishedAt:                normalized.ExistingPublishedAt,
 	}
 
+	if result.StarterMessageID == "" {
+		message, err := session.ChannelMessageSendComplex(
+			normalized.ChannelID,
+			buildOfficialPostStarterMessage(questionEmbed, normalized.OfficialPostID),
+		)
+		if err != nil {
+			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd starter message: %w", err)
+		}
+		if message == nil || strings.TrimSpace(message.ID) == "" {
+			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd starter message: missing message id")
+		}
+		result.StarterMessageID = strings.TrimSpace(message.ID)
+		if result.PublishedAt.IsZero() {
+			result.PublishedAt = time.Now().UTC()
+		}
+	}
+
 	if result.ThreadID == "" {
-		thread, err := session.ForumThreadStartComplex(
-			normalized.ForumChannelID,
+		thread, err := session.MessageThreadStartComplex(
+			normalized.ChannelID,
+			result.StarterMessageID,
 			&discordgo.ThreadStart{
 				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.QuestionText, normalized.QueuePosition, normalized.ThreadName),
 				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
 			},
-			buildOfficialPostStarterMessage(questionEmbed),
 		)
 		if err != nil {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("create qotd forum thread: %w", err)
+			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd daily thread: %w", err)
 		}
 		if thread != nil {
 			result.ThreadID = strings.TrimSpace(thread.ID)
-			if result.StarterMessageID == "" {
-				result.StarterMessageID = strings.TrimSpace(thread.LastMessageID)
-			}
 		}
 		if result.ThreadID == "" {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("create qotd forum thread: missing thread id")
-		}
-		if result.AnswerChannelID == "" {
-			result.AnswerChannelID = result.ThreadID
+			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd daily thread: missing thread id")
 		}
 		if result.PublishedAt.IsZero() {
 			result.PublishedAt = time.Now().UTC()
 		}
 	}
 
-	if result.StarterMessageID == "" && result.ThreadID != "" {
-		msgs, fetchErr := session.ChannelMessages(result.ThreadID, 1, "", "", "")
-		if fetchErr != nil {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("resolve qotd starter message: %w", fetchErr)
-		}
-		if len(msgs) == 0 || strings.TrimSpace(msgs[0].ID) == "" {
-			return result.withPostURL(normalized.GuildID), fmt.Errorf("resolve qotd starter message: discord returned no starter message")
-		}
-		result.StarterMessageID = strings.TrimSpace(msgs[0].ID)
-	}
-
 	if result.AnswerChannelID == "" && result.ThreadID != "" {
 		result.AnswerChannelID = result.ThreadID
 	}
 
-	listArtifact, err := newQuestionListArtifactPublisher(p, session).Publish(ctx, questionListArtifactPublishParams{
-		ForumChannelID:      normalized.ForumChannelID,
-		PreferredThreadID:   result.QuestionListThreadID,
-		EntryMessageID:      result.QuestionListEntryMessageID,
-		OfficialPostID:      normalized.OfficialPostID,
-		QuestionEmbed:       questionEmbed,
-		ExistingPublishedAt: result.PublishedAt,
-	})
-	if listArtifact != nil {
-		result.QuestionListThreadID = listArtifact.ThreadID
-		result.QuestionListEntryMessageID = listArtifact.EntryMessageID
-		if result.PublishedAt.IsZero() {
-			result.PublishedAt = listArtifact.PublishedAt
-		}
-	}
-	if err != nil {
-		return result.withPostURL(normalized.GuildID), fmt.Errorf("publish qotd questions list artifact: %w", err)
-	}
-
-	return result.withPostURL(normalized.GuildID), nil
+	return result.withPostURL(normalized.GuildID, normalized.ChannelID), nil
 }
 
-func (post *PublishedOfficialPost) withPostURL(guildID string) *PublishedOfficialPost {
+func (post *PublishedOfficialPost) withPostURL(guildID, channelID string) *PublishedOfficialPost {
 	if post == nil {
 		return nil
 	}
 	if strings.TrimSpace(post.PostURL) == "" {
+		if channelID = strings.TrimSpace(channelID); channelID != "" {
+			if starterMessageID := strings.TrimSpace(post.StarterMessageID); starterMessageID != "" {
+				post.PostURL = BuildMessageJumpURL(guildID, channelID, starterMessageID)
+				return post
+			}
+		}
 		if threadID := strings.TrimSpace(post.ThreadID); threadID != "" {
 			post.PostURL = BuildThreadJumpURL(guildID, threadID)
 		}
@@ -350,17 +337,32 @@ func buildOfficialPostName(publishDateUTC time.Time, questionText string, queueP
 	return "question of the day"
 }
 
-func buildOfficialPostStarterMessage(embed *discordgo.MessageEmbed) *discordgo.MessageSend {
+func buildOfficialPostStarterMessage(embed *discordgo.MessageEmbed, officialPostID int64) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
 		Embeds:          []*discordgo.MessageEmbed{embed},
+		Components:      buildAnswerButtonComponents(officialPostID),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
+	}
+}
+
+func buildAnswerButtonComponents(officialPostID int64) []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    answerButtonLabel,
+					Style:    discordgo.SecondaryButton,
+					CustomID: fmt.Sprintf(answerButtonCustomID, officialPostID),
+				},
+			},
+		},
 	}
 }
 
 func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (PublishOfficialPostParams, error) {
 	params.GuildID = strings.TrimSpace(params.GuildID)
 	params.DeckName = strings.TrimSpace(params.DeckName)
-	params.ForumChannelID = strings.TrimSpace(params.ForumChannelID)
+	params.ChannelID = strings.TrimSpace(params.ChannelID)
 	params.QuestionListThreadID = strings.TrimSpace(params.QuestionListThreadID)
 	params.QuestionListEntryMessageID = strings.TrimSpace(params.QuestionListEntryMessageID)
 	params.OfficialThreadID = strings.TrimSpace(params.OfficialThreadID)
@@ -385,8 +387,8 @@ func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (Publi
 		return PublishOfficialPostParams{}, fmt.Errorf("question text is required")
 	case params.PublishDateUTC.IsZero():
 		return PublishOfficialPostParams{}, fmt.Errorf("publish date is required")
-	case params.ForumChannelID == "":
-		return PublishOfficialPostParams{}, fmt.Errorf("forum channel id is required")
+	case params.ChannelID == "":
+		return PublishOfficialPostParams{}, fmt.Errorf("channel id is required")
 	default:
 		return params, nil
 	}

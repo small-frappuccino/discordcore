@@ -360,7 +360,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		PublishMode:          string(PublishModeManual),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       strings.TrimSpace(deck.ForumChannelID),
+		ChannelID:            strings.TrimSpace(deck.ChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
@@ -876,7 +876,7 @@ func isQOTDUniqueConstraintError(err error) bool {
 }
 
 func canPublishQOTD(deck files.QOTDDeckConfig) bool {
-	return strings.TrimSpace(deck.ForumChannelID) != ""
+	return strings.TrimSpace(deck.ChannelID) != ""
 }
 
 func hasPublishedOfficialPostTarget(post *storage.QOTDOfficialPostRecord) bool {
@@ -887,6 +887,11 @@ func hasPublishedOfficialPostTarget(post *storage.QOTDOfficialPostRecord) bool {
 }
 
 func officialPostJumpURL(post storage.QOTDOfficialPostRecord) string {
+	if channelID := strings.TrimSpace(post.ChannelID); channelID != "" {
+		if starterMessageID := strings.TrimSpace(post.DiscordStarterMessageID); starterMessageID != "" {
+			return discordqotd.BuildMessageJumpURL(post.GuildID, channelID, starterMessageID)
+		}
+	}
 	if threadID := strings.TrimSpace(post.DiscordThreadID); threadID != "" {
 		return discordqotd.BuildThreadJumpURL(post.GuildID, threadID)
 	}
@@ -898,7 +903,7 @@ func officialPostJumpURL(post storage.QOTDOfficialPostRecord) string {
 	return discordqotd.BuildMessageJumpURL(post.GuildID, channelID, messageID)
 }
 
-func qotdForumSurfaceQuestionListThreadID(surface *storage.QOTDForumSurfaceRecord) string {
+func qotdForumSurfaceQuestionListThreadID(surface *storage.QOTDSurfaceRecord) string {
 	if surface == nil {
 		return ""
 	}

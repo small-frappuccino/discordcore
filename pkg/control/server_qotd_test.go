@@ -51,18 +51,15 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 }
 
 func (routeFakePublisher) SetupForum(_ context.Context, _ *discordgo.Session, params discordqotd.SetupForumParams) (*discordqotd.SetupForumResult, error) {
-	forumChannelID := strings.TrimSpace(params.PreferredForumChannelID)
-	if forumChannelID == "" {
-		forumChannelID = "forum-setup-1"
+	channelID := strings.TrimSpace(params.PreferredChannelID)
+	if channelID == "" {
+		channelID = "channel-setup-1"
 	}
 	questionListThreadID := strings.TrimSpace(params.PreferredQuestionListThreadID)
-	if questionListThreadID == "" {
-		questionListThreadID = "questions-list-thread"
-	}
 	return &discordqotd.SetupForumResult{
-		ForumChannelID:       forumChannelID,
-		ForumChannelName:     "☆-qotd-☆",
-		ForumChannelURL:      discordqotd.BuildChannelJumpURL(params.GuildID, forumChannelID),
+		ChannelID:            channelID,
+		ChannelName:          "☆-qotd-☆",
+		ChannelURL:           discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
 		QuestionListThreadID: questionListThreadID,
 		QuestionListPostURL:  discordqotd.BuildChannelJumpURL(params.GuildID, questionListThreadID),
 	}, nil
@@ -186,12 +183,13 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	handler := srv.httpServer.Handler
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
+		VerifiedRoleID: "verified-role",
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "123456789012345678",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
 		}},
 	})
 	if settingsRec.Code != 200 {
@@ -202,8 +200,11 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected qotd settings response to expose an active deck: %+v", settingsResp.Settings)
 	}
-	if !deck.Enabled || deck.ForumChannelID != "123456789012345678" {
+	if !deck.Enabled || deck.ChannelID != "123456789012345678" {
 		t.Fatalf("unexpected qotd settings response: %+v", settingsResp.Settings)
+	}
+	if settingsResp.Settings.VerifiedRoleID != "verified-role" {
+		t.Fatalf("expected verified role to round-trip in qotd settings, got %+v", settingsResp.Settings)
 	}
 	if strings.Contains(settingsRec.Body.String(), "staff_role_ids") {
 		t.Fatalf("expected qotd settings payload to omit deprecated staff roles, body=%q", settingsRec.Body.String())
@@ -269,15 +270,15 @@ func TestQOTDRoutesSetupBootstrapsForumAndSettings(t *testing.T) {
 	if setupResp.SetupResult == nil {
 		t.Fatalf("expected setup result payload, got body=%q", setupRec.Body.String())
 	}
-	if setupResp.SetupResult.ForumChannelID != "forum-setup-1" {
-		t.Fatalf("unexpected setup forum channel id: %+v", setupResp.SetupResult)
+	if setupResp.SetupResult.ChannelID != "channel-setup-1" {
+		t.Fatalf("unexpected setup channel id: %+v", setupResp.SetupResult)
 	}
 	deck, ok := setupResp.Settings.ActiveDeck()
 	if !ok {
 		t.Fatalf("expected active deck in setup settings response: %+v", setupResp.Settings)
 	}
-	if !deck.Enabled || deck.ForumChannelID != "forum-setup-1" {
-		t.Fatalf("expected setup to enable active deck and persist forum channel, got %+v", deck)
+	if !deck.Enabled || deck.ChannelID != "channel-setup-1" {
+		t.Fatalf("expected setup to enable active deck and persist qotd channel, got %+v", deck)
 	}
 }
 
@@ -352,10 +353,10 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
-			ID:             files.LegacyQOTDDefaultDeckID,
-			Name:           files.LegacyQOTDDefaultDeckName,
-			Enabled:        true,
-			ForumChannelID: "question-channel-1",
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -379,7 +380,7 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 		PublishMode:          string(qotd.PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(qotd.OfficialPostStatePrevious),
-		ForumChannelID:       "question-channel-1",
+		ChannelID:            "question-channel-1",
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,

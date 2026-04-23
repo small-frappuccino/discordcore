@@ -9,12 +9,11 @@ import (
 )
 
 type fakeForumSetupTransport struct {
-	botUserID            string
-	preferredChannel     *discordgo.Channel
-	listedChannels       []*discordgo.Channel
-	createdChannel       *discordgo.Channel
-	syncedChannel        *discordgo.Channel
-	questionListThreadID string
+	botUserID      string
+	preferred      *discordgo.Channel
+	listedChannels []*discordgo.Channel
+	createdChannel *discordgo.Channel
+	syncedChannel  *discordgo.Channel
 
 	createCalls []discordgo.GuildChannelCreateData
 	syncCalls   []struct {
@@ -39,31 +38,31 @@ func (f *fakeForumSetupTransport) CurrentBotUserID(context.Context) (string, err
 	return f.botUserID, nil
 }
 
-func (f *fakeForumSetupTransport) ResolveForumChannel(context.Context, string, string) (*discordgo.Channel, error) {
-	return f.preferredChannel, f.resolveErr
+func (f *fakeForumSetupTransport) ResolveChannel(context.Context, string, string) (*discordgo.Channel, error) {
+	return f.preferred, f.resolveErr
 }
 
-func (f *fakeForumSetupTransport) ListForumChannels(context.Context, string) ([]*discordgo.Channel, error) {
+func (f *fakeForumSetupTransport) ListTextChannels(context.Context, string) ([]*discordgo.Channel, error) {
 	return f.listedChannels, f.listErr
 }
 
-func (f *fakeForumSetupTransport) CreateForumChannel(_ context.Context, _ string, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+func (f *fakeForumSetupTransport) CreateTextChannel(_ context.Context, _ string, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	f.createCalls = append(f.createCalls, discordgo.GuildChannelCreateData{
 		Name:                 name,
 		Topic:                topic,
-		Type:                 discordgo.ChannelTypeGuildForum,
+		Type:                 discordgo.ChannelTypeGuildText,
 		PermissionOverwrites: overwrites,
 	})
 	if f.createErr != nil {
 		return nil, f.createErr
 	}
 	if f.createdChannel == nil {
-		f.createdChannel = &discordgo.Channel{ID: "forum-created", Name: name, Type: discordgo.ChannelTypeGuildForum}
+		f.createdChannel = &discordgo.Channel{ID: "channel-created", Name: name, Type: discordgo.ChannelTypeGuildText}
 	}
 	return f.createdChannel, nil
 }
 
-func (f *fakeForumSetupTransport) SyncForumChannel(_ context.Context, channelID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+func (f *fakeForumSetupTransport) SyncChannel(_ context.Context, channelID, name, topic string, overwrites []*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	f.syncCalls = append(f.syncCalls, struct {
 		channelID  string
 		name       string
@@ -79,90 +78,114 @@ func (f *fakeForumSetupTransport) SyncForumChannel(_ context.Context, channelID,
 		return nil, f.syncErr
 	}
 	if f.syncedChannel == nil {
-		f.syncedChannel = &discordgo.Channel{ID: channelID, Name: name, Type: discordgo.ChannelTypeGuildForum}
+		f.syncedChannel = &discordgo.Channel{ID: channelID, Name: name, Type: discordgo.ChannelTypeGuildText}
 	}
 	return f.syncedChannel, nil
 }
 
-func (f *fakeForumSetupTransport) EnsureQuestionListThread(_ context.Context, forumChannelID, preferredThreadID string) (string, error) {
-	f.ensureThreadCalls = append(f.ensureThreadCalls, forumChannelID+"|"+preferredThreadID)
+func (f *fakeForumSetupTransport) EnsureQuestionListThread(_ context.Context, channelID, preferredThreadID string) (string, error) {
+	f.ensureThreadCalls = append(f.ensureThreadCalls, channelID+"|"+preferredThreadID)
 	if f.threadErr != nil {
 		return "", f.threadErr
 	}
-	if f.questionListThreadID == "" {
-		f.questionListThreadID = "questions-list-thread"
-	}
-	return f.questionListThreadID, nil
+	return "questions-list-thread", nil
 }
 
-func TestForumSetupCoordinatorCreatesCanonicalForumAndThread(t *testing.T) {
+func TestForumSetupCoordinatorCreatesCanonicalChannel(t *testing.T) {
 	t.Parallel()
 
-	transport := &fakeForumSetupTransport{
-		botUserID: "bot-user",
-	}
+	transport := &fakeForumSetupTransport{botUserID: "bot-user"}
 	coordinator := forumSetupCoordinator{transport: transport}
 
-	result, err := coordinator.Setup(context.Background(), SetupForumParams{
-		GuildID: "guild-1",
-	})
+	result, err := coordinator.Setup(context.Background(), SetupForumParams{GuildID: "guild-1"})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected setup result")
-	}
-	if result.ForumChannelID != "forum-created" || result.QuestionListThreadID != "questions-list-thread" {
+	if result == nil || result.ChannelID != "channel-created" {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
-	if len(transport.createCalls) != 1 {
-		t.Fatalf("expected one forum channel creation, got %+v", transport.createCalls)
+	if result.QuestionListThreadID != "" || result.QuestionListPostURL != "" {
+		t.Fatalf("expected no legacy question-list artifacts, got %+v", result)
 	}
-	if transport.createCalls[0].Name != canonicalQOTDForumChannelName {
-		t.Fatalf("expected canonical forum name, got %+v", transport.createCalls[0])
+	if len(transport.createCalls) != 1 {
+		t.Fatalf("expected one text channel creation, got %+v", transport.createCalls)
+	}
+	if transport.createCalls[0].Name != canonicalQOTDChannelName {
+		t.Fatalf("expected canonical channel name, got %+v", transport.createCalls[0])
 	}
 	if len(transport.createCalls[0].PermissionOverwrites) != 2 {
 		t.Fatalf("expected everyone + bot overwrites, got %+v", transport.createCalls[0].PermissionOverwrites)
 	}
 	everyoneOverwrite := transport.createCalls[0].PermissionOverwrites[0]
-	if everyoneOverwrite.Deny&discordgo.PermissionSendMessages == 0 ||
-		everyoneOverwrite.Allow&discordgo.PermissionSendMessagesInThreads == 0 {
-		t.Fatalf("expected setup to block new forum posts but keep thread replies available, got %+v", everyoneOverwrite)
+	if everyoneOverwrite.Deny&discordgo.PermissionSendMessages == 0 {
+		t.Fatalf("expected setup to block direct channel messages, got %+v", everyoneOverwrite)
 	}
-	if len(transport.ensureThreadCalls) != 1 || transport.ensureThreadCalls[0] != "forum-created|" {
-		t.Fatalf("expected one question-list bootstrap call, got %+v", transport.ensureThreadCalls)
+	if everyoneOverwrite.Allow&discordgo.PermissionSendMessagesInThreads == 0 {
+		t.Fatalf("expected setup to keep thread replies available, got %+v", everyoneOverwrite)
+	}
+	if len(transport.ensureThreadCalls) != 0 {
+		t.Fatalf("expected no legacy question-list bootstrap call, got %+v", transport.ensureThreadCalls)
 	}
 }
 
-func TestForumSetupCoordinatorPrefersExistingCanonicalForum(t *testing.T) {
+func TestForumSetupCoordinatorReusesCanonicalChannel(t *testing.T) {
 	t.Parallel()
 
 	transport := &fakeForumSetupTransport{
 		botUserID: "bot-user",
 		listedChannels: []*discordgo.Channel{
-			{ID: "forum-existing", Name: canonicalQOTDForumChannelName, Type: discordgo.ChannelTypeGuildForum},
+			{ID: "channel-existing", Name: canonicalQOTDChannelName, Type: discordgo.ChannelTypeGuildText},
 		},
 	}
 	coordinator := forumSetupCoordinator{transport: transport}
 
 	result, err := coordinator.Setup(context.Background(), SetupForumParams{
 		GuildID:                       "guild-1",
-		PreferredForumChannelID:       "forum-old",
+		PreferredChannelID:            "channel-old",
 		PreferredQuestionListThreadID: "questions-list-existing",
 	})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
-	if result == nil || result.ForumChannelID != "forum-existing" {
-		t.Fatalf("expected canonical forum reuse, got %+v", result)
+	if result == nil || result.ChannelID != "channel-existing" {
+		t.Fatalf("expected canonical channel reuse, got %+v", result)
 	}
 	if len(transport.createCalls) != 0 {
-		t.Fatalf("expected no new forum creation, got %+v", transport.createCalls)
+		t.Fatalf("expected no new channel creation, got %+v", transport.createCalls)
 	}
-	if len(transport.syncCalls) != 1 || transport.syncCalls[0].channelID != "forum-existing" {
-		t.Fatalf("expected sync on canonical forum, got %+v", transport.syncCalls)
+	if len(transport.syncCalls) != 1 || transport.syncCalls[0].channelID != "channel-existing" {
+		t.Fatalf("expected sync on canonical channel, got %+v", transport.syncCalls)
 	}
-	if len(transport.ensureThreadCalls) != 1 || transport.ensureThreadCalls[0] != "forum-existing|questions-list-existing" {
-		t.Fatalf("unexpected question list bootstrap call: %+v", transport.ensureThreadCalls)
+	if len(transport.ensureThreadCalls) != 0 {
+		t.Fatalf("expected no legacy question-list bootstrap call, got %+v", transport.ensureThreadCalls)
+	}
+}
+
+func TestForumSetupCoordinatorLocksChannelToVerifiedRole(t *testing.T) {
+	t.Parallel()
+
+	transport := &fakeForumSetupTransport{botUserID: "bot-user"}
+	coordinator := forumSetupCoordinator{transport: transport}
+
+	_, err := coordinator.Setup(context.Background(), SetupForumParams{
+		GuildID:        "guild-1",
+		VerifiedRoleID: "verified-role",
+	})
+	if err != nil {
+		t.Fatalf("Setup() failed: %v", err)
+	}
+	if len(transport.createCalls) != 1 {
+		t.Fatalf("expected one channel creation, got %+v", transport.createCalls)
+	}
+	if len(transport.createCalls[0].PermissionOverwrites) != 3 {
+		t.Fatalf("expected everyone + verified role + bot overwrites, got %+v", transport.createCalls[0].PermissionOverwrites)
+	}
+	everyoneOverwrite := transport.createCalls[0].PermissionOverwrites[0]
+	verifiedOverwrite := transport.createCalls[0].PermissionOverwrites[1]
+	if everyoneOverwrite.Deny&discordgo.PermissionViewChannel == 0 {
+		t.Fatalf("expected everyone to lose channel visibility, got %+v", everyoneOverwrite)
+	}
+	if verifiedOverwrite.ID != "verified-role" || verifiedOverwrite.Allow&discordgo.PermissionViewChannel == 0 {
+		t.Fatalf("expected verified role to receive channel visibility, got %+v", verifiedOverwrite)
 	}
 }

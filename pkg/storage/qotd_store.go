@@ -755,7 +755,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -779,7 +779,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -801,7 +801,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 		normalized.PublishMode,
 		normalized.PublishDateUTC,
 		normalized.State,
-		normalized.ForumChannelID,
+		normalized.ChannelID,
 		normalized.QuestionListThreadID,
 		normalized.QuestionListEntryMessageID,
 		zeroEmptyString(normalized.DiscordThreadID),
@@ -834,12 +834,6 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 	discordThreadID = strings.TrimSpace(discordThreadID)
 	starterMessageID = strings.TrimSpace(starterMessageID)
 	answerChannelID = strings.TrimSpace(answerChannelID)
-	if questionListThreadID == "" {
-		return nil, fmt.Errorf("finalize qotd official post: question list thread id is required")
-	}
-	if questionListEntryMessageID == "" {
-		return nil, fmt.Errorf("finalize qotd official post: question list entry message id is required")
-	}
 	if starterMessageID == "" {
 		return nil, fmt.Errorf("finalize qotd official post: starter message id is required")
 	}
@@ -873,7 +867,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -923,7 +917,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -974,7 +968,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -1033,7 +1027,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -1101,7 +1095,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -1175,7 +1169,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 			publish_mode,
 			publish_date_utc,
 			state,
-			forum_channel_id,
+			channel_id,
 			question_list_thread_id,
 			question_list_entry_message_id,
 			discord_thread_id,
@@ -1382,7 +1376,7 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 	rec.DeckNameSnapshot = strings.TrimSpace(rec.DeckNameSnapshot)
 	rec.PublishMode = strings.TrimSpace(rec.PublishMode)
 	rec.State = strings.TrimSpace(rec.State)
-	rec.ForumChannelID = strings.TrimSpace(rec.ForumChannelID)
+	rec.ChannelID = strings.TrimSpace(rec.ChannelID)
 	rec.QuestionListThreadID = strings.TrimSpace(rec.QuestionListThreadID)
 	rec.QuestionListEntryMessageID = strings.TrimSpace(rec.QuestionListEntryMessageID)
 	rec.DiscordThreadID = strings.TrimSpace(rec.DiscordThreadID)
@@ -1419,8 +1413,8 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 	if rec.PublishDateUTC.IsZero() {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("publish_date_utc is required")
 	}
-	if rec.ForumChannelID == "" {
-		return QOTDOfficialPostRecord{}, fmt.Errorf("forum_channel_id is required")
+	if rec.ChannelID == "" {
+		return QOTDOfficialPostRecord{}, fmt.Errorf("channel_id is required")
 	}
 	if rec.QuestionTextSnapshot == "" {
 		return QOTDOfficialPostRecord{}, fmt.Errorf("question_text_snapshot is required")
@@ -1638,7 +1632,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 		&record.PublishMode,
 		&record.PublishDateUTC,
 		&record.State,
-		&record.ForumChannelID,
+		&record.ChannelID,
 		&questionListThreadID,
 		&questionListEntryMessageID,
 		&threadID,

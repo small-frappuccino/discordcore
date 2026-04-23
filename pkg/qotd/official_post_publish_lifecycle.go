@@ -12,8 +12,7 @@ import (
 )
 
 func isOfficialPostProvisioningComplete(post storage.QOTDOfficialPostRecord) bool {
-	return strings.TrimSpace(post.QuestionListThreadID) != "" &&
-		strings.TrimSpace(post.QuestionListEntryMessageID) != "" &&
+	return strings.TrimSpace(post.DiscordThreadID) != "" &&
 		strings.TrimSpace(post.DiscordStarterMessageID) != "" &&
 		strings.TrimSpace(post.AnswerChannelID) != ""
 }
@@ -39,15 +38,6 @@ func (s *Service) completeOfficialPostProvisioning(
 		post = *updated
 	}
 
-	surfaceThreadID := strings.TrimSpace(post.QuestionListThreadID)
-	if surfaceThreadID == "" {
-		surface, err := s.store.GetQOTDForumSurfaceByDeck(ctx, post.GuildID, post.DeckID)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		surfaceThreadID = qotdForumSurfaceQuestionListThreadID(surface)
-	}
-
 	queuePosition := int64(0)
 	if question != nil {
 		queuePosition = question.QueuePosition
@@ -59,8 +49,8 @@ func (s *Service) completeOfficialPostProvisioning(
 		QueuePosition:              queuePosition,
 		DeckName:                   post.DeckNameSnapshot,
 		AvailableQuestions:         availableQuestions,
-		ForumChannelID:             strings.TrimSpace(post.ForumChannelID),
-		QuestionListThreadID:       surfaceThreadID,
+		ChannelID:                  strings.TrimSpace(post.ChannelID),
+		QuestionListThreadID:       post.QuestionListThreadID,
 		QuestionListEntryMessageID: post.QuestionListEntryMessageID,
 		OfficialThreadID:           post.DiscordThreadID,
 		OfficialStarterMessageID:   post.DiscordStarterMessageID,
@@ -83,10 +73,10 @@ func (s *Service) completeOfficialPostProvisioning(
 		}
 		post = *progress
 		if strings.TrimSpace(post.QuestionListThreadID) != "" {
-			if _, err := s.store.UpsertQOTDForumSurface(ctx, storage.QOTDForumSurfaceRecord{
+			if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
 				GuildID:              post.GuildID,
 				DeckID:               post.DeckID,
-				ForumChannelID:       post.ForumChannelID,
+				ChannelID:            post.ChannelID,
 				QuestionListThreadID: post.QuestionListThreadID,
 			}); err != nil {
 				return nil, nil, "", err
@@ -131,14 +121,14 @@ func (s *Service) completeOfficialPostProvisioning(
 		}
 		return nil, nil, "", err
 	}
-	if _, err := s.store.UpsertQOTDForumSurface(ctx, storage.QOTDForumSurfaceRecord{
+	if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
 		GuildID:              finalized.GuildID,
 		DeckID:               finalized.DeckID,
-		ForumChannelID:       finalized.ForumChannelID,
+		ChannelID:            finalized.ChannelID,
 		QuestionListThreadID: finalized.QuestionListThreadID,
 	}); err != nil {
 		if _, markErr := s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(OfficialPostStateFailed), nil, nil); markErr != nil {
-			return nil, nil, "", fmt.Errorf("upsert qotd forum surface: %w (mark failed: %v)", err, markErr)
+			return nil, nil, "", fmt.Errorf("upsert qotd surface: %w (mark failed: %v)", err, markErr)
 		}
 		return nil, nil, "", err
 	}

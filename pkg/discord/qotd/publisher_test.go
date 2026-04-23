@@ -93,7 +93,7 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 	}
 }
 
-func TestBuildOfficialPostStarterMessageUsesEmbedWithoutComponents(t *testing.T) {
+func TestBuildOfficialPostStarterMessageIncludesAnswerButton(t *testing.T) {
 	t.Parallel()
 
 	embed := buildOfficialQuestionEmbed(
@@ -102,13 +102,24 @@ func TestBuildOfficialPostStarterMessageUsesEmbedWithoutComponents(t *testing.T)
 		"What song best represents the current mood you are in?",
 		345,
 	)
-	message := buildOfficialPostStarterMessage(embed)
+	message := buildOfficialPostStarterMessage(embed, 345)
 
 	if message == nil || len(message.Embeds) != 1 {
 		t.Fatalf("expected one embed starter message, got %+v", message)
 	}
-	if len(message.Components) != 0 {
-		t.Fatalf("expected no components on official post starter message, got %+v", message.Components)
+	if len(message.Components) != 1 {
+		t.Fatalf("expected one actions row on official post starter message, got %+v", message.Components)
+	}
+	row, ok := message.Components[0].(discordgo.ActionsRow)
+	if !ok || len(row.Components) != 1 {
+		t.Fatalf("expected one answer button row, got %+v", message.Components)
+	}
+	button, ok := row.Components[0].(discordgo.Button)
+	if !ok {
+		t.Fatalf("expected button component, got %+v", row.Components[0])
+	}
+	if button.Label != answerButtonLabel || button.CustomID != "qotd:answer:345" {
+		t.Fatalf("unexpected answer button payload: %+v", button)
 	}
 }
 

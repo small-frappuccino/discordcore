@@ -297,7 +297,7 @@ describe("ControlApiClient feature routes", () => {
                     id: "default",
                     name: "Default",
                     enabled: true,
-                    forum_channel_id: "question-channel-1",
+                    channel_id: "question-channel-1",
                   },
                 ],
               },
@@ -344,7 +344,7 @@ describe("ControlApiClient feature routes", () => {
                   id: "default",
                   name: "Default",
                   enabled: true,
-                  forum_channel_id: "forum-setup-1",
+                  channel_id: "channel-setup-1",
                 },
               ],
             },
@@ -356,7 +356,7 @@ describe("ControlApiClient feature routes", () => {
                     id: "default",
                     name: "Default",
                     enabled: true,
-                    forum_channel_id: "forum-setup-1",
+                    channel_id: "channel-setup-1",
                   },
                 ],
               },
@@ -391,11 +391,8 @@ describe("ControlApiClient feature routes", () => {
             },
             result: {
               deck_id: "default",
-              forum_channel_id: "forum-setup-1",
-              forum_channel_url: "https://discord.com/channels/guild-1/forum-setup-1",
-              question_list_thread_id: "questions-list-thread",
-              question_list_post_url:
-                "https://discord.com/channels/guild-1/questions-list-thread",
+              channel_id: "channel-setup-1",
+              channel_url: "https://discord.com/channels/guild-1/channel-setup-1",
             },
           });
         }
@@ -418,7 +415,7 @@ describe("ControlApiClient feature routes", () => {
     await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
     expect(summary.summary.settings.active_deck_id).toBe("default");
-    expect(setup.result.forum_channel_id).toBe("forum-setup-1");
+    expect(setup.result.channel_id).toBe("channel-setup-1");
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/v1/guilds/guild-1/qotd",

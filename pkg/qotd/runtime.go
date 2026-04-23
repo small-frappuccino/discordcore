@@ -95,7 +95,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
-		ForumChannelID:       strings.TrimSpace(deck.ForumChannelID),
+		ChannelID:            strings.TrimSpace(deck.ChannelID),
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
