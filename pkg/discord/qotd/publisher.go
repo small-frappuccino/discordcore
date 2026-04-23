@@ -552,11 +552,6 @@ func resolveForumThreadByID(ctx context.Context, session *discordgo.Session, for
 	return thread, nil
 }
 
-func compactThreadNameBase(questionText string) string {
-	questionText = strings.ReplaceAll(questionText, "\n", " ")
-	return strings.Join(strings.Fields(strings.TrimSpace(questionText)), " ")
-}
-
 func normalizeOfficialQuestionText(questionText string) string {
 	return strings.ToLower(strings.TrimSpace(questionText))
 }

@@ -312,10 +312,6 @@ func buildGlobalSettingsWorkspace(cfg files.BotConfig) globalSettingsWorkspace {
 	}
 }
 
-func buildGuildSettingsWorkspace(cfg files.BotConfig, guild files.GuildConfig) guildSettingsWorkspace {
-	return buildGuildSettingsWorkspaceWithBindings(cfg, guild, nil, "")
-}
-
 func buildGuildSettingsWorkspaceWithBindings(
 	cfg files.BotConfig,
 	guild files.GuildConfig,

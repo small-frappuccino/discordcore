@@ -49,18 +49,6 @@ type questionListArtifactPublisher struct {
 	now       func() time.Time
 }
 
-func newQuestionListArtifactPublisher(p *Publisher, session *discordgo.Session) questionListArtifactPublisher {
-	return questionListArtifactPublisher{
-		transport: discordQuestionListArtifactTransport{
-			publisher: p,
-			session:   session,
-		},
-		now: func() time.Time {
-			return time.Now().UTC()
-		},
-	}
-}
-
 func (p questionListArtifactPublisher) Publish(ctx context.Context, params questionListArtifactPublishParams) (*questionListArtifactPublishResult, error) {
 	normalized, err := normalizeQuestionListArtifactPublishParams(params)
 	if err != nil {
@@ -102,26 +90,6 @@ func (p questionListArtifactPublisher) Publish(ctx context.Context, params quest
 		return result, fmt.Errorf("lock qotd questions list thread: %w", err)
 	}
 	return result, nil
-}
-
-func (p questionListArtifactPublisher) EnsureSealedThread(ctx context.Context, forumChannelID, preferredThreadID string) (string, error) {
-	forumChannelID = strings.TrimSpace(forumChannelID)
-	preferredThreadID = strings.TrimSpace(preferredThreadID)
-	if forumChannelID == "" {
-		return "", fmt.Errorf("forum channel id is required")
-	}
-	if p.transport == nil {
-		return "", fmt.Errorf("question list artifact publisher: transport is required")
-	}
-
-	threadID, err := p.transport.EnsureThread(ctx, forumChannelID, preferredThreadID)
-	if err != nil {
-		return "", err
-	}
-	if err := p.transport.SetThreadState(ctx, threadID, questionListThreadSealedState); err != nil {
-		return "", fmt.Errorf("lock qotd questions list thread: %w", err)
-	}
-	return threadID, nil
 }
 
 func (p questionListArtifactPublisher) appendEntry(ctx context.Context, threadID string, params questionListArtifactPublishParams) (string, error) {

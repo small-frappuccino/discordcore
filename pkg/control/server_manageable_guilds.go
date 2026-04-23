@@ -20,20 +20,6 @@ func (s *Server) resolveAccessibleGuilds(
 	return s.oauthControl().resolveAccessibleGuilds(ctx, session)
 }
 
-func (s *Server) resolveAccessibleGuildsFresh(
-	ctx context.Context,
-	session discordOAuthSession,
-) ([]accessibleGuildResponse, error) {
-	return s.oauthControl().resolveAccessibleGuildsFresh(ctx, session)
-}
-
-func (s *Server) resolveAccessibleGuildsRefreshed(
-	ctx context.Context,
-	session discordOAuthSession,
-) ([]accessibleGuildResponse, error) {
-	return s.oauthControl().resolveAccessibleGuildsRefreshed(ctx, session)
-}
-
 func (s *Server) resolveManageableGuilds(
 	ctx context.Context,
 	session discordOAuthSession,
@@ -50,13 +36,6 @@ func (s *Server) resolveBotGuildBindings(ctx context.Context) ([]BotGuildBinding
 		return nil, errBotGuildIDsProviderUnavailable
 	}
 	return s.botGuildSource.Bindings(ctx)
-}
-
-func (s *Server) resolveBotGuildIDSet(ctx context.Context) (map[string]struct{}, error) {
-	if s == nil || s.botGuildSource == nil {
-		return nil, errBotGuildIDsProviderUnavailable
-	}
-	return s.botGuildSource.GuildIDSet(ctx)
 }
 
 func statusForManageableGuildsError(err error) int {

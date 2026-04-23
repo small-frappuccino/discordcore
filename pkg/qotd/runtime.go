@@ -17,7 +17,6 @@ import (
 
 const (
 	qotdArchiveSourceOfficial = "official"
-	qotdArchiveSourceReply    = "reply"
 )
 
 // PublishScheduledIfDue publishes the scheduled QOTD for the active slot when

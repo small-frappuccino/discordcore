@@ -1741,14 +1741,6 @@ func timePtrFromNull(value sql.NullTime) *time.Time {
 	return &normalized
 }
 
-func int64PtrFromNull(value sql.NullInt64) *int64 {
-	if !value.Valid {
-		return nil
-	}
-	normalized := value.Int64
-	return &normalized
-}
-
 func normalizeQOTDDateUTC(value time.Time) time.Time {
 	if value.IsZero() {
 		return time.Time{}

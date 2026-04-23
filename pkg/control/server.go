@@ -24,8 +24,6 @@ const (
 	defaultSyncTimeout           = 20 * time.Second
 	defaultAccessibleGuildsQuery = 20 * time.Second
 	defaultAccessibleGuildsCache = 45 * time.Second
-	defaultManageableGuildsQuery = defaultAccessibleGuildsQuery
-	defaultManageableGuildsCache = defaultAccessibleGuildsCache
 )
 
 var ErrControlServerBind = errors.New("control server bind failed")
@@ -45,7 +43,6 @@ type BotGuildBinding struct {
 type requestAuthMode string
 
 const (
-	requestAuthModeUnknown             requestAuthMode = ""
 	requestAuthModeBearer              requestAuthMode = "bearer"
 	requestAuthModeDiscordOAuthSession requestAuthMode = "discord_oauth_session"
 )

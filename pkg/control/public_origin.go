@@ -17,13 +17,6 @@ func (o controlPublicOrigin) valid() bool {
 	return strings.TrimSpace(o.scheme) != "" && strings.TrimSpace(o.host) != ""
 }
 
-func (o controlPublicOrigin) string() string {
-	if !o.valid() {
-		return ""
-	}
-	return o.scheme + "://" + o.host
-}
-
 func (o controlPublicOrigin) resolve(target string) string {
 	trimmed := strings.TrimSpace(target)
 	if trimmed == "" || !o.valid() {
