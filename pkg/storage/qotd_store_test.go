@@ -2,9 +2,11 @@ package storage
 
 import (
 	"context"
-	"strings"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestQOTDTablesInitialized(t *testing.T) {
@@ -203,8 +205,15 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate scheduled publish date to remain unique")
 	}
-	if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "unique") {
-		t.Fatalf("expected unique-constraint error for duplicate scheduled publish date, got %v", err)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr == nil {
+		t.Fatalf("expected pg error for duplicate scheduled publish date, got %T %v", err, err)
+	}
+	if pgErr.Code != "23505" {
+		t.Fatalf("expected SQLSTATE 23505 for duplicate scheduled publish date, got %q", pgErr.Code)
+	}
+	if pgErr.ConstraintName != "idx_qotd_official_posts_scheduled_publish_date" {
+		t.Fatalf("expected scheduled publish date constraint, got %q", pgErr.ConstraintName)
 	}
 }
 

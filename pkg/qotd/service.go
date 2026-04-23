@@ -460,7 +460,7 @@ func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, 
 			CreatedViaInteractionID: normalized.InteractionID,
 		})
 		if err != nil {
-			if !isQOTDUniqueConstraintError(err) {
+			if !isQOTDAnswerMessageConflict(err) {
 				return nil, err
 			}
 			record, err = s.store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
@@ -865,14 +865,6 @@ func (s *Service) guildLifecycleLock(guildID string) *sync.Mutex {
 	key := strings.TrimSpace(guildID)
 	lock, _ := s.guildLifecycleLocks.LoadOrStore(key, &sync.Mutex{})
 	return lock.(*sync.Mutex)
-}
-
-func isQOTDUniqueConstraintError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
 }
 
 func canPublishQOTD(deck files.QOTDDeckConfig) bool {

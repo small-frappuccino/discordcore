@@ -104,7 +104,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		if isQOTDUniqueConstraintError(err) {
+		if isQOTDScheduledPublishConflict(err) {
 			existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
 			if lookupErr != nil {
 				return false, lookupErr
@@ -297,7 +297,7 @@ func (s *Service) ensureThreadArchive(ctx context.Context, record storage.QOTDTh
 
 	created, err := s.store.CreateQOTDThreadArchive(ctx, record)
 	if err != nil {
-		if !isQOTDUniqueConstraintError(err) {
+		if !isQOTDThreadArchiveConflict(err) {
 			return nil, err
 		}
 		return s.store.GetQOTDThreadArchiveByThreadID(ctx, threadID)
