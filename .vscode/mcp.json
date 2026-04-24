@@ -4,8 +4,8 @@
       "type": "stdio",
       "command": "node",
       "args": [
-        "${workspaceFolder:smallfrappuccino-mcp}/node_modules/tsx/dist/cli.mjs",
-        "${workspaceFolder:smallfrappuccino-mcp}/src/index.ts",
+        "${workspaceFolder}/../smallfrappuccino-mcp/node_modules/tsx/dist/cli.mjs",
+        "${workspaceFolder}/../smallfrappuccino-mcp/src/index.ts",
         "--repo-root",
         "${workspaceFolder}",
         "--server-name",
@@ -18,7 +18,7 @@
       "type": "stdio",
       "command": "node",
       "args": [
-        "${workspaceFolder:smallfrappuccino-mcp}/dist/index.js",
+        "${workspaceFolder}/../smallfrappuccino-mcp/dist/index.js",
         "--repo-root",
         "${workspaceFolder}",
         "--server-name",
