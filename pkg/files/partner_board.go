@@ -20,8 +20,8 @@ var (
 	ErrInvalidPartnerBoardInput = errors.New("invalid partner board input")
 )
 
-// GetPartnerBoardTarget returns the configured board target for a guild.
-func (mgr *ConfigManager) GetPartnerBoardTarget(guildID string) (EmbedUpdateTargetConfig, error) {
+// PartnerBoardTarget returns the configured board target for a guild.
+func (mgr *ConfigManager) PartnerBoardTarget(guildID string) (EmbedUpdateTargetConfig, error) {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return EmbedUpdateTargetConfig{}, fmt.Errorf("get partner board target: %w", invalidPartnerBoardInput("guild_id is required"))
@@ -40,6 +40,11 @@ func (mgr *ConfigManager) GetPartnerBoardTarget(guildID string) (EmbedUpdateTarg
 		return EmbedUpdateTargetConfig{}, fmt.Errorf("get partner board target: %w", err)
 	}
 	return target, nil
+}
+
+// GetPartnerBoardTarget returns the configured board target for a guild.
+func (mgr *ConfigManager) GetPartnerBoardTarget(guildID string) (EmbedUpdateTargetConfig, error) {
+	return mgr.PartnerBoardTarget(guildID)
 }
 
 // SetPartnerBoardTarget sets or clears the board update target for a guild.
@@ -62,8 +67,8 @@ func (mgr *ConfigManager) SetPartnerBoardTarget(guildID string, target EmbedUpda
 	return nil
 }
 
-// GetPartnerBoardTemplate returns the configured board template for a guild.
-func (mgr *ConfigManager) GetPartnerBoardTemplate(guildID string) (PartnerBoardTemplateConfig, error) {
+// PartnerBoardTemplate returns the configured board template for a guild.
+func (mgr *ConfigManager) PartnerBoardTemplate(guildID string) (PartnerBoardTemplateConfig, error) {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return PartnerBoardTemplateConfig{}, fmt.Errorf("get partner board template: %w", invalidPartnerBoardInput("guild_id is required"))
@@ -77,6 +82,11 @@ func (mgr *ConfigManager) GetPartnerBoardTemplate(guildID string) (PartnerBoardT
 		return PartnerBoardTemplateConfig{}, err
 	}
 	return normalizePartnerBoardTemplate(guildConfig.PartnerBoard.Template), nil
+}
+
+// GetPartnerBoardTemplate returns the configured board template for a guild.
+func (mgr *ConfigManager) GetPartnerBoardTemplate(guildID string) (PartnerBoardTemplateConfig, error) {
+	return mgr.PartnerBoardTemplate(guildID)
 }
 
 // SetPartnerBoardTemplate sets the board template for a guild.
@@ -96,8 +106,8 @@ func (mgr *ConfigManager) SetPartnerBoardTemplate(guildID string, template Partn
 	return nil
 }
 
-// GetPartnerBoard returns target/template/partners using canonical partner ordering.
-func (mgr *ConfigManager) GetPartnerBoard(guildID string) (PartnerBoardConfig, error) {
+// PartnerBoard returns target/template/partners using canonical partner ordering.
+func (mgr *ConfigManager) PartnerBoard(guildID string) (PartnerBoardConfig, error) {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return PartnerBoardConfig{}, fmt.Errorf("get partner board: %w", invalidPartnerBoardInput("guild_id is required"))
@@ -127,6 +137,11 @@ func (mgr *ConfigManager) GetPartnerBoard(guildID string) (PartnerBoardConfig, e
 	}, nil
 }
 
+// GetPartnerBoard returns target/template/partners using canonical partner ordering.
+func (mgr *ConfigManager) GetPartnerBoard(guildID string) (PartnerBoardConfig, error) {
+	return mgr.PartnerBoard(guildID)
+}
+
 // ListPartners lists partner records for a guild in canonical deterministic order.
 func (mgr *ConfigManager) ListPartners(guildID string) ([]PartnerEntryConfig, error) {
 	scope := strings.TrimSpace(guildID)
@@ -149,8 +164,8 @@ func (mgr *ConfigManager) ListPartners(guildID string) ([]PartnerEntryConfig, er
 	return clonePartnerEntries(partners), nil
 }
 
-// GetPartner retrieves one partner by name (case-insensitive).
-func (mgr *ConfigManager) GetPartner(guildID, name string) (PartnerEntryConfig, error) {
+// Partner retrieves one partner by name (case-insensitive).
+func (mgr *ConfigManager) Partner(guildID, name string) (PartnerEntryConfig, error) {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return PartnerEntryConfig{}, fmt.Errorf("get partner: %w", invalidPartnerBoardInput("guild_id is required"))
@@ -179,6 +194,11 @@ func (mgr *ConfigManager) GetPartner(guildID, name string) (PartnerEntryConfig, 
 		return PartnerEntryConfig{}, fmt.Errorf("%w: name=%s", ErrPartnerNotFound, strings.TrimSpace(name))
 	}
 	return clonePartnerEntry(partners[idx]), nil
+}
+
+// GetPartner retrieves one partner by name (case-insensitive).
+func (mgr *ConfigManager) GetPartner(guildID, name string) (PartnerEntryConfig, error) {
+	return mgr.Partner(guildID, name)
 }
 
 // CreatePartner creates a new partner record (dedupe by name/link).

@@ -2,6 +2,7 @@ package messageupdate
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +19,7 @@ type patchRecorder struct {
 	channelPatchCount int
 	lastWebhookPath   string
 	lastChannelPath   string
+	issues            []string
 }
 
 func (r *patchRecorder) recordWebhook(path string) {
@@ -52,6 +54,18 @@ func (r *patchRecorder) channelPath() string {
 	return r.lastChannelPath
 }
 
+func (r *patchRecorder) addIssue(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.issues = append(r.issues, fmt.Sprintf(format, args...))
+}
+
+func (r *patchRecorder) issuesSnapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.issues...)
+}
+
 func newMessageUpdateTestSession(t *testing.T) (*discordgo.Session, *patchRecorder) {
 	t.Helper()
 
@@ -63,7 +77,7 @@ func newMessageUpdateTestSession(t *testing.T) (*discordgo.Session, *patchRecord
 			var payload map[string]any
 			_ = json.NewDecoder(req.Body).Decode(&payload)
 			if _, ok := payload["embeds"]; !ok {
-				t.Errorf("expected embeds in webhook patch payload: %#v", payload)
+				rec.addIssue("expected embeds in webhook patch payload: %#v", payload)
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"ok"}`))
@@ -73,7 +87,7 @@ func newMessageUpdateTestSession(t *testing.T) (*discordgo.Session, *patchRecord
 			var payload map[string]any
 			_ = json.NewDecoder(req.Body).Decode(&payload)
 			if _, ok := payload["embeds"]; !ok {
-				t.Errorf("expected embeds in channel patch payload: %#v", payload)
+				rec.addIssue("expected embeds in channel patch payload: %#v", payload)
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"ok"}`))
@@ -128,6 +142,9 @@ func TestUpdateEmbeds_WebhookTarget(t *testing.T) {
 	if path := rec.webhookPath(); !strings.Contains(path, "/webhooks/123/token/messages/456") {
 		t.Fatalf("unexpected webhook patch path: %q", path)
 	}
+	if issues := rec.issuesSnapshot(); len(issues) > 0 {
+		t.Fatalf("unexpected payload issues: %v", issues)
+	}
 }
 
 func TestUpdateEmbeds_ChannelTarget(t *testing.T) {
@@ -153,6 +170,9 @@ func TestUpdateEmbeds_ChannelTarget(t *testing.T) {
 	}
 	if path := rec.channelPath(); !strings.Contains(path, "/channels/789/messages/456") {
 		t.Fatalf("unexpected channel patch path: %q", path)
+	}
+	if issues := rec.issuesSnapshot(); len(issues) > 0 {
+		t.Fatalf("unexpected payload issues: %v", issues)
 	}
 }
 

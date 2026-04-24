@@ -41,9 +41,9 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 		t.Fatalf("SetQOTDConfig() failed: %v", err)
 	}
 
-	cfg, err := mgr.GetQOTDConfig("g1")
+	cfg, err := mgr.QOTDConfig("g1")
 	if err != nil {
-		t.Fatalf("GetQOTDConfig() failed: %v", err)
+		t.Fatalf("QOTDConfig() failed: %v", err)
 	}
 	deck, ok := cfg.ActiveDeck()
 	if !ok {

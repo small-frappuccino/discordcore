@@ -189,7 +189,7 @@ func (s *Service) ExportCollectedQuestionsTXT(ctx context.Context, guildID strin
 }
 
 func (s *Service) collectorConfigForRun(guildID string) (files.QOTDCollectorConfig, error) {
-	cfg, err := s.configManager.GetQOTDConfig(guildID)
+	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return files.QOTDCollectorConfig{}, err
 	}

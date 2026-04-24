@@ -263,7 +263,7 @@ func (s *UserPruneService) didRunGuildPruneThisMonth(guildID string, now time.Ti
 	if s.store == nil || guildID == "" {
 		return false
 	}
-	ts, ok, err := s.store.GetMetadata(userPruneLastRunKey(guildID))
+	ts, ok, err := s.store.Metadata(userPruneLastRunKey(guildID))
 	if err != nil {
 		log.ApplicationLogger().Warn("User prune: failed to read last run metadata", "guildID", guildID, "err", err)
 		return false

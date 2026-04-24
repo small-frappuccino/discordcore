@@ -210,8 +210,8 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// GetQOTDConfig returns the canonical QOTD config for one guild.
-func (mgr *ConfigManager) GetQOTDConfig(guildID string) (QOTDConfig, error) {
+// QOTDConfig returns the canonical QOTD config for one guild.
+func (mgr *ConfigManager) QOTDConfig(guildID string) (QOTDConfig, error) {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return QOTDConfig{}, fmt.Errorf("get qotd config: %w", invalidQOTDInput("guild_id is required"))
@@ -230,6 +230,11 @@ func (mgr *ConfigManager) GetQOTDConfig(guildID string) (QOTDConfig, error) {
 		return QOTDConfig{}, fmt.Errorf("get qotd config: %w", err)
 	}
 	return normalized, nil
+}
+
+// GetQOTDConfig returns the canonical QOTD config for one guild.
+func (mgr *ConfigManager) GetQOTDConfig(guildID string) (QOTDConfig, error) {
+	return mgr.QOTDConfig(guildID)
 }
 
 // SetQOTDConfig validates and persists the QOTD config for one guild.

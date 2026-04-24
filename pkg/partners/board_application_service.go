@@ -10,13 +10,17 @@ import (
 
 // BoardService defines partner board reads and mutations.
 type BoardService interface {
+	PartnerBoard(guildID string) (files.PartnerBoardConfig, error)
 	GetPartnerBoard(guildID string) (files.PartnerBoardConfig, error)
+	PartnerBoardTarget(guildID string) (files.EmbedUpdateTargetConfig, error)
 	GetPartnerBoardTarget(guildID string) (files.EmbedUpdateTargetConfig, error)
 	SetPartnerBoardTarget(guildID string, target files.EmbedUpdateTargetConfig) error
+	PartnerBoardTemplate(guildID string) (files.PartnerBoardTemplateConfig, error)
 	GetPartnerBoardTemplate(guildID string) (files.PartnerBoardTemplateConfig, error)
 	SetPartnerBoardTemplate(guildID string, template files.PartnerBoardTemplateConfig) error
 
 	ListPartners(guildID string) ([]files.PartnerEntryConfig, error)
+	Partner(guildID, name string) (files.PartnerEntryConfig, error)
 	GetPartner(guildID, name string) (files.PartnerEntryConfig, error)
 	CreatePartner(guildID string, partner files.PartnerEntryConfig) error
 	UpdatePartner(guildID, currentName string, partner files.PartnerEntryConfig) error
@@ -45,20 +49,30 @@ func NewBoardApplicationService(
 	}
 }
 
-// GetPartnerBoard reads the full board configuration for a guild.
-func (s *BoardApplicationService) GetPartnerBoard(guildID string) (files.PartnerBoardConfig, error) {
+// PartnerBoard reads the full board configuration for a guild.
+func (s *BoardApplicationService) PartnerBoard(guildID string) (files.PartnerBoardConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.PartnerBoardConfig{}, err
 	}
-	return s.configManager.GetPartnerBoard(guildID)
+	return s.configManager.PartnerBoard(guildID)
+}
+
+// GetPartnerBoard reads the full board configuration for a guild.
+func (s *BoardApplicationService) GetPartnerBoard(guildID string) (files.PartnerBoardConfig, error) {
+	return s.PartnerBoard(guildID)
+}
+
+// PartnerBoardTarget reads the board update target for a guild.
+func (s *BoardApplicationService) PartnerBoardTarget(guildID string) (files.EmbedUpdateTargetConfig, error) {
+	if err := s.validate(); err != nil {
+		return files.EmbedUpdateTargetConfig{}, err
+	}
+	return s.configManager.PartnerBoardTarget(guildID)
 }
 
 // GetPartnerBoardTarget reads the board update target for a guild.
 func (s *BoardApplicationService) GetPartnerBoardTarget(guildID string) (files.EmbedUpdateTargetConfig, error) {
-	if err := s.validate(); err != nil {
-		return files.EmbedUpdateTargetConfig{}, err
-	}
-	return s.configManager.GetPartnerBoardTarget(guildID)
+	return s.PartnerBoardTarget(guildID)
 }
 
 // SetPartnerBoardTarget persists target changes and triggers auto-sync notify.
@@ -73,12 +87,17 @@ func (s *BoardApplicationService) SetPartnerBoardTarget(guildID string, target f
 	return nil
 }
 
-// GetPartnerBoardTemplate reads the board render template for a guild.
-func (s *BoardApplicationService) GetPartnerBoardTemplate(guildID string) (files.PartnerBoardTemplateConfig, error) {
+// PartnerBoardTemplate reads the board render template for a guild.
+func (s *BoardApplicationService) PartnerBoardTemplate(guildID string) (files.PartnerBoardTemplateConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.PartnerBoardTemplateConfig{}, err
 	}
-	return s.configManager.GetPartnerBoardTemplate(guildID)
+	return s.configManager.PartnerBoardTemplate(guildID)
+}
+
+// GetPartnerBoardTemplate reads the board render template for a guild.
+func (s *BoardApplicationService) GetPartnerBoardTemplate(guildID string) (files.PartnerBoardTemplateConfig, error) {
+	return s.PartnerBoardTemplate(guildID)
 }
 
 // SetPartnerBoardTemplate persists template changes and triggers auto-sync notify.
@@ -101,12 +120,17 @@ func (s *BoardApplicationService) ListPartners(guildID string) ([]files.PartnerE
 	return s.configManager.ListPartners(guildID)
 }
 
-// GetPartner reads one partner by name for a guild.
-func (s *BoardApplicationService) GetPartner(guildID, name string) (files.PartnerEntryConfig, error) {
+// Partner reads one partner by name for a guild.
+func (s *BoardApplicationService) Partner(guildID, name string) (files.PartnerEntryConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.PartnerEntryConfig{}, err
 	}
-	return s.configManager.GetPartner(guildID, name)
+	return s.configManager.Partner(guildID, name)
+}
+
+// GetPartner reads one partner by name for a guild.
+func (s *BoardApplicationService) GetPartner(guildID, name string) (files.PartnerEntryConfig, error) {
+	return s.Partner(guildID, name)
 }
 
 // CreatePartner persists one partner and triggers auto-sync notify.

@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Server) handlePartnerBoardGet(w http.ResponseWriter, _ *http.Request, guildID string) {
-	board, err := s.partnerBoardService.GetPartnerBoard(guildID)
+	board, err := s.partnerBoardService.PartnerBoard(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
 		http.Error(w, fmt.Sprintf("failed to read partner board: %v", err), status)
@@ -28,7 +28,7 @@ func (s *Server) handlePartnerBoardGet(w http.ResponseWriter, _ *http.Request, g
 }
 
 func (s *Server) handlePartnerBoardTargetGet(w http.ResponseWriter, _ *http.Request, guildID string) {
-	target, err := s.partnerBoardService.GetPartnerBoardTarget(guildID)
+	target, err := s.partnerBoardService.PartnerBoardTarget(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
 		http.Error(w, fmt.Sprintf("failed to read partner board target: %v", err), status)
@@ -54,7 +54,7 @@ func (s *Server) handlePartnerBoardTargetPut(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	target, err := s.partnerBoardService.GetPartnerBoardTarget(guildID)
+	target, err := s.partnerBoardService.PartnerBoardTarget(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read updated target: %v", err), http.StatusInternalServerError)
 		return
@@ -68,7 +68,7 @@ func (s *Server) handlePartnerBoardTargetPut(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handlePartnerBoardTemplateGet(w http.ResponseWriter, _ *http.Request, guildID string) {
-	template, err := s.partnerBoardService.GetPartnerBoardTemplate(guildID)
+	template, err := s.partnerBoardService.PartnerBoardTemplate(guildID)
 	if err != nil {
 		status := partnerBoardErrorStatus(err)
 		http.Error(w, fmt.Sprintf("failed to read partner board template: %v", err), status)
@@ -94,7 +94,7 @@ func (s *Server) handlePartnerBoardTemplatePut(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	template, err := s.partnerBoardService.GetPartnerBoardTemplate(guildID)
+	template, err := s.partnerBoardService.PartnerBoardTemplate(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read updated template: %v", err), http.StatusInternalServerError)
 		return
@@ -137,7 +137,7 @@ func (s *Server) handlePartnerBoardPartnersCreate(w http.ResponseWriter, r *http
 		return
 	}
 
-	created, err := s.partnerBoardService.GetPartner(guildID, payload.Name)
+	created, err := s.partnerBoardService.Partner(guildID, payload.Name)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read created partner: %v", err), http.StatusInternalServerError)
 		return
@@ -175,7 +175,7 @@ func (s *Server) handlePartnerBoardPartnersUpdate(w http.ResponseWriter, r *http
 		return
 	}
 
-	updated, err := s.partnerBoardService.GetPartner(guildID, payload.Partner.Name)
+	updated, err := s.partnerBoardService.Partner(guildID, payload.Partner.Name)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read updated partner: %v", err), http.StatusInternalServerError)
 		return

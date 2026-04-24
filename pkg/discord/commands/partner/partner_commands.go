@@ -136,7 +136,7 @@ func (c *PartnerAddSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Failed to create partner: %v", err), true)
 	}
 
-	saved, err := c.boardService.GetPartner(ctx.GuildID, name)
+	saved, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
 		return core.NewCommandError(fmt.Sprintf("Partner created but lookup failed: %v", err), true)
 	}
@@ -177,7 +177,7 @@ func (c *PartnerReadSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	entry, err := c.boardService.GetPartner(ctx.GuildID, name)
+	entry, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
 			return core.NewCommandError("Partner not found", true)
@@ -247,7 +247,7 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	existing, err := c.boardService.GetPartner(ctx.GuildID, currentName)
+	existing, err := c.boardService.Partner(ctx.GuildID, currentName)
 	if err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
 			return core.NewCommandError("Partner not found", true)
@@ -272,7 +272,7 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Failed to update partner: %v", err), true)
 	}
 
-	saved, err := c.boardService.GetPartner(ctx.GuildID, name)
+	saved, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
 		return core.NewCommandError(fmt.Sprintf("Partner updated but lookup failed: %v", err), true)
 	}

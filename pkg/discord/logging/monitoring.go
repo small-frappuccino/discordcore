@@ -1065,7 +1065,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 					}
 
 					// Check progress for this channel
-					_, hasProgress, err := ms.store.GetMetadata("backfill_progress:" + cid)
+					_, hasProgress, err := ms.store.Metadata("backfill_progress:" + cid)
 					if err != nil {
 						log.ErrorLoggerRaw().Error(
 							"Failed to read backfill progress; skipping backfill dispatch for channel",
@@ -1308,20 +1308,20 @@ func (ms *MonitoringService) getLastEvent() (time.Time, bool, error) {
 	if ms == nil || ms.store == nil {
 		return time.Time{}, false, fmt.Errorf("store unavailable")
 	}
-	if ts, ok, err := ms.store.GetLastEventForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+	if ts, ok, err := ms.store.LastEventForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
 		return ts, ok, err
 	}
-	return ms.store.GetLastEvent()
+	return ms.store.LastEvent()
 }
 
 func (ms *MonitoringService) getHeartbeat() (time.Time, bool, error) {
 	if ms == nil || ms.store == nil {
 		return time.Time{}, false, fmt.Errorf("store unavailable")
 	}
-	if ts, ok, err := ms.store.GetHeartbeatForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+	if ts, ok, err := ms.store.HeartbeatForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
 		return ts, ok, err
 	}
-	return ms.store.GetHeartbeat()
+	return ms.store.Heartbeat()
 }
 
 // Stop stops the monitoring service. Returns error if not running.

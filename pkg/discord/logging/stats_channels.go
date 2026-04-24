@@ -408,7 +408,7 @@ func (ms *MonitoringService) hasStatsSeed(ctx context.Context, guildID string) b
 	if ms == nil || ms.store == nil {
 		return false
 	}
-	_, ok, err := ms.store.GetMetadataContext(ctx, statsSeedMetadataKey(guildID))
+	_, ok, err := ms.store.MetadataContext(ctx, statsSeedMetadataKey(guildID))
 	if err != nil {
 		log.ApplicationLogger().Warn(
 			"Failed to read stats seed metadata",

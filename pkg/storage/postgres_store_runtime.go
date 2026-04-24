@@ -111,14 +111,24 @@ func (s *Store) SetHeartbeatForBotContext(ctx context.Context, botInstanceID str
 	return s.setRuntimeTimestamp(ctx, runtimeMetaKey("heartbeat", botInstanceID), t)
 }
 
+// Heartbeat returns the last recorded heartbeat timestamp, if any.
+func (s *Store) Heartbeat() (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(context.Background(), "heartbeat")
+}
+
 // GetHeartbeat returns the last recorded heartbeat timestamp, if any.
 func (s *Store) GetHeartbeat() (time.Time, bool, error) {
-	return s.getRuntimeTimestamp(context.Background(), "heartbeat")
+	return s.Heartbeat()
+}
+
+// HeartbeatForBot returns the last recorded heartbeat timestamp for one bot instance, if any.
+func (s *Store) HeartbeatForBot(botInstanceID string) (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(context.Background(), runtimeMetaKey("heartbeat", botInstanceID))
 }
 
 // GetHeartbeatForBot returns the last recorded heartbeat timestamp for one bot instance, if any.
 func (s *Store) GetHeartbeatForBot(botInstanceID string) (time.Time, bool, error) {
-	return s.getRuntimeTimestamp(context.Background(), runtimeMetaKey("heartbeat", botInstanceID))
+	return s.HeartbeatForBot(botInstanceID)
 }
 
 // SetLastEvent records the last time a relevant Discord event was processed.
@@ -141,14 +151,24 @@ func (s *Store) SetLastEventForBotContext(ctx context.Context, botInstanceID str
 	return s.setRuntimeTimestamp(ctx, runtimeMetaKey("last_event", botInstanceID), t)
 }
 
+// LastEvent returns the last recorded event timestamp, if any.
+func (s *Store) LastEvent() (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(context.Background(), "last_event")
+}
+
 // GetLastEvent returns the last recorded event timestamp, if any.
 func (s *Store) GetLastEvent() (time.Time, bool, error) {
-	return s.getRuntimeTimestamp(context.Background(), "last_event")
+	return s.LastEvent()
+}
+
+// LastEventForBot returns the last recorded event timestamp for one bot instance, if any.
+func (s *Store) LastEventForBot(botInstanceID string) (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(context.Background(), runtimeMetaKey("last_event", botInstanceID))
 }
 
 // GetLastEventForBot returns the last recorded event timestamp for one bot instance, if any.
 func (s *Store) GetLastEventForBot(botInstanceID string) (time.Time, bool, error) {
-	return s.getRuntimeTimestamp(context.Background(), runtimeMetaKey("last_event", botInstanceID))
+	return s.LastEventForBot(botInstanceID)
 }
 
 // SetMetadata records a timestamp associated with a specific key.
@@ -161,12 +181,22 @@ func (s *Store) SetMetadataContext(ctx context.Context, key string, t time.Time)
 	return s.setRuntimeTimestamp(ctx, key, t)
 }
 
+// Metadata retrieves the timestamp for a specific key.
+func (s *Store) Metadata(key string) (time.Time, bool, error) {
+	return s.MetadataContext(context.Background(), key)
+}
+
 // GetMetadata retrieves the timestamp for a specific key.
 func (s *Store) GetMetadata(key string) (time.Time, bool, error) {
-	return s.GetMetadataContext(context.Background(), key)
+	return s.Metadata(key)
+}
+
+// MetadataContext retrieves the timestamp for a specific key with context support.
+func (s *Store) MetadataContext(ctx context.Context, key string) (time.Time, bool, error) {
+	return s.getRuntimeTimestamp(ctx, key)
 }
 
 // GetMetadataContext retrieves the timestamp for a specific key with context support.
 func (s *Store) GetMetadataContext(ctx context.Context, key string) (time.Time, bool, error) {
-	return s.getRuntimeTimestamp(ctx, key)
+	return s.MetadataContext(ctx, key)
 }

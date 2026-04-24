@@ -93,15 +93,19 @@ func NewService(configManager *files.ConfigManager, store *storage.Store, publis
 	}
 }
 
-func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
+func (s *Service) Settings(guildID string) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, err
 	}
-	settings, err := s.configManager.GetQOTDConfig(guildID)
+	settings, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
 	return files.DashboardQOTDConfig(settings), nil
+}
+
+func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
+	return s.Settings(guildID)
 }
 
 func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
@@ -264,7 +268,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	}
 
 	now := s.clock()
-	settings, err := s.configManager.GetQOTDConfig(guildID)
+	settings, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return Summary{}, err
 	}
@@ -319,7 +323,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 
 	now := s.clock()
 	publishDate := NormalizePublishDateUTC(now)
-	cfg, err := s.configManager.GetQOTDConfig(guildID)
+	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -806,7 +810,7 @@ func filterQuestionsByDeck(questions []storage.QOTDQuestionRecord, deckID string
 }
 
 func (s *Service) resolveDashboardDeck(guildID, deckID string) (files.QOTDDeckConfig, error) {
-	settings, err := s.GetSettings(guildID)
+	settings, err := s.Settings(guildID)
 	if err != nil {
 		return files.QOTDDeckConfig{}, err
 	}

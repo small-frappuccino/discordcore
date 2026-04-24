@@ -3,6 +3,7 @@ package persistence_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
@@ -215,14 +216,91 @@ WHERE official_post_id = $1
 		t.Fatalf("expected one migrated answer message, got %d", migratedMessages)
 	}
 
-	assertTableAbsent(t, db, "qotd_reply_threads")
-	assertColumnAbsent(t, db, "qotd_official_posts", "response_channel_id_snapshot")
-	assertColumnAbsent(t, db, "qotd_official_posts", "is_pinned")
-	assertColumnAbsent(t, db, "qotd_thread_archives", "reply_thread_id")
+	if err := tableAbsent(db, "qotd_reply_threads"); err != nil {
+		t.Fatal(err)
+	}
+	if err := columnAbsent(db, "qotd_official_posts", "response_channel_id_snapshot"); err != nil {
+		t.Fatal(err)
+	}
+	if err := columnAbsent(db, "qotd_official_posts", "is_pinned"); err != nil {
+		t.Fatal(err)
+	}
+	if err := columnAbsent(db, "qotd_thread_archives", "reply_thread_id"); err != nil {
+		t.Fatal(err)
+	}
 }
 
-func assertTableAbsent(t *testing.T, db *sql.DB, tableName string) {
-	t.Helper()
+func TestPostgresMigratorUpRepairsLegacyQOTDSurfaceChannelColumn(t *testing.T) {
+	t.Parallel()
+
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		if testdb.IsDatabaseURLNotConfigured(err) {
+			t.Skipf("skipping postgres integration test: %v", err)
+		}
+		t.Fatalf("resolve test database dsn: %v", err)
+	}
+
+	db, cleanup, err := testdb.OpenIsolatedDatabase(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("open isolated test database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup isolated test database: %v", err)
+		}
+	})
+
+	migrator := persistence.NewPostgresMigrator(db)
+	if err := migrator.Up(context.Background()); err != nil {
+		t.Fatalf("apply baseline schema: %v", err)
+	}
+
+	if _, err := db.ExecContext(context.Background(), `
+INSERT INTO qotd_forum_surfaces (
+	guild_id,
+	deck_id,
+	channel_id,
+	question_list_thread_id
+) VALUES (
+	'g1',
+	'default',
+	'channel-1',
+	'thread-1'
+)
+`); err != nil {
+		t.Fatalf("insert qotd surface: %v", err)
+	}
+
+	if _, err := db.ExecContext(context.Background(), `
+ALTER TABLE qotd_forum_surfaces
+RENAME COLUMN channel_id TO forum_channel_id
+`); err != nil {
+		t.Fatalf("drift qotd surfaces schema: %v", err)
+	}
+
+	if err := migrator.Up(context.Background()); err != nil {
+		t.Fatalf("repair drifted qotd surfaces schema: %v", err)
+	}
+
+	var repairedChannelID string
+	if err := db.QueryRowContext(context.Background(), `
+SELECT channel_id
+FROM qotd_forum_surfaces
+WHERE guild_id = 'g1' AND deck_id = 'default'
+`).Scan(&repairedChannelID); err != nil {
+		t.Fatalf("read repaired qotd surface: %v", err)
+	}
+	if repairedChannelID != "channel-1" {
+		t.Fatalf("expected repaired qotd surface channel_id to be preserved, got %q", repairedChannelID)
+	}
+
+	if err := columnAbsent(db, "qotd_forum_surfaces", "forum_channel_id"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func tableAbsent(db *sql.DB, tableName string) error {
 	var exists bool
 	if err := db.QueryRowContext(context.Background(), `
 SELECT EXISTS(
@@ -231,15 +309,15 @@ SELECT EXISTS(
 	WHERE table_schema = current_schema()
 	  AND table_name = $1
 )`, tableName).Scan(&exists); err != nil {
-		t.Fatalf("query table %s existence: %v", tableName, err)
+		return fmt.Errorf("query table %s existence: %w", tableName, err)
 	}
 	if exists {
-		t.Fatalf("expected table %s to be absent", tableName)
+		return fmt.Errorf("expected table %s to be absent", tableName)
 	}
+	return nil
 }
 
-func assertColumnAbsent(t *testing.T, db *sql.DB, tableName, columnName string) {
-	t.Helper()
+func columnAbsent(db *sql.DB, tableName, columnName string) error {
 	var exists bool
 	if err := db.QueryRowContext(context.Background(), `
 SELECT EXISTS(
@@ -249,9 +327,10 @@ SELECT EXISTS(
 	  AND table_name = $1
 	  AND column_name = $2
 )`, tableName, columnName).Scan(&exists); err != nil {
-		t.Fatalf("query column %s.%s existence: %v", tableName, columnName, err)
+		return fmt.Errorf("query column %s.%s existence: %w", tableName, columnName, err)
 	}
 	if exists {
-		t.Fatalf("expected column %s.%s to be absent", tableName, columnName)
+		return fmt.Errorf("expected column %s.%s to be absent", tableName, columnName)
 	}
+	return nil
 }

@@ -236,7 +236,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	firstDeadline := time.Now().Add(100 * time.Millisecond)
 	var first time.Time
 	for time.Now().Before(firstDeadline) {
-		if ts, ok, err := store.GetHeartbeat(); err == nil && ok {
+		if ts, ok, err := store.Heartbeat(); err == nil && ok {
 			first = ts
 			break
 		}
@@ -249,7 +249,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	updated := false
 	updateDeadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(updateDeadline) {
-		if ts, ok, err := store.GetHeartbeat(); err == nil && ok && ts.After(first) {
+		if ts, ok, err := store.Heartbeat(); err == nil && ok && ts.After(first) {
 			updated = true
 			break
 		}

@@ -22,7 +22,7 @@ func TestRuntimeActivityMarkEventPersistsTimestamp(t *testing.T) {
 
 	activity.MarkEvent(context.Background(), "test")
 
-	got, ok, err := store.GetLastEvent()
+	got, ok, err := store.LastEvent()
 	if err != nil {
 		t.Fatalf("get last event: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
 
 	activity.MarkEvent(context.Background(), "test")
 
-	got, ok, err := store.GetLastEventForBot("yuzuha")
+	got, ok, err := store.LastEventForBot("yuzuha")
 	if err != nil {
 		t.Fatalf("get last event by bot: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestRuntimeActivityMarkEventUsesBackgroundWhenContextNil(t *testing.T) {
 		t.Fatalf("expected MarkEvent to provide a background context")
 	}
 
-	got, ok, err := store.GetLastEvent()
+	got, ok, err := store.LastEvent()
 	if err != nil {
 		t.Fatalf("get last event: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 	firstDeadline := time.Now().Add(100 * time.Millisecond)
 	var first time.Time
 	for time.Now().Before(firstDeadline) {
-		if ts, ok, err := store.GetHeartbeat(); err == nil && ok {
+		if ts, ok, err := store.Heartbeat(); err == nil && ok {
 			first = ts
 			break
 		}
@@ -131,7 +131,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 
 	updatedDeadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(updatedDeadline) {
-		if ts, ok, err := store.GetHeartbeat(); err == nil && ok && ts.After(first) {
+		if ts, ok, err := store.Heartbeat(); err == nil && ok && ts.After(first) {
 			return
 		}
 		time.Sleep(2 * time.Millisecond)
@@ -214,7 +214,7 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 
 	deadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if ts, ok, err := store.GetHeartbeat(); err == nil && ok && !ts.IsZero() {
+		if ts, ok, err := store.Heartbeat(); err == nil && ok && !ts.IsZero() {
 			return
 		}
 		time.Sleep(2 * time.Millisecond)

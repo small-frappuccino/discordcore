@@ -80,6 +80,41 @@ SET answer_channel_id = COALESCE(
 		hasChannelID = true
 	}
 
+	hasForumSurfaces, err := tableExists(ctx, tx, "qotd_forum_surfaces")
+	if err != nil {
+		return fmt.Errorf("repair qotd legacy schema: check qotd surfaces table: %w", err)
+	}
+	if hasForumSurfaces {
+		hasLegacySurfaceChannelColumn, err := columnExists(ctx, tx, "qotd_forum_surfaces", "forum_channel_id")
+		if err != nil {
+			return fmt.Errorf("repair qotd legacy schema: check qotd surfaces legacy channel column: %w", err)
+		}
+		hasSurfaceChannelID, err := columnExists(ctx, tx, "qotd_forum_surfaces", "channel_id")
+		if err != nil {
+			return fmt.Errorf("repair qotd legacy schema: check qotd surfaces channel column: %w", err)
+		}
+		switch {
+		case hasLegacySurfaceChannelColumn && hasSurfaceChannelID:
+			if _, err := tx.ExecContext(ctx, `
+UPDATE qotd_forum_surfaces
+SET channel_id = COALESCE(NULLIF(channel_id, ''), forum_channel_id)
+WHERE channel_id IS NULL OR channel_id = ''
+`); err != nil {
+				return fmt.Errorf("repair qotd legacy schema: backfill qotd surfaces channel column: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx, `
+ALTER TABLE qotd_forum_surfaces
+DROP COLUMN forum_channel_id
+`); err != nil {
+				return fmt.Errorf("repair qotd legacy schema: drop qotd surfaces legacy channel column: %w", err)
+			}
+		case hasLegacySurfaceChannelColumn:
+			if _, err := tx.ExecContext(ctx, `ALTER TABLE qotd_forum_surfaces RENAME COLUMN forum_channel_id TO channel_id`); err != nil {
+				return fmt.Errorf("repair qotd legacy schema: rename qotd surfaces legacy channel column: %w", err)
+			}
+		}
+	}
+
 	hasLegacyReplyThreads, err := tableExists(ctx, tx, "qotd_reply_threads")
 	if err != nil {
 		return fmt.Errorf("repair qotd legacy schema: check legacy reply threads table: %w", err)

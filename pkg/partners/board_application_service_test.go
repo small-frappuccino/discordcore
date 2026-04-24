@@ -112,19 +112,19 @@ func TestBoardApplicationServiceReadsDoNotNotify(t *testing.T) {
 
 	notifier.calls = nil
 
-	if _, err := service.GetPartnerBoard("g1"); err != nil {
+	if _, err := service.PartnerBoard("g1"); err != nil {
 		t.Fatalf("get board: %v", err)
 	}
-	if _, err := service.GetPartnerBoardTarget("g1"); err != nil {
+	if _, err := service.PartnerBoardTarget("g1"); err != nil {
 		t.Fatalf("get target: %v", err)
 	}
-	if _, err := service.GetPartnerBoardTemplate("g1"); err != nil {
+	if _, err := service.PartnerBoardTemplate("g1"); err != nil {
 		t.Fatalf("get template: %v", err)
 	}
 	if _, err := service.ListPartners("g1"); err != nil {
 		t.Fatalf("list partners: %v", err)
 	}
-	if _, err := service.GetPartner("g1", "Citlali Mains"); err != nil {
+	if _, err := service.Partner("g1", "Citlali Mains"); err != nil {
 		t.Fatalf("get partner: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestBoardApplicationServiceNotifyErrorDoesNotFailMutation(t *testing.T) {
 		t.Fatalf("create partner should still succeed when notify fails: %v", err)
 	}
 
-	if _, err := service.GetPartner("g1", "Jane Mains"); err != nil {
+	if _, err := service.Partner("g1", "Jane Mains"); err != nil {
 		t.Fatalf("expected partner to persist despite notify failure: %v", err)
 	}
 	if got := len(notifier.calls); got != 1 {

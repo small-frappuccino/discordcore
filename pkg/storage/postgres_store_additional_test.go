@@ -542,7 +542,7 @@ func TestHeartbeatMetadataRoundTrip(t *testing.T) {
 	if err := store.SetHeartbeat(ts); err != nil {
 		t.Fatalf("set heartbeat: %v", err)
 	}
-	got, ok, err := store.GetHeartbeat()
+	got, ok, err := store.Heartbeat()
 	if err != nil || !ok || !got.Equal(ts) {
 		t.Fatalf("heartbeat mismatch: ts=%v ok=%v err=%v", got, ok, err)
 	}
@@ -568,19 +568,19 @@ func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 		t.Fatalf("set yuzuha last event: %v", err)
 	}
 
-	gotAliceHeartbeat, ok, err := store.GetHeartbeatForBot("alice")
+	gotAliceHeartbeat, ok, err := store.HeartbeatForBot("alice")
 	if err != nil || !ok || !gotAliceHeartbeat.Equal(aliceHeartbeat) {
 		t.Fatalf("unexpected alice heartbeat: got=%v ok=%v err=%v", gotAliceHeartbeat, ok, err)
 	}
-	gotYuzuhaHeartbeat, ok, err := store.GetHeartbeatForBot("yuzuha")
+	gotYuzuhaHeartbeat, ok, err := store.HeartbeatForBot("yuzuha")
 	if err != nil || !ok || !gotYuzuhaHeartbeat.Equal(yuzuhaHeartbeat) {
 		t.Fatalf("unexpected yuzuha heartbeat: got=%v ok=%v err=%v", gotYuzuhaHeartbeat, ok, err)
 	}
-	gotAliceLastEvent, ok, err := store.GetLastEventForBot("alice")
+	gotAliceLastEvent, ok, err := store.LastEventForBot("alice")
 	if err != nil || !ok || !gotAliceLastEvent.Equal(aliceLastEvent) {
 		t.Fatalf("unexpected alice last event: got=%v ok=%v err=%v", gotAliceLastEvent, ok, err)
 	}
-	gotYuzuhaLastEvent, ok, err := store.GetLastEventForBot("yuzuha")
+	gotYuzuhaLastEvent, ok, err := store.LastEventForBot("yuzuha")
 	if err != nil || !ok || !gotYuzuhaLastEvent.Equal(yuzuhaLastEvent) {
 		t.Fatalf("unexpected yuzuha last event: got=%v ok=%v err=%v", gotYuzuhaLastEvent, ok, err)
 	}

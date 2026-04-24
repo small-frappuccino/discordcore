@@ -77,9 +77,9 @@ func TestPartnersCRUDAndDeterministicOrder(t *testing.T) {
 		t.Fatalf("update partner: %v", err)
 	}
 
-	got, err := mgr.GetPartner("g1", "jane doe mains")
+	got, err := mgr.Partner("g1", "jane doe mains")
 	if err != nil {
-		t.Fatalf("get partner: %v", err)
+		t.Fatalf("Partner() failed: %v", err)
 	}
 	if got.Name != "Jane Doe Mains" {
 		t.Fatalf("unexpected updated name: %+v", got)
@@ -172,9 +172,9 @@ func TestPartnerBoardTargetSetGet(t *testing.T) {
 		t.Fatalf("set webhook target: %v", err)
 	}
 
-	webhookTarget, err := mgr.GetPartnerBoardTarget("g1")
+	webhookTarget, err := mgr.PartnerBoardTarget("g1")
 	if err != nil {
-		t.Fatalf("get webhook target: %v", err)
+		t.Fatalf("PartnerBoardTarget(webhook) failed: %v", err)
 	}
 	if webhookTarget.Type != EmbedUpdateTargetTypeWebhookMessage {
 		t.Fatalf("unexpected webhook target type: %+v", webhookTarget)
@@ -191,9 +191,9 @@ func TestPartnerBoardTargetSetGet(t *testing.T) {
 		t.Fatalf("set channel target: %v", err)
 	}
 
-	channelTarget, err := mgr.GetPartnerBoardTarget("g1")
+	channelTarget, err := mgr.PartnerBoardTarget("g1")
 	if err != nil {
-		t.Fatalf("get channel target: %v", err)
+		t.Fatalf("PartnerBoardTarget(channel) failed: %v", err)
 	}
 	if channelTarget.Type != EmbedUpdateTargetTypeChannelMessage {
 		t.Fatalf("unexpected channel target type: %+v", channelTarget)
@@ -209,9 +209,9 @@ func TestPartnerBoardTargetSetGet(t *testing.T) {
 	if err := mgr.SetPartnerBoardTarget("g1", EmbedUpdateTargetConfig{}); err != nil {
 		t.Fatalf("clear target: %v", err)
 	}
-	cleared, err := mgr.GetPartnerBoardTarget("g1")
+	cleared, err := mgr.PartnerBoardTarget("g1")
 	if err != nil {
-		t.Fatalf("get cleared target: %v", err)
+		t.Fatalf("PartnerBoardTarget(cleared) failed: %v", err)
 	}
 	if !cleared.IsZero() {
 		t.Fatalf("expected cleared target to be zero, got %+v", cleared)

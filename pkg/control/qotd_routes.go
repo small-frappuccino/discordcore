@@ -146,7 +146,7 @@ func (s *Server) handleQOTDSummaryGet(w http.ResponseWriter, r *http.Request, gu
 }
 
 func (s *Server) handleQOTDSettingsGet(w http.ResponseWriter, _ *http.Request, guildID string) {
-	settings, err := s.qotdService.GetSettings(guildID)
+	settings, err := s.qotdService.Settings(guildID)
 	if err != nil {
 		status := qotdErrorStatus(err)
 		http.Error(w, fmt.Sprintf("failed to read qotd settings: %v", err), status)

@@ -2,6 +2,7 @@ package partner
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -220,11 +221,11 @@ func partnerStringOpt(name, value string) *discordgo.ApplicationCommandInteracti
 	}
 }
 
-func assertPartnerEphemeral(t *testing.T, resp discordgo.InteractionResponse) {
-	t.Helper()
+func partnerEphemeralError(resp discordgo.InteractionResponse) error {
 	if resp.Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
-		t.Fatalf("expected ephemeral response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
+		return fmt.Errorf("expected ephemeral response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
 	}
+	return nil
 }
 
 func TestPartnerCommandsCRUDInteractions(t *testing.T) {
@@ -243,12 +244,14 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 		partnerStringOpt(optionLink, "discord.gg/citlali"),
 	}))
 	addResp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, addResp)
+	if err := partnerEphemeralError(addResp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(addResp.Data.Content, "Partner added") {
 		t.Fatalf("unexpected add response: %q", addResp.Data.Content)
 	}
 
-	created, err := cm.GetPartner(guildID, "Citlali Mains")
+	created, err := cm.Partner(guildID, "Citlali Mains")
 	if err != nil {
 		t.Fatalf("expected created partner: %v", err)
 	}
@@ -261,7 +264,9 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 		partnerStringOpt(optionName, "Citlali Mains"),
 	}))
 	readResp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, readResp)
+	if err := partnerEphemeralError(readResp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(readResp.Data.Content, "Partner details") {
 		t.Fatalf("unexpected read response: %q", readResp.Data.Content)
 	}
@@ -277,11 +282,13 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 		partnerStringOpt(optionLink, "https://discord.gg/citlalihub"),
 	}))
 	updateResp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, updateResp)
+	if err := partnerEphemeralError(updateResp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(updateResp.Data.Content, "Partner updated") {
 		t.Fatalf("unexpected update response: %q", updateResp.Data.Content)
 	}
-	updated, err := cm.GetPartner(guildID, "Citlali Hub")
+	updated, err := cm.Partner(guildID, "Citlali Hub")
 	if err != nil {
 		t.Fatalf("expected updated partner: %v", err)
 	}
@@ -292,7 +299,9 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 	// LIST
 	router.HandleInteraction(session, newPartnerSlashInteraction(guildID, ownerID, "list", nil))
 	listResp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, listResp)
+	if err := partnerEphemeralError(listResp); err != nil {
+		t.Fatal(err)
+	}
 	if len(listResp.Data.Embeds) == 0 {
 		t.Fatalf("expected list embed response, got none: %+v", listResp.Data)
 	}
@@ -305,11 +314,13 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 		partnerStringOpt(optionName, "Citlali Hub"),
 	}))
 	deleteResp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, deleteResp)
+	if err := partnerEphemeralError(deleteResp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(deleteResp.Data.Content, "deleted") {
 		t.Fatalf("unexpected delete response: %q", deleteResp.Data.Content)
 	}
-	if _, err := cm.GetPartner(guildID, "Citlali Hub"); err == nil {
+	if _, err := cm.Partner(guildID, "Citlali Hub"); err == nil {
 		t.Fatalf("expected deleted partner to be missing")
 	}
 }
@@ -329,7 +340,9 @@ func TestPartnerCommandsDuplicateValidation(t *testing.T) {
 		partnerStringOpt(optionLink, "https://discord.gg/jane"),
 	}))
 	firstAdd := rec.lastResponse(t)
-	assertPartnerEphemeral(t, firstAdd)
+	if err := partnerEphemeralError(firstAdd); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(firstAdd.Data.Content, "Partner added") {
 		t.Fatalf("unexpected first add response: %q", firstAdd.Data.Content)
 	}
@@ -340,7 +353,9 @@ func TestPartnerCommandsDuplicateValidation(t *testing.T) {
 		partnerStringOpt(optionLink, "https://discord.gg/jane2"),
 	}))
 	secondAdd := rec.lastResponse(t)
-	assertPartnerEphemeral(t, secondAdd)
+	if err := partnerEphemeralError(secondAdd); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(strings.ToLower(secondAdd.Data.Content), "already exists") {
 		t.Fatalf("expected duplicate error response, got: %q", secondAdd.Data.Content)
 	}
@@ -374,7 +389,9 @@ func TestPartnerSyncCommandWebhookTargetSuccess(t *testing.T) {
 
 	router.HandleInteraction(session, newPartnerSlashInteraction(guildID, ownerID, "sync", nil))
 	resp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, resp)
+	if err := partnerEphemeralError(resp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(strings.ToLower(resp.Data.Content), "synced successfully") {
 		t.Fatalf("unexpected sync response: %q", resp.Data.Content)
 	}
@@ -417,7 +434,9 @@ func TestPartnerSyncCommandWebhookTargetFailure(t *testing.T) {
 
 	router.HandleInteraction(session, newPartnerSlashInteraction(guildID, ownerID, "sync", nil))
 	resp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, resp)
+	if err := partnerEphemeralError(resp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(strings.ToLower(resp.Data.Content), "failed to sync") {
 		t.Fatalf("unexpected sync failure response: %q", resp.Data.Content)
 	}
@@ -454,7 +473,9 @@ func TestPartnerSyncCommandChannelTargetSuccess(t *testing.T) {
 
 	router.HandleInteraction(session, newPartnerSlashInteraction(guildID, ownerID, "sync", nil))
 	resp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, resp)
+	if err := partnerEphemeralError(resp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(strings.ToLower(resp.Data.Content), "synced successfully") {
 		t.Fatalf("unexpected sync response: %q", resp.Data.Content)
 	}
@@ -497,7 +518,9 @@ func TestPartnerSyncCommandChannelTargetFailure(t *testing.T) {
 
 	router.HandleInteraction(session, newPartnerSlashInteraction(guildID, ownerID, "sync", nil))
 	resp := rec.lastResponse(t)
-	assertPartnerEphemeral(t, resp)
+	if err := partnerEphemeralError(resp); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(strings.ToLower(resp.Data.Content), "failed to sync") {
 		t.Fatalf("unexpected sync failure response: %q", resp.Data.Content)
 	}

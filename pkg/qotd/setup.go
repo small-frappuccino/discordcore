@@ -33,7 +33,7 @@ func (s *Service) SetupChannel(ctx context.Context, guildID, deckID string, sess
 	lifecycleLock.Lock()
 	defer lifecycleLock.Unlock()
 
-	current, err := s.configManager.GetQOTDConfig(guildID)
+	current, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *Service) updateSettingsLocked(guildID string, cfg files.QOTDConfig) (fi
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
-	current, err := s.configManager.GetQOTDConfig(guildID)
+	current, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
@@ -102,7 +102,7 @@ func (s *Service) updateSettingsLocked(guildID string, cfg files.QOTDConfig) (fi
 		}
 		return files.QOTDConfig{}, err
 	}
-	updated, err := s.configManager.GetQOTDConfig(guildID)
+	updated, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}

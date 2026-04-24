@@ -291,9 +291,9 @@ func TestSetupChannelEnablesActiveDeckAndPersistsQOTDSurface(t *testing.T) {
 		t.Fatalf("unexpected setup result: %+v", result)
 	}
 
-	settings, err := service.GetSettings("g1")
+	settings, err := service.Settings("g1")
 	if err != nil {
-		t.Fatalf("GetSettings() failed: %v", err)
+		t.Fatalf("Settings() failed: %v", err)
 	}
 	deck, ok := settings.ActiveDeck()
 	if !ok {

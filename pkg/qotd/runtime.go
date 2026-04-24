@@ -61,7 +61,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 
-	cfg, err := s.configManager.GetQOTDConfig(guildID)
+	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return false, err
 	}
