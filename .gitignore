@@ -2,6 +2,7 @@
 .github/
 .idea/
 .vscode/*
+!.vscode/mcp.json
 !.vscode/settings.json
 
 # Environment files
