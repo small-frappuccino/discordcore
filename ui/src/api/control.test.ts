@@ -328,7 +328,7 @@ describe("ControlApiClient feature routes", () => {
                 },
               ],
               current_publish_date_utc: "2026-04-03T00:00:00Z",
-              published_for_current_slot: false,
+              published_for_current_slot: true,
               current_post: {
                 deck_id: "default",
                 deck_name: "Default",
@@ -346,6 +346,24 @@ describe("ControlApiClient feature routes", () => {
                   "https://discord.com/channels/guild-1/thread-20260403",
                 post_url:
                   "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
+              },
+              previous_post: {
+                deck_id: "default",
+                deck_name: "Default",
+                publish_mode: "scheduled",
+                publish_date_utc: "2026-04-02T00:00:00Z",
+                state: "previous",
+                question_text: "What did we ship yesterday?",
+                published_at: "2026-04-02T00:00:00Z",
+                becomes_previous_at: "2026-04-03T00:00:00Z",
+                answers_close_at: "2026-04-04T00:00:00Z",
+                thread_id: "thread-20260402",
+                thread_url: "https://discord.com/channels/guild-1/thread-20260402",
+                answer_channel_id: "thread-20260402",
+                answer_channel_url:
+                  "https://discord.com/channels/guild-1/thread-20260402",
+                post_url:
+                  "https://discord.com/channels/guild-1/question-channel-1/message-20260402",
               },
             },
           });
@@ -472,10 +490,14 @@ describe("ControlApiClient feature routes", () => {
     await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
     expect(summary.summary.settings.active_deck_id).toBe("default");
+    expect(summary.summary.published_for_current_slot).toBe(true);
+    expect(summary.summary.current_post?.state).toBe("current");
+    expect(summary.summary.previous_post?.state).toBe("previous");
     expect(summary.summary.current_post?.thread_id).toBe("thread-20260403");
     expect(summary.summary.current_post?.answer_channel_url).toBe(
       "https://discord.com/channels/guild-1/thread-20260403",
     );
+    expect(publish.result.official_post.state).toBe("current");
     expect(publish.result.official_post.thread_url).toBe(
       "https://discord.com/channels/guild-1/thread-20260403",
     );

@@ -260,6 +260,9 @@ describe("QOTD UI", () => {
       screen.getByRole("heading", { name: "Workflow settings", level: 2 }),
     ).toBeInTheDocument();
     expect(
+      screen.getByText(/text channel with verified-role permissions/i),
+    ).toBeInTheDocument();
+    expect(
       screen.queryByRole("heading", { name: "Staff roles", level: 2 }),
     ).not.toBeInTheDocument();
     expect(
@@ -804,14 +807,14 @@ describe("QOTD UI", () => {
 
     await user.click(
       within(view.container).getByRole("button", {
-        name: "Collect questions now",
+        name: "Import historical questions",
       }),
     );
 
     await waitFor(() => {
       expect(
         within(view.container).getByText(
-          "Scanned 8 messages, matched 3 embeds, and stored 2 new questions. 3 total questions are ready for export.",
+          "Scanned 8 historical messages, matched 3 embeds, and stored 2 new questions. 3 total questions are ready for export.",
         ),
       ).toBeInTheDocument();
     });

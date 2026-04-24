@@ -51,8 +51,6 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 	messageID := "message-" + params.PublishDateUTC.Format("20060102")
 	threadID := "thread-" + params.PublishDateUTC.Format("20060102")
 	return &discordqotd.PublishedOfficialPost{
-		QuestionListThreadID:       "questions-list-thread",
-		QuestionListEntryMessageID: "questions-list-entry-" + params.PublishDateUTC.Format("20060102"),
 		ThreadID:                   threadID,
 		StarterMessageID:           messageID,
 		AnswerChannelID:            threadID,
@@ -271,7 +269,7 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	}
 }
 
-func TestQOTDRoutesSetupBootstrapsForumAndSettings(t *testing.T) {
+func TestQOTDRoutesSetupBootstrapsChannelAndSettings(t *testing.T) {
 	t.Parallel()
 
 	srv, _, _, _ := newQOTDControlTestServer(t)
@@ -335,6 +333,9 @@ func TestQOTDRoutesPublishNowReturnsThreadAndAnswerChannelTargets(t *testing.T) 
 		t.Fatalf("expected official post payload, got body=%q", publishRec.Body.String())
 	}
 	officialPost := publishResp.Result.OfficialPost
+	if officialPost.State != string(qotd.OfficialPostStateCurrent) {
+		t.Fatalf("expected current official post state, got %+v", officialPost)
+	}
 	if officialPost.ThreadID == "" {
 		t.Fatalf("expected thread id in official post response, got %+v", officialPost)
 	}
@@ -343,6 +344,9 @@ func TestQOTDRoutesPublishNowReturnsThreadAndAnswerChannelTargets(t *testing.T) 
 	}
 	if officialPost.AnswerChannelID == "" {
 		t.Fatalf("expected answer channel id in official post response, got %+v", officialPost)
+	}
+	if officialPost.AnswerChannelID != officialPost.ThreadID {
+		t.Fatalf("expected daily thread to be the answer channel, got %+v", officialPost)
 	}
 	if officialPost.AnswerChannelURL != discordqotd.BuildChannelJumpURL("g1", officialPost.AnswerChannelID) {
 		t.Fatalf("unexpected answer channel url in official post response: %+v", officialPost)

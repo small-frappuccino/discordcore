@@ -118,8 +118,8 @@ export function QOTDCollectorPage() {
       label: channel.display_name,
       description:
         channel.kind === "announcement"
-          ? "Announcement channel that contains previous QOTD embeds."
-          : "Text channel that contains previous QOTD embeds.",
+          ? "Announcement channel with historical QOTD embeds available for import."
+          : "Text channel with historical QOTD embeds available for import.",
     }));
   const channelPlaceholder = channelOptions.loading
     ? "Loading message channels..."
@@ -279,7 +279,7 @@ export function QOTDCollectorPage() {
                   disabled={
                     !canEditSelectedGuild || saving || channelOptions.loading
                   }
-                  note="The bot scans this channel for past QOTD embeds from other bots."
+                  note="Import past QOTD embeds from this channel. The live discordcore embed, answer button, and daily thread stay outside this importer."
                 />
               </GroupedSettingsSubrow>
 
@@ -324,7 +324,7 @@ export function QOTDCollectorPage() {
                       />
                       <span className="meta-note">
                         One pattern per line. Matching is case-insensitive and
-                        uses title fragments.
+                        uses title fragments from historical embeds only.
                       </span>
                     </label>
 
@@ -349,8 +349,9 @@ export function QOTDCollectorPage() {
                     </label>
 
                     <div className="card-copy">
-                      Matching embeds store only the first non-empty description
-                      line as the exported question text.
+                      This importer reads historical embed text only: it stores
+                      the first non-empty description line and ignores the live
+                      answer button and daily thread flow.
                     </div>
                   </div>
                 </div>
@@ -367,7 +368,7 @@ export function QOTDCollectorPage() {
               variant="section"
               id={actionHeadingId}
             >
-              Scan previous QOTDs
+              Import historical QOTD embeds
             </GroupedSettingsHeading>
           </GroupedSettingsCopy>
 
@@ -383,7 +384,7 @@ export function QOTDCollectorPage() {
 
                 {hasUnsavedChanges ? (
                   <GroupedSettingsInlineMessage
-                    message="Save collector settings before scanning channel history."
+                    message="Save collector settings before importing historical embeds."
                     tone="info"
                   />
                 ) : null}
@@ -411,7 +412,7 @@ export function QOTDCollectorPage() {
                       disabled={!canRunCollector}
                       onClick={() => void handleCollect()}
                     >
-                      {collecting ? "Collecting..." : "Collect questions now"}
+                      {collecting ? "Importing..." : "Import historical questions"}
                     </button>
                   </div>
                 </div>
@@ -560,7 +561,7 @@ function parseTitlePatterns(value: string) {
 }
 
 function formatCollectorRunResult(result: QOTDCollectorRunResult) {
-  return `Scanned ${result.scanned_messages} messages, matched ${result.matched_messages} embeds, and stored ${result.new_questions} new questions. ${result.total_questions} total questions are ready for export.`;
+  return `Scanned ${result.scanned_messages} historical messages, matched ${result.matched_messages} embeds, and stored ${result.new_questions} new questions. ${result.total_questions} total questions are ready for export.`;
 }
 
 function buildCollectedQuestionMeta(question: QOTDCollectedQuestion) {
