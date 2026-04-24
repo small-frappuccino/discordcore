@@ -7,6 +7,7 @@ import type {
   ControlApiClient,
   QOTDConfig,
   QOTDDeckSummary,
+  QOTDOfficialPost,
   QOTDQuestion,
   QOTDSummary,
 } from "../../api/control";
@@ -501,6 +502,77 @@ describe("QOTD UI", () => {
     );
   });
 
+  it("renders operational QOTD status with current and previous Discord links", () => {
+    qotdMock.summary = createQOTDSummary({
+      current_publish_date_utc: "2026-04-04T12:30:00Z",
+      published_for_current_slot: true,
+      current_post: createOfficialPost({
+        publish_mode: "manual",
+        publish_date_utc: "2026-04-04T00:00:00Z",
+        state: "current",
+        question_text: "What shipped today?",
+        published_at: "2026-04-04T12:30:00Z",
+        becomes_previous_at: "2026-04-05T00:00:00Z",
+        answers_close_at: "2026-04-06T00:00:00Z",
+        post_url:
+          "https://discord.com/channels/guild-1/question-channel-1/message-current",
+        thread_id: "thread-current",
+        thread_url: "https://discord.com/channels/guild-1/thread-current",
+        answer_channel_id: "thread-current",
+        answer_channel_url:
+          "https://discord.com/channels/guild-1/thread-current",
+      }),
+      previous_post: createOfficialPost({
+        state: "previous",
+        question_text: "Yesterday's question",
+        post_url:
+          "https://discord.com/channels/guild-1/question-channel-1/message-previous",
+        thread_id: "thread-previous",
+        thread_url: "https://discord.com/channels/guild-1/thread-previous",
+        answer_channel_id: "thread-previous",
+        answer_channel_url:
+          "https://discord.com/channels/guild-1/thread-previous",
+      }),
+    });
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDQuestionsPage />
+      </MemoryRouter>,
+    );
+
+    expect(within(view.container).getByText("Official post status")).toBeInTheDocument();
+    expect(within(view.container).getByText("Current slot published")).toBeInTheDocument();
+    expect(within(view.container).getByText("What shipped today?")).toBeInTheDocument();
+    expect(within(view.container).getByText("Yesterday's question")).toBeInTheDocument();
+    expect(
+      within(view.container).getByRole("link", { name: "Open current post embed" }),
+    ).toHaveAttribute(
+      "href",
+      "https://discord.com/channels/guild-1/question-channel-1/message-current",
+    );
+    expect(
+      within(view.container).getByRole("link", { name: "Open current post thread" }),
+    ).toHaveAttribute(
+      "href",
+      "https://discord.com/channels/guild-1/thread-current",
+    );
+    expect(
+      within(view.container).getByRole("link", { name: "Open previous post embed" }),
+    ).toHaveAttribute(
+      "href",
+      "https://discord.com/channels/guild-1/question-channel-1/message-previous",
+    );
+    expect(
+      within(view.container).getByRole("link", { name: "Open previous post thread" }),
+    ).toHaveAttribute(
+      "href",
+      "https://discord.com/channels/guild-1/thread-previous",
+    );
+    expect(within(view.container).getAllByText(/Turns previous/)).not.toHaveLength(0);
+    expect(within(view.container).getAllByText(/Answers close/)).not.toHaveLength(0);
+  });
+
   it("imports questions from a text file into the selected deck", async () => {
     const user = userEvent.setup();
 
@@ -834,17 +906,30 @@ function createQOTDSummary(overrides: Partial<QOTDSummary> = {}): QOTDSummary {
     current_publish_date_utc: "2026-04-04T00:00:00Z",
     decks,
     published_for_current_slot: false,
-    previous_post: {
-      deck_id: "default",
-      deck_name: "Default",
-      publish_mode: "scheduled",
-      publish_date_utc: "2026-04-03T00:00:00Z",
-      state: "published",
-      question_text: "Yesterday's question",
-      becomes_previous_at: "2026-04-04T00:00:00Z",
-      answers_close_at: "2026-04-05T00:00:00Z",
-    },
+    previous_post: createOfficialPost(),
     ...overrides,
     settings,
+  };
+}
+
+function createOfficialPost(
+  overrides: Partial<QOTDOfficialPost> = {},
+): QOTDOfficialPost {
+  return {
+    deck_id: "default",
+    deck_name: "Default",
+    publish_mode: "scheduled",
+    publish_date_utc: "2026-04-03T00:00:00Z",
+    state: "previous",
+    question_text: "Yesterday's question",
+    becomes_previous_at: "2026-04-04T00:00:00Z",
+    answers_close_at: "2026-04-05T00:00:00Z",
+    thread_id: "thread-previous",
+    thread_url: "https://discord.com/channels/guild-1/thread-previous",
+    answer_channel_id: "thread-previous",
+    answer_channel_url: "https://discord.com/channels/guild-1/thread-previous",
+    post_url:
+      "https://discord.com/channels/guild-1/question-channel-1/message-previous",
+    ...overrides,
   };
 }

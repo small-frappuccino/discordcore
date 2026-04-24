@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import type {
   QOTDDeck,
+  QOTDOfficialPost,
   QOTDQuestion,
   QOTDQuestionStatus,
 } from "../../api/control";
+import { formatTimestamp } from "../../app/utils";
 import {
   GroupedSettingsCopy,
   GroupedSettingsGroup,
@@ -31,15 +33,21 @@ export function QOTDQuestionsPage() {
     selectDeck,
     selectedDeckID,
     settings,
+    summary,
     updateQuestion,
   } = useQOTD();
   const composerHeadingId = useId();
   const importInputId = useId();
   const queueHeadingId = useId();
+  const publishingHeadingId = useId();
   const availableDecks = settings.decks ?? [];
   const selectedDeck = availableDecks.find((deck) => deck.id === selectedDeckID) ?? null;
   const selectedDeckSummary =
     deckSummaries.find((deck) => deck.id === selectedDeckID) ?? null;
+  const activePublishingDeck =
+    availableDecks.find((deck) => deck.id === settings.active_deck_id) ?? null;
+  const hasOperationalPosts =
+    summary?.current_post !== undefined || summary?.previous_post !== undefined;
   const orderedQuestions = [...questions].sort((left, right) => {
     if (left.queue_position !== right.queue_position) {
       return left.queue_position - right.queue_position;
@@ -223,6 +231,65 @@ export function QOTDQuestionsPage() {
   return (
     <div className="workspace-view qotd-workspace">
       <GroupedSettingsStack className="qotd-grouped-stack">
+        <GroupedSettingsSection>
+          <GroupedSettingsCopy>
+            <p className="section-label">Publishing</p>
+            <GroupedSettingsHeading as="h2" variant="section" id={publishingHeadingId}>
+              Official post status
+            </GroupedSettingsHeading>
+            <p className="field-note">
+              This timeline follows the active publishing deck
+              {activePublishingDeck ? `, ${activePublishingDeck.name}.` : "."}
+            </p>
+          </GroupedSettingsCopy>
+
+          <GroupedSettingsGroup>
+            <GroupedSettingsItem stacked role="group" aria-labelledby={publishingHeadingId}>
+              <GroupedSettingsSubrow>
+                <div className="qotd-deck-card-footer">
+                  <div className="qotd-deck-summary">
+                    <span>
+                      {summary?.published_for_current_slot
+                        ? "Current slot published"
+                        : "Current slot waiting"}
+                    </span>
+                    <span>
+                      Slot {formatQOTDDateTime(summary?.current_publish_date_utc, "Unavailable")}
+                    </span>
+                    {activePublishingDeck ? (
+                      <span>Active deck {activePublishingDeck.name}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </GroupedSettingsSubrow>
+
+              <GroupedSettingsSubrow>
+                {hasOperationalPosts ? (
+                  <div className="qotd-post-grid">
+                    {summary?.current_post ? (
+                      <QOTDOfficialPostCard
+                        label="Current post"
+                        post={summary.current_post}
+                      />
+                    ) : null}
+                    {summary?.previous_post ? (
+                      <QOTDOfficialPostCard
+                        label="Previous post"
+                        post={summary.previous_post}
+                      />
+                    ) : null}
+                  </div>
+                ) : (
+                  <GroupedSettingsInlineMessage
+                    message="No official QOTD posts have been published for this server yet."
+                    tone="info"
+                  />
+                )}
+              </GroupedSettingsSubrow>
+            </GroupedSettingsItem>
+          </GroupedSettingsGroup>
+        </GroupedSettingsSection>
+
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
             <p className="section-label">Deck</p>
@@ -560,6 +627,82 @@ export function QOTDQuestionsPage() {
   );
 }
 
+function QOTDOfficialPostCard({
+  label,
+  post,
+}: {
+  label: string;
+  post: QOTDOfficialPost;
+}) {
+  const lowerLabel = label.toLowerCase();
+  const showAnswerChannelLink =
+    post.answer_channel_url && post.answer_channel_url !== post.thread_url;
+
+  return (
+    <article className="qotd-post-card">
+      <div className="qotd-question-top">
+        <div className="qotd-question-heading">
+          <div className="qotd-question-order-row">
+            <span className="qotd-question-index">{label}</span>
+            <span
+              className={`qotd-status-pill ${getOfficialPostToneClass(post.state)}`}
+            >
+              {formatOfficialPostStateLabel(post.state)}
+            </span>
+          </div>
+          <p className="qotd-question-body">
+            {post.question_text.trim() === ""
+              ? "Question text unavailable."
+              : post.question_text}
+          </p>
+        </div>
+
+        <div className="inline-actions qotd-post-links">
+          {post.post_url ? (
+            <a
+              className="button-secondary"
+              href={post.post_url}
+              aria-label={`Open ${lowerLabel} embed`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open embed
+            </a>
+          ) : null}
+          {post.thread_url ? (
+            <a
+              className="button-secondary"
+              href={post.thread_url}
+              aria-label={`Open ${lowerLabel} thread`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open thread
+            </a>
+          ) : null}
+          {showAnswerChannelLink ? (
+            <a
+              className="button-secondary"
+              href={post.answer_channel_url}
+              aria-label={`Open ${lowerLabel} answer channel`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open answer channel
+            </a>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="qotd-question-meta qotd-post-meta">
+        {buildOfficialPostMeta(post).map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function parseImportedQuestions(text: string) {
   return text
     .split(/\r?\n/)
@@ -609,6 +752,83 @@ function getQuestionToneClass(status: QOTDQuestionStatus) {
     default:
       return "qotd-status-neutral";
   }
+}
+
+function formatOfficialPostStateLabel(state: string) {
+  switch (state.trim()) {
+    case "current":
+      return "Current";
+    case "previous":
+      return "Previous";
+    case "archived":
+      return "Archived";
+    case "provisioning":
+      return "Publishing";
+    case "failed":
+      return "Failed";
+    case "missing_discord":
+      return "Missing in Discord";
+    case "published":
+      return "Published";
+    default:
+      return state.trim() === "" ? "Unknown" : state;
+  }
+}
+
+function getOfficialPostToneClass(state: string) {
+  switch (state.trim()) {
+    case "current":
+      return "qotd-status-success";
+    case "previous":
+    case "published":
+      return "qotd-status-info";
+    case "provisioning":
+      return "qotd-status-warning";
+    case "failed":
+    case "missing_discord":
+      return "qotd-status-error";
+    case "archived":
+    default:
+      return "qotd-status-neutral";
+  }
+}
+
+function buildOfficialPostMeta(post: QOTDOfficialPost) {
+  const meta = [
+    `Deck ${post.deck_name}`,
+    `${formatPublishModeLabel(post.publish_mode)} publish`,
+    `Slot ${formatQOTDDateTime(post.publish_date_utc, "Unavailable")}`,
+    `Turns previous ${formatQOTDDateTime(post.becomes_previous_at, "Unavailable")}`,
+    `Answers close ${formatQOTDDateTime(post.answers_close_at, "Unavailable")}`,
+  ];
+
+  if (post.published_at) {
+    meta.splice(2, 0, `Published ${formatQOTDDateTime(post.published_at, "Unavailable")}`);
+  }
+
+  return meta;
+}
+
+function formatPublishModeLabel(mode: string) {
+  switch (mode.trim()) {
+    case "manual":
+      return "Manual";
+    case "scheduled":
+      return "Scheduled";
+    default:
+      return mode.trim() === "" ? "Unknown" : mode;
+  }
+}
+
+function formatQOTDDateTime(value: string | undefined, fallback: string) {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return fallback;
+  }
+  return formatTimestamp(parsed, fallback);
 }
 
 function buildQuestionMeta(question: QOTDQuestion, decks: QOTDDeck[]) {
