@@ -1245,13 +1245,6 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 	return state
 }
 
-func (ms *MonitoringService) shouldRunMemberEventService(globalRC files.RuntimeConfig) bool {
-	if ms.configManager == nil {
-		return false
-	}
-	return shouldRunMemberEventService(ms.scopedConfig(), globalRC)
-}
-
 func (ms *MonitoringService) workloadState(globalRC files.RuntimeConfig) monitoringWorkloadState {
 	cfg := ms.scopedConfig()
 	if cfg == nil {
@@ -1277,13 +1270,6 @@ func (ms *MonitoringService) scopedConfig() *files.BotConfig {
 	scoped := *cfg
 	scoped.Guilds = scopedGuilds
 	return &scoped
-}
-
-func (ms *MonitoringService) configuredGuilds() []files.GuildConfig {
-	if cfg := ms.scopedConfig(); cfg != nil {
-		return cfg.Guilds
-	}
-	return nil
 }
 
 func (ms *MonitoringService) handlesGuild(guildID string) bool {
@@ -1447,28 +1433,6 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 
 	log.ApplicationLogger().Info("Monitoring service stopped")
 	return nil
-}
-
-// initializeCache loads the current member users for all configured guilds.
-func (ms *MonitoringService) initializeCache() {
-	cfg := ms.scopedConfig()
-	if cfg == nil || len(cfg.Guilds) == 0 {
-		log.ApplicationLogger().Info("No guild configured for monitoring")
-		return
-	}
-	ms.markEvent(nil)
-	guildIDs := make([]string, 0, len(cfg.Guilds))
-	for _, gcfg := range cfg.Guilds {
-		if gid := strings.TrimSpace(gcfg.GuildID); gid != "" {
-			guildIDs = append(guildIDs, gid)
-		}
-	}
-	if err := runGuildTasksWithLimit(context.Background(), guildIDs, monitoringMaxConcurrentGuildScan, func(runCtx context.Context, guildID string) error {
-		return ms.initializeGuildCacheContext(runCtx, guildID)
-	}); err != nil {
-		log.ApplicationLogger().Warn("Some guild cache initializations failed", "err", err)
-	}
-	// No-op: avatars are persisted per change in the Postgres store
 }
 
 // initializeGuildCache initializes the current avatars of members in a specific guild.

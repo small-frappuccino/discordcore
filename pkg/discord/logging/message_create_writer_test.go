@@ -70,7 +70,7 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 		t.Fatalf("expected pending create to stay out of store before flush, got %+v", cachedBeforeFlush)
 	}
 
-	if err := service.processMessageUpdate(session, &discordgo.MessageUpdate{
+	if err := service.processMessageUpdate(context.Background(), session, &discordgo.MessageUpdate{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
@@ -181,7 +181,7 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 		},
 	})
 
-	if err := service.processMessageDelete(session, &discordgo.MessageDelete{
+	if err := service.processMessageDelete(context.Background(), session, &discordgo.MessageDelete{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
@@ -280,7 +280,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 		},
 	})
 
-	if err := service.processMessageUpdate(session, &discordgo.MessageUpdate{
+	if err := service.processMessageUpdate(context.Background(), session, &discordgo.MessageUpdate{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
@@ -295,7 +295,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 		t.Fatalf("process update: %v", err)
 	}
 
-	if err := service.processMessageDelete(session, &discordgo.MessageDelete{
+	if err := service.processMessageDelete(context.Background(), session, &discordgo.MessageDelete{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,

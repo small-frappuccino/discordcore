@@ -61,41 +61,6 @@ func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
 	}
 }
 
-func TestRuntimeActivityMarkEventUsesBackgroundWhenContextNil(t *testing.T) {
-	store, _ := newLoggingStore(t, "runtime-activity-mark-event-nil.db")
-	expected := time.Date(2026, time.January, 2, 4, 5, 6, 0, time.UTC)
-
-	var sawNilCtx atomic.Bool
-	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
-			if ctx == nil {
-				sawNilCtx.Store(true)
-			}
-			return fn(ctx)
-		},
-		Now: func() time.Time {
-			return expected
-		},
-	})
-
-	activity.MarkEvent(nil, "test")
-
-	if sawNilCtx.Load() {
-		t.Fatalf("expected MarkEvent to provide a background context")
-	}
-
-	got, ok, err := store.LastEvent(context.Background())
-	if err != nil {
-		t.Fatalf("get last event: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected last event timestamp to be persisted")
-	}
-	if !got.Equal(expected) {
-		t.Fatalf("unexpected last event timestamp: got=%s want=%s", got.UTC(), expected.UTC())
-	}
-}
-
 func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *testing.T) {
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat.db")
 	base := time.Date(2026, time.January, 2, 5, 0, 0, 0, time.UTC)

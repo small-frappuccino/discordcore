@@ -155,7 +155,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 		t.Fatalf("expected cached message with original content, got %+v", cachedBefore)
 	}
 
-	if err := service.processMessageUpdate(session, &discordgo.MessageUpdate{
+	if err := service.processMessageUpdate(context.Background(), session, &discordgo.MessageUpdate{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
@@ -178,7 +178,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 		t.Fatalf("expected updated cached content, got %+v", cachedAfter)
 	}
 
-	if err := service.processMessageDelete(session, &discordgo.MessageDelete{
+	if err := service.processMessageDelete(context.Background(), session, &discordgo.MessageDelete{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,

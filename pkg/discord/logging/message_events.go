@@ -416,7 +416,7 @@ func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *disc
 		return
 	}
 
-	if err := mes.processMessageUpdate(s, m, true); err != nil {
+	if err := mes.processMessageUpdate(ctx, s, m, true); err != nil {
 		slog.Error("MessageUpdate: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
 	}
 }
@@ -449,7 +449,7 @@ func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *disc
 		return
 	}
 
-	if err := mes.processMessageDelete(s, m, true); err != nil {
+	if err := mes.processMessageDelete(ctx, s, m, true); err != nil {
 		slog.Error("MessageDelete: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
 	}
 }
@@ -555,23 +555,23 @@ func (mes *MessageEventService) dispatchMessageDeleteTask(m *discordgo.MessageDe
 	})
 }
 
-func (mes *MessageEventService) handleMessageUpdateTask(_ context.Context, payload any) error {
+func (mes *MessageEventService) handleMessageUpdateTask(ctx context.Context, payload any) error {
 	p, ok := payload.(messageUpdateTaskPayload)
 	if !ok || p.Update == nil {
 		return fmt.Errorf("invalid payload for %s", taskTypeMessageUpdateProcess)
 	}
-	return mes.processMessageUpdate(mes.session, p.Update, false)
+	return mes.processMessageUpdate(ctx, mes.session, p.Update, false)
 }
 
-func (mes *MessageEventService) handleMessageDeleteTask(_ context.Context, payload any) error {
+func (mes *MessageEventService) handleMessageDeleteTask(ctx context.Context, payload any) error {
 	p, ok := payload.(messageDeleteTaskPayload)
 	if !ok || p.Delete == nil {
 		return fmt.Errorf("invalid payload for %s", taskTypeMessageDeleteProcess)
 	}
-	return mes.processMessageDelete(mes.session, p.Delete, false)
+	return mes.processMessageDelete(ctx, mes.session, p.Delete, false)
 }
 
-func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, allowWait bool) error {
+func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageUpdate, allowWait bool) error {
 	if m == nil {
 		return nil
 	}
@@ -579,7 +579,7 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 		return nil
 	}
 
-	mes.markEvent(nil)
+	mes.markEvent(ctx)
 
 	// Consult persistence (Postgres store) to get the original message (with guild/channel fallback)
 	guildID := m.GuildID
@@ -693,12 +693,12 @@ func (mes *MessageEventService) processMessageUpdate(s *discordgo.Session, m *di
 	return nil
 }
 
-func (mes *MessageEventService) processMessageDelete(s *discordgo.Session, m *discordgo.MessageDelete, allowWait bool) error {
+func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *discordgo.Session, m *discordgo.MessageDelete, allowWait bool) error {
 	if m == nil {
 		return nil
 	}
 
-	mes.markEvent(nil)
+	mes.markEvent(ctx)
 
 	guildID := m.GuildID
 	if guildID == "" && s != nil && s.State != nil {

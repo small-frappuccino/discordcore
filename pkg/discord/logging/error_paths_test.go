@@ -57,8 +57,8 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 	}
 
 	memberService.markEvent(context.Background())
-	messageService.markEvent(nil)
-	monitoringService.markEvent(nil)
+	messageService.markEvent(context.Background())
+	monitoringService.markEvent(context.Background())
 }
 
 func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
