@@ -239,6 +239,14 @@ export interface QOTDCollectorRunResult {
   total_questions: number;
 }
 
+export interface QOTDCollectorRemoveDuplicatesResult {
+  deck_id: string;
+  scanned_messages: number;
+  matched_messages: number;
+  duplicate_questions: number;
+  deleted_questions: number;
+}
+
 export interface QOTDCollectorSummaryResponse {
   status: string;
   guild_id: string;
@@ -250,6 +258,12 @@ export interface QOTDCollectorRunResponse {
   guild_id: string;
   result: QOTDCollectorRunResult;
   summary: QOTDCollectorSummary;
+}
+
+export interface QOTDCollectorRemoveDuplicatesResponse {
+  status: string;
+  guild_id: string;
+  result: QOTDCollectorRemoveDuplicatesResult;
 }
 
 export type DashboardGuildAccessLevel = "read" | "write";
@@ -677,6 +691,19 @@ export class ControlApiClient {
     return this.request<QOTDCollectorRunResponse>(
       "POST",
       `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/collect`,
+    );
+  }
+
+  async removeQOTDCollectorDeckDuplicates(
+    guildId: string,
+    deckId: string,
+  ): Promise<QOTDCollectorRemoveDuplicatesResponse> {
+    return this.request<QOTDCollectorRemoveDuplicatesResponse>(
+      "POST",
+      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/remove-duplicates`,
+      {
+        deck_id: deckId.trim(),
+      },
     );
   }
 

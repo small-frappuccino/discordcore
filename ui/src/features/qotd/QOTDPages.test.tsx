@@ -25,6 +25,7 @@ const dashboardSessionMock: {
     ControlApiClient,
     | "downloadQOTDCollectorExport"
     | "getQOTDCollectorSummary"
+    | "removeQOTDCollectorDeckDuplicates"
     | "runQOTDCollector"
   >;
   selectedGuild: AccessibleGuild | null;
@@ -36,6 +37,7 @@ const dashboardSessionMock: {
   client: {
     downloadQOTDCollectorExport: vi.fn(),
     getQOTDCollectorSummary: vi.fn(),
+    removeQOTDCollectorDeckDuplicates: vi.fn(),
     runQOTDCollector: vi.fn(),
   },
   selectedGuild: {
@@ -81,6 +83,7 @@ const qotdMock = {
   deleteQuestion: vi.fn(),
   publishNow: vi.fn(),
   reconcilePosts: vi.fn(),
+  removeCollectorDeckDuplicates: vi.fn(),
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
@@ -172,6 +175,13 @@ describe("QOTD UI", () => {
     qotdMock.workspaceState = "ready";
     qotdMock.createQuestions.mockReset().mockResolvedValue(true);
     qotdMock.reconcilePosts.mockReset().mockResolvedValue(undefined);
+    qotdMock.removeCollectorDeckDuplicates.mockReset().mockResolvedValue({
+      deck_id: "default",
+      scanned_messages: 8,
+      matched_messages: 3,
+      duplicate_questions: 2,
+      deleted_questions: 1,
+    });
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
     qotdMock.setupChannel.mockReset().mockResolvedValue(undefined);
     qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
@@ -868,6 +878,68 @@ describe("QOTD UI", () => {
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
     anchorClick.mockRestore();
+  });
+
+  it("removes deck duplicates from stored collector history", async () => {
+    const user = userEvent.setup();
+    qotdMock.settings = createQOTDSettings({
+      active_deck_id: "default",
+      decks: [
+        {
+          id: "default",
+          name: "Default",
+          enabled: true,
+          channel_id: "question-channel-1",
+        },
+        {
+          id: "icebreakers",
+          name: "Icebreakers",
+          enabled: true,
+          channel_id: "answers-channel-1",
+        },
+      ],
+    });
+    qotdMock.removeCollectorDeckDuplicates.mockResolvedValue({
+      deck_id: "icebreakers",
+      scanned_messages: 8,
+      matched_messages: 3,
+      duplicate_questions: 2,
+      deleted_questions: 1,
+    });
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDCollectorPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        within(view.container).getByText("1 collected question stored"),
+      ).toBeInTheDocument();
+    });
+
+    await user.selectOptions(
+      within(view.container).getByLabelText("Target deck"),
+      "icebreakers",
+    );
+    await user.click(
+      within(view.container).getByRole("button", {
+        name: "Remove deck duplicates",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        within(view.container).getByText(
+          "Scanned 8 historical messages, matched 3 embeds, found 2 duplicate questions in Icebreakers, removed 1 duplicate question, and kept 1 scheduled or used question.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      qotdMock.removeCollectorDeckDuplicates,
+    ).toHaveBeenCalledWith("icebreakers");
   });
 });
 

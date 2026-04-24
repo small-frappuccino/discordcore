@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +42,12 @@ type qotdCollectorRouteResponse struct {
 	GuildID         string                         `json:"guild_id"`
 	Summary         qotdCollectorSummaryResponse   `json:"summary"`
 	CollectorResult qotdCollectorRunResultResponse `json:"result"`
+}
+
+type qotdCollectorRemoveDuplicatesRouteResponse struct {
+	Status string                                     `json:"status"`
+	GuildID string                                    `json:"guild_id"`
+	Result qotdCollectorRemoveDuplicatesResultResponse `json:"result"`
 }
 
 type routeFakePublisher struct {
@@ -178,6 +185,16 @@ func decodeQOTDCollectorRouteResponse(t *testing.T, recBody string) qotdCollecto
 	var out qotdCollectorRouteResponse
 	if err := json.Unmarshal([]byte(recBody), &out); err != nil {
 		t.Fatalf("decode qotd collector response: %v body=%q", err, recBody)
+	}
+	return out
+}
+
+func decodeQOTDCollectorRemoveDuplicatesRouteResponse(t *testing.T, recBody string) qotdCollectorRemoveDuplicatesRouteResponse {
+	t.Helper()
+
+	var out qotdCollectorRemoveDuplicatesRouteResponse
+	if err := json.Unmarshal([]byte(recBody), &out); err != nil {
+		t.Fatalf("decode qotd collector duplicate removal response: %v body=%q", err, recBody)
 	}
 	return out
 }
@@ -417,6 +434,104 @@ func TestQOTDRoutesCollectAndExportArchivedQuestions(t *testing.T) {
 	}
 	if got := exportRec.Header().Get("Content-Disposition"); !strings.Contains(got, "qotd-collected-questions.txt") {
 		t.Fatalf("expected export filename header, got %q", got)
+	}
+}
+
+func TestQOTDRoutesRemoveDeckDuplicatesFromCollector(t *testing.T) {
+	t.Parallel()
+
+	srv, service, store, _ := newQOTDControlTestServer(t)
+	handler := srv.httpServer.Handler
+
+	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
+		}},
+	})
+	if settingsRec.Code != 200 {
+		t.Fatalf("put collector settings status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
+	}
+	srv.SetDiscordSessionResolver(func(string) (*discordgo.Session, error) {
+		return nil, errors.New("discord unavailable")
+	})
+
+	mutableDuplicate, err := service.CreateQuestion(context.Background(), "g1", "user-1", qotd.QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "Tell us about a person you look up to!",
+		Status: qotd.QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(mutable duplicate) failed: %v", err)
+	}
+	immutableDuplicate, err := service.CreateQuestion(context.Background(), "g1", "user-2", qotd.QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "What food have you never eaten but would really like to try?",
+		Status: qotd.QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(immutable duplicate) failed: %v", err)
+	}
+	immutableDuplicate.Status = string(qotd.QuestionStatusUsed)
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *immutableDuplicate); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(immutable duplicate) failed: %v", err)
+	}
+
+	created, err := store.CreateQOTDCollectedQuestions(context.Background(), []storage.QOTDCollectedQuestionRecord{
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "collector-channel-1",
+			SourceMessageID:          "message-1",
+			SourceAuthorID:           "bot-1",
+			SourceAuthorNameSnapshot: "QOTD Bot",
+			SourceCreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
+			EmbedTitle:               "Question Of The Day",
+			QuestionText:             "Tell us about a person you look up to!",
+		},
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "collector-channel-1",
+			SourceMessageID:          "message-2",
+			SourceAuthorID:           "bot-1",
+			SourceAuthorNameSnapshot: "QOTD Bot",
+			SourceCreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
+			EmbedTitle:               "question!!",
+			QuestionText:             "What food have you never eaten but would really like to try?",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDCollectedQuestions() failed: %v", err)
+	}
+	if created != 2 {
+		t.Fatalf("expected two stored collected questions, got %d", created)
+	}
+
+	rec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/collector/remove-duplicates", map[string]any{
+		"deck_id": files.LegacyQOTDDefaultDeckID,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("remove duplicates status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	resp := decodeQOTDCollectorRemoveDuplicatesRouteResponse(t, rec.Body.String())
+	if resp.Result.DeckID != files.LegacyQOTDDefaultDeckID {
+		t.Fatalf("unexpected duplicate removal deck: %+v", resp.Result)
+	}
+	if resp.Result.ScannedMessages != 2 || resp.Result.MatchedMessages != 2 {
+		t.Fatalf("unexpected duplicate removal scan: %+v", resp.Result)
+	}
+	if resp.Result.DuplicateQuestions != 2 || resp.Result.DeletedQuestions != 1 {
+		t.Fatalf("unexpected duplicate removal result: %+v", resp.Result)
+	}
+
+	deleted, err := store.GetQOTDQuestion(context.Background(), "g1", mutableDuplicate.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(deleted) failed: %v", err)
+	}
+	if deleted != nil {
+		t.Fatalf("expected mutable duplicate to be deleted, got %+v", deleted)
 	}
 }
 

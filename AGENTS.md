@@ -196,15 +196,31 @@ Canonical contracts:
 
 If dashboard routing changes, update backend, frontend, tests, docs, and embed assumptions together.
 
+For Go code in `pkg/`, `cmd/`, and `ui/*.go`:
+
+- name functions, methods, packages, and test doubles from the call site: avoid repeating package, receiver, type, or parameter names; avoid `Get` prefixes for getters; prefer noun-like accessors and verb-like mutators; avoid new `util`, `helper`, or `common` package names
+- keep packages cohesive and files focused; extend existing sibling seams first, but split by responsibility before a file becomes an unsearchable hotspot
+- prefer `:=` for new non-zero values; use zero values or `new(T)` when an empty value is the point; initialize maps before writes; keep pointer receivers on types that contain mutexes or other no-copy fields
+- avoid accidental shadowing, especially for `ctx`, `err`, and imported package names; when reusing an outer variable across a nested scope, use `=` instead of `:=`
+- keep exported APIs readable: put `context.Context` first, do not hide it in options, avoid long parameter lists, and prefer option structs or ordered functional options only when they materially improve common call sites
+- prefer explicit dependency passing and instance types over new mutable package globals; package-level convenience wrappers, if unavoidable, must stay thin and must not be the only API that library code relies on
+- avoid unnecessary interfaces; define small consumer-side interfaces only when multiple implementations, real substitution, or import-cycle pressure justify them; accept interfaces and usually return concrete types
+- specify channel direction where ownership is one-way, and prefer real transports or generated clients over hand-rolled RPC or HTTP stand-ins when testing integrations
+- update doc comments when exported behavior changes, especially for concurrency, cleanup, context, or returned-error contracts; document the non-obvious behavior, not every parameter name
+
 Backend rules:
 
 - prefer explicit error propagation
-- wrap errors with operation context using `fmt.Errorf("operation: %w", err)`
-- avoid `panic` for expected runtime failures
+- wrap errors with operation context when callers should still be able to inspect the underlying failure using `fmt.Errorf("operation: %w", err)`; use `%v` when translating or intentionally hiding internals at a boundary
+- prefer structured or sentinel errors when callers need to branch on failure; do not string-match on error text
+- avoid `panic` for expected runtime failures; reserve panic or fatal termination for unrecoverable invariants or top-level startup failures
 - return early on bad auth, invalid input, and missing dependencies
 - use existing repo logging facilities, especially `pkg/log` and area-specific helpers
+- avoid logging and returning the same error unless the local log is the only actionable sink
+- gate expensive debug logging behind cheap conditions or verbosity checks
 - include relevant guild, channel, or user identifiers in operational context
 - never log secrets, tokens, OAuth credentials, or private message content
+- prefer `+` for simple string joins, `fmt.Sprintf` or `fmt.Fprintf` for formatted output, and `strings.Builder` for piecemeal string construction
 - treat `ConfigManager.Config()` and `GuildConfig()` results as read-only snapshots
 - persist through `UpdateConfig`, `UpdateRuntimeConfig`, or existing helpers
 - preserve normalization and validation when changing config semantics
@@ -245,6 +261,13 @@ Testing style:
 - prefer deterministic seams already present in the repo
 - do not require live Discord access
 - only use isolated Postgres helpers where the package already follows that pattern
+- keep failures in the `Test` or subtest when possible; shared validators should return `error`, diffs, or `cmp.Option` rather than failing the test themselves
+- mark setup and cleanup helpers with `t.Helper()` and use `t.Fatal` there only for unrecoverable test-environment failures
+- prefer `t.Error` plus `continue` to keep table tests going; use `t.Fatal` when setup failure prevents the current test or subtest from continuing
+- never call `t.Fatal`, `t.FailNow`, or similar methods from spawned goroutines
+- use field names in larger table-driven test case literals
+- scope expensive setup to the tests that need it; use `sync.Once` only for shared setup with no teardown, and `TestMain` only when package-wide setup and teardown are genuinely required
+- prefer real transports for HTTP or RPC integration tests when practical
 
 Validation expectations:
 
@@ -252,6 +275,7 @@ Validation expectations:
 - UI changes: `bun run test`, `bun run lint`, and `bun run build`
 - route or embed contract changes: verify `ui/vite.config.ts`, `ui/src/app/routes.ts`, `pkg/control/http_routes.go`, `pkg/control/dashboard_handler.go`, and that `ui/dist/index.html` still exists
 - feature or settings contract changes: verify Go route and workspace builders, `ui/src/api/control.ts`, and the adapters or pages consuming the changed fields
+- exported Go API, doc, or error-contract changes: update nearby tests and doc comments that pin the new behavior
 - if a relevant validation step was not run, say so explicitly
 
 ## Hotspots And Cautions

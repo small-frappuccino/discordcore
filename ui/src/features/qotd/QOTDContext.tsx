@@ -10,6 +10,7 @@ import {
 import type {
   QOTDConfig,
   QOTDCollectorConfig,
+  QOTDCollectorRemoveDuplicatesResult,
   QOTDDeck,
   QOTDDeckSummary,
   QOTDQuestion,
@@ -33,6 +34,7 @@ export const QOTD_BUSY_LABELS = {
   reconcilePosts: "Reconciling QOTD with Discord...",
   saveSettings: "Saving QOTD settings...",
   setupChannel: "Preparing QOTD channel...",
+  removeCollectorDeckDuplicates: "Removing collector duplicates...",
   createQuestion: "Creating question...",
   createQuestions: "Importing questions...",
   updateQuestion: "Updating question...",
@@ -56,6 +58,9 @@ interface QOTDContextValue {
   createQuestion: (payload: QOTDQuestionMutation) => Promise<void>;
   createQuestions: (payloads: QOTDQuestionMutation[]) => Promise<boolean>;
   deleteQuestion: (questionId: number) => Promise<void>;
+  removeCollectorDeckDuplicates: (
+    deckId: string,
+  ) => Promise<QOTDCollectorRemoveDuplicatesResult | null>;
   publishNow: () => Promise<void>;
   reconcilePosts: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
@@ -419,6 +424,29 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function removeCollectorDeckDuplicates(deckId: string) {
+    if (!canEditSelectedGuild || normalizedGuildID === "") {
+      return null;
+    }
+
+    const targetDeckID = chooseDeckID(deckId, settings);
+    if (targetDeckID === "") {
+      return null;
+    }
+
+    setBusyLabel(QOTD_BUSY_LABELS.removeCollectorDeckDuplicates);
+    try {
+      const response = await client.removeQOTDCollectorDeckDuplicates(
+        normalizedGuildID,
+        targetDeckID,
+      );
+      void loadWorkspace(targetDeckID, true);
+      return response.result;
+    } finally {
+      setBusyLabel("");
+    }
+  }
+
   async function reorderQuestions(orderedIDs: number[]) {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
       return;
@@ -576,6 +604,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         createQuestion,
         createQuestions,
         deleteQuestion,
+        removeCollectorDeckDuplicates,
         publishNow,
         reconcilePosts,
         refreshWorkspace,

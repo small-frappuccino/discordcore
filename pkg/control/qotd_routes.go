@@ -81,6 +81,13 @@ func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, g
 		}
 		s.handleQOTDCollectorExportGet(w, r, guildID)
 		return
+	case len(tail) == 3 && tail[1] == "collector" && tail[2] == "remove-duplicates":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleQOTDCollectorRemoveDuplicatesPost(w, r, guildID, auth)
+		return
 	case len(tail) == 3 && tail[1] == "questions":
 		questionID, err := strconv.ParseInt(strings.TrimSpace(tail[2]), 10, 64)
 		if err != nil || questionID <= 0 {
@@ -390,6 +397,36 @@ func (s *Server) handleQOTDCollectorExportGet(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Disposition", `attachment; filename="qotd-collected-questions.txt"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(exported))
+}
+
+func (s *Server) handleQOTDCollectorRemoveDuplicatesPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
+	var payload struct {
+		DeckID string `json:"deck_id"`
+	}
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		return
+	}
+
+	result, err := s.qotdService.RemoveDeckDuplicatesFromCollector(r.Context(), guildID, strings.TrimSpace(payload.DeckID))
+	if err != nil {
+		status := qotdErrorStatus(err)
+		log.ApplicationLogger().Warn(
+			"QOTD collector duplicate removal failed",
+			"operation", "control.qotd.collector.remove_duplicates",
+			"guildID", guildID,
+			"deckID", strings.TrimSpace(payload.DeckID),
+			"userID", settingsRequestUserID(auth),
+			"err", err,
+		)
+		http.Error(w, fmt.Sprintf("failed to remove qotd deck duplicates: %v", err), status)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"guild_id": guildID,
+		"result":   buildQOTDCollectorRemoveDuplicatesResultResponse(result),
+	})
 }
 
 func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {

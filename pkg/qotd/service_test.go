@@ -769,6 +769,124 @@ func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
 	}
 }
 
+func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	mutableDuplicate, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "  WHAT is one habit you want to keep this month?  ",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(mutable duplicate) failed: %v", err)
+	}
+	immutableDuplicate, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "What are you excited to try next?",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(immutable duplicate) failed: %v", err)
+	}
+	immutableDuplicate.Status = string(QuestionStatusUsed)
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *immutableDuplicate); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(immutable duplicate) failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-3", QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "What changed in the release process this week?",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion(unique) failed: %v", err)
+	}
+
+	created, err := store.CreateQOTDCollectedQuestions(context.Background(), []storage.QOTDCollectedQuestionRecord{
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "collector-channel-1",
+			SourceMessageID:          "message-1",
+			SourceAuthorID:           "bot-1",
+			SourceAuthorNameSnapshot: "QOTD Bot",
+			SourceCreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
+			EmbedTitle:               "Question Of The Day",
+			QuestionText:             "What is one habit you want to keep this month?",
+		},
+		{
+			GuildID:                  "g1",
+			SourceChannelID:          "collector-channel-1",
+			SourceMessageID:          "message-2",
+			SourceAuthorID:           "bot-1",
+			SourceAuthorNameSnapshot: "QOTD Bot",
+			SourceCreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
+			EmbedTitle:               "question!!",
+			QuestionText:             "What are you excited to try next?",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDCollectedQuestions() failed: %v", err)
+	}
+	if created != 2 {
+		t.Fatalf("expected two stored collected questions, got %d", created)
+	}
+
+	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
+		"collector-channel-1": {
+			{
+				MessageID:          "live-message-1",
+				AuthorID:           "bot-1",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Live discord history should not be used here."}]`),
+				CreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	result, err := service.RemoveDeckDuplicatesFromCollector(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("RemoveDeckDuplicatesFromCollector() failed: %v", err)
+	}
+	if result.DeckID != files.LegacyQOTDDefaultDeckID {
+		t.Fatalf("expected default deck id, got %+v", result)
+	}
+	if result.ScannedMessages != 2 || result.MatchedMessages != 2 {
+		t.Fatalf("unexpected scan result: %+v", result)
+	}
+	if result.DuplicateQuestions != 2 || result.DeletedQuestions != 1 {
+		t.Fatalf("unexpected duplicate removal result: %+v", result)
+	}
+
+	deleted, err := store.GetQOTDQuestion(context.Background(), "g1", mutableDuplicate.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(deleted) failed: %v", err)
+	}
+	if deleted != nil {
+		t.Fatalf("expected mutable duplicate to be deleted, got %+v", deleted)
+	}
+
+	remaining, err := store.ListQOTDQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQOTDQuestions() failed: %v", err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("expected two questions to remain after duplicate removal, got %+v", remaining)
+	}
+	if remaining[0].ID != immutableDuplicate.ID || remaining[0].Status != string(QuestionStatusUsed) {
+		t.Fatalf("expected immutable duplicate to remain, got %+v", remaining)
+	}
+}
+
 func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	service, store, fake := newTestQOTDService(t)
 	service.now = func() time.Time {

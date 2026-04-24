@@ -87,6 +87,14 @@ type qotdCollectorRunResultResponse struct {
 	TotalQuestions  int `json:"total_questions"`
 }
 
+type qotdCollectorRemoveDuplicatesResultResponse struct {
+	DeckID             string `json:"deck_id"`
+	ScannedMessages    int    `json:"scanned_messages"`
+	MatchedMessages    int    `json:"matched_messages"`
+	DuplicateQuestions int    `json:"duplicate_questions"`
+	DeletedQuestions   int    `json:"deleted_questions"`
+}
+
 type qotdSetupResultResponse struct {
 	DeckID     string `json:"deck_id"`
 	ChannelID  string `json:"channel_id"`
@@ -228,6 +236,16 @@ func buildQOTDCollectorRunResultResponse(result qotd.CollectorRunResult) qotdCol
 		MatchedMessages: result.MatchedMessages,
 		NewQuestions:    result.NewQuestions,
 		TotalQuestions:  result.TotalQuestions,
+	}
+}
+
+func buildQOTDCollectorRemoveDuplicatesResultResponse(result qotd.CollectorRemoveDuplicatesResult) qotdCollectorRemoveDuplicatesResultResponse {
+	return qotdCollectorRemoveDuplicatesResultResponse{
+		DeckID:             strings.TrimSpace(result.DeckID),
+		ScannedMessages:    result.ScannedMessages,
+		MatchedMessages:    result.MatchedMessages,
+		DuplicateQuestions: result.DuplicateQuestions,
+		DeletedQuestions:   result.DeletedQuestions,
 	}
 }
 

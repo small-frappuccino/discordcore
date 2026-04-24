@@ -2,8 +2,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import type {
   QOTDCollectedQuestion,
   QOTDCollectorConfig,
+  QOTDCollectorRemoveDuplicatesResult,
   QOTDCollectorRunResult,
   QOTDCollectorSummary,
+  QOTDDeck,
 } from "../../api/control";
 import type { Notice } from "../../app/types";
 import { formatError } from "../../app/utils";
@@ -21,7 +23,7 @@ import {
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useGuildChannelOptions } from "../features/useGuildChannelOptions";
-import { useQOTD } from "./QOTDContext";
+import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
 interface CollectorDraft {
   source_channel_id: string;
@@ -38,7 +40,8 @@ const emptyCollectorSummary: QOTDCollectorSummary = {
 export function QOTDCollectorPage() {
   const { authState, canEditSelectedGuild, client, selectedGuildID } =
     useDashboardSession();
-  const { saveSettings, settings } = useQOTD();
+  const { busyLabel, removeCollectorDeckDuplicates, saveSettings, settings } =
+    useQOTD();
   const channelOptions = useGuildChannelOptions();
   const collectorHeadingId = useId();
   const actionHeadingId = useId();
@@ -51,6 +54,9 @@ export function QOTDCollectorPage() {
   );
   const [summary, setSummary] = useState<QOTDCollectorSummary>(
     emptyCollectorSummary,
+  );
+  const [dedupeDeckID, setDedupeDeckID] = useState<string>(() =>
+    resolveCollectorDeckID(settings.decks, settings.active_deck_id),
   );
   const [pageNotice, setPageNotice] = useState<Notice | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -68,6 +74,15 @@ export function QOTDCollectorPage() {
         : nextSavedDraft,
     );
   }, [settings]);
+
+  useEffect(() => {
+    setDedupeDeckID((currentDeckID: string) =>
+      resolveCollectorDeckID(
+        settings.decks,
+        currentDeckID || settings.active_deck_id,
+      ),
+    );
+  }, [settings.active_deck_id, settings.decks]);
 
   useEffect(() => {
     if (authState !== "signed_in" || selectedGuildID.trim() === "") {
@@ -126,6 +141,20 @@ export function QOTDCollectorPage() {
     : messageChannelOptions.length === 0
       ? "No message channels available"
       : "Select a source channel";
+  const deckOptions = (settings.decks ?? []).map((deck) => ({
+    value: deck.id,
+    label: deck.name,
+    description: deck.enabled
+      ? "Enabled deck"
+      : "Disabled deck",
+  }));
+  const deckPlaceholder =
+    deckOptions.length === 0 ? "No decks available" : "Select a target deck";
+  const selectedDeckName =
+    (settings.decks ?? []).find((deck) => deck.id === dedupeDeckID)?.name ??
+    "the selected deck";
+  const removingDuplicates =
+    busyLabel === QOTD_BUSY_LABELS.removeCollectorDeckDuplicates;
   const hasUnsavedChanges = collectorDraftChanged(savedDraftRef.current, draft);
   const canRunCollector =
     canEditSelectedGuild &&
@@ -134,6 +163,12 @@ export function QOTDCollectorPage() {
     draft.source_channel_id.trim() !== "" &&
     parseTitlePatterns(draft.title_patterns_text).length > 0 &&
     selectedGuildID.trim() !== "";
+  const canRemoveDuplicates =
+    canEditSelectedGuild &&
+    !removingDuplicates &&
+    selectedGuildID.trim() !== "" &&
+    summary.total_questions > 0 &&
+    dedupeDeckID.trim() !== "";
 
   async function handleSave() {
     if (!canEditSelectedGuild || saving) {
@@ -223,6 +258,33 @@ export function QOTDCollectorPage() {
       });
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleRemoveDuplicates() {
+    if (!canRemoveDuplicates) {
+      return;
+    }
+
+    try {
+      const result = await removeCollectorDeckDuplicates(
+        dedupeDeckID.trim(),
+      );
+      if (result == null) {
+        return;
+      }
+      setPageNotice({
+        tone: "success",
+        message: formatCollectorRemoveDuplicatesResult(
+          result,
+          selectedDeckName,
+        ),
+      });
+    } catch (error) {
+      setPageNotice({
+        tone: "error",
+        message: formatError(error),
+      });
     }
   }
 
@@ -440,12 +502,40 @@ export function QOTDCollectorPage() {
               aria-labelledby={exportHeadingId}
             >
               <GroupedSettingsSubrow>
+                <SettingsSelectField
+                  label="Target deck"
+                  value={dedupeDeckID}
+                  onChange={setDedupeDeckID}
+                  options={deckOptions}
+                  placeholder={deckPlaceholder}
+                  disabled={
+                    !canEditSelectedGuild ||
+                    removingDuplicates ||
+                    deckOptions.length === 0
+                  }
+                  note="Compare the stored collector history against this deck and remove matching mutable cards."
+                />
+              </GroupedSettingsSubrow>
+
+              <GroupedSettingsSubrow>
                 <div className="qotd-deck-card-footer">
                   <div className="card-copy">
                     Export uses the same `.txt` format as question import: one
-                    question per line.
+                    question per line. Duplicate removal compares stored
+                    collected questions against the selected deck and deletes
+                    matching mutable cards.
                   </div>
                   <div className="inline-actions">
+                    <button
+                      className="button-danger"
+                      type="button"
+                      disabled={!canRemoveDuplicates}
+                      onClick={() => void handleRemoveDuplicates()}
+                    >
+                      {removingDuplicates
+                        ? "Removing duplicates..."
+                        : "Remove deck duplicates"}
+                    </button>
                     <button
                       className="button-secondary"
                       type="button"
@@ -564,6 +654,25 @@ function formatCollectorRunResult(result: QOTDCollectorRunResult) {
   return `Scanned ${result.scanned_messages} historical messages, matched ${result.matched_messages} embeds, and stored ${result.new_questions} new questions. ${result.total_questions} total questions are ready for export.`;
 }
 
+function formatCollectorRemoveDuplicatesResult(
+  result: QOTDCollectorRemoveDuplicatesResult,
+  deckName: string,
+) {
+  if (result.duplicate_questions === 0) {
+    return `Scanned ${result.scanned_messages} historical messages, matched ${result.matched_messages} embeds, and found no duplicate questions in ${deckName}.`;
+  }
+
+  const keptQuestions = Math.max(
+    result.duplicate_questions - result.deleted_questions,
+    0,
+  );
+  if (keptQuestions === 0) {
+    return `Scanned ${result.scanned_messages} historical messages, matched ${result.matched_messages} embeds, and removed ${formatCollectorCount(result.deleted_questions, "duplicate question")} from ${deckName}.`;
+  }
+
+  return `Scanned ${result.scanned_messages} historical messages, matched ${result.matched_messages} embeds, found ${formatCollectorCount(result.duplicate_questions, "duplicate question")} in ${deckName}, removed ${formatCollectorCount(result.deleted_questions, "duplicate question")}, and kept ${formatCollectorCount(keptQuestions, "scheduled or used question")}.`;
+}
+
 function buildCollectedQuestionMeta(question: QOTDCollectedQuestion) {
   const postedLabel =
     typeof question.source_created_at === "string" &&
@@ -631,4 +740,23 @@ function normalizeCollectorEntries(
     normalized.push(trimmed);
   }
   return normalized;
+}
+
+function resolveCollectorDeckID(
+  decks: readonly QOTDDeck[] | undefined,
+  preferredDeckID?: string,
+): string {
+  const availableDecks = Array.isArray(decks) ? decks : [];
+  const preferred = preferredDeckID?.trim() ?? "";
+  if (
+    preferred !== "" &&
+    availableDecks.some((deck) => deck.id === preferred)
+  ) {
+    return preferred;
+  }
+  return availableDecks[0]?.id ?? "";
+}
+
+function formatCollectorCount(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }

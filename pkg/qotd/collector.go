@@ -27,6 +27,14 @@ type CollectorRunResult struct {
 	TotalQuestions  int
 }
 
+type CollectorRemoveDuplicatesResult struct {
+	DeckID             string
+	ScannedMessages    int
+	MatchedMessages    int
+	DuplicateQuestions int
+	DeletedQuestions   int
+}
+
 func (s *Service) GetCollectorSummary(ctx context.Context, guildID string) (CollectorSummary, error) {
 	if err := s.validate(); err != nil {
 		return CollectorSummary{}, err
@@ -67,48 +75,10 @@ func (s *Service) CollectArchivedQuestions(ctx context.Context, guildID string, 
 	if err != nil {
 		return CollectorRunResult{}, err
 	}
-	startTime, err := collectorStartTime(collector.StartDate)
+
+	matchedRecords, scanned, err := s.collectArchivedQuestionMatches(ctx, guildID, collector, session)
 	if err != nil {
 		return CollectorRunResult{}, err
-	}
-
-	matchedRecords := make([]storage.QOTDCollectedQuestionRecord, 0, 32)
-	scanned := 0
-	beforeMessageID := ""
-	stop := false
-
-	for {
-		page, err := s.publisher.FetchChannelMessages(ctx, session, collector.SourceChannelID, beforeMessageID, 100)
-		if err != nil {
-			return CollectorRunResult{}, err
-		}
-		if len(page) == 0 {
-			break
-		}
-
-		scanned += len(page)
-		for _, message := range page {
-			if !startTime.IsZero() && message.CreatedAt.UTC().Before(startTime) {
-				stop = true
-				break
-			}
-			if !collectorAllowsAuthor(message, collector.AuthorIDs) {
-				continue
-			}
-			record, ok := extractCollectedQuestion(guildID, collector.SourceChannelID, message, collector.TitlePatterns)
-			if !ok {
-				continue
-			}
-			matchedRecords = append(matchedRecords, record)
-		}
-
-		if stop || len(page) < 100 {
-			break
-		}
-		beforeMessageID = strings.TrimSpace(page[len(page)-1].MessageID)
-		if beforeMessageID == "" {
-			break
-		}
 	}
 
 	newQuestions, err := s.store.CreateQOTDCollectedQuestions(ctx, matchedRecords)
@@ -126,6 +96,71 @@ func (s *Service) CollectArchivedQuestions(ctx context.Context, guildID string, 
 		NewQuestions:    newQuestions,
 		TotalQuestions:  totalQuestions,
 	}, nil
+}
+
+func (s *Service) RemoveDeckDuplicatesFromCollector(ctx context.Context, guildID, deckID string) (CollectorRemoveDuplicatesResult, error) {
+	if err := s.validate(); err != nil {
+		return CollectorRemoveDuplicatesResult{}, err
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return CollectorRemoveDuplicatesResult{}, fmt.Errorf("%w: guild id is required", files.ErrInvalidQOTDInput)
+	}
+
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return CollectorRemoveDuplicatesResult{}, err
+	}
+	matchedRecords, err := s.store.ListAllQOTDCollectedQuestions(ctx, guildID)
+	if err != nil {
+		return CollectorRemoveDuplicatesResult{}, err
+	}
+
+	result := CollectorRemoveDuplicatesResult{
+		DeckID:          deck.ID,
+		ScannedMessages: len(matchedRecords),
+		MatchedMessages: len(matchedRecords),
+	}
+	if len(matchedRecords) == 0 {
+		return result, nil
+	}
+
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	if err != nil {
+		return CollectorRemoveDuplicatesResult{}, err
+	}
+	if len(questions) == 0 {
+		return result, nil
+	}
+
+	matchedText := make(map[string]struct{}, len(matchedRecords))
+	for _, record := range matchedRecords {
+		key := normalizeCollectorQuestionComparisonText(record.QuestionText)
+		if key == "" {
+			continue
+		}
+		matchedText[key] = struct{}{}
+	}
+	if len(matchedText) == 0 {
+		return result, nil
+	}
+
+	for _, question := range questions {
+		if _, ok := matchedText[normalizeCollectorQuestionComparisonText(question.Body)]; !ok {
+			continue
+		}
+		result.DuplicateQuestions++
+		if isImmutableQuestion(question) {
+			continue
+		}
+		if err := s.store.DeleteQOTDQuestion(ctx, guildID, question.ID); err != nil {
+			return CollectorRemoveDuplicatesResult{}, err
+		}
+		result.DeletedQuestions++
+	}
+
+	return result, nil
 }
 
 func (s *Service) ExportCollectedQuestionsTXT(ctx context.Context, guildID string) (string, error) {
@@ -167,6 +202,54 @@ func (s *Service) collectorConfigForRun(guildID string) (files.QOTDCollectorConf
 		return files.QOTDCollectorConfig{}, fmt.Errorf("%w: collector title_patterns must include at least one pattern", files.ErrInvalidQOTDInput)
 	}
 	return collector, nil
+}
+
+func (s *Service) collectArchivedQuestionMatches(ctx context.Context, guildID string, collector files.QOTDCollectorConfig, session *discordgo.Session) ([]storage.QOTDCollectedQuestionRecord, int, error) {
+	startTime, err := collectorStartTime(collector.StartDate)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	matchedRecords := make([]storage.QOTDCollectedQuestionRecord, 0, 32)
+	scanned := 0
+	beforeMessageID := ""
+	stop := false
+
+	for {
+		page, err := s.publisher.FetchChannelMessages(ctx, session, collector.SourceChannelID, beforeMessageID, 100)
+		if err != nil {
+			return nil, 0, err
+		}
+		if len(page) == 0 {
+			break
+		}
+
+		scanned += len(page)
+		for _, message := range page {
+			if !startTime.IsZero() && message.CreatedAt.UTC().Before(startTime) {
+				stop = true
+				break
+			}
+			if !collectorAllowsAuthor(message, collector.AuthorIDs) {
+				continue
+			}
+			record, ok := extractCollectedQuestion(guildID, collector.SourceChannelID, message, collector.TitlePatterns)
+			if !ok {
+				continue
+			}
+			matchedRecords = append(matchedRecords, record)
+		}
+
+		if stop || len(page) < 100 {
+			break
+		}
+		beforeMessageID = strings.TrimSpace(page[len(page)-1].MessageID)
+		if beforeMessageID == "" {
+			break
+		}
+	}
+
+	return matchedRecords, scanned, nil
 }
 
 func collectorStartTime(value string) (time.Time, error) {
@@ -253,6 +336,10 @@ func extractCollectedQuestionText(description string) string {
 		return normalized
 	}
 	return ""
+}
+
+func normalizeCollectorQuestionComparisonText(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
 }
 
 func parseCollectorEmbeds(raw json.RawMessage) []collectorEmbed {
