@@ -47,7 +47,7 @@ func TestCleanupObsoleteMemberJoins_DoesNotDeleteHistoricalJoins(t *testing.T) {
 		t.Fatalf("CleanupAllObsoleteData() failed: %v", err)
 	}
 
-	got, ok, err := s.GetMemberJoin(guildID, userID)
+	got, ok, err := s.MemberJoin(context.Background(), guildID, userID)
 	if err != nil {
 		t.Fatalf("GetMemberJoin() failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestTouchMemberJoin_PreservesHistoricalJoin(t *testing.T) {
 		t.Fatalf("TouchMemberJoin() failed: %v", err)
 	}
 
-	got, ok, err := store.GetMemberJoin(guildID, userID)
+	got, ok, err := store.MemberJoin(context.Background(), guildID, userID)
 	if err != nil {
 		t.Fatalf("GetMemberJoin() failed: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestTouchMemberJoin_UpdatesLastSeenWithoutCreatingMissingJoin(t *testing.T)
 		t.Fatalf("TouchMemberJoin() failed: %v", err)
 	}
 
-	gotJoin, ok, err := store.GetMemberJoin(guildID, userID)
+	gotJoin, ok, err := store.MemberJoin(context.Background(), guildID, userID)
 	if err != nil {
 		t.Fatalf("GetMemberJoin() failed: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestTouchMemberJoin_UpdatesLastSeenWithoutCreatingMissingJoin(t *testing.T)
 	if err := store.TouchMemberJoin(guildID, "missing"); err != nil {
 		t.Fatalf("TouchMemberJoin(missing) failed: %v", err)
 	}
-	if _, ok, err := store.GetMemberJoin(guildID, "missing"); err != nil {
+	if _, ok, err := store.MemberJoin(context.Background(), guildID, "missing"); err != nil {
 		t.Fatalf("GetMemberJoin(missing) failed: %v", err)
 	} else if ok {
 		t.Fatal("expected missing member touch not to create a join row")

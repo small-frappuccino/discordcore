@@ -80,7 +80,7 @@ func (ra *runtimeActivity) MarkEvent(ctx context.Context, source string) {
 	}
 
 	if err := ra.runErr(ctx, ra.eventTimeout, func(runCtx context.Context) error {
-		return ra.store.SetLastEventForBotContext(runCtx, ra.botInstanceID, ra.now())
+		return ra.store.SetLastEventForBot(runCtx, ra.botInstanceID, ra.now())
 	}); err != nil && ra.warn != nil {
 		ra.warn("Failed to persist last event timestamp", "source", source, "error", err)
 	}
@@ -107,7 +107,7 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 	ra.mu.Unlock()
 
 	if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
-		return ra.store.SetHeartbeatForBotContext(runCtx, ra.botInstanceID, ra.now())
+		return ra.store.SetHeartbeatForBot(runCtx, ra.botInstanceID, ra.now())
 	}); err != nil && ra.warn != nil {
 		ra.warn("Failed to persist startup heartbeat", "error", err)
 	}
@@ -121,7 +121,7 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 			select {
 			case <-ticker.C:
 				if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
-					return ra.store.SetHeartbeatForBotContext(runCtx, ra.botInstanceID, ra.now())
+					return ra.store.SetHeartbeatForBot(runCtx, ra.botInstanceID, ra.now())
 				}); err != nil && ra.warn != nil {
 					ra.warn("Failed to persist heartbeat", "error", err)
 				}

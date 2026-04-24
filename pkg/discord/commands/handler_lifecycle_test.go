@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,15 +9,8 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
-
-type noopAnswerSubmissionService struct{}
-
-func (noopAnswerSubmissionService) SubmitAnswer(context.Context, *discordgo.Session, discordqotd.SubmitAnswerParams) (*discordqotd.SubmitAnswerResult, error) {
-	return nil, nil
-}
 
 func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {
 	t.Helper()
@@ -82,16 +74,12 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 
 	cfgMgr := files.NewMemoryConfigManager()
 	handler := NewCommandHandler(session, cfgMgr)
-	handler.SetQOTDReplyService(noopAnswerSubmissionService{})
 
 	if err := handler.SetupCommands(); err != nil {
 		t.Fatalf("first setup: %v", err)
 	}
 	if handler.runtimeHandlerCancel == nil {
 		t.Fatalf("expected runtime interaction handler cancel function to be set")
-	}
-	if handler.qotdHandlerCancel == nil {
-		t.Fatalf("expected qotd interaction handler cancel function to be set")
 	}
 	if handler.commandManager == nil {
 		t.Fatalf("expected command manager to be initialized")
@@ -103,9 +91,6 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	}
 	if handler.runtimeHandlerCancel == nil {
 		t.Fatalf("expected runtime interaction handler cancel function after reinit")
-	}
-	if handler.qotdHandlerCancel == nil {
-		t.Fatalf("expected qotd interaction handler cancel function after reinit")
 	}
 	if handler.commandManager == nil {
 		t.Fatalf("expected command manager after reinit")
@@ -123,9 +108,6 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	}
 	if handler.runtimeHandlerCancel != nil {
 		t.Fatalf("expected runtime handler cancel to be cleared on shutdown")
-	}
-	if handler.qotdHandlerCancel != nil {
-		t.Fatalf("expected qotd handler cancel to be cleared on shutdown")
 	}
 	if handler.commandManager != nil {
 		t.Fatalf("expected command manager to be cleared on shutdown")
@@ -163,32 +145,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	}
 }
 
-func TestCommandHandlerSetupQOTDInteractionsWithoutCommands(t *testing.T) {
-	session := newCommandHandlerSession(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	})
-
-	cfgMgr := files.NewMemoryConfigManager()
-	handler := NewCommandHandler(session, cfgMgr)
-	handler.SetQOTDReplyService(noopAnswerSubmissionService{})
-
-	if err := handler.SetupQOTDInteractions(); err != nil {
-		t.Fatalf("setup qotd interactions: %v", err)
-	}
-	if handler.qotdHandlerCancel == nil {
-		t.Fatalf("expected qotd interaction handler cancel function to be set")
-	}
-	if handler.commandManager != nil {
-		t.Fatalf("expected qotd-only setup to avoid initializing command manager")
-	}
-
-	if err := handler.Shutdown(); err != nil {
-		t.Fatalf("shutdown after qotd-only setup: %v", err)
-	}
-}
-
-func TestCommandHandlerHandlesQOTDGuildWithoutCommandsFeature(t *testing.T) {
+func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
 	cfgMgr := files.NewMemoryConfigManager()
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
@@ -220,8 +177,5 @@ func TestCommandHandlerHandlesQOTDGuildWithoutCommandsFeature(t *testing.T) {
 	handler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
-	}
-	if !handler.handlesQOTDGuild("guild-1") {
-		t.Fatal("expected qotd handler to ignore the commands feature gate")
 	}
 }

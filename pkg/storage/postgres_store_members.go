@@ -448,15 +448,13 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 	return tx.Commit()
 }
 
-// GetMemberJoin returns the stored join time for a member, if any.
-func (s *Store) GetMemberJoin(guildID, userID string) (time.Time, bool, error) {
-	return s.GetMemberJoinContext(context.Background(), guildID, userID)
-}
-
-// GetMemberJoinContext returns the stored join time for a member, if any, with context support.
-func (s *Store) GetMemberJoinContext(ctx context.Context, guildID, userID string) (time.Time, bool, error) {
+// MemberJoin returns the stored join time for a member, if any.
+func (s *Store) MemberJoin(ctx context.Context, guildID, userID string) (time.Time, bool, error) {
 	if s.db == nil {
 		return time.Time{}, false, fmt.Errorf("store not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	row := s.queryRowContext(ctx, `SELECT joined_at FROM member_joins WHERE guild_id=? AND user_id=?`, guildID, userID)
 	var jt time.Time

@@ -1,6 +1,7 @@
 package maintenance
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -126,6 +127,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 	if !isPruneExecutionDay(now) {
 		return
 	}
+	runCtx := context.Background()
 
 	botID := s.currentBotID()
 
@@ -136,7 +138,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 		if !gcfg.UserPrune.Enabled {
 			continue
 		}
-		if s.didRunGuildPruneThisMonth(gcfg.GuildID, now) {
+		if s.didRunGuildPruneThisMonth(runCtx, gcfg.GuildID, now) {
 			continue
 		}
 
@@ -152,7 +154,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 			continue
 		}
 
-		if err := s.markGuildPruneRun(gcfg.GuildID, now); err != nil {
+		if err := s.markGuildPruneRun(runCtx, gcfg.GuildID, now); err != nil {
 			log.ApplicationLogger().Warn(
 				"User prune: failed to persist run marker",
 				"guildID", gcfg.GuildID,
@@ -258,12 +260,12 @@ func (s *UserPruneService) guildPrune(guildID string, days uint32, reason string
 	return *resp.Pruned, nil
 }
 
-func (s *UserPruneService) didRunGuildPruneThisMonth(guildID string, now time.Time) bool {
+func (s *UserPruneService) didRunGuildPruneThisMonth(ctx context.Context, guildID string, now time.Time) bool {
 	guildID = strings.TrimSpace(guildID)
 	if s.store == nil || guildID == "" {
 		return false
 	}
-	ts, ok, err := s.store.Metadata(userPruneLastRunKey(guildID))
+	ts, ok, err := s.store.Metadata(ctx, userPruneLastRunKey(guildID))
 	if err != nil {
 		log.ApplicationLogger().Warn("User prune: failed to read last run metadata", "guildID", guildID, "err", err)
 		return false
@@ -274,7 +276,7 @@ func (s *UserPruneService) didRunGuildPruneThisMonth(guildID string, now time.Ti
 	return sameYearMonth(ts.UTC(), now.UTC())
 }
 
-func (s *UserPruneService) markGuildPruneRun(guildID string, when time.Time) error {
+func (s *UserPruneService) markGuildPruneRun(ctx context.Context, guildID string, when time.Time) error {
 	guildID = strings.TrimSpace(guildID)
 	if s.store == nil || guildID == "" {
 		return fmt.Errorf("store or guildID is empty")
@@ -282,7 +284,7 @@ func (s *UserPruneService) markGuildPruneRun(guildID string, when time.Time) err
 	if when.IsZero() {
 		when = time.Now().UTC()
 	}
-	if err := s.store.SetMetadata(userPruneLastRunKey(guildID), when.UTC()); err != nil {
+	if err := s.store.SetMetadata(ctx, userPruneLastRunKey(guildID), when.UTC()); err != nil {
 		return fmt.Errorf("set last run metadata: %w", err)
 	}
 	return nil

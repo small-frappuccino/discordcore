@@ -109,7 +109,7 @@ func TestRefreshMemberDataUpdatesCacheAndStore(t *testing.T) {
 		t.Fatalf("expected cached member, got %v %v", got, ok)
 	}
 
-	gotJoin, ok, err := store.GetMemberJoin("g1", "u1")
+	gotJoin, ok, err := store.MemberJoin(context.Background(), "g1", "u1")
 	if err != nil {
 		t.Fatalf("GetMemberJoin error: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestWarmupGuildMembersPreservesHistoricalJoin(t *testing.T) {
 		t.Fatalf("expected 1 cached member, got %d", gotCount)
 	}
 
-	gotJoin, ok, err := store.GetMemberJoin("g1", "u1")
+	gotJoin, ok, err := store.MemberJoin(context.Background(), "g1", "u1")
 	if err != nil {
 		t.Fatalf("GetMemberJoin error: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestKeepMemberDataFreshPreservesHistoricalJoin(t *testing.T) {
 		t.Fatalf("KeepMemberDataFresh error: %v", err)
 	}
 
-	gotJoin, ok, err := store.GetMemberJoin("g1", "u1")
+	gotJoin, ok, err := store.MemberJoin(context.Background(), "g1", "u1")
 	if err != nil {
 		t.Fatalf("GetMemberJoin error: %v", err)
 	}

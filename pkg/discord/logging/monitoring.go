@@ -787,7 +787,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 								}
 							}
 							// Record the oldest processed timestamp for this channel
-							if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
+							if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+channelID, t); err != nil {
 								log.ApplicationLogger().Warn("Backfill(day): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
 							}
 						}
@@ -954,7 +954,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 								}
 							}
 							// Record the oldest processed timestamp for this channel
-							if err := ms.store.SetMetadata("backfill_progress:"+channelID, t); err != nil {
+							if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+channelID, t); err != nil {
 								log.ApplicationLogger().Warn("Backfill(range): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
 							}
 						}
@@ -980,7 +980,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		//
 		// Behavior:
 		// - If `BackfillStartDay` is set: run day-based scan.
-		// - Otherwise: if downtime is detected via `store.GetLastEvent()` and exceeds threshold, run a range scan to recover.
+		// - Otherwise: if downtime is detected via the persisted last event timestamp and exceeds threshold, run a range scan to recover.
 		//
 		// New Condition: Backfill only runs if a channel is configured AND an initial start date is provided in config.
 		if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
@@ -1020,7 +1020,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 			if len(targets) == 0 {
 				log.ApplicationLogger().Debug("No target channels for backfill check")
 			} else {
-				lastEvent, hasLastEvent, err := ms.getLastEvent()
+				lastEvent, hasLastEvent, err := ms.getLastEvent(serviceCtx)
 				if err != nil {
 					lastEvent = time.Time{}
 					hasLastEvent = false
@@ -1065,7 +1065,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 					}
 
 					// Check progress for this channel
-					_, hasProgress, err := ms.store.Metadata("backfill_progress:" + cid)
+					_, hasProgress, err := ms.store.Metadata(serviceCtx, "backfill_progress:"+cid)
 					if err != nil {
 						log.ErrorLoggerRaw().Error(
 							"Failed to read backfill progress; skipping backfill dispatch for channel",
@@ -1304,24 +1304,24 @@ func (ms *MonitoringService) handlesGuild(guildID string) bool {
 	return guild.EffectiveBotInstanceID(ms.defaultBotInstanceID) == files.NormalizeBotInstanceID(ms.botInstanceID)
 }
 
-func (ms *MonitoringService) getLastEvent() (time.Time, bool, error) {
+func (ms *MonitoringService) getLastEvent(ctx context.Context) (time.Time, bool, error) {
 	if ms == nil || ms.store == nil {
 		return time.Time{}, false, fmt.Errorf("store unavailable")
 	}
-	if ts, ok, err := ms.store.LastEventForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+	if ts, ok, err := ms.store.LastEventForBot(ctx, ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
 		return ts, ok, err
 	}
-	return ms.store.LastEvent()
+	return ms.store.LastEvent(ctx)
 }
 
-func (ms *MonitoringService) getHeartbeat() (time.Time, bool, error) {
+func (ms *MonitoringService) getHeartbeat(ctx context.Context) (time.Time, bool, error) {
 	if ms == nil || ms.store == nil {
 		return time.Time{}, false, fmt.Errorf("store unavailable")
 	}
-	if ts, ok, err := ms.store.HeartbeatForBot(ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+	if ts, ok, err := ms.store.HeartbeatForBot(ctx, ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
 		return ts, ok, err
 	}
-	return ms.store.Heartbeat()
+	return ms.store.Heartbeat(ctx)
 }
 
 // Stop stops the monitoring service. Returns error if not running.
@@ -1494,7 +1494,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 	}
 
 	// Set bot join time if missing
-	_, hasBotSince, err := ms.store.GetBotSince(guildID)
+	_, hasBotSince, err := ms.store.BotSince(ctx, guildID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error(
 			"Failed to read bot join timestamp during cache initialization",
@@ -1518,12 +1518,12 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 			}
 		}
 		if botMember != nil && !botMember.JoinedAt.IsZero() {
-			if err := ms.store.SetBotSince(guildID, botMember.JoinedAt); err != nil {
+			if err := ms.store.SetBotSince(ctx, guildID, botMember.JoinedAt); err != nil {
 				log.ApplicationLogger().Warn("Failed to persist bot join timestamp", "guildID", guildID, "joinedAt", botMember.JoinedAt, "err", err)
 			}
 		} else {
 			now := time.Now()
-			if err := ms.store.SetBotSince(guildID, now); err != nil {
+			if err := ms.store.SetBotSince(ctx, guildID, now); err != nil {
 				log.ApplicationLogger().Warn("Failed to persist fallback bot join timestamp", "guildID", guildID, "joinedAt", now, "err", err)
 			}
 		}

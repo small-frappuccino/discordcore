@@ -25,15 +25,11 @@ var (
 	ErrQuestionNotFound         = errors.New("qotd question not found")
 	ErrDeckNotFound             = errors.New("qotd deck not found")
 	ErrDiscordUnavailable       = errors.New("discord session unavailable")
-	ErrOfficialPostNotFound     = discordqotd.ErrOfficialPostNotFound
-	ErrAnswerWindowClosed       = discordqotd.ErrAnswerWindowClosed
-	ErrAnswerChannelUnavailable = discordqotd.ErrAnswerChannelUnavailable
 )
 
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
 	SetupChannel(ctx context.Context, session *discordgo.Session, params discordqotd.SetupChannelParams) (*discordqotd.SetupChannelResult, error)
-	UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 	FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error)
 	FetchChannelMessages(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]discordqotd.ArchivedMessage, error)
@@ -75,7 +71,6 @@ type Service struct {
 	store               *storage.Store
 	publisher           Publisher
 	now                 func() time.Time
-	answerRecordLocks   sync.Map
 	guildLifecycleLocks sync.Map
 }
 
@@ -403,122 +398,6 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	}, nil
 }
 
-func (s *Service) SubmitAnswer(ctx context.Context, session *discordgo.Session, params discordqotd.SubmitAnswerParams) (*discordqotd.SubmitAnswerResult, error) {
-	if err := s.validate(); err != nil {
-		return nil, err
-	}
-	if session == nil {
-		return nil, ErrDiscordUnavailable
-	}
-
-	normalized, err := normalizeSubmitAnswerParams(params)
-	if err != nil {
-		return nil, err
-	}
-
-	officialPost, err := s.store.GetQOTDOfficialPostByID(ctx, normalized.OfficialPostID)
-	if err != nil {
-		return nil, err
-	}
-	if officialPost == nil || officialPost.GuildID != normalized.GuildID {
-		return nil, ErrOfficialPostNotFound
-	}
-	if !isOfficialPostPublished(*officialPost) {
-		return nil, ErrAnswerChannelUnavailable
-	}
-
-	lifecycle := EvaluateOfficialPostWindow(
-		officialPost.PublishDateUTC,
-		derefTime(officialPost.PublishedAt),
-		officialPost.GraceUntil,
-		officialPost.ArchiveAt,
-		s.clock(),
-	)
-	if !lifecycle.AnswerWindow.IsOpen {
-		return nil, ErrAnswerWindowClosed
-	}
-
-	defaultAnswerChannelID := strings.TrimSpace(officialPost.AnswerChannelID)
-	if defaultAnswerChannelID == "" {
-		defaultAnswerChannelID = strings.TrimSpace(officialPost.DiscordThreadID)
-	}
-	if defaultAnswerChannelID == "" {
-		return nil, ErrAnswerChannelUnavailable
-	}
-
-	lock := s.answerRecordLock(officialPost.ID, normalized.UserID)
-	lock.Lock()
-	defer lock.Unlock()
-
-	record, err := s.store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
-	if err != nil {
-		return nil, err
-	}
-	if record == nil {
-		record, err = s.store.CreateQOTDAnswerMessage(ctx, storage.QOTDAnswerMessageRecord{
-			GuildID:                 officialPost.GuildID,
-			OfficialPostID:          officialPost.ID,
-			UserID:                  normalized.UserID,
-			State:                   string(AnswerRecordStateActive),
-			AnswerChannelID:         defaultAnswerChannelID,
-			CreatedViaInteractionID: normalized.InteractionID,
-		})
-		if err != nil {
-			if !isQOTDAnswerMessageConflict(err) {
-				return nil, err
-			}
-			record, err = s.store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, officialPost.ID, normalized.UserID)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	if record == nil {
-		return nil, ErrAnswerChannelUnavailable
-	}
-
-	targetChannelID := strings.TrimSpace(record.AnswerChannelID)
-	if targetChannelID == "" {
-		targetChannelID = defaultAnswerChannelID
-	}
-
-	upserted, err := s.publisher.UpsertAnswerMessage(ctx, session, discordqotd.UpsertAnswerMessageParams{
-		GuildID:           officialPost.GuildID,
-		OfficialPostID:    officialPost.ID,
-		DeckName:          officialPost.DeckNameSnapshot,
-		PublishDateUTC:    officialPost.PublishDateUTC,
-		AnswerChannelID:   targetChannelID,
-		QuestionText:      officialPost.QuestionTextSnapshot,
-		QuestionURL:       OfficialPostJumpURL(*officialPost),
-		AnswerText:        normalized.AnswerText,
-		UserID:            normalized.UserID,
-		UserDisplayName:   normalized.UserDisplayName,
-		UserAvatarURL:     normalized.UserAvatarURL,
-		ExistingMessageID: strings.TrimSpace(record.DiscordMessageID),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if strings.TrimSpace(record.DiscordMessageID) != upserted.MessageID {
-		record, err = s.store.FinalizeQOTDAnswerMessage(ctx, record.ID, upserted.MessageID)
-		if err != nil {
-			return nil, err
-		}
-	}
-	record, err = s.store.UpdateQOTDAnswerMessageState(ctx, record.ID, string(AnswerRecordStateActive), nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return &discordqotd.SubmitAnswerResult{
-		MessageID:  upserted.MessageID,
-		ChannelID:  upserted.ChannelID,
-		MessageURL: upserted.MessageURL,
-		Updated:    upserted.Updated,
-	}, nil
-}
-
 func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {
 	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
 	if err != nil {
@@ -736,28 +615,6 @@ func idsFromQuestions(questions []storage.QOTDQuestionRecord) []int64 {
 	return ids
 }
 
-func normalizeSubmitAnswerParams(params discordqotd.SubmitAnswerParams) (discordqotd.SubmitAnswerParams, error) {
-	params.GuildID = strings.TrimSpace(params.GuildID)
-	params.UserID = strings.TrimSpace(params.UserID)
-	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
-	params.UserAvatarURL = strings.TrimSpace(params.UserAvatarURL)
-	params.InteractionID = strings.TrimSpace(params.InteractionID)
-	params.AnswerText = strings.TrimSpace(params.AnswerText)
-
-	switch {
-	case params.GuildID == "":
-		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: guild id is required", files.ErrInvalidQOTDInput)
-	case params.OfficialPostID <= 0:
-		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: official post id is required", files.ErrInvalidQOTDInput)
-	case params.UserID == "":
-		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: user id is required", files.ErrInvalidQOTDInput)
-	case params.AnswerText == "":
-		return discordqotd.SubmitAnswerParams{}, fmt.Errorf("%w: answer text is required", files.ErrInvalidQOTDInput)
-	default:
-		return params, nil
-	}
-}
-
 func (s *Service) availableQuestionCount(ctx context.Context, guildID, deckID string) (int, error) {
 	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
 	if err != nil {
@@ -857,12 +714,6 @@ func missingDeckIDs(current, next []files.QOTDDeckConfig) []string {
 		removed = append(removed, deckID)
 	}
 	return removed
-}
-
-func (s *Service) answerRecordLock(officialPostID int64, userID string) *sync.Mutex {
-	key := fmt.Sprintf("%d:%s", officialPostID, strings.TrimSpace(userID))
-	lock, _ := s.answerRecordLocks.LoadOrStore(key, &sync.Mutex{})
-	return lock.(*sync.Mutex)
 }
 
 func (s *Service) guildLifecycleLock(guildID string) *sync.Mutex {

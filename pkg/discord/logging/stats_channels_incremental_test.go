@@ -261,7 +261,7 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 	if err := store.UpsertMemberRoles(guildID, userID, []string{roleID}, seenAt); err != nil {
 		t.Fatalf("seed member roles: %v", err)
 	}
-	if err := store.SetMetadataContext(context.Background(), statsSeedMetadataKey(guildID), seenAt); err != nil {
+	if err := store.SetMetadata(context.Background(), statsSeedMetadataKey(guildID), seenAt); err != nil {
 		t.Fatalf("seed stats metadata: %v", err)
 	}
 
@@ -326,7 +326,7 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 		statsGuilds:   make(map[string]*statsGuildState),
 	}
 	now := time.Now().UTC()
-	if err := store.SetHeartbeatContext(context.Background(), now); err != nil {
+	if err := store.SetHeartbeat(context.Background(), now); err != nil {
 		t.Fatalf("set heartbeat: %v", err)
 	}
 

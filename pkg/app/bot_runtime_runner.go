@@ -29,7 +29,6 @@ type botRuntimeOptions struct {
 	runtimeApplier       *runtimeapply.Manager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
-	qotdReplyService     discordqotd.AnswerSubmissionService
 	qotdLifecycleService discordqotd.GuildLifecycleService
 	startupTasks         *startupTaskOrchestrator
 }
@@ -202,7 +201,6 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
 		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
-		commandHandler.SetQOTDReplyService(opts.qotdReplyService)
 		if err := setupCommandHandler(commandHandler); err != nil {
 			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
 		}
@@ -221,14 +219,6 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 			adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 		}
 		runtime.commandHandler = commandHandler
-	} else if runtime.capabilities.qotd && opts.qotdReplyService != nil {
-		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
-		commandHandler.SetQOTDReplyService(opts.qotdReplyService)
-		if err := setupQOTDInteractionHandler(commandHandler); err != nil {
-			return fmt.Errorf("configure qotd interactions for %s: %w", runtime.instanceID, err)
-		}
-		runtime.commandHandler = commandHandler
-		log.ApplicationLogger().Info("Commands skipped; QOTD interaction handler enabled", "botInstanceID", runtime.instanceID)
 	} else {
 		log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
 	}

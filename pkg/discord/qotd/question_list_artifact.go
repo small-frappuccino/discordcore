@@ -27,7 +27,6 @@ type questionListArtifactPublishParams struct {
 	ForumChannelID      string
 	PreferredThreadID   string
 	EntryMessageID      string
-	OfficialPostID      int64
 	QuestionEmbed       *discordgo.MessageEmbed
 	ExistingPublishedAt time.Time
 }
@@ -95,7 +94,7 @@ func (p questionListArtifactPublisher) Publish(ctx context.Context, params quest
 func (p questionListArtifactPublisher) appendEntry(ctx context.Context, threadID string, params questionListArtifactPublishParams) (string, error) {
 	var entryMessageID string
 	err := p.withWritableThread(ctx, threadID, func() error {
-		message, err := p.transport.SendEntry(ctx, threadID, buildQuestionListEntryMessage(params.QuestionEmbed, params.OfficialPostID))
+		message, err := p.transport.SendEntry(ctx, threadID, buildQuestionListEntryMessage(params.QuestionEmbed))
 		if message != nil {
 			entryMessageID = strings.TrimSpace(message.ID)
 		}
@@ -145,17 +144,14 @@ func normalizeQuestionListArtifactPublishParams(params questionListArtifactPubli
 		return questionListArtifactPublishParams{}, fmt.Errorf("forum channel id is required")
 	case params.QuestionEmbed == nil:
 		return questionListArtifactPublishParams{}, fmt.Errorf("question embed is required")
-	case params.OfficialPostID <= 0:
-		return questionListArtifactPublishParams{}, fmt.Errorf("official post id is required")
 	default:
 		return params, nil
 	}
 }
 
-func buildQuestionListEntryMessage(embed *discordgo.MessageEmbed, officialPostID int64) *discordgo.MessageSend {
+func buildQuestionListEntryMessage(embed *discordgo.MessageEmbed) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
 		Embeds:          []*discordgo.MessageEmbed{embed},
-		Components:      buildAnswerButtonComponents(officialPostID),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	}
 }

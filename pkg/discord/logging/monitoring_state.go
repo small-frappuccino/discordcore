@@ -368,7 +368,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 		ok bool
 	}
 	hb, err := monitoringRunWithTimeout(ctx, monitoringPersistenceTimeout, func() (heartbeatState, error) {
-		at, ok, err := ms.getHeartbeat()
+		at, ok, err := ms.getHeartbeat(ctx)
 		return heartbeatState{at: at, ok: ok}, err
 	})
 	lastHB := hb.at

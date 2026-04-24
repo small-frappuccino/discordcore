@@ -12,7 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
@@ -27,10 +26,8 @@ type CommandHandler struct {
 	defaultBotInstanceID string
 	commandManager       *core.CommandManager
 	runtimeHandlerCancel func()
-	qotdHandlerCancel    func()
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
-	qotdReplyService     discordqotd.AnswerSubmissionService
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -61,7 +58,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	log.ApplicationLogger().Info("Setting up bot commands...")
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
-	if ch.commandManager != nil || ch.runtimeHandlerCancel != nil || ch.qotdHandlerCancel != nil {
+	if ch.commandManager != nil || ch.runtimeHandlerCancel != nil {
 		log.ApplicationLogger().Warn("Command setup called with active handlers; cleaning previous registrations first")
 		if err := ch.Shutdown(); err != nil {
 			return fmt.Errorf("cleanup previous command handlers: %w", err)
@@ -98,26 +95,12 @@ func (ch *CommandHandler) SetupCommands() error {
 		}
 		runtimeHandler(s, i)
 	})
-	if err := ch.setupQOTDInteractionHandler(); err != nil {
-		if ch.runtimeHandlerCancel != nil {
-			ch.runtimeHandlerCancel()
-			ch.runtimeHandlerCancel = nil
-		}
-		if ch.commandManager != nil {
-			ch.commandManager = nil
-		}
-		return fmt.Errorf("register qotd interaction handler: %w", err)
-	}
 
 	// Configure commands on Discord
 	if err := ch.commandManager.SetupCommands(); err != nil {
 		if ch.runtimeHandlerCancel != nil {
 			ch.runtimeHandlerCancel()
 			ch.runtimeHandlerCancel = nil
-		}
-		if ch.qotdHandlerCancel != nil {
-			ch.qotdHandlerCancel()
-			ch.qotdHandlerCancel = nil
 		}
 		if ch.commandManager != nil {
 			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
@@ -145,14 +128,6 @@ func (ch *CommandHandler) SetPartnerBoardService(service partners.BoardService) 
 // SetPartnerBoardSyncExecutor injects a sync executor used by /partner sync.
 func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor) {
 	ch.partnerSyncExecutor = executor
-}
-
-func (ch *CommandHandler) SetQOTDReplyService(service discordqotd.AnswerSubmissionService) {
-	ch.qotdReplyService = service
-}
-
-func (ch *CommandHandler) SetupQOTDInteractions() error {
-	return ch.setupQOTDInteractionHandler()
 }
 
 // registerConfigCommands registers configuration-related commands
@@ -193,10 +168,6 @@ func (ch *CommandHandler) Shutdown() error {
 		ch.runtimeHandlerCancel()
 		ch.runtimeHandlerCancel = nil
 	}
-	if ch.qotdHandlerCancel != nil {
-		ch.qotdHandlerCancel()
-		ch.qotdHandlerCancel = nil
-	}
 
 	if ch.commandManager != nil {
 		if err := ch.commandManager.Shutdown(); err != nil {
@@ -224,10 +195,6 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 	return cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands
 }
 
-func (ch *CommandHandler) handlesQOTDGuild(guildID string) bool {
-	return ch.matchesGuildBotInstance(guildID)
-}
-
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
 	if ch == nil {
 		return false
@@ -247,26 +214,4 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
 		return false
 	}
 	return true
-}
-
-func (ch *CommandHandler) setupQOTDInteractionHandler() error {
-	if ch == nil || ch.qotdReplyService == nil {
-		return nil
-	}
-	if ch.session == nil {
-		return fmt.Errorf("discord session is unavailable")
-	}
-	if ch.qotdHandlerCancel != nil {
-		ch.qotdHandlerCancel()
-		ch.qotdHandlerCancel = nil
-	}
-
-	qotdHandler := discordqotd.HandleQOTDInteractions(ch.qotdReplyService)
-	ch.qotdHandlerCancel = ch.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if i == nil || !ch.handlesQOTDGuild(i.GuildID) {
-			return
-		}
-		qotdHandler(s, i)
-	})
-	return nil
 }

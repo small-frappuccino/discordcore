@@ -539,10 +539,10 @@ func TestForeignKeysAndUniqueConstraints(t *testing.T) {
 func TestHeartbeatMetadataRoundTrip(t *testing.T) {
 	store := newTempStore(t)
 	ts := time.Now().UTC().Truncate(time.Second)
-	if err := store.SetHeartbeat(ts); err != nil {
+	if err := store.SetHeartbeat(context.Background(), ts); err != nil {
 		t.Fatalf("set heartbeat: %v", err)
 	}
-	got, ok, err := store.Heartbeat()
+	got, ok, err := store.Heartbeat(context.Background())
 	if err != nil || !ok || !got.Equal(ts) {
 		t.Fatalf("heartbeat mismatch: ts=%v ok=%v err=%v", got, ok, err)
 	}
@@ -555,32 +555,32 @@ func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 	aliceLastEvent := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second)
 	yuzuhaLastEvent := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Second)
 
-	if err := store.SetHeartbeatForBot("alice", aliceHeartbeat); err != nil {
+	if err := store.SetHeartbeatForBot(context.Background(), "alice", aliceHeartbeat); err != nil {
 		t.Fatalf("set alice heartbeat: %v", err)
 	}
-	if err := store.SetHeartbeatForBot("yuzuha", yuzuhaHeartbeat); err != nil {
+	if err := store.SetHeartbeatForBot(context.Background(), "yuzuha", yuzuhaHeartbeat); err != nil {
 		t.Fatalf("set yuzuha heartbeat: %v", err)
 	}
-	if err := store.SetLastEventForBot("alice", aliceLastEvent); err != nil {
+	if err := store.SetLastEventForBot(context.Background(), "alice", aliceLastEvent); err != nil {
 		t.Fatalf("set alice last event: %v", err)
 	}
-	if err := store.SetLastEventForBot("yuzuha", yuzuhaLastEvent); err != nil {
+	if err := store.SetLastEventForBot(context.Background(), "yuzuha", yuzuhaLastEvent); err != nil {
 		t.Fatalf("set yuzuha last event: %v", err)
 	}
 
-	gotAliceHeartbeat, ok, err := store.HeartbeatForBot("alice")
+	gotAliceHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "alice")
 	if err != nil || !ok || !gotAliceHeartbeat.Equal(aliceHeartbeat) {
 		t.Fatalf("unexpected alice heartbeat: got=%v ok=%v err=%v", gotAliceHeartbeat, ok, err)
 	}
-	gotYuzuhaHeartbeat, ok, err := store.HeartbeatForBot("yuzuha")
+	gotYuzuhaHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "yuzuha")
 	if err != nil || !ok || !gotYuzuhaHeartbeat.Equal(yuzuhaHeartbeat) {
 		t.Fatalf("unexpected yuzuha heartbeat: got=%v ok=%v err=%v", gotYuzuhaHeartbeat, ok, err)
 	}
-	gotAliceLastEvent, ok, err := store.LastEventForBot("alice")
+	gotAliceLastEvent, ok, err := store.LastEventForBot(context.Background(), "alice")
 	if err != nil || !ok || !gotAliceLastEvent.Equal(aliceLastEvent) {
 		t.Fatalf("unexpected alice last event: got=%v ok=%v err=%v", gotAliceLastEvent, ok, err)
 	}
-	gotYuzuhaLastEvent, ok, err := store.LastEventForBot("yuzuha")
+	gotYuzuhaLastEvent, ok, err := store.LastEventForBot(context.Background(), "yuzuha")
 	if err != nil || !ok || !gotYuzuhaLastEvent.Equal(yuzuhaLastEvent) {
 		t.Fatalf("unexpected yuzuha last event: got=%v ok=%v err=%v", gotYuzuhaLastEvent, ok, err)
 	}
@@ -672,7 +672,7 @@ func TestUpsertGuildMemberSnapshotsContext_BatchesAvatarRolesAndJoins(t *testing
 		t.Fatalf("expected cleared roles for u2, got %v", roles)
 	}
 
-	joinedAt, ok, err := store.GetMemberJoin(guildID, "u1")
+	joinedAt, ok, err := store.MemberJoin(context.Background(), guildID, "u1")
 	if err != nil {
 		t.Fatalf("GetMemberJoin(u1) failed: %v", err)
 	}
@@ -680,7 +680,7 @@ func TestUpsertGuildMemberSnapshotsContext_BatchesAvatarRolesAndJoins(t *testing
 		t.Fatalf("expected earliest join for u1=%s, got %s (ok=%v)", firstSeen.Format(time.RFC3339), joinedAt.Format(time.RFC3339), ok)
 	}
 
-	joinedAt, ok, err = store.GetMemberJoin(guildID, "u2")
+	joinedAt, ok, err = store.MemberJoin(context.Background(), guildID, "u2")
 	if err != nil {
 		t.Fatalf("GetMemberJoin(u2) failed: %v", err)
 	}
@@ -735,7 +735,7 @@ func TestUpsertGuildMemberSnapshotsContext_OptionalFieldsDoNotOverwriteExistingD
 		t.Fatalf("expected roles to remain unchanged, got %v", roles)
 	}
 
-	gotJoin, ok, err := store.GetMemberJoin(guildID, "u1")
+	gotJoin, ok, err := store.MemberJoin(context.Background(), guildID, "u1")
 	if err != nil {
 		t.Fatalf("GetMemberJoin() failed: %v", err)
 	}

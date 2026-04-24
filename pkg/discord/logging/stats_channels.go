@@ -329,7 +329,7 @@ func (ms *MonitoringService) prepareStatsState(ctx context.Context, gcfg files.G
 	if !hydrated {
 		return true, nil
 	}
-	return ms.statsStoreStateStale(gcfg), nil
+	return ms.statsStoreStateStale(ctx, gcfg), nil
 }
 
 func (ms *MonitoringService) hydrateStatsForGuildFromStore(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
@@ -382,9 +382,9 @@ func statsRequiresBotClassification(channels []files.StatsChannelConfig) bool {
 	return false
 }
 
-func (ms *MonitoringService) statsStoreStateStale(gcfg files.GuildConfig) bool {
+func (ms *MonitoringService) statsStoreStateStale(ctx context.Context, gcfg files.GuildConfig) bool {
 	limit := statsStoreFreshnessLimit(gcfg.Stats)
-	lastHeartbeat, ok, err := ms.getHeartbeat()
+	lastHeartbeat, ok, err := ms.getHeartbeat(ctx)
 	if err != nil || !ok {
 		return true
 	}
@@ -408,7 +408,7 @@ func (ms *MonitoringService) hasStatsSeed(ctx context.Context, guildID string) b
 	if ms == nil || ms.store == nil {
 		return false
 	}
-	_, ok, err := ms.store.MetadataContext(ctx, statsSeedMetadataKey(guildID))
+	_, ok, err := ms.store.Metadata(ctx, statsSeedMetadataKey(guildID))
 	if err != nil {
 		log.ApplicationLogger().Warn(
 			"Failed to read stats seed metadata",
@@ -428,7 +428,7 @@ func (ms *MonitoringService) markStatsSeeded(ctx context.Context, guildID string
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
-	if err := ms.store.SetMetadataContext(ctx, statsSeedMetadataKey(guildID), at); err != nil {
+	if err := ms.store.SetMetadata(ctx, statsSeedMetadataKey(guildID), at); err != nil {
 		log.ApplicationLogger().Warn(
 			"Failed to persist stats seed metadata",
 			"operation", "monitoring.stats.seed.write",

@@ -78,14 +78,6 @@ func (routeFakePublisher) SetupChannel(_ context.Context, _ *discordgo.Session, 
 	}, nil
 }
 
-func (routeFakePublisher) UpsertAnswerMessage(context.Context, *discordgo.Session, discordqotd.UpsertAnswerMessageParams) (*discordqotd.UpsertedAnswerMessage, error) {
-	return &discordqotd.UpsertedAnswerMessage{
-		ChannelID:  "answers-channel",
-		MessageID:  "answer-message",
-		MessageURL: discordqotd.BuildMessageJumpURL("g1", "answers-channel", "answer-message"),
-	}, nil
-}
-
 func (routeFakePublisher) SetThreadState(context.Context, *discordgo.Session, string, discordqotd.ThreadState) error {
 	return nil
 }

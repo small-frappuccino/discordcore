@@ -66,7 +66,6 @@ func TestQuestionListArtifactPublisherAppendsAndSealsThread(t *testing.T) {
 
 	result, err := publisher.Publish(context.Background(), questionListArtifactPublishParams{
 		ForumChannelID: "forum-1",
-		OfficialPostID: 42,
 		QuestionEmbed:  buildOfficialQuestionEmbed("Default", 3, "What is your answer?", 1),
 	})
 	if err != nil {
@@ -87,26 +86,11 @@ func TestQuestionListArtifactPublisherAppendsAndSealsThread(t *testing.T) {
 	if len(transport.sendCalls) != 1 || transport.sendCalls[0] != "questions-list-thread" {
 		t.Fatalf("expected one entry append call, got %+v", transport.sendCalls)
 	}
-	if transport.lastSentMessage == nil || len(transport.lastSentMessage.Components) == 0 {
-		t.Fatalf("expected answer button on list entry message, got %+v", transport.lastSentMessage)
-	}
 	if transport.lastSentMessage == nil || len(transport.lastSentMessage.Embeds) != 1 {
 		t.Fatalf("expected one embed in list entry, got %+v", transport.lastSentMessage)
 	}
-	buttons := transport.lastSentMessage.Components
-	if len(buttons) == 0 {
-		t.Fatalf("expected answer button on list entry message, got %+v", transport.lastSentMessage)
-	}
-	row, ok := buttons[0].(discordgo.ActionsRow)
-	if !ok || len(row.Components) != 1 {
-		t.Fatalf("expected one answer button row, got %+v", buttons)
-	}
-	button, ok := row.Components[0].(discordgo.Button)
-	if !ok {
-		t.Fatalf("expected button component, got %+v", row.Components[0])
-	}
-	if button.Label != "answer" || button.Style != discordgo.SecondaryButton {
-		t.Fatalf("expected gray answer button, got %+v", button)
+	if len(transport.lastSentMessage.Components) != 0 {
+		t.Fatalf("expected no components on list entry message, got %+v", transport.lastSentMessage.Components)
 	}
 }
 
@@ -120,7 +104,6 @@ func TestQuestionListArtifactPublisherSealsExistingEntryWithoutAppend(t *testing
 		ForumChannelID:    "forum-1",
 		PreferredThreadID: "questions-list-thread",
 		EntryMessageID:    "existing-entry",
-		OfficialPostID:    42,
 		QuestionEmbed:     buildOfficialQuestionEmbed("Default", 3, "What is your answer?", 1),
 	})
 	if err != nil {
@@ -145,7 +128,6 @@ func TestQuestionListArtifactPublisherRelocksAfterAppendFailure(t *testing.T) {
 
 	result, err := publisher.Publish(context.Background(), questionListArtifactPublishParams{
 		ForumChannelID: "forum-1",
-		OfficialPostID: 42,
 		QuestionEmbed:  buildOfficialQuestionEmbed("Default", 3, "What is your answer?", 1),
 	})
 	if err == nil {
@@ -175,7 +157,6 @@ func TestQuestionListArtifactPublisherReturnsJoinedAppendAndRelockErrors(t *test
 
 	_, err := publisher.Publish(context.Background(), questionListArtifactPublishParams{
 		ForumChannelID: "forum-1",
-		OfficialPostID: 42,
 		QuestionEmbed:  buildOfficialQuestionEmbed("Default", 3, "What is your answer?", 1),
 	})
 	if err == nil {

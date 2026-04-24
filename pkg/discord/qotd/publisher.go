@@ -11,11 +11,8 @@ import (
 )
 
 const (
-	answerButtonLabel    = "answer"
-	answerButtonCustomID = "qotd:answer:%d"
-
 	legacyOfficialIndexThreadName    = "questions list!"
-	legacyOfficialIndexThreadMessage = "you can send your answers to the questions through the embed here, by clicking on the 'answer' button!"
+	legacyOfficialIndexThreadMessage = "daily qotd prompts are archived here."
 	defaultThreadAutoArchiveMinutes  = 4320
 )
 
@@ -45,28 +42,6 @@ type PublishedOfficialPost struct {
 	AnswerChannelID            string
 	PublishedAt                time.Time
 	PostURL                    string
-}
-
-type UpsertAnswerMessageParams struct {
-	GuildID           string
-	OfficialPostID    int64
-	DeckName          string
-	PublishDateUTC    time.Time
-	AnswerChannelID   string
-	QuestionText      string
-	QuestionURL       string
-	AnswerText        string
-	UserID            string
-	UserDisplayName   string
-	UserAvatarURL     string
-	ExistingMessageID string
-}
-
-type UpsertedAnswerMessage struct {
-	ChannelID  string
-	MessageID  string
-	MessageURL string
-	Updated    bool
 }
 
 type ThreadState struct {
@@ -105,7 +80,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 	if result.StarterMessageID == "" {
 		message, err := session.ChannelMessageSendComplex(
 			normalized.ChannelID,
-			buildOfficialPostStarterMessage(questionEmbed, normalized.OfficialPostID),
+			buildOfficialPostStarterMessage(questionEmbed),
 		)
 		if err != nil {
 			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd starter message: %w", err)
@@ -165,66 +140,6 @@ func (post *PublishedOfficialPost) withPostURL(guildID, channelID string) *Publi
 		}
 	}
 	return post
-}
-
-func (p *Publisher) UpsertAnswerMessage(ctx context.Context, session *discordgo.Session, params UpsertAnswerMessageParams) (*UpsertedAnswerMessage, error) {
-	if session == nil {
-		return nil, fmt.Errorf("upsert qotd answer message: discord session is required")
-	}
-
-	normalized, err := normalizeUpsertAnswerMessageParams(params)
-	if err != nil {
-		return nil, fmt.Errorf("upsert qotd answer message: %w", err)
-	}
-
-	embed := buildAnswerEmbed(
-		normalized.DeckName,
-		normalized.PublishDateUTC,
-		normalized.QuestionText,
-		normalized.AnswerText,
-		normalized.UserID,
-		normalized.UserDisplayName,
-		normalized.UserAvatarURL,
-	)
-
-	messageID := normalized.ExistingMessageID
-	updated := false
-	if messageID != "" {
-		_, err = session.ChannelMessageEditComplex(&discordgo.MessageEdit{
-			ID:      messageID,
-			Channel: normalized.AnswerChannelID,
-			Embeds:  &[]*discordgo.MessageEmbed{embed},
-		})
-		if err == nil {
-			updated = true
-		}
-	}
-	if !updated {
-		message, createErr := session.ChannelMessageSendComplex(
-			normalized.AnswerChannelID,
-			&discordgo.MessageSend{
-				Embeds:          []*discordgo.MessageEmbed{embed},
-				AllowedMentions: &discordgo.MessageAllowedMentions{},
-			},
-		)
-		if createErr != nil {
-			if err != nil {
-				return nil, fmt.Errorf("update answer message: %w", err)
-			}
-			return nil, fmt.Errorf("create answer message: %w", createErr)
-		}
-		if message == nil || strings.TrimSpace(message.ID) == "" {
-			return nil, fmt.Errorf("create answer message: missing message id")
-		}
-		messageID = strings.TrimSpace(message.ID)
-	}
-
-	return &UpsertedAnswerMessage{
-		ChannelID:  normalized.AnswerChannelID,
-		MessageID:  messageID,
-		MessageURL: BuildMessageJumpURL(normalized.GuildID, normalized.AnswerChannelID, messageID),
-		Updated:    updated,
-	}, nil
 }
 
 func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) error {
@@ -293,36 +208,6 @@ func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questio
 	}
 }
 
-func buildAnswerEmbed(deckName string, publishDateUTC time.Time, questionText, answerText, userID, userDisplayName, userAvatarURL string) *discordgo.MessageEmbed {
-	userDisplayName = strings.TrimSpace(userDisplayName)
-	if userDisplayName == "" {
-		userDisplayName = strings.TrimSpace(userID)
-	}
-	if userDisplayName == "" {
-		userDisplayName = "Member"
-	}
-
-	description := ""
-	if trimmedQuestion := strings.TrimSpace(questionText); trimmedQuestion != "" {
-		compactQuestion := strings.ReplaceAll(trimmedQuestion, "\n", " ")
-		description += fmt.Sprintf("*%s*\n\n", truncateEmbedText(compactQuestion, 256))
-	}
-	description += quoteEmbedText(answerText, 3600)
-
-	embed := &discordgo.MessageEmbed{
-		Author: &discordgo.MessageEmbedAuthor{
-			Name:    userDisplayName,
-			IconURL: strings.TrimSpace(userAvatarURL),
-		},
-		Description: description,
-		Color:       0x68C77C,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: buildAnswerFooter(deckName, publishDateUTC),
-		},
-	}
-	return embed
-}
-
 func buildOfficialPostName(publishDateUTC time.Time, queuePosition int64, explicitName string) string {
 	explicitName = strings.TrimSpace(explicitName)
 	if explicitName != "" {
@@ -337,25 +222,10 @@ func buildOfficialPostName(publishDateUTC time.Time, queuePosition int64, explic
 	return "question of the day"
 }
 
-func buildOfficialPostStarterMessage(embed *discordgo.MessageEmbed, officialPostID int64) *discordgo.MessageSend {
+func buildOfficialPostStarterMessage(embed *discordgo.MessageEmbed) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
 		Embeds:          []*discordgo.MessageEmbed{embed},
-		Components:      buildAnswerButtonComponents(officialPostID),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
-	}
-}
-
-func buildAnswerButtonComponents(officialPostID int64) []discordgo.MessageComponent {
-	return []discordgo.MessageComponent{
-		discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    answerButtonLabel,
-					Style:    discordgo.SecondaryButton,
-					CustomID: fmt.Sprintf(answerButtonCustomID, officialPostID),
-				},
-			},
-		},
 	}
 }
 
@@ -389,37 +259,6 @@ func normalizePublishOfficialPostParams(params PublishOfficialPostParams) (Publi
 		return PublishOfficialPostParams{}, fmt.Errorf("publish date is required")
 	case params.ChannelID == "":
 		return PublishOfficialPostParams{}, fmt.Errorf("channel id is required")
-	default:
-		return params, nil
-	}
-}
-
-func normalizeUpsertAnswerMessageParams(params UpsertAnswerMessageParams) (UpsertAnswerMessageParams, error) {
-	params.GuildID = strings.TrimSpace(params.GuildID)
-	params.DeckName = strings.TrimSpace(params.DeckName)
-	if !params.PublishDateUTC.IsZero() {
-		params.PublishDateUTC = params.PublishDateUTC.UTC()
-	}
-	params.AnswerChannelID = strings.TrimSpace(params.AnswerChannelID)
-	params.QuestionText = strings.TrimSpace(params.QuestionText)
-	params.QuestionURL = strings.TrimSpace(params.QuestionURL)
-	params.AnswerText = strings.TrimSpace(params.AnswerText)
-	params.UserID = strings.TrimSpace(params.UserID)
-	params.UserDisplayName = strings.TrimSpace(params.UserDisplayName)
-	params.UserAvatarURL = strings.TrimSpace(params.UserAvatarURL)
-	params.ExistingMessageID = strings.TrimSpace(params.ExistingMessageID)
-
-	switch {
-	case params.GuildID == "":
-		return UpsertAnswerMessageParams{}, fmt.Errorf("guild id is required")
-	case params.OfficialPostID <= 0:
-		return UpsertAnswerMessageParams{}, fmt.Errorf("official post id is required")
-	case params.AnswerChannelID == "":
-		return UpsertAnswerMessageParams{}, fmt.Errorf("answer channel id is required")
-	case params.AnswerText == "":
-		return UpsertAnswerMessageParams{}, fmt.Errorf("answer text is required")
-	case params.UserID == "":
-		return UpsertAnswerMessageParams{}, fmt.Errorf("user id is required")
 	default:
 		return params, nil
 	}
@@ -465,28 +304,6 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, queueP
 		return fmt.Sprintf("Deck: %s | Question #%d -- %d Cards Remaining", deckName, queuePosition, availableQuestions)
 	}
 	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
-}
-
-func buildAnswerFooter(deckName string, publishDateUTC time.Time) string {
-	deckName = strings.TrimSpace(deckName)
-	if !publishDateUTC.IsZero() {
-		publishDateUTC = publishDateUTC.UTC()
-	}
-	publishDateText := ""
-	if !publishDateUTC.IsZero() {
-		publishDateText = publishDateUTC.Format("2006-01-02")
-	}
-
-	switch {
-	case deckName != "" && publishDateText != "":
-		return fmt.Sprintf("%s | %s", deckName, publishDateText)
-	case deckName != "":
-		return deckName
-	case publishDateText != "":
-		return publishDateText
-	default:
-		return "Official QOTD"
-	}
 }
 
 func (p *Publisher) ensureLegacyOfficialIndexThread(ctx context.Context, session *discordgo.Session, parentChannelID, preferredThreadID string) (string, error) {

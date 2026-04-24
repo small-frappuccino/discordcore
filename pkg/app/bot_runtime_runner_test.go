@@ -1,22 +1,14 @@
 package app
 
 import (
-	"context"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-type noopAppAnswerSubmissionService struct{}
-
-func (noopAppAnswerSubmissionService) SubmitAnswer(context.Context, *discordgo.Session, discordqotd.SubmitAnswerParams) (*discordqotd.SubmitAnswerResult, error) {
-	return nil, nil
-}
-
-func TestInitializeBotRuntimeRegistersQOTDInteractionsWithoutCommands(t *testing.T) {
+func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.T) {
 	session, err := discordgo.New("Bot test-token")
 	if err != nil {
 		t.Fatalf("create discord session: %v", err)
@@ -52,27 +44,20 @@ func TestInitializeBotRuntimeRegistersQOTDInteractionsWithoutCommands(t *testing
 
 	origNewCommandHandlerForBot := newCommandHandlerForBot
 	origSetupCommandHandler := setupCommandHandler
-	origSetupQOTDInteractionHandler := setupQOTDInteractionHandler
 	defer func() {
 		newCommandHandlerForBot = origNewCommandHandlerForBot
 		setupCommandHandler = origSetupCommandHandler
-		setupQOTDInteractionHandler = origSetupQOTDInteractionHandler
 	}()
 
-	var created *commands.CommandHandler
+	var created bool
 	var setupCommandsCalls int
-	var setupQOTDCalls int
 
 	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *commands.CommandHandler {
-		created = commands.NewCommandHandlerForBot(session, configManager, botInstanceID, defaultBotInstanceID)
-		return created
+		created = true
+		return nil
 	}
 	setupCommandHandler = func(ch *commands.CommandHandler) error {
 		setupCommandsCalls++
-		return nil
-	}
-	setupQOTDInteractionHandler = func(ch *commands.CommandHandler) error {
-		setupQOTDCalls++
 		return nil
 	}
 
@@ -85,7 +70,6 @@ func TestInitializeBotRuntimeRegistersQOTDInteractionsWithoutCommands(t *testing
 		defaultBotInstanceID: "alice",
 		runtimeCount:         1,
 		configManager:        cfgMgr,
-		qotdReplyService:     noopAppAnswerSubmissionService{},
 	})
 	if err != nil {
 		t.Fatalf("initialize bot runtime: %v", err)
@@ -94,10 +78,10 @@ func TestInitializeBotRuntimeRegistersQOTDInteractionsWithoutCommands(t *testing
 	if setupCommandsCalls != 0 {
 		t.Fatalf("expected slash command setup to be skipped, got %d calls", setupCommandsCalls)
 	}
-	if setupQOTDCalls != 1 {
-		t.Fatalf("expected qotd interaction setup once, got %d calls", setupQOTDCalls)
+	if created {
+		t.Fatal("expected command handler creation to be skipped when commands are disabled")
 	}
-	if runtime.commandHandler == nil || runtime.commandHandler != created {
-		t.Fatal("expected qotd-only runtime to retain the created command handler for shutdown")
+	if runtime.commandHandler != nil {
+		t.Fatal("expected no command handler when commands are disabled")
 	}
 }

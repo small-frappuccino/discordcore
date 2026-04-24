@@ -65,7 +65,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 		},
 	})
 
-	gotJoin, ok, err := store.GetMemberJoin(guildID, userID)
+	gotJoin, ok, err := store.MemberJoin(context.Background(), guildID, userID)
 	if err != nil {
 		t.Fatalf("get member join: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		t.Fatalf("unexpected owner id: got=%q ok=%v want=%q", gotOwnerID, ok, ownerID)
 	}
 
-	gotBotSince, ok, err := store.GetBotSince(guildID)
+	gotBotSince, ok, err := store.BotSince(context.Background(), guildID)
 	if err != nil {
 		t.Fatalf("get bot since: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		t.Fatalf("unexpected persisted roles: got=%v", roles)
 	}
 
-	gotJoin, ok, err := store.GetMemberJoin(guildID, userID)
+	gotJoin, ok, err := store.MemberJoin(context.Background(), guildID, userID)
 	if err != nil {
 		t.Fatalf("get member join snapshot: %v", err)
 	}

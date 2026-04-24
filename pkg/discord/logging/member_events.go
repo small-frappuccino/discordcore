@@ -494,7 +494,7 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 			ok bool
 		}
 		res, err := runWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) (joinLookup, error) {
-			at, ok, err := mes.store.GetMemberJoinContext(runCtx, guildID, userID)
+			at, ok, err := mes.store.MemberJoin(runCtx, guildID, userID)
 			return joinLookup{at: at, ok: ok}, err
 		})
 		if err != nil {
