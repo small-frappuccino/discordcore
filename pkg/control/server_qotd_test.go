@@ -25,6 +25,17 @@ type qotdRouteResponse struct {
 	SetupResult *qotdSetupResultResponse `json:"result"`
 }
 
+type qotdPublishResultResponse struct {
+	PostURL      string                    `json:"post_url"`
+	OfficialPost *qotdOfficialPostResponse `json:"official_post"`
+}
+
+type qotdPublishRouteResponse struct {
+	Status string                    `json:"status"`
+	GuildID string                   `json:"guild_id"`
+	Result qotdPublishResultResponse `json:"result"`
+}
+
 type qotdCollectorRouteResponse struct {
 	Status          string                         `json:"status"`
 	GuildID         string                         `json:"guild_id"`
@@ -173,6 +184,16 @@ func decodeQOTDCollectorRouteResponse(t *testing.T, recBody string) qotdCollecto
 	return out
 }
 
+func decodeQOTDPublishRouteResponse(t *testing.T, recBody string) qotdPublishRouteResponse {
+	t.Helper()
+
+	var out qotdPublishRouteResponse
+	if err := json.Unmarshal([]byte(recBody), &out); err != nil {
+		t.Fatalf("decode qotd publish response: %v body=%q", err, recBody)
+	}
+	return out
+}
+
 func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	t.Parallel()
 
@@ -276,6 +297,58 @@ func TestQOTDRoutesSetupBootstrapsForumAndSettings(t *testing.T) {
 	}
 	if !deck.Enabled || deck.ChannelID != "channel-setup-1" {
 		t.Fatalf("expected setup to enable active deck and persist qotd channel, got %+v", deck)
+	}
+}
+
+func TestQOTDRoutesPublishNowReturnsThreadAndAnswerChannelTargets(t *testing.T) {
+	t.Parallel()
+
+	srv, service, _, _ := newQOTDControlTestServer(t)
+	handler := srv.httpServer.Handler
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", qotd.QuestionMutation{
+		Body:   "Publish route question",
+		Status: qotd.QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	publishRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/actions/publish-now", nil)
+	if publishRec.Code != 200 {
+		t.Fatalf("publish qotd status=%d body=%q", publishRec.Code, publishRec.Body.String())
+	}
+
+	publishResp := decodeQOTDPublishRouteResponse(t, publishRec.Body.String())
+	if publishResp.Result.OfficialPost == nil {
+		t.Fatalf("expected official post payload, got body=%q", publishRec.Body.String())
+	}
+	officialPost := publishResp.Result.OfficialPost
+	if officialPost.ThreadID == "" {
+		t.Fatalf("expected thread id in official post response, got %+v", officialPost)
+	}
+	if officialPost.ThreadURL != discordqotd.BuildThreadJumpURL("g1", officialPost.ThreadID) {
+		t.Fatalf("unexpected thread url in official post response: %+v", officialPost)
+	}
+	if officialPost.AnswerChannelID == "" {
+		t.Fatalf("expected answer channel id in official post response, got %+v", officialPost)
+	}
+	if officialPost.AnswerChannelURL != discordqotd.BuildChannelJumpURL("g1", officialPost.AnswerChannelID) {
+		t.Fatalf("unexpected answer channel url in official post response: %+v", officialPost)
+	}
+	if officialPost.PostURL == "" || publishResp.Result.PostURL != officialPost.PostURL {
+		t.Fatalf("expected publish result and official post to share post url, got result=%+v official=%+v", publishResp.Result, officialPost)
 	}
 }
 

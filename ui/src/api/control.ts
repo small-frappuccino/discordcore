@@ -141,6 +141,10 @@ export interface QOTDOfficialPost {
   answers_close_at: string;
   closed_at?: string;
   archived_at?: string;
+  thread_id?: string;
+  thread_url?: string;
+  answer_channel_id?: string;
+  answer_channel_url?: string;
   post_url?: string;
 }
 

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -34,6 +35,10 @@ type qotdOfficialPostResponse struct {
 	AnswersCloseAt    time.Time  `json:"answers_close_at"`
 	ClosedAt          *time.Time `json:"closed_at,omitempty"`
 	ArchivedAt        *time.Time `json:"archived_at,omitempty"`
+	ThreadID          string     `json:"thread_id,omitempty"`
+	ThreadURL         string     `json:"thread_url,omitempty"`
+	AnswerChannelID   string     `json:"answer_channel_id,omitempty"`
+	AnswerChannelURL  string     `json:"answer_channel_url,omitempty"`
 	PostURL           string     `json:"post_url,omitempty"`
 }
 
@@ -112,15 +117,16 @@ func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialP
 	if record == nil {
 		return nil
 	}
-	publishDate := record.PublishDateUTC.UTC()
+	resolved := resolveQOTDOfficialPost(guildID, record)
+	publishDate := resolved.PublishDateUTC.UTC()
 	now := time.Now().UTC()
-	state := strings.TrimSpace(record.State)
-	if record.ArchivedAt != nil && !record.ArchivedAt.IsZero() {
+	state := strings.TrimSpace(resolved.State)
+	if resolved.ArchivedAt != nil && !resolved.ArchivedAt.IsZero() {
 		state = string(qotd.OfficialPostStateArchived)
 	} else {
 		switch state {
 		case "", string(qotd.OfficialPostStateCurrent), string(qotd.OfficialPostStatePrevious):
-			state = string(qotd.StateWithinWindow(record.GraceUntil, record.ArchiveAt, now))
+			state = string(qotd.StateWithinWindow(resolved.GraceUntil, resolved.ArchiveAt, now))
 		case string(qotd.OfficialPostStateProvisioning):
 			// preserve provisioning until the publish finishes.
 		case string(qotd.OfficialPostStateArchiving),
@@ -129,22 +135,30 @@ func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialP
 			string(qotd.OfficialPostStateArchived):
 			// preserve explicitly managed non-live states.
 		default:
-			state = string(qotd.StateWithinWindow(record.GraceUntil, record.ArchiveAt, now))
+			state = string(qotd.StateWithinWindow(resolved.GraceUntil, resolved.ArchiveAt, now))
 		}
 	}
+	answerChannelID := strings.TrimSpace(resolved.AnswerChannelID)
+	if answerChannelID == "" {
+		answerChannelID = strings.TrimSpace(resolved.DiscordThreadID)
+	}
 	return &qotdOfficialPostResponse{
-		DeckID:            strings.TrimSpace(record.DeckID),
-		DeckName:          strings.TrimSpace(record.DeckNameSnapshot),
-		PublishMode:       strings.TrimSpace(record.PublishMode),
+		DeckID:            strings.TrimSpace(resolved.DeckID),
+		DeckName:          strings.TrimSpace(resolved.DeckNameSnapshot),
+		PublishMode:       strings.TrimSpace(resolved.PublishMode),
 		PublishDateUTC:    publishDate,
 		State:             strings.TrimSpace(state),
-		QuestionText:      record.QuestionTextSnapshot,
-		PublishedAt:       record.PublishedAt,
-		BecomesPreviousAt: record.GraceUntil.UTC(),
-		AnswersCloseAt:    record.ArchiveAt.UTC(),
-		ClosedAt:          record.ClosedAt,
-		ArchivedAt:        record.ArchivedAt,
-		PostURL:           buildQOTDOfficialPostJumpURL(guildID, record),
+		QuestionText:      resolved.QuestionTextSnapshot,
+		PublishedAt:       resolved.PublishedAt,
+		BecomesPreviousAt: resolved.GraceUntil.UTC(),
+		AnswersCloseAt:    resolved.ArchiveAt.UTC(),
+		ClosedAt:          resolved.ClosedAt,
+		ArchivedAt:        resolved.ArchivedAt,
+		ThreadID:          strings.TrimSpace(resolved.DiscordThreadID),
+		ThreadURL:         buildQOTDOfficialThreadJumpURL(resolved),
+		AnswerChannelID:   answerChannelID,
+		AnswerChannelURL:  buildQOTDAnswerChannelJumpURL(resolved, answerChannelID),
+		PostURL:           qotd.OfficialPostJumpURL(resolved),
 	}
 }
 
@@ -232,9 +246,22 @@ func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPo
 	if record == nil {
 		return ""
 	}
+	resolved := resolveQOTDOfficialPost(guildID, record)
+	return qotd.OfficialPostJumpURL(resolved)
+}
+
+func resolveQOTDOfficialPost(guildID string, record *storage.QOTDOfficialPostRecord) storage.QOTDOfficialPostRecord {
 	resolved := *record
 	if strings.TrimSpace(resolved.GuildID) == "" {
 		resolved.GuildID = strings.TrimSpace(guildID)
 	}
-	return qotd.OfficialPostJumpURL(resolved)
+	return resolved
+}
+
+func buildQOTDOfficialThreadJumpURL(record storage.QOTDOfficialPostRecord) string {
+	return discordqotd.BuildThreadJumpURL(record.GuildID, record.DiscordThreadID)
+}
+
+func buildQOTDAnswerChannelJumpURL(record storage.QOTDOfficialPostRecord, answerChannelID string) string {
+	return discordqotd.BuildChannelJumpURL(record.GuildID, answerChannelID)
 }

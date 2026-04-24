@@ -329,6 +329,62 @@ describe("ControlApiClient feature routes", () => {
               ],
               current_publish_date_utc: "2026-04-03T00:00:00Z",
               published_for_current_slot: false,
+              current_post: {
+                deck_id: "default",
+                deck_name: "Default",
+                publish_mode: "scheduled",
+                publish_date_utc: "2026-04-03T00:00:00Z",
+                state: "current",
+                question_text: "What should we build next?",
+                published_at: "2026-04-03T00:00:00Z",
+                becomes_previous_at: "2026-04-04T00:00:00Z",
+                answers_close_at: "2026-04-05T00:00:00Z",
+                thread_id: "thread-20260403",
+                thread_url: "https://discord.com/channels/guild-1/thread-20260403",
+                answer_channel_id: "thread-20260403",
+                answer_channel_url:
+                  "https://discord.com/channels/guild-1/thread-20260403",
+                post_url:
+                  "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
+              },
+            },
+          });
+        }
+
+        if (url.endsWith("/qotd/actions/publish-now")) {
+          return jsonResponse({
+            status: "ok",
+            guild_id: "guild-1",
+            result: {
+              post_url:
+                "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
+              question: {
+                id: 1,
+                deck_id: "default",
+                body: "What should we build next?",
+                status: "used",
+                queue_position: 1,
+                created_at: "2026-04-03T00:00:00Z",
+                updated_at: "2026-04-03T00:00:00Z",
+              },
+              official_post: {
+                deck_id: "default",
+                deck_name: "Default",
+                publish_mode: "manual",
+                publish_date_utc: "2026-04-03T00:00:00Z",
+                state: "current",
+                question_text: "What should we build next?",
+                published_at: "2026-04-03T00:00:00Z",
+                becomes_previous_at: "2026-04-04T00:00:00Z",
+                answers_close_at: "2026-04-05T00:00:00Z",
+                thread_id: "thread-20260403",
+                thread_url: "https://discord.com/channels/guild-1/thread-20260403",
+                answer_channel_id: "thread-20260403",
+                answer_channel_url:
+                  "https://discord.com/channels/guild-1/thread-20260403",
+                post_url:
+                  "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
+              },
             },
           });
         }
@@ -411,10 +467,21 @@ describe("ControlApiClient feature routes", () => {
     });
 
     const summary = await client.getQOTDSummary("guild-1");
+    const publish = await client.publishQOTDNow("guild-1");
     const setup = await client.setupQOTD("guild-1", { deck_id: "default" });
     await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
     expect(summary.summary.settings.active_deck_id).toBe("default");
+    expect(summary.summary.current_post?.thread_id).toBe("thread-20260403");
+    expect(summary.summary.current_post?.answer_channel_url).toBe(
+      "https://discord.com/channels/guild-1/thread-20260403",
+    );
+    expect(publish.result.official_post.thread_url).toBe(
+      "https://discord.com/channels/guild-1/thread-20260403",
+    );
+    expect(publish.result.official_post.answer_channel_id).toBe(
+      "thread-20260403",
+    );
     expect(setup.result.channel_id).toBe("channel-setup-1");
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -427,7 +494,7 @@ describe("ControlApiClient feature routes", () => {
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       "/v1/guilds/guild-1/qotd/actions/setup",
       {
         method: "POST",
@@ -440,8 +507,19 @@ describe("ControlApiClient feature routes", () => {
         }),
       },
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/guilds/guild-1/qotd/actions/publish-now",
+      {
+        method: "POST",
+        headers: expect.objectContaining({
+          get: expect.any(Function),
+        }),
+        credentials: "include",
+        body: undefined,
+      },
+    );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       "/v1/guilds/guild-1/qotd/questions/reorder",
       {
         method: "POST",
