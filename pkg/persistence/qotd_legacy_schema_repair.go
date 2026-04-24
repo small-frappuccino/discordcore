@@ -22,9 +22,9 @@ func repairQOTDLegacySchema(ctx context.Context, tx *sql.Tx) error {
 		return nil
 	}
 
-	hasForumChannelID, err := columnExists(ctx, tx, "qotd_official_posts", "forum_channel_id")
+	hasLegacyChannelColumn, err := columnExists(ctx, tx, "qotd_official_posts", "forum_channel_id")
 	if err != nil {
-		return fmt.Errorf("repair qotd legacy schema: check official posts forum channel column: %w", err)
+		return fmt.Errorf("repair qotd legacy schema: check official posts legacy channel column: %w", err)
 	}
 	hasChannelID, err := columnExists(ctx, tx, "qotd_official_posts", "channel_id")
 	if err != nil {
@@ -46,7 +46,7 @@ func repairQOTDLegacySchema(ctx context.Context, tx *sql.Tx) error {
 	if !hasChannelID {
 		channelColumn = "forum_channel_id"
 	}
-	if (hasForumChannelID || hasChannelID) && hasDiscordThreadID && hasAnswerChannelID {
+	if (hasLegacyChannelColumn || hasChannelID) && hasDiscordThreadID && hasAnswerChannelID {
 		if hasResponseChannelSnapshot {
 			if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
 UPDATE qotd_official_posts
@@ -73,9 +73,9 @@ SET answer_channel_id = COALESCE(
 		}
 	}
 
-	if hasForumChannelID && !hasChannelID {
+	if hasLegacyChannelColumn && !hasChannelID {
 		if _, err := tx.ExecContext(ctx, `ALTER TABLE qotd_official_posts RENAME COLUMN forum_channel_id TO channel_id`); err != nil {
-			return fmt.Errorf("repair qotd legacy schema: rename official posts forum channel column: %w", err)
+			return fmt.Errorf("repair qotd legacy schema: rename official posts legacy channel column: %w", err)
 		}
 		hasChannelID = true
 	}

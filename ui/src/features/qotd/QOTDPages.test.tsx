@@ -80,6 +80,7 @@ const qotdMock = {
   createQuestions: vi.fn(),
   deleteQuestion: vi.fn(),
   publishNow: vi.fn(),
+  reconcilePosts: vi.fn(),
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
@@ -170,6 +171,7 @@ describe("QOTD UI", () => {
     qotdMock.summary = createQOTDSummary();
     qotdMock.workspaceState = "ready";
     qotdMock.createQuestions.mockReset().mockResolvedValue(true);
+    qotdMock.reconcilePosts.mockReset().mockResolvedValue(undefined);
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
     qotdMock.setupChannel.mockReset().mockResolvedValue(undefined);
     qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
@@ -264,11 +266,6 @@ describe("QOTD UI", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Staff roles", level: 2 }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "Choose the forum and tags used by the daily publish flow.",
-      ),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("1 roles")).not.toBeInTheDocument();
     expect(
@@ -574,6 +571,38 @@ describe("QOTD UI", () => {
     );
     expect(within(view.container).getAllByText(/Turns previous/)).not.toHaveLength(0);
     expect(within(view.container).getAllByText(/Answers close/)).not.toHaveLength(0);
+  });
+
+  it("exposes reconcile when an official post is missing or failed in Discord", async () => {
+    const user = userEvent.setup();
+    qotdMock.summary = createQOTDSummary({
+      current_post: createOfficialPost({
+        state: "missing_discord",
+        thread_id: "thread-missing",
+        thread_url: "https://discord.com/channels/guild-1/thread-missing",
+        answer_channel_id: "thread-missing",
+        answer_channel_url:
+          "https://discord.com/channels/guild-1/thread-missing",
+      }),
+    });
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDQuestionsPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      within(view.container).getByText(/need a Discord reconcile/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(view.container).getByRole("button", {
+        name: "Reconcile Discord state",
+      }),
+    );
+
+    expect(qotdMock.reconcilePosts).toHaveBeenCalledTimes(1);
   });
 
   it("imports questions from a text file into the selected deck", async () => {

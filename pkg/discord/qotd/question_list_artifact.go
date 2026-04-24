@@ -154,8 +154,8 @@ func normalizeQuestionListArtifactPublishParams(params questionListArtifactPubli
 
 func buildQuestionListEntryMessage(embed *discordgo.MessageEmbed, officialPostID int64) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
-		Embeds: []*discordgo.MessageEmbed{embed},
-		Components: buildAnswerButtonComponents(officialPostID),
+		Embeds:          []*discordgo.MessageEmbed{embed},
+		Components:      buildAnswerButtonComponents(officialPostID),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	}
 }
@@ -169,7 +169,7 @@ func (t discordQuestionListArtifactTransport) EnsureThread(ctx context.Context, 
 	if t.publisher == nil {
 		return "", fmt.Errorf("ensure qotd questions list thread: publisher is required")
 	}
-	return t.publisher.ensureOfficialQuestionListThread(ctx, t.session, forumChannelID, preferredThreadID)
+	return t.publisher.ensureLegacyOfficialIndexThread(ctx, t.session, forumChannelID, preferredThreadID)
 }
 
 func (t discordQuestionListArtifactTransport) SetThreadState(ctx context.Context, threadID string, state ThreadState) error {

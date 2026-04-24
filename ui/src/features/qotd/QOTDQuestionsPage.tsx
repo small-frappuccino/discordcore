@@ -17,18 +17,20 @@ import {
   GroupedSettingsSubrow,
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
-import { useQOTD } from "./QOTDContext";
+import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
 const editableStatuses: QOTDQuestionStatus[] = ["draft", "ready", "disabled"];
 
 export function QOTDQuestionsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
   const {
+    busyLabel,
     createQuestion,
     createQuestions,
     deckSummaries,
     deleteQuestion,
     questions,
+    reconcilePosts,
     reorderQuestions,
     selectDeck,
     selectedDeckID,
@@ -48,6 +50,8 @@ export function QOTDQuestionsPage() {
     availableDecks.find((deck) => deck.id === settings.active_deck_id) ?? null;
   const hasOperationalPosts =
     summary?.current_post !== undefined || summary?.previous_post !== undefined;
+  const needsReconcile = hasOfficialPostReconcileIssue(summary);
+  const reconciling = busyLabel === QOTD_BUSY_LABELS.reconcilePosts;
   const orderedQuestions = [...questions].sort((left, right) => {
     if (left.queue_position !== right.queue_position) {
       return left.queue_position - right.queue_position;
@@ -260,8 +264,30 @@ export function QOTDQuestionsPage() {
                       <span>Active deck {activePublishingDeck.name}</span>
                     ) : null}
                   </div>
+
+                  {canEditSelectedGuild && needsReconcile ? (
+                    <div className="inline-actions">
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        disabled={reconciling}
+                        onClick={() => void reconcilePosts()}
+                      >
+                        {reconciling ? "Reconciling..." : "Reconcile Discord state"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </GroupedSettingsSubrow>
+
+              {needsReconcile ? (
+                <GroupedSettingsSubrow>
+                  <GroupedSettingsInlineMessage
+                    message="One or more official QOTD posts need a Discord reconcile. Refresh the stored embed and thread state before trusting these links."
+                    tone="error"
+                  />
+                </GroupedSettingsSubrow>
+              ) : null}
 
               <GroupedSettingsSubrow>
                 {hasOperationalPosts ? (
@@ -829,6 +855,26 @@ function formatQOTDDateTime(value: string | undefined, fallback: string) {
     return fallback;
   }
   return formatTimestamp(parsed, fallback);
+}
+
+function hasOfficialPostReconcileIssue(summary: {
+  current_post?: QOTDOfficialPost;
+  previous_post?: QOTDOfficialPost;
+} | null) {
+  if (!summary) {
+    return false;
+  }
+  return [summary.current_post, summary.previous_post].some((post) =>
+    postNeedsReconcile(post),
+  );
+}
+
+function postNeedsReconcile(post?: QOTDOfficialPost) {
+  if (!post) {
+    return false;
+  }
+  const state = post.state.trim();
+  return state === "failed" || state === "missing_discord" || state === "provisioning";
 }
 
 function buildQuestionMeta(question: QOTDQuestion, decks: QOTDDeck[]) {

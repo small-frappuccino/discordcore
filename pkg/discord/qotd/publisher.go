@@ -14,9 +14,9 @@ const (
 	answerButtonLabel    = "answer"
 	answerButtonCustomID = "qotd:answer:%d"
 
-	officialQuestionListThreadName    = "questions list!"
-	officialQuestionListThreadMessage = "you can send your answers to the questions through the embed here, by clicking on the 'answer' button!"
-	defaultThreadAutoArchiveMinutes   = 4320
+	legacyOfficialIndexThreadName    = "questions list!"
+	legacyOfficialIndexThreadMessage = "you can send your answers to the questions through the embed here, by clicking on the 'answer' button!"
+	defaultThreadAutoArchiveMinutes  = 4320
 )
 
 type PublishOfficialPostParams struct {
@@ -489,25 +489,25 @@ func buildAnswerFooter(deckName string, publishDateUTC time.Time) string {
 	}
 }
 
-func (p *Publisher) ensureOfficialQuestionListThread(ctx context.Context, session *discordgo.Session, forumChannelID, preferredThreadID string) (string, error) {
-	thread, err := resolveForumThreadByID(ctx, session, forumChannelID, preferredThreadID)
+func (p *Publisher) ensureLegacyOfficialIndexThread(ctx context.Context, session *discordgo.Session, parentChannelID, preferredThreadID string) (string, error) {
+	thread, err := resolveThreadByParentChannelID(ctx, session, parentChannelID, preferredThreadID)
 	if err != nil {
 		return "", err
 	}
 	if thread == nil {
 		thread, err = session.ForumThreadStartComplex(
-			forumChannelID,
+			parentChannelID,
 			&discordgo.ThreadStart{
-				Name:                officialQuestionListThreadName,
+				Name:                legacyOfficialIndexThreadName,
 				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
 			},
 			&discordgo.MessageSend{
-				Content:         officialQuestionListThreadMessage,
+				Content:         legacyOfficialIndexThreadMessage,
 				AllowedMentions: &discordgo.MessageAllowedMentions{},
 			},
 		)
 		if err != nil {
-			return "", fmt.Errorf("create qotd questions list thread: %w", err)
+			return "", fmt.Errorf("create qotd legacy index thread: %w", err)
 		}
 	}
 
@@ -516,22 +516,22 @@ func (p *Publisher) ensureOfficialQuestionListThread(ctx context.Context, sessio
 		threadID = strings.TrimSpace(thread.ID)
 	}
 	if threadID == "" {
-		return "", fmt.Errorf("resolve qotd questions list thread: missing thread id")
+		return "", fmt.Errorf("resolve qotd legacy index thread: missing thread id")
 	}
 	return threadID, nil
 }
 
-func resolveForumThreadByID(ctx context.Context, session *discordgo.Session, forumChannelID, threadID string) (*discordgo.Channel, error) {
-	forumChannelID = strings.TrimSpace(forumChannelID)
+func resolveThreadByParentChannelID(ctx context.Context, session *discordgo.Session, parentChannelID, threadID string) (*discordgo.Channel, error) {
+	parentChannelID = strings.TrimSpace(parentChannelID)
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
 		return nil, nil
 	}
-	if forumChannelID == "" {
-		return nil, fmt.Errorf("resolve qotd forum thread by id: forum channel id is required")
+	if parentChannelID == "" {
+		return nil, fmt.Errorf("resolve qotd legacy index thread by id: parent channel id is required")
 	}
 	if session == nil {
-		return nil, fmt.Errorf("resolve qotd forum thread by id: discord session is required")
+		return nil, fmt.Errorf("resolve qotd legacy index thread by id: discord session is required")
 	}
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
@@ -543,9 +543,9 @@ func resolveForumThreadByID(ctx context.Context, session *discordgo.Session, for
 		if isNotFoundRESTError(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("resolve qotd forum thread by id: %w", err)
+		return nil, fmt.Errorf("resolve qotd legacy index thread by id: %w", err)
 	}
-	if thread == nil || strings.TrimSpace(thread.ParentID) != forumChannelID {
+	if thread == nil || strings.TrimSpace(thread.ParentID) != parentChannelID {
 		return nil, nil
 	}
 	return thread, nil

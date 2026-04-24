@@ -30,6 +30,7 @@ type WorkspaceState =
 
 export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
+  reconcilePosts: "Reconciling QOTD with Discord...",
   saveSettings: "Saving QOTD settings...",
   setupChannel: "Preparing QOTD channel...",
   createQuestion: "Creating question...",
@@ -56,6 +57,7 @@ interface QOTDContextValue {
   createQuestions: (payloads: QOTDQuestionMutation[]) => Promise<boolean>;
   deleteQuestion: (questionId: number) => Promise<void>;
   publishNow: () => Promise<void>;
+  reconcilePosts: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<QOTDConfig | null>;
@@ -471,6 +473,34 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function reconcilePosts() {
+    if (!canEditSelectedGuild || normalizedGuildID === "") {
+      return;
+    }
+
+    setBusyLabel(QOTD_BUSY_LABELS.reconcilePosts);
+    try {
+      const response = await client.reconcileQOTD(normalizedGuildID);
+      const nextSettings = normalizeQOTDSettings(response.summary.settings);
+      const nextDeckID = chooseDeckID(selectedDeckRef.current, nextSettings);
+      setSettings(nextSettings);
+      setSummary(normalizeQOTDSummary(response.summary, nextSettings));
+      setSelectedDeckID(nextDeckID);
+      setHasLoadedAttempt(true);
+      setNotice({
+        tone: "success",
+        message: "QOTD Discord state reconciled.",
+      });
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: formatError(error),
+      });
+    } finally {
+      setBusyLabel("");
+    }
+  }
+
   async function setupChannel(deckId = "") {
     if (!canEditSelectedGuild || normalizedGuildID === "") {
       return;
@@ -547,6 +577,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         createQuestions,
         deleteQuestion,
         publishNow,
+        reconcilePosts,
         refreshWorkspace,
         reorderQuestions,
         saveSettings,
