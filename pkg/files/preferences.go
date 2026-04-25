@@ -55,7 +55,7 @@ func (mgr *ConfigManager) LoadConfig() error {
 	orderMigrated := normalizeAutoAssignmentRoleOrder(mgr.config)
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
 		mgr.mu.Unlock()
-		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
+		return wrapValidationError(validationErr)
 	}
 	mgr.publishSnapshotLocked()
 	mgr.mu.Unlock()
@@ -91,7 +91,7 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 		return fmt.Errorf("config store is not configured")
 	}
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
-		return fmt.Errorf("%s: %w", ErrValidationFailed, validationErr)
+		return wrapValidationError(validationErr)
 	}
 
 	if err := mgr.store.Save(mgr.config); err != nil {

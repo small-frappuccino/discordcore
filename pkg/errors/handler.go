@@ -2,7 +2,9 @@ package errors
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -69,6 +71,34 @@ func (e ServiceError) Error() string {
 
 func (e ServiceError) Unwrap() error {
 	return e.Cause
+}
+
+type validationFieldError interface {
+	ValidationField() string
+}
+
+type configPathError interface {
+	ConfigErrorPath() string
+}
+
+type cacheKeyError interface {
+	CacheErrorKey() string
+}
+
+type discordCodeError interface {
+	DiscordErrorCode() int
+}
+
+type commandCodeError interface {
+	CommandErrorCode() string
+}
+
+type timeoutError interface {
+	Timeout() bool
+}
+
+type temporaryError interface {
+	Temporary() bool
 }
 
 // ErrorHandler provides centralized error handling for the entire system
@@ -250,13 +280,12 @@ func (eh *ErrorHandler) HandleDiscordError(ctx context.Context, operation string
 
 // normalizeError converts any error into a ServiceError
 func (eh *ErrorHandler) normalizeError(err error) *ServiceError {
-	if serviceErr, ok := err.(*ServiceError); ok {
+	if serviceErr := unwrapServiceError(err); serviceErr != nil {
 		return serviceErr
 	}
 
-	// Try to categorize based on error type and message
 	category := eh.categorizeError(err)
-	severity := eh.getSeverityForCategory(category)
+	severity := eh.severityForError(err, category)
 
 	return &ServiceError{
 		Category:    category,
@@ -267,27 +296,24 @@ func (eh *ErrorHandler) normalizeError(err error) *ServiceError {
 		Cause:       err,
 		Timestamp:   time.Time{},
 		Recoverable: eh.isErrorRecoverable(err),
-		Actions:     eh.getDefaultActions(category),
+		Actions:     eh.actionsForError(err, category),
 		Context:     make(map[string]interface{}),
 	}
 }
 
-// categorizeError attempts to categorize an error based on its type and message
 func (eh *ErrorHandler) categorizeError(err error) ErrorCategory {
-	errStr := strings.ToLower(err.Error())
-
 	switch {
-	case strings.Contains(errStr, "discord") || strings.Contains(errStr, "gateway"):
+	case isDiscordError(err):
 		return CategoryDiscord
-	case strings.Contains(errStr, "cache") || strings.Contains(errStr, "key not found"):
+	case isCacheError(err):
 		return CategoryCache
-	case strings.Contains(errStr, "config") || strings.Contains(errStr, "guild"):
+	case isConfigError(err):
 		return CategoryConfig
-	case strings.Contains(errStr, "command") || strings.Contains(errStr, "interaction"):
+	case isCommandError(err):
 		return CategoryCommand
-	case strings.Contains(errStr, "network") || strings.Contains(errStr, "connection") || strings.Contains(errStr, "timeout"):
+	case isNetworkError(err):
 		return CategoryNetwork
-	case strings.Contains(errStr, "validation") || strings.Contains(errStr, "invalid"):
+	case isValidationError(err):
 		return CategoryValidation
 	default:
 		return CategoryInternal
@@ -336,23 +362,117 @@ func (eh *ErrorHandler) notifyError(ctx context.Context, err *ServiceError) {
 func (eh *ErrorHandler) isDiscordErrorRecoverable(err error) bool {
 	if restErr, ok := err.(*discordgo.RESTError); ok {
 		code := restErr.Message.Code
-		// Rate limits, server errors, and temporary issues are recoverable
-		return code == 429 || (code >= 500 && code < 600) || code == 502 || code == 503 || code == 504
+		return eh.isDiscordCodeRecoverable(code)
 	}
 	return true // Default to recoverable for unknown Discord errors
 }
 
 func (eh *ErrorHandler) isErrorRecoverable(err error) bool {
-	// Default recovery logic based on error patterns
-	errStr := strings.ToLower(err.Error())
-	nonRecoverablePatterns := []string{"permission denied", "unauthorized", "not found", "invalid token"}
-
-	for _, pattern := range nonRecoverablePatterns {
-		if strings.Contains(errStr, pattern) {
-			return false
-		}
+	if serviceErr := unwrapServiceError(err); serviceErr != nil {
+		return serviceErr.Recoverable
 	}
-	return true
+	if stderrors.Is(err, context.Canceled) {
+		return false
+	}
+	if stderrors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	if stderrors.Is(err, fs.ErrPermission) || stderrors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+	if code, ok := discordCode(err); ok {
+		return eh.isDiscordCodeRecoverable(code)
+	}
+	if isTimeout(err) || isTemporary(err) {
+		return true
+	}
+
+	switch eh.categorizeError(err) {
+	case CategoryValidation, CategoryConfig, CategoryCommand:
+		return false
+	default:
+		return true
+	}
+}
+
+func unwrapServiceError(err error) *ServiceError {
+	var serviceErr *ServiceError
+	if stderrors.As(err, &serviceErr) && serviceErr != nil {
+		return serviceErr
+	}
+	return nil
+}
+
+func isValidationError(err error) bool {
+	var validationErr validationFieldError
+	return stderrors.As(err, &validationErr)
+}
+
+func isConfigError(err error) bool {
+	var configErr configPathError
+	return stderrors.As(err, &configErr)
+}
+
+func isCacheError(err error) bool {
+	var cacheErr cacheKeyError
+	return stderrors.As(err, &cacheErr)
+}
+
+func isCommandError(err error) bool {
+	var commandErr commandCodeError
+	return stderrors.As(err, &commandErr)
+}
+
+func isDiscordError(err error) bool {
+	var restErr *discordgo.RESTError
+	if stderrors.As(err, &restErr) {
+		return true
+	}
+	_, ok := discordCode(err)
+	return ok
+}
+
+func isNetworkError(err error) bool {
+	return stderrors.Is(err, context.Canceled) ||
+		stderrors.Is(err, context.DeadlineExceeded) ||
+		isTimeout(err) ||
+		isTemporary(err)
+}
+
+func discordCode(err error) (int, bool) {
+	var discordErr discordCodeError
+	if !stderrors.As(err, &discordErr) {
+		return 0, false
+	}
+	return discordErr.DiscordErrorCode(), true
+}
+
+func isTimeout(err error) bool {
+	var timeoutErr timeoutError
+	return stderrors.As(err, &timeoutErr) && timeoutErr.Timeout()
+}
+
+func isTemporary(err error) bool {
+	var temporaryErr temporaryError
+	return stderrors.As(err, &temporaryErr) && temporaryErr.Temporary()
+}
+
+func (eh *ErrorHandler) severityForError(err error, category ErrorCategory) ErrorSeverity {
+	if code, ok := discordCode(err); ok {
+		return eh.getDiscordErrorSeverity(code)
+	}
+	return eh.getSeverityForCategory(category)
+}
+
+func (eh *ErrorHandler) actionsForError(err error, category ErrorCategory) []ErrorAction {
+	if code, ok := discordCode(err); ok {
+		return eh.getDiscordErrorActions(code)
+	}
+	return eh.getDefaultActions(category)
+}
+
+func (eh *ErrorHandler) isDiscordCodeRecoverable(code int) bool {
+	return code == 429 || (code >= 500 && code < 600) || code == 502 || code == 503 || code == 504
 }
 
 func (eh *ErrorHandler) getDiscordErrorSeverity(code int) ErrorSeverity {

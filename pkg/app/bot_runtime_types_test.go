@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -238,6 +239,29 @@ func TestResolveBotInstancesRejectsMissingRequiredToken(t *testing.T) {
 	}
 	if got := err.Error(); got != "ALICE_TOKEN not set in environment or .env file" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveBotInstancesReturnsSentinelWhenNoOptionalTokensAreConfigured(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("ALICE_TOKEN", "")
+	t.Setenv("YUZUHA_TOKEN", "")
+
+	_, _, err := resolveBotInstances("", RunOptions{
+		BotCatalog: []BotInstanceDefinition{
+			{ID: "alice", TokenEnv: "ALICE_TOKEN", Optional: true},
+			{ID: "yuzuha", TokenEnv: "YUZUHA_TOKEN", Optional: true},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected missing optional token set to fail")
+	}
+	if !errors.Is(err, ErrNoBotTokensConfigured) {
+		t.Fatalf("expected ErrNoBotTokensConfigured, got %v", err)
+	}
+	if got := err.Error(); got != ErrNoBotTokensConfigured.Error() {
+		t.Fatalf("unexpected error message: got %q want %q", got, ErrNoBotTokensConfigured.Error())
 	}
 }
 

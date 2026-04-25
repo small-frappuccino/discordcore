@@ -115,7 +115,7 @@ func TestRunExplainsMissingKnownTokens(t *testing.T) {
 
 	orig := runDiscordCore
 	runDiscordCore = func(name, tokenEnv string, opts discordcoreapp.RunOptions) error {
-		return errors.New("no bot instances have a configured token")
+		return discordcoreapp.ErrNoBotTokensConfigured
 	}
 	t.Cleanup(func() { runDiscordCore = orig })
 

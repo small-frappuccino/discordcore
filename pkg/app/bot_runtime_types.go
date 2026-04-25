@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,6 +18,8 @@ import (
 )
 
 const DefaultBotInstanceID = "default"
+
+var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
 // BotInstanceDefinition describes one Discord bot instance managed by the host
 // runtime. Tokens remain host-owned and are referenced by environment variable.
@@ -104,7 +107,7 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 	}
 
 	if len(resolved) == 0 {
-		return nil, "", fmt.Errorf("no bot instances have a configured token")
+		return nil, "", ErrNoBotTokensConfigured
 	}
 	if defaultBotInstanceID == "" && len(resolved) > 0 {
 		defaultBotInstanceID = resolved[0].ID

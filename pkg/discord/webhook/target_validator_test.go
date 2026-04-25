@@ -144,3 +144,28 @@ func TestValidateMessageTarget(t *testing.T) {
 		})
 	}
 }
+
+func TestWrapTargetValidationErrorClassifiesDiscordgoRateLimitError(t *testing.T) {
+	t.Parallel()
+
+	err := wrapTargetValidationError("message lookup", &discordgo.RateLimitError{
+		RateLimit: &discordgo.RateLimit{
+			TooManyRequests: &discordgo.TooManyRequests{RetryAfter: time.Second},
+			URL:             "/webhooks/123/token/messages/456",
+		},
+	})
+
+	var validationErr *TargetValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("expected TargetValidationError, got %T (%v)", err, err)
+	}
+	if validationErr.Class != TargetValidationClassRateLimited {
+		t.Fatalf("unexpected class: got %q want %q", validationErr.Class, TargetValidationClassRateLimited)
+	}
+	if validationErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("unexpected status code: got %d want %d", validationErr.StatusCode, http.StatusTooManyRequests)
+	}
+	if !validationErr.Temporary {
+		t.Fatalf("expected temporary rate-limit classification")
+	}
+}

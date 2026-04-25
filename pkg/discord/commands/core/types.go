@@ -176,6 +176,13 @@ type CommandError struct {
 	Code      string
 }
 
+func (e *CommandError) CommandErrorCode() string {
+	if e == nil {
+		return ""
+	}
+	return e.Code
+}
+
 func (e *CommandError) Error() string {
 	return e.Message
 }
@@ -192,6 +199,13 @@ func NewCommandError(message string, ephemeral bool) *CommandError {
 type ValidationError struct {
 	Field   string
 	Message string
+}
+
+func (e *ValidationError) ValidationField() string {
+	if e == nil {
+		return ""
+	}
+	return e.Field
 }
 
 func (e *ValidationError) Error() string {

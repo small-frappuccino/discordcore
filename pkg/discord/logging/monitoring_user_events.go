@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -521,7 +523,7 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 
 		if ms.adapters != nil {
 			if err := ms.adapters.EnqueueProcessAvatarChange(guildID, userID, username, currentAvatar); err != nil {
-				if err.Error() == "duplicate task (idempotency key present)" {
+				if errors.Is(err, task.ErrDuplicateTask) {
 					log.ApplicationLogger().Info("Avatar change task already enqueued (idempotency)", "guildID", guildID, "userID", userID)
 				} else {
 					log.ErrorLoggerRaw().Error("Failed to enqueue avatar change task; falling back to synchronous processing", "guildID", guildID, "userID", userID, "err", err)

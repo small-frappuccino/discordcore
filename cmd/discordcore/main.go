@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -116,7 +117,7 @@ func normalizeRunError(err error, testMode bool) error {
 	if err == nil {
 		return nil
 	}
-	if !strings.Contains(err.Error(), "no bot instances have a configured token") {
+	if !errors.Is(err, discordcoreapp.ErrNoBotTokensConfigured) {
 		return err
 	}
 

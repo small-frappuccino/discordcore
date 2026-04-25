@@ -116,6 +116,10 @@ type CacheError struct {
 	Cause     error
 }
 
+func (e CacheError) CacheErrorKey() string {
+	return e.Key
+}
+
 func (e CacheError) Error() string {
 	if e.Key != "" {
 		return fmt.Sprintf("cache %s failed for key '%s': %v", e.Operation, e.Key, e.Cause)

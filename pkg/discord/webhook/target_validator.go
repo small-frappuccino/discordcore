@@ -168,7 +168,8 @@ func wrapTargetValidationError(operation string, err error) error {
 			}
 		}
 	}
-	if strings.Contains(strings.ToLower(err.Error()), "rate limit") {
+	var rateLimitErr *discordgo.RateLimitError
+	if errors.As(err, &rateLimitErr) {
 		return &TargetValidationError{
 			Operation:  operation,
 			StatusCode: http.StatusTooManyRequests,

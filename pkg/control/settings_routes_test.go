@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -625,6 +626,26 @@ func TestGuildSettingsPutRejectsInvalidAutoAssignmentOrdering(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), files.ErrValidationFailed) {
 		t.Fatalf("expected validation error body, got %q", rec.Body.String())
+	}
+}
+
+func TestStatusForSettingsMutationErrorTreatsWrappedValidationAsBadRequest(t *testing.T) {
+	t.Parallel()
+
+	err := fmt.Errorf(
+		"update settings: %w",
+		fmt.Errorf(
+			"save config: %w",
+			files.NewValidationError(
+				"guilds[0].roles.auto_assignment.required_roles",
+				[]string{"stable-role"},
+				"required_roles must contain exactly 2 role IDs",
+			),
+		),
+	)
+
+	if got := statusForSettingsMutationError(err); got != http.StatusBadRequest {
+		t.Fatalf("statusForSettingsMutationError() = %d, want %d", got, http.StatusBadRequest)
 	}
 }
 

@@ -698,7 +698,7 @@ describe("QOTD UI", () => {
     });
 
     await user.selectOptions(
-      within(view.container).getByLabelText("History channel"),
+      within(view.container).getByLabelText("Historical embeds channel"),
       "answers-channel-1",
     );
     await user.clear(
@@ -738,6 +738,39 @@ describe("QOTD UI", () => {
     );
   });
 
+  it("distinguishes archived collector imports from the live qotd post flow", async () => {
+    const view = render(
+      <MemoryRouter>
+        <QOTDCollectorPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        within(view.container).getByText("1 collected question stored"),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      within(view.container).getByLabelText("Historical embeds channel"),
+    ).toBeInTheDocument();
+    expect(
+      within(view.container).getByText(
+        /scan archived QOTD embeds from older channels or other bots/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(view.container).getByText(
+        /does not read the current discordcore post, its answer button, or the thread opened from that live post/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(view.container).getByText(
+        /does not republish the current QOTD message or modify the live answer button and thread workflow/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("normalizes collector draft values after save and clears the unsaved state", async () => {
     const user = userEvent.setup();
     qotdMock.saveSettings.mockImplementation(async (next) =>
@@ -765,7 +798,7 @@ describe("QOTD UI", () => {
     });
 
     await user.selectOptions(
-      within(view.container).getByLabelText("History channel"),
+      within(view.container).getByLabelText("Historical embeds channel"),
       "answers-channel-1",
     );
     await user.type(

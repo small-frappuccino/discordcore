@@ -284,10 +284,10 @@ type PartnerBoardConfig struct {
 
 // QOTDDeckConfig stores one named QOTD deck plus its target delivery channel.
 type QOTDDeckConfig struct {
-	ID             string `json:"id,omitempty"`
-	Name           string `json:"name,omitempty"`
-	Enabled        bool   `json:"enabled,omitempty"`
-	ChannelID      string `json:"channel_id,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Enabled   bool   `json:"enabled,omitempty"`
+	ChannelID string `json:"channel_id,omitempty"`
 }
 
 // QOTDCollectorConfig stores channel-history collection settings used to
@@ -720,6 +720,10 @@ type ValidationError struct {
 	Message string
 }
 
+func (e ValidationError) ValidationField() string {
+	return e.Field
+}
+
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation failed for field '%s': %s", e.Field, e.Message)
 }
@@ -738,6 +742,10 @@ type ConfigError struct {
 	Operation string
 	Path      string
 	Cause     error
+}
+
+func (e ConfigError) ConfigErrorPath() string {
+	return e.Path
 }
 
 func (e ConfigError) Error() string {
@@ -766,6 +774,10 @@ type DiscordError struct {
 	Code      int
 	Message   string
 	Cause     error
+}
+
+func (e DiscordError) DiscordErrorCode() int {
+	return e.Code
 }
 
 func (e DiscordError) Error() string {

@@ -301,6 +301,13 @@ export function QOTDCollectorPage() {
             >
               Source settings
             </GroupedSettingsHeading>
+            <p className="field-note">
+              Use the collector to scan archived QOTD embeds from older
+              channels or other bots. The live discordcore workflow is
+              separate: it posts the current embed in the active QOTD channel,
+              keeps the answer button on that message, and opens one thread
+              from that live post.
+            </p>
           </GroupedSettingsCopy>
 
           {channelOptions.notice ? (
@@ -328,7 +335,7 @@ export function QOTDCollectorPage() {
             >
               <GroupedSettingsSubrow>
                 <SettingsSelectField
-                  label="History channel"
+                  label="Historical embeds channel"
                   value={draft.source_channel_id}
                   onChange={(value) =>
                     setDraft((current) => ({
@@ -341,7 +348,7 @@ export function QOTDCollectorPage() {
                   disabled={
                     !canEditSelectedGuild || saving || channelOptions.loading
                   }
-                  note="Import past QOTD embeds from this channel. The live discordcore embed, answer button, and daily thread stay outside this importer."
+                  note="Scan this channel for archived QOTD embeds to import. The collector does not read the current discordcore post, its answer button, or the thread opened from that live post."
                 />
               </GroupedSettingsSubrow>
 
@@ -386,7 +393,7 @@ export function QOTDCollectorPage() {
                       />
                       <span className="meta-note">
                         One pattern per line. Matching is case-insensitive and
-                        uses title fragments from historical embeds only.
+                        uses title fragments from archived embeds only.
                       </span>
                     </label>
 
@@ -411,9 +418,10 @@ export function QOTDCollectorPage() {
                     </label>
 
                     <div className="card-copy">
-                      This importer reads historical embed text only: it stores
-                      the first non-empty description line and ignores the live
-                      answer button and daily thread flow.
+                      Only archived embed text is imported here. The collector
+                      stores the first non-empty description line and ignores
+                      the live post's answer button state and per-post thread
+                      activity.
                     </div>
                   </div>
                 </div>
@@ -432,6 +440,11 @@ export function QOTDCollectorPage() {
             >
               Import historical QOTD embeds
             </GroupedSettingsHeading>
+            <p className="field-note">
+              Run this to backfill old prompt embeds into collector storage. It
+              does not republish the current QOTD message or modify the live
+              answer button and thread workflow.
+            </p>
           </GroupedSettingsCopy>
 
           <GroupedSettingsGroup>

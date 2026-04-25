@@ -653,7 +653,6 @@ func statusForSettingsMutationError(err error) int {
 		return http.StatusInternalServerError
 	}
 
-	var validationErr files.ValidationError
 	switch {
 	case errors.Is(err, errGuildRegistrationRequired):
 		return http.StatusConflict
@@ -669,9 +668,7 @@ func statusForSettingsMutationError(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, files.ErrWebhookEmbedUpdateAlreadyExists):
 		return http.StatusConflict
-	case errors.As(err, &validationErr):
-		return http.StatusBadRequest
-	case strings.Contains(err.Error(), files.ErrValidationFailed):
+	case files.IsValidationError(err):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
