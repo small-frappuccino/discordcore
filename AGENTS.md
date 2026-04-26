@@ -20,8 +20,8 @@ Prefer narrow, source-backed changes over broad rewrites. Do not treat this repo
 
 `discordcore` is the product repository. It owns:
 
-- the Go runtime and orchestration for Discord-facing behavior
-- the control API and dashboard-serving layer
+- the Go runtime and orchestration for Discord-facing behavior, including the primary slash-command workflow
+- the control API and complementary dashboard-serving layer
 - canonical config and runtime state
 - Postgres-backed persistence and migrations
 - the embedded React dashboard under `ui/`
@@ -36,15 +36,27 @@ Boundary rule:
 - reusable product logic, state rules, contracts, and shared workflows belong in `discordcore`
 - host-specific setup belongs in `alicebot`
 
+## Product Interaction Model
+
+`discordcore` is slash-commands-first.
+
+Default product split:
+
+- slash commands are the primary end-user interface for bot capabilities, routine actions, and conversational flows
+- the dashboard is a complementary surface for setup, review, bulk edits, diagnostics, and recovery flows that are awkward in chat
+- do not make a dashboard page the canonical or exclusive path for routine bot actions unless the product owner explicitly asks for that tradeoff
+- when shaping a feature, define the slash-command workflow first, then add only the UI needed to support it cleanly
+- if a page mainly mirrors command usage, command output, or routine action buttons, compress it, move it behind diagnostics, or remove it
+
 ## Boundaries And Ownership
 
 Use this map before editing:
 
 - `cmd/discordcore/`: example runner only, not reusable product logic
 - `pkg/app/`: runtime orchestration and startup wiring
-- `pkg/control/`: control API, auth/session handling, dashboard serving, guild/settings/feature routes
+- `pkg/control/`: control API, auth/session handling, dashboard serving, guild/settings/feature routes for the complementary web surface
 - `pkg/files/`: canonical config model, normalization, persistence adapters, and `ConfigManager`
-- `pkg/discord/`: Discord runtime behavior, commands, logging, cache, services, session handling
+- `pkg/discord/`: Discord runtime behavior, commands, logging, cache, services, session handling; primary user-facing command workflows
 - `pkg/storage/`: durable Postgres-backed domain storage
 - `pkg/persistence/`: DB open, ping, and migrations
 - `pkg/partners/`: partner board rendering and sync helpers
@@ -62,6 +74,8 @@ Respect package ownership:
 - do not move reusable logic into `cmd/`
 - do not reimplement config or state rules in `pkg/control/` when they belong in `pkg/files/`
 - do not move Discord runtime behavior into the dashboard layer
+- keep routine user workflows in Discord when a slash command is the natural surface
+- use the dashboard for setup, review, bulk edits, diagnostics, and cross-feature visibility rather than as a duplicate command console
 - keep router and provider entrypoints thin when a focused sibling file or service already exists
 
 ## How To Work Well In This Repo With GPT-5.4 Xhigh
@@ -152,10 +166,11 @@ For bug fixes:
 For multi-file feature work:
 
 1. identify the owning contract first
-2. trace all required layers before editing
-3. update backend and UI together when the contract crosses both
-4. keep route, feature, and config contracts centralized
-5. verify the exact files that define the contract before editing dependents
+2. define the slash-command workflow before expanding the dashboard workflow
+3. trace all required layers before editing
+4. update backend and UI together when the contract crosses both and the UI is justified
+5. keep route, feature, and config contracts centralized
+6. verify the exact files that define the contract before editing dependents
 
 For refactors:
 
@@ -245,6 +260,10 @@ When a backend contract changes, update:
 
 UI semantics:
 
+- treat the dashboard as a complement to slash-command workflows, not the primary product surface
+- default standard pages to setup, review, bulk edits, diagnostics, or exception handling rather than routine bot usage
+- do not use the dashboard as the default home for actions that are cleaner as slash commands, command responses, or Discord-native flows
+- prefer concise state, blockers, and next configuration actions over mirroring full bot behavior on the page
 - preserve the compact operational dashboard style already present in the app
 - prefer existing primitives such as `PageHeader`, `FeatureWorkspaceLayout`, `SurfaceCard`, `StatusBadge`, and `EmptyState`
 - use human-facing labels instead of raw internal enum or storage names unless the page is explicitly diagnostic

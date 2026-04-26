@@ -2,13 +2,30 @@
 
 ## Purpose
 
-This file defines the current UI direction for the Discordcore dashboard.
+This file defines the current UI direction for the Discordcore dashboard as a complementary surface to the bot's slash-command UX.
 It exists for coding agents and engineers making frontend changes.
 
 These rules are meant to reduce drift, generic admin-template output, and UI that depends on explanatory text to function.
 
 If the source code and this file disagree, trust the current source code first and update this file.
 If a direct product-owner instruction conflicts with this file, follow the product-owner instruction and then update this file later if the new direction should persist.
+
+---
+
+## 0. Product direction
+
+Discordcore is now slash-commands-first.
+
+The dashboard is a complement, not the primary product surface.
+
+Default split:
+
+- slash commands handle routine actions, conversational flows, quick confirmations, and work that benefits from staying inside Discord
+- the dashboard handles setup, review, bulk changes, multi-setting visibility, diagnostics, and recovery flows that are awkward in chat
+- do not build a page just because the data exists; build it only when a browser surface materially reduces friction compared with a slash command
+- do not mirror every command as a page, and do not turn the dashboard into a second primary app for routine bot usage
+
+Every standard page should justify why it exists instead of being a slash command, command response, or diagnostic-only surface.
 
 ---
 
@@ -65,10 +82,11 @@ If a `Home` change materially alters these constraints, update this file in the 
 
 ## 2. Primary UI rule
 
-The interface must guide users visually first.
+The interface must guide users visually first, but only for work that belongs in the dashboard.
 
 Users should understand:
 
+- what part of the slash-command workflow this page supports
 - where they are
 - what matters most on the screen
 - what can be acted on next
@@ -168,6 +186,8 @@ Do not show these in the standard UI:
 - raw Discord IDs or fallback-by-ID editors
 - long helper text that only narrates the visible toggle, picker, or select
 - repeated badges or repeated state text at multiple levels of the same screen
+- routine action controls that would be faster and clearer as slash commands
+- command reference walls or embedded instructions for normal in-Discord usage
 
 Internal or low-level metadata is allowed only in an explicit diagnostic mode.
 When diagnostic-only UI is needed, gate it behind the `?diagnostics=1` query parameter instead of exposing it in the default page flow.
@@ -176,7 +196,7 @@ When in doubt, prefer omission over explanation.
 
 ### 3.3 Direct settings pattern
 
-For settings-style pages, the default composition should feel closer to app settings than to an operator console.
+For settings-style pages, the default composition should feel closer to app settings than to an operator console or command-replacement surface.
 
 Preferred patterns:
 
@@ -191,14 +211,18 @@ Rules:
 - use helper text only when the setting would otherwise be ambiguous, and keep it to one short secondary line directly under the control
 - only show warning or error text when the user has something real to fix, such as a missing channel, invalid role, runtime kill switch, or failed lookup
 - prefer one shared lookup failure message for a whole control group when the same dependency failure affects every row in that group
+- if the main point of a control is to trigger a routine bot action, prefer a slash command instead of adding it to the standard page
+- reserve standard page controls for configuration, review, bulk edits, or exceptional recovery
 
 Examples:
 
 - good: `Automod service` + switch
 - good: `Mute role` + switch + role select
 - good: `Moderation case logging` + switch + channel select + short blocker text only when needed
+- good: compact review and repair UI for settings that are hard to reason about from chat alone
 - bad: `Mute role` + badge + `Current signal` + `Applied from` + long section description + extra reset-to-default metadata
 - bad: `Route destination` + select + paragraph explaining that the visible select controls the destination
+- bad: a page full of routine action buttons that should be slash commands
 
 ### 3.4 Grouped settings surfaces
 
@@ -249,6 +273,8 @@ Rules:
 ## 5. Layout and flow
 
 Every page must have one primary job.
+
+That job should usually be setup, review, bulk change, diagnostics, or exception handling, not replacing routine in-Discord usage.
 
 Build the visual scan path in this order:
 
@@ -405,6 +431,8 @@ Do not introduce:
 
 - generic hero sections or marketing-style dashboard headers
 - text-heavy UI that teaches the user where to look
+- standard pages whose main purpose is to duplicate routine slash command actions
+- command-manual pages that mirror normal command usage instead of supporting setup or diagnostics
 - floating inner canvases when the page should feel continuous
 - nested slabs, card-inside-card stacks, or inset panels without a real interaction boundary
 - extra wrapper components whose only job is to create another visual layer around content that could stay flat
@@ -428,16 +456,18 @@ Do not introduce:
 
 Before finalizing a page, check:
 
-1. What is the single primary job of this page?
-2. What must the user understand before reading any paragraph?
-3. Does the layout answer that visually?
-4. Are existing shell/components/tokens being reused?
-5. Are semantic colors being used only where meaning exists?
-6. Is the page stable during loading, refresh, empty, and error states?
-7. Are card proportions and grid alignment still intact?
-8. Did extra copy get added because the layout was weak?
+1. Why does this page exist instead of a slash command, command response, or diagnostic-only surface?
+2. What is the single primary job of this page?
+3. What must the user understand before reading any paragraph?
+4. Does the layout answer that visually?
+5. Are existing shell/components/tokens being reused?
+6. Are semantic colors being used only where meaning exists?
+7. Is the page stable during loading, refresh, empty, and error states?
+8. Are card proportions and grid alignment still intact?
+9. Is this page supporting setup, review, bulk change, diagnostics, or recovery instead of replacing routine in-Discord usage?
+10. Did extra copy get added because the layout was weak?
 
-If the answer to step 8 is yes, fix the layout first.
+If the answer to step 10 is yes, fix the layout first.
 
 ---
 
