@@ -200,8 +200,8 @@ func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questionText string, queuePosition int64) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "☆ question!! ☆",
-		Description: quoteEmbedText(normalizeOfficialQuestionText(questionText), 3800),
-		Color:       0x89E5D1,
+		Description: normalizeOfficialQuestionText(questionText),
+		Color:       0x5B86E5,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: buildOfficialQuestionFooter(deckName, availableQuestions, queuePosition),
 		},
@@ -301,9 +301,9 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, queueP
 		availableQuestions = 0
 	}
 	if queuePosition > 0 {
-		return fmt.Sprintf("Deck: %s | Question #%d -- %d Cards Remaining", deckName, queuePosition, availableQuestions)
+		return fmt.Sprintf("Question #%d from %s -- %d questions remaining", queuePosition, deckName, availableQuestions)
 	}
-	return fmt.Sprintf("Deck: %s -- %d Cards Remaining", deckName, availableQuestions)
+	return fmt.Sprintf("%s -- %d questions remaining", deckName, availableQuestions)
 }
 
 func (p *Publisher) ensureLegacyOfficialIndexThread(ctx context.Context, session *discordgo.Session, parentChannelID, preferredThreadID string) (string, error) {
