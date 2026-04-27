@@ -307,9 +307,6 @@ func (s *Service) SetNextQuestion(ctx context.Context, guildID, deckID string, q
 	if movedIndex < 0 {
 		return nil, ErrQuestionNotFound
 	}
-	if firstMutableIndex < 0 {
-		return nil, ErrNoQuestionsAvailable
-	}
 
 	moved := questions[movedIndex]
 	if moved.DeckID != deck.ID {
@@ -320,6 +317,9 @@ func (s *Service) SetNextQuestion(ctx context.Context, guildID, deckID string, q
 	}
 	if QuestionStatus(strings.TrimSpace(moved.Status)) != QuestionStatusReady {
 		return nil, ErrQuestionNotReady
+	}
+	if firstMutableIndex < 0 {
+		return nil, ErrNoQuestionsAvailable
 	}
 	if movedIndex == firstMutableIndex {
 		return &moved, nil

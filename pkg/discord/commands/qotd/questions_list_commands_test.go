@@ -645,6 +645,52 @@ func TestQuestionsNextCommandSetsSelectedQuestionAsNextReady(t *testing.T) {
 	}
 }
 
+func TestQuestionsNextCommandShowsSpecificErrorForUsedQuestion(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	fake := &fakePublisher{}
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "channel-123",
+		}},
+	})
+
+	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Already used", applicationqotd.QuestionStatusReady)
+	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions() failed: %v", err)
+	}
+	if len(questions) != 1 {
+		t.Fatalf("expected one question before publish, got %+v", questions)
+	}
+	created := questions[0]
+	if _, err := service.PublishNow(context.Background(), guildID, session); err != nil {
+		t.Fatalf("PublishNow() failed: %v", err)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsNextSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
+		qotdIntOpt(questionsIDOptionName, created.DisplayID),
+	}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be set as next.", created.DisplayID)) {
+		t.Fatalf("expected specific immutable-question error, got %q", resp.Data.Content)
+	}
+	if strings.Contains(resp.Data.Content, "An error occurred while executing the command") {
+		t.Fatalf("expected command-specific error response, got generic fallback %q", resp.Data.Content)
+	}
+}
+
 func TestQuestionsResetCommandResetsUsedQuestionsToReady(t *testing.T) {
 	const (
 		guildID = "guild-1"

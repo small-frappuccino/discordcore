@@ -286,6 +286,39 @@ func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T
 	}
 }
 
+func TestServiceSetNextQuestionReturnsImmutableForUsedQuestion(t *testing.T) {
+	service, _, _ := newTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	created, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question 1",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishNow() failed: %v", err)
+	}
+
+	_, err = service.SetNextQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created.ID)
+	if !errors.Is(err, ErrImmutableQuestion) {
+		t.Fatalf("expected ErrImmutableQuestion, got %v", err)
+	}
+}
+
 func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	t.Parallel()
 
