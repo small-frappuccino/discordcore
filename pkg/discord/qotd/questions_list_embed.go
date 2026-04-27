@@ -56,6 +56,8 @@ func buildQuestionsListDescription(
 		return "This deck does not have any questions yet.\n\nPage 1 of 1 • 0 questions"
 	}
 
+	nextReadyQuestionID := nextReadyQuestionID(questions)
+
 	start := page * pageSize
 	if start > len(questions) {
 		start = len(questions)
@@ -67,31 +69,60 @@ func buildQuestionsListDescription(
 
 	lines := make([]string, 0, end-start+2)
 	for _, question := range questions[start:end] {
-		lines = append(lines, formatQuestionsListEntry(question))
+		lines = append(lines, formatQuestionsListEntry(question, nextReadyQuestionID))
 	}
 	lines = append(lines, "")
 	lines = append(lines, fmt.Sprintf("Page %d of %d • %d questions", page+1, totalPages, totalQuestions))
 	return strings.Join(lines, "\n")
 }
 
-func formatQuestionsListEntry(question storage.QOTDQuestionRecord) string {
+func formatQuestionsListEntry(question storage.QOTDQuestionRecord, nextReadyQuestionID int64) string {
 	text := strings.Join(strings.Fields(strings.TrimSpace(question.Body)), " ")
 	text = truncateEmbedText(text, 96)
-	meta := make([]string, 0, 1)
+	meta := make([]string, 0, 3)
 	displayID := question.DisplayID
 	if displayID <= 0 {
 		displayID = question.ID
 	}
 	meta = append(meta, fmt.Sprintf("ID:%d", displayID))
+	meta = append(meta, questionStatusLabel(question.Status))
+	if question.ID == nextReadyQuestionID {
+		meta = append(meta, "publishes next")
+	}
 	return fmt.Sprintf("%s \"%s\" (%s)", questionStatusIcon(question.Status), text, strings.Join(meta, " • "))
+}
+
+func nextReadyQuestionID(questions []storage.QOTDQuestionRecord) int64 {
+	for _, question := range questions {
+		if canQuestionPublishNext(question) {
+			return question.ID
+		}
+	}
+	return 0
+}
+
+func canQuestionPublishNext(question storage.QOTDQuestionRecord) bool {
+	if strings.TrimSpace(question.Status) != "ready" {
+		return false
+	}
+	if question.ScheduledForDateUTC != nil && !question.ScheduledForDateUTC.IsZero() {
+		return false
+	}
+	return true
 }
 
 func questionStatusIcon(status string) string {
 	switch strings.TrimSpace(status) {
-	case "ready", "draft", "reserved", "disabled":
+	case "ready":
 		return "✅"
+	case "draft":
+		return "📝"
+	case "reserved":
+		return "📌"
 	case "used":
 		return "🚫"
+	case "disabled":
+		return "⏸️"
 	default:
 		return "❔"
 	}

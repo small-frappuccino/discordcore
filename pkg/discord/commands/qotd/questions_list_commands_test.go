@@ -643,6 +643,18 @@ func TestQuestionsNextCommandSetsSelectedQuestionAsNextReady(t *testing.T) {
 	if updated[5].ID != created[4].ID || updated[5].DisplayID != 6 {
 		t.Fatalf("expected the previous next question to shift back by one slot, got %+v", updated)
 	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
+
+	listResp := rec.lastResponse(t)
+	requirePublicResponse(t, listResp)
+	if len(listResp.Data.Embeds) != 1 {
+		t.Fatalf("expected one embed after list command, got %+v", listResp.Data.Embeds)
+	}
+	listDescription := listResp.Data.Embeds[0].Description
+	if !strings.Contains(listDescription, "Question 06\" (ID:5 • ready • publishes next)") {
+		t.Fatalf("expected reordered question to be marked as publishes next in list, got %q", listDescription)
+	}
 }
 
 func TestQuestionsNextCommandShowsSpecificErrorForUsedQuestion(t *testing.T) {
