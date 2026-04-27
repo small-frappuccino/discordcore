@@ -192,6 +192,7 @@ function createSummary(cardsRemaining: number): QOTDSummary {
 function createQuestions(count: number): QOTDQuestion[] {
   return Array.from({ length: count }, (_, index) => ({
     id: index + 1,
+    display_id: index + 1,
     deck_id: "default",
     body: `Question ${index + 1}`,
     status: "ready",

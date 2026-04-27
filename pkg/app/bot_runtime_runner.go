@@ -69,7 +69,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	if err := enforceRuntimeGuildAllowlist(runtime); err != nil {
 		return fmt.Errorf("enforce runtime guild allowlist for %s: %w", runtime.instanceID, err)
 	}
-	registerRuntimeGuildAllowlistHandler(runtime)
+	registerRuntimeGuildAllowlistHandler(runtime, opts.configManager, opts.store)
 
 	cfg := opts.configManager.Config()
 	runtimeConfig := files.RuntimeConfig{}

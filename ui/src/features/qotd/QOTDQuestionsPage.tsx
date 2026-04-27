@@ -504,7 +504,7 @@ export function QOTDQuestionsPage() {
                             <div className="qotd-question-heading">
                               <div className="qotd-question-order-row">
                                 <span className="qotd-question-index">
-                                  Question #{question.queue_position}
+                                  Question ID {question.display_id}
                                 </span>
                                 <span
                                   className={`qotd-status-pill ${getQuestionToneClass(question.status)}`}

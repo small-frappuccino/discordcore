@@ -477,4 +477,35 @@ var postgresMigrations = []migration{
 		UpSQL:   []string{},
 		DownSQL: []string{},
 	},
+	{
+		Version: 15,
+		UpSQL: []string{
+			`ALTER TABLE qotd_questions
+			 ADD COLUMN IF NOT EXISTS display_id BIGINT`,
+			`WITH ordered AS (
+				SELECT
+					id,
+					ROW_NUMBER() OVER (
+						PARTITION BY guild_id, deck_id
+						ORDER BY queue_position ASC, id ASC
+					)::BIGINT AS next_display_id
+				FROM qotd_questions
+			)
+			UPDATE qotd_questions AS questions
+			SET display_id = ordered.next_display_id
+			FROM ordered
+			WHERE questions.id = ordered.id`,
+			`UPDATE qotd_questions
+			 SET display_id = 1
+			 WHERE display_id IS NULL`,
+			`ALTER TABLE qotd_questions
+			 ALTER COLUMN display_id SET NOT NULL`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_questions_display_id
+			 ON qotd_questions(guild_id, deck_id, display_id)`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_questions_display_id`,
+			`ALTER TABLE qotd_questions DROP COLUMN IF EXISTS display_id`,
+		},
+	},
 }

@@ -7,6 +7,7 @@ import (
 
 type QOTDQuestionRecord struct {
 	ID                  int64
+	DisplayID           int64
 	GuildID             string
 	DeckID              string
 	Body                string

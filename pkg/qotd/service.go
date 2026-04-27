@@ -418,7 +418,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		*provisioned,
 		question,
 		availableQuestions,
-		buildOfficialThreadName(question.QueuePosition),
+		buildOfficialThreadName(question.DisplayID),
 		now,
 	)
 	if err != nil {
@@ -527,9 +527,9 @@ func derefTime(value *time.Time) time.Time {
 	return value.UTC()
 }
 
-func buildOfficialThreadName(queuePosition int64) string {
-	if queuePosition > 0 {
-		return fmt.Sprintf("question of the day #%d", queuePosition)
+func buildOfficialThreadName(displayID int64) string {
+	if displayID > 0 {
+		return fmt.Sprintf("question of the day ID %d", displayID)
 	}
 	return "question of the day"
 }

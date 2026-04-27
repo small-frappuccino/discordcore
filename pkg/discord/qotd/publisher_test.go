@@ -25,7 +25,7 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 	if embed.Color != officialQuestionEmbedColor {
 		t.Fatalf("expected qotd embed color %x, got %x", officialQuestionEmbedColor, embed.Color)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Question #345 from Final Mix -- 62 questions remaining" {
+	if embed.Footer == nil || embed.Footer.Text != "Question ID 345 from Final Mix -- 62 questions remaining" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {
@@ -48,7 +48,7 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 		"",
 	)
 
-	if got != "question of the day #1" {
+	if got != "question of the day ID 1" {
 		t.Fatalf("unexpected official post name: %q", got)
 	}
 }

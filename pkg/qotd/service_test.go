@@ -221,13 +221,16 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 	if questions[0].ID != third.ID || questions[1].ID != first.ID || questions[2].ID != second.ID {
 		t.Fatalf("unexpected order after reorder: %+v", questions)
 	}
+	if questions[0].DisplayID != 1 || questions[1].DisplayID != 2 || questions[2].DisplayID != 3 {
+		t.Fatalf("expected reordered questions to receive sequential visible ids, got %+v", questions)
+	}
 }
 
 func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	t.Parallel()
 
 	got := buildOfficialThreadName(1)
-	if got != "question of the day #1" {
+	if got != "question of the day ID 1" {
 		t.Fatalf("unexpected official thread title: %q", got)
 	}
 }
@@ -382,7 +385,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 0 {
 		t.Fatalf("expected no remaining available questions after manual publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "question of the day #2" {
+	if fake.publishedParams[0].ThreadName != "question of the day ID 2" {
 		t.Fatalf("expected manual publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 	if result.Question.Status != string(QuestionStatusUsed) {
@@ -648,7 +651,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "question of the day #1" {
+	if fake.publishedParams[0].ThreadName != "question of the day ID 1" {
 		t.Fatalf("expected scheduled publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 

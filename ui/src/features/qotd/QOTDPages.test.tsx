@@ -993,6 +993,7 @@ describe("QOTD UI", () => {
 function createQuestion(overrides: Partial<QOTDQuestion>): QOTDQuestion {
   return {
     id: 1,
+    display_id: 1,
     deck_id: "default",
     body: "Question",
     status: "ready",

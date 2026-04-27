@@ -188,23 +188,30 @@ func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
-		Success(ctx.Interaction, fmt.Sprintf("Added QOTD question ID %d to deck `%s`.", created.ID, deck.Name))
+		Success(ctx.Interaction, fmt.Sprintf("Added QOTD question ID %d to deck `%s`.", visibleQuestionID(*created), deck.Name))
 }
 
 func (c *questionsRemoveCommand) Name() string { return questionsRemoveSubCommand }
 
 func (c *questionsRemoveCommand) Description() string {
-	return "Remove a question from QOTD by ID"
+	return "Remove a question from QOTD by visible ID"
 }
 
 func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{{
-		Type:        discordgo.ApplicationCommandOptionInteger,
-		Name:        questionsIDOptionName,
-		Description: "Question ID from the questions list embed",
-		Required:    true,
-	}}
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        questionsIDOptionName,
+			Description: "Question ID from the questions list embed",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsDeckOptionName,
+			Description: "Deck ID or exact deck name. Defaults to the active deck.",
+			Required:    false,
+		},
+	}
 }
 
 func (c *questionsRemoveCommand) RequiresGuild() bool       { return true }
@@ -245,12 +252,10 @@ func (c *questionsResetCommand) Handle(ctx *core.Context) error {
 	}
 	if resetCount == 0 {
 		return core.NewResponseBuilder(ctx.Session).
-			Ephemeral().
 			Info(ctx.Interaction, fmt.Sprintf("No used or reserved QOTD questions needed reset in deck `%s`.", deck.Name))
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
 		Success(ctx.Interaction, fmt.Sprintf("Reset %d QOTD question states in deck `%s`.", resetCount, deck.Name))
 }
 
@@ -275,10 +280,10 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if !deck.Enabled {
-		return core.NewCommandError("Enable QOTD publishing for the active deck before publishing manually.", true)
+		return core.NewCommandError("Enable QOTD publishing for the active deck before publishing manually.", false)
 	}
 	if strings.TrimSpace(deck.ChannelID) == "" {
-		return core.NewCommandError("Set a QOTD channel for the active deck before publishing manually.", true)
+		return core.NewCommandError("Set a QOTD channel for the active deck before publishing manually.", false)
 	}
 
 	result, err := c.service.PublishNow(context.Background(), ctx.GuildID, ctx.Session)
@@ -286,12 +291,11 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		return translatePublishNowError(err)
 	}
 
-	message := fmt.Sprintf("Published QOTD question ID %d manually.", result.Question.ID)
+	message := fmt.Sprintf("Published QOTD question ID %d manually.", visibleQuestionID(result.Question))
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
 	}
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
 		Success(ctx.Interaction, message)
 }
 
@@ -301,18 +305,29 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	questionID := extractor.Int(questionsIDOptionName)
-	if questionID <= 0 {
-		return core.NewValidationError(questionsIDOptionName, "Question ID must be greater than zero")
+	displayID := extractor.Int(questionsIDOptionName)
+	if displayID <= 0 {
+		return core.NewCommandError("Question ID must be greater than zero.", false)
+	}
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
+	if err != nil {
+		return err
+	}
+	question := findQuestionByDisplayID(questions, displayID)
+	if question == nil {
+		return translateQuestionsDeleteError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
-	if err := c.service.DeleteQuestion(context.Background(), ctx.GuildID, questionID); err != nil {
-		return translateQuestionsDeleteError(questionID, err)
+	if err := c.service.DeleteQuestion(context.Background(), ctx.GuildID, question.ID); err != nil {
+		return translateQuestionsDeleteError(displayID, err)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
-		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d.", questionID))
+		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d from deck `%s`.", displayID, deck.Name))
 }
 
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
@@ -332,7 +347,7 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 		DeckID: view.deck.ID,
 		Page:   0,
 	}
-	return respondQuestionsList(ctx, view, state, true, questionsListRouteFirst)
+	return respondQuestionsList(ctx, view, state, false, questionsListRouteFirst)
 }
 
 func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
@@ -379,7 +394,7 @@ func requireQuestionsGuild(ctx *core.Context) error {
 		return nil
 	}
 	if strings.TrimSpace(ctx.GuildID) == "" {
-		return core.NewCommandError(questionsListMissingGuild, true)
+		return core.NewCommandError(questionsListMissingGuild, false)
 	}
 	return nil
 }
@@ -399,7 +414,7 @@ func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDec
 		if deck, ok := settings.ActiveDeck(); ok {
 			return deck, nil
 		}
-		return files.QOTDDeckConfig{}, core.NewCommandError(questionsListUnknownDeck, true)
+		return files.QOTDDeckConfig{}, core.NewCommandError(questionsListUnknownDeck, false)
 	}
 
 	if deck, ok := settings.DeckByID(requestedDeck); ok {
@@ -410,7 +425,7 @@ func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDec
 			return deck, nil
 		}
 	}
-	return files.QOTDDeckConfig{}, core.NewCommandError(fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), true)
+	return files.QOTDDeckConfig{}, core.NewCommandError(fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), false)
 }
 
 func respondQuestionsList(
@@ -542,6 +557,22 @@ func (state questionsListState) withPage(page int) questionsListState {
 	return state
 }
 
+func visibleQuestionID(question storage.QOTDQuestionRecord) int64 {
+	if question.DisplayID > 0 {
+		return question.DisplayID
+	}
+	return question.ID
+}
+
+func findQuestionByDisplayID(questions []storage.QOTDQuestionRecord, displayID int64) *storage.QOTDQuestionRecord {
+	for idx := range questions {
+		if visibleQuestionID(questions[idx]) == displayID {
+			return &questions[idx]
+		}
+	}
+	return nil
+}
+
 func translateQuestionsMutationError(err error) error {
 	if err == nil {
 		return nil
@@ -551,7 +582,7 @@ func translateQuestionsMutationError(err error) error {
 		if message == "" {
 			message = "Invalid QOTD question input"
 		}
-		return core.NewCommandError(message, true)
+		return core.NewCommandError(message, false)
 	}
 	return err
 }
@@ -561,10 +592,10 @@ func translateQuestionsDeleteError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), true)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), true)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), false)
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -574,13 +605,13 @@ func translatePublishNowError(err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
-		return core.NewCommandError("No ready QOTD questions are available in the active deck.", true)
+		return core.NewCommandError("No ready QOTD questions are available in the active deck.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
-		return core.NewCommandError("Enable QOTD publishing and set a channel before publishing manually.", true)
+		return core.NewCommandError("Enable QOTD publishing and set a channel before publishing manually.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
-		return core.NewCommandError("Discord session unavailable for manual publish.", true)
+		return core.NewCommandError("Discord session unavailable for manual publish.", false)
 	}
 	return err
 }

@@ -105,6 +105,7 @@ export interface QOTDConfig {
 
 export interface QOTDQuestion {
   id: number;
+  display_id: number;
   deck_id: string;
   body: string;
   status: QOTDQuestionStatus;

@@ -98,3 +98,39 @@ func TestHandleRuntimeGuildCreateLeavesUnauthorizedGuild(t *testing.T) {
 		t.Fatalf("unexpected guild create leaves: got=%v want=%v", leftGuilds, want)
 	}
 }
+
+func TestHandleRuntimeGuildDeleteRemovesDisallowedGuildConfig(t *testing.T) {
+	t.Parallel()
+
+	configManager := files.NewMemoryConfigManager()
+	if _, err := configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = []files.GuildConfig{
+			{GuildID: "1375650791251120179"},
+			{GuildID: "guild-denied"},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	handleRuntimeGuildDelete("alice", &discordgo.GuildDelete{
+		Guild: &discordgo.Guild{ID: "guild-denied"},
+	}, configManager, nil)
+
+	got := configManager.SnapshotConfig()
+	if len(got.Guilds) != 1 || got.Guilds[0].GuildID != "1375650791251120179" {
+		t.Fatalf("unexpected config after guild delete cleanup: %+v", got.Guilds)
+	}
+
+	handleRuntimeGuildDelete("alice", &discordgo.GuildDelete{
+		Guild: &discordgo.Guild{ID: "1375650791251120179"},
+	}, configManager, nil)
+	handleRuntimeGuildDelete("alice", &discordgo.GuildDelete{
+		Guild: &discordgo.Guild{ID: "guild-unavailable", Unavailable: true},
+	}, configManager, nil)
+
+	got = configManager.SnapshotConfig()
+	if len(got.Guilds) != 1 || got.Guilds[0].GuildID != "1375650791251120179" {
+		t.Fatalf("expected allowed and unavailable deletes to be ignored, got %+v", got.Guilds)
+	}
+}

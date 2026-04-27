@@ -12,6 +12,7 @@ import (
 
 type qotdQuestionResponse struct {
 	ID                  int64      `json:"id"`
+	DisplayID           int64      `json:"display_id"`
 	DeckID              string     `json:"deck_id"`
 	Body                string     `json:"body"`
 	Status              string     `json:"status"`
@@ -101,6 +102,7 @@ func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQues
 		record := record
 		out = append(out, qotdQuestionResponse{
 			ID:                  record.ID,
+			DisplayID:           record.DisplayID,
 			DeckID:              strings.TrimSpace(record.DeckID),
 			Body:                record.Body,
 			Status:              strings.TrimSpace(record.Status),

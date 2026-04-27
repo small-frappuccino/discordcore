@@ -38,15 +38,15 @@ func (s *Service) completeOfficialPostProvisioning(
 		post = *updated
 	}
 
-	queuePosition := int64(0)
+	displayID := int64(0)
 	if question != nil {
-		queuePosition = question.QueuePosition
+		displayID = question.DisplayID
 	}
 
 	published, publishErr := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
 		GuildID:                    post.GuildID,
 		OfficialPostID:             post.ID,
-		QueuePosition:              queuePosition,
+		DisplayID:                  displayID,
 		DeckName:                   post.DeckNameSnapshot,
 		AvailableQuestions:         availableQuestions,
 		ChannelID:                  strings.TrimSpace(post.ChannelID),

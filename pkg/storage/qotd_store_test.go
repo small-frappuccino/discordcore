@@ -87,6 +87,102 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	}
 }
 
+func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "First question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
+	}
+	if first.ID != 1 {
+		t.Fatalf("expected fresh isolated database to start question IDs at 1, got %d", first.ID)
+	}
+
+	if err := store.DeleteQOTDQuestion(ctx, "g1", first.ID); err != nil {
+		t.Fatalf("DeleteQOTDQuestion() failed: %v", err)
+	}
+	if err := store.Init(); err != nil {
+		t.Fatalf("Init() after emptying qotd_questions failed: %v", err)
+	}
+
+	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Second question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
+	}
+	if second.ID != 1 {
+		t.Fatalf("expected question ID sequence to reset to 1 after Init() on an empty table, got %d", second.ID)
+	}
+}
+
+func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "First question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
+	}
+	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Second question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
+	}
+	if first.DisplayID != 1 || second.DisplayID != 2 {
+		t.Fatalf("expected sequential visible ids after create, got first=%d second=%d", first.DisplayID, second.DisplayID)
+	}
+
+	if err := store.DeleteQOTDQuestion(ctx, "g1", first.ID); err != nil {
+		t.Fatalf("DeleteQOTDQuestion() failed: %v", err)
+	}
+
+	remaining, err := store.ListQOTDQuestions(ctx, "g1", "default")
+	if err != nil {
+		t.Fatalf("ListQOTDQuestions() failed: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Fatalf("expected one remaining question, got %+v", remaining)
+	}
+	if remaining[0].ID != second.ID {
+		t.Fatalf("expected second question to remain, got %+v", remaining[0])
+	}
+	if remaining[0].DisplayID != 1 {
+		t.Fatalf("expected remaining question display id to be renumbered to 1, got %d", remaining[0].DisplayID)
+	}
+
+	third, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Third question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(third) failed: %v", err)
+	}
+	if third.DisplayID != 2 {
+		t.Fatalf("expected next visible id to continue from 2 after reindex, got %d", third.DisplayID)
+	}
+}
+
 func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()

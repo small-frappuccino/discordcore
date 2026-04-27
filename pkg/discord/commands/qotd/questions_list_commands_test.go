@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -294,6 +294,13 @@ func requireEphemeralResponse(t *testing.T, resp discordgo.InteractionResponse) 
 	}
 }
 
+func requirePublicResponse(t *testing.T, resp discordgo.InteractionResponse) {
+	t.Helper()
+	if resp.Data.Flags&discordgo.MessageFlagsEphemeral != 0 {
+		t.Fatalf("expected public response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
+	}
+}
+
 func TestQuestionsListCommandUsesRequestedDeck(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -317,7 +324,7 @@ func TestQuestionsListCommandUsesRequestedDeck(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requirePublicResponse(t, resp)
 	if len(resp.Data.Embeds) != 1 {
 		t.Fatalf("expected one embed, got %+v", resp.Data.Embeds)
 	}
@@ -371,7 +378,7 @@ func TestQuestionsListCommandPaginatesWithButtons(t *testing.T) {
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
 	firstResp := rec.lastResponse(t)
-	requireEphemeralResponse(t, firstResp)
+	requirePublicResponse(t, firstResp)
 	if !strings.Contains(firstResp.Data.Embeds[0].Description, "Question number 01") {
 		t.Fatalf("expected first page to contain first question, got %q", firstResp.Data.Embeds[0].Description)
 	}
@@ -456,7 +463,7 @@ func TestQuestionsAddCommandCreatesQuestionWithVisibleID(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requirePublicResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "Added QOTD question ID") {
 		t.Fatalf("expected add confirmation with ID, got %q", resp.Data.Content)
 	}
@@ -471,11 +478,14 @@ func TestQuestionsAddCommandCreatesQuestionWithVisibleID(t *testing.T) {
 	if questions[0].Body != "What is your favorite snack?" {
 		t.Fatalf("unexpected added question: %+v", questions[0])
 	}
+	if questions[0].DisplayID != 1 {
+		t.Fatalf("expected added question to receive visible ID 1, got %+v", questions[0])
+	}
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
 	listResp := rec.lastResponse(t)
-	requireEphemeralResponse(t, listResp)
-	if !strings.Contains(listResp.Data.Embeds[0].Description, fmt.Sprintf("ID:%d", questions[0].ID)) {
+	requirePublicResponse(t, listResp)
+	if !strings.Contains(listResp.Data.Embeds[0].Description, fmt.Sprintf("ID:%d", questions[0].DisplayID)) {
 		t.Fatalf("expected list embed to expose created question ID, got %q", listResp.Data.Embeds[0].Description)
 	}
 }
@@ -506,12 +516,12 @@ func TestQuestionsRemoveCommandDeletesByID(t *testing.T) {
 	}
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsRemoveSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
-		qotdIntOpt(questionsIDOptionName, questions[0].ID),
+		qotdIntOpt(questionsIDOptionName, questions[0].DisplayID),
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, fmt.Sprintf("Removed QOTD question ID %d.", questions[0].ID)) {
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, fmt.Sprintf("Removed QOTD question ID %d", questions[0].DisplayID)) {
 		t.Fatalf("expected remove confirmation with ID, got %q", resp.Data.Content)
 	}
 
@@ -550,7 +560,7 @@ func TestQuestionsResetCommandResetsUsedQuestionsToReady(t *testing.T) {
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsResetSubCommand, nil))
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requirePublicResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "Reset 1 QOTD question states") {
 		t.Fatalf("expected reset confirmation, got %q", resp.Data.Content)
 	}
@@ -565,7 +575,7 @@ func TestQuestionsResetCommandResetsUsedQuestionsToReady(t *testing.T) {
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
 	listResp := rec.lastResponse(t)
-	requireEphemeralResponse(t, listResp)
+	requirePublicResponse(t, listResp)
 	if !strings.Contains(listResp.Data.Embeds[0].Description, "✅") {
 		t.Fatalf("expected reset question to show check icon, got %q", listResp.Data.Embeds[0].Description)
 	}
@@ -593,8 +603,8 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "Published QOTD question ID") {
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "Published QOTD question ID 1 manually.") {
 		t.Fatalf("expected publish confirmation, got %q", resp.Data.Content)
 	}
 	if !strings.Contains(resp.Data.Content, "https://discord.com/channels/") {
@@ -614,7 +624,7 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
 	listResp := rec.lastResponse(t)
-	requireEphemeralResponse(t, listResp)
+	requirePublicResponse(t, listResp)
 	if !strings.Contains(listResp.Data.Embeds[0].Description, "🚫") {
 		t.Fatalf("expected used question to show prohibited icon, got %q", listResp.Data.Embeds[0].Description)
 	}

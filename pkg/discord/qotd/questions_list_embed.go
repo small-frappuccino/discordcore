@@ -77,11 +77,12 @@ func buildQuestionsListDescription(
 func formatQuestionsListEntry(question storage.QOTDQuestionRecord) string {
 	text := strings.Join(strings.Fields(strings.TrimSpace(question.Body)), " ")
 	text = truncateEmbedText(text, 96)
-	meta := make([]string, 0, 2)
-	if question.QueuePosition > 0 {
-		meta = append(meta, fmt.Sprintf("#%d", question.QueuePosition))
+	meta := make([]string, 0, 1)
+	displayID := question.DisplayID
+	if displayID <= 0 {
+		displayID = question.ID
 	}
-	meta = append(meta, fmt.Sprintf("ID:%d", question.ID))
+	meta = append(meta, fmt.Sprintf("ID:%d", displayID))
 	return fmt.Sprintf("%s \"%s\" (%s)", questionStatusIcon(question.Status), text, strings.Join(meta, " • "))
 }
 

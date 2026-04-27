@@ -38,6 +38,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			body,
 			status,
 			queue_position,
+			display_id,
 			created_by,
 			scheduled_for_date_utc,
 			used_at
@@ -51,12 +52,14 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 				WHEN ? > 0 THEN ?
 				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
 			END,
+			COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1),
 			?,
 			?,
 			?
 		)
 		RETURNING
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -73,6 +76,8 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		normalized.Status,
 		position,
 		position,
+		normalized.GuildID,
+		normalized.DeckID,
 		normalized.GuildID,
 		normalized.DeckID,
 		normalized.CreatedBy,
@@ -101,18 +106,43 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		ctx = context.Background()
 	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("update qotd question: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var currentDeckID string
+	var currentQueuePosition int64
+	if err := txQueryRow(tx,
+		`SELECT deck_id, queue_position FROM qotd_questions WHERE id = ? AND guild_id = ? FOR UPDATE`,
+		normalized.ID,
+		normalized.GuildID,
+	).Scan(&currentDeckID, &currentQueuePosition); err != nil {
+		return nil, fmt.Errorf("update qotd question: %w", err)
+	}
+
 	position := normalized.QueuePosition
 	if position < 1 {
 		position = 0
 	}
 
-	row := s.queryRowContext(ctx,
+	movingDeck := currentDeckID != normalized.DeckID
+	row := txQueryRow(tx,
 		`UPDATE qotd_questions
 		SET
 			deck_id = ?,
 			body = ?,
 			status = ?,
-			queue_position = CASE WHEN ? > 0 THEN ? ELSE queue_position END,
+			queue_position = CASE
+				WHEN ? > 0 THEN ?
+				WHEN ? THEN COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
+				ELSE queue_position
+			END,
+			display_id = CASE
+				WHEN ? THEN COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
+				ELSE display_id
+			END,
 			created_by = ?,
 			scheduled_for_date_utc = ?,
 			used_at = ?,
@@ -120,6 +150,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		WHERE id = ? AND guild_id = ?
 		RETURNING
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -135,6 +166,12 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		normalized.Status,
 		position,
 		position,
+		movingDeck,
+		normalized.GuildID,
+		normalized.DeckID,
+		movingDeck,
+		normalized.GuildID,
+		normalized.DeckID,
 		normalized.CreatedBy,
 		nullableTime(normalized.ScheduledForDateUTC),
 		nullableTime(normalized.UsedAt),
@@ -143,6 +180,26 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	)
 	updated, err := scanQOTDQuestionRecord(row)
 	if err != nil {
+		return nil, fmt.Errorf("update qotd question: %w", err)
+	}
+
+	needsReindex := movingDeck || (position > 0 && position != currentQueuePosition)
+	if needsReindex {
+		if movingDeck {
+			if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, normalized.GuildID, currentDeckID); err != nil {
+				return nil, fmt.Errorf("update qotd question: %w", err)
+			}
+		}
+		if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, normalized.GuildID, normalized.DeckID); err != nil {
+			return nil, fmt.Errorf("update qotd question: %w", err)
+		}
+		updated, err = getQOTDQuestionTx(ctx, tx, normalized.GuildID, normalized.ID)
+		if err != nil {
+			return nil, fmt.Errorf("update qotd question: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("update qotd question: %w", err)
 	}
 	return updated, nil
@@ -159,8 +216,32 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	_, err := s.execContext(ctx, `DELETE FROM qotd_questions WHERE guild_id = ? AND id = ?`, guildID, questionID)
+
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		return fmt.Errorf("delete qotd question: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var deckID string
+	if err := txQueryRow(tx,
+		`SELECT deck_id FROM qotd_questions WHERE guild_id = ? AND id = ? FOR UPDATE`,
+		guildID,
+		questionID,
+	).Scan(&deckID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("delete qotd question: %w", err)
+	}
+
+	if _, err := txExecContext(ctx, tx, `DELETE FROM qotd_questions WHERE guild_id = ? AND id = ?`, guildID, questionID); err != nil {
+		return fmt.Errorf("delete qotd question: %w", err)
+	}
+	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
+		return fmt.Errorf("delete qotd question: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("delete qotd question: %w", err)
 	}
 	return nil
@@ -407,6 +488,7 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 	rows, err := s.queryContext(ctx,
 		`SELECT
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -459,6 +541,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 	row := s.queryRowContext(ctx,
 		`SELECT
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -551,6 +634,9 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 			return fmt.Errorf("reorder qotd questions: %w", err)
 		}
 	}
+	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
+		return fmt.Errorf("reorder qotd questions: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("reorder qotd questions: %w", err)
 	}
@@ -586,6 +672,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	row := txQueryRow(tx,
 		`SELECT
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -624,6 +711,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		WHERE id = ?
 		RETURNING
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -672,6 +760,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	row := txQueryRow(tx,
 		`SELECT
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -709,6 +798,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		WHERE id = ?
 		RETURNING
 			id,
+			display_id,
 			guild_id,
 			deck_id,
 			body,
@@ -1351,6 +1441,7 @@ func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, er
 	rec.Body = strings.TrimSpace(rec.Body)
 	rec.Status = strings.TrimSpace(rec.Status)
 	rec.CreatedBy = strings.TrimSpace(rec.CreatedBy)
+	rec.DisplayID = maxInt64(rec.DisplayID, 0)
 	rec.QueuePosition = maxInt64(rec.QueuePosition, 0)
 	rec.ScheduledForDateUTC = normalizeQOTDDatePtr(rec.ScheduledForDateUTC)
 	rec.UsedAt = normalizeQOTDTimePtr(rec.UsedAt)
@@ -1594,6 +1685,7 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 	var usedAt sql.NullTime
 	if err := scanner.Scan(
 		&record.ID,
+		&record.DisplayID,
 		&record.GuildID,
 		&record.DeckID,
 		&record.Body,
@@ -1610,6 +1702,87 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 	record.ScheduledForDateUTC = timePtrFromNull(scheduledFor)
 	record.UsedAt = timePtrFromNull(usedAt)
 	return &record, nil
+}
+
+func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, questionID int64) (*QOTDQuestionRecord, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("transaction is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	row := txQueryRow(tx,
+		`SELECT
+			id,
+			display_id,
+			guild_id,
+			deck_id,
+			body,
+			status,
+			queue_position,
+			created_by,
+			scheduled_for_date_utc,
+			used_at,
+			created_at,
+			updated_at
+		FROM qotd_questions
+		WHERE guild_id = ? AND id = ?`,
+		guildID,
+		questionID,
+	)
+	record, err := scanQOTDQuestionRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return record, nil
+}
+
+func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx *sql.Tx, guildID, deckID string) error {
+	if tx == nil {
+		return fmt.Errorf("transaction is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
+	if guildID == "" || deckID == "" {
+		return nil
+	}
+
+	if _, err := txExecContext(ctx, tx,
+		`UPDATE qotd_questions
+		SET display_id = -id
+		WHERE guild_id = ? AND deck_id = ?`,
+		guildID,
+		deckID,
+	); err != nil {
+		return err
+	}
+
+	if _, err := txExecContext(ctx, tx,
+		`WITH ordered AS (
+			SELECT
+				id,
+				ROW_NUMBER() OVER (ORDER BY queue_position ASC, id ASC)::BIGINT AS next_display_id
+			FROM qotd_questions
+			WHERE guild_id = ?
+			  AND deck_id = ?
+		)
+		UPDATE qotd_questions AS questions
+		SET display_id = ordered.next_display_id
+		FROM ordered
+		WHERE questions.id = ordered.id`,
+		guildID,
+		deckID,
+	); err != nil {
+		return err
+	}
+	return nil
 }
 
 func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord, error) {

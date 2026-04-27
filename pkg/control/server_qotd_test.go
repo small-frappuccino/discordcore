@@ -239,6 +239,9 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 		t.Fatalf("create first question status=%d body=%q", createFirst.Code, createFirst.Body.String())
 	}
 	firstResp := decodeQOTDRouteResponse(t, createFirst.Body.String())
+	if firstResp.Question.DisplayID != 1 {
+		t.Fatalf("expected first question visible id to be 1, got %+v", firstResp.Question)
+	}
 
 	createSecond := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/questions", map[string]any{
 		"body":   "Second question",
@@ -248,6 +251,9 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 		t.Fatalf("create second question status=%d body=%q", createSecond.Code, createSecond.Body.String())
 	}
 	secondResp := decodeQOTDRouteResponse(t, createSecond.Body.String())
+	if secondResp.Question.DisplayID != 2 {
+		t.Fatalf("expected second question visible id to be 2, got %+v", secondResp.Question)
+	}
 
 	reorderRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/questions/reorder", map[string]any{
 		"ordered_ids": []int64{secondResp.Question.ID, firstResp.Question.ID},
@@ -258,6 +264,9 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	reorderResp := decodeQOTDRouteResponse(t, reorderRec.Body.String())
 	if len(reorderResp.Questions) != 2 || reorderResp.Questions[0].ID != secondResp.Question.ID {
 		t.Fatalf("unexpected reordered questions: %+v", reorderResp.Questions)
+	}
+	if reorderResp.Questions[0].DisplayID != 1 || reorderResp.Questions[1].DisplayID != 2 {
+		t.Fatalf("expected reordered questions to expose sequential visible ids, got %+v", reorderResp.Questions)
 	}
 
 	summaryRec := performHandlerJSONRequest(t, handler, "GET", "/v1/guilds/g1/qotd", nil)

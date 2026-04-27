@@ -1,12 +1,15 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 var leaveRuntimeGuild = func(session *discordgo.Session, guildID string) error {
@@ -70,7 +73,7 @@ func enforceRuntimeGuildAllowlist(runtime *botRuntime) error {
 	return nil
 }
 
-func registerRuntimeGuildAllowlistHandler(runtime *botRuntime) {
+func registerRuntimeGuildAllowlistHandler(runtime *botRuntime, configManager *files.ConfigManager, store *storage.Store) {
 	if runtime == nil || runtime.session == nil {
 		return
 	}
@@ -78,13 +81,17 @@ func registerRuntimeGuildAllowlistHandler(runtime *botRuntime) {
 		runtime.cleanupStop = make(chan struct{})
 	}
 
-	cancel := runtime.session.AddHandler(func(session *discordgo.Session, event *discordgo.GuildCreate) {
+	cancelGuildCreate := runtime.session.AddHandler(func(session *discordgo.Session, event *discordgo.GuildCreate) {
 		handleRuntimeGuildCreate(session, runtime.instanceID, event)
+	})
+	cancelGuildDelete := runtime.session.AddHandler(func(session *discordgo.Session, event *discordgo.GuildDelete) {
+		handleRuntimeGuildDelete(runtime.instanceID, event, configManager, store)
 	})
 
 	go func(stop <-chan struct{}) {
 		<-stop
-		cancel()
+		cancelGuildCreate()
+		cancelGuildDelete()
 	}(runtime.cleanupStop)
 }
 
@@ -110,6 +117,33 @@ func handleRuntimeGuildCreate(session *discordgo.Session, botInstanceID string, 
 
 	log.ApplicationLogger().Warn(
 		"Left unauthorized guild after guild create",
+		"botInstanceID", botInstanceID,
+		"guildID", guildID,
+	)
+}
+
+func handleRuntimeGuildDelete(botInstanceID string, event *discordgo.GuildDelete, configManager *files.ConfigManager, store *storage.Store) {
+	if event == nil {
+		return
+	}
+
+	guildID := strings.TrimSpace(event.ID)
+	if guildID == "" || event.Unavailable || isAllowedRuntimeGuild(guildID) {
+		return
+	}
+
+	if err := deleteGuildReferences(context.Background(), configManager, store, guildID); err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Failed to remove disallowed guild references after guild delete",
+			"botInstanceID", botInstanceID,
+			"guildID", guildID,
+			"err", err,
+		)
+		return
+	}
+
+	log.ApplicationLogger().Warn(
+		"Removed disallowed guild references after guild delete",
 		"botInstanceID", botInstanceID,
 		"guildID", guildID,
 	)

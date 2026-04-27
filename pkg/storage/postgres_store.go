@@ -75,6 +75,37 @@ func (s *Store) Init() error {
 	if err := validateSchema(ctx, s.db); err != nil {
 		return fmt.Errorf("validate schema: %w", err)
 	}
+	if err := s.resetQOTDQuestionSequenceWhenEmpty(ctx); err != nil {
+		return fmt.Errorf("reset qotd question sequence: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) resetQOTDQuestionSequenceWhenEmpty(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("store database handle is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var hasRows bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qotd_questions LIMIT 1)`).Scan(&hasRows); err != nil {
+		return err
+	}
+	if hasRows {
+		return nil
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		SELECT setval(
+			pg_get_serial_sequence(format('%I.%I', current_schema(), 'qotd_questions'), 'id'),
+			1,
+			false
+		)
+	`); err != nil {
+		return err
+	}
 	return nil
 }
 

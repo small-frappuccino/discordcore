@@ -378,6 +378,7 @@ describe("ControlApiClient feature routes", () => {
                 "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
               question: {
                 id: 1,
+                display_id: 1,
                 deck_id: "default",
                 body: "What should we build next?",
                 status: "used",
