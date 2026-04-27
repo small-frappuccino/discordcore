@@ -17,6 +17,24 @@ import (
 
 var errFakePublishFailed = errors.New("fake publish failed")
 
+func scheduledQOTDConfig(enabled bool, channelID string) files.QOTDConfig {
+	hourUTC := 12
+	minuteUTC := 43
+	return files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule: files.QOTDPublishScheduleConfig{
+			HourUTC:   &hourUTC,
+			MinuteUTC: &minuteUTC,
+		},
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   enabled,
+			ChannelID: channelID,
+		}},
+	}
+}
+
 type fakePublisher struct {
 	publishedParams  []discordqotd.PublishOfficialPostParams
 	publishResponses []fakePublishResponse
@@ -217,8 +235,14 @@ func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 	service, store, _ := newTestQOTDService(t)
 
+	hourUTC := 12
+	minuteUTC := 43
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule: files.QOTDPublishScheduleConfig{
+			HourUTC:   &hourUTC,
+			MinuteUTC: &minuteUTC,
+		},
 		Decks: []files.QOTDDeckConfig{
 			{
 				ID:        files.LegacyQOTDDefaultDeckID,
@@ -254,17 +278,7 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		t.Fatalf("CreateQuestion(deck-b) failed: %v", err)
 	}
 
-	updated, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{
-			{
-				ID:        files.LegacyQOTDDefaultDeckID,
-				Name:      files.LegacyQOTDDefaultDeckName,
-				Enabled:   true,
-				ChannelID: "question-channel-1",
-			},
-		},
-	})
+	updated, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "question-channel-1"))
 	if err != nil {
 		t.Fatalf("UpdateSettings(remove deck) failed: %v", err)
 	}
@@ -296,15 +310,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
 	}
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "123456789012345678",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -324,7 +330,11 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 		t.Fatalf("UpdateQOTDQuestion(old used) failed: %v", err)
 	}
 
-	oldLifecycle := EvaluateOfficialPost(time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC), service.clock())
+	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, "123456789012345678"))
+	if err != nil {
+		t.Fatalf("resolvePublishSchedule() failed: %v", err)
+	}
+	oldLifecycle := EvaluateOfficialPost(schedule, time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC), service.clock())
 	oldOfficial, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               files.LegacyQOTDDefaultDeckID,
@@ -482,15 +492,7 @@ func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
 
 func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T) {
 	service, store, fake := newTestQOTDService(t)
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "question-channel-1",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "question-channel-1")); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -679,15 +681,7 @@ func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "123456789012345678",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -803,7 +797,11 @@ func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing
 		t.Fatalf("UpdateQOTDQuestion(reserved) failed: %v", err)
 	}
 
-	lifecycle := EvaluateOfficialPost(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC), service.clock())
+	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, "123456789012345678"))
+	if err != nil {
+		t.Fatalf("resolvePublishSchedule() failed: %v", err)
+	}
+	lifecycle := EvaluateOfficialPost(schedule, time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC), service.clock())
 	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:                    "g1",
 		DeckID:                     files.LegacyQOTDDefaultDeckID,
@@ -893,7 +891,11 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 
 	publishDate := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
 	publishedAt := time.Date(2026, 4, 1, 12, 43, 0, 0, time.UTC)
-	lifecycle := EvaluateOfficialPost(publishDate, service.clock())
+	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, "forum-1"))
+	if err != nil {
+		t.Fatalf("resolvePublishSchedule() failed: %v", err)
+	}
+	lifecycle := EvaluateOfficialPost(schedule, publishDate, service.clock())
 	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               files.LegacyQOTDDefaultDeckID,

@@ -53,6 +53,15 @@ type routeFakePublisher struct {
 	channelMessages map[string][]discordqotd.ArchivedMessage
 }
 
+func routeQOTDSchedule() files.QOTDPublishScheduleConfig {
+	hourUTC := 12
+	minuteUTC := 43
+	return files.QOTDPublishScheduleConfig{
+		HourUTC:   &hourUTC,
+		MinuteUTC: &minuteUTC,
+	}
+}
+
 func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
 	messageID := "message-" + params.PublishDateUTC.Format("20060102")
 	threadID := "thread-" + params.PublishDateUTC.Format("20060102")
@@ -60,7 +69,7 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 		ThreadID:                   threadID,
 		StarterMessageID:           messageID,
 		AnswerChannelID:            threadID,
-		PublishedAt:                qotd.PublishTimeUTC(params.PublishDateUTC),
+		PublishedAt:                qotd.PublishTimeUTC(routeQOTDSchedule(), params.PublishDateUTC),
 		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}, nil
 }
@@ -273,6 +282,7 @@ func TestQOTDRoutesPublishNowReturnsThreadAndAnswerChannelTargets(t *testing.T) 
 
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     routeQOTDSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
@@ -491,6 +501,7 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	srv, service, store, _ := newQOTDControlTestServer(t)
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     routeQOTDSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
@@ -510,9 +521,10 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	}
 
 	baseNow := time.Now().UTC()
-	publishDate := qotd.CurrentPublishDateUTC(baseNow).AddDate(0, 0, -3)
-	publishedAt := qotd.PublishTimeUTC(publishDate)
-	lifecycle := qotd.EvaluateOfficialPost(publishDate, baseNow)
+	schedule := routeQOTDSchedule()
+	publishDate := qotd.CurrentPublishDateUTC(schedule, baseNow).AddDate(0, 0, -3)
+	publishedAt := qotd.PublishTimeUTC(schedule, publishDate)
+	lifecycle := qotd.EvaluateOfficialPost(schedule, publishDate, baseNow)
 	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
 		QuestionID:           question.ID,

@@ -154,25 +154,12 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 	if guildID == "" {
 		return false
 	}
-	guildConfig := pc.config.GuildConfig(guildID)
-
-	ownerID, ownerFound, err := pc.ResolveOwnerID(guildID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Permission checker failed to resolve guild owner",
-			"operation", "commands.permission.has_permission.resolve_owner",
-			"guildID", guildID,
-			"userID", userID,
-			"err", err,
-		)
-	}
-	isOwner := err == nil && ownerFound && ownerID == userID
-
-	if guildConfig == nil || len(guildConfig.Roles.Allowed) == 0 {
-		return isOwner
-	}
-	if isOwner {
+	if pc.hasAdministrativeAccess(guildID, userID) {
 		return true
+	}
+	guildConfig := pc.config.GuildConfig(guildID)
+	if guildConfig == nil || len(guildConfig.Roles.Allowed) == 0 {
+		return false
 	}
 
 	member, memberFound, err := pc.ResolveMember(guildID, userID)
@@ -196,6 +183,81 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 		}
 	}
 	return false
+}
+
+func (pc *PermissionChecker) hasAdministrativeAccess(guildID, userID string) bool {
+	ownerID, ownerFound, err := pc.ResolveOwnerID(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild owner",
+			"operation", "commands.permission.has_permission.resolve_owner",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+	}
+	if err == nil && ownerFound && ownerID == userID {
+		return true
+	}
+
+	member, memberFound, err := pc.ResolveMember(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild member for admin access",
+			"operation", "commands.permission.has_permission.resolve_member_admin",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	if !memberFound || member == nil {
+		return false
+	}
+
+	roles, err := pc.ResolveRoles(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild roles for admin access",
+			"operation", "commands.permission.has_permission.resolve_roles_admin",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	permissions := memberPermissionBits(member, roles, guildID)
+	if permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		return true
+	}
+	if permissions&discordgo.PermissionManageGuild == discordgo.PermissionManageGuild {
+		return true
+	}
+	return false
+}
+
+func memberPermissionBits(member *discordgo.Member, roles []*discordgo.Role, guildID string) int64 {
+	if member == nil {
+		return 0
+	}
+	rolesByID := make(map[string]*discordgo.Role, len(roles))
+	for _, role := range roles {
+		if role == nil {
+			continue
+		}
+		rolesByID[role.ID] = role
+	}
+
+	var permissions int64
+	if role, ok := rolesByID[guildID]; ok && role != nil {
+		permissions |= role.Permissions
+	}
+	for _, roleID := range member.Roles {
+		if role, ok := rolesByID[roleID]; ok && role != nil {
+			permissions |= role.Permissions
+		}
+	}
+	return permissions
 }
 
 // HasRole checks whether the user has a specific role

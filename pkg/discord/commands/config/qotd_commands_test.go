@@ -8,6 +8,15 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
+func testCommandSchedule() files.QOTDPublishScheduleConfig {
+	hourUTC := 12
+	minuteUTC := 43
+	return files.QOTDPublishScheduleConfig{
+		HourUTC:   &hourUTC,
+		MinuteUTC: &minuteUTC,
+	}
+}
+
 func TestQOTDConfigCommandsSetChannelAndToggleEnabled(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -40,6 +49,18 @@ func TestQOTDConfigCommandsSetChannelAndToggleEnabled(t *testing.T) {
 		t.Fatalf("unexpected qotd config after channel update: %+v", deck)
 	}
 
+	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, qotdScheduleSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{
+		intOpt(qotdScheduleHourOptionName, 12),
+		intOpt(qotdScheduleMinuteOptionName, 43),
+	}))
+	scheduleResp := rec.lastResponse(t)
+	if err := ephemeralError(scheduleResp); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(scheduleResp.Data.Content, "12:43") {
+		t.Fatalf("unexpected schedule response: %q", scheduleResp.Data.Content)
+	}
+
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, qotdEnabledSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{
 		boolOpt(qotdEnabledOptionName, true),
 	}))
@@ -58,6 +79,9 @@ func TestQOTDConfigCommandsSetChannelAndToggleEnabled(t *testing.T) {
 	deck, ok = qotdConfig.ActiveDeck()
 	if !ok || !deck.Enabled || deck.ChannelID != "123456789012345678" {
 		t.Fatalf("unexpected qotd config after enabling: %+v", qotdConfig)
+	}
+	if qotdConfig.Schedule.HourUTC == nil || qotdConfig.Schedule.MinuteUTC == nil || *qotdConfig.Schedule.HourUTC != 12 || *qotdConfig.Schedule.MinuteUTC != 43 {
+		t.Fatalf("expected persisted qotd schedule after enabling, got %+v", qotdConfig.Schedule)
 	}
 
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, qotdEnabledSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{
@@ -111,11 +135,57 @@ func TestQOTDConfigCommandsRejectEnableWithoutChannel(t *testing.T) {
 	}
 }
 
+func TestQOTDConfigCommandsRejectEnableWithoutSchedule(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	session, rec := newConfigCommandTestSession(t)
+	router, cm := newConfigCommandTestRouter(t, session, guildID, ownerID)
+
+	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, qotdChannelSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{
+		channelOpt(qotdChannelOptionName, "123456789012345678"),
+	}))
+	if err := ephemeralError(rec.lastResponse(t)); err != nil {
+		t.Fatal(err)
+	}
+
+	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, qotdEnabledSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{
+		boolOpt(qotdEnabledOptionName, true),
+	}))
+
+	resp := rec.lastResponse(t)
+	if err := ephemeralError(resp); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(resp.Data.Content, "Set the QOTD publish hour and minute before enabling publishing") {
+		t.Fatalf("unexpected validation response: %q", resp.Data.Content)
+	}
+
+	qotdConfig, err := cm.QOTDConfig(guildID)
+	if err != nil {
+		t.Fatalf("QOTDConfig() failed: %v", err)
+	}
+	deck, ok := qotdConfig.ActiveDeck()
+	if !ok || deck.Enabled || deck.ChannelID != "123456789012345678" {
+		t.Fatalf("expected channel-only qotd config to remain disabled, got %+v", qotdConfig)
+	}
+}
+
 func channelOpt(name, channelID string) *discordgo.ApplicationCommandInteractionDataOption {
 	return &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
 		Type:  discordgo.ApplicationCommandOptionChannel,
 		Value: channelID,
+	}
+}
+
+func intOpt(name string, value int64) *discordgo.ApplicationCommandInteractionDataOption {
+	return &discordgo.ApplicationCommandInteractionDataOption{
+		Name:  name,
+		Type:  discordgo.ApplicationCommandOptionInteger,
+		Value: float64(value),
 	}
 }
 
@@ -135,6 +205,7 @@ func TestQOTDConfigGetReportsCurrentState(t *testing.T) {
 			}
 			cfg.Guilds[idx].QOTD = files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Schedule:     testCommandSchedule(),
 				Decks: []files.QOTDDeckConfig{{
 					ID:        files.LegacyQOTDDefaultDeckID,
 					Name:      files.LegacyQOTDDefaultDeckName,
@@ -159,5 +230,8 @@ func TestQOTDConfigGetReportsCurrentState(t *testing.T) {
 	}
 	if !strings.Contains(description, "QOTD Channel: channel-555") {
 		t.Fatalf("expected qotd channel line in config output, got %q", description)
+	}
+	if !strings.Contains(description, "QOTD Schedule (UTC): 12:43") {
+		t.Fatalf("expected qotd schedule line in config output, got %q", description)
 	}
 }

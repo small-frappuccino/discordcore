@@ -90,11 +90,17 @@ export interface QOTDCollectorConfig {
   start_date?: string;
 }
 
+export interface QOTDPublishScheduleConfig {
+  hour_utc?: number;
+  minute_utc?: number;
+}
+
 export interface QOTDConfig {
   verified_role_id?: string;
   active_deck_id?: string;
   decks?: QOTDDeck[];
   collector?: QOTDCollectorConfig;
+  schedule?: QOTDPublishScheduleConfig;
 }
 
 export interface QOTDQuestion {

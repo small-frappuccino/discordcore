@@ -267,6 +267,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 		return Summary{}, err
 	}
 	displaySettings := files.DashboardQOTDConfig(settings)
+	schedule, scheduleErr := resolvePublishSchedule(displaySettings)
 	questions, err := s.store.ListQOTDQuestions(ctx, guildID, "")
 	if err != nil {
 		return Summary{}, err
@@ -275,10 +276,14 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	if err != nil {
 		return Summary{}, err
 	}
-	currentPublishDate := CurrentPublishDateUTC(now)
-	currentSlotPost, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
-	if err != nil {
-		return Summary{}, err
+	currentPublishDate := time.Time{}
+	var currentSlotPost *storage.QOTDOfficialPostRecord
+	if scheduleErr == nil {
+		currentPublishDate = CurrentPublishDateUTC(schedule, now)
+		currentSlotPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
+		if err != nil {
+			return Summary{}, err
+		}
 	}
 
 	summary := Summary{

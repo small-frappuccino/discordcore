@@ -664,3 +664,29 @@ func TestRegisterInteractionRouteDispatchesComponentAndModalHandlers(t *testing.
 		t.Fatalf("expected modal route to dispatch once, got %d", modalCalls)
 	}
 }
+
+func TestHandleInteractionUsesGuildRouteFilter(t *testing.T) {
+	session, _ := newTestSession(t)
+	config := files.NewMemoryConfigManager()
+	router := NewCommandRouter(session, config)
+
+	allowedCalls := 0
+	router.RegisterSlashCommand(testCommand{name: "bootstrap", handler: func(*Context) error {
+		allowedCalls++
+		return nil
+	}})
+	router.RegisterSlashCommand(testCommand{name: "blocked", handler: func(*Context) error {
+		allowedCalls++
+		return nil
+	}})
+	router.SetGuildRouteFilter(func(guildID string, routeKey InteractionRouteKey) bool {
+		return guildID == "guild" && routeKey.Path == "bootstrap"
+	})
+
+	router.HandleInteraction(session, buildInteraction("bootstrap", "guild", "user"))
+	router.HandleInteraction(session, buildInteraction("blocked", "guild", "user"))
+
+	if allowedCalls != 1 {
+		t.Fatalf("expected exactly one routed interaction after guild route filtering, got %d", allowedCalls)
+	}
+}

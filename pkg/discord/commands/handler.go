@@ -66,7 +66,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	// Create the command manager
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
 	if router := ch.commandManager.GetRouter(); router != nil {
-		router.SetGuildFilter(ch.handlesGuild)
+		router.SetGuildRouteFilter(ch.handlesGuildRoute)
 	}
 
 	// Register configuration commands
@@ -154,6 +154,10 @@ func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {
 }
 
 func (ch *CommandHandler) handlesGuild(guildID string) bool {
+	return ch.handlesGuildRoute(guildID, core.InteractionRouteKey{})
+}
+
+func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
 	if !ch.matchesGuildBotInstance(guildID) {
 		return false
 	}
@@ -161,7 +165,10 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 	if cfg == nil {
 		return false
 	}
-	return cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands
+	if cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands {
+		return true
+	}
+	return config.AllowsDormantGuildBootstrapRoute(routeKey)
 }
 
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {

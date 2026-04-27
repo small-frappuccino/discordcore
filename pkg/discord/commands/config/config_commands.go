@@ -30,8 +30,15 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	setCmd := NewConfigSetSubCommand(cc.configManager)
 	getCmd := NewConfigGetSubCommand(cc.configManager)
 	listCmd := NewConfigListSubCommand(cc.configManager)
+	smokeTestCmd := NewSmokeTestSubCommand(cc.configManager)
+	commandsEnabledCmd := NewCommandsEnabledSubCommand(cc.configManager)
+	commandChannelCmd := NewCommandChannelSubCommand(cc.configManager)
+	allowedRoleAddCmd := NewAllowedRoleAddSubCommand(cc.configManager)
+	allowedRoleRemoveCmd := NewAllowedRoleRemoveSubCommand(cc.configManager)
+	allowedRoleListCmd := NewAllowedRoleListSubCommand(cc.configManager)
 	qotdEnabledCmd := NewQOTDEnabledSubCommand(cc.configManager)
 	qotdChannelCmd := NewQOTDChannelSubCommand(cc.configManager)
+	qotdScheduleCmd := NewQOTDScheduleSubCommand(cc.configManager)
 	webhookCatalog := newWebhookEmbedInteractionCatalog(cc.configManager)
 	pingCmd := NewPingCommand()
 	echoCmd := NewEchoCommand()
@@ -52,8 +59,15 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	group.AddSubCommand(setCmd)
 	group.AddSubCommand(getCmd)
 	group.AddSubCommand(listCmd)
+	group.AddSubCommand(smokeTestCmd)
+	group.AddSubCommand(commandsEnabledCmd)
+	group.AddSubCommand(commandChannelCmd)
+	group.AddSubCommand(allowedRoleAddCmd)
+	group.AddSubCommand(allowedRoleRemoveCmd)
+	group.AddSubCommand(allowedRoleListCmd)
 	group.AddSubCommand(qotdEnabledCmd)
 	group.AddSubCommand(qotdChannelCmd)
+	group.AddSubCommand(qotdScheduleCmd)
 	webhookCatalog.appendToGroup(group)
 
 	// Register (or refresh) the group.
@@ -247,6 +261,11 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 
 	var b strings.Builder
 	b.WriteString("**Server Configuration:**\n")
+	commandsEnabled := false
+	if snapshot := ctx.Config.Config(); snapshot != nil {
+		commandsEnabled = snapshot.ResolveFeatures(ctx.GuildID).Services.Commands
+	}
+	b.WriteString(fmt.Sprintf("Commands Enabled: %t\n", commandsEnabled))
 	b.WriteString(fmt.Sprintf("Command Channel: %s\n", emptyToDash(ctx.GuildConfig.Channels.Commands)))
 	b.WriteString(fmt.Sprintf("Avatar Logging: %s\n", emptyToDash(ctx.GuildConfig.Channels.AvatarLogging)))
 	b.WriteString(fmt.Sprintf("Role Update: %s\n", emptyToDash(ctx.GuildConfig.Channels.RoleUpdate)))
@@ -268,6 +287,7 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	}
 	b.WriteString(fmt.Sprintf("QOTD Enabled: %t\n", qotdEnabled))
 	b.WriteString(fmt.Sprintf("QOTD Channel: %s\n", emptyToDash(qotdChannel)))
+	b.WriteString(fmt.Sprintf("QOTD Schedule (UTC): %s\n", formatQOTDSchedule(qotdSettings.Schedule)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
 	builder := core.NewResponseBuilder(ctx.Session).
@@ -299,6 +319,13 @@ func (c *ConfigListSubCommand) RequiresPermissions() bool { return true }
 func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 	options := []string{
 		"**Available Configuration Options:**",
+		"`/config smoke_test` - Show bootstrap readiness for general config and QOTD",
+		"`/config commands_enabled <enabled>` - Enable or disable slash command handling for this guild",
+		"`/config command_channel <channel>` - Set the channel used for command routing or references",
+		"`/config allowed_role_add <role>` - Allow one role to use admin-level slash commands",
+		"`/config allowed_role_remove <role>` - Remove one allowed admin role",
+		"`/config allowed_role_list` - Show the current allowed admin roles",
+		"",
 		"`channels.commands` - Channel for bot commands",
 		"`channels.avatar_logging` - Channel for avatar change logs",
 		"`channels.role_update` - Channel for role update logs",
@@ -313,6 +340,7 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
 		"",
+		"`/config qotd_schedule <hour> <minute>` - Set the QOTD publish schedule in UTC",
 		"`/config qotd_enabled <enabled>` - Enable or disable QOTD publishing for the active deck",
 		"`/config qotd_channel <channel>` - Set the QOTD delivery channel for the active deck",
 		"",
@@ -338,4 +366,23 @@ func emptyToDash(s string) string {
 		return "—"
 	}
 	return s
+}
+
+func formatQOTDSchedule(schedule files.QOTDPublishScheduleConfig) string {
+	hourUTC, minuteUTC, ok := schedule.Values()
+	if ok {
+		return fmt.Sprintf("%02d:%02d", hourUTC, minuteUTC)
+	}
+	hour := "--"
+	minute := "--"
+	if schedule.HourUTC != nil {
+		hour = fmt.Sprintf("%02d", *schedule.HourUTC)
+	}
+	if schedule.MinuteUTC != nil {
+		minute = fmt.Sprintf("%02d", *schedule.MinuteUTC)
+	}
+	if schedule.IsZero() {
+		return "—"
+	}
+	return hour + ":" + minute
 }

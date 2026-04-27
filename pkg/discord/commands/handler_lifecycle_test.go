@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -165,5 +166,38 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	handler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
+	}
+}
+
+func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+	cfgMgr := files.NewMemoryConfigManager()
+	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = []files.GuildConfig{{
+			GuildID:       "guild-1",
+			BotInstanceID: "alice",
+			Features: files.FeatureToggles{
+				Services: files.FeatureServiceToggles{
+					Commands: boolPtr(false),
+				},
+			},
+		}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	handler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
+	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}) {
+		t.Fatal("expected dormant guild bootstrap command route to remain enabled")
+	}
+	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config smoke_test"}) {
+		t.Fatal("expected dormant guild smoke test route to remain enabled")
+	}
+	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
+		t.Fatal("expected dormant guild qotd bootstrap route to remain enabled")
+	}
+	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
+		t.Fatal("expected non-bootstrap route to remain disabled for dormant guild")
 	}
 }

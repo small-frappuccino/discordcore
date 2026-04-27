@@ -299,12 +299,19 @@ type QOTDCollectorConfig struct {
 	StartDate       string   `json:"start_date,omitempty"`
 }
 
+// QOTDPublishScheduleConfig stores the UTC publish boundary for one guild.
+type QOTDPublishScheduleConfig struct {
+	HourUTC   *int `json:"hour_utc,omitempty"`
+	MinuteUTC *int `json:"minute_utc,omitempty"`
+}
+
 // QOTDConfig stores per-guild question-of-the-day deck settings.
 type QOTDConfig struct {
-	VerifiedRoleID string              `json:"verified_role_id,omitempty"`
-	ActiveDeckID   string              `json:"active_deck_id,omitempty"`
-	Decks          []QOTDDeckConfig    `json:"decks,omitempty"`
-	Collector      QOTDCollectorConfig `json:"collector,omitempty"`
+	VerifiedRoleID string                    `json:"verified_role_id,omitempty"`
+	ActiveDeckID   string                    `json:"active_deck_id,omitempty"`
+	Decks          []QOTDDeckConfig          `json:"decks,omitempty"`
+	Collector      QOTDCollectorConfig       `json:"collector,omitempty"`
+	Schedule       QOTDPublishScheduleConfig `json:"schedule,omitempty"`
 }
 
 // UserPruneConfig controls periodic user pruning per guild.

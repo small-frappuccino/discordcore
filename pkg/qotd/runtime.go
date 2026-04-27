@@ -35,8 +35,16 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	defer lifecycleLock.Unlock()
 
 	now := s.clock()
-	publishDate := CurrentPublishDateUTC(now)
-	if now.Before(PublishTimeUTC(publishDate)) {
+	cfg, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return false, err
+	}
+	schedule, err := resolvePublishSchedule(cfg)
+	if err != nil {
+		return false, ErrQOTDDisabled
+	}
+	publishDate := CurrentPublishDateUTC(schedule, now)
+	if now.Before(PublishTimeUTC(schedule, publishDate)) {
 		return false, nil
 	}
 
@@ -60,11 +68,6 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		}
 		return false, nil
 	}
-
-	cfg, err := s.configManager.QOTDConfig(guildID)
-	if err != nil {
-		return false, err
-	}
 	deck, ok := cfg.ActiveDeck()
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return false, ErrQOTDDisabled
@@ -85,7 +88,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, err
 	}
 
-	lifecycle := EvaluateOfficialPost(publishDate, now)
+	lifecycle := EvaluateOfficialPost(schedule, publishDate, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
 		GuildID:              guildID,
 		DeckID:               deck.ID,

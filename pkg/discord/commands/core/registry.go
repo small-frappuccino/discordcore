@@ -24,6 +24,7 @@ type CommandRouter struct {
 	permChecker *PermissionChecker
 	store       *storage.Store
 	guildFilter func(string) bool
+	guildRouteFilter func(string, InteractionRouteKey) bool
 
 	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
 	// It is set by the app runner and can be used by interaction handlers to apply changes
@@ -110,10 +111,35 @@ func (cr *CommandRouter) SetGuildFilter(filter func(string) bool) {
 		return
 	}
 	cr.guildFilter = filter
+	if filter == nil {
+		cr.guildRouteFilter = nil
+		return
+	}
+	cr.guildRouteFilter = func(guildID string, _ InteractionRouteKey) bool {
+		return filter(guildID)
+	}
 }
 
-func (cr *CommandRouter) shouldHandleGuild(guildID string) bool {
-	if cr == nil || cr.guildFilter == nil || guildID == "" {
+// SetGuildRouteFilter restricts interaction handling to guild/route pairs
+// accepted by the provided predicate.
+func (cr *CommandRouter) SetGuildRouteFilter(filter func(string, InteractionRouteKey) bool) {
+	if cr == nil {
+		return
+	}
+	cr.guildRouteFilter = filter
+	if filter == nil {
+		cr.guildFilter = nil
+	}
+}
+
+func (cr *CommandRouter) shouldHandleInteraction(guildID string, routeKey InteractionRouteKey) bool {
+	if cr == nil || guildID == "" {
+		return true
+	}
+	if cr.guildRouteFilter != nil {
+		return cr.guildRouteFilter(guildID, routeKey)
+	}
+	if cr.guildFilter == nil {
 		return true
 	}
 	return cr.guildFilter(guildID)

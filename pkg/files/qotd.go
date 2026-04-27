@@ -33,17 +33,36 @@ func (cfg QOTDCollectorConfig) IsZero() bool {
 		len(cfg.TitlePatterns) == 0
 }
 
+// IsZero reports whether both schedule components are unset.
+func (cfg QOTDPublishScheduleConfig) IsZero() bool {
+	return cfg.HourUTC == nil && cfg.MinuteUTC == nil
+}
+
+// IsComplete reports whether both schedule components are present.
+func (cfg QOTDPublishScheduleConfig) IsComplete() bool {
+	return cfg.HourUTC != nil && cfg.MinuteUTC != nil
+}
+
+// Values returns the configured UTC schedule when both components are present.
+func (cfg QOTDPublishScheduleConfig) Values() (hour int, minute int, ok bool) {
+	if !cfg.IsComplete() {
+		return 0, 0, false
+	}
+	return *cfg.HourUTC, *cfg.MinuteUTC, true
+}
+
 // IsZero reports whether all QOTD fields are unset.
 func (cfg QOTDConfig) IsZero() bool {
 	if len(cfg.deckConfigs()) > 0 {
 		if len(cfg.deckConfigs()) == 1 &&
 			isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) &&
-			cfg.Collector.IsZero() {
+			cfg.Collector.IsZero() &&
+			cfg.Schedule.IsZero() {
 			return true
 		}
 		return false
 	}
-	if !cfg.Collector.IsZero() {
+	if !cfg.Collector.IsZero() || !cfg.Schedule.IsZero() {
 		return false
 	}
 	return true
@@ -160,16 +179,30 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 }
 
 func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
+	type rawQOTDPublishScheduleConfig struct {
+		HourUTC          *int `json:"hour_utc,omitempty"`
+		MinuteUTC        *int `json:"minute_utc,omitempty"`
+		PublishHourUTC   *int `json:"publish_hour_utc,omitempty"`
+		PublishMinuteUTC *int `json:"publish_minute_utc,omitempty"`
+		LegacyHourUTC    *int `json:"qotd_time_hour_utc,omitempty"`
+		LegacyMinuteUTC  *int `json:"qotd_time_minute_utc,omitempty"`
+	}
+
 	type rawQOTDConfig struct {
-		VerifiedRoleID   string              `json:"verified_role_id,omitempty"`
-		ActiveDeckID      string              `json:"active_deck_id,omitempty"`
-		Decks             []QOTDDeckConfig    `json:"decks,omitempty"`
-		Collector         QOTDCollectorConfig `json:"collector,omitempty"`
-		Enabled           bool                `json:"enabled,omitempty"`
-		ChannelID         string              `json:"channel_id,omitempty"`
-		ForumChannelID    string              `json:"forum_channel_id,omitempty"`
-		QuestionChannelID string              `json:"question_channel_id,omitempty"`
-		ResponseChannelID string              `json:"response_channel_id,omitempty"`
+		VerifiedRoleID    string                       `json:"verified_role_id,omitempty"`
+		ActiveDeckID      string                       `json:"active_deck_id,omitempty"`
+		Decks             []QOTDDeckConfig             `json:"decks,omitempty"`
+		Collector         QOTDCollectorConfig          `json:"collector,omitempty"`
+		Schedule          rawQOTDPublishScheduleConfig `json:"schedule,omitempty"`
+		Enabled           bool                         `json:"enabled,omitempty"`
+		ChannelID         string                       `json:"channel_id,omitempty"`
+		ForumChannelID    string                       `json:"forum_channel_id,omitempty"`
+		QuestionChannelID string                       `json:"question_channel_id,omitempty"`
+		ResponseChannelID string                       `json:"response_channel_id,omitempty"`
+		PublishHourUTC    *int                         `json:"publish_hour_utc,omitempty"`
+		PublishMinuteUTC  *int                         `json:"publish_minute_utc,omitempty"`
+		LegacyHourUTC     *int                         `json:"qotd_time_hour_utc,omitempty"`
+		LegacyMinuteUTC   *int                         `json:"qotd_time_minute_utc,omitempty"`
 	}
 
 	var raw rawQOTDConfig
@@ -177,11 +210,41 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	schedule := QOTDPublishScheduleConfig{
+		HourUTC:   cloneOptionalInt(raw.Schedule.HourUTC),
+		MinuteUTC: cloneOptionalInt(raw.Schedule.MinuteUTC),
+	}
+	if schedule.HourUTC == nil {
+		switch {
+		case raw.Schedule.PublishHourUTC != nil:
+			schedule.HourUTC = cloneOptionalInt(raw.Schedule.PublishHourUTC)
+		case raw.PublishHourUTC != nil:
+			schedule.HourUTC = cloneOptionalInt(raw.PublishHourUTC)
+		case raw.Schedule.LegacyHourUTC != nil:
+			schedule.HourUTC = cloneOptionalInt(raw.Schedule.LegacyHourUTC)
+		case raw.LegacyHourUTC != nil:
+			schedule.HourUTC = cloneOptionalInt(raw.LegacyHourUTC)
+		}
+	}
+	if schedule.MinuteUTC == nil {
+		switch {
+		case raw.Schedule.PublishMinuteUTC != nil:
+			schedule.MinuteUTC = cloneOptionalInt(raw.Schedule.PublishMinuteUTC)
+		case raw.PublishMinuteUTC != nil:
+			schedule.MinuteUTC = cloneOptionalInt(raw.PublishMinuteUTC)
+		case raw.Schedule.LegacyMinuteUTC != nil:
+			schedule.MinuteUTC = cloneOptionalInt(raw.Schedule.LegacyMinuteUTC)
+		case raw.LegacyMinuteUTC != nil:
+			schedule.MinuteUTC = cloneOptionalInt(raw.LegacyMinuteUTC)
+		}
+	}
+
 	*cfg = QOTDConfig{
 		VerifiedRoleID: raw.VerifiedRoleID,
 		ActiveDeckID:   raw.ActiveDeckID,
 		Decks:          raw.Decks,
 		Collector:      raw.Collector,
+		Schedule:       schedule,
 	}
 	if len(raw.Decks) > 0 {
 		return nil

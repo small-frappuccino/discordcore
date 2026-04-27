@@ -3,21 +3,21 @@ package qotd
 import "time"
 
 // BecomesPreviousAt returns when a published QOTD leaves the current-day slot.
-func BecomesPreviousAt(publishDate time.Time) time.Time {
+func BecomesPreviousAt(schedule PublishSchedule, publishDate time.Time) time.Time {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
 		return time.Time{}
 	}
-	return PublishTimeUTC(date.AddDate(0, 0, 1))
+	return PublishTimeUTC(schedule, date.AddDate(0, 0, 1))
 }
 
 // ArchiveAt returns when a published QOTD ages out of the current+previous window.
-func ArchiveAt(publishDate time.Time) time.Time {
+func ArchiveAt(schedule PublishSchedule, publishDate time.Time) time.Time {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
 		return time.Time{}
 	}
-	return PublishTimeUTC(date.AddDate(0, 0, 2))
+	return PublishTimeUTC(schedule, date.AddDate(0, 0, 2))
 }
 
 // ManualBecomesPreviousAt returns when an independently published manual QOTD
@@ -61,12 +61,12 @@ func StateWithinWindow(graceUntil, archiveAt, now time.Time) OfficialPostState {
 }
 
 // StateAt returns the lifecycle state for an official QOTD post at a given time.
-func StateAt(publishDate, now time.Time) OfficialPostState {
+func StateAt(schedule PublishSchedule, publishDate, now time.Time) OfficialPostState {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
 		return OfficialPostStateArchived
 	}
-	return StateWithinWindow(BecomesPreviousAt(date), ArchiveAt(date), now)
+	return StateWithinWindow(BecomesPreviousAt(schedule, date), ArchiveAt(schedule, date), now)
 }
 
 // EvaluateOfficialPostWindow returns the pure lifecycle view for any post whose
@@ -81,10 +81,8 @@ func EvaluateOfficialPostWindow(publishDate, publishAt, graceUntil, archiveAt, n
 	}
 	now = normalizeClockInput(now)
 	if publishAt.IsZero() {
-		publishAt = PublishTimeUTC(publishDate)
-	} else {
-		publishAt = publishAt.UTC()
 	}
+	publishAt = publishAt.UTC()
 	graceUntil = graceUntil.UTC()
 	archiveAt = archiveAt.UTC()
 
@@ -106,12 +104,12 @@ func EvaluateOfficialPostWindow(publishDate, publishAt, graceUntil, archiveAt, n
 }
 
 // EvaluateOfficialPost returns the pure lifecycle view for a published official post.
-func EvaluateOfficialPost(publishDate, now time.Time) OfficialPostLifecycle {
+func EvaluateOfficialPost(schedule PublishSchedule, publishDate, now time.Time) OfficialPostLifecycle {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
 		return OfficialPostLifecycle{}
 	}
-	return EvaluateOfficialPostWindow(date, PublishTimeUTC(date), BecomesPreviousAt(date), ArchiveAt(date), now)
+	return EvaluateOfficialPostWindow(date, PublishTimeUTC(schedule, date), BecomesPreviousAt(schedule, date), ArchiveAt(schedule, date), now)
 }
 
 // EvaluateManualOfficialPost returns the lifecycle view for a manually
@@ -131,7 +129,7 @@ func EvaluateManualOfficialPost(publishedAt, now time.Time) OfficialPostLifecycl
 }
 
 // ShouldArchive reports whether the post should be archived now, ignoring already-archived rows.
-func ShouldArchive(publishDate, now time.Time, archivedAt *time.Time) bool {
+func ShouldArchive(schedule PublishSchedule, publishDate, now time.Time, archivedAt *time.Time) bool {
 	if archivedAt != nil && !archivedAt.IsZero() {
 		return false
 	}
@@ -140,5 +138,5 @@ func ShouldArchive(publishDate, now time.Time, archivedAt *time.Time) bool {
 		return false
 	}
 	now = normalizeClockInput(now)
-	return !now.Before(ArchiveAt(date))
+	return !now.Before(ArchiveAt(schedule, date))
 }

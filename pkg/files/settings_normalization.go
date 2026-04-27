@@ -78,6 +78,10 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	verifiedRoleID := strings.TrimSpace(in.VerifiedRoleID)
 	activeDeckID := strings.TrimSpace(in.ActiveDeckID)
 	decks := cloneQOTDDeckConfigs(in.Decks)
+	schedule, err := normalizeQOTDPublishScheduleConfig(in.Schedule)
+	if err != nil {
+		return QOTDConfig{}, invalidQOTDInput("schedule: %v", err)
+	}
 	collector, err := normalizeQOTDCollectorConfig(in.Collector)
 	if err != nil {
 		return QOTDConfig{}, invalidQOTDInput("collector: %v", err)
@@ -87,12 +91,13 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	}
 
 	if len(decks) == 0 {
-		if collector.IsZero() && verifiedRoleID == "" {
+		if collector.IsZero() && verifiedRoleID == "" && schedule.IsZero() {
 			return QOTDConfig{}, nil
 		}
 		return QOTDConfig{
 			VerifiedRoleID: verifiedRoleID,
 			Collector:      collector,
+			Schedule:       schedule,
 		}, nil
 	}
 
@@ -128,10 +133,15 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		}
 	}
 
+	if firstEnabledQOTDDeckID(normalizedDecks) != "" && !schedule.IsComplete() {
+		return QOTDConfig{}, invalidQOTDInput("schedule.hour_utc and schedule.minute_utc are required when enabled")
+	}
+
 	if len(normalizedDecks) == 1 &&
 		isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) &&
 		collector.IsZero() &&
-		verifiedRoleID == "" {
+		verifiedRoleID == "" &&
+		schedule.IsZero() {
 		return QOTDConfig{}, nil
 	}
 
@@ -140,7 +150,26 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		ActiveDeckID:   activeDeckID,
 		Decks:          normalizedDecks,
 		Collector:      collector,
+		Schedule:       schedule,
 	}, nil
+}
+
+func normalizeQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) (QOTDPublishScheduleConfig, error) {
+	out := QOTDPublishScheduleConfig{
+		HourUTC:   cloneOptionalInt(in.HourUTC),
+		MinuteUTC: cloneOptionalInt(in.MinuteUTC),
+	}
+	if out.HourUTC != nil {
+		if *out.HourUTC < 0 || *out.HourUTC > 23 {
+			return QOTDPublishScheduleConfig{}, fmt.Errorf("hour_utc must be between 0 and 23")
+		}
+	}
+	if out.MinuteUTC != nil {
+		if *out.MinuteUTC < 0 || *out.MinuteUTC > 59 {
+			return QOTDPublishScheduleConfig{}, fmt.Errorf("minute_utc must be between 0 and 59")
+		}
+	}
+	return out, nil
 }
 
 func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {

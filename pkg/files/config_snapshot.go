@@ -325,6 +325,14 @@ func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 		ActiveDeckID:   in.ActiveDeckID,
 		Decks:          cloneQOTDDeckConfigs(in.Decks),
 		Collector:      cloneQOTDCollectorConfig(in.Collector),
+		Schedule:       cloneQOTDPublishScheduleConfig(in.Schedule),
+	}
+}
+
+func cloneQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) QOTDPublishScheduleConfig {
+	return QOTDPublishScheduleConfig{
+		HourUTC:   cloneOptionalInt(in.HourUTC),
+		MinuteUTC: cloneOptionalInt(in.MinuteUTC),
 	}
 }
 
@@ -353,6 +361,14 @@ func cloneStringSlice(in []string) []string {
 	out := make([]string, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneOptionalInt(in *int) *int {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func cloneBoolPtr(in *bool) *bool {

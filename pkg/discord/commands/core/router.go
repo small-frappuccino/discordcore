@@ -15,11 +15,11 @@ func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.In
 	if i == nil {
 		return
 	}
-	if !cr.shouldHandleGuild(i.GuildID) {
+	routeKey := resolveInteractionRouteKey(i)
+	if !cr.shouldHandleInteraction(i.GuildID, routeKey) {
 		return
 	}
 
-	routeKey := resolveInteractionRouteKey(i)
 	switch routeKey.Kind {
 	case InteractionKindAutocomplete:
 		cr.handleAutocompleteRoute(i, routeKey)

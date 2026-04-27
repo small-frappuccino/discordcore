@@ -6,6 +6,13 @@ import (
 	"testing"
 )
 
+func testQOTDSchedule(hour, minute int) QOTDPublishScheduleConfig {
+	return QOTDPublishScheduleConfig{
+		HourUTC:   &hour,
+		MinuteUTC: &minute,
+	}
+}
+
 func TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -20,6 +27,44 @@ func TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestNormalizeQOTDConfigRequiresScheduleWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NormalizeQOTDConfig(QOTDConfig{
+		Decks: []QOTDDeckConfig{{
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
+		}},
+	}); err == nil {
+		t.Fatal("expected enabled qotd config without schedule to fail")
+	}
+}
+
+func TestNormalizeQOTDConfigAllowsPartialScheduleWhileDisabled(t *testing.T) {
+	t.Parallel()
+
+	hourUTC := 7
+	normalized, err := NormalizeQOTDConfig(QOTDConfig{
+		Schedule: QOTDPublishScheduleConfig{HourUTC: &hourUTC},
+		Decks: []QOTDDeckConfig{{
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			ChannelID: "123456789012345678",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
+	}
+	if normalized.Schedule.HourUTC == nil || *normalized.Schedule.HourUTC != 7 {
+		t.Fatalf("expected partial schedule to persist, got %+v", normalized.Schedule)
+	}
+	if normalized.Schedule.MinuteUTC != nil {
+		t.Fatalf("expected minute to remain unset, got %+v", normalized.Schedule)
+	}
+}
+
 func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	t.Parallel()
 
@@ -30,6 +75,7 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
 		VerifiedRoleID: " 987654321098765432 ",
 		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Schedule:     testQOTDSchedule(12, 43),
 		Decks: []QOTDDeckConfig{{
 			ID:        LegacyQOTDDefaultDeckID,
 			Name:      LegacyQOTDDefaultDeckName,
@@ -61,6 +107,9 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	if cfg.ActiveDeckID != LegacyQOTDDefaultDeckID {
 		t.Fatalf("expected default deck to become active, got %q", cfg.ActiveDeckID)
 	}
+	if cfg.Schedule.HourUTC == nil || cfg.Schedule.MinuteUTC == nil || *cfg.Schedule.HourUTC != 12 || *cfg.Schedule.MinuteUTC != 43 {
+		t.Fatalf("expected canonical schedule, got %+v", cfg.Schedule)
+	}
 }
 
 func TestSetQOTDConfigRollsBackOnSaveError(t *testing.T) {
@@ -73,6 +122,7 @@ func TestSetQOTDConfigRollsBackOnSaveError(t *testing.T) {
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
 		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Schedule:     testQOTDSchedule(12, 43),
 		Decks: []QOTDDeckConfig{{
 			ID:        LegacyQOTDDefaultDeckID,
 			Name:      LegacyQOTDDefaultDeckName,
@@ -150,7 +200,9 @@ func TestQOTDConfigUnmarshalMigratesLegacyChannelFields(t *testing.T) {
 	var cfg QOTDConfig
 	if err := json.Unmarshal([]byte(`{
 		"enabled": true,
-		"question_channel_id": "123456789012345678"
+		"question_channel_id": "123456789012345678",
+		"qotd_time_hour_utc": 7,
+		"qotd_time_minute_utc": 5
 	}`), &cfg); err != nil {
 		t.Fatalf("json.Unmarshal() failed: %v", err)
 	}
@@ -164,5 +216,8 @@ func TestQOTDConfigUnmarshalMigratesLegacyChannelFields(t *testing.T) {
 	}
 	if deck.ChannelID != "123456789012345678" {
 		t.Fatalf("expected legacy question channel to map to channel_id, got %+v", deck)
+	}
+	if cfg.Schedule.HourUTC == nil || cfg.Schedule.MinuteUTC == nil || *cfg.Schedule.HourUTC != 7 || *cfg.Schedule.MinuteUTC != 5 {
+		t.Fatalf("expected legacy schedule fields to map to canonical schedule, got %+v", cfg.Schedule)
 	}
 }
