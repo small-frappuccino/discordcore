@@ -23,6 +23,7 @@ var (
 	ErrNoQuestionsAvailable     = errors.New("no qotd questions available")
 	ErrImmutableQuestion        = errors.New("qotd question is already scheduled or used")
 	ErrQuestionNotFound         = errors.New("qotd question not found")
+	ErrQuestionNotReady         = errors.New("qotd question is not ready")
 	ErrDeckNotFound             = errors.New("qotd deck not found")
 	ErrDiscordUnavailable       = errors.New("discord session unavailable")
 )
@@ -264,6 +265,82 @@ func (s *Service) ResetDeckQuestionStates(ctx context.Context, guildID, deckID s
 	}
 
 	return resetCount, nil
+}
+
+func (s *Service) SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
+	if err := s.validate(); err != nil {
+		return nil, err
+	}
+
+	if questionID <= 0 {
+		return nil, fmt.Errorf("%w: question id must be greater than zero", files.ErrInvalidQOTDInput)
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return nil, err
+	}
+
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(questions) == 0 {
+		return nil, ErrQuestionNotFound
+	}
+
+	movedIndex := -1
+	firstMutableIndex := -1
+	for idx, question := range questions {
+		if firstMutableIndex < 0 && !isImmutableQuestion(question) {
+			firstMutableIndex = idx
+		}
+		if question.ID == questionID {
+			movedIndex = idx
+		}
+	}
+	if movedIndex < 0 {
+		return nil, ErrQuestionNotFound
+	}
+	if firstMutableIndex < 0 {
+		return nil, ErrNoQuestionsAvailable
+	}
+
+	moved := questions[movedIndex]
+	if moved.DeckID != deck.ID {
+		return nil, ErrQuestionNotFound
+	}
+	if isImmutableQuestion(moved) {
+		return nil, ErrImmutableQuestion
+	}
+	if QuestionStatus(strings.TrimSpace(moved.Status)) != QuestionStatusReady {
+		return nil, ErrQuestionNotReady
+	}
+	if movedIndex == firstMutableIndex {
+		return &moved, nil
+	}
+
+	orderedIDs := reorderQuestionIDsToIndex(questions, movedIndex, firstMutableIndex)
+	if len(orderedIDs) == 0 {
+		return &moved, nil
+	}
+	if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, orderedIDs); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, ErrQuestionNotFound
+	}
+	return updated, nil
 }
 
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
@@ -528,10 +605,7 @@ func derefTime(value *time.Time) time.Time {
 }
 
 func buildOfficialThreadName(displayID int64) string {
-	if displayID > 0 {
-		return fmt.Sprintf("question of the day ID %d", displayID)
-	}
-	return "question of the day"
+	return "Question of the Day"
 }
 
 func normalizeQuestionMutation(mutation QuestionMutation) (string, QuestionStatus, error) {
@@ -654,6 +728,21 @@ func idsFromQuestions(questions []storage.QOTDQuestionRecord) []int64 {
 		ids = append(ids, question.ID)
 	}
 	return ids
+}
+
+func reorderQuestionIDsToIndex(current []storage.QOTDQuestionRecord, movedIndex, targetIndex int) []int64 {
+	if len(current) == 0 || movedIndex < 0 || movedIndex >= len(current) || targetIndex < 0 || targetIndex >= len(current) {
+		return nil
+	}
+	if movedIndex == targetIndex {
+		return idsFromQuestions(current)
+	}
+
+	ordered := append([]storage.QOTDQuestionRecord(nil), current...)
+	moved := ordered[movedIndex]
+	copy(ordered[targetIndex+1:movedIndex+1], ordered[targetIndex:movedIndex])
+	ordered[targetIndex] = moved
+	return idsFromQuestions(ordered)
 }
 
 func (s *Service) availableQuestionCount(ctx context.Context, guildID, deckID string) (int, error) {

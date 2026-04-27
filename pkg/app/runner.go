@@ -179,17 +179,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
 		return fmt.Errorf("sync runtime database bootstrap config: %w", err)
 	}
-	removedGuildIDs, err := pruneStartupGuildReferences(context.Background(), configManager, store)
-	if err != nil {
-		return fmt.Errorf("prune startup guild references: %w", err)
-	}
-	if len(removedGuildIDs) > 0 {
-		log.ApplicationLogger().Warn(
-			"Removed disallowed guild references during startup cleanup",
-			"guildCount", len(removedGuildIDs),
-			"guildIDs", removedGuildIDs,
-		)
-	}
 
 	// Theme configuration (from persisted runtime_config)
 	{

@@ -66,10 +66,6 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	if runtime == nil || runtime.session == nil {
 		return fmt.Errorf("bot runtime is unavailable")
 	}
-	if err := enforceRuntimeGuildAllowlist(runtime); err != nil {
-		return fmt.Errorf("enforce runtime guild allowlist for %s: %w", runtime.instanceID, err)
-	}
-	registerRuntimeGuildAllowlistHandler(runtime, opts.configManager, opts.store)
 
 	cfg := opts.configManager.Config()
 	runtimeConfig := files.RuntimeConfig{}
@@ -349,10 +345,6 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 	if runtime.persistStop != nil {
 		close(runtime.persistStop)
 		runtime.persistStop = nil
-	}
-	if runtime.cleanupStop != nil {
-		close(runtime.cleanupStop)
-		runtime.cleanupStop = nil
 	}
 	_ = ctx
 	return errs

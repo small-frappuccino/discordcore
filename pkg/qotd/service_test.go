@@ -3,6 +3,7 @@ package qotd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -226,11 +227,70 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 	}
 }
 
+func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T) {
+	service, _, _ := newTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	created := make([]*storage.QOTDQuestionRecord, 0, 6)
+	for idx := 1; idx <= 6; idx++ {
+		question, err := service.CreateQuestion(context.Background(), "g1", fmt.Sprintf("user-%d", idx), QuestionMutation{
+			Body:   fmt.Sprintf("Question %d", idx),
+			Status: QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+		created = append(created, question)
+	}
+
+	for idx := 0; idx < 4; idx++ {
+		if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+			t.Fatalf("PublishNow(%d) failed: %v", idx, err)
+		}
+	}
+
+	moved, err := service.SetNextQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created[5].ID)
+	if err != nil {
+		t.Fatalf("SetNextQuestion() failed: %v", err)
+	}
+	if moved == nil || moved.ID != created[5].ID {
+		t.Fatalf("expected moved question to be returned, got %+v", moved)
+	}
+	if moved.DisplayID != 5 {
+		t.Fatalf("expected moved question to become visible ID 5, got %+v", moved)
+	}
+
+	questions, err := service.ListQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions() failed: %v", err)
+	}
+	if len(questions) != 6 {
+		t.Fatalf("expected six questions after reorder, got %+v", questions)
+	}
+	if questions[4].ID != created[5].ID || questions[4].DisplayID != 5 {
+		t.Fatalf("expected selected question to become next ready slot, got %+v", questions)
+	}
+	if questions[5].ID != created[4].ID || questions[5].DisplayID != 6 {
+		t.Fatalf("expected previous next question to shift back one slot, got %+v", questions)
+	}
+}
+
 func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	t.Parallel()
 
 	got := buildOfficialThreadName(1)
-	if got != "question of the day ID 1" {
+	if got != "Question of the Day" {
 		t.Fatalf("unexpected official thread title: %q", got)
 	}
 }
@@ -385,7 +445,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 0 {
 		t.Fatalf("expected no remaining available questions after manual publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "question of the day ID 2" {
+	if fake.publishedParams[0].ThreadName != "Question of the Day" {
 		t.Fatalf("expected manual publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 	if result.Question.Status != string(QuestionStatusUsed) {
@@ -651,7 +711,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "question of the day ID 1" {
+	if fake.publishedParams[0].ThreadName != "Question of the Day" {
 		t.Fatalf("expected scheduled publish to use the daily thread title format, got %+v", fake.publishedParams[0])
 	}
 

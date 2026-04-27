@@ -108,6 +108,45 @@ func newQOTDCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRe
 	return session, rec
 }
 
+func TestQuestionsListIdleTimeoutResetsOnActivity(t *testing.T) {
+	fired := make(chan struct{}, 2)
+	command := &questionsListCommand{
+		idleTimeout: 80 * time.Millisecond,
+		editComponents: func(_ *discordgo.Session, channelID, messageID string, components []discordgo.MessageComponent) error {
+			if channelID != "channel-1" || messageID != "message-1" {
+				t.Fatalf("unexpected message target: channel=%q message=%q", channelID, messageID)
+			}
+			if len(components) != 0 {
+				t.Fatalf("expected controls to be cleared, got %+v", components)
+			}
+			fired <- struct{}{}
+			return nil
+		},
+	}
+
+	command.armQuestionsListIdleTimeout(&discordgo.Session{}, "channel-1", "message-1")
+	time.Sleep(40 * time.Millisecond)
+	command.armQuestionsListIdleTimeout(&discordgo.Session{}, "channel-1", "message-1")
+
+	select {
+	case <-fired:
+		t.Fatal("expected renewed activity to keep controls visible before the new timeout expires")
+	case <-time.After(55 * time.Millisecond):
+	}
+
+	select {
+	case <-fired:
+	case <-time.After(400 * time.Millisecond):
+		t.Fatal("expected idle timeout to hide controls after inactivity")
+	}
+
+	select {
+	case <-fired:
+		t.Fatal("expected controls to be hidden only once for the same message")
+	case <-time.After(40 * time.Millisecond):
+	}
+}
+
 func newQOTDCommandTestRouter(
 	t *testing.T,
 	session *discordgo.Session,
@@ -534,6 +573,78 @@ func TestQuestionsRemoveCommandDeletesByID(t *testing.T) {
 	}
 }
 
+func TestQuestionsNextCommandSetsSelectedQuestionAsNextReady(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	fake := &fakePublisher{}
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "channel-123",
+		}},
+	})
+
+	created := make([]*storage.QOTDQuestionRecord, 0, 6)
+	for idx := 1; idx <= 6; idx++ {
+		question, err := service.CreateQuestion(context.Background(), guildID, ownerID, applicationqotd.QuestionMutation{
+			DeckID: files.LegacyQOTDDefaultDeckID,
+			Body:   fmt.Sprintf("Question %02d", idx),
+			Status: applicationqotd.QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+		created = append(created, question)
+	}
+
+	for idx := 0; idx < 4; idx++ {
+		if _, err := service.PublishNow(context.Background(), guildID, session); err != nil {
+			t.Fatalf("PublishNow(%d) failed: %v", idx, err)
+		}
+	}
+
+	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("list questions before next command: %v", err)
+	}
+	selected := created[5]
+	if questions[5].ID != selected.ID || questions[5].DisplayID != 6 {
+		t.Fatalf("expected selected question to begin at visible ID 6, got %+v", questions)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsNextSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
+		qotdIntOpt(questionsIDOptionName, 6),
+	}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "QOTD question ID 6 is now the next ready question") {
+		t.Fatalf("expected next-question confirmation, got %q", resp.Data.Content)
+	}
+	if !strings.Contains(resp.Data.Content, "ID 5") {
+		t.Fatalf("expected next-question response to mention the new visible ID, got %q", resp.Data.Content)
+	}
+
+	updated, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("list questions after next command: %v", err)
+	}
+	if updated[4].ID != selected.ID || updated[4].DisplayID != 5 {
+		t.Fatalf("expected selected question to become the next ready slot, got %+v", updated)
+	}
+	if updated[5].ID != created[4].ID || updated[5].DisplayID != 6 {
+		t.Fatalf("expected the previous next question to shift back by one slot, got %+v", updated)
+	}
+}
+
 func TestQuestionsResetCommandResetsUsedQuestionsToReady(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -612,6 +723,9 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	}
 	if len(fake.publishedParams) != 1 {
 		t.Fatalf("expected fake publisher to be invoked once, got %d", len(fake.publishedParams))
+	}
+	if fake.publishedParams[0].ThreadName != "Question of the Day" {
+		t.Fatalf("expected manual publish to use the fixed thread title, got %+v", fake.publishedParams[0])
 	}
 
 	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)

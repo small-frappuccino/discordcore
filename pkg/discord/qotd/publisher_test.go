@@ -48,7 +48,7 @@ func TestBuildOfficialPostNameMatchesDailyForumFormat(t *testing.T) {
 		"",
 	)
 
-	if got != "question of the day ID 1" {
+	if got != "Question of the Day" {
 		t.Fatalf("unexpected official post name: %q", got)
 	}
 }

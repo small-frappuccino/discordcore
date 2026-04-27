@@ -42,7 +42,6 @@ type botRuntime struct {
 	serviceManager    *service.ServiceManager
 	monitoringService *logging.MonitoringService
 	commandHandler    *commands.CommandHandler
-	cleanupStop       chan struct{}
 	persistStop       chan struct{}
 }
 

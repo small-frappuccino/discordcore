@@ -209,18 +209,12 @@ func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questio
 	}
 }
 
-func buildOfficialPostName(publishDateUTC time.Time, displayID int64, explicitName string) string {
+func buildOfficialPostName(_ time.Time, _ int64, explicitName string) string {
 	explicitName = strings.TrimSpace(explicitName)
 	if explicitName != "" {
 		return truncateThreadName(explicitName)
 	}
-	if displayID > 0 {
-		return truncateThreadName(fmt.Sprintf("question of the day ID %d", displayID))
-	}
-	if !publishDateUTC.IsZero() {
-		return truncateThreadName(fmt.Sprintf("question of the day %s", publishDateUTC.UTC().Format("2006-01-02")))
-	}
-	return "question of the day"
+	return "Question of the Day"
 }
 
 func buildOfficialPostStarterMessage(embed *discordgo.MessageEmbed) *discordgo.MessageSend {

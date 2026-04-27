@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
@@ -21,6 +23,7 @@ const (
 	questionsGroupName        = "questions"
 	questionsAddSubCommand    = "add"
 	questionsListSubCommand   = "list"
+	questionsNextSubCommand   = "next"
 	questionsResetSubCommand  = "reset"
 	questionsRemoveSubCommand = "remove"
 	questionsBodyOptionName   = "question"
@@ -34,6 +37,7 @@ const (
 	questionsListDeniedText   = "Only the user who opened this list can change pages."
 	questionsListUnknownDeck  = "QOTD deck not found"
 	questionsListMissingGuild = "This command can only be used in a server"
+	questionsListIdleTimeout  = 60 * time.Second
 )
 
 type QuestionCatalogService interface {
@@ -41,6 +45,7 @@ type QuestionCatalogService interface {
 	ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error)
 	CreateQuestion(ctx context.Context, guildID, actorID string, mutation applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error)
 	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
+	SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	ResetDeckQuestionStates(ctx context.Context, guildID, deckID string) (int, error)
 	PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
 }
@@ -61,12 +66,14 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	addCommand := &questionsAddCommand{service: c.service}
 	listCommand := &questionsListCommand{service: c.service}
+	nextCommand := &questionsNextCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
 	resetCommand := &questionsResetCommand{service: c.service}
 	removeCommand := &questionsRemoveCommand{service: c.service}
 	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
 	questionsGroup.AddSubCommand(addCommand)
 	questionsGroup.AddSubCommand(listCommand)
+	questionsGroup.AddSubCommand(nextCommand)
 	questionsGroup.AddSubCommand(resetCommand)
 	questionsGroup.AddSubCommand(removeCommand)
 
@@ -95,10 +102,18 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 }
 
 type questionsListCommand struct {
-	service QuestionCatalogService
+	service        QuestionCatalogService
+	controlsMu     sync.Mutex
+	controlTimers  map[string]questionsListControlTimer
+	idleTimeout    time.Duration
+	editComponents questionsListMessageEditor
 }
 
 type questionsAddCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsNextCommand struct {
 	service QuestionCatalogService
 }
 
@@ -119,6 +134,13 @@ type questionsListState struct {
 	DeckID string
 	Page   int
 }
+
+type questionsListControlTimer struct {
+	generation uint64
+	timer      *time.Timer
+}
+
+type questionsListMessageEditor func(session *discordgo.Session, channelID, messageID string, components []discordgo.MessageComponent) error
 
 func (c *questionsListCommand) Name() string { return questionsListSubCommand }
 
@@ -197,6 +219,32 @@ func (c *questionsRemoveCommand) Description() string {
 	return "Remove a question from QOTD by visible ID"
 }
 
+func (c *questionsNextCommand) Name() string { return questionsNextSubCommand }
+
+func (c *questionsNextCommand) Description() string {
+	return "Set which ready QOTD question publishes next"
+}
+
+func (c *questionsNextCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        questionsIDOptionName,
+			Description: "Question ID from the questions list embed",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsDeckOptionName,
+			Description: "Deck ID or exact deck name. Defaults to the active deck.",
+			Required:    false,
+		},
+	}
+}
+
+func (c *questionsNextCommand) RequiresGuild() bool       { return true }
+func (c *questionsNextCommand) RequiresPermissions() bool { return true }
+
 func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -257,6 +305,45 @@ func (c *questionsResetCommand) Handle(ctx *core.Context) error {
 
 	return core.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Reset %d QOTD question states in deck `%s`.", resetCount, deck.Name))
+}
+
+func (c *questionsNextCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	displayID := extractor.Int(questionsIDOptionName)
+	if displayID <= 0 {
+		return core.NewCommandError("Question ID must be greater than zero.", false)
+	}
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
+	if err != nil {
+		return err
+	}
+	question := findQuestionByDisplayID(questions, displayID)
+	if question == nil {
+		return translateQuestionsSetNextError(displayID, applicationqotd.ErrQuestionNotFound)
+	}
+
+	updated, err := c.service.SetNextQuestion(context.Background(), ctx.GuildID, deck.ID, question.ID)
+	if err != nil {
+		return translateQuestionsSetNextError(displayID, err)
+	}
+	if updated == nil {
+		return translateQuestionsSetNextError(displayID, applicationqotd.ErrQuestionNotFound)
+	}
+	if visibleQuestionID(*updated) == displayID {
+		return core.NewResponseBuilder(ctx.Session).
+			Info(ctx.Interaction, fmt.Sprintf("QOTD question ID %d is already the next ready question in deck `%s`.", displayID, deck.Name))
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Success(ctx.Interaction, fmt.Sprintf("QOTD question ID %d is now the next ready question in deck `%s` and is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
 }
 
 func (c *qotdPublishCommand) Name() string { return publishSubCommandName }
@@ -347,7 +434,11 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 		DeckID: view.deck.ID,
 		Page:   0,
 	}
-	return respondQuestionsList(ctx, view, state, false, questionsListRouteFirst)
+	if err := respondQuestionsList(ctx, view, state, false, questionsListRouteFirst); err != nil {
+		return err
+	}
+	c.armQuestionsListIdleTimeoutForOriginalResponse(ctx)
+	return nil
 }
 
 func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
@@ -369,7 +460,11 @@ func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
 
 	totalPages := discordqotdBuildPageCount(len(view.questions))
 	state.Page = nextQuestionsListPage(action, state.Page, totalPages)
-	return respondQuestionsList(ctx, view, state, false, action)
+	if err := respondQuestionsList(ctx, view, state, false, action); err != nil {
+		return err
+	}
+	c.armQuestionsListIdleTimeoutForMessage(ctx)
+	return nil
 }
 
 type questionsListView struct {
@@ -557,6 +652,99 @@ func (state questionsListState) withPage(page int) questionsListState {
 	return state
 }
 
+func (c *questionsListCommand) currentQuestionsListIdleTimeout() time.Duration {
+	if c != nil && c.idleTimeout > 0 {
+		return c.idleTimeout
+	}
+	return questionsListIdleTimeout
+}
+
+func (c *questionsListCommand) currentQuestionsListMessageEditor() questionsListMessageEditor {
+	if c != nil && c.editComponents != nil {
+		return c.editComponents
+	}
+	return editQuestionsListMessageComponents
+}
+
+func (c *questionsListCommand) armQuestionsListIdleTimeoutForOriginalResponse(ctx *core.Context) {
+	if c == nil || ctx == nil || ctx.Session == nil || ctx.Interaction == nil || ctx.Interaction.Interaction == nil {
+		return
+	}
+	message, err := ctx.Session.InteractionResponse(ctx.Interaction.Interaction)
+	if err != nil || message == nil {
+		return
+	}
+	c.armQuestionsListIdleTimeout(ctx.Session, message.ChannelID, message.ID)
+}
+
+func (c *questionsListCommand) armQuestionsListIdleTimeoutForMessage(ctx *core.Context) {
+	if c == nil || ctx == nil || ctx.Session == nil || ctx.Interaction == nil || ctx.Interaction.Message == nil {
+		return
+	}
+	c.armQuestionsListIdleTimeout(ctx.Session, ctx.Interaction.Message.ChannelID, ctx.Interaction.Message.ID)
+}
+
+func (c *questionsListCommand) armQuestionsListIdleTimeout(session *discordgo.Session, channelID, messageID string) {
+	if c == nil {
+		return
+	}
+	channelID = strings.TrimSpace(channelID)
+	messageID = strings.TrimSpace(messageID)
+	if channelID == "" || messageID == "" {
+		return
+	}
+	timeout := c.currentQuestionsListIdleTimeout()
+	if timeout <= 0 {
+		return
+	}
+
+	c.controlsMu.Lock()
+	if c.controlTimers == nil {
+		c.controlTimers = make(map[string]questionsListControlTimer)
+	}
+	entry := c.controlTimers[messageID]
+	if entry.timer != nil {
+		entry.timer.Stop()
+	}
+	entry.generation++
+	generation := entry.generation
+	entry.timer = time.AfterFunc(timeout, func() {
+		c.hideQuestionsListControls(session, channelID, messageID, generation)
+	})
+	c.controlTimers[messageID] = entry
+	c.controlsMu.Unlock()
+}
+
+func (c *questionsListCommand) hideQuestionsListControls(session *discordgo.Session, channelID, messageID string, generation uint64) {
+	if c == nil {
+		return
+	}
+
+	c.controlsMu.Lock()
+	entry, ok := c.controlTimers[messageID]
+	if !ok || entry.generation != generation {
+		c.controlsMu.Unlock()
+		return
+	}
+	delete(c.controlTimers, messageID)
+	c.controlsMu.Unlock()
+
+	_ = c.currentQuestionsListMessageEditor()(session, channelID, messageID, []discordgo.MessageComponent{})
+}
+
+func editQuestionsListMessageComponents(session *discordgo.Session, channelID, messageID string, components []discordgo.MessageComponent) error {
+	if session == nil {
+		return fmt.Errorf("discord session is required")
+	}
+	edit := &discordgo.MessageEdit{
+		ID:         messageID,
+		Channel:    channelID,
+		Components: &components,
+	}
+	_, err := session.ChannelMessageEditComplex(edit)
+	return err
+}
+
 func visibleQuestionID(question storage.QOTDQuestionRecord) int64 {
 	if question.DisplayID > 0 {
 		return question.DisplayID
@@ -600,6 +788,22 @@ func translateQuestionsDeleteError(questionID int64, err error) error {
 	return translateQuestionsMutationError(err)
 }
 
+func translateQuestionsSetNextError(questionID int64, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
+	}
+	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be set as next.", questionID), false)
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotReady) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d must be ready before it can be set as next.", questionID), false)
+	}
+	return translateQuestionsMutationError(err)
+}
+
 func translatePublishNowError(err error) error {
 	if err == nil {
 		return nil
@@ -618,6 +822,7 @@ func translatePublishNowError(err error) error {
 
 var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
+var _ core.SubCommand = (*questionsNextCommand)(nil)
 var _ core.SubCommand = (*questionsResetCommand)(nil)
 var _ core.SubCommand = (*questionsRemoveCommand)(nil)
 var _ core.SubCommand = (*qotdPublishCommand)(nil)

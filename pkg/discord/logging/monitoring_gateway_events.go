@@ -12,16 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
-var monitoringGuildAllowlist = map[string]struct{}{
-	"1375650791251120179": {},
-	"1390069056530419823": {},
-}
-
-func shouldMonitorGuild(guildID string) bool {
-	_, ok := monitoringGuildAllowlist[strings.TrimSpace(guildID)]
-	return ok
-}
-
 // setupEventHandlers registra handlers do Discord.
 func (ms *MonitoringService) setupEventHandlers() {
 	rc := files.RuntimeConfig{}
@@ -90,9 +80,6 @@ func (ms *MonitoringService) ensureGuildsListed() {
 		if g == nil || g.ID == "" {
 			continue
 		}
-		if !shouldMonitorGuild(g.ID) {
-			continue
-		}
 		if ms.configManager.GuildConfig(g.ID) == nil {
 			if err := ms.configManager.EnsureMinimalGuildConfigForBot(g.ID, ms.botInstanceID); err != nil {
 				log.ErrorLoggerRaw().Error("Error adding minimal dormant guild entry", "guildID", g.ID, "err", err)
@@ -109,9 +96,6 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	}
 	guildID := e.ID
 	if guildID == "" {
-		return
-	}
-	if !shouldMonitorGuild(guildID) {
 		return
 	}
 
