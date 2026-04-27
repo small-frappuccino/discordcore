@@ -77,24 +77,19 @@ func buildQuestionsListDescription(
 func formatQuestionsListEntry(question storage.QOTDQuestionRecord) string {
 	text := strings.Join(strings.Fields(strings.TrimSpace(question.Body)), " ")
 	text = truncateEmbedText(text, 96)
-	queue := "-"
+	meta := make([]string, 0, 2)
 	if question.QueuePosition > 0 {
-		queue = fmt.Sprintf("#%d", question.QueuePosition)
+		meta = append(meta, fmt.Sprintf("#%d", question.QueuePosition))
 	}
-	return fmt.Sprintf("%s \"%s\" (ID: %d • %s • %s)", questionStatusIcon(question.Status), text, question.ID, queue, questionStatusLabel(question.Status))
+	meta = append(meta, fmt.Sprintf("ID:%d", question.ID))
+	return fmt.Sprintf("%s \"%s\" (%s)", questionStatusIcon(question.Status), text, strings.Join(meta, " • "))
 }
 
 func questionStatusIcon(status string) string {
 	switch strings.TrimSpace(status) {
-	case "ready":
+	case "ready", "draft", "reserved", "disabled":
 		return "✅"
-	case "draft":
-		return "📝"
-	case "reserved":
-		return "⏳"
 	case "used":
-		return "🚫"
-	case "disabled":
 		return "🚫"
 	default:
 		return "❔"

@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,9 +17,15 @@ import (
 
 const (
 	groupName                 = "qotd"
+	publishSubCommandName     = "publish"
 	questionsGroupName        = "questions"
+	questionsAddSubCommand    = "add"
 	questionsListSubCommand   = "list"
+	questionsResetSubCommand  = "reset"
+	questionsRemoveSubCommand = "remove"
+	questionsBodyOptionName   = "question"
 	questionsDeckOptionName   = "deck"
+	questionsIDOptionName     = "id"
 	questionsPageSize         = 10
 	questionsListRouteFirst   = "qotd:questions:list:first"
 	questionsListRoutePrev    = "qotd:questions:list:prev"
@@ -32,6 +39,10 @@ const (
 type QuestionCatalogService interface {
 	Settings(guildID string) (files.QOTDConfig, error)
 	ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error)
+	CreateQuestion(ctx context.Context, guildID, actorID string, mutation applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error)
+	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
+	ResetDeckQuestionStates(ctx context.Context, guildID, deckID string) (int, error)
+	PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
 }
 
 type Commands struct {
@@ -48,9 +59,16 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	}
 
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+	addCommand := &questionsAddCommand{service: c.service}
 	listCommand := &questionsListCommand{service: c.service}
+	publishCommand := &qotdPublishCommand{service: c.service}
+	resetCommand := &questionsResetCommand{service: c.service}
+	removeCommand := &questionsRemoveCommand{service: c.service}
 	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
+	questionsGroup.AddSubCommand(addCommand)
 	questionsGroup.AddSubCommand(listCommand)
+	questionsGroup.AddSubCommand(resetCommand)
+	questionsGroup.AddSubCommand(removeCommand)
 
 	var group *core.GroupCommand
 	if existing, ok := router.GetRegistry().GetCommand(groupName); ok {
@@ -61,6 +79,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	if group == nil {
 		group = core.NewGroupCommand(groupName, "Manage QOTD decks and questions", checker)
 	}
+	group.AddSubCommand(publishCommand)
 	group.AddSubCommand(questionsGroup)
 	router.RegisterSlashCommand(group)
 
@@ -76,6 +95,22 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 }
 
 type questionsListCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsAddCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsRemoveCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsResetCommand struct {
+	service QuestionCatalogService
+}
+
+type qotdPublishCommand struct {
 	service QuestionCatalogService
 }
 
@@ -103,12 +138,186 @@ func (c *questionsListCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *questionsListCommand) RequiresGuild() bool       { return true }
 func (c *questionsListCommand) RequiresPermissions() bool { return true }
 
-func (c *questionsListCommand) Handle(ctx *core.Context) error {
-	if ctx == nil || ctx.Interaction == nil {
-		return nil
+func (c *questionsAddCommand) Name() string { return questionsAddSubCommand }
+
+func (c *questionsAddCommand) Description() string {
+	return "Add a question to a QOTD deck"
+}
+
+func (c *questionsAddCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsBodyOptionName,
+			Description: "Question text to add to the deck",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsDeckOptionName,
+			Description: "Deck ID or exact deck name. Defaults to the active deck.",
+			Required:    false,
+		},
 	}
-	if strings.TrimSpace(ctx.GuildID) == "" {
-		return core.NewCommandError(questionsListMissingGuild, true)
+}
+
+func (c *questionsAddCommand) RequiresGuild() bool       { return true }
+func (c *questionsAddCommand) RequiresPermissions() bool { return true }
+
+func (c *questionsAddCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	body, err := extractor.StringRequired(questionsBodyOptionName)
+	if err != nil {
+		return err
+	}
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+
+	created, err := c.service.CreateQuestion(context.Background(), ctx.GuildID, ctx.UserID, applicationqotd.QuestionMutation{
+		DeckID: deck.ID,
+		Body:   body,
+	})
+	if err != nil {
+		return translateQuestionsMutationError(err)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Ephemeral().
+		Success(ctx.Interaction, fmt.Sprintf("Added QOTD question ID %d to deck `%s`.", created.ID, deck.Name))
+}
+
+func (c *questionsRemoveCommand) Name() string { return questionsRemoveSubCommand }
+
+func (c *questionsRemoveCommand) Description() string {
+	return "Remove a question from QOTD by ID"
+}
+
+func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{{
+		Type:        discordgo.ApplicationCommandOptionInteger,
+		Name:        questionsIDOptionName,
+		Description: "Question ID from the questions list embed",
+		Required:    true,
+	}}
+}
+
+func (c *questionsRemoveCommand) RequiresGuild() bool       { return true }
+func (c *questionsRemoveCommand) RequiresPermissions() bool { return true }
+
+func (c *questionsResetCommand) Name() string { return questionsResetSubCommand }
+
+func (c *questionsResetCommand) Description() string {
+	return "Reset used or reserved questions back to ready"
+}
+
+func (c *questionsResetCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        questionsDeckOptionName,
+		Description: "Deck ID or exact deck name. Defaults to the active deck.",
+		Required:    false,
+	}}
+}
+
+func (c *questionsResetCommand) RequiresGuild() bool       { return true }
+func (c *questionsResetCommand) RequiresPermissions() bool { return true }
+
+func (c *questionsResetCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+
+	resetCount, err := c.service.ResetDeckQuestionStates(context.Background(), ctx.GuildID, deck.ID)
+	if err != nil {
+		return translateQuestionsMutationError(err)
+	}
+	if resetCount == 0 {
+		return core.NewResponseBuilder(ctx.Session).
+			Ephemeral().
+			Info(ctx.Interaction, fmt.Sprintf("No used or reserved QOTD questions needed reset in deck `%s`.", deck.Name))
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Ephemeral().
+		Success(ctx.Interaction, fmt.Sprintf("Reset %d QOTD question states in deck `%s`.", resetCount, deck.Name))
+}
+
+func (c *qotdPublishCommand) Name() string { return publishSubCommandName }
+
+func (c *qotdPublishCommand) Description() string {
+	return "Publish the next ready QOTD question immediately"
+}
+
+func (c *qotdPublishCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
+
+func (c *qotdPublishCommand) RequiresGuild() bool       { return true }
+func (c *qotdPublishCommand) RequiresPermissions() bool { return true }
+
+func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	deck, err := loadCommandDeck(ctx, c.service, "")
+	if err != nil {
+		return err
+	}
+	if !deck.Enabled {
+		return core.NewCommandError("Enable QOTD publishing for the active deck before publishing manually.", true)
+	}
+	if strings.TrimSpace(deck.ChannelID) == "" {
+		return core.NewCommandError("Set a QOTD channel for the active deck before publishing manually.", true)
+	}
+
+	result, err := c.service.PublishNow(context.Background(), ctx.GuildID, ctx.Session)
+	if err != nil {
+		return translatePublishNowError(err)
+	}
+
+	message := fmt.Sprintf("Published QOTD question ID %d manually.", result.Question.ID)
+	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
+		message = fmt.Sprintf("%s %s", message, postURL)
+	}
+	return core.NewResponseBuilder(ctx.Session).
+		Ephemeral().
+		Success(ctx.Interaction, message)
+}
+
+func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	questionID := extractor.Int(questionsIDOptionName)
+	if questionID <= 0 {
+		return core.NewValidationError(questionsIDOptionName, "Question ID must be greater than zero")
+	}
+
+	if err := c.service.DeleteQuestion(context.Background(), ctx.GuildID, questionID); err != nil {
+		return translateQuestionsDeleteError(questionID, err)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Ephemeral().
+		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d.", questionID))
+}
+
+func (c *questionsListCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -154,11 +363,7 @@ type questionsListView struct {
 }
 
 func (c *questionsListCommand) loadView(ctx *core.Context, requestedDeck string) (questionsListView, error) {
-	settings, err := c.service.Settings(ctx.GuildID)
-	if err != nil {
-		return questionsListView{}, err
-	}
-	deck, err := resolveDeck(settings, requestedDeck)
+	deck, err := loadCommandDeck(ctx, c.service, requestedDeck)
 	if err != nil {
 		return questionsListView{}, err
 	}
@@ -167,6 +372,24 @@ func (c *questionsListCommand) loadView(ctx *core.Context, requestedDeck string)
 		return questionsListView{}, err
 	}
 	return questionsListView{deck: deck, questions: questions}, nil
+}
+
+func requireQuestionsGuild(ctx *core.Context) error {
+	if ctx == nil || ctx.Interaction == nil {
+		return nil
+	}
+	if strings.TrimSpace(ctx.GuildID) == "" {
+		return core.NewCommandError(questionsListMissingGuild, true)
+	}
+	return nil
+}
+
+func loadCommandDeck(ctx *core.Context, service QuestionCatalogService, requestedDeck string) (files.QOTDDeckConfig, error) {
+	settings, err := service.Settings(ctx.GuildID)
+	if err != nil {
+		return files.QOTDDeckConfig{}, err
+	}
+	return resolveDeck(settings, requestedDeck)
 }
 
 func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDeckConfig, error) {
@@ -216,7 +439,7 @@ func buildQuestionsListComponents(state questionsListState, totalPages int) []di
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 			discordgo.Button{CustomID: encodeQuestionsListState(questionsListRouteFirst, state.withPage(page)), Label: "<<", Style: discordgo.SecondaryButton, Disabled: page == 0 || totalPages <= 1},
-			discordgo.Button{CustomID: encodeQuestionsListState(questionsListRoutePrev, state.withPage(page)), Label: "<", Style: discordgo.SecondaryButton, Disabled: page == 0 || totalPages <= 1},
+			discordgo.Button{CustomID: encodeQuestionsListState(questionsListRoutePrev, state.withPage(page)), Label: "<", Style: discordgo.PrimaryButton, Disabled: page == 0 || totalPages <= 1},
 			discordgo.Button{CustomID: encodeQuestionsListState(questionsListRouteNext, state.withPage(page)), Label: ">", Style: discordgo.PrimaryButton, Disabled: page >= totalPages-1 || totalPages <= 1},
 			discordgo.Button{CustomID: encodeQuestionsListState(questionsListRouteLast, state.withPage(page)), Label: ">>", Style: discordgo.SecondaryButton, Disabled: page >= totalPages-1 || totalPages <= 1},
 		}},
@@ -319,6 +542,53 @@ func (state questionsListState) withPage(page int) questionsListState {
 	return state
 }
 
+func translateQuestionsMutationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, files.ErrInvalidQOTDInput) {
+		message := strings.TrimSpace(strings.TrimPrefix(err.Error(), files.ErrInvalidQOTDInput.Error()+":"))
+		if message == "" {
+			message = "Invalid QOTD question input"
+		}
+		return core.NewCommandError(message, true)
+	}
+	return err
+}
+
+func translateQuestionsDeleteError(questionID int64, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), true)
+	}
+	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), true)
+	}
+	return translateQuestionsMutationError(err)
+}
+
+func translatePublishNowError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
+		return core.NewCommandError("No ready QOTD questions are available in the active deck.", true)
+	}
+	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
+		return core.NewCommandError("Enable QOTD publishing and set a channel before publishing manually.", true)
+	}
+	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
+		return core.NewCommandError("Discord session unavailable for manual publish.", true)
+	}
+	return err
+}
+
+var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
+var _ core.SubCommand = (*questionsResetCommand)(nil)
+var _ core.SubCommand = (*questionsRemoveCommand)(nil)
+var _ core.SubCommand = (*qotdPublishCommand)(nil)
 
 var _ QuestionCatalogService = (*applicationqotd.Service)(nil)

@@ -229,6 +229,43 @@ func (s *Service) DeleteQuestion(ctx context.Context, guildID string, questionID
 	return s.store.DeleteQOTDQuestion(ctx, guildID, questionID)
 }
 
+func (s *Service) ResetDeckQuestionStates(ctx context.Context, guildID, deckID string) (int, error) {
+	if err := s.validate(); err != nil {
+		return 0, err
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return 0, err
+	}
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	if err != nil {
+		return 0, err
+	}
+
+	resetCount := 0
+	for idx := range questions {
+		question := questions[idx]
+		switch QuestionStatus(strings.TrimSpace(question.Status)) {
+		case QuestionStatusReserved, QuestionStatusUsed:
+			question.Status = string(QuestionStatusReady)
+			question.ScheduledForDateUTC = nil
+			question.UsedAt = nil
+			if _, err := s.store.UpdateQOTDQuestion(ctx, question); err != nil {
+				return resetCount, err
+			}
+			resetCount++
+		}
+	}
+
+	return resetCount, nil
+}
+
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
