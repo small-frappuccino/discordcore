@@ -26,8 +26,6 @@ func ptrInt(v int) *int { return &v }
 // - UX/QoL: grouping, search/filter, safe defaults, clear restart hints
 //
 // Notes / constraints:
-// - core.CommandRouter routes slash commands only, so component + modal interactions
-//   are handled via discordgo.Session.AddHandler(...) in commands/handler.go.
 // - Runtime config is bot-global.
 
 const (
@@ -428,10 +426,13 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	if router == nil {
 		return
 	}
+	cc.registerInteractionHandlers(router)
+	runtimeCommand := newRuntimeSubCommand(cc.configManager)
 
 	if existing, ok := router.GetRegistry().GetCommand(groupName); ok {
 		if group, ok := existing.(*core.GroupCommand); ok {
-			group.AddSubCommand(newRuntimeSubCommand(cc.configManager))
+			group.AddSubCommand(runtimeCommand)
+			router.RegisterSlashCommand(group)
 			return
 		}
 	}
@@ -439,10 +440,60 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	group := core.NewGroupCommand(groupName, "Manage server configuration", checker)
 
-	group.AddSubCommand(newRuntimeSubCommand(cc.configManager))
+	group.AddSubCommand(runtimeCommand)
 
 	// Register group under existing /config namespace.
-	router.RegisterCommand(group)
+	router.RegisterSlashCommand(group)
+}
+
+func (cc *ConfigCommands) registerInteractionHandlers(router *core.CommandRouter) {
+	if router == nil {
+		return
+	}
+
+	componentHandler := core.ComponentHandlerFunc(func(ctx *core.Context) error {
+		if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
+			return nil
+		}
+
+		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
+		defer done()
+
+		handleComponent(ctx.Session, ctx.Interaction, cc.configManager, runtimeInteractionApplier(ctx))
+		return nil
+	})
+	bindings := make([]core.InteractionRouteBinding, 0, len(runtimeComponentRouteIDs())+1)
+	for _, routeID := range runtimeComponentRouteIDs() {
+		bindings = append(bindings, core.InteractionRouteBinding{Path: routeID, Component: componentHandler})
+	}
+
+	bindings = append(bindings, core.InteractionRouteBinding{Path: modalEditValueID, Modal: core.ModalHandlerFunc(func(ctx *core.Context) error {
+		if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
+			return nil
+		}
+
+		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
+		defer done()
+
+		handleModalSubmit(ctx.Session, ctx.Interaction, cc.configManager, runtimeInteractionApplier(ctx))
+		return nil
+	})})
+	router.RegisterInteractionRoutes(bindings...)
+}
+
+func runtimeComponentRouteIDs() []string {
+	return []string{
+		cidSelectKey,
+		cidSelectGroup,
+		cidButtonMain,
+		cidButtonHelp,
+		cidButtonBack,
+		cidButtonDetail,
+		cidButtonToggle,
+		cidButtonEdit,
+		cidButtonReset,
+		cidButtonReload,
+	}
 }
 
 type runtimeSubCommand struct {
@@ -1213,42 +1264,25 @@ func asRuntimeConfigApplier(applier *runtimeapply.Manager) runtimeConfigApplier 
 	return applier
 }
 
-// HandleRuntimeConfigInteractions should be registered on the discordgo session (outside the slash router).
-// It captures the runtime hot-apply manager via closure, so the panel can apply changes immediately
-// after persisting runtime config changes.
-func HandleRuntimeConfigInteractions(configManager *files.ConfigManager, applier *runtimeapply.Manager) func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	runtimeApplier := asRuntimeConfigApplier(applier)
-
-	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if i == nil || s == nil {
-			return
-		}
-
-		userID := interactionUserID(i)
-		done := perf.StartGatewayEvent(
-			"interaction_create.runtime_config",
-			slog.Int("interactionType", int(i.Type)),
-			slog.String("guildID", i.GuildID),
-			slog.String("userID", userID),
-		)
-		defer done()
-
-		switch i.Type {
-		case discordgo.InteractionMessageComponent:
-			handleComponent(s, i, configManager, runtimeApplier)
-		case discordgo.InteractionModalSubmit:
-			handleModalSubmit(s, i, configManager, runtimeApplier)
-		default:
-			return
-		}
+func runtimeInteractionApplier(ctx *core.Context) runtimeConfigApplier {
+	if ctx == nil || ctx.Router() == nil {
+		return nil
 	}
+	return asRuntimeConfigApplier(ctx.Router().GetRuntimeApplier())
+}
+
+func startRuntimeConfigInteractionTrace(i *discordgo.InteractionCreate) func() {
+	userID := interactionUserID(i)
+	return perf.StartGatewayEvent(
+		"interaction_create.runtime_config",
+		slog.Int("interactionType", int(i.Type)),
+		slog.String("guildID", i.GuildID),
+		slog.String("userID", userID),
+	)
 }
 
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
 	cc := i.MessageComponentData()
-	if !strings.HasPrefix(cc.CustomID, customIDPrefix) {
-		return
-	}
 
 	action, st := parseActionAndState(cc.CustomID)
 	if action == "" {
@@ -1491,7 +1525,8 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 
 func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
 	m := i.ModalSubmitData()
-	if !strings.HasPrefix(m.CustomID, modalEditValueID+stateSep) {
+	rawState, ok := runtimeModalState(m.CustomID)
+	if !ok {
 		return
 	}
 
@@ -1504,7 +1539,6 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
 	}, "modal_submit.defer_update")
 
-	rawState := strings.TrimPrefix(m.CustomID, modalEditValueID+stateSep)
 	st := decodeState(rawState)
 
 	sp, ok := specByKey(st.Key)
@@ -1689,32 +1723,46 @@ func ensureKeyInGroup(st panelState) panelState {
 
 // parseActionAndState decodes "action|mode|group|key"
 func parseActionAndState(customID string) (action string, st panelState) {
-	if customID == cidSelectGroup {
-		return cidSelectGroup, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
+	routeID, rawState, hasState := strings.Cut(customID, stateSep)
+	if !isKnownRuntimeComponentRoute(routeID) {
+		return "", panelState{}
 	}
-	if customID == cidSelectKey {
-		return cidSelectKey, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
+	switch routeID {
+	case cidSelectGroup, cidSelectKey:
+		if hasState {
+			return routeID, decodeState(rawState)
+		}
+		return routeID, panelState{Mode: pageMain, Group: "ALL", Key: runtimeKeyBotTheme}
+	case cidButtonMain, cidButtonHelp, cidButtonBack,
+		cidButtonDetail, cidButtonToggle, cidButtonEdit,
+		cidButtonReset, cidButtonReload:
+		if !hasState {
+			return "", panelState{}
+		}
+		return routeID, decodeState(rawState)
+	default:
+		return "", panelState{}
 	}
+}
 
-	if !strings.Contains(customID, stateSep) {
-		return "", panelState{}
+func runtimeModalState(customID string) (string, bool) {
+	routeID, rawState, hasState := strings.Cut(customID, stateSep)
+	if routeID != modalEditValueID || !hasState {
+		return "", false
 	}
-	parts := strings.SplitN(customID, stateSep, 2)
-	if len(parts) != 2 {
-		return "", panelState{}
-	}
-	action = parts[0]
-	switch action {
+	return rawState, true
+}
+
+func isKnownRuntimeComponentRoute(routeID string) bool {
+	switch routeID {
 	case cidSelectGroup, cidSelectKey,
 		cidButtonMain, cidButtonHelp, cidButtonBack,
 		cidButtonDetail, cidButtonToggle, cidButtonEdit,
 		cidButtonReset, cidButtonReload:
-		// ok
+		return true
 	default:
-		return "", panelState{}
+		return false
 	}
-	st = decodeState(parts[1])
-	return action, st
 }
 
 // --- Discord helpers ---

@@ -66,14 +66,20 @@ func (pc *PartnerCommands) RegisterCommands(router *core.CommandRouter) {
 		"Manage partner board records",
 		core.NewPermissionChecker(router.GetSession(), router.GetConfigManager()),
 	)
-	group.AddSubCommand(NewPartnerAddSubCommand(pc.boardService))
-	group.AddSubCommand(NewPartnerReadSubCommand(pc.boardService))
-	group.AddSubCommand(NewPartnerUpdateSubCommand(pc.boardService))
-	group.AddSubCommand(NewPartnerDeleteSubCommand(pc.boardService))
-	group.AddSubCommand(NewPartnerListSubCommand(pc.boardService))
-	group.AddSubCommand(NewPartnerSyncSubCommand(pc.syncExecutor))
+	addCommand := NewPartnerAddSubCommand(pc.boardService)
+	readCommand := NewPartnerReadSubCommand(pc.boardService)
+	updateCommand := NewPartnerUpdateSubCommand(pc.boardService)
+	deleteCommand := NewPartnerDeleteSubCommand(pc.boardService)
+	listCommand := NewPartnerListSubCommand(pc.boardService)
+	syncCommand := NewPartnerSyncSubCommand(pc.syncExecutor)
+	group.AddSubCommand(addCommand)
+	group.AddSubCommand(readCommand)
+	group.AddSubCommand(updateCommand)
+	group.AddSubCommand(deleteCommand)
+	group.AddSubCommand(listCommand)
+	group.AddSubCommand(syncCommand)
 
-	router.RegisterCommand(group)
+	router.RegisterSlashCommand(group)
 }
 
 type PartnerAddSubCommand struct {

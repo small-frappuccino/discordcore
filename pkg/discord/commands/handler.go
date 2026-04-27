@@ -15,7 +15,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
-	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 )
 
 // CommandHandler manages bot command setup and handling
@@ -25,7 +24,6 @@ type CommandHandler struct {
 	botInstanceID        string
 	defaultBotInstanceID string
 	commandManager       *core.CommandManager
-	runtimeHandlerCancel func()
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
 }
@@ -58,7 +56,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	log.ApplicationLogger().Info("Setting up bot commands...")
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
-	if ch.commandManager != nil || ch.runtimeHandlerCancel != nil {
+	if ch.commandManager != nil {
 		log.ApplicationLogger().Warn("Command setup called with active handlers; cleaning previous registrations first")
 		if err := ch.Shutdown(); err != nil {
 			return fmt.Errorf("cleanup previous command handlers: %w", err)
@@ -76,32 +74,8 @@ func (ch *CommandHandler) SetupCommands() error {
 		return fmt.Errorf("failed to register config commands: %w", err)
 	}
 
-	// Register runtime-config interactive handlers (components + modals)
-	// This is required because core.CommandRouter currently routes only slash commands.
-	//
-	// The runtime config panel needs the hot-apply manager to apply THEME + ALICE_DISABLE_* at runtime.
-	// Since these interactions do not go through the slash CommandRouter, we pass the shared applier
-	// via closure here.
-	var applier *runtimeapply.Manager
-	if ch.commandManager != nil {
-		if router := ch.commandManager.GetRouter(); router != nil {
-			applier = router.GetRuntimeApplier()
-		}
-	}
-	runtimeHandler := runtime.HandleRuntimeConfigInteractions(ch.configManager, applier)
-	ch.runtimeHandlerCancel = ch.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if i == nil || !ch.handlesGuild(i.GuildID) {
-			return
-		}
-		runtimeHandler(s, i)
-	})
-
 	// Configure commands on Discord
 	if err := ch.commandManager.SetupCommands(); err != nil {
-		if ch.runtimeHandlerCancel != nil {
-			ch.runtimeHandlerCancel()
-			ch.runtimeHandlerCancel = nil
-		}
 		if ch.commandManager != nil {
 			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
 				log.ErrorLoggerRaw().Error("Failed to rollback command manager handler registration", "err", shutdownErr)
@@ -164,11 +138,6 @@ func (ch *CommandHandler) Shutdown() error {
 	log.ApplicationLogger().Info("Shutting down command handler...")
 
 	var errs []error
-	if ch.runtimeHandlerCancel != nil {
-		ch.runtimeHandlerCancel()
-		ch.runtimeHandlerCancel = nil
-	}
-
 	if ch.commandManager != nil {
 		if err := ch.commandManager.Shutdown(); err != nil {
 			errs = append(errs, fmt.Errorf("shutdown command manager: %w", err))

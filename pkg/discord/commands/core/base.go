@@ -1,6 +1,8 @@
 package core
 
 import (
+	"strings"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -143,14 +145,33 @@ func HasFocusedOption(options []*discordgo.ApplicationCommandInteractionDataOpti
 
 // GetCommandPath returns the full command path (command + subcommand if present)
 func GetCommandPath(i *discordgo.InteractionCreate) string {
-	path := i.ApplicationCommandData().Name
-
-	subCmd := GetSubCommandName(i)
-	if subCmd != "" {
-		path += " " + subCmd
+	if i == nil {
+		return ""
 	}
 
-	return path
+	data := i.ApplicationCommandData()
+	if data.Name == "" {
+		return ""
+	}
+
+	parts := []string{data.Name}
+	appendCommandPathSegments(&parts, data.Options)
+	return strings.Join(parts, " ")
+}
+
+func appendCommandPathSegments(parts *[]string, options []*discordgo.ApplicationCommandInteractionDataOption) {
+	if len(options) == 0 {
+		return
+	}
+
+	current := options[0]
+	switch current.Type {
+	case discordgo.ApplicationCommandOptionSubCommand:
+		*parts = append(*parts, current.Name)
+	case discordgo.ApplicationCommandOptionSubCommandGroup:
+		*parts = append(*parts, current.Name)
+		appendCommandPathSegments(parts, current.Options)
+	}
 }
 
 // IsAutocompleteInteraction checks if the interaction is for autocomplete

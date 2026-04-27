@@ -78,9 +78,6 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	if err := handler.SetupCommands(); err != nil {
 		t.Fatalf("first setup: %v", err)
 	}
-	if handler.runtimeHandlerCancel == nil {
-		t.Fatalf("expected runtime interaction handler cancel function to be set")
-	}
 	if handler.commandManager == nil {
 		t.Fatalf("expected command manager to be initialized")
 	}
@@ -88,9 +85,6 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	// Re-run setup to exercise reinit cleanup path.
 	if err := handler.SetupCommands(); err != nil {
 		t.Fatalf("second setup: %v", err)
-	}
-	if handler.runtimeHandlerCancel == nil {
-		t.Fatalf("expected runtime interaction handler cancel function after reinit")
 	}
 	if handler.commandManager == nil {
 		t.Fatalf("expected command manager after reinit")
@@ -105,9 +99,6 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 
 	if err := handler.Shutdown(); err != nil {
 		t.Fatalf("shutdown: %v", err)
-	}
-	if handler.runtimeHandlerCancel != nil {
-		t.Fatalf("expected runtime handler cancel to be cleared on shutdown")
 	}
 	if handler.commandManager != nil {
 		t.Fatalf("expected command manager to be cleared on shutdown")
@@ -136,9 +127,6 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to setup commands") {
 		t.Fatalf("unexpected setup error: %v", err)
-	}
-	if handler.runtimeHandlerCancel != nil {
-		t.Fatalf("runtime handler cancel should be cleared on setup rollback")
 	}
 	if handler.commandManager != nil {
 		t.Fatalf("command manager should be cleared on setup rollback")

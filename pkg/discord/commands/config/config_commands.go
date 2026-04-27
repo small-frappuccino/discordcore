@@ -27,6 +27,17 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 		return
 	}
 
+	setCmd := NewConfigSetSubCommand(cc.configManager)
+	getCmd := NewConfigGetSubCommand(cc.configManager)
+	listCmd := NewConfigListSubCommand(cc.configManager)
+	webhookCreateCmd := NewConfigWebhookEmbedCreateSubCommand(cc.configManager)
+	webhookReadCmd := NewConfigWebhookEmbedReadSubCommand(cc.configManager)
+	webhookUpdateCmd := NewConfigWebhookEmbedUpdateSubCommand(cc.configManager)
+	webhookDeleteCmd := NewConfigWebhookEmbedDeleteSubCommand(cc.configManager)
+	webhookListCmd := NewConfigWebhookEmbedListSubCommand(cc.configManager)
+	pingCmd := NewPingCommand()
+	echoCmd := NewEchoCommand()
+
 	// Build /config group with permission checks (or reuse existing group).
 	var group *core.GroupCommand
 	if existing, ok := router.GetRegistry().GetCommand("config"); ok {
@@ -40,21 +51,21 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	}
 
 	// Attach subcommands
-	group.AddSubCommand(NewConfigSetSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigGetSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigListSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigWebhookEmbedCreateSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigWebhookEmbedReadSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigWebhookEmbedUpdateSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigWebhookEmbedDeleteSubCommand(cc.configManager))
-	group.AddSubCommand(NewConfigWebhookEmbedListSubCommand(cc.configManager))
+	group.AddSubCommand(setCmd)
+	group.AddSubCommand(getCmd)
+	group.AddSubCommand(listCmd)
+	group.AddSubCommand(webhookCreateCmd)
+	group.AddSubCommand(webhookReadCmd)
+	group.AddSubCommand(webhookUpdateCmd)
+	group.AddSubCommand(webhookDeleteCmd)
+	group.AddSubCommand(webhookListCmd)
 
 	// Register (or refresh) the group.
-	router.RegisterCommand(group)
+	router.RegisterSlashCommand(group)
 
 	// Optionally register simple commands (useful for quick health checks of the routing stack)
-	router.RegisterCommand(NewPingCommand())
-	router.RegisterCommand(NewEchoCommand())
+	router.RegisterSlashCommand(pingCmd)
+	router.RegisterSlashCommand(echoCmd)
 }
 
 // ------------------------------

@@ -51,7 +51,7 @@ func (ac *AdminCommands) RegisterCommands(router *core.CommandRouter) {
 	adminCmd.AddSubCommand(ac.createServiceRestartCommand())
 	adminCmd.AddSubCommand(ac.createHealthCheckCommand())
 
-	router.RegisterCommand(adminCmd)
+	router.RegisterSlashCommand(adminCmd)
 }
 
 // createServiceStatusCommand creates the service status subcommand

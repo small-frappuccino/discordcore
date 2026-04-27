@@ -7,7 +7,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -18,12 +17,13 @@ import (
 // CommandRouter manages routing and execution of commands
 type CommandRouter struct {
 	registry       *CommandRegistry
+	routeRegistry  *interactionRouteRegistry
 	contextBuilder *ContextBuilder
+	middlewares    []InteractionMiddleware
 
-	permChecker     *PermissionChecker
-	autocompleteMap map[string]AutocompleteHandler
-	store           *storage.Store
-	guildFilter     func(string) bool
+	permChecker *PermissionChecker
+	store       *storage.Store
+	guildFilter func(string) bool
 
 	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
 	// It is set by the app runner and can be used by interaction handlers to apply changes
@@ -44,28 +44,64 @@ func NewCommandRouter(
 	permChecker := NewPermissionChecker(session, configManager)
 	contextBuilder := NewContextBuilder(session, configManager, permChecker)
 
-	return &CommandRouter{
+	router := &CommandRouter{
 		registry:       registry,
+		routeRegistry:  newInteractionRouteRegistry(),
 		contextBuilder: contextBuilder,
 
-		permChecker:     permChecker,
-		autocompleteMap: make(map[string]AutocompleteHandler),
+		permChecker: permChecker,
 	}
+	router.UseMiddleware(defaultInteractionMiddlewares(router)...)
+	return router
 }
 
-// RegisterCommand registers a simple command
-func (cr *CommandRouter) RegisterCommand(cmd Command) {
+// RegisterSlashCommand registers a slash command tree in both the sync registry
+// and the slash route registry.
+func (cr *CommandRouter) RegisterSlashCommand(cmd Command) {
+	if cr == nil || cmd == nil {
+		return
+	}
 	cr.registry.Register(cmd)
+	cr.registerSlashCommandRoutes(cmd)
 }
 
-// RegisterSubCommand registers a subcommand
-func (cr *CommandRouter) RegisterSubCommand(parentName string, subcmd SubCommand) {
+// RegisterCommand is the compatibility API; prefer RegisterSlashCommand for new slash trees.
+func (cr *CommandRouter) RegisterCommand(cmd Command) {
+	cr.RegisterSlashCommand(cmd)
+}
+
+// RegisterSlashSubCommand registers a slash subcommand in both the sync registry
+// and the slash route registry.
+func (cr *CommandRouter) RegisterSlashSubCommand(parentName string, subcmd SubCommand) {
+	if cr == nil || subcmd == nil {
+		return
+	}
 	cr.registry.RegisterSubCommand(parentName, subcmd)
+	cr.registerSlashSubCommandRoutes(parentName, subcmd)
 }
 
-// RegisterAutocomplete registers an autocomplete handler
-func (cr *CommandRouter) RegisterAutocomplete(commandName string, handler AutocompleteHandler) {
-	cr.autocompleteMap[commandName] = handler
+// RegisterSubCommand is the compatibility API; prefer RegisterSlashSubCommand for new slash trees.
+func (cr *CommandRouter) RegisterSubCommand(parentName string, subcmd SubCommand) {
+	cr.RegisterSlashSubCommand(parentName, subcmd)
+}
+
+// RegisterAutocomplete registers an autocomplete handler by canonical route path.
+// This is the compatibility API; prefer an AutocompleteRouteProvider on the
+// slash tree or RegisterInteractionRoute for new code.
+func (cr *CommandRouter) RegisterAutocomplete(routePath string, handler AutocompleteHandler) {
+	cr.RegisterAutocompleteRoute(routePath, handler)
+}
+
+// RegisterComponentHandler registers a component handler for an exact component route ID.
+// This is the compatibility API; prefer RegisterInteractionRoute for new code.
+func (cr *CommandRouter) RegisterComponentHandler(routeID string, handler ComponentHandler) {
+	cr.RegisterComponentRoute(routeID, handler)
+}
+
+// RegisterModalHandler registers a modal handler for an exact modal route ID.
+// This is the compatibility API; prefer RegisterInteractionRoute for new code.
+func (cr *CommandRouter) RegisterModalHandler(routeID string, handler ModalHandler) {
+	cr.RegisterModalRoute(routeID, handler)
 }
 
 // SetGuildFilter restricts interaction handling to guilds accepted by the provided predicate.
@@ -81,118 +117,6 @@ func (cr *CommandRouter) shouldHandleGuild(guildID string) bool {
 		return true
 	}
 	return cr.guildFilter(guildID)
-}
-
-// HandleInteraction routes interactions to the appropriate handlers
-func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i == nil {
-		return
-	}
-	if !cr.shouldHandleGuild(i.GuildID) {
-		return
-	}
-
-	done := perf.StartGatewayEvent(
-		"interaction_create",
-		slog.Int("interactionType", int(i.Type)),
-		slog.String("guildID", i.GuildID),
-		slog.String("userID", extractUserID(i)),
-	)
-	defer done()
-
-	if IsAutocompleteInteraction(i) {
-		cr.handleAutocomplete(i)
-		return
-	}
-
-	if !IsSlashCommandInteraction(i) {
-		return
-	}
-
-	cr.handleSlashCommand(i)
-}
-
-// handleSlashCommand processes slash commands
-func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
-	ctx := cr.contextBuilder.BuildContext(i)
-	ctx.SetRouter(cr)
-	commandName := i.ApplicationCommandData().Name
-
-	slog.Info("Processing slash command")
-
-	// Check if the command exists
-	cmd, exists := cr.registry.GetCommand(commandName)
-	if !exists {
-		slog.Error("Command not found")
-		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "Command not found")
-		return
-	}
-
-	// Check if the command requires a guild
-	if cmd.RequiresGuild() && ctx.GuildID == "" {
-		slog.Warn("Command used outside of guild")
-		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "This command can only be used in a server")
-		return
-	}
-
-	// Check permissions
-	if ctx.GuildConfig != nil && len(ctx.GuildConfig.Roles.Allowed) > 0 && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
-		slog.Warn("User without allowed role tried to use command")
-		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "You do not have permission to use this command")
-		return
-	}
-
-	if cmd.RequiresPermissions() && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
-		slog.Warn("User without permission tried to use command")
-		NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "You do not have permission to use this command")
-		return
-	}
-
-	// Execute command
-	slog.Info("Executing command")
-	if err := cmd.Handle(ctx); err != nil {
-		slog.Error("Command execution failed", "err", err)
-
-		// Check if it's a command-specific error
-		if cmdErr, ok := err.(*CommandError); ok {
-			if cmdErr.Ephemeral {
-				NewResponseBuilder(ctx.Session).Ephemeral().Error(i, cmdErr.Message)
-			} else {
-				NewResponseBuilder(ctx.Session).Error(i, cmdErr.Message)
-			}
-		} else {
-			NewResponseBuilder(ctx.Session).Ephemeral().Error(i, "An error occurred while executing the command")
-		}
-	}
-}
-
-// handleAutocomplete processes autocomplete interactions
-func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
-	ctx := cr.contextBuilder.BuildContext(i)
-	commandName := i.ApplicationCommandData().Name
-
-	// Find autocomplete handler
-	handler, exists := cr.autocompleteMap[commandName]
-	if !exists {
-		NewResponseBuilder(ctx.Session).Build().Autocomplete(i, []*discordgo.ApplicationCommandOptionChoice{})
-		return
-	}
-
-	// Find the focused option
-	focusedOpt, hasFocus := HasFocusedOption(i.ApplicationCommandData().Options)
-	if !hasFocus {
-		NewResponseBuilder(ctx.Session).Build().Autocomplete(i, []*discordgo.ApplicationCommandOptionChoice{})
-		return
-	}
-
-	// Executar autocomplete
-	choices, err := handler.HandleAutocomplete(ctx, focusedOpt.Name)
-	if err != nil {
-		slog.Error("Autocomplete handler failed", "err", err)
-		choices = []*discordgo.ApplicationCommandOptionChoice{}
-	}
-
-	NewResponseBuilder(ctx.Session).Build().Autocomplete(i, choices)
 }
 
 // CommandManager manages the lifecycle of commands on Discord
@@ -444,6 +368,7 @@ type SimpleCommand struct {
 	description         string
 	options             []*discordgo.ApplicationCommandOption
 	handler             func(ctx *Context) error
+	autocompleteHandler AutocompleteHandler
 	requiresGuild       bool
 	requiresPermissions bool
 }
@@ -465,12 +390,24 @@ func NewSimpleCommand(
 	}
 }
 
+// WithAutocomplete binds an autocomplete handler to the command's route path.
+func (sc *SimpleCommand) WithAutocomplete(handler AutocompleteHandler) *SimpleCommand {
+	if sc == nil {
+		return nil
+	}
+	sc.autocompleteHandler = handler
+	return sc
+}
+
 func (sc *SimpleCommand) Name() string        { return sc.name }
 func (sc *SimpleCommand) Description() string { return sc.description }
 func (sc *SimpleCommand) Options() []*discordgo.ApplicationCommandOption {
 	return sc.options
 }
 func (sc *SimpleCommand) Handle(ctx *Context) error { return sc.handler(ctx) }
+func (sc *SimpleCommand) AutocompleteRouteHandler() AutocompleteHandler {
+	return sc.autocompleteHandler
+}
 func (sc *SimpleCommand) RequiresGuild() bool       { return sc.requiresGuild }
 func (sc *SimpleCommand) RequiresPermissions() bool { return sc.requiresPermissions }
 

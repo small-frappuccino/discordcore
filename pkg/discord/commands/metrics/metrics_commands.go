@@ -17,10 +17,21 @@ import (
 // RegisterMetricsCommands registers slash commands under the /metrics group.
 func RegisterMetricsCommands(router *core.CommandRouter) {
 	metricsGroup := core.NewGroupCommand("metrics", "Server statistics and metrics", router.GetPermissionChecker())
-	metricsGroup.AddSubCommand(newActivityCommand())
-	metricsGroup.AddSubCommand(newServerStatsCommand()) // We will change this to return a GroupCommand
+	activityCommand := newActivityCommand()
+	serverStatsGroup := core.NewGroupCommand("serverstats", "Server health and member statistics.", nil)
+	serverStatsHealthCommand := newServerStatsHealthCommand()
+	serverStatsWeeklyCommand := newServerStatsPeriodicCommand("weekly", "Last 7 days of member metrics.", "7d")
+	serverStatsMonthlyCommand := newServerStatsPeriodicCommand("monthly", "Last 30 days of member metrics.", "30d")
+	serverStatsThreeMonthsCommand := newServerStatsPeriodicCommand("3months", "Last 90 days of member metrics.", "90d")
 
-	router.RegisterCommand(metricsGroup)
+	serverStatsGroup.AddSubCommand(serverStatsHealthCommand)
+	serverStatsGroup.AddSubCommand(serverStatsWeeklyCommand)
+	serverStatsGroup.AddSubCommand(serverStatsMonthlyCommand)
+	serverStatsGroup.AddSubCommand(serverStatsThreeMonthsCommand)
+	metricsGroup.AddSubCommand(activityCommand)
+	metricsGroup.AddSubCommand(serverStatsGroup)
+
+	router.RegisterSlashCommand(metricsGroup)
 }
 
 // -------- Activity Command (messages + reactions) --------
@@ -230,15 +241,6 @@ func handleActivity(ctx *core.Context) error {
 }
 
 // -------- Members Command (weekly/monthly enter/leave/net) --------
-
-func newServerStatsCommand() core.SubCommand {
-	group := core.NewGroupCommand("serverstats", "Server health and member statistics.", nil)
-	group.AddSubCommand(newServerStatsHealthCommand())
-	group.AddSubCommand(newServerStatsPeriodicCommand("weekly", "Last 7 days of member metrics.", "7d"))
-	group.AddSubCommand(newServerStatsPeriodicCommand("monthly", "Last 30 days of member metrics.", "30d"))
-	group.AddSubCommand(newServerStatsPeriodicCommand("3months", "Last 90 days of member metrics.", "90d"))
-	return group
-}
 
 func newServerStatsHealthCommand() core.SubCommand {
 	return core.NewSimpleCommand(

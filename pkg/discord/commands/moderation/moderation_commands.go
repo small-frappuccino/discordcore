@@ -237,7 +237,7 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 	moderationGroup.AddSubCommand(newWarnCommand())
 	moderationGroup.AddSubCommand(newWarningsCommand())
 
-	router.RegisterCommand(moderationGroup)
+	router.RegisterSlashCommand(moderationGroup)
 }
 
 type banCommand struct{}

@@ -6,6 +6,47 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
+// InteractionKind identifies the normalized interaction surface being routed.
+type InteractionKind int
+
+const (
+	InteractionKindUnknown InteractionKind = iota
+	InteractionKindSlash
+	InteractionKindAutocomplete
+	InteractionKindComponent
+	InteractionKindModal
+)
+
+func (kind InteractionKind) String() string {
+	switch kind {
+	case InteractionKindSlash:
+		return "slash"
+	case InteractionKindAutocomplete:
+		return "autocomplete"
+	case InteractionKindComponent:
+		return "component"
+	case InteractionKindModal:
+		return "modal"
+	default:
+		return "unknown"
+	}
+}
+
+// InteractionRouteKey is the normalized dispatch key used by the unified
+// interaction router.
+//
+// Path is the canonical route path for the interaction kind:
+// - slash/autocomplete: full command path, including subcommand groups
+// - component/modal: stable route ID extracted from the custom ID
+//
+// CustomID keeps the raw encoded custom ID when the interaction uses one.
+type InteractionRouteKey struct {
+	Kind          InteractionKind
+	Path          string
+	FocusedOption string
+	CustomID      string
+}
+
 // Command represents a Discord command
 type Command interface {
 	Name() string
@@ -36,6 +77,7 @@ type Context struct {
 	UserID      string
 	IsOwner     bool
 	GuildConfig *files.GuildConfig
+	RouteKey    InteractionRouteKey
 	router      *CommandRouter
 }
 
@@ -156,6 +198,64 @@ type SubCommandMeta struct {
 // AutocompleteHandler defines a handler for autocomplete
 type AutocompleteHandler interface {
 	HandleAutocomplete(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error)
+}
+
+// AutocompleteRouteProvider allows a slash command route to expose an
+// autocomplete handler for the same canonical route path.
+type AutocompleteRouteProvider interface {
+	AutocompleteRouteHandler() AutocompleteHandler
+}
+
+// AutocompleteHandlerFunc adapts a function into an AutocompleteHandler.
+type AutocompleteHandlerFunc func(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error)
+
+func (fn AutocompleteHandlerFunc) HandleAutocomplete(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	return fn(ctx, focusedOption)
+}
+
+// SlashHandler defines the minimal execution contract for a slash route.
+type SlashHandler interface {
+	Handle(ctx *Context) error
+	RequiresGuild() bool
+	RequiresPermissions() bool
+}
+
+// ComponentHandler defines a handler for message component interactions.
+type ComponentHandler interface {
+	HandleComponent(ctx *Context) error
+}
+
+// ComponentHandlerFunc adapts a function into a ComponentHandler.
+type ComponentHandlerFunc func(ctx *Context) error
+
+func (fn ComponentHandlerFunc) HandleComponent(ctx *Context) error {
+	return fn(ctx)
+}
+
+// ModalHandler defines a handler for modal submit interactions.
+type ModalHandler interface {
+	HandleModal(ctx *Context) error
+}
+
+// ModalHandlerFunc adapts a function into a ModalHandler.
+type ModalHandlerFunc func(ctx *Context) error
+
+func (fn ModalHandlerFunc) HandleModal(ctx *Context) error {
+	return fn(ctx)
+}
+
+// InteractionRouteBinding declares the handlers bound to the same normalized
+// interaction route path or stable route ID.
+type InteractionRouteBinding struct {
+	Path         string
+	Slash        SlashHandler
+	Autocomplete AutocompleteHandler
+	Component    ComponentHandler
+	Modal        ModalHandler
+}
+
+func (binding InteractionRouteBinding) hasHandlers() bool {
+	return binding.Slash != nil || binding.Autocomplete != nil || binding.Component != nil || binding.Modal != nil
 }
 
 // PermissionLevel defines permission levels for commands

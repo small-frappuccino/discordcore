@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -255,5 +256,59 @@ func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 	}
 	if rc.BotTheme != "nebula" {
 		t.Fatalf("expected runtime config to persist updated bot_theme, got %q", rc.BotTheme)
+	}
+}
+
+func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) {
+	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
+	cm := files.NewMemoryConfigManager()
+	if err := cm.LoadConfig(); err != nil {
+		t.Fatalf("failed to load config manager: %v", err)
+	}
+
+	router := core.NewCommandRouter(session, cm)
+	NewRuntimeConfigCommands(cm).RegisterCommands(router)
+
+	interaction := newRuntimeComponentInteraction(cidButtonMain + stateSep + panelState{
+		Mode:  pageMain,
+		Group: "ALL",
+		Key:   runtimeKeyBotTheme,
+		Scope: "global",
+	}.encode())
+	router.HandleInteraction(session, interaction)
+
+	if rec.webhookPatchCount() == 0 {
+		t.Fatalf("expected runtime component to be handled through core router")
+	}
+}
+
+func TestRegisterCommands_RoutesRuntimeModalThroughCoreRouter(t *testing.T) {
+	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
+	cm := files.NewMemoryConfigManager()
+	if err := cm.LoadConfig(); err != nil {
+		t.Fatalf("failed to load config manager: %v", err)
+	}
+
+	router := core.NewCommandRouter(session, cm)
+	NewRuntimeConfigCommands(cm).RegisterCommands(router)
+
+	st := panelState{
+		Mode:  pageMain,
+		Group: "ALL",
+		Key:   runtimeKeyBotTheme,
+		Scope: "global",
+	}
+	router.HandleInteraction(session, newRuntimeModalInteraction(st, "nebula"))
+
+	if rec.webhookPatchCount() == 0 {
+		t.Fatalf("expected runtime modal to edit the panel through core router")
+	}
+
+	rc, err := loadRuntimeConfig(cm, "global")
+	if err != nil {
+		t.Fatalf("failed to reload runtime config: %v", err)
+	}
+	if rc.BotTheme != "nebula" {
+		t.Fatalf("expected runtime modal to persist updated bot_theme, got %q", rc.BotTheme)
 	}
 }
