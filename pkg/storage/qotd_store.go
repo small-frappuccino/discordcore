@@ -594,7 +594,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	defer func() { _ = tx.Rollback() }()
 
 	rows, err := txQueryContext(ctx, tx,
-		`SELECT id
+		`SELECT id, queue_position
 		FROM qotd_questions
 		WHERE guild_id = ?
 		  AND deck_id = ?
@@ -609,12 +609,17 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	defer rows.Close()
 
 	currentIDs := make([]int64, 0, len(normalizedIDs))
+	var maxQueuePosition int64
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var queuePosition int64
+		if err := rows.Scan(&id, &queuePosition); err != nil {
 			return fmt.Errorf("reorder qotd questions: %w", err)
 		}
 		currentIDs = append(currentIDs, id)
+		if queuePosition > maxQueuePosition {
+			maxQueuePosition = queuePosition
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("reorder qotd questions: %w", err)
@@ -623,6 +628,19 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		return fmt.Errorf("reorder qotd questions: ordered ids must match the full guild question set")
 	}
 
+	// Move rows out of the indexed range first so swaps do not trip the unique queue constraint.
+	tempBase := maxQueuePosition + int64(len(normalizedIDs))
+	for idx, id := range normalizedIDs {
+		if _, err := txExecContext(ctx, tx,
+			`UPDATE qotd_questions SET queue_position = ?, updated_at = NOW() WHERE guild_id = ? AND deck_id = ? AND id = ?`,
+			tempBase+int64(idx)+1,
+			guildID,
+			deckID,
+			id,
+		); err != nil {
+			return fmt.Errorf("reorder qotd questions: %w", err)
+		}
+	}
 	for idx, id := range normalizedIDs {
 		if _, err := txExecContext(ctx, tx,
 			`UPDATE qotd_questions SET queue_position = ?, updated_at = NOW() WHERE guild_id = ? AND deck_id = ? AND id = ?`,

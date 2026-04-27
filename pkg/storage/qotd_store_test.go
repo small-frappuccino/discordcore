@@ -226,6 +226,48 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	}
 }
 
+func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "First question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
+	}
+	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Second question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
+	}
+
+	if err := store.ReorderQOTDQuestions(ctx, "g1", "default", []int64{second.ID, first.ID}); err != nil {
+		t.Fatalf("ReorderQOTDQuestions() failed: %v", err)
+	}
+
+	questions, err := store.ListQOTDQuestions(ctx, "g1", "default")
+	if err != nil {
+		t.Fatalf("ListQOTDQuestions() failed: %v", err)
+	}
+	if len(questions) != 2 {
+		t.Fatalf("expected two questions after reorder, got %+v", questions)
+	}
+	if questions[0].ID != second.ID || questions[0].QueuePosition != 1 || questions[0].DisplayID != 1 {
+		t.Fatalf("expected second question to move into slot 1, got %+v", questions)
+	}
+	if questions[1].ID != first.ID || questions[1].QueuePosition != 2 || questions[1].DisplayID != 2 {
+		t.Fatalf("expected first question to move into slot 2, got %+v", questions)
+	}
+}
+
 func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
