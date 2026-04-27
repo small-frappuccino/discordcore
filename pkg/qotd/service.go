@@ -29,7 +29,6 @@ var (
 
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
-	SetupChannel(ctx context.Context, session *discordgo.Session, params discordqotd.SetupChannelParams) (*discordqotd.SetupChannelResult, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 	FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error)
 	FetchChannelMessages(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]discordqotd.ArchivedMessage, error)

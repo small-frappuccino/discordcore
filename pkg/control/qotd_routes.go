@@ -110,13 +110,6 @@ func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, g
 		}
 		s.handleQOTDPublishNowPost(w, r, guildID, auth)
 		return
-	case len(tail) == 3 && tail[1] == "actions" && tail[2] == "setup":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.handleQOTDSetupPost(w, r, guildID, auth)
-		return
 	case len(tail) == 3 && tail[1] == "actions" && tail[2] == "reconcile":
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -458,45 +451,6 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 			"question":      buildQOTDQuestionsResponse([]storage.QOTDQuestionRecord{result.Question})[0],
 			"official_post": buildQOTDOfficialPostResponse(guildID, &result.OfficialPost),
 		},
-	})
-}
-
-func (s *Server) handleQOTDSetupPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
-	session, err := s.discordSessionForGuild(guildID)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to resolve discord session: %v", err), http.StatusServiceUnavailable)
-		return
-	}
-
-	var payload struct {
-		DeckID string `json:"deck_id"`
-	}
-	if r.Body != nil && r.ContentLength != 0 {
-		if err := decodeJSONBody(w, r, &payload); err != nil {
-			return
-		}
-	}
-
-	result, err := s.qotdService.SetupChannel(r.Context(), guildID, strings.TrimSpace(payload.DeckID), session)
-	if err != nil {
-		status := qotdErrorStatus(err)
-		log.ApplicationLogger().Warn(
-			"QOTD setup failed",
-			"operation", "control.qotd.setup",
-			"guildID", guildID,
-			"userID", settingsRequestUserID(auth),
-			"err", err,
-		)
-		http.Error(w, fmt.Sprintf("failed to setup qotd channel: %v", err), status)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"settings": result.Settings,
-		"summary":  buildQOTDSummaryResponse(guildID, result.Summary),
-		"result":   buildQOTDSetupResultResponse(result),
 	})
 }
 

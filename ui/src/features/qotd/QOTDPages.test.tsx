@@ -87,7 +87,6 @@ const qotdMock = {
   refreshWorkspace: vi.fn(),
   reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
-  setupChannel: vi.fn(),
   selectDeck: vi.fn(),
   updateQuestion: vi.fn(),
 };
@@ -183,7 +182,6 @@ describe("QOTD UI", () => {
       deleted_questions: 1,
     });
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
-    qotdMock.setupChannel.mockReset().mockResolvedValue(undefined);
     qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
     channelOptionsMock.refresh.mockReset();
     dashboardSessionMock.client.getQOTDCollectorSummary = vi
@@ -272,7 +270,7 @@ describe("QOTD UI", () => {
       screen.getByRole("heading", { name: "Workflow settings", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/text channel with verified-role permissions/i),
+      screen.getByText(/create the qotd text channel manually in discord/i),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Staff roles", level: 2 }),
@@ -285,27 +283,8 @@ describe("QOTD UI", () => {
       screen.queryByRole("button", { name: "Save changes" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Repair QOTD setup" }),
-    ).toBeInTheDocument();
-  });
-
-  it("runs the automatic setup flow from the settings page", async () => {
-    const user = userEvent.setup();
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDSettingsPage />
-      </MemoryRouter>,
-    );
-
-    await user.click(
-      within(view.container).getByRole("button", { name: "Repair QOTD setup" }),
-    );
-
-    await waitFor(() => {
-      expect(qotdMock.setupChannel).toHaveBeenCalledWith("default");
-      expect(channelOptionsMock.refresh).toHaveBeenCalledTimes(1);
-    });
+      screen.queryByRole("button", { name: /qotd setup/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the unsaved changes bar and resets the local draft", async () => {
@@ -370,6 +349,41 @@ describe("QOTD UI", () => {
             name: "Default",
             enabled: false,
             channel_id: "question-channel-1",
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("preserves legacy hidden qotd settings when saving the settings page", async () => {
+    const user = userEvent.setup();
+    qotdMock.settings = createQOTDSettings({
+      verified_role_id: "987654321098765432",
+    });
+
+    const view = render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(view.container).getByRole("checkbox", {
+        name: /Enable Default/,
+      }),
+    );
+    await user.click(
+      within(view.container).getByRole("button", { name: "Save changes" }),
+    );
+
+    expect(qotdMock.saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        verified_role_id: "987654321098765432",
+        active_deck_id: "default",
+        decks: expect.arrayContaining([
+          expect.objectContaining({
+            id: "default",
+            enabled: false,
           }),
         ]),
       }),

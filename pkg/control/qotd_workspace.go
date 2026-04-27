@@ -95,12 +95,6 @@ type qotdCollectorRemoveDuplicatesResultResponse struct {
 	DeletedQuestions   int    `json:"deleted_questions"`
 }
 
-type qotdSetupResultResponse struct {
-	DeckID     string `json:"deck_id"`
-	ChannelID  string `json:"channel_id"`
-	ChannelURL string `json:"channel_url,omitempty"`
-}
-
 func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQuestionResponse {
 	out := make([]qotdQuestionResponse, 0, len(records))
 	for _, record := range records {
@@ -246,17 +240,6 @@ func buildQOTDCollectorRemoveDuplicatesResultResponse(result qotd.CollectorRemov
 		MatchedMessages:    result.MatchedMessages,
 		DuplicateQuestions: result.DuplicateQuestions,
 		DeletedQuestions:   result.DeletedQuestions,
-	}
-}
-
-func buildQOTDSetupResultResponse(result *qotd.SetupResult) *qotdSetupResultResponse {
-	if result == nil {
-		return nil
-	}
-	return &qotdSetupResultResponse{
-		DeckID:     strings.TrimSpace(result.DeckID),
-		ChannelID:  strings.TrimSpace(result.ChannelID),
-		ChannelURL: strings.TrimSpace(result.ChannelURL),
 	}
 }
 

@@ -30,6 +30,12 @@ func (r *runtimePanelRecorder) addCallbackCall() {
 	r.callbackCalls++
 }
 
+func (r *runtimePanelRecorder) callbackCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.callbackCalls
+}
+
 func (r *runtimePanelRecorder) addWebhookPatch(body string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -277,6 +283,9 @@ func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) 
 	}.encode())
 	router.HandleInteraction(session, interaction)
 
+	if rec.callbackCount() != 1 {
+		t.Fatalf("expected exactly one interaction callback ack, got %d", rec.callbackCount())
+	}
 	if rec.webhookPatchCount() == 0 {
 		t.Fatalf("expected runtime component to be handled through core router")
 	}
@@ -300,6 +309,9 @@ func TestRegisterCommands_RoutesRuntimeModalThroughCoreRouter(t *testing.T) {
 	}
 	router.HandleInteraction(session, newRuntimeModalInteraction(st, "nebula"))
 
+	if rec.callbackCount() != 1 {
+		t.Fatalf("expected exactly one modal callback ack, got %d", rec.callbackCount())
+	}
 	if rec.webhookPatchCount() == 0 {
 		t.Fatalf("expected runtime modal to edit the panel through core router")
 	}

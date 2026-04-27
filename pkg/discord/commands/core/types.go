@@ -47,6 +47,33 @@ type InteractionRouteKey struct {
 	CustomID      string
 }
 
+// InteractionAckMode defines how the router should acknowledge an interaction
+// before handing execution to the route handler.
+type InteractionAckMode int
+
+const (
+	InteractionAckModeNone InteractionAckMode = iota
+	InteractionAckModeDefer
+)
+
+// InteractionAckPolicy declares whether the router should acknowledge the
+// interaction before the handler runs.
+//
+// Mode=Defer means:
+// - slash: deferred channel message response
+// - component/modal: deferred message update
+//
+// Handlers that need to open a modal or otherwise control the first response
+// should leave the policy as Mode=None.
+type InteractionAckPolicy struct {
+	Mode      InteractionAckMode
+	Ephemeral bool
+}
+
+func (policy InteractionAckPolicy) requiresAck() bool {
+	return policy.Mode != InteractionAckModeNone
+}
+
 // Command represents a Discord command
 type Command interface {
 	Name() string
@@ -206,6 +233,12 @@ type AutocompleteRouteProvider interface {
 	AutocompleteRouteHandler() AutocompleteHandler
 }
 
+// InteractionAckPolicyProvider allows a slash command route to expose an ack
+// policy for the same canonical route path derived into the interaction router.
+type InteractionAckPolicyProvider interface {
+	InteractionAckPolicy() InteractionAckPolicy
+}
+
 // AutocompleteHandlerFunc adapts a function into an AutocompleteHandler.
 type AutocompleteHandlerFunc func(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error)
 
@@ -252,6 +285,7 @@ type InteractionRouteBinding struct {
 	Autocomplete AutocompleteHandler
 	Component    ComponentHandler
 	Modal        ModalHandler
+	AckPolicy    InteractionAckPolicy
 }
 
 func (binding InteractionRouteBinding) hasHandlers() bool {

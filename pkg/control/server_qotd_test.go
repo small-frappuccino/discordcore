@@ -17,13 +17,12 @@ import (
 )
 
 type qotdRouteResponse struct {
-	Status      string                   `json:"status"`
-	GuildID     string                   `json:"guild_id"`
-	Settings    files.QOTDConfig         `json:"settings"`
-	Summary     qotdSummaryResponse      `json:"summary"`
-	Question    qotdQuestionResponse     `json:"question"`
-	Questions   []qotdQuestionResponse   `json:"questions"`
-	SetupResult *qotdSetupResultResponse `json:"result"`
+	Status    string                 `json:"status"`
+	GuildID   string                 `json:"guild_id"`
+	Settings  files.QOTDConfig       `json:"settings"`
+	Summary   qotdSummaryResponse    `json:"summary"`
+	Question  qotdQuestionResponse   `json:"question"`
+	Questions []qotdQuestionResponse `json:"questions"`
 }
 
 type qotdPublishResultResponse struct {
@@ -63,18 +62,6 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 		AnswerChannelID:            threadID,
 		PublishedAt:                qotd.PublishTimeUTC(params.PublishDateUTC),
 		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
-	}, nil
-}
-
-func (routeFakePublisher) SetupChannel(_ context.Context, _ *discordgo.Session, params discordqotd.SetupChannelParams) (*discordqotd.SetupChannelResult, error) {
-	channelID := strings.TrimSpace(params.PreferredChannelID)
-	if channelID == "" {
-		channelID = "channel-setup-1"
-	}
-	return &discordqotd.SetupChannelResult{
-		ChannelID:   channelID,
-		ChannelName: "☆-qotd-☆",
-		ChannelURL:  discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
 	}, nil
 }
 
@@ -208,7 +195,7 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	handler := srv.httpServer.Handler
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
-		VerifiedRoleID: "verified-role",
+		VerifiedRoleID: "987654321098765432",
 		ActiveDeckID:   files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
@@ -228,7 +215,7 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	if !deck.Enabled || deck.ChannelID != "123456789012345678" {
 		t.Fatalf("unexpected qotd settings response: %+v", settingsResp.Settings)
 	}
-	if settingsResp.Settings.VerifiedRoleID != "verified-role" {
+	if settingsResp.Settings.VerifiedRoleID != "987654321098765432" {
 		t.Fatalf("expected verified role to round-trip in qotd settings, got %+v", settingsResp.Settings)
 	}
 	if strings.Contains(settingsRec.Body.String(), "staff_role_ids") {
@@ -275,35 +262,6 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	activeDeck, ok := summaryResp.Summary.Settings.ActiveDeck()
 	if !ok || !activeDeck.Enabled {
 		t.Fatalf("expected summary settings to include an enabled active deck: %+v", summaryResp.Summary.Settings)
-	}
-}
-
-func TestQOTDRoutesSetupBootstrapsChannelAndSettings(t *testing.T) {
-	t.Parallel()
-
-	srv, _, _, _ := newQOTDControlTestServer(t)
-	handler := srv.httpServer.Handler
-
-	setupRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/actions/setup", map[string]any{
-		"deck_id": "default",
-	})
-	if setupRec.Code != 200 {
-		t.Fatalf("setup qotd status=%d body=%q", setupRec.Code, setupRec.Body.String())
-	}
-
-	setupResp := decodeQOTDRouteResponse(t, setupRec.Body.String())
-	if setupResp.SetupResult == nil {
-		t.Fatalf("expected setup result payload, got body=%q", setupRec.Body.String())
-	}
-	if setupResp.SetupResult.ChannelID != "channel-setup-1" {
-		t.Fatalf("unexpected setup channel id: %+v", setupResp.SetupResult)
-	}
-	deck, ok := setupResp.Settings.ActiveDeck()
-	if !ok {
-		t.Fatalf("expected active deck in setup settings response: %+v", setupResp.Settings)
-	}
-	if !deck.Enabled || deck.ChannelID != "channel-setup-1" {
-		t.Fatalf("expected setup to enable active deck and persist qotd channel, got %+v", deck)
 	}
 }
 

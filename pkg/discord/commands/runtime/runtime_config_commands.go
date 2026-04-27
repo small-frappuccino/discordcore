@@ -1213,13 +1213,23 @@ func startRuntimeConfigInteractionTrace(i *discordgo.InteractionCreate) func() {
 
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
 	cc := i.MessageComponentData()
+	routeID, _, _ := strings.Cut(cc.CustomID, stateSep)
+	ackPolicy := runtimeComponentAckPolicy(routeID)
 
 	action, st := parseActionAndState(cc.CustomID)
 	if action == "" {
-		respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		}, "invalid_state.defer_update")
-		editInteractionMessageWithLog(s, i, errorEmbed("Invalid interaction state"), nil, "invalid_state.render_error")
+		if ackPolicy.Mode == core.InteractionAckModeNone {
+			respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags: discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{errorEmbed("Invalid interaction state")},
+				},
+			}, routeID+".invalid_state.respond_error")
+			return
+		}
+
+		editInteractionMessageWithLog(s, i, errorEmbed("Invalid interaction state"), nil, routeID+".invalid_state.render_error")
 		return
 	}
 
@@ -1230,17 +1240,9 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		editInteractionMessageWithLog(s, i, embed, components, action+"."+stage)
 	}
 
-	// If this interaction is going to open a modal, we must NOT ack with a message update first.
-	// Otherwise the modal response can fail because an interaction can only be responded to once.
-	if action != cidButtonEdit {
-		respond(&discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		}, "defer_update")
-	}
-
 	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
-		if action == cidButtonEdit {
+		if ackPolicy.Mode == core.InteractionAckModeNone {
 			respond(&discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -1463,11 +1465,6 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 	edit := func(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent, stage string) {
 		editInteractionMessageWithLog(s, i, embed, components, "modal_submit."+stage)
 	}
-
-	// For modal submits, keep the panel usable by updating the original panel message.
-	respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
-	}, "modal_submit.defer_update")
 
 	st := decodeState(rawState)
 

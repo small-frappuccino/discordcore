@@ -33,7 +33,6 @@ export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
   reconcilePosts: "Reconciling QOTD with Discord...",
   saveSettings: "Saving QOTD settings...",
-  setupChannel: "Preparing QOTD channel...",
   removeCollectorDeckDuplicates: "Removing collector duplicates...",
   createQuestion: "Creating question...",
   createQuestions: "Importing questions...",
@@ -66,7 +65,6 @@ interface QOTDContextValue {
   refreshWorkspace: () => Promise<void>;
   reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<QOTDConfig | null>;
-  setupChannel: (deckId?: string) => Promise<void>;
   selectDeck: (deckId: string) => Promise<void>;
   updateQuestion: (
     questionId: number,
@@ -529,36 +527,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function setupChannel(deckId = "") {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.setupChannel);
-    try {
-      const response = await client.setupQOTD(normalizedGuildID, {
-        deck_id: deckId.trim() || undefined,
-      });
-      const updatedSettings = normalizeQOTDSettings(response.settings);
-      setSettings(updatedSettings);
-      setSummary(normalizeQOTDSummary(response.summary, updatedSettings));
-      await loadWorkspace(chooseDeckID(deckId || selectedDeckRef.current, updatedSettings));
-      setNotice({
-        tone: "success",
-        message: response.result.channel_url
-          ? "QOTD channel is ready. Verify the channel permissions and the next daily post thread."
-          : "QOTD channel is ready.",
-      });
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
   async function selectDeck(deckId: string) {
     if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
@@ -610,7 +578,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         refreshWorkspace,
         reorderQuestions,
         saveSettings,
-        setupChannel,
         selectDeck,
         updateQuestion,
       }}

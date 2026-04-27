@@ -1,8 +1,10 @@
 package core
 
 import (
+	"fmt"
 	"log/slog"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 )
 
@@ -35,6 +37,7 @@ func defaultInteractionMiddlewares(cr *CommandRouter) []InteractionMiddleware {
 		cr.telemetryMiddleware(),
 		cr.errorMappingMiddleware(),
 		cr.permissionGateMiddleware(),
+		cr.ackPolicyMiddleware(),
 	}
 }
 
@@ -102,6 +105,40 @@ func (cr *CommandRouter) errorMappingMiddleware() InteractionMiddleware {
 			respondToSlashError(ctx, err)
 			return nil
 		}
+	}
+}
+
+func (cr *CommandRouter) ackPolicyMiddleware() InteractionMiddleware {
+	return func(routeKey InteractionRouteKey, next InteractionHandlerFunc) InteractionHandlerFunc {
+		return func(ctx *Context) error {
+			policy, exists := cr.lookupInteractionAckPolicy(routeKey)
+			if !exists || !policy.requiresAck() {
+				return next(ctx)
+			}
+
+			if err := applyInteractionAckPolicy(ctx, routeKey, policy); err != nil {
+				return fmt.Errorf("ack interaction: %w", err)
+			}
+
+			return next(ctx)
+		}
+	}
+}
+
+func applyInteractionAckPolicy(ctx *Context, routeKey InteractionRouteKey, policy InteractionAckPolicy) error {
+	if ctx == nil || ctx.Session == nil || ctx.Interaction == nil || !policy.requiresAck() {
+		return nil
+	}
+
+	switch routeKey.Kind {
+	case InteractionKindSlash:
+		return NewResponseManager(ctx.Session).DeferResponse(ctx.Interaction, policy.Ephemeral)
+	case InteractionKindComponent, InteractionKindModal:
+		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		})
+	default:
+		return nil
 	}
 }
 

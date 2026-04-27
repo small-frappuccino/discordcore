@@ -30,6 +30,8 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	setCmd := NewConfigSetSubCommand(cc.configManager)
 	getCmd := NewConfigGetSubCommand(cc.configManager)
 	listCmd := NewConfigListSubCommand(cc.configManager)
+	qotdEnabledCmd := NewQOTDEnabledSubCommand(cc.configManager)
+	qotdChannelCmd := NewQOTDChannelSubCommand(cc.configManager)
 	webhookCatalog := newWebhookEmbedInteractionCatalog(cc.configManager)
 	pingCmd := NewPingCommand()
 	echoCmd := NewEchoCommand()
@@ -50,6 +52,8 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	group.AddSubCommand(setCmd)
 	group.AddSubCommand(getCmd)
 	group.AddSubCommand(listCmd)
+	group.AddSubCommand(qotdEnabledCmd)
+	group.AddSubCommand(qotdChannelCmd)
 	webhookCatalog.appendToGroup(group)
 
 	// Register (or refresh) the group.
@@ -254,6 +258,16 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	b.WriteString(fmt.Sprintf("Moderation Case: %s\n", emptyToDash(ctx.GuildConfig.Channels.ModerationCase)))
 	b.WriteString(fmt.Sprintf("Entry Backfill: %s\n", emptyToDash(ctx.GuildConfig.Channels.EntryBackfill)))
 	b.WriteString(fmt.Sprintf("Verification Cleanup: %s\n", emptyToDash(ctx.GuildConfig.Channels.VerificationCleanup)))
+	qotdSettings := files.DashboardQOTDConfig(ctx.GuildConfig.QOTD)
+	qotdDeck, _ := qotdSettings.ActiveDeck()
+	qotdEnabled := false
+	qotdChannel := ""
+	if qotdDeck.ID != "" {
+		qotdEnabled = qotdDeck.Enabled
+		qotdChannel = qotdDeck.ChannelID
+	}
+	b.WriteString(fmt.Sprintf("QOTD Enabled: %t\n", qotdEnabled))
+	b.WriteString(fmt.Sprintf("QOTD Channel: %s\n", emptyToDash(qotdChannel)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
 	builder := core.NewResponseBuilder(ctx.Session).
@@ -298,6 +312,9 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`channels.verification_cleanup` - Channel used for verification cleanup routines",
 		"",
 		"Use `/config set <key> <value>` to modify these settings.",
+		"",
+		"`/config qotd_enabled <enabled>` - Enable or disable QOTD publishing for the active deck",
+		"`/config qotd_channel <channel>` - Set the QOTD delivery channel for the active deck",
 		"",
 		"`/config webhook_embed_create` - Add webhook embed patch entry",
 		"`/config webhook_embed_read` - Show one webhook embed patch entry",

@@ -15,21 +15,25 @@ type interactionRouteEntry struct {
 
 type slashRouteEntry struct {
 	handler  SlashHandler
+	ackPolicy InteractionAckPolicy
 	explicit bool
 }
 
 type autocompleteRouteEntry struct {
 	handler  AutocompleteHandler
+	ackPolicy InteractionAckPolicy
 	explicit bool
 }
 
 type componentRouteEntry struct {
 	handler  ComponentHandler
+	ackPolicy InteractionAckPolicy
 	explicit bool
 }
 
 type modalRouteEntry struct {
 	handler  ModalHandler
+	ackPolicy InteractionAckPolicy
 	explicit bool
 }
 
@@ -114,6 +118,38 @@ func (cr *CommandRouter) lookupInteractionRouteEntry(path string) (*interactionR
 	return entry, exists
 }
 
+func (cr *CommandRouter) lookupInteractionAckPolicy(routeKey InteractionRouteKey) (InteractionAckPolicy, bool) {
+	entry, exists := cr.lookupInteractionRouteEntry(routeKey.Path)
+	if !exists || entry == nil {
+		return InteractionAckPolicy{}, false
+	}
+
+	switch routeKey.Kind {
+	case InteractionKindSlash:
+		if entry.slash.handler == nil {
+			return InteractionAckPolicy{}, false
+		}
+		return entry.slash.ackPolicy, true
+	case InteractionKindAutocomplete:
+		if entry.autocomplete.handler == nil {
+			return InteractionAckPolicy{}, false
+		}
+		return entry.autocomplete.ackPolicy, true
+	case InteractionKindComponent:
+		if entry.component.handler == nil {
+			return InteractionAckPolicy{}, false
+		}
+		return entry.component.ackPolicy, true
+	case InteractionKindModal:
+		if entry.modal.handler == nil {
+			return InteractionAckPolicy{}, false
+		}
+		return entry.modal.ackPolicy, true
+	default:
+		return InteractionAckPolicy{}, false
+	}
+}
+
 func (cr *CommandRouter) registerSlashCommandRoutes(cmd Command) {
 	if cr == nil || cr.routeRegistry == nil || cmd == nil {
 		return
@@ -157,16 +193,16 @@ func (cr *CommandRouter) storeInteractionRoute(binding InteractionRouteBinding, 
 	}
 
 	if binding.Slash != nil && !(entry.slash.explicit && !explicit) {
-		entry.slash = slashRouteEntry{handler: binding.Slash, explicit: explicit}
+		entry.slash = slashRouteEntry{handler: binding.Slash, ackPolicy: binding.AckPolicy, explicit: explicit}
 	}
 	if binding.Autocomplete != nil && !(entry.autocomplete.explicit && !explicit) {
-		entry.autocomplete = autocompleteRouteEntry{handler: binding.Autocomplete, explicit: explicit}
+		entry.autocomplete = autocompleteRouteEntry{handler: binding.Autocomplete, ackPolicy: binding.AckPolicy, explicit: explicit}
 	}
 	if binding.Component != nil && !(entry.component.explicit && !explicit) {
-		entry.component = componentRouteEntry{handler: binding.Component, explicit: explicit}
+		entry.component = componentRouteEntry{handler: binding.Component, ackPolicy: binding.AckPolicy, explicit: explicit}
 	}
 	if binding.Modal != nil && !(entry.modal.explicit && !explicit) {
-		entry.modal = modalRouteEntry{handler: binding.Modal, explicit: explicit}
+		entry.modal = modalRouteEntry{handler: binding.Modal, ackPolicy: binding.AckPolicy, explicit: explicit}
 	}
 }
 
@@ -179,6 +215,9 @@ func collectInteractionRouteBindings(path string, handler SlashHandler) []Intera
 	binding := InteractionRouteBinding{Path: path, Slash: handler}
 	if provider, ok := handler.(AutocompleteRouteProvider); ok {
 		binding.Autocomplete = provider.AutocompleteRouteHandler()
+	}
+	if provider, ok := handler.(InteractionAckPolicyProvider); ok {
+		binding.AckPolicy = provider.InteractionAckPolicy()
 	}
 	bindings := []InteractionRouteBinding{binding}
 

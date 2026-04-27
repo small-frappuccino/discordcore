@@ -22,7 +22,10 @@ func TestBuildOfficialQuestionEmbedCarriesPromptMetadata(t *testing.T) {
 	if embed.Title != "☆ question!! ☆" {
 		t.Fatalf("unexpected title: %+v", embed)
 	}
-	if embed.Footer == nil || embed.Footer.Text != "Deck: Final Mix | Question #345 -- 62 Cards Remaining" {
+	if embed.Color != officialQuestionEmbedColor {
+		t.Fatalf("expected qotd embed color %x, got %x", officialQuestionEmbedColor, embed.Color)
+	}
+	if embed.Footer == nil || embed.Footer.Text != "Question #345 from Final Mix -- 62 questions remaining" {
 		t.Fatalf("expected qotd footer metadata, got %+v", embed.Footer)
 	}
 	if embed.Timestamp != "" {

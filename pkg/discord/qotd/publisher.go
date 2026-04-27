@@ -14,6 +14,7 @@ const (
 	legacyOfficialIndexThreadName    = "questions list!"
 	legacyOfficialIndexThreadMessage = "daily qotd prompts are archived here."
 	defaultThreadAutoArchiveMinutes  = 4320
+	officialQuestionEmbedColor       = 0xF48FB1
 )
 
 type PublishOfficialPostParams struct {
@@ -201,7 +202,7 @@ func buildOfficialQuestionEmbed(deckName string, availableQuestions int, questio
 	return &discordgo.MessageEmbed{
 		Title:       "☆ question!! ☆",
 		Description: normalizeOfficialQuestionText(questionText),
-		Color:       0x5B86E5,
+		Color:       officialQuestionEmbedColor,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: buildOfficialQuestionFooter(deckName, availableQuestions, queuePosition),
 		},

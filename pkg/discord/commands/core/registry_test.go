@@ -18,6 +18,7 @@ type testCommand struct {
 	requiresPermissions bool
 	handler             func(*Context) error
 	autocomplete        AutocompleteHandler
+	ackPolicy           InteractionAckPolicy
 }
 
 func (tc testCommand) Name() string        { return tc.name }
@@ -32,6 +33,7 @@ func (tc testCommand) Handle(ctx *Context) error {
 	return nil
 }
 func (tc testCommand) AutocompleteRouteHandler() AutocompleteHandler { return tc.autocomplete }
+func (tc testCommand) InteractionAckPolicy() InteractionAckPolicy    { return tc.ackPolicy }
 func (tc testCommand) RequiresGuild() bool       { return tc.requiresGuild }
 func (tc testCommand) RequiresPermissions() bool { return tc.requiresPermissions }
 

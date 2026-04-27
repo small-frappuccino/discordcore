@@ -20,8 +20,6 @@ var errFakePublishFailed = errors.New("fake publish failed")
 type fakePublisher struct {
 	publishedParams  []discordqotd.PublishOfficialPostParams
 	publishResponses []fakePublishResponse
-	setupParams      []discordqotd.SetupChannelParams
-	setupResults     []fakeSetupChannelResponse
 	threadStates     map[string]discordqotd.ThreadState
 	fetchCalls       []string
 	threadMessages   map[string][]discordqotd.ArchivedMessage
@@ -31,11 +29,6 @@ type fakePublisher struct {
 
 type fakePublishResponse struct {
 	result *discordqotd.PublishedOfficialPost
-	err    error
-}
-
-type fakeSetupChannelResponse struct {
-	result *discordqotd.SetupChannelResult
 	err    error
 }
 
@@ -87,28 +80,6 @@ func defaultFakePublishedOfficialPost(params discordqotd.PublishOfficialPostPara
 		PublishedAt:                publishedAt,
 		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}
-}
-
-func (p *fakePublisher) SetupChannel(_ context.Context, _ *discordgo.Session, params discordqotd.SetupChannelParams) (*discordqotd.SetupChannelResult, error) {
-	p.setupParams = append(p.setupParams, params)
-	if len(p.setupResults) > 0 {
-		response := p.setupResults[0]
-		p.setupResults = p.setupResults[1:]
-		if response.result == nil {
-			return nil, response.err
-		}
-		out := *response.result
-		return &out, response.err
-	}
-	channelID := strings.TrimSpace(params.PreferredChannelID)
-	if channelID == "" {
-		channelID = "channel-setup-1"
-	}
-	return &discordqotd.SetupChannelResult{
-		ChannelID:   channelID,
-		ChannelName: "☆-qotd-☆",
-		ChannelURL:  discordqotd.BuildChannelJumpURL(params.GuildID, channelID),
-	}, nil
 }
 
 func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, threadID string, state discordqotd.ThreadState) error {
@@ -240,60 +211,6 @@ func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
 	got := buildOfficialThreadName(1)
 	if got != "question of the day #1" {
 		t.Fatalf("unexpected official thread title: %q", got)
-	}
-}
-
-func TestSetupChannelEnablesActiveDeckAndPersistsQOTDSurface(t *testing.T) {
-	t.Parallel()
-
-	service, store, fake := newTestQOTDService(t)
-
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:      files.LegacyQOTDDefaultDeckID,
-			Name:    files.LegacyQOTDDefaultDeckName,
-			Enabled: false,
-		}},
-	}); err != nil {
-		t.Fatalf("UpdateSettings(initial) failed: %v", err)
-	}
-
-	result, err := service.SetupChannel(context.Background(), "g1", "", &discordgo.Session{})
-	if err != nil {
-		t.Fatalf("SetupChannel() failed: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected setup result")
-	}
-	if len(fake.setupParams) != 1 {
-		t.Fatalf("expected one setup publisher call, got %+v", fake.setupParams)
-	}
-	if fake.setupParams[0].GuildID != "g1" {
-		t.Fatalf("unexpected setup params: %+v", fake.setupParams[0])
-	}
-	if result.ChannelID != "channel-setup-1" {
-		t.Fatalf("unexpected setup result: %+v", result)
-	}
-
-	settings, err := service.Settings("g1")
-	if err != nil {
-		t.Fatalf("Settings() failed: %v", err)
-	}
-	deck, ok := settings.ActiveDeck()
-	if !ok {
-		t.Fatalf("expected active deck after setup: %+v", settings)
-	}
-	if !deck.Enabled || deck.ChannelID != "channel-setup-1" {
-		t.Fatalf("expected setup to enable active deck and persist channel id, got %+v", deck)
-	}
-
-	surface, err := store.GetQOTDSurfaceByDeck(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
-	if err != nil {
-		t.Fatalf("GetQOTDSurfaceByDeck() failed: %v", err)
-	}
-	if surface == nil || surface.ChannelID != "channel-setup-1" || surface.QuestionListThreadID != "" {
-		t.Fatalf("unexpected persisted qotd surface: %+v", surface)
 	}
 }
 

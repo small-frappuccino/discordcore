@@ -46,12 +46,17 @@ func (catalog runtimeInteractionCatalog) bindings() []core.InteractionRouteBindi
 	componentHandler := catalog.componentHandler()
 	bindings := make([]core.InteractionRouteBinding, 0, len(runtimeComponentRouteIDs())+1)
 	for _, routeID := range runtimeComponentRouteIDs() {
-		bindings = append(bindings, core.InteractionRouteBinding{Path: routeID, Component: componentHandler})
+		bindings = append(bindings, core.InteractionRouteBinding{
+			Path:      routeID,
+			Component: componentHandler,
+			AckPolicy: runtimeComponentAckPolicy(routeID),
+		})
 	}
 
 	bindings = append(bindings, core.InteractionRouteBinding{
-		Path:  modalEditValueID,
-		Modal: catalog.modalHandler(),
+		Path:      modalEditValueID,
+		Modal:     catalog.modalHandler(),
+		AckPolicy: core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer},
 	})
 
 	return bindings
@@ -98,4 +103,12 @@ func runtimeComponentRouteIDs() []string {
 		cidButtonReset,
 		cidButtonReload,
 	}
+}
+
+func runtimeComponentAckPolicy(routeID string) core.InteractionAckPolicy {
+	if routeID == cidButtonEdit {
+		return core.InteractionAckPolicy{}
+	}
+
+	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
 }

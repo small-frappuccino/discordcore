@@ -21,21 +21,18 @@ import {
 } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useGuildChannelOptions } from "../features/useGuildChannelOptions";
-import { useGuildRoleOptions } from "../features/useGuildRoleOptions";
-import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
+import { useQOTD } from "./QOTDContext";
 
 interface SettingsDraft {
   active_deck_id: string;
-  verified_role_id?: string;
   decks: QOTDDeck[];
   collector?: QOTDCollectorConfig;
 }
 
 export function QOTDSettingsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
-  const { busyLabel, deckSummaries, saveSettings, settings, setupChannel } = useQOTD();
+	const { deckSummaries, saveSettings, settings } = useQOTD();
   const channelOptions = useGuildChannelOptions();
-  const roleOptions = useGuildRoleOptions();
   const workflowHeadingId = useId();
   const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
   const [draft, setDraft] = useState<SettingsDraft>(
@@ -62,16 +59,7 @@ export function QOTDSettingsPage() {
       description: "Text channel that hosts the daily QOTD message and its answer thread.",
     }));
   const hasUnsavedChanges = settingsDraftChanged(savedDraftRef.current, draft);
-  const setupBusy = busyLabel === QOTD_BUSY_LABELS.setupChannel;
-  const controlsDisabled = !canEditSelectedGuild || saving || setupBusy;
-  const activeDeckDraft = draft.decks.find((deck) => deck.id === draft.active_deck_id);
-  const hasConfiguredChannel =
-    (activeDeckDraft?.channel_id ?? "").trim() !== "";
-  const setupDisabled =
-    !canEditSelectedGuild ||
-    saving ||
-    setupBusy ||
-    hasUnsavedChanges;
+  const controlsDisabled = !canEditSelectedGuild || saving;
   const channelPlaceholder = channelOptions.loading
     ? "Loading text channels..."
     : textChannelOptions.length === 0
@@ -85,7 +73,12 @@ export function QOTDSettingsPage() {
 
     setSaving(true);
     try {
-      const updatedSettings = await saveSettings(draft);
+      const updatedSettings = await saveSettings({
+        ...settings,
+        active_deck_id: draft.active_deck_id,
+        decks: draft.decks,
+        collector: draft.collector,
+      });
       if (updatedSettings != null) {
         const nextDraft = createSettingsDraft(updatedSettings);
         savedDraftRef.current = nextDraft;
@@ -111,6 +104,11 @@ export function QOTDSettingsPage() {
             </GroupedSettingsHeading>
           </GroupedSettingsCopy>
 
+            <GroupedSettingsInlineMessage
+            message="Create the QOTD text channel manually in Discord. This page only controls whether publishing is enabled and which existing text channel receives the daily post."
+            tone="info"
+            />
+
           {channelOptions.notice ? (
             <GroupedSettingsInlineMessage
               message={channelOptions.notice.message}
@@ -129,51 +127,6 @@ export function QOTDSettingsPage() {
           ) : null}
 
           <GroupedSettingsGroup>
-            <GroupedSettingsItem
-              stacked
-              role="group"
-              aria-labelledby={`${workflowHeadingId}-setup`}
-            >
-              <GroupedSettingsSubrow>
-                <GroupedSettingsMainRow>
-                  <GroupedSettingsCopy>
-                    <GroupedSettingsHeading id={`${workflowHeadingId}-setup`}>
-                      Automatic setup
-                    </GroupedSettingsHeading>
-                    <p className="field-note">
-                      Creates or repairs the <code>☆-qotd-☆</code> text channel with verified-role permissions so each daily QOTD post can open its own answer thread.
-                    </p>
-                  </GroupedSettingsCopy>
-                  <button
-                    className="button-primary"
-                    type="button"
-                    disabled={setupDisabled}
-                    onClick={() => {
-                      void (async () => {
-                        await setupChannel(draft.active_deck_id);
-                        await channelOptions.refresh();
-                      })().catch(() => undefined);
-                    }}
-                  >
-                    {setupBusy
-                      ? "Setting up..."
-                      : hasConfiguredChannel
-                        ? "Repair QOTD setup"
-                        : "Create QOTD channel"}
-                  </button>
-                </GroupedSettingsMainRow>
-              </GroupedSettingsSubrow>
-
-              {hasUnsavedChanges ? (
-                <GroupedSettingsSubrow>
-                  <GroupedSettingsInlineMessage
-                    message="Save the current deck changes before running automatic setup."
-                    tone="info"
-                  />
-                </GroupedSettingsSubrow>
-              ) : null}
-            </GroupedSettingsItem>
-
             <GroupedSettingsItem
               stacked
               role="group"
@@ -213,33 +166,6 @@ export function QOTDSettingsPage() {
               </GroupedSettingsSubrow>
             </GroupedSettingsItem>
           </GroupedSettingsGroup>
-
-          <GroupedSettingsGroup>
-            <GroupedSettingsItem>
-              <GroupedSettingsSubrow>
-                <div className="input-group">
-                  <label>
-                    <GroupedSettingsHeading>Verified Role</GroupedSettingsHeading>
-                    <span className="field-note">The role required to view the QOTD text channels.</span>
-                  </label>
-                  <SettingsSelectField
-                    label="Verified role"
-                    value={draft.verified_role_id ?? ""}
-                    onChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        verified_role_id: value,
-                      }))
-                    }
-                    options={roleOptions.roles.map(r => ({ value: r.id, label: r.name }))}
-                    placeholder="Select a verified role (optional)"
-                    disabled={controlsDisabled || roleOptions.loading}
-                    note="Users without this role will not be able to read the QOTD text channel."
-                  />
-                </div>
-              </GroupedSettingsSubrow>
-            </GroupedSettingsItem>
-          </GroupedSettingsGroup>
         </GroupedSettingsSection>
 
         <GroupedSettingsSection>
@@ -255,6 +181,7 @@ export function QOTDSettingsPage() {
               const summary = findDeckSummary(deckSummaries, deck.id);
               const questionCount = summary?.counts.total ?? 0;
               const canDelete = draft.decks.length > 1;
+              const hasChannel = (deck.channel_id ?? "").trim() !== "";
 
               return (
                 <GroupedSettingsItem
@@ -275,7 +202,7 @@ export function QOTDSettingsPage() {
                       <GroupedSettingsSwitch
                         label={`Enable ${deck.name}`}
                         checked={Boolean(deck.enabled)}
-                        disabled={controlsDisabled}
+                      disabled={controlsDisabled || (!deck.enabled && !hasChannel)}
                         onChange={(checked) =>
                           setDraft((current) => ({
                             ...current,
@@ -330,10 +257,19 @@ export function QOTDSettingsPage() {
                         options={textChannelOptions}
                         placeholder={channelPlaceholder}
                         disabled={controlsDisabled || channelOptions.loading}
-                        note="Single text channel used for the daily QOTD post; each post opens a dedicated answer thread."
+                        note="Existing text channel used for the daily QOTD post. Create it manually in Discord; each published question still opens its own answer thread from the post."
                       />
                     </div>
                   </GroupedSettingsSubrow>
+
+                      {!hasChannel ? (
+                      <GroupedSettingsSubrow>
+                        <GroupedSettingsInlineMessage
+                        message="Pick a text channel before enabling this deck. Channel selection stays available even while publishing is disabled."
+                        tone="info"
+                        />
+                      </GroupedSettingsSubrow>
+                      ) : null}
 
                   <GroupedSettingsSubrow>
                     <div className="qotd-deck-card-footer">
@@ -475,7 +411,6 @@ function createSettingsDraft(settings: QOTDConfig): SettingsDraft {
     String(settings.active_deck_id ?? "").trim() || String(decks[0]?.id ?? "");
   return {
     active_deck_id: activeDeckID,
-    verified_role_id: String(settings.verified_role_id ?? "").trim(),
     decks,
     collector: normalizeCollectorConfig(settings.collector),
   };

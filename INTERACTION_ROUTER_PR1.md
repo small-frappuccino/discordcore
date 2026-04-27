@@ -33,6 +33,7 @@ After the current PR 1 implementation:
 - runtime config registers into the same core router instead of installing a parallel handler
 - slash command trees can derive both slash and autocomplete routing from the same source
 - components and modals register through the same declarative route catalog used by the core router
+- routes can declare explicit ack and defer policy handled centrally by middleware
 - existing slash command packages still work through compatibility adapters where needed
 - no intentional user-facing behavior change was introduced beyond more consistent routing and lifecycle behavior
 
@@ -87,6 +88,17 @@ Current default middleware covers:
 - telemetry for routed interactions
 - slash permission gating
 - slash error mapping
+- route-scoped ack and defer policy
+
+`InteractionRouteBinding` can now declare `AckPolicy`, and slash-tree-derived
+routes can expose the same contract through `InteractionAckPolicyProvider`.
+
+Current defer behavior is:
+
+- slash routes with defer policy: deferred channel message response
+- component and modal routes with defer policy: deferred message update
+- modal-opening component routes: no pre-ack, so the handler still owns the
+	first response
 
 The middleware chain is installed by default in `NewCommandRouter`.
 
@@ -102,6 +114,7 @@ Conceptually, one route entry can carry:
 - autocomplete handler
 - component handler
 - modal handler
+- per-route ack policy
 
 This is represented by `InteractionRouteBinding` in the core types and stored
 through `RegisterInteractionRoute(...)` and `RegisterInteractionRoutes(...)`.
@@ -147,8 +160,13 @@ It also moved into a feature-local interaction catalog so that the feature owns:
 - its slash tree registration
 - its component bindings
 - its modal bindings
+- its explicit ack policy per interaction route
 
 without pushing that wiring back into the general config or core lifecycle code.
+
+Runtime config component and modal routes now rely on the central router for
+deferred acknowledgements. The edit-button route intentionally opts out of
+pre-ack so it can open a modal as the first response.
 
 ### 9. Feature-local catalog pattern has started
 
@@ -252,6 +270,12 @@ Relevant green validations include:
 - `go test ./pkg/discord/commands/config`
 - `go test ./pkg/discord/commands/...`
 - `go vet ./...`
+
+Core tests now pin:
+
+- single-ack behavior for deferred slash routes
+- deferred-update behavior for component and modal routes
+- no-pre-ack-before-modal for modal-opening component routes
 
 The full repo test suite is not fully green because of the existing QOTD test
 failure outside this PR:

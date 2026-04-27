@@ -407,70 +407,6 @@ describe("ControlApiClient feature routes", () => {
           });
         }
 
-        if (url.endsWith("/qotd/actions/setup")) {
-          return jsonResponse({
-            status: "ok",
-            guild_id: "guild-1",
-            settings: {
-              active_deck_id: "default",
-              decks: [
-                {
-                  id: "default",
-                  name: "Default",
-                  enabled: true,
-                  channel_id: "channel-setup-1",
-                },
-              ],
-            },
-            summary: {
-              settings: {
-                active_deck_id: "default",
-                decks: [
-                  {
-                    id: "default",
-                    name: "Default",
-                    enabled: true,
-                    channel_id: "channel-setup-1",
-                  },
-                ],
-              },
-              counts: {
-                total: 1,
-                draft: 0,
-                ready: 1,
-                reserved: 0,
-                used: 0,
-                disabled: 0,
-              },
-              decks: [
-                {
-                  id: "default",
-                  name: "Default",
-                  enabled: true,
-                  counts: {
-                    total: 1,
-                    draft: 0,
-                    ready: 1,
-                    reserved: 0,
-                    used: 0,
-                    disabled: 0,
-                  },
-                  cards_remaining: 1,
-                  is_active: true,
-                  can_publish: true,
-                },
-              ],
-              current_publish_date_utc: "2026-04-03T00:00:00Z",
-              published_for_current_slot: false,
-            },
-            result: {
-              deck_id: "default",
-              channel_id: "channel-setup-1",
-              channel_url: "https://discord.com/channels/guild-1/channel-setup-1",
-            },
-          });
-        }
-
         return jsonResponse({
           status: "ok",
           guild_id: "guild-1",
@@ -486,7 +422,6 @@ describe("ControlApiClient feature routes", () => {
 
     const summary = await client.getQOTDSummary("guild-1");
     const publish = await client.publishQOTDNow("guild-1");
-    const setup = await client.setupQOTD("guild-1", { deck_id: "default" });
     await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
     expect(summary.summary.settings.active_deck_id).toBe("default");
@@ -504,7 +439,6 @@ describe("ControlApiClient feature routes", () => {
     expect(publish.result.official_post.answer_channel_id).toBe(
       "thread-20260403",
     );
-    expect(setup.result.channel_id).toBe("channel-setup-1");
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/v1/guilds/guild-1/qotd",
@@ -513,20 +447,6 @@ describe("ControlApiClient feature routes", () => {
         headers: expect.any(Headers),
         credentials: "include",
         body: undefined,
-      },
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
-      "/v1/guilds/guild-1/qotd/actions/setup",
-      {
-        method: "POST",
-        headers: expect.objectContaining({
-          get: expect.any(Function),
-        }),
-        credentials: "include",
-        body: JSON.stringify({
-          deck_id: "default",
-        }),
       },
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -541,7 +461,7 @@ describe("ControlApiClient feature routes", () => {
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+		  4,
       "/v1/guilds/guild-1/qotd/questions/reorder",
       {
         method: "POST",

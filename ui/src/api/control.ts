@@ -200,20 +200,6 @@ export interface QOTDPublishResponse {
   result: QOTDPublishResult;
 }
 
-export interface QOTDSetupResult {
-  deck_id: string;
-  channel_id: string;
-  channel_url?: string;
-}
-
-export interface QOTDSetupResponse {
-  status: string;
-  guild_id: string;
-  settings: QOTDConfig;
-  summary: QOTDSummary;
-  result: QOTDSetupResult;
-}
-
 export interface QOTDCollectedQuestion {
   id: number;
   source_channel_id: string;
@@ -664,17 +650,6 @@ export class ControlApiClient {
     return this.request<QOTDPublishResponse>(
       "POST",
       `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/publish-now`,
-    );
-  }
-
-  async setupQOTD(
-    guildId: string,
-    payload: { deck_id?: string } = {},
-  ): Promise<QOTDSetupResponse> {
-    return this.request<QOTDSetupResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/setup`,
-      payload,
     );
   }
 
