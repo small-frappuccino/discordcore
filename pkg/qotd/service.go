@@ -347,6 +347,11 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
 	deck, err := s.resolveDashboardDeck(guildID, deckID)
 	if err != nil {
 		return nil, err
@@ -451,6 +456,24 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 			return nil, err
 		}
 		return recovered, nil
+	}
+
+	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		if !isOfficialPostPublished(*existing) {
+			recovered, err := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+			if err != nil {
+				return nil, err
+			}
+			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+				return nil, err
+			}
+			return recovered, nil
+		}
+		return nil, ErrAlreadyPublished
 	}
 
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)

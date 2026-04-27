@@ -2,11 +2,8 @@ package storage
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestQOTDTablesInitialized(t *testing.T) {
@@ -268,7 +265,7 @@ func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
 	}
 }
 
-func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
+func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -294,24 +291,9 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
 	graceUntil := time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC)
 	archiveAt := time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
+	publishedAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
-		GuildID:              "g1",
-		DeckID:               "default",
-		DeckNameSnapshot:     "Default",
-		QuestionID:           question.ID,
-		PublishMode:          "scheduled",
-		PublishDateUTC:       publishDate,
-		State:                "current",
-		ChannelID:            "forum-1",
-		QuestionTextSnapshot: question.Body,
-		GraceUntil:           graceUntil,
-		ArchiveAt:            archiveAt,
-	}); err != nil {
-		t.Fatalf("CreateQOTDOfficialPostProvisioning(scheduled) failed: %v", err)
-	}
-
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	manual, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -323,35 +305,40 @@ func TestQOTDOfficialPostsAllowManualAndScheduledOnSameDate(t *testing.T) {
 		QuestionTextSnapshot: second.Body,
 		GraceUntil:           graceUntil,
 		ArchiveAt:            archiveAt,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
 	}
+	manual, err = store.FinalizeQOTDOfficialPost(ctx, manual.ID, "questions-list-thread", "questions-list-entry-manual", "manual-thread", "manual-message", "manual-thread", publishedAt)
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost(manual) failed: %v", err)
+	}
 
-	_, err = store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
-		QuestionID:           second.ID,
+		QuestionID:           question.ID,
 		PublishMode:          "scheduled",
 		PublishDateUTC:       publishDate,
-		State:                "current",
+		State:                "provisioning",
 		ChannelID:            "forum-1",
-		QuestionTextSnapshot: second.Body,
+		QuestionTextSnapshot: question.Body,
 		GraceUntil:           graceUntil,
 		ArchiveAt:            archiveAt,
-	})
-	if err == nil {
-		t.Fatal("expected duplicate scheduled publish date to remain unique")
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(scheduled) failed: %v", err)
 	}
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || pgErr == nil {
-		t.Fatalf("expected pg error for duplicate scheduled publish date, got %T %v", err, err)
+
+	record, err := store.GetQOTDOfficialPostByDate(ctx, "g1", publishDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if pgErr.Code != "23505" {
-		t.Fatalf("expected SQLSTATE 23505 for duplicate scheduled publish date, got %q", pgErr.Code)
+	if record == nil || record.ID != manual.ID {
+		t.Fatalf("expected published manual post to win the day lookup, got %+v", record)
 	}
-	if pgErr.ConstraintName != "idx_qotd_official_posts_scheduled_publish_date" {
-		t.Fatalf("expected scheduled publish date constraint, got %q", pgErr.ConstraintName)
+	if record.PublishMode != "manual" || record.PublishedAt == nil {
+		t.Fatalf("expected published manual post from the same day, got %+v", record)
 	}
 }
 

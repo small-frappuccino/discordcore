@@ -808,6 +808,9 @@ func translatePublishNowError(err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, applicationqotd.ErrAlreadyPublished) {
+		return core.NewCommandError("A QOTD question has already been published for today.", false)
+	}
 	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
 		return core.NewCommandError("No ready QOTD questions are available in the active deck.", false)
 	}

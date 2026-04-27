@@ -1093,8 +1093,19 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			updated_at
 		FROM qotd_official_posts
 		WHERE guild_id = ?
-		  AND publish_mode = 'scheduled'
-		  AND publish_date_utc = ?`,
+		  AND publish_date_utc = ?
+		ORDER BY
+		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
+		  CASE
+		    WHEN published_at IS NOT NULL
+		      AND discord_thread_id IS NOT NULL
+		      AND discord_starter_message_id IS NOT NULL
+		      AND answer_channel_id IS NOT NULL THEN 0
+		    ELSE 1
+		  END,
+		  updated_at DESC,
+		  id DESC
+		LIMIT 1`,
 		guildID,
 		publishDateUTC,
 	)

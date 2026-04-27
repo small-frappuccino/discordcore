@@ -801,3 +801,42 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 		t.Fatalf("expected used question to show prohibited icon, got %q", listResp.Data.Embeds[0].Description)
 	}
 }
+
+func TestQOTDPublishCommandRejectsSecondPublishForTheDay(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	fake := &fakePublisher{}
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "channel-123",
+		}},
+	})
+	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me first", applicationqotd.QuestionStatusReady)
+	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Do not publish me today", applicationqotd.QuestionStatusReady)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
+	firstResp := rec.lastResponse(t)
+	requirePublicResponse(t, firstResp)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
+	secondResp := rec.lastResponse(t)
+	requirePublicResponse(t, secondResp)
+	if !strings.Contains(secondResp.Data.Content, "A QOTD question has already been published for today.") {
+		t.Fatalf("expected same-day publish guard message, got %q", secondResp.Data.Content)
+	}
+	if strings.Contains(secondResp.Data.Content, "An error occurred while executing the command") {
+		t.Fatalf("expected command-specific publish error, got generic fallback %q", secondResp.Data.Content)
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected only one publish attempt for the day, got %d", len(fake.publishedParams))
+	}
+}

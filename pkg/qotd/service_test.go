@@ -227,6 +227,65 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 	}
 }
 
+func TestServiceReorderQuestionsChangesNextPublishSelection(t *testing.T) {
+	service, _, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "question-channel-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	first, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "First question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(first) failed: %v", err)
+	}
+	second, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		Body:   "Second question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(second) failed: %v", err)
+	}
+	third, err := service.CreateQuestion(context.Background(), "g1", "user-3", QuestionMutation{
+		Body:   "Third question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(third) failed: %v", err)
+	}
+
+	if _, err := service.ReorderQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, []int64{third.ID, first.ID, second.ID}); err != nil {
+		t.Fatalf("ReorderQuestions() failed: %v", err)
+	}
+
+	result, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishNow() failed: %v", err)
+	}
+	if result.Question.ID != third.ID {
+		t.Fatalf("expected reordered question to publish next, got %+v", result.Question)
+	}
+	if len(fake.publishedParams) != 1 || fake.publishedParams[0].QuestionText != "Third question" {
+		t.Fatalf("expected publish to use reordered first question, got %+v", fake.publishedParams)
+	}
+	if fake.publishedParams[0].DisplayID != 1 {
+		t.Fatalf("expected reordered publish to keep visible id 1, got %+v", fake.publishedParams[0])
+	}
+}
+
 func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T) {
 	service, _, _ := newTestQOTDService(t)
 
@@ -504,6 +563,102 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	}
 	if previousOfficial == nil || previousOfficial.State != string(OfficialPostStateCurrent) {
 		t.Fatalf("expected scheduled official post to remain current and unpinned before the boundary, got %+v", previousOfficial)
+	}
+}
+
+func TestServicePublishNowRejectsSecondPublishForCurrentSlot(t *testing.T) {
+	service, _, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	for idx := 1; idx <= 2; idx++ {
+		if _, err := service.CreateQuestion(context.Background(), "g1", fmt.Sprintf("user-%d", idx), QuestionMutation{
+			Body:   fmt.Sprintf("Question %d", idx),
+			Status: QuestionStatusReady,
+		}); err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+	}
+
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishNow(first) failed: %v", err)
+	}
+
+	_, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	if !errors.Is(err, ErrAlreadyPublished) {
+		t.Fatalf("expected ErrAlreadyPublished on second publish, got %v", err)
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected a single publish attempt for the day, got %d", len(fake.publishedParams))
+	}
+}
+
+func TestServicePublishScheduledIfDueSkipsWhenCurrentSlotAlreadyPublishedManually(t *testing.T) {
+	service, store, fake := newTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	first, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question 1",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(first) failed: %v", err)
+	}
+	second, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		Body:   "Question 2",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(second) failed: %v", err)
+	}
+
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishNow() failed: %v", err)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected scheduled publish to skip after a manual publish filled the slot")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected only the manual publish attempt, got %d", len(fake.publishedParams))
+	}
+
+	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if official == nil || official.PublishMode != string(PublishModeManual) {
+		t.Fatalf("expected manual official post to own the slot, got %+v", official)
+	}
+
+	storedSecond, err := store.GetQOTDQuestion(context.Background(), "g1", second.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(second) failed: %v", err)
+	}
+	if storedSecond == nil || storedSecond.Status != string(QuestionStatusReady) {
+		t.Fatalf("expected second question to remain ready, got %+v", storedSecond)
+	}
+	storedFirst, err := store.GetQOTDQuestion(context.Background(), "g1", first.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(first) failed: %v", err)
+	}
+	if storedFirst == nil || storedFirst.Status != string(QuestionStatusUsed) {
+		t.Fatalf("expected only the manually published question to be used, got %+v", storedFirst)
 	}
 }
 
