@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
+	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -26,6 +27,7 @@ type CommandHandler struct {
 	commandManager       *core.CommandManager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
+	qotdService          qotdcmd.QuestionCatalogService
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -104,6 +106,11 @@ func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyn
 	ch.partnerSyncExecutor = executor
 }
 
+// SetQOTDService injects the QOTD application service for interactive QOTD commands.
+func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService) {
+	ch.qotdService = service
+}
+
 // registerConfigCommands registers configuration-related commands
 func (ch *CommandHandler) registerConfigCommands() error {
 	router := ch.commandManager.GetRouter()
@@ -128,6 +135,7 @@ func (ch *CommandHandler) registerConfigCommands() error {
 	}
 	// Register moderation commands
 	moderation.RegisterModerationCommands(router)
+	qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
 
 	log.ApplicationLogger().Info("Config, partner, metrics, and moderation commands registered successfully")
 	return nil

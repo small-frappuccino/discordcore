@@ -322,6 +322,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		runtimeApplier:       runtimeApplier,
 		partnerBoardService:  partnerBoardAppService,
 		partnerSyncExecutor:  partnerSyncDispatcher,
+		qotdCommandService:   qotdService,
 		qotdLifecycleService: qotdService,
 		startupTasks:         startupTasks,
 	}); err != nil {
