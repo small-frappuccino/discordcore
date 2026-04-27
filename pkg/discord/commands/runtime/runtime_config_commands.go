@@ -423,77 +423,7 @@ func NewRuntimeConfigCommands(configManager *files.ConfigManager) *ConfigCommand
 
 // RegisterCommands registers `/config runtime`.
 func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
-	if router == nil {
-		return
-	}
-	cc.registerInteractionHandlers(router)
-	runtimeCommand := newRuntimeSubCommand(cc.configManager)
-
-	if existing, ok := router.GetRegistry().GetCommand(groupName); ok {
-		if group, ok := existing.(*core.GroupCommand); ok {
-			group.AddSubCommand(runtimeCommand)
-			router.RegisterSlashCommand(group)
-			return
-		}
-	}
-
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-	group := core.NewGroupCommand(groupName, "Manage server configuration", checker)
-
-	group.AddSubCommand(runtimeCommand)
-
-	// Register group under existing /config namespace.
-	router.RegisterSlashCommand(group)
-}
-
-func (cc *ConfigCommands) registerInteractionHandlers(router *core.CommandRouter) {
-	if router == nil {
-		return
-	}
-
-	componentHandler := core.ComponentHandlerFunc(func(ctx *core.Context) error {
-		if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
-			return nil
-		}
-
-		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
-		defer done()
-
-		handleComponent(ctx.Session, ctx.Interaction, cc.configManager, runtimeInteractionApplier(ctx))
-		return nil
-	})
-	bindings := make([]core.InteractionRouteBinding, 0, len(runtimeComponentRouteIDs())+1)
-	for _, routeID := range runtimeComponentRouteIDs() {
-		bindings = append(bindings, core.InteractionRouteBinding{Path: routeID, Component: componentHandler})
-	}
-
-	bindings = append(bindings, core.InteractionRouteBinding{Path: modalEditValueID, Modal: core.ModalHandlerFunc(func(ctx *core.Context) error {
-		if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
-			return nil
-		}
-
-		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
-		defer done()
-
-		handleModalSubmit(ctx.Session, ctx.Interaction, cc.configManager, runtimeInteractionApplier(ctx))
-		return nil
-	})})
-	router.RegisterInteractionRoutes(bindings...)
-}
-
-func runtimeComponentRouteIDs() []string {
-	return []string{
-		cidSelectKey,
-		cidSelectGroup,
-		cidButtonMain,
-		cidButtonHelp,
-		cidButtonBack,
-		cidButtonDetail,
-		cidButtonToggle,
-		cidButtonEdit,
-		cidButtonReset,
-		cidButtonReload,
-	}
+	newRuntimeInteractionCatalog(cc.configManager).register(router)
 }
 
 type runtimeSubCommand struct {

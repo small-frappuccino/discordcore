@@ -30,11 +30,7 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	setCmd := NewConfigSetSubCommand(cc.configManager)
 	getCmd := NewConfigGetSubCommand(cc.configManager)
 	listCmd := NewConfigListSubCommand(cc.configManager)
-	webhookCreateCmd := NewConfigWebhookEmbedCreateSubCommand(cc.configManager)
-	webhookReadCmd := NewConfigWebhookEmbedReadSubCommand(cc.configManager)
-	webhookUpdateCmd := NewConfigWebhookEmbedUpdateSubCommand(cc.configManager)
-	webhookDeleteCmd := NewConfigWebhookEmbedDeleteSubCommand(cc.configManager)
-	webhookListCmd := NewConfigWebhookEmbedListSubCommand(cc.configManager)
+	webhookCatalog := newWebhookEmbedInteractionCatalog(cc.configManager)
 	pingCmd := NewPingCommand()
 	echoCmd := NewEchoCommand()
 
@@ -54,11 +50,7 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	group.AddSubCommand(setCmd)
 	group.AddSubCommand(getCmd)
 	group.AddSubCommand(listCmd)
-	group.AddSubCommand(webhookCreateCmd)
-	group.AddSubCommand(webhookReadCmd)
-	group.AddSubCommand(webhookUpdateCmd)
-	group.AddSubCommand(webhookDeleteCmd)
-	group.AddSubCommand(webhookListCmd)
+	webhookCatalog.appendToGroup(group)
 
 	// Register (or refresh) the group.
 	router.RegisterSlashCommand(group)

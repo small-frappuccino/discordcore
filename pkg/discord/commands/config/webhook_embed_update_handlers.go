@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -161,10 +162,14 @@ func (c *ConfigWebhookEmbedReadSubCommand) Options() []*discordgo.ApplicationCom
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        optionMessageID,
 			Description: "Message ID entry key",
+			Autocomplete: true,
 			Required:    true,
 		},
 		webhookScopeOption(),
 	}
+}
+func (c *ConfigWebhookEmbedReadSubCommand) AutocompleteRouteHandler() core.AutocompleteHandler {
+	return webhookEmbedMessageIDAutocompleteHandler(c.configManager)
 }
 func (c *ConfigWebhookEmbedReadSubCommand) RequiresGuild() bool       { return true }
 func (c *ConfigWebhookEmbedReadSubCommand) RequiresPermissions() bool { return true }
@@ -218,6 +223,7 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Options() []*discordgo.ApplicationC
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        optionMessageID,
 			Description: "Existing message ID entry key",
+			Autocomplete: true,
 			Required:    true,
 		},
 		{
@@ -241,6 +247,9 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Options() []*discordgo.ApplicationC
 		webhookScopeOption(),
 		applyNowOption(),
 	}
+}
+func (c *ConfigWebhookEmbedUpdateSubCommand) AutocompleteRouteHandler() core.AutocompleteHandler {
+	return webhookEmbedMessageIDAutocompleteHandler(c.configManager)
 }
 func (c *ConfigWebhookEmbedUpdateSubCommand) RequiresGuild() bool       { return true }
 func (c *ConfigWebhookEmbedUpdateSubCommand) RequiresPermissions() bool { return true }
@@ -369,11 +378,15 @@ func (c *ConfigWebhookEmbedDeleteSubCommand) Options() []*discordgo.ApplicationC
 			Type:        discordgo.ApplicationCommandOptionString,
 			Name:        optionMessageID,
 			Description: "Message ID entry key",
+			Autocomplete: true,
 			Required:    true,
 		},
 		webhookScopeOption(),
 		applyNowOption(),
 	}
+}
+func (c *ConfigWebhookEmbedDeleteSubCommand) AutocompleteRouteHandler() core.AutocompleteHandler {
+	return webhookEmbedMessageIDAutocompleteHandler(c.configManager)
 }
 func (c *ConfigWebhookEmbedDeleteSubCommand) RequiresGuild() bool       { return true }
 func (c *ConfigWebhookEmbedDeleteSubCommand) RequiresPermissions() bool { return true }
@@ -498,6 +511,71 @@ func rollbackUpdatedWebhookEmbedUpdate(
 	previous files.WebhookEmbedUpdateConfig,
 ) error {
 	return configManager.UpdateWebhookEmbedUpdate(scopeGuildID, currentMessageID, previous)
+}
+
+func webhookEmbedMessageIDAutocompleteHandler(configManager *files.ConfigManager) core.AutocompleteHandler {
+	return core.AutocompleteHandlerFunc(func(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+		if focusedOption != optionMessageID || ctx == nil || ctx.Interaction == nil || configManager == nil {
+			return []*discordgo.ApplicationCommandOptionChoice{}, nil
+		}
+
+		extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+		scopeGuildID, err := parseScope(ctx, extractor)
+		if err != nil {
+			return []*discordgo.ApplicationCommandOptionChoice{}, nil
+		}
+
+		updates, err := configManager.ListWebhookEmbedUpdates(scopeGuildID)
+		if err != nil {
+			return []*discordgo.ApplicationCommandOptionChoice{}, nil
+		}
+
+		query := focusedAutocompleteValue(ctx)
+		return webhookEmbedAutocompleteChoices(updates, query), nil
+	})
+}
+
+func focusedAutocompleteValue(ctx *core.Context) string {
+	if ctx == nil || ctx.Interaction == nil {
+		return ""
+	}
+	focused, ok := core.HasFocusedOption(core.GetSubCommandOptions(ctx.Interaction))
+	if !ok || focused == nil || focused.Value == nil {
+		return ""
+	}
+	if value, ok := focused.Value.(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return strings.TrimSpace(fmt.Sprint(focused.Value))
+}
+
+func webhookEmbedAutocompleteChoices(updates []files.WebhookEmbedUpdateConfig, query string) []*discordgo.ApplicationCommandOptionChoice {
+	query = strings.ToLower(strings.TrimSpace(query))
+	ids := make([]string, 0, len(updates))
+	for _, update := range updates {
+		messageID := strings.TrimSpace(update.MessageID)
+		if messageID == "" {
+			continue
+		}
+		if query != "" && !strings.Contains(strings.ToLower(messageID), query) {
+			continue
+		}
+		ids = append(ids, messageID)
+	}
+
+	sort.Strings(ids)
+	if len(ids) > 25 {
+		ids = ids[:25]
+	}
+
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(ids))
+	for _, messageID := range ids {
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+			Name:  messageID,
+			Value: messageID,
+		})
+	}
+	return choices
 }
 
 func validateWebhookTargetBeforePersist(
