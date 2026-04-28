@@ -801,7 +801,7 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsResetSubCommand, nil))
 	resp := rec.lastResponse(t)
 	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "reset 2 QOTD question states") || strings.Contains(resp.Data.Content, "cleared 1 QOTD publish record") {
+	if !strings.Contains(resp.Data.Content, "reset 2 QOTD question states") || !strings.Contains(resp.Data.Content, "cleared 1 QOTD publish record") {
 		t.Fatalf("expected reset confirmation, got %q", resp.Data.Content)
 	}
 	if !strings.Contains(resp.Data.Content, "Question order was preserved.") {
@@ -828,8 +828,8 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if storedOfficial == nil || storedOfficial.PublishedAt == nil {
-		t.Fatalf("expected reset to preserve the published slot record, got %+v", storedOfficial)
+	if storedOfficial != nil {
+		t.Fatalf("expected reset to clear the published slot record, got %+v", storedOfficial)
 	}
 	surface, err := store.GetQOTDSurfaceByDeck(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
 	if err != nil {

@@ -313,7 +313,7 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 		}
 	}
 
-	result.OfficialPostsCleared, err = s.store.DeleteQOTDUnpublishedOfficialPostsByDeck(ctx, guildID, deck.ID)
+	result.OfficialPostsCleared, err = s.store.DeleteQOTDOfficialPostsByDeck(ctx, guildID, deck.ID)
 	if err != nil {
 		return result, err
 	}
@@ -623,7 +623,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		return nil, err
+		return nil, s.resolvePublishNowConflict(ctx, guildID, publishDate, err)
 	}
 
 	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(
@@ -651,6 +651,24 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		OfficialPost: *finalized,
 		PostURL:      postURL,
 	}, nil
+}
+
+func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string, publishDate time.Time, err error) error {
+	if !isQOTDScheduledPublishConflict(err) {
+		return err
+	}
+
+	existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if existing == nil {
+		return err
+	}
+	if isOfficialPostPublished(*existing) {
+		return ErrAlreadyPublished
+	}
+	return ErrPublishInProgress
 }
 
 func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {

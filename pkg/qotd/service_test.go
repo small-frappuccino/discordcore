@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/jackc/pgx/v5/pgconn"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -893,7 +894,101 @@ func TestServicePublishNowBlocksSecondCurrentSlotPublish(t *testing.T) {
 	}
 }
 
-func TestServiceResetDeckStatePreservesPublishedCurrentSlotGuard(t *testing.T) {
+func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testing.T) {
+	service, store, _ := newTestQOTDService(t)
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	conflictErr := &pgconn.PgError{Code: postgresUniqueViolationCode, ConstraintName: qotdLegacyPublishDateConstraint}
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) error
+		want  error
+	}{
+		{
+			name: "published post becomes already published",
+			setup: func(t *testing.T) error {
+				t.Helper()
+				question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+					Body:   "Question 1",
+					Status: QuestionStatusReady,
+				})
+				if err != nil {
+					return fmt.Errorf("CreateQuestion(): %w", err)
+				}
+
+				official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+					GuildID:              "g1",
+					DeckID:               files.LegacyQOTDDefaultDeckID,
+					DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+					QuestionID:           question.ID,
+					PublishMode:          string(PublishModeScheduled),
+					PublishDateUTC:       publishDate,
+					State:                string(OfficialPostStateCurrent),
+					ChannelID:            "123456789012345678",
+					QuestionTextSnapshot: question.Body,
+					GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
+					ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
+				})
+				if err != nil {
+					return fmt.Errorf("CreateQOTDOfficialPostProvisioning(): %w", err)
+				}
+				if _, err := store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "questions-list-entry", "thread-1", "message-1", "thread-1", time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)); err != nil {
+					return fmt.Errorf("FinalizeQOTDOfficialPost(): %w", err)
+				}
+				return nil
+			},
+			want: ErrAlreadyPublished,
+		},
+		{
+			name: "provisioning post becomes publish in progress",
+			setup: func(t *testing.T) error {
+				t.Helper()
+				question, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+					Body:   "Question 2",
+					Status: QuestionStatusReady,
+				})
+				if err != nil {
+					return fmt.Errorf("CreateQuestion(): %w", err)
+				}
+
+				_, err = store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+					GuildID:              "g1",
+					DeckID:               files.LegacyQOTDDefaultDeckID,
+					DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+					QuestionID:           question.ID,
+					PublishMode:          string(PublishModeScheduled),
+					PublishDateUTC:       publishDate,
+					State:                string(OfficialPostStateProvisioning),
+					ChannelID:            "123456789012345678",
+					QuestionTextSnapshot: question.Body,
+					GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
+					ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
+				})
+				if err != nil {
+					return fmt.Errorf("CreateQOTDOfficialPostProvisioning(): %w", err)
+				}
+				return nil
+			},
+			want: ErrPublishInProgress,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service, store, _ = newTestQOTDService(t)
+			if err := tt.setup(t); err != nil {
+				t.Fatal(err)
+			}
+
+			err := service.resolvePublishNowConflict(context.Background(), "g1", publishDate, conflictErr)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("resolvePublishNowConflict() error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceResetDeckStateClearsPublishedCurrentSlotGuard(t *testing.T) {
 	service, store, fake := newTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -920,16 +1015,16 @@ func TestServiceResetDeckStatePreservesPublishedCurrentSlotGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResetDeckState() failed: %v", err)
 	}
-	if resetResult.OfficialPostsCleared != 0 {
-		t.Fatalf("expected reset to preserve already-published slot records, got %+v", resetResult)
+	if resetResult.OfficialPostsCleared != 1 {
+		t.Fatalf("expected reset to clear the published slot record, got %+v", resetResult)
 	}
 
 	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if official == nil || official.PublishedAt == nil {
-		t.Fatalf("expected reset to preserve the published current-slot record, got %+v", official)
+	if official != nil {
+		t.Fatalf("expected reset to clear the published current-slot record, got %+v", official)
 	}
 	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", 1)
 	if err != nil {
@@ -943,11 +1038,11 @@ func TestServiceResetDeckStatePreservesPublishedCurrentSlotGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
-	if published {
-		t.Fatal("expected reset not to re-arm a second scheduled publish for the same slot")
+	if !published {
+		t.Fatal("expected reset to re-arm publishing for the same slot after clearing the slot record")
 	}
-	if len(fake.publishedParams) != 1 {
-		t.Fatalf("expected only the original manual publish attempt, got %d", len(fake.publishedParams))
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected reset to allow a second publish attempt for the same slot, got %d", len(fake.publishedParams))
 	}
 
 	resetQuestions, err := service.ListQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
@@ -968,7 +1063,7 @@ func TestServiceResetDeckStatePreservesPublishedCurrentSlotGuard(t *testing.T) {
 	if result.Question.ID != resetQuestions[0].ID {
 		t.Fatalf("expected reset to make the first previously-published question eligible again on a future slot, got %+v", result)
 	}
-	if len(fake.publishedParams) != 2 {
+	if len(fake.publishedParams) != 3 {
 		t.Fatalf("expected future-slot republish after reset, got %d publish attempts", len(fake.publishedParams))
 	}
 }
@@ -1109,7 +1204,7 @@ func TestServiceResetDeckStatePreservesQuestionOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResetDeckState() failed: %v", err)
 	}
-	if resetResult.QuestionsReset != 2 || resetResult.OfficialPostsCleared != 0 {
+	if resetResult.QuestionsReset != 2 || resetResult.OfficialPostsCleared != 1 {
 		t.Fatalf("unexpected reset result: %+v", resetResult)
 	}
 
@@ -1133,8 +1228,8 @@ func TestServiceResetDeckStatePreservesQuestionOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if storedOfficial == nil || storedOfficial.PublishedAt == nil {
-		t.Fatalf("expected reset to preserve published official posts for the slot guard, got %+v", storedOfficial)
+	if storedOfficial != nil {
+		t.Fatalf("expected reset to clear published official posts for the deck, got %+v", storedOfficial)
 	}
 	surface, err := store.GetQOTDSurfaceByDeck(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
