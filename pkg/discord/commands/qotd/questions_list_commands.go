@@ -808,7 +808,7 @@ func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string
 		lines = append(lines, "Automatic publish schedule is not configured.")
 	} else {
 		lines = append(lines, fmt.Sprintf("Automatic schedule: %s UTC.", formatAutomaticQueueSchedule(state.Schedule)))
-		lines = append(lines, fmt.Sprintf("Today's automatic slot: %s (%s).", formatAutomaticQueueTimestamp(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
+		lines = append(lines, fmt.Sprintf("Current automatic slot: %s (%s).", formatAutomaticQueueTimestamp(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
 	}
 
 	if !state.Deck.Enabled {
@@ -858,9 +858,9 @@ func formatAutomaticQueueSlotStatus(status applicationqotd.AutomaticQueueSlotSta
 	case applicationqotd.AutomaticQueueSlotStatusReserved:
 		return "question reserved for the slot"
 	case applicationqotd.AutomaticQueueSlotStatusRecovering:
-		return "scheduled publish recovery pending"
+		return "slot publish recovery pending"
 	case applicationqotd.AutomaticQueueSlotStatusPublished:
-		return "scheduled slot already published"
+		return "slot already published"
 	case applicationqotd.AutomaticQueueSlotStatusDisabled:
 		fallthrough
 	default:
@@ -954,7 +954,10 @@ func translatePublishNowError(err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrAlreadyPublished) {
-		return core.NewCommandError("A QOTD question has already been published for today.", false)
+		return core.NewCommandError("A QOTD question has already been published for the current slot.", false)
+	}
+	if errors.Is(err, applicationqotd.ErrPublishInProgress) {
+		return core.NewCommandError("A QOTD publish is already in progress for the current slot.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
 		return core.NewCommandError("No ready QOTD questions are available in the active deck.", false)

@@ -1230,11 +1230,10 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			updated_at
 		FROM qotd_official_posts
 		WHERE guild_id = ?
-		  AND publish_mode = 'scheduled'
 		  AND published_at IS NOT NULL
 		  AND archived_at IS NULL
 		  AND archive_at > ?
-		ORDER BY publish_date_utc DESC
+		ORDER BY publish_date_utc DESC, published_at DESC, id DESC
 		LIMIT 2`,
 		guildID,
 		now,
@@ -1406,6 +1405,37 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 	deleted, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("delete qotd official posts by deck: %w", err)
+	}
+	return int(deleted), nil
+}
+
+func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (int, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
+	if guildID == "" || deckID == "" {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	result, err := s.execContext(ctx,
+		`DELETE FROM qotd_official_posts
+		 WHERE guild_id = ?
+		   AND deck_id = ?
+		   AND published_at IS NULL`,
+		guildID,
+		deckID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete unpublished qotd official posts by deck: %w", err)
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("delete unpublished qotd official posts by deck: %w", err)
 	}
 	return int(deleted), nil
 }

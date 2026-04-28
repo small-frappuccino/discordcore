@@ -20,6 +20,7 @@ var (
 	ErrServiceUnavailable       = errors.New("qotd service unavailable")
 	ErrQOTDDisabled             = errors.New("qotd is disabled")
 	ErrAlreadyPublished         = errors.New("qotd already published for the current slot")
+	ErrPublishInProgress        = errors.New("qotd publish already in progress for the current slot")
 	ErrNoQuestionsAvailable     = errors.New("no qotd questions available")
 	ErrImmutableQuestion        = errors.New("qotd question is already scheduled or used")
 	ErrQuestionNotFound         = errors.New("qotd question not found")
@@ -301,7 +302,7 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 		}
 	}
 
-	result.OfficialPostsCleared, err = s.store.DeleteQOTDOfficialPostsByDeck(ctx, guildID, deck.ID)
+	result.OfficialPostsCleared, err = s.store.DeleteQOTDUnpublishedOfficialPostsByDeck(ctx, guildID, deck.ID)
 	if err != nil {
 		return result, err
 	}
@@ -343,11 +344,11 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 	if scheduleErr == nil {
 		state.ScheduleConfigured = true
 		state.Schedule = schedule
-		state.SlotDateUTC = NormalizePublishDateUTC(now)
+		state.SlotDateUTC = CurrentPublishDateUTC(schedule, now)
 		state.SlotPublishAtUTC = PublishTimeUTC(schedule, state.SlotDateUTC)
 		state.CanPublish = deck.Enabled && canPublishQOTD(deck)
 
-		officialPost, err := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, state.SlotDateUTC)
+		officialPost, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, state.SlotDateUTC)
 		if err != nil {
 			return AutomaticQueueState{}, err
 		}
@@ -514,7 +515,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	var currentSlotPost *storage.QOTDOfficialPostRecord
 	if scheduleErr == nil {
 		currentPublishDate = CurrentPublishDateUTC(schedule, now)
-		currentSlotPost, err = s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
+		currentSlotPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
 		if err != nil {
 			return Summary{}, err
 		}
@@ -555,22 +556,27 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	defer lifecycleLock.Unlock()
 
 	now := s.clock()
-	publishDate := NormalizePublishDateUTC(now)
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
 		return nil, err
+	}
+	publishDate := NormalizePublishDateUTC(now)
+	if schedule, scheduleErr := resolvePublishSchedule(cfg); scheduleErr == nil {
+		publishDate = CurrentPublishDateUTC(schedule, now)
 	}
 	deck, ok := cfg.ActiveDeck()
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return nil, ErrQOTDDisabled
 	}
-	if recovered, err := s.resumeOldestPendingOfficialPost(ctx, guildID, session, now); err != nil {
+	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	if err != nil {
 		return nil, err
-	} else if recovered != nil {
-		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-			return nil, err
+	}
+	if existing != nil {
+		if isOfficialPostPublished(*existing) {
+			return nil, ErrAlreadyPublished
 		}
-		return recovered, nil
+		return nil, ErrPublishInProgress
 	}
 
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)

@@ -48,7 +48,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 
-	existing, err := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
 	if err != nil {
 		return false, err
 	}
@@ -107,7 +107,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
 		if isQOTDScheduledPublishConflict(err) {
-			existing, lookupErr := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, publishDate)
+			existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
 			if lookupErr != nil {
 				return false, lookupErr
 			}

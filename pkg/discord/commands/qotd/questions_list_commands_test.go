@@ -801,7 +801,7 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsResetSubCommand, nil))
 	resp := rec.lastResponse(t)
 	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "reset 2 QOTD question states") || !strings.Contains(resp.Data.Content, "cleared 1 QOTD publish record") {
+	if !strings.Contains(resp.Data.Content, "reset 2 QOTD question states") || strings.Contains(resp.Data.Content, "cleared 1 QOTD publish record") {
 		t.Fatalf("expected reset confirmation, got %q", resp.Data.Content)
 	}
 	if !strings.Contains(resp.Data.Content, "Question order was preserved.") {
@@ -828,8 +828,8 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if storedOfficial != nil {
-		t.Fatalf("expected reset to clear publish history, got %+v", storedOfficial)
+	if storedOfficial == nil || storedOfficial.PublishedAt == nil {
+		t.Fatalf("expected reset to preserve the published slot record, got %+v", storedOfficial)
 	}
 	surface, err := store.GetQOTDSurfaceByDeck(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
 	if err != nil {
@@ -882,14 +882,37 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 	if !strings.Contains(resp.Data.Content, "Automatic QOTD queue") {
 		t.Fatalf("expected automatic queue summary, got %q", resp.Data.Content)
 	}
-	if !strings.Contains(resp.Data.Content, "ready to publish now") {
-		t.Fatalf("expected queue command to show the automatic slot is still due, got %q", resp.Data.Content)
+	if !strings.Contains(resp.Data.Content, "slot already published") {
+		t.Fatalf("expected queue command to show the current slot is already occupied, got %q", resp.Data.Content)
 	}
 	if !strings.Contains(resp.Data.Content, "Next automatic question: QOTD question ID 2") {
 		t.Fatalf("expected queue command to point at the remaining ready question, got %q", resp.Data.Content)
 	}
-	if strings.Contains(resp.Data.Content, "Current automatic slot question:") {
-		t.Fatalf("expected manual publish not to reserve the automatic slot, got %q", resp.Data.Content)
+	if !strings.Contains(resp.Data.Content, "Current automatic slot question: QOTD question ID 1") {
+		t.Fatalf("expected manual publish to occupy the current automatic slot, got %q", resp.Data.Content)
+	}
+}
+
+func TestFormatAutomaticQueueStateUsesCurrentSlotLabel(t *testing.T) {
+	message := formatAutomaticQueueState(applicationqotd.AutomaticQueueState{
+		Deck: files.QOTDDeckConfig{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "channel-123",
+		},
+		ScheduleConfigured: true,
+		Schedule:           dueQOTDCommandSchedule(),
+		CanPublish:         true,
+		SlotPublishAtUTC:   time.Date(2026, 4, 2, 12, 43, 0, 0, time.UTC),
+		SlotStatus:         applicationqotd.AutomaticQueueSlotStatusDue,
+	})
+
+	if !strings.Contains(message, "Current automatic slot:") {
+		t.Fatalf("expected queue formatter to describe the active slot generically, got %q", message)
+	}
+	if strings.Contains(message, "Today's automatic slot:") {
+		t.Fatalf("expected queue formatter to avoid claiming the active slot is always today's, got %q", message)
 	}
 }
 
