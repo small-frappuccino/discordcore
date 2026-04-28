@@ -623,7 +623,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		return nil, s.resolvePublishNowConflict(ctx, guildID, publishDate, err)
+		return s.resolvePublishNowConflict(ctx, guildID, publishDate, err)
 	}
 
 	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(
@@ -653,15 +653,40 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	}, nil
 }
 
-func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string, publishDate time.Time, err error) error {
+func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string, publishDate time.Time, err error) (*PublishResult, error) {
 	existing, lookupErr := s.lookupPublishConflictPost(ctx, guildID, publishDate, err)
 	if lookupErr != nil {
-		return lookupErr
+		return nil, lookupErr
 	}
 	if isOfficialPostPublished(*existing) {
-		return ErrAlreadyPublished
+		return s.publishResultFromOfficialPost(ctx, *existing)
 	}
-	return ErrPublishInProgress
+	return nil, ErrPublishInProgress
+}
+
+func (s *Service) publishResultFromOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord) (*PublishResult, error) {
+	question, err := s.store.GetQOTDQuestion(ctx, post.GuildID, post.QuestionID)
+	if err != nil {
+		return nil, err
+	}
+
+	resultQuestion := storage.QOTDQuestionRecord{
+		ID:      post.QuestionID,
+		GuildID: post.GuildID,
+		DeckID:  post.DeckID,
+		Body:    post.QuestionTextSnapshot,
+		Status:  string(QuestionStatusUsed),
+		UsedAt:  post.PublishedAt,
+	}
+	if question != nil {
+		resultQuestion = *question
+	}
+
+	return &PublishResult{
+		Question:     resultQuestion,
+		OfficialPost: post,
+		PostURL:      OfficialPostJumpURL(post),
+	}, nil
 }
 
 func (s *Service) lookupPublishConflictPost(ctx context.Context, guildID string, publishDate time.Time, err error) (*storage.QOTDOfficialPostRecord, error) {

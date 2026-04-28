@@ -920,9 +920,12 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 	conflictErr := &pgconn.PgError{Code: postgresUniqueViolationCode, ConstraintName: qotdLegacyPublishDateConstraint}
 
 	tests := []struct {
-		name  string
-		setup func(t *testing.T) error
-		want  error
+		name            string
+		setup           func(t *testing.T) error
+		wantErr         error
+		wantQuestionID  int64
+		wantOfficialID  int64
+		wantPostURLPart string
 	}{
 		{
 			name: "published post becomes already published",
@@ -957,7 +960,9 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 				}
 				return nil
 			},
-			want: ErrAlreadyPublished,
+			wantQuestionID:  1,
+			wantOfficialID:  1,
+			wantPostURLPart: "https://discord.com/channels/g1/123456789012345678/message-1",
 		},
 		{
 			name: "provisioning post becomes publish in progress",
@@ -989,7 +994,7 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 				}
 				return nil
 			},
-			want: ErrPublishInProgress,
+			wantErr: ErrPublishInProgress,
 		},
 	}
 
@@ -1000,9 +1005,27 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 				t.Fatal(err)
 			}
 
-			err := service.resolvePublishNowConflict(context.Background(), "g1", publishDate, conflictErr)
-			if !errors.Is(err, tt.want) {
-				t.Fatalf("resolvePublishNowConflict() error = %v, want %v", err, tt.want)
+			result, err := service.resolvePublishNowConflict(context.Background(), "g1", publishDate, conflictErr)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("resolvePublishNowConflict() error = %v, want %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				if result != nil {
+					t.Fatalf("resolvePublishNowConflict() result = %+v, want nil on error", result)
+				}
+				return
+			}
+			if result == nil {
+				t.Fatal("resolvePublishNowConflict() result = nil, want published result")
+			}
+			if result.Question.ID != tt.wantQuestionID {
+				t.Fatalf("resolvePublishNowConflict() question ID = %d, want %d", result.Question.ID, tt.wantQuestionID)
+			}
+			if result.OfficialPost.ID != tt.wantOfficialID {
+				t.Fatalf("resolvePublishNowConflict() official post ID = %d, want %d", result.OfficialPost.ID, tt.wantOfficialID)
+			}
+			if result.PostURL != tt.wantPostURLPart {
+				t.Fatalf("resolvePublishNowConflict() post URL = %q, want %q", result.PostURL, tt.wantPostURLPart)
 			}
 		})
 	}
