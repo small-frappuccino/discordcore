@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 )
 
 func testQOTDSchedule(hour, minute int) QOTDPublishScheduleConfig {
@@ -65,6 +66,62 @@ func TestNormalizeQOTDConfigAllowsPartialScheduleWhileDisabled(t *testing.T) {
 	}
 }
 
+func TestNormalizeQOTDConfigNormalizesSuppressedScheduledPublishDate(t *testing.T) {
+	t.Parallel()
+
+	normalized, err := NormalizeQOTDConfig(QOTDConfig{
+		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Schedule:     testQOTDSchedule(12, 43),
+		Decks: []QOTDDeckConfig{{
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
+		}},
+		SuppressScheduledPublishDateUTC: " 2026-04-03 ",
+	})
+	if err != nil {
+		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
+	}
+	if normalized.SuppressScheduledPublishDateUTC != "2026-04-03" {
+		t.Fatalf("expected canonical suppressed publish date, got %+v", normalized)
+	}
+	if !normalized.SuppressesScheduledPublishDate(time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)) {
+		t.Fatalf("expected normalized config to suppress the matching slot date, got %+v", normalized)
+	}
+	cleared := normalized.ClearSuppressedScheduledPublishDate(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if cleared.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected matching clear to remove suppressed slot date, got %+v", cleared)
+	}
+	unchanged := normalized.ClearSuppressedScheduledPublishDate(time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC))
+	if unchanged.SuppressScheduledPublishDateUTC != "2026-04-03" {
+		t.Fatalf("expected non-matching clear to preserve suppressed slot date, got %+v", unchanged)
+	}
+	shifted := normalized.WithSuppressedScheduledPublishDate(time.Date(2026, 4, 5, 13, 15, 0, 0, time.UTC))
+	if shifted.SuppressScheduledPublishDateUTC != "2026-04-05" {
+		t.Fatalf("expected slot suppression helper to normalize to date only, got %+v", shifted)
+	}
+}
+
+func TestNormalizeQOTDConfigRejectsInvalidSuppressedScheduledPublishDate(t *testing.T) {
+	t.Parallel()
+
+	_, err := NormalizeQOTDConfig(QOTDConfig{
+		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Schedule:     testQOTDSchedule(12, 43),
+		Decks: []QOTDDeckConfig{{
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
+		}},
+		SuppressScheduledPublishDateUTC: "04/03/2026",
+	})
+	if err == nil {
+		t.Fatal("expected invalid suppressed scheduled publish date to fail normalization")
+	}
+}
+
 func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 	t.Parallel()
 
@@ -74,8 +131,8 @@ func TestSetQOTDConfigCanonicalizesMessageChannelFields(t *testing.T) {
 
 	err := mgr.SetQOTDConfig("g1", QOTDConfig{
 		VerifiedRoleID: " 987654321098765432 ",
-		ActiveDeckID: LegacyQOTDDefaultDeckID,
-		Schedule:     testQOTDSchedule(12, 43),
+		ActiveDeckID:   LegacyQOTDDefaultDeckID,
+		Schedule:       testQOTDSchedule(12, 43),
 		Decks: []QOTDDeckConfig{{
 			ID:        LegacyQOTDDefaultDeckID,
 			Name:      LegacyQOTDDefaultDeckName,

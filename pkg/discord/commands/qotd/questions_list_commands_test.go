@@ -25,6 +25,50 @@ type fakePublisher struct {
 	threadStates    map[string]discordqotd.ThreadState
 }
 
+type publishCommandStubService struct {
+	settings           files.QOTDConfig
+	publishResult      *applicationqotd.PublishResult
+	publishErr         error
+	publishCalls       int
+	lastPublishGuild   string
+	lastPublishSession *discordgo.Session
+}
+
+func (s *publishCommandStubService) Settings(string) (files.QOTDConfig, error) {
+	return s.settings, nil
+}
+
+func (s *publishCommandStubService) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
+	panic("unexpected ListQuestions call")
+}
+
+func (s *publishCommandStubService) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected CreateQuestion call")
+}
+
+func (s *publishCommandStubService) DeleteQuestion(context.Context, string, int64) error {
+	panic("unexpected DeleteQuestion call")
+}
+
+func (s *publishCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected SetNextQuestion call")
+}
+
+func (s *publishCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
+	panic("unexpected ResetDeckState call")
+}
+
+func (s *publishCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
+	panic("unexpected GetAutomaticQueueState call")
+}
+
+func (s *publishCommandStubService) PublishNow(_ context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error) {
+	s.publishCalls++
+	s.lastPublishGuild = guildID
+	s.lastPublishSession = session
+	return s.publishResult, s.publishErr
+}
+
 func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
 	p.publishedParams = append(p.publishedParams, params)
 	publishedAt := time.Now().UTC()
@@ -154,6 +198,28 @@ func newQOTDCommandTestRouter(
 	ownerID string,
 ) (*core.CommandRouter, *files.ConfigManager, *applicationqotd.Service, *storage.Store) {
 	return newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, nil)
+}
+
+func newQOTDCommandTestRouterWithService(
+	t *testing.T,
+	session *discordgo.Session,
+	guildID string,
+	ownerID string,
+	service QuestionCatalogService,
+) (*core.CommandRouter, *files.ConfigManager) {
+	t.Helper()
+
+	cm := files.NewMemoryConfigManager()
+	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
+		t.Fatalf("failed to add guild config: %v", err)
+	}
+	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, OwnerID: ownerID}); err != nil {
+		t.Fatalf("failed to add guild to state: %v", err)
+	}
+
+	router := core.NewCommandRouter(session, cm)
+	NewCommands(service).RegisterCommands(router)
+	return router, cm
 }
 
 func newQOTDCommandTestRouterWithPublisher(
@@ -965,6 +1031,72 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	requirePublicResponse(t, listResp)
 	if strings.Contains(listResp.Data.Embeds[0].Description, "publishes next") {
 		t.Fatalf("expected questions list to remove the manually published question from the automatic queue, got %q", listResp.Data.Embeds[0].Description)
+	}
+}
+
+func TestQOTDPublishCommandTreatsRecoveredPublishedResultAsSuccess(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	service := &publishCommandStubService{
+		settings: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "channel-123",
+			}},
+		},
+		publishResult: &applicationqotd.PublishResult{
+			Question: storage.QOTDQuestionRecord{
+				ID:        17,
+				DisplayID: 17,
+				GuildID:   guildID,
+				DeckID:    files.LegacyQOTDDefaultDeckID,
+				Body:      "Recovered publish",
+				Status:    string(applicationqotd.QuestionStatusUsed),
+				UsedAt:    &publishedAt,
+			},
+			OfficialPost: storage.QOTDOfficialPostRecord{
+				ID:                      99,
+				GuildID:                 guildID,
+				DeckID:                  files.LegacyQOTDDefaultDeckID,
+				DeckNameSnapshot:        files.LegacyQOTDDefaultDeckName,
+				QuestionID:              17,
+				PublishMode:             string(applicationqotd.PublishModeManual),
+				PublishDateUTC:          time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+				ChannelID:               "channel-123",
+				DiscordStarterMessageID: "message-99",
+				PublishedAt:             &publishedAt,
+			},
+			PostURL: discordqotd.BuildMessageJumpURL(guildID, "channel-123", "message-99"),
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "Published QOTD question ID 17 manually.") {
+		t.Fatalf("expected recovered publish to surface as success, got %q", resp.Data.Content)
+	}
+	if !strings.Contains(resp.Data.Content, "https://discord.com/channels/guild-1/channel-123/message-99") {
+		t.Fatalf("expected recovered publish to include the existing jump url, got %q", resp.Data.Content)
+	}
+	if strings.Contains(resp.Data.Content, "An error occurred while executing the command") {
+		t.Fatalf("expected recovered publish to avoid generic fallback errors, got %q", resp.Data.Content)
+	}
+	if service.publishCalls != 1 {
+		t.Fatalf("expected publish command to call PublishNow once, got %d", service.publishCalls)
+	}
+	if service.lastPublishGuild != guildID || service.lastPublishSession != session {
+		t.Fatalf("expected publish command to forward guild and session, got guild=%q session=%p", service.lastPublishGuild, service.lastPublishSession)
 	}
 }
 

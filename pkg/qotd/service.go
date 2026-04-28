@@ -17,16 +17,16 @@ import (
 )
 
 var (
-	ErrServiceUnavailable       = errors.New("qotd service unavailable")
-	ErrQOTDDisabled             = errors.New("qotd is disabled")
-	ErrAlreadyPublished         = errors.New("qotd already published for the current slot")
-	ErrPublishInProgress        = errors.New("qotd publish already in progress for the current slot")
-	ErrNoQuestionsAvailable     = errors.New("no qotd questions available")
-	ErrImmutableQuestion        = errors.New("qotd question is already scheduled or used")
-	ErrQuestionNotFound         = errors.New("qotd question not found")
-	ErrQuestionNotReady         = errors.New("qotd question is not ready")
-	ErrDeckNotFound             = errors.New("qotd deck not found")
-	ErrDiscordUnavailable       = errors.New("discord session unavailable")
+	ErrServiceUnavailable   = errors.New("qotd service unavailable")
+	ErrQOTDDisabled         = errors.New("qotd is disabled")
+	ErrAlreadyPublished     = errors.New("qotd already published for the current slot")
+	ErrPublishInProgress    = errors.New("qotd publish already in progress for the current slot")
+	ErrNoQuestionsAvailable = errors.New("no qotd questions available")
+	ErrImmutableQuestion    = errors.New("qotd question is already scheduled or used")
+	ErrQuestionNotFound     = errors.New("qotd question not found")
+	ErrQuestionNotReady     = errors.New("qotd question is not ready")
+	ErrDeckNotFound         = errors.New("qotd deck not found")
+	ErrDiscordUnavailable   = errors.New("discord session unavailable")
 )
 
 type Publisher interface {
@@ -68,8 +68,9 @@ type PublishResult struct {
 }
 
 type ResetDeckResult struct {
-	QuestionsReset      int
-	OfficialPostsCleared int
+	QuestionsReset                        int
+	OfficialPostsCleared                  int
+	SuppressedCurrentSlotAutomaticPublish bool
 }
 
 type AutomaticQueueSlotStatus string
@@ -277,11 +278,33 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 	lifecycleLock := s.guildLifecycleLock(guildID)
 	lifecycleLock.Lock()
 	defer lifecycleLock.Unlock()
+	now := s.clock()
 
 	deck, err := s.resolveDashboardDeck(guildID, deckID)
 	if err != nil {
 		return ResetDeckResult{}, err
 	}
+
+	var suppressCurrentSlotDate time.Time
+	settings, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return ResetDeckResult{}, err
+	}
+	if activeDeck, ok := settings.ActiveDeck(); ok && activeDeck.ID == deck.ID {
+		if schedule, scheduleErr := resolvePublishSchedule(settings); scheduleErr == nil {
+			currentPublishDate := CurrentPublishDateUTC(schedule, now)
+			if !now.Before(PublishTimeUTC(schedule, currentPublishDate)) {
+				existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
+				if lookupErr != nil {
+					return ResetDeckResult{}, lookupErr
+				}
+				if existing != nil && existing.DeckID == deck.ID && hasPublishedOfficialPostTarget(existing) {
+					suppressCurrentSlotDate = currentPublishDate
+				}
+			}
+		}
+	}
+
 	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 	if err != nil {
 		return ResetDeckResult{}, err
@@ -319,6 +342,12 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 	}
 	if err := s.store.DeleteQOTDSurfaceByDeck(ctx, guildID, deck.ID); err != nil {
 		return result, err
+	}
+	if !suppressCurrentSlotDate.IsZero() {
+		if err := s.suppressScheduledPublishForDate(guildID, suppressCurrentSlotDate); err != nil {
+			return result, err
+		}
+		result.SuppressedCurrentSlotAutomaticPublish = true
 	}
 
 	return result, nil
@@ -645,6 +674,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
 		return nil, err
 	}
+	s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
 
 	return &PublishResult{
 		Question:     *question,
@@ -659,6 +689,7 @@ func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string,
 		return nil, lookupErr
 	}
 	if isOfficialPostPublished(*existing) {
+		s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
 		return s.publishResultFromOfficialPost(ctx, *existing)
 	}
 	return nil, ErrPublishInProgress

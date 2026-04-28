@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var (
@@ -15,6 +16,7 @@ var (
 const (
 	LegacyQOTDDefaultDeckID   = "default"
 	LegacyQOTDDefaultDeckName = "Default"
+	qotdPublishDateLayout     = "2006-01-02"
 )
 
 // IsZero reports whether all QOTD deck fields are unset.
@@ -57,15 +59,42 @@ func (cfg QOTDConfig) IsZero() bool {
 		if len(cfg.deckConfigs()) == 1 &&
 			isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) &&
 			cfg.Collector.IsZero() &&
-			cfg.Schedule.IsZero() {
+			cfg.Schedule.IsZero() &&
+			strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC) == "" {
 			return true
 		}
 		return false
 	}
-	if !cfg.Collector.IsZero() || !cfg.Schedule.IsZero() {
+	if !cfg.Collector.IsZero() || !cfg.Schedule.IsZero() || strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC) != "" {
 		return false
 	}
 	return true
+}
+
+func (cfg QOTDConfig) SuppressesScheduledPublishDate(publishDate time.Time) bool {
+	publishDate = publishDate.UTC()
+	if publishDate.IsZero() {
+		return false
+	}
+	return strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC) == publishDate.Format(qotdPublishDateLayout)
+}
+
+func (cfg QOTDConfig) WithSuppressedScheduledPublishDate(publishDate time.Time) QOTDConfig {
+	publishDate = publishDate.UTC()
+	if publishDate.IsZero() {
+		cfg.SuppressScheduledPublishDateUTC = ""
+		return cfg
+	}
+	cfg.SuppressScheduledPublishDateUTC = publishDate.Format(qotdPublishDateLayout)
+	return cfg
+}
+
+func (cfg QOTDConfig) ClearSuppressedScheduledPublishDate(publishDate time.Time) QOTDConfig {
+	if !cfg.SuppressesScheduledPublishDate(publishDate) {
+		return cfg
+	}
+	cfg.SuppressScheduledPublishDateUTC = ""
+	return cfg
 }
 
 // DashboardQOTDConfig returns a stable deck-aware settings payload for the
@@ -189,20 +218,21 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	type rawQOTDConfig struct {
-		VerifiedRoleID    string                       `json:"verified_role_id,omitempty"`
-		ActiveDeckID      string                       `json:"active_deck_id,omitempty"`
-		Decks             []QOTDDeckConfig             `json:"decks,omitempty"`
-		Collector         QOTDCollectorConfig          `json:"collector,omitempty"`
-		Schedule          rawQOTDPublishScheduleConfig `json:"schedule,omitempty"`
-		Enabled           bool                         `json:"enabled,omitempty"`
-		ChannelID         string                       `json:"channel_id,omitempty"`
-		ForumChannelID    string                       `json:"forum_channel_id,omitempty"`
-		QuestionChannelID string                       `json:"question_channel_id,omitempty"`
-		ResponseChannelID string                       `json:"response_channel_id,omitempty"`
-		PublishHourUTC    *int                         `json:"publish_hour_utc,omitempty"`
-		PublishMinuteUTC  *int                         `json:"publish_minute_utc,omitempty"`
-		LegacyHourUTC     *int                         `json:"qotd_time_hour_utc,omitempty"`
-		LegacyMinuteUTC   *int                         `json:"qotd_time_minute_utc,omitempty"`
+		VerifiedRoleID                  string                       `json:"verified_role_id,omitempty"`
+		ActiveDeckID                    string                       `json:"active_deck_id,omitempty"`
+		Decks                           []QOTDDeckConfig             `json:"decks,omitempty"`
+		Collector                       QOTDCollectorConfig          `json:"collector,omitempty"`
+		Schedule                        rawQOTDPublishScheduleConfig `json:"schedule,omitempty"`
+		SuppressScheduledPublishDateUTC string                       `json:"suppress_scheduled_publish_date_utc,omitempty"`
+		Enabled                         bool                         `json:"enabled,omitempty"`
+		ChannelID                       string                       `json:"channel_id,omitempty"`
+		ForumChannelID                  string                       `json:"forum_channel_id,omitempty"`
+		QuestionChannelID               string                       `json:"question_channel_id,omitempty"`
+		ResponseChannelID               string                       `json:"response_channel_id,omitempty"`
+		PublishHourUTC                  *int                         `json:"publish_hour_utc,omitempty"`
+		PublishMinuteUTC                *int                         `json:"publish_minute_utc,omitempty"`
+		LegacyHourUTC                   *int                         `json:"qotd_time_hour_utc,omitempty"`
+		LegacyMinuteUTC                 *int                         `json:"qotd_time_minute_utc,omitempty"`
 	}
 
 	var raw rawQOTDConfig
@@ -240,11 +270,12 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	*cfg = QOTDConfig{
-		VerifiedRoleID: raw.VerifiedRoleID,
-		ActiveDeckID:   raw.ActiveDeckID,
-		Decks:          raw.Decks,
-		Collector:      raw.Collector,
-		Schedule:       schedule,
+		VerifiedRoleID:                  raw.VerifiedRoleID,
+		ActiveDeckID:                    raw.ActiveDeckID,
+		Decks:                           raw.Decks,
+		Collector:                       raw.Collector,
+		Schedule:                        schedule,
+		SuppressScheduledPublishDateUTC: raw.SuppressScheduledPublishDateUTC,
 	}
 	if len(raw.Decks) > 0 {
 		return nil

@@ -72,6 +72,9 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return false, ErrQOTDDisabled
 	}
+	if isScheduledPublishSuppressed(cfg, publishDate) {
+		return false, nil
+	}
 
 	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, publishDate)
 	if err != nil {

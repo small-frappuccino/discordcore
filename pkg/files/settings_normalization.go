@@ -78,6 +78,10 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	verifiedRoleID := strings.TrimSpace(in.VerifiedRoleID)
 	activeDeckID := strings.TrimSpace(in.ActiveDeckID)
 	decks := cloneQOTDDeckConfigs(in.Decks)
+	suppressedPublishDateUTC, err := normalizeQOTDSuppressedPublishDate(in.SuppressScheduledPublishDateUTC)
+	if err != nil {
+		return QOTDConfig{}, invalidQOTDInput("suppress_scheduled_publish_date_utc: %v", err)
+	}
 	schedule, err := normalizeQOTDPublishScheduleConfig(in.Schedule)
 	if err != nil {
 		return QOTDConfig{}, invalidQOTDInput("schedule: %v", err)
@@ -95,9 +99,10 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 			return QOTDConfig{}, nil
 		}
 		return QOTDConfig{
-			VerifiedRoleID: verifiedRoleID,
-			Collector:      collector,
-			Schedule:       schedule,
+			VerifiedRoleID:                  verifiedRoleID,
+			Collector:                       collector,
+			Schedule:                        schedule,
+			SuppressScheduledPublishDateUTC: suppressedPublishDateUTC,
 		}, nil
 	}
 
@@ -141,17 +146,31 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) &&
 		collector.IsZero() &&
 		verifiedRoleID == "" &&
-		schedule.IsZero() {
+		schedule.IsZero() &&
+		suppressedPublishDateUTC == "" {
 		return QOTDConfig{}, nil
 	}
 
 	return QOTDConfig{
-		VerifiedRoleID: verifiedRoleID,
-		ActiveDeckID:   activeDeckID,
-		Decks:          normalizedDecks,
-		Collector:      collector,
-		Schedule:       schedule,
+		VerifiedRoleID:                  verifiedRoleID,
+		ActiveDeckID:                    activeDeckID,
+		Decks:                           normalizedDecks,
+		Collector:                       collector,
+		Schedule:                        schedule,
+		SuppressScheduledPublishDateUTC: suppressedPublishDateUTC,
 	}, nil
+}
+
+func normalizeQOTDSuppressedPublishDate(in string) (string, error) {
+	in = strings.TrimSpace(in)
+	if in == "" {
+		return "", nil
+	}
+	parsed, err := time.Parse(qotdPublishDateLayout, in)
+	if err != nil {
+		return "", fmt.Errorf("must be a UTC publish date in YYYY-MM-DD format")
+	}
+	return parsed.UTC().Format(qotdPublishDateLayout), nil
 }
 
 func normalizeQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) (QOTDPublishScheduleConfig, error) {

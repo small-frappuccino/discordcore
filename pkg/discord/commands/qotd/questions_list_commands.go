@@ -885,9 +885,17 @@ func describeResetDeckResult(result applicationqotd.ResetDeckResult, deckName st
 		parts = append(parts, fmt.Sprintf("cleared %s", formatCountNoun(result.OfficialPostsCleared, "QOTD publish record", "QOTD publish records")))
 	}
 	if len(parts) == 0 {
-		return fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deckName)
+		message := fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deckName)
+		if result.SuppressedCurrentSlotAutomaticPublish {
+			message += " Automatic publishing for the current slot is paused until you publish manually."
+		}
+		return message
 	}
-	return fmt.Sprintf("%s in deck `%s`. Question order was preserved.", strings.Join(parts, " and "), deckName)
+	message := fmt.Sprintf("%s in deck `%s`. Question order was preserved.", strings.Join(parts, " and "), deckName)
+	if result.SuppressedCurrentSlotAutomaticPublish {
+		message += " Automatic publishing for the current slot is paused until you publish manually."
+	}
+	return message
 }
 
 func formatCountNoun(count int, singular, plural string) string {
