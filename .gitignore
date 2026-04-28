@@ -1,5 +1,7 @@
 # Editor and repository tooling
-.github/
+.github/*
+!.github/workflows/
+!.github/workflows/**
 .idea/
 .vscode/*
 !.vscode/mcp.json

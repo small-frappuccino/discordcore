@@ -447,6 +447,14 @@ set DISCORDCORE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres?ss
 powershell -ExecutionPolicy Bypass -File .\scripts\test-qotd-integration.ps1
 ```
 
+Focused QOTD race coverage uses the same test database and requires CGO support:
+
+```bash
+set DISCORDCORE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
+set CGO_ENABLED=1
+powershell -ExecutionPolicy Bypass -File .\scripts\test-qotd-race.ps1
+```
+
 Other Postgres-backed suites outside the QOTD area still require `DISCORDCORE_TEST_DATABASE_URL` when run directly.
 
 ## License

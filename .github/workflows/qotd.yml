@@ -1,0 +1,75 @@
+name: qotd
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/qotd.yml
+      - go.mod
+      - go.sum
+      - scripts/test-qotd-integration.ps1
+      - scripts/test-qotd-race.ps1
+      - pkg/qotd/**
+      - pkg/discord/commands/qotd/**
+      - pkg/discord/commands/config/**
+      - pkg/files/**
+      - pkg/control/**
+      - pkg/storage/**
+      - pkg/persistence/**
+  push:
+    paths:
+      - .github/workflows/qotd.yml
+      - go.mod
+      - go.sum
+      - scripts/test-qotd-integration.ps1
+      - scripts/test-qotd-race.ps1
+      - pkg/qotd/**
+      - pkg/discord/commands/qotd/**
+      - pkg/discord/commands/config/**
+      - pkg/files/**
+      - pkg/control/**
+      - pkg/storage/**
+      - pkg/persistence/**
+  workflow_dispatch:
+
+jobs:
+  qotd:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: discordcore_test
+          POSTGRES_PASSWORD: discordcore_test
+          POSTGRES_DB: discordcore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U discordcore_test -d discordcore_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DISCORDCORE_TEST_DATABASE_URL: postgres://discordcore_test:discordcore_test@127.0.0.1:5432/discordcore_test?sslmode=disable
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run QOTD pure suites
+        run: go test ./pkg/qotd ./pkg/discord/commands/qotd ./pkg/files ./pkg/discord/commands/config
+
+      - name: Run QOTD integration suites
+        shell: pwsh
+        run: ./scripts/test-qotd-integration.ps1
+
+      - name: Run QOTD focused race suites
+        shell: pwsh
+        env:
+          CGO_ENABLED: "1"
+        run: ./scripts/test-qotd-race.ps1
