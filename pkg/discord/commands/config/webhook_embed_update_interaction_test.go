@@ -253,14 +253,6 @@ func stringOpt(name, value string) *discordgo.ApplicationCommandInteractionDataO
 	}
 }
 
-func boolOpt(name string, value bool) *discordgo.ApplicationCommandInteractionDataOption {
-	return &discordgo.ApplicationCommandInteractionDataOption{
-		Name:  name,
-		Type:  discordgo.ApplicationCommandOptionBoolean,
-		Value: value,
-	}
-}
-
 func ephemeralError(resp discordgo.InteractionResponse) error {
 	if resp.Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
 		return fmt.Errorf("expected ephemeral response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)

@@ -1,0 +1,71 @@
+package config
+
+import (
+	"testing"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
+
+func TestQOTDConfigEnabledCommandTogglesEnabledState(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	harness := newConfigCommandTestHarness(t, guildID, ownerID)
+	mustSetGuildQOTDConfig(t, harness.cm, guildID, buildTestQOTDConfig(false, "123456789012345678", testCommandSchedule()))
+
+	enableResp := harness.runSlash(t, qotdEnabledSubCommandName,
+		boolOpt(qotdEnabledOptionName, true),
+	)
+
+	assertEphemeralContains(t, enableResp, "QOTD is now enabled")
+	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", true, testCommandSchedule())
+
+	disableResp := harness.runSlash(t, qotdEnabledSubCommandName,
+		boolOpt(qotdEnabledOptionName, false),
+	)
+
+	assertEphemeralContains(t, disableResp, "QOTD is now disabled")
+	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", false, testCommandSchedule())
+}
+
+func TestQOTDConfigEnabledCommandRejectsEnableWithoutChannel(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	harness := newConfigCommandTestHarness(t, guildID, ownerID)
+
+	resp := harness.runSlash(t, qotdEnabledSubCommandName,
+		boolOpt(qotdEnabledOptionName, true),
+	)
+
+	assertEphemeralContains(t, resp, "Set a QOTD channel before enabling publishing")
+
+	qotdConfig, err := harness.cm.QOTDConfig(guildID)
+	if err != nil {
+		t.Fatalf("QOTDConfig() failed: %v", err)
+	}
+	if !qotdConfig.IsZero() {
+		t.Fatalf("expected qotd config to remain empty, got %+v", qotdConfig)
+	}
+}
+
+func TestQOTDConfigEnabledCommandRejectsEnableWithoutSchedule(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	harness := newConfigCommandTestHarness(t, guildID, ownerID)
+	mustSetGuildQOTDConfig(t, harness.cm, guildID, buildTestQOTDConfig(false, "123456789012345678", files.QOTDPublishScheduleConfig{}))
+
+	resp := harness.runSlash(t, qotdEnabledSubCommandName,
+		boolOpt(qotdEnabledOptionName, true),
+	)
+
+	assertEphemeralContains(t, resp, "Set the QOTD publish hour and minute before enabling publishing")
+	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", false, files.QOTDPublishScheduleConfig{})
+}
