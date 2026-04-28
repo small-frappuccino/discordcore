@@ -124,9 +124,23 @@ DROP COLUMN forum_channel_id
 		return fmt.Errorf("repair qotd legacy schema: check answer messages table: %w", err)
 	}
 	if hasLegacyReplyThreads && hasAnswerMessages {
-		replyThreadChannelColumn := "channel_id"
-		if !hasChannelID {
+		hasLegacyReplyThreadChannel, err := columnExists(ctx, tx, "qotd_reply_threads", "forum_channel_id")
+		if err != nil {
+			return fmt.Errorf("repair qotd legacy schema: check legacy reply thread forum channel column: %w", err)
+		}
+		hasReplyThreadChannelID, err := columnExists(ctx, tx, "qotd_reply_threads", "channel_id")
+		if err != nil {
+			return fmt.Errorf("repair qotd legacy schema: check legacy reply thread channel column: %w", err)
+		}
+
+		replyThreadChannelColumn := ""
+		switch {
+		case hasReplyThreadChannelID:
+			replyThreadChannelColumn = "channel_id"
+		case hasLegacyReplyThreadChannel:
 			replyThreadChannelColumn = "forum_channel_id"
+		default:
+			return fmt.Errorf("repair qotd legacy schema: qotd_reply_threads missing channel column")
 		}
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
 INSERT INTO qotd_answer_messages (

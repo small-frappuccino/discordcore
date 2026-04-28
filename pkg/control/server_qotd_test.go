@@ -1,3 +1,5 @@
+//go:build integration
+
 package control
 
 import (
@@ -14,6 +16,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
+)
+
+const (
+	qotdRouteChannelID          = "123456789012345678"
+	qotdRouteCollectorChannelID = "223456789012345678"
 )
 
 type qotdRouteResponse struct {
@@ -206,6 +213,7 @@ func TestQOTDRoutesSettingsQuestionsAndSummary(t *testing.T) {
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
 		VerifiedRoleID: "987654321098765432",
 		ActiveDeckID:   files.LegacyQOTDDefaultDeckID,
+		Schedule:       routeQOTDSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
@@ -296,7 +304,7 @@ func TestQOTDRoutesPublishNowReturnsThreadAndAnswerChannelTargets(t *testing.T) 
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "question-channel-1",
+			ChannelID: qotdRouteChannelID,
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -414,11 +422,12 @@ func TestQOTDRoutesRemoveDeckDuplicatesFromCollector(t *testing.T) {
 
 	settingsRec := performHandlerJSONRequest(t, handler, "PUT", "/v1/guilds/g1/qotd/settings", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     routeQOTDSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "question-channel-1",
+			ChannelID: qotdRouteChannelID,
 		}},
 	})
 	if settingsRec.Code != 200 {
@@ -452,7 +461,7 @@ func TestQOTDRoutesRemoveDeckDuplicatesFromCollector(t *testing.T) {
 	created, err := store.CreateQOTDCollectedQuestions(context.Background(), []storage.QOTDCollectedQuestionRecord{
 		{
 			GuildID:                  "g1",
-			SourceChannelID:          "collector-channel-1",
+			SourceChannelID:          qotdRouteCollectorChannelID,
 			SourceMessageID:          "message-1",
 			SourceAuthorID:           "bot-1",
 			SourceAuthorNameSnapshot: "QOTD Bot",
@@ -462,7 +471,7 @@ func TestQOTDRoutesRemoveDeckDuplicatesFromCollector(t *testing.T) {
 		},
 		{
 			GuildID:                  "g1",
-			SourceChannelID:          "collector-channel-1",
+			SourceChannelID:          qotdRouteCollectorChannelID,
 			SourceMessageID:          "message-2",
 			SourceAuthorID:           "bot-1",
 			SourceAuthorNameSnapshot: "QOTD Bot",
@@ -515,7 +524,7 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "question-channel-1",
+			ChannelID: qotdRouteChannelID,
 		}},
 	}); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
@@ -536,11 +545,13 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	lifecycle := qotd.EvaluateOfficialPost(schedule, publishDate, baseNow)
 	official, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
 		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
 		QuestionID:           question.ID,
 		PublishMode:          string(qotd.PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(qotd.OfficialPostStatePrevious),
-		ChannelID:            "question-channel-1",
+		ChannelID:            qotdRouteChannelID,
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,

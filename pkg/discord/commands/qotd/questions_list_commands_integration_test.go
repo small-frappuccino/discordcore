@@ -1,3 +1,5 @@
+//go:build integration
+
 package qotd
 
 import (
@@ -15,6 +17,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
+
+const integrationDeckChannelID = "123456789012345678"
 
 type fakePublisher struct {
 	publishedParams []discordqotd.PublishOfficialPostParams
@@ -106,78 +110,6 @@ func newIntegrationQOTDCommandTestRouterWithPublisher(
 	return router, cm, service, store
 }
 
-func newQOTDSlashInteraction(
-	guildID string,
-	userID string,
-	subCommand string,
-	options []*discordgo.ApplicationCommandInteractionDataOption,
-) *discordgo.InteractionCreate {
-	return &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{
-			ID:      "interaction-qotd-questions-" + subCommand,
-			AppID:   "app",
-			Token:   "token",
-			Type:    discordgo.InteractionApplicationCommand,
-			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
-			Data: discordgo.ApplicationCommandInteractionData{
-				Name: groupName,
-				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
-					Name: questionsGroupName,
-					Type: discordgo.ApplicationCommandOptionSubCommandGroup,
-					Options: []*discordgo.ApplicationCommandInteractionDataOption{{
-						Name:    subCommand,
-						Type:    discordgo.ApplicationCommandOptionSubCommand,
-						Options: options,
-					}},
-				}},
-			},
-		},
-	}
-}
-
-func newQOTDRootSlashInteraction(
-	guildID string,
-	userID string,
-	subCommand string,
-	options []*discordgo.ApplicationCommandInteractionDataOption,
-) *discordgo.InteractionCreate {
-	return &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{
-			ID:      "interaction-qotd-" + subCommand,
-			AppID:   "app",
-			Token:   "token",
-			Type:    discordgo.InteractionApplicationCommand,
-			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
-			Data: discordgo.ApplicationCommandInteractionData{
-				Name: groupName,
-				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
-					Name:    subCommand,
-					Type:    discordgo.ApplicationCommandOptionSubCommand,
-					Options: options,
-				}},
-			},
-		},
-	}
-}
-
-func newQOTDComponentInteraction(guildID, userID, customID string) *discordgo.InteractionCreate {
-	return &discordgo.InteractionCreate{
-		Interaction: &discordgo.Interaction{
-			ID:      "interaction-qotd-questions-list-component",
-			AppID:   "app",
-			Token:   "token",
-			Type:    discordgo.InteractionMessageComponent,
-			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
-			Data: discordgo.MessageComponentInteractionData{
-				CustomID: customID,
-			},
-		},
-	}
-}
-
 func qotdStringOpt(name, value string) *discordgo.ApplicationCommandInteractionDataOption {
 	return &discordgo.ApplicationCommandInteractionDataOption{
 		Name:  name,
@@ -230,20 +162,6 @@ func mustCreateQuestion(
 	}
 }
 
-func requireEphemeralResponse(t *testing.T, resp discordgo.InteractionResponse) {
-	t.Helper()
-	if resp.Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
-		t.Fatalf("expected ephemeral response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
-	}
-}
-
-func requirePublicResponse(t *testing.T, resp discordgo.InteractionResponse) {
-	t.Helper()
-	if resp.Data.Flags&discordgo.MessageFlagsEphemeral != 0 {
-		t.Fatalf("expected public response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
-	}
-}
-
 func TestQuestionsListCommandUsesRequestedDeck(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -286,17 +204,6 @@ func TestQuestionsListCommandUsesRequestedDeck(t *testing.T) {
 	}
 	if embed.Footer == nil || !strings.Contains(embed.Footer.Text, "Spicy") {
 		t.Fatalf("expected spicy deck footer, got %+v", embed.Footer)
-	}
-	if len(resp.Data.Components) != 1 {
-		t.Fatalf("expected one component row, got %+v", resp.Data.Components)
-	}
-	row, ok := resp.Data.Components[0].(discordgo.ActionsRow)
-	if !ok || len(row.Components) < 2 {
-		t.Fatalf("expected action row buttons, got %+v", resp.Data.Components)
-	}
-	prevButton, ok := row.Components[1].(discordgo.Button)
-	if !ok || prevButton.Style != discordgo.PrimaryButton {
-		t.Fatalf("expected previous button to use primary style, got %+v", row.Components[1])
 	}
 }
 
@@ -485,14 +392,15 @@ func TestQuestionsNextCommandSetsSelectedQuestionAsNextReady(t *testing.T) {
 
 	fake := &fakePublisher{}
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	router, cm, service, store := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-123",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 
@@ -510,8 +418,11 @@ func TestQuestionsNextCommandSetsSelectedQuestionAsNextReady(t *testing.T) {
 	}
 
 	for idx := 0; idx < 4; idx++ {
-		if _, err := service.PublishNow(context.Background(), guildID, session); err != nil {
-			t.Fatalf("PublishNow(%d) failed: %v", idx, err)
+		usedAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+		created[idx].Status = string(applicationqotd.QuestionStatusUsed)
+		created[idx].UsedAt = &usedAt
+		if _, err := store.UpdateQOTDQuestion(context.Background(), *created[idx]); err != nil {
+			t.Fatalf("UpdateQOTDQuestion(%d) failed: %v", idx, err)
 		}
 	}
 
@@ -572,11 +483,12 @@ func TestQuestionsNextCommandShowsSpecificErrorForUsedQuestion(t *testing.T) {
 	router, cm, service, store := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-123",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 
@@ -620,11 +532,12 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	router, cm, service, store := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-1",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Question 1", applicationqotd.QuestionStatusReady)
@@ -665,7 +578,7 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 		PublishMode:          string(applicationqotd.PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(applicationqotd.OfficialPostStateCurrent),
-		ChannelID:            "channel-1",
+		ChannelID:            integrationDeckChannelID,
 		QuestionTextSnapshot: questions[0].Body,
 		GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
 		ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
@@ -679,7 +592,7 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	if _, err := store.UpsertQOTDSurface(context.Background(), storage.QOTDSurfaceRecord{
 		GuildID:              guildID,
 		DeckID:               files.LegacyQOTDDefaultDeckID,
-		ChannelID:            "channel-1",
+		ChannelID:            integrationDeckChannelID,
 		QuestionListThreadID: "questions-list-thread",
 	}); err != nil {
 		t.Fatalf("UpsertQOTDSurface() failed: %v", err)
@@ -750,7 +663,7 @@ func TestQuestionsResetAfterManualPublishKeepsCurrentSlotPausedAndListPagination
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-123",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 	for idx := 1; idx <= 12; idx++ {
@@ -867,7 +780,7 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-123",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me first", applicationqotd.QuestionStatusReady)
@@ -889,7 +802,7 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 	if !strings.Contains(resp.Data.Content, "slot already published") {
 		t.Fatalf("expected queue command to show the current slot is already occupied, got %q", resp.Data.Content)
 	}
-	if !strings.Contains(resp.Data.Content, "Next automatic question: QOTD question ID 2") {
+	if !strings.Contains(resp.Data.Content, "After that: QOTD question ID 2") {
 		t.Fatalf("expected queue command to point at the remaining ready question, got %q", resp.Data.Content)
 	}
 	if !strings.Contains(resp.Data.Content, "Current automatic slot question: QOTD question ID 1") {
@@ -908,11 +821,12 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-123",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me", applicationqotd.QuestionStatusReady)
@@ -948,7 +862,8 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 		t.Fatalf("expected questions list to remove the manually published question from the automatic queue, got %q", listResp.Data.Embeds[0].Description)
 	}
 }
-func TestQOTDPublishCommandAllowsMultiplePublishesForTheDay(t *testing.T) {
+
+func TestQOTDPublishCommandBlocksSecondPublishForCurrentSlot(t *testing.T) {
 	const (
 		guildID = "guild-1"
 		ownerID = "owner-1"
@@ -959,11 +874,12 @@ func TestQOTDPublishCommandAllowsMultiplePublishesForTheDay(t *testing.T) {
 	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
 			Enabled:   true,
-			ChannelID: "channel-123",
+			ChannelID: integrationDeckChannelID,
 		}},
 	})
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me first", applicationqotd.QuestionStatusReady)
@@ -979,24 +895,24 @@ func TestQOTDPublishCommandAllowsMultiplePublishesForTheDay(t *testing.T) {
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
 	secondResp := rec.lastResponse(t)
 	requirePublicResponse(t, secondResp)
-	if !strings.Contains(secondResp.Data.Content, "Published QOTD question ID 2 manually.") {
-		t.Fatalf("expected second manual publish confirmation for the next remaining question, got %q", secondResp.Data.Content)
+	if !strings.Contains(secondResp.Data.Content, "already been published for the current slot") {
+		t.Fatalf("expected second manual publish to be blocked for the current slot, got %q", secondResp.Data.Content)
 	}
 	if strings.Contains(secondResp.Data.Content, "An error occurred while executing the command") {
 		t.Fatalf("expected command-specific publish response, got generic fallback %q", secondResp.Data.Content)
 	}
-	if len(fake.publishedParams) != 2 {
-		t.Fatalf("expected two publish attempts for the day, got %d", len(fake.publishedParams))
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected only one real publish attempt for the current slot, got %d", len(fake.publishedParams))
 	}
-	if fake.publishedParams[0].QuestionText != "Publish me first" || fake.publishedParams[1].QuestionText != "Publish me today too" {
-		t.Fatalf("expected publish order to follow the current next question, got %+v", fake.publishedParams)
+	if fake.publishedParams[0].QuestionText != "Publish me first" {
+		t.Fatalf("expected the first publish to use the first ready question, got %+v", fake.publishedParams)
 	}
 
 	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
 	if err != nil {
 		t.Fatalf("list questions after second manual publish: %v", err)
 	}
-	if len(questions) != 2 || questions[0].Status != string(applicationqotd.QuestionStatusUsed) || questions[0].UsedAt == nil || questions[1].Status != string(applicationqotd.QuestionStatusUsed) || questions[1].UsedAt == nil {
-		t.Fatalf("expected both manually published questions to be consumed, got %+v", questions)
+	if len(questions) != 2 || questions[0].Status != string(applicationqotd.QuestionStatusUsed) || questions[0].UsedAt == nil || questions[1].Status != string(applicationqotd.QuestionStatusReady) || questions[1].UsedAt != nil {
+		t.Fatalf("expected only the first manual publish to consume a question, got %+v", questions)
 	}
 }

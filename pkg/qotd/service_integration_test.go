@@ -1,3 +1,5 @@
+//go:build integration
+
 package qotd
 
 import (
@@ -19,6 +21,13 @@ import (
 )
 
 var errFakePublishFailed = errors.New("fake publish failed")
+
+const (
+	integrationQuestionChannelID    = "123456789012345678"
+	integrationQuestionChannelIDAlt = "223456789012345678"
+	integrationCollectorChannelID   = "323456789012345678"
+	integrationForumChannelID       = "423456789012345678"
+)
 
 func scheduledQOTDConfig(enabled bool, channelID string) files.QOTDConfig {
 	hourUTC := 12
@@ -254,15 +263,7 @@ func TestServiceReorderQuestionsChangesNextPublishSelection(t *testing.T) {
 		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
 	}
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "question-channel-1",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -308,17 +309,9 @@ func TestServiceReorderQuestionsChangesNextPublishSelection(t *testing.T) {
 }
 
 func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T) {
-	service, _, _ := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "question-channel-1",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -335,8 +328,11 @@ func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T
 	}
 
 	for idx := 0; idx < 4; idx++ {
-		if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
-			t.Fatalf("PublishNow(%d) failed: %v", idx, err)
+		usedAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+		created[idx].Status = string(QuestionStatusUsed)
+		created[idx].UsedAt = &usedAt
+		if _, err := store.UpdateQOTDQuestion(context.Background(), *created[idx]); err != nil {
+			t.Fatalf("UpdateQOTDQuestion(%d) failed: %v", idx, err)
 		}
 	}
 
@@ -369,15 +365,7 @@ func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T
 func TestServiceSetNextQuestionReturnsImmutableForUsedQuestion(t *testing.T) {
 	service, _, _ := newIntegrationTestQOTDService(t)
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "question-channel-1",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -415,13 +403,13 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 				ID:        files.LegacyQOTDDefaultDeckID,
 				Name:      files.LegacyQOTDDefaultDeckName,
 				Enabled:   true,
-				ChannelID: "question-channel-1",
+				ChannelID: integrationQuestionChannelID,
 			},
 			{
 				ID:        "deck-b",
 				Name:      "Deck B",
 				Enabled:   false,
-				ChannelID: "question-channel-2",
+				ChannelID: integrationQuestionChannelIDAlt,
 			},
 		},
 	}); err != nil {
@@ -445,7 +433,7 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		t.Fatalf("CreateQuestion(deck-b) failed: %v", err)
 	}
 
-	updated, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "question-channel-1"))
+	updated, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID))
 	if err != nil {
 		t.Fatalf("UpdateSettings(remove deck) failed: %v", err)
 	}
@@ -471,10 +459,10 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 	}
 }
 
-func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
+func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
-		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
 
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
@@ -581,19 +569,19 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSummary() failed: %v", err)
 	}
-	if summary.PublishedForCurrentSlot {
-		t.Fatalf("expected manual publish to leave the automatic slot open, got %+v", summary)
+	if !summary.PublishedForCurrentSlot {
+		t.Fatalf("expected manual publish to occupy the current slot, got %+v", summary)
 	}
 
 	automaticQueue, err := service.GetAutomaticQueueState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusDue {
-		t.Fatalf("expected manual publish to leave the automatic slot due, got %+v", automaticQueue)
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusPublished {
+		t.Fatalf("expected manual publish to occupy the automatic slot, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotOfficialPost != nil {
-		t.Fatalf("expected manual publish to avoid creating a scheduled slot record, got %+v", automaticQueue)
+	if automaticQueue.SlotOfficialPost == nil || automaticQueue.SlotOfficialPost.PublishMode != string(PublishModeManual) {
+		t.Fatalf("expected manual publish to create the current slot record, got %+v", automaticQueue)
 	}
 	if automaticQueue.NextReadyQuestion != nil {
 		t.Fatalf("expected no next ready question after the only ready question was published manually, got %+v", automaticQueue)
@@ -603,12 +591,12 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate(previous) failed: %v", err)
 	}
-	if previousOfficial == nil || previousOfficial.State != string(OfficialPostStateCurrent) {
-		t.Fatalf("expected scheduled official post to remain current and unpinned before the boundary, got %+v", previousOfficial)
+	if previousOfficial == nil || previousOfficial.State != string(OfficialPostStatePrevious) {
+		t.Fatalf("expected the previous day's official post to remain available as the prior slot after the boundary, got %+v", previousOfficial)
 	}
 }
 
-func TestServicePublishNowAllowsMultiplePublishesForCurrentSlot(t *testing.T) {
+func TestServicePublishNowBlocksAdditionalManualPublishesForCurrentSlot(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -641,34 +629,26 @@ func TestServicePublishNowAllowsMultiplePublishesForCurrentSlot(t *testing.T) {
 		t.Fatalf("expected first manual publish to consume the first question, got %+v", firstResult.Question)
 	}
 
-	secondResult, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
-	if err != nil {
-		t.Fatalf("PublishNow(second) failed: %v", err)
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); !errors.Is(err, ErrAlreadyPublished) {
+		t.Fatalf("expected second manual publish to be blocked for the same current slot, got %v", err)
 	}
-	if secondResult.Question.ID != created[1].ID {
-		t.Fatalf("expected second manual publish to use the next remaining ready question, got %+v", secondResult.Question)
-	}
-	if secondResult.Question.Status != string(QuestionStatusUsed) || secondResult.Question.UsedAt == nil {
-		t.Fatalf("expected second manual publish to consume the second question, got %+v", secondResult.Question)
-	}
-	if len(fake.publishedParams) != 2 {
-		t.Fatalf("expected two manual publish attempts for the day, got %d", len(fake.publishedParams))
-	}
-	if fake.publishedParams[0].QuestionText != created[0].Body || fake.publishedParams[1].QuestionText != created[1].Body {
-		t.Fatalf("expected manual publishes to follow the current next question, got %+v", fake.publishedParams)
-	}
-	if fake.publishedParams[0].AvailableQuestions != 1 || fake.publishedParams[1].AvailableQuestions != 0 {
-		t.Fatalf("expected manual publishes to decrement the remaining queue count, got %+v", fake.publishedParams)
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected only one real publish attempt for the current slot, got %d", len(fake.publishedParams))
 	}
 
-	for _, createdQuestion := range created {
-		stored, err := store.GetQOTDQuestion(context.Background(), "g1", createdQuestion.ID)
-		if err != nil {
-			t.Fatalf("GetQOTDQuestion(%d) failed: %v", createdQuestion.ID, err)
-		}
-		if stored == nil || stored.Status != string(QuestionStatusUsed) || stored.UsedAt == nil {
-			t.Fatalf("expected manual publishes to consume each published queue question, got %+v", stored)
-		}
+	firstStored, err := store.GetQOTDQuestion(context.Background(), "g1", created[0].ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(first) failed: %v", err)
+	}
+	if firstStored == nil || firstStored.Status != string(QuestionStatusUsed) || firstStored.UsedAt == nil {
+		t.Fatalf("expected the first manual publish to consume the current-slot question, got %+v", firstStored)
+	}
+	secondStored, err := store.GetQOTDQuestion(context.Background(), "g1", created[1].ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(second) failed: %v", err)
+	}
+	if secondStored == nil || secondStored.Status != string(QuestionStatusReady) || secondStored.UsedAt != nil {
+		t.Fatalf("expected the blocked second publish to leave the next question untouched, got %+v", secondStored)
 	}
 }
 
@@ -1138,6 +1118,14 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 		t.Fatalf("PublishNow() failed: %v", err)
 	}
 
+	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", 1)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(used) failed: %v", err)
+	}
+	if usedQuestion == nil || usedQuestion.PublishedOnceAt == nil || usedQuestion.PublishedOnceAt.IsZero() {
+		t.Fatalf("expected published question to carry the published-once marker before reset cleanup, got %+v", usedQuestion)
+	}
+
 	resetResult, err := service.ResetDeckState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
 		t.Fatalf("ResetDeckState() failed: %v", err)
@@ -1156,13 +1144,7 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 	if official != nil {
 		t.Fatalf("expected reset to clear the published current-slot record, got %+v", official)
 	}
-	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", 1)
-	if err != nil {
-		t.Fatalf("GetQOTDQuestion(used) failed: %v", err)
-	}
-	if usedQuestion == nil || usedQuestion.PublishedOnceAt == nil || usedQuestion.PublishedOnceAt.IsZero() {
-		t.Fatalf("expected published question to carry the published-once marker before reset cleanup, got %+v", usedQuestion)
-	}
+
 	secondQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", 2)
 	if err != nil {
 		t.Fatalf("GetQOTDQuestion(second) failed: %v", err)
@@ -1224,8 +1206,8 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 	if err != nil {
 		t.Fatalf("PublishNow(next day after reset) failed: %v", err)
 	}
-	if result.Question.ID != resetQuestions[0].ID {
-		t.Fatalf("expected reset to make the first previously-published question eligible again on a future slot, got %+v", result)
+	if result.Question.ID != usedQuestion.ID {
+		t.Fatalf("expected reset to make the previously published question eligible again on a future slot, got %+v", result)
 	}
 	if len(fake.publishedParams) != 3 {
 		t.Fatalf("expected future-slot republish after reset, got %d publish attempts", len(fake.publishedParams))
@@ -1485,7 +1467,7 @@ func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
 
 func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
-	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "question-channel-1")); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -1520,7 +1502,7 @@ func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T)
 	created, err := store.CreateQOTDCollectedQuestions(context.Background(), []storage.QOTDCollectedQuestionRecord{
 		{
 			GuildID:                  "g1",
-			SourceChannelID:          "collector-channel-1",
+			SourceChannelID:          integrationCollectorChannelID,
 			SourceMessageID:          "message-1",
 			SourceAuthorID:           "bot-1",
 			SourceAuthorNameSnapshot: "QOTD Bot",
@@ -1530,7 +1512,7 @@ func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T)
 		},
 		{
 			GuildID:                  "g1",
-			SourceChannelID:          "collector-channel-1",
+			SourceChannelID:          integrationCollectorChannelID,
 			SourceMessageID:          "message-2",
 			SourceAuthorID:           "bot-1",
 			SourceAuthorNameSnapshot: "QOTD Bot",
@@ -1547,7 +1529,7 @@ func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T)
 	}
 
 	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
-		"collector-channel-1": {
+		integrationCollectorChannelID: {
 			{
 				MessageID:          "live-message-1",
 				AuthorID:           "bot-1",
@@ -1599,15 +1581,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Decks: []files.QOTDDeckConfig{{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "question-channel-1",
-		}},
-	}); err != nil {
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
@@ -1884,7 +1858,7 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 
 	publishDate := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
 	publishedAt := time.Date(2026, 4, 1, 12, 43, 0, 0, time.UTC)
-	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, "forum-1"))
+	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, integrationForumChannelID))
 	if err != nil {
 		t.Fatalf("resolvePublishSchedule() failed: %v", err)
 	}
@@ -1897,7 +1871,7 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 		PublishMode:          string(PublishModeScheduled),
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStatePrevious),
-		ChannelID:            "forum-1",
+		ChannelID:            integrationForumChannelID,
 		QuestionTextSnapshot: question.Body,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,

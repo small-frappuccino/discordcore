@@ -56,6 +56,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1),
 			?,
 			?,
+			?,
 			?
 		)
 		RETURNING

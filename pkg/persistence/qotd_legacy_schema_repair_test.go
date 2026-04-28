@@ -1,3 +1,5 @@
+//go:build integration
+
 package persistence_test
 
 import (
@@ -10,7 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
-func TestPostgresMigratorUpRepairsLegacyQOTDSchemaFromVersion10(t *testing.T) {
+func TestPostgresMigratorUpRepairsLegacyQOTDSchemaDrift(t *testing.T) {
 	t.Parallel()
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
@@ -32,19 +34,16 @@ func TestPostgresMigratorUpRepairsLegacyQOTDSchemaFromVersion10(t *testing.T) {
 	})
 
 	migrator := persistence.NewPostgresMigrator(db)
-	if err := migrator.Down(context.Background(), 4); err != nil {
-		t.Fatalf("rollback to version 10: %v", err)
-	}
-
-	version, err := migrator.Version(context.Background())
+	latestVersion, err := migrator.Version(context.Background())
 	if err != nil {
-		t.Fatalf("read schema version after rollback: %v", err)
+		t.Fatalf("read schema version before drift: %v", err)
 	}
-	if version != 10 {
-		t.Fatalf("expected schema version 10 after rollback, got %d", version)
+	if latestVersion == 0 {
+		t.Fatal("expected migrated test schema before applying legacy drift")
 	}
 
 	if _, err := db.ExecContext(context.Background(), `
+ALTER TABLE qotd_official_posts RENAME COLUMN channel_id TO forum_channel_id;
 ALTER TABLE qotd_official_posts ADD COLUMN response_channel_id_snapshot TEXT NOT NULL DEFAULT '';
 ALTER TABLE qotd_official_posts ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE TABLE qotd_reply_threads (
@@ -82,8 +81,9 @@ INSERT INTO qotd_questions (
 	deck_id,
 	body,
 	status,
-	queue_position
-) VALUES ('g1', 'default', 'Legacy question', 'used', 1)
+	queue_position,
+	display_id
+) VALUES ('g1', 'default', 'Legacy question', 'used', 1, 1)
 RETURNING id
 `).Scan(&questionID); err != nil {
 		t.Fatalf("insert question: %v", err)
@@ -181,12 +181,12 @@ INSERT INTO qotd_thread_archives (
 		t.Fatalf("upgrade with legacy repair: %v", err)
 	}
 
-	version, err = migrator.Version(context.Background())
+	version, err := migrator.Version(context.Background())
 	if err != nil {
 		t.Fatalf("read schema version after upgrade: %v", err)
 	}
-	if version != 14 {
-		t.Fatalf("expected schema version 14 after upgrade, got %d", version)
+	if version != latestVersion {
+		t.Fatalf("expected schema version %d after repair, got %d", latestVersion, version)
 	}
 
 	var answerChannelID string

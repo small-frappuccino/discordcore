@@ -182,6 +182,92 @@ func newQOTDCommandTestRouterWithService(
 	return router, cm
 }
 
+func newQOTDSlashInteraction(
+	guildID string,
+	userID string,
+	subCommand string,
+	options []*discordgo.ApplicationCommandInteractionDataOption,
+) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:      "interaction-qotd-questions-" + subCommand,
+			AppID:   "app",
+			Token:   "token",
+			Type:    discordgo.InteractionApplicationCommand,
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: groupName,
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
+					Name: questionsGroupName,
+					Type: discordgo.ApplicationCommandOptionSubCommandGroup,
+					Options: []*discordgo.ApplicationCommandInteractionDataOption{{
+						Name:    subCommand,
+						Type:    discordgo.ApplicationCommandOptionSubCommand,
+						Options: options,
+					}},
+				}},
+			},
+		},
+	}
+}
+
+func newQOTDRootSlashInteraction(
+	guildID string,
+	userID string,
+	subCommand string,
+	options []*discordgo.ApplicationCommandInteractionDataOption,
+) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:      "interaction-qotd-" + subCommand,
+			AppID:   "app",
+			Token:   "token",
+			Type:    discordgo.InteractionApplicationCommand,
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: groupName,
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
+					Name:    subCommand,
+					Type:    discordgo.ApplicationCommandOptionSubCommand,
+					Options: options,
+				}},
+			},
+		},
+	}
+}
+
+func newQOTDComponentInteraction(guildID, userID, customID string) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:      "interaction-qotd-questions-list-component",
+			AppID:   "app",
+			Token:   "token",
+			Type:    discordgo.InteractionMessageComponent,
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Data: discordgo.MessageComponentInteractionData{
+				CustomID: customID,
+			},
+		},
+	}
+}
+
+func requireEphemeralResponse(t *testing.T, resp discordgo.InteractionResponse) {
+	t.Helper()
+	if resp.Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
+		t.Fatalf("expected ephemeral response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
+	}
+}
+
+func requirePublicResponse(t *testing.T, resp discordgo.InteractionResponse) {
+	t.Helper()
+	if resp.Data.Flags&discordgo.MessageFlagsEphemeral != 0 {
+		t.Fatalf("expected public response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
+	}
+}
+
 func dueQOTDCommandSchedule() files.QOTDPublishScheduleConfig {
 	now := time.Now().UTC()
 	hourUTC := now.Hour()

@@ -434,12 +434,20 @@ Slow gateway handlers are logged by default.
 ## Testing
 
 ```bash
-set DISCORDCORE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
-go test ./...
+go test ./pkg/qotd ./pkg/discord/commands/qotd ./pkg/files ./pkg/discord/commands/config
 go vet ./...
 cd ui
 bun run build
 ```
+
+QOTD DB-backed integration suites are excluded from the default `go test` path behind the `integration` build tag. Run them explicitly:
+
+```bash
+set DISCORDCORE_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
+powershell -ExecutionPolicy Bypass -File .\scripts\test-qotd-integration.ps1
+```
+
+Other Postgres-backed suites outside the QOTD area still require `DISCORDCORE_TEST_DATABASE_URL` when run directly.
 
 ## License
 
