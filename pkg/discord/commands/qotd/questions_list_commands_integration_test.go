@@ -2,12 +2,8 @@ package qotd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,50 +19,6 @@ import (
 type fakePublisher struct {
 	publishedParams []discordqotd.PublishOfficialPostParams
 	threadStates    map[string]discordqotd.ThreadState
-}
-
-type publishCommandStubService struct {
-	settings           files.QOTDConfig
-	publishResult      *applicationqotd.PublishResult
-	publishErr         error
-	publishCalls       int
-	lastPublishGuild   string
-	lastPublishSession *discordgo.Session
-}
-
-func (s *publishCommandStubService) Settings(string) (files.QOTDConfig, error) {
-	return s.settings, nil
-}
-
-func (s *publishCommandStubService) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
-	panic("unexpected ListQuestions call")
-}
-
-func (s *publishCommandStubService) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected CreateQuestion call")
-}
-
-func (s *publishCommandStubService) DeleteQuestion(context.Context, string, int64) error {
-	panic("unexpected DeleteQuestion call")
-}
-
-func (s *publishCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected SetNextQuestion call")
-}
-
-func (s *publishCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
-	panic("unexpected ResetDeckState call")
-}
-
-func (s *publishCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
-	panic("unexpected GetAutomaticQueueState call")
-}
-
-func (s *publishCommandStubService) PublishNow(_ context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error) {
-	s.publishCalls++
-	s.lastPublishGuild = guildID
-	s.lastPublishSession = session
-	return s.publishResult, s.publishErr
 }
 
 func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
@@ -99,130 +51,16 @@ func (p *fakePublisher) FetchChannelMessages(_ context.Context, _ *discordgo.Ses
 	return nil, nil
 }
 
-type interactionRecorder struct {
-	mu        sync.Mutex
-	responses []discordgo.InteractionResponse
-}
-
-func (r *interactionRecorder) addResponse(resp discordgo.InteractionResponse) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.responses = append(r.responses, resp)
-}
-
-func (r *interactionRecorder) lastResponse(t *testing.T) discordgo.InteractionResponse {
-	t.Helper()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.responses) == 0 {
-		t.Fatal("expected at least one interaction response")
-	}
-	return r.responses[len(r.responses)-1]
-}
-
-func newQOTDCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRecorder) {
-	t.Helper()
-
-	rec := &interactionRecorder{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if strings.Contains(req.URL.Path, "/callback") {
-			var resp discordgo.InteractionResponse
-			_ = json.NewDecoder(req.Body).Decode(&resp)
-			rec.addResponse(resp)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-
-	oldAPI := discordgo.EndpointAPI
-	discordgo.EndpointAPI = server.URL + "/"
-	t.Cleanup(func() {
-		discordgo.EndpointAPI = oldAPI
-	})
-
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatalf("failed to create discord session: %v", err)
-	}
-	if session.State == nil {
-		t.Fatal("expected session state to be initialized")
-	}
-	return session, rec
-}
-
-func TestQuestionsListIdleTimeoutResetsOnActivity(t *testing.T) {
-	fired := make(chan struct{}, 2)
-	command := &questionsListCommand{
-		idleTimeout: 80 * time.Millisecond,
-		editComponents: func(_ *discordgo.Session, channelID, messageID string, components []discordgo.MessageComponent) error {
-			if channelID != "channel-1" || messageID != "message-1" {
-				t.Fatalf("unexpected message target: channel=%q message=%q", channelID, messageID)
-			}
-			if len(components) != 0 {
-				t.Fatalf("expected controls to be cleared, got %+v", components)
-			}
-			fired <- struct{}{}
-			return nil
-		},
-	}
-
-	command.armQuestionsListIdleTimeout(&discordgo.Session{}, "channel-1", "message-1")
-	time.Sleep(40 * time.Millisecond)
-	command.armQuestionsListIdleTimeout(&discordgo.Session{}, "channel-1", "message-1")
-
-	select {
-	case <-fired:
-		t.Fatal("expected renewed activity to keep controls visible before the new timeout expires")
-	case <-time.After(55 * time.Millisecond):
-	}
-
-	select {
-	case <-fired:
-	case <-time.After(400 * time.Millisecond):
-		t.Fatal("expected idle timeout to hide controls after inactivity")
-	}
-
-	select {
-	case <-fired:
-		t.Fatal("expected controls to be hidden only once for the same message")
-	case <-time.After(40 * time.Millisecond):
-	}
-}
-
-func newQOTDCommandTestRouter(
+func newIntegrationQOTDCommandTestRouter(
 	t *testing.T,
 	session *discordgo.Session,
 	guildID string,
 	ownerID string,
 ) (*core.CommandRouter, *files.ConfigManager, *applicationqotd.Service, *storage.Store) {
-	return newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, nil)
+	return newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, nil)
 }
 
-func newQOTDCommandTestRouterWithService(
-	t *testing.T,
-	session *discordgo.Session,
-	guildID string,
-	ownerID string,
-	service QuestionCatalogService,
-) (*core.CommandRouter, *files.ConfigManager) {
-	t.Helper()
-
-	cm := files.NewMemoryConfigManager()
-	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
-		t.Fatalf("failed to add guild config: %v", err)
-	}
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, OwnerID: ownerID}); err != nil {
-		t.Fatalf("failed to add guild to state: %v", err)
-	}
-
-	router := core.NewCommandRouter(session, cm)
-	NewCommands(service).RegisterCommands(router)
-	return router, cm
-}
-
-func newQOTDCommandTestRouterWithPublisher(
+func newIntegrationQOTDCommandTestRouterWithPublisher(
 	t *testing.T,
 	session *discordgo.Session,
 	guildID string,
@@ -373,23 +211,6 @@ func mustConfigureQOTDDecks(t *testing.T, cm *files.ConfigManager, guildID strin
 	}
 }
 
-func dueQOTDCommandSchedule() files.QOTDPublishScheduleConfig {
-	now := time.Now().UTC()
-	hourUTC := now.Hour()
-	minuteUTC := now.Minute()
-	switch {
-	case minuteUTC > 0:
-		minuteUTC--
-	case hourUTC > 0:
-		hourUTC--
-		minuteUTC = 59
-	}
-	return files.QOTDPublishScheduleConfig{
-		HourUTC:   &hourUTC,
-		MinuteUTC: &minuteUTC,
-	}
-}
-
 func mustCreateQuestion(
 	t *testing.T,
 	service *applicationqotd.Service,
@@ -430,7 +251,7 @@ func TestQuestionsListCommandUsesRequestedDeck(t *testing.T) {
 	)
 
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouter(t, session, guildID, ownerID)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{
@@ -486,7 +307,7 @@ func TestQuestionsListCommandPaginatesWithButtons(t *testing.T) {
 	)
 
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouter(t, session, guildID, ownerID)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -541,7 +362,7 @@ func TestQuestionsListComponentRejectsDifferentUser(t *testing.T) {
 	)
 
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouter(t, session, guildID, ownerID)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -571,7 +392,7 @@ func TestQuestionsAddCommandCreatesQuestionWithVisibleID(t *testing.T) {
 	)
 
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouter(t, session, guildID, ownerID)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -619,7 +440,7 @@ func TestQuestionsRemoveCommandDeletesByID(t *testing.T) {
 	)
 
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouter(t, session, guildID, ownerID)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -664,7 +485,7 @@ func TestQuestionsNextCommandSetsSelectedQuestionAsNextReady(t *testing.T) {
 
 	fake := &fakePublisher{}
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -748,7 +569,7 @@ func TestQuestionsNextCommandShowsSpecificErrorForUsedQuestion(t *testing.T) {
 
 	fake := &fakePublisher{}
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, store := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	router, cm, service, store := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -796,7 +617,7 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	)
 
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, store := newQOTDCommandTestRouter(t, session, guildID, ownerID)
+	router, cm, service, store := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -913,6 +734,123 @@ func TestQuestionsResetCommandResetsDeckStateAndPreservesOrder(t *testing.T) {
 	}
 }
 
+func TestQuestionsResetAfterManualPublishKeepsCurrentSlotPausedAndListPaginationStillWorks(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	fake := &fakePublisher{}
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "channel-123",
+		}},
+	})
+	for idx := 1; idx <= 12; idx++ {
+		mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, fmt.Sprintf("Question %02d", idx), applicationqotd.QuestionStatusReady)
+	}
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
+	firstPublishResp := rec.lastResponse(t)
+	requirePublicResponse(t, firstPublishResp)
+	if !strings.Contains(firstPublishResp.Data.Content, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected first manual publish confirmation, got %q", firstPublishResp.Data.Content)
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected first manual publish to invoke the publisher once, got %d", len(fake.publishedParams))
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsResetSubCommand, nil))
+	firstResetResp := rec.lastResponse(t)
+	requirePublicResponse(t, firstResetResp)
+	if !strings.Contains(firstResetResp.Data.Content, "cleared 1 QOTD publish record") {
+		t.Fatalf("expected first reset to clear the current-slot publish record, got %q", firstResetResp.Data.Content)
+	}
+	if !strings.Contains(firstResetResp.Data.Content, "Automatic publishing for the current slot is paused until you publish manually.") {
+		t.Fatalf("expected first reset to pause the current slot after clearing it, got %q", firstResetResp.Data.Content)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
+	listResp := rec.lastResponse(t)
+	requirePublicResponse(t, listResp)
+	if !strings.Contains(listResp.Data.Embeds[0].Description, "Question 01") {
+		t.Fatalf("expected questions list to show the first question after reset, got %q", listResp.Data.Embeds[0].Description)
+	}
+	if !strings.Contains(listResp.Data.Embeds[0].Description, "ID:1 • ready • publishes next") {
+		t.Fatalf("expected first reset to restore question 1 as the next ready question, got %q", listResp.Data.Embeds[0].Description)
+	}
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
+	secondPublishResp := rec.lastResponse(t)
+	requirePublicResponse(t, secondPublishResp)
+	if !strings.Contains(secondPublishResp.Data.Content, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected second manual publish to republish question 1 explicitly, got %q", secondPublishResp.Data.Content)
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected two manual publish attempts before the second reset, got %d", len(fake.publishedParams))
+	}
+
+	router.HandleInteraction(session, newQOTDComponentInteraction(guildID, ownerID, encodeQuestionsListState(questionsListRouteNext, questionsListState{
+		UserID: ownerID,
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Page:   0,
+	})))
+	nextResp := rec.lastResponse(t)
+	if nextResp.Type != discordgo.InteractionResponseUpdateMessage {
+		t.Fatalf("expected next-page interaction to update the original list message, got type %v", nextResp.Type)
+	}
+	if !strings.Contains(nextResp.Data.Embeds[0].Description, "Question 11") {
+		t.Fatalf("expected next-page interaction to reach page 2, got %q", nextResp.Data.Embeds[0].Description)
+	}
+
+	router.HandleInteraction(session, newQOTDComponentInteraction(guildID, ownerID, encodeQuestionsListState(questionsListRoutePrev, questionsListState{
+		UserID: ownerID,
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Page:   1,
+	})))
+	prevResp := rec.lastResponse(t)
+	if prevResp.Type != discordgo.InteractionResponseUpdateMessage {
+		t.Fatalf("expected previous-page interaction to update the original list message, got type %v", prevResp.Type)
+	}
+	if !strings.Contains(prevResp.Data.Embeds[0].Description, "ID:1 • used") {
+		t.Fatalf("expected pagination after manual publish to show question 1 as used, got %q", prevResp.Data.Embeds[0].Description)
+	}
+	if !strings.Contains(prevResp.Data.Embeds[0].Description, "ID:2 • ready • publishes next") {
+		t.Fatalf("expected pagination after manual publish to move the queue to question 2, got %q", prevResp.Data.Embeds[0].Description)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsResetSubCommand, nil))
+	secondResetResp := rec.lastResponse(t)
+	requirePublicResponse(t, secondResetResp)
+	if !strings.Contains(secondResetResp.Data.Content, "cleared 1 QOTD publish record") {
+		t.Fatalf("expected second reset to clear the republished current-slot record, got %q", secondResetResp.Data.Content)
+	}
+	if !strings.Contains(secondResetResp.Data.Content, "Automatic publishing for the current slot is paused until you publish manually.") {
+		t.Fatalf("expected second reset to keep the current slot paused, got %q", secondResetResp.Data.Content)
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected second reset not to trigger a new publish immediately, got %d publish attempts", len(fake.publishedParams))
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), guildID, session)
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() after second reset failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected second reset to keep automatic publish paused for the current slot")
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected paused current slot to prevent extra publish attempts, got %d", len(fake.publishedParams))
+	}
+}
+
 func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -921,7 +859,7 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 
 	fake := &fakePublisher{}
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Schedule:     dueQOTDCommandSchedule(),
@@ -959,29 +897,6 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 	}
 }
 
-func TestFormatAutomaticQueueStateUsesCurrentSlotLabel(t *testing.T) {
-	message := formatAutomaticQueueState(applicationqotd.AutomaticQueueState{
-		Deck: files.QOTDDeckConfig{
-			ID:        files.LegacyQOTDDefaultDeckID,
-			Name:      files.LegacyQOTDDefaultDeckName,
-			Enabled:   true,
-			ChannelID: "channel-123",
-		},
-		ScheduleConfigured: true,
-		Schedule:           dueQOTDCommandSchedule(),
-		CanPublish:         true,
-		SlotPublishAtUTC:   time.Date(2026, 4, 2, 12, 43, 0, 0, time.UTC),
-		SlotStatus:         applicationqotd.AutomaticQueueSlotStatusDue,
-	})
-
-	if !strings.Contains(message, "Current automatic slot:") {
-		t.Fatalf("expected queue formatter to describe the active slot generically, got %q", message)
-	}
-	if strings.Contains(message, "Today's automatic slot:") {
-		t.Fatalf("expected queue formatter to avoid claiming the active slot is always today's, got %q", message)
-	}
-}
-
 func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -990,7 +905,7 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 
 	fake := &fakePublisher{}
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{
@@ -1033,73 +948,6 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 		t.Fatalf("expected questions list to remove the manually published question from the automatic queue, got %q", listResp.Data.Embeds[0].Description)
 	}
 }
-
-func TestQOTDPublishCommandTreatsRecoveredPublishedResultAsSuccess(t *testing.T) {
-	const (
-		guildID = "guild-1"
-		ownerID = "owner-1"
-	)
-
-	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
-	service := &publishCommandStubService{
-		settings: files.QOTDConfig{
-			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-			Decks: []files.QOTDDeckConfig{{
-				ID:        files.LegacyQOTDDefaultDeckID,
-				Name:      files.LegacyQOTDDefaultDeckName,
-				Enabled:   true,
-				ChannelID: "channel-123",
-			}},
-		},
-		publishResult: &applicationqotd.PublishResult{
-			Question: storage.QOTDQuestionRecord{
-				ID:        17,
-				DisplayID: 17,
-				GuildID:   guildID,
-				DeckID:    files.LegacyQOTDDefaultDeckID,
-				Body:      "Recovered publish",
-				Status:    string(applicationqotd.QuestionStatusUsed),
-				UsedAt:    &publishedAt,
-			},
-			OfficialPost: storage.QOTDOfficialPostRecord{
-				ID:                      99,
-				GuildID:                 guildID,
-				DeckID:                  files.LegacyQOTDDefaultDeckID,
-				DeckNameSnapshot:        files.LegacyQOTDDefaultDeckName,
-				QuestionID:              17,
-				PublishMode:             string(applicationqotd.PublishModeManual),
-				PublishDateUTC:          time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
-				ChannelID:               "channel-123",
-				DiscordStarterMessageID: "message-99",
-				PublishedAt:             &publishedAt,
-			},
-			PostURL: discordqotd.BuildMessageJumpURL(guildID, "channel-123", "message-99"),
-		},
-	}
-
-	session, rec := newQOTDCommandTestSession(t)
-	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
-
-	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	resp := rec.lastResponse(t)
-	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "Published QOTD question ID 17 manually.") {
-		t.Fatalf("expected recovered publish to surface as success, got %q", resp.Data.Content)
-	}
-	if !strings.Contains(resp.Data.Content, "https://discord.com/channels/guild-1/channel-123/message-99") {
-		t.Fatalf("expected recovered publish to include the existing jump url, got %q", resp.Data.Content)
-	}
-	if strings.Contains(resp.Data.Content, "An error occurred while executing the command") {
-		t.Fatalf("expected recovered publish to avoid generic fallback errors, got %q", resp.Data.Content)
-	}
-	if service.publishCalls != 1 {
-		t.Fatalf("expected publish command to call PublishNow once, got %d", service.publishCalls)
-	}
-	if service.lastPublishGuild != guildID || service.lastPublishSession != session {
-		t.Fatalf("expected publish command to forward guild and session, got guild=%q session=%p", service.lastPublishGuild, service.lastPublishSession)
-	}
-}
-
 func TestQOTDPublishCommandAllowsMultiplePublishesForTheDay(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -1108,7 +956,7 @@ func TestQOTDPublishCommandAllowsMultiplePublishesForTheDay(t *testing.T) {
 
 	fake := &fakePublisher{}
 	session, rec := newQOTDCommandTestSession(t)
-	router, cm, service, _ := newQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
 	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 		Decks: []files.QOTDDeckConfig{{

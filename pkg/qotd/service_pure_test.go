@@ -99,3 +99,12 @@ func TestQuestionSelectionHelpersIgnorePublishedAndScheduledQuestions(t *testing
 		t.Fatal("expected reservedQuestionForDate() to return nil for a different slot date")
 	}
 }
+
+func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
+	t.Parallel()
+
+	got := buildOfficialThreadName(1)
+	if got != "Question of the Day" {
+		t.Fatalf("unexpected official thread title: %q", got)
+	}
+}

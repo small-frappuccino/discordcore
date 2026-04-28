@@ -173,7 +173,7 @@ func (p *fakePublisher) FetchChannelMessages(_ context.Context, _ *discordgo.Ses
 	return append([]discordqotd.ArchivedMessage(nil), messages[start:end]...), nil
 }
 
-func newTestQOTDService(t *testing.T) (*Service, *storage.Store, *fakePublisher) {
+func newIntegrationTestQOTDService(t *testing.T) (*Service, *storage.Store, *fakePublisher) {
 	t.Helper()
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
@@ -209,7 +209,7 @@ func newTestQOTDService(t *testing.T) (*Service, *storage.Store, *fakePublisher)
 }
 
 func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
-	service, _, _ := newTestQOTDService(t)
+	service, _, _ := newIntegrationTestQOTDService(t)
 
 	first, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
 		Body:   "First question",
@@ -249,7 +249,7 @@ func TestServiceReorderQuestionsUsesOrderedIDs(t *testing.T) {
 }
 
 func TestServiceReorderQuestionsChangesNextPublishSelection(t *testing.T) {
-	service, _, fake := newTestQOTDService(t)
+	service, _, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
 	}
@@ -308,7 +308,7 @@ func TestServiceReorderQuestionsChangesNextPublishSelection(t *testing.T) {
 }
 
 func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T) {
-	service, _, _ := newTestQOTDService(t)
+	service, _, _ := newIntegrationTestQOTDService(t)
 
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
@@ -367,7 +367,7 @@ func TestServiceSetNextQuestionMovesSelectedReadyQuestionToNextSlot(t *testing.T
 }
 
 func TestServiceSetNextQuestionReturnsImmutableForUsedQuestion(t *testing.T) {
-	service, _, _ := newTestQOTDService(t)
+	service, _, _ := newIntegrationTestQOTDService(t)
 
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
@@ -399,17 +399,8 @@ func TestServiceSetNextQuestionReturnsImmutableForUsedQuestion(t *testing.T) {
 	}
 }
 
-func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
-	t.Parallel()
-
-	got := buildOfficialThreadName(1)
-	if got != "Question of the Day" {
-		t.Fatalf("unexpected official thread title: %q", got)
-	}
-}
-
 func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
-	service, store, _ := newTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 
 	hourUTC := 12
 	minuteUTC := 43
@@ -481,7 +472,7 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 }
 
 func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
 	}
@@ -618,7 +609,7 @@ func TestServicePublishNowCreatesIndependentManualPost(t *testing.T) {
 }
 
 func TestServicePublishNowAllowsMultiplePublishesForCurrentSlot(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -682,7 +673,7 @@ func TestServicePublishNowAllowsMultiplePublishesForCurrentSlot(t *testing.T) {
 }
 
 func TestServicePublishScheduledIfDueDoesNotRepublishCurrentSlotAfterManualPublish(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -771,7 +762,7 @@ func TestServicePublishScheduledIfDueDoesNotRepublishCurrentSlotAfterManualPubli
 }
 
 func TestServiceGetAutomaticQueueStateTreatsManualPublishAsCurrentSlotPublish(t *testing.T) {
-	service, _, _ := newTestQOTDService(t)
+	service, _, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -836,7 +827,7 @@ func TestServiceGetAutomaticQueueStateTreatsManualPublishAsCurrentSlotPublish(t 
 }
 
 func TestServicePublishNowUsesCurrentScheduledSlotBeforeBoundary(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 42, 0, 0, time.UTC)
 	}
@@ -885,7 +876,7 @@ func TestServicePublishNowUsesCurrentScheduledSlotBeforeBoundary(t *testing.T) {
 }
 
 func TestServicePublishNowBlocksSecondCurrentSlotPublish(t *testing.T) {
-	service, _, fake := newTestQOTDService(t)
+	service, _, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -915,7 +906,7 @@ func TestServicePublishNowBlocksSecondCurrentSlotPublish(t *testing.T) {
 }
 
 func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testing.T) {
-	service, store, _ := newTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
 	conflictErr := &pgconn.PgError{Code: postgresUniqueViolationCode, ConstraintName: qotdLegacyPublishDateConstraint}
 
@@ -1000,7 +991,7 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service, store, _ = newTestQOTDService(t)
+			service, store, _ = newIntegrationTestQOTDService(t)
 			if err := tt.setup(t); err != nil {
 				t.Fatal(err)
 			}
@@ -1032,7 +1023,7 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 }
 
 func TestServicePublishAcrossInstancesReportsInProgressDuringScheduledProvisioning(t *testing.T) {
-	baseService, store, _ := newTestQOTDService(t)
+	baseService, store, _ := newIntegrationTestQOTDService(t)
 	blocked := &blockingPublisher{
 		started: make(chan struct{}),
 		release: make(chan struct{}),
@@ -1125,7 +1116,7 @@ func TestServicePublishAcrossInstancesReportsInProgressDuringScheduledProvisioni
 }
 
 func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -1242,7 +1233,7 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 }
 
 func TestServiceGetAutomaticQueueStateUsesActiveScheduledSlotBeforeBoundary(t *testing.T) {
-	service, _, _ := newTestQOTDService(t)
+	service, _, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 42, 0, 0, time.UTC)
 	}
@@ -1298,7 +1289,7 @@ func TestServiceGetAutomaticQueueStateUsesActiveScheduledSlotBeforeBoundary(t *t
 }
 
 func TestServiceResetDeckStatePreservesQuestionOrder(t *testing.T) {
-	service, store, _ := newTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -1414,7 +1405,7 @@ func TestServiceResetDeckStatePreservesQuestionOrder(t *testing.T) {
 }
 
 func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
-	service, _, fake := newTestQOTDService(t)
+	service, _, fake := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
 		Collector: files.QOTDCollectorConfig{
 			SourceChannelID: "123456789012345678",
@@ -1493,7 +1484,7 @@ func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
 }
 
 func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "question-channel-1")); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -1603,7 +1594,7 @@ func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T)
 }
 
 func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -1678,7 +1669,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 }
 
 func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -1782,7 +1773,7 @@ func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 }
 
 func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -1867,7 +1858,7 @@ func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing
 }
 
 func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T) {
-	service, store, fake := newTestQOTDService(t)
+	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
