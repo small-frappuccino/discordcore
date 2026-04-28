@@ -90,6 +90,29 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (*
 	return updated, nil
 }
 
+func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) error {
+	if s.db == nil {
+		return fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
+	if guildID == "" || deckID == "" {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if _, err := s.execContext(ctx,
+		`DELETE FROM qotd_forum_surfaces WHERE guild_id = ? AND deck_id = ?`,
+		guildID,
+		deckID,
+	); err != nil {
+		return fmt.Errorf("delete qotd surface by deck: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessageRecord) (*QOTDAnswerMessageRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")

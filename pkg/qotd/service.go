@@ -66,6 +66,35 @@ type PublishResult struct {
 	PostURL      string
 }
 
+type ResetDeckResult struct {
+	QuestionsReset      int
+	OfficialPostsCleared int
+}
+
+type AutomaticQueueSlotStatus string
+
+const (
+	AutomaticQueueSlotStatusDisabled   AutomaticQueueSlotStatus = "disabled"
+	AutomaticQueueSlotStatusWaiting    AutomaticQueueSlotStatus = "waiting"
+	AutomaticQueueSlotStatusDue        AutomaticQueueSlotStatus = "due"
+	AutomaticQueueSlotStatusReserved   AutomaticQueueSlotStatus = "reserved"
+	AutomaticQueueSlotStatusRecovering AutomaticQueueSlotStatus = "recovering"
+	AutomaticQueueSlotStatusPublished  AutomaticQueueSlotStatus = "published"
+)
+
+type AutomaticQueueState struct {
+	Deck               files.QOTDDeckConfig
+	Schedule           PublishSchedule
+	ScheduleConfigured bool
+	CanPublish         bool
+	SlotDateUTC        time.Time
+	SlotPublishAtUTC   time.Time
+	SlotStatus         AutomaticQueueSlotStatus
+	SlotOfficialPost   *storage.QOTDOfficialPostRecord
+	SlotQuestion       *storage.QOTDQuestionRecord
+	NextReadyQuestion  *storage.QOTDQuestionRecord
+}
+
 type Service struct {
 	configManager       *files.ConfigManager
 	store               *storage.Store
@@ -231,8 +260,16 @@ func (s *Service) DeleteQuestion(ctx context.Context, guildID string, questionID
 }
 
 func (s *Service) ResetDeckQuestionStates(ctx context.Context, guildID, deckID string) (int, error) {
-	if err := s.validate(); err != nil {
+	result, err := s.ResetDeckState(ctx, guildID, deckID)
+	if err != nil {
 		return 0, err
+	}
+	return result.QuestionsReset, nil
+}
+
+func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (ResetDeckResult, error) {
+	if err := s.validate(); err != nil {
+		return ResetDeckResult{}, err
 	}
 
 	guildID = strings.TrimSpace(guildID)
@@ -242,14 +279,14 @@ func (s *Service) ResetDeckQuestionStates(ctx context.Context, guildID, deckID s
 
 	deck, err := s.resolveDashboardDeck(guildID, deckID)
 	if err != nil {
-		return 0, err
+		return ResetDeckResult{}, err
 	}
 	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 	if err != nil {
-		return 0, err
+		return ResetDeckResult{}, err
 	}
 
-	resetCount := 0
+	result := ResetDeckResult{}
 	for idx := range questions {
 		question := questions[idx]
 		switch QuestionStatus(strings.TrimSpace(question.Status)) {
@@ -258,13 +295,91 @@ func (s *Service) ResetDeckQuestionStates(ctx context.Context, guildID, deckID s
 			question.ScheduledForDateUTC = nil
 			question.UsedAt = nil
 			if _, err := s.store.UpdateQOTDQuestion(ctx, question); err != nil {
-				return resetCount, err
+				return result, err
 			}
-			resetCount++
+			result.QuestionsReset++
 		}
 	}
 
-	return resetCount, nil
+	result.OfficialPostsCleared, err = s.store.DeleteQOTDOfficialPostsByDeck(ctx, guildID, deck.ID)
+	if err != nil {
+		return result, err
+	}
+	if err := s.store.DeleteQOTDSurfaceByDeck(ctx, guildID, deck.ID); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (AutomaticQueueState, error) {
+	if err := s.validate(); err != nil {
+		return AutomaticQueueState{}, err
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return AutomaticQueueState{}, err
+	}
+
+	state := AutomaticQueueState{Deck: deck}
+	now := s.clock()
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	if err != nil {
+		return AutomaticQueueState{}, err
+	}
+	state.NextReadyQuestion = firstReadyUnscheduledQuestion(questions)
+
+	settings, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return AutomaticQueueState{}, err
+	}
+	schedule, scheduleErr := resolvePublishSchedule(settings)
+	if scheduleErr == nil {
+		state.ScheduleConfigured = true
+		state.Schedule = schedule
+		state.SlotDateUTC = NormalizePublishDateUTC(now)
+		state.SlotPublishAtUTC = PublishTimeUTC(schedule, state.SlotDateUTC)
+		state.CanPublish = deck.Enabled && canPublishQOTD(deck)
+
+		officialPost, err := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, state.SlotDateUTC)
+		if err != nil {
+			return AutomaticQueueState{}, err
+		}
+		state.SlotOfficialPost = officialPost
+		if officialPost != nil {
+			state.SlotQuestion = questionByID(questions, officialPost.QuestionID)
+		}
+		if state.SlotQuestion == nil {
+			state.SlotQuestion = reservedQuestionForDate(questions, state.SlotDateUTC)
+		}
+	} else {
+		state.CanPublish = false
+	}
+
+	switch {
+	case !state.ScheduleConfigured || !state.CanPublish:
+		state.SlotStatus = AutomaticQueueSlotStatusDisabled
+	case state.SlotOfficialPost != nil:
+		if hasPublishedOfficialPostTarget(state.SlotOfficialPost) {
+			state.SlotStatus = AutomaticQueueSlotStatusPublished
+		} else {
+			state.SlotStatus = AutomaticQueueSlotStatusRecovering
+		}
+	case state.SlotQuestion != nil:
+		state.SlotStatus = AutomaticQueueSlotStatusReserved
+	case now.Before(state.SlotPublishAtUTC):
+		state.SlotStatus = AutomaticQueueSlotStatusWaiting
+	default:
+		state.SlotStatus = AutomaticQueueSlotStatusDue
+	}
+
+	return state, nil
 }
 
 func (s *Service) SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
@@ -399,7 +514,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	var currentSlotPost *storage.QOTDOfficialPostRecord
 	if scheduleErr == nil {
 		currentPublishDate = CurrentPublishDateUTC(schedule, now)
-		currentSlotPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
+		currentSlotPost, err = s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
 		if err != nil {
 			return Summary{}, err
 		}
@@ -456,24 +571,6 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 			return nil, err
 		}
 		return recovered, nil
-	}
-
-	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil {
-		if !isOfficialPostPublished(*existing) {
-			recovered, err := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
-			if err != nil {
-				return nil, err
-			}
-			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-				return nil, err
-			}
-			return recovered, nil
-		}
-		return nil, ErrAlreadyPublished
 	}
 
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)
@@ -817,6 +914,57 @@ func filterQuestionsByDeck(questions []storage.QOTDQuestionRecord, deckID string
 		}
 	}
 	return filtered
+}
+
+func questionByID(questions []storage.QOTDQuestionRecord, questionID int64) *storage.QOTDQuestionRecord {
+	if questionID <= 0 {
+		return nil
+	}
+	for idx := range questions {
+		if questions[idx].ID != questionID {
+			continue
+		}
+		question := questions[idx]
+		return &question
+	}
+	return nil
+}
+
+func firstReadyUnscheduledQuestion(questions []storage.QOTDQuestionRecord) *storage.QOTDQuestionRecord {
+	for idx := range questions {
+		question := questions[idx]
+		if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusReady {
+			continue
+		}
+		if question.ScheduledForDateUTC != nil && !question.ScheduledForDateUTC.IsZero() {
+			continue
+		}
+		questionCopy := question
+		return &questionCopy
+	}
+	return nil
+}
+
+func reservedQuestionForDate(questions []storage.QOTDQuestionRecord, publishDateUTC time.Time) *storage.QOTDQuestionRecord {
+	publishDateUTC = NormalizePublishDateUTC(publishDateUTC)
+	if publishDateUTC.IsZero() {
+		return nil
+	}
+	for idx := range questions {
+		question := questions[idx]
+		if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusReserved {
+			continue
+		}
+		if question.ScheduledForDateUTC == nil || question.ScheduledForDateUTC.IsZero() {
+			continue
+		}
+		if !NormalizePublishDateUTC(*question.ScheduledForDateUTC).Equal(publishDateUTC) {
+			continue
+		}
+		questionCopy := question
+		return &questionCopy
+	}
+	return nil
 }
 
 func (s *Service) resolveDashboardDeck(guildID, deckID string) (files.QOTDDeckConfig, error) {

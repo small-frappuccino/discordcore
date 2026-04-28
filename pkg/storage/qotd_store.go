@@ -1119,6 +1119,73 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 	return record, nil
 }
 
+func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
+	if guildID == "" || publishDateUTC.IsZero() {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	row := s.queryRowContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			deck_id,
+			deck_name_snapshot,
+			question_id,
+			publish_mode,
+			publish_date_utc,
+			state,
+			channel_id,
+			question_list_thread_id,
+			question_list_entry_message_id,
+			discord_thread_id,
+			discord_starter_message_id,
+			answer_channel_id,
+			question_text_snapshot,
+			published_at,
+			grace_until,
+			archive_at,
+			closed_at,
+			archived_at,
+			last_reconciled_at,
+			created_at,
+			updated_at
+		FROM qotd_official_posts
+		WHERE guild_id = ?
+		  AND publish_mode = 'scheduled'
+		  AND publish_date_utc = ?
+		ORDER BY
+		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
+		  CASE
+		    WHEN published_at IS NOT NULL
+		      AND discord_thread_id IS NOT NULL
+		      AND discord_starter_message_id IS NOT NULL
+		      AND answer_channel_id IS NOT NULL THEN 0
+		    ELSE 1
+		  END,
+		  updated_at DESC,
+		  id DESC
+		LIMIT 1`,
+		guildID,
+		publishDateUTC,
+	)
+	record, err := scanQOTDOfficialPostRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get scheduled qotd official post by date: %w", err)
+	}
+	return record, nil
+}
+
 func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) ([]QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -1313,6 +1380,34 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 		return nil, fmt.Errorf("update qotd official post state: %w", err)
 	}
 	return record, nil
+}
+
+func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (int, error) {
+	if s.db == nil {
+		return 0, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	deckID = strings.TrimSpace(deckID)
+	if guildID == "" || deckID == "" {
+		return 0, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	result, err := s.execContext(ctx,
+		`DELETE FROM qotd_official_posts WHERE guild_id = ? AND deck_id = ?`,
+		guildID,
+		deckID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete qotd official posts by deck: %w", err)
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("delete qotd official posts by deck: %w", err)
+	}
+	return int(deleted), nil
 }
 
 func (s *Store) CreateQOTDThreadArchive(ctx context.Context, rec QOTDThreadArchiveRecord) (*QOTDThreadArchiveRecord, error) {

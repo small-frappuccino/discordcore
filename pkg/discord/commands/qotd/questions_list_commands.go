@@ -23,6 +23,7 @@ const (
 	questionsGroupName        = "questions"
 	questionsAddSubCommand    = "add"
 	questionsListSubCommand   = "list"
+	questionsQueueSubCommand  = "queue"
 	questionsNextSubCommand   = "next"
 	questionsResetSubCommand  = "reset"
 	questionsRemoveSubCommand = "remove"
@@ -46,7 +47,8 @@ type QuestionCatalogService interface {
 	CreateQuestion(ctx context.Context, guildID, actorID string, mutation applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error)
 	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
 	SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
-	ResetDeckQuestionStates(ctx context.Context, guildID, deckID string) (int, error)
+	ResetDeckState(ctx context.Context, guildID, deckID string) (applicationqotd.ResetDeckResult, error)
+	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
 	PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
 }
 
@@ -66,6 +68,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	addCommand := &questionsAddCommand{service: c.service}
 	listCommand := &questionsListCommand{service: c.service}
+	queueCommand := &questionsQueueCommand{service: c.service}
 	nextCommand := &questionsNextCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
 	resetCommand := &questionsResetCommand{service: c.service}
@@ -73,6 +76,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
 	questionsGroup.AddSubCommand(addCommand)
 	questionsGroup.AddSubCommand(listCommand)
+	questionsGroup.AddSubCommand(queueCommand)
 	questionsGroup.AddSubCommand(nextCommand)
 	questionsGroup.AddSubCommand(resetCommand)
 	questionsGroup.AddSubCommand(removeCommand)
@@ -114,6 +118,10 @@ type questionsAddCommand struct {
 }
 
 type questionsNextCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsQueueCommand struct {
 	service QuestionCatalogService
 }
 
@@ -159,6 +167,24 @@ func (c *questionsListCommand) Options() []*discordgo.ApplicationCommandOption {
 
 func (c *questionsListCommand) RequiresGuild() bool       { return true }
 func (c *questionsListCommand) RequiresPermissions() bool { return true }
+
+func (c *questionsQueueCommand) Name() string { return questionsQueueSubCommand }
+
+func (c *questionsQueueCommand) Description() string {
+	return "Show the real automatic QOTD queue state"
+}
+
+func (c *questionsQueueCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        questionsDeckOptionName,
+		Description: "Deck ID or exact deck name. Defaults to the active deck.",
+		Required:    false,
+	}}
+}
+
+func (c *questionsQueueCommand) RequiresGuild() bool       { return true }
+func (c *questionsQueueCommand) RequiresPermissions() bool { return true }
 
 func (c *questionsAddCommand) Name() string { return questionsAddSubCommand }
 
@@ -268,7 +294,7 @@ func (c *questionsRemoveCommand) RequiresPermissions() bool { return true }
 func (c *questionsResetCommand) Name() string { return questionsResetSubCommand }
 
 func (c *questionsResetCommand) Description() string {
-	return "Reset used or reserved questions back to ready"
+	return "Reset question states and clear automatic/manual QOTD publish state"
 }
 
 func (c *questionsResetCommand) Options() []*discordgo.ApplicationCommandOption {
@@ -294,17 +320,36 @@ func (c *questionsResetCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	resetCount, err := c.service.ResetDeckQuestionStates(context.Background(), ctx.GuildID, deck.ID)
+	result, err := c.service.ResetDeckState(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
 		return translateQuestionsMutationError(err)
 	}
-	if resetCount == 0 {
+	if result.QuestionsReset == 0 && result.OfficialPostsCleared == 0 {
 		return core.NewResponseBuilder(ctx.Session).
-			Info(ctx.Interaction, fmt.Sprintf("No used or reserved QOTD questions needed reset in deck `%s`.", deck.Name))
+			Info(ctx.Interaction, fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deck.Name))
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, fmt.Sprintf("Reset %d QOTD question states in deck `%s`.", resetCount, deck.Name))
+		Success(ctx.Interaction, describeResetDeckResult(result, deck.Name))
+}
+
+func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+	state, err := c.service.GetAutomaticQueueState(context.Background(), ctx.GuildID, deck.ID)
+	if err != nil {
+		return translateQuestionsMutationError(err)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Info(ctx.Interaction, formatAutomaticQueueState(state))
 }
 
 func (c *questionsNextCommand) Handle(ctx *core.Context) error {
@@ -752,6 +797,106 @@ func visibleQuestionID(question storage.QOTDQuestionRecord) int64 {
 	return question.ID
 }
 
+func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string {
+	deckName := strings.TrimSpace(state.Deck.Name)
+	if deckName == "" {
+		deckName = "Default"
+	}
+	lines := []string{fmt.Sprintf("Automatic QOTD queue for deck `%s`.", deckName)}
+
+	if !state.ScheduleConfigured {
+		lines = append(lines, "Automatic publish schedule is not configured.")
+	} else {
+		lines = append(lines, fmt.Sprintf("Automatic schedule: %s UTC.", formatAutomaticQueueSchedule(state.Schedule)))
+		lines = append(lines, fmt.Sprintf("Today's automatic slot: %s (%s).", formatAutomaticQueueTimestamp(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
+	}
+
+	if !state.Deck.Enabled {
+		lines = append(lines, "Publishing is disabled for this deck.")
+	} else if strings.TrimSpace(state.Deck.ChannelID) == "" {
+		lines = append(lines, "Set a QOTD channel before automatic publishing can run.")
+	}
+
+	if state.SlotQuestion != nil {
+		lines = append(lines, fmt.Sprintf("Current automatic slot question: %s.", formatAutomaticQueueQuestion(*state.SlotQuestion)))
+	}
+
+	if state.NextReadyQuestion != nil {
+		label := "Next automatic question"
+		if state.SlotQuestion != nil || state.SlotStatus == applicationqotd.AutomaticQueueSlotStatusPublished {
+			label = "After that"
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s.", label, formatAutomaticQueueQuestion(*state.NextReadyQuestion)))
+	} else if state.SlotQuestion == nil {
+		lines = append(lines, "No ready QOTD questions are available for the automatic queue.")
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func formatAutomaticQueueSchedule(schedule applicationqotd.PublishSchedule) string {
+	hourUTC, minuteUTC, ok := schedule.Values()
+	if !ok {
+		return "unavailable"
+	}
+	return fmt.Sprintf("%02d:%02d", hourUTC, minuteUTC)
+}
+
+func formatAutomaticQueueTimestamp(value time.Time) string {
+	if value.IsZero() {
+		return "unavailable"
+	}
+	return value.UTC().Format("2006-01-02 15:04 UTC")
+}
+
+func formatAutomaticQueueSlotStatus(status applicationqotd.AutomaticQueueSlotStatus) string {
+	switch status {
+	case applicationqotd.AutomaticQueueSlotStatusWaiting:
+		return "waiting for the scheduled publish"
+	case applicationqotd.AutomaticQueueSlotStatusDue:
+		return "ready to publish now"
+	case applicationqotd.AutomaticQueueSlotStatusReserved:
+		return "question reserved for the slot"
+	case applicationqotd.AutomaticQueueSlotStatusRecovering:
+		return "scheduled publish recovery pending"
+	case applicationqotd.AutomaticQueueSlotStatusPublished:
+		return "scheduled slot already published"
+	case applicationqotd.AutomaticQueueSlotStatusDisabled:
+		fallthrough
+	default:
+		return "automatic publishing unavailable"
+	}
+}
+
+func formatAutomaticQueueQuestion(question storage.QOTDQuestionRecord) string {
+	body := strings.Join(strings.Fields(strings.TrimSpace(question.Body)), " ")
+	if len(body) > 72 {
+		body = body[:69] + "..."
+	}
+	return fmt.Sprintf("QOTD question ID %d (%s)", visibleQuestionID(question), body)
+}
+
+func describeResetDeckResult(result applicationqotd.ResetDeckResult, deckName string) string {
+	parts := make([]string, 0, 2)
+	if result.QuestionsReset > 0 {
+		parts = append(parts, fmt.Sprintf("reset %s", formatCountNoun(result.QuestionsReset, "QOTD question state", "QOTD question states")))
+	}
+	if result.OfficialPostsCleared > 0 {
+		parts = append(parts, fmt.Sprintf("cleared %s", formatCountNoun(result.OfficialPostsCleared, "QOTD publish record", "QOTD publish records")))
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deckName)
+	}
+	return fmt.Sprintf("%s in deck `%s`. Question order was preserved.", strings.Join(parts, " and "), deckName)
+}
+
+func formatCountNoun(count int, singular, plural string) string {
+	if count == 1 {
+		return fmt.Sprintf("1 %s", singular)
+	}
+	return fmt.Sprintf("%d %s", count, plural)
+}
+
 func findQuestionByDisplayID(questions []storage.QOTDQuestionRecord, displayID int64) *storage.QOTDQuestionRecord {
 	for idx := range questions {
 		if visibleQuestionID(questions[idx]) == displayID {
@@ -825,6 +970,7 @@ func translatePublishNowError(err error) error {
 
 var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
+var _ core.SubCommand = (*questionsQueueCommand)(nil)
 var _ core.SubCommand = (*questionsNextCommand)(nil)
 var _ core.SubCommand = (*questionsResetCommand)(nil)
 var _ core.SubCommand = (*questionsRemoveCommand)(nil)
