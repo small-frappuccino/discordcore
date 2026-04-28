@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,6 +51,25 @@ type fakePublisher struct {
 type fakePublishResponse struct {
 	result *discordqotd.PublishedOfficialPost
 	err    error
+}
+
+type blockingPublisher struct {
+	fakePublisher
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (p *blockingPublisher) PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
+	p.once.Do(func() {
+		if p.started != nil {
+			close(p.started)
+		}
+	})
+	if p.release != nil {
+		<-p.release
+	}
+	return p.fakePublisher.PublishOfficialPost(ctx, session, params)
 }
 
 func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
@@ -985,6 +1005,99 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 				t.Fatalf("resolvePublishNowConflict() error = %v, want %v", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestServicePublishAcrossInstancesReportsInProgressDuringScheduledProvisioning(t *testing.T) {
+	baseService, store, _ := newTestQOTDService(t)
+	blocked := &blockingPublisher{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	manualFake := &fakePublisher{}
+	scheduledService := NewService(baseService.configManager, store, blocked)
+	manualService := NewService(baseService.configManager, store, manualFake)
+	now := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	scheduledService.now = func() time.Time { return now }
+	manualService.now = func() time.Time { return now }
+
+	if _, err := scheduledService.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	first, err := scheduledService.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Scheduled winner",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(first) failed: %v", err)
+	}
+	second, err := scheduledService.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		Body:   "Manual fallback",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(second) failed: %v", err)
+	}
+
+	type scheduledResult struct {
+		published bool
+		err       error
+	}
+	results := make(chan scheduledResult, 1)
+	go func() {
+		published, err := scheduledService.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+		results <- scheduledResult{published: published, err: err}
+	}()
+
+	select {
+	case <-blocked.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for scheduled publish to enter provisioning")
+	}
+
+	_, err = manualService.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	if !errors.Is(err, ErrPublishInProgress) {
+		close(blocked.release)
+		t.Fatalf("expected manual publish to observe in-progress scheduled provisioning, got %v", err)
+	}
+	if len(manualFake.publishedParams) != 0 {
+		close(blocked.release)
+		t.Fatalf("expected manual publish not to reach discord publisher while the slot is occupied, got %+v", manualFake.publishedParams)
+	}
+
+	close(blocked.release)
+	result := <-results
+	if result.err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", result.err)
+	}
+	if !result.published {
+		t.Fatal("expected scheduled publish to complete after the contention window")
+	}
+	if len(blocked.publishedParams) != 1 {
+		t.Fatalf("expected scheduled publisher to be invoked once, got %d", len(blocked.publishedParams))
+	}
+
+	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if official == nil || official.PublishMode != string(PublishModeScheduled) || official.PublishedAt == nil {
+		t.Fatalf("expected the scheduled publish to own the current slot, got %+v", official)
+	}
+
+	storedFirst, err := store.GetQOTDQuestion(context.Background(), "g1", first.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(first) failed: %v", err)
+	}
+	if storedFirst == nil || storedFirst.Status != string(QuestionStatusUsed) || storedFirst.UsedAt == nil {
+		t.Fatalf("expected scheduled winner question to be consumed, got %+v", storedFirst)
+	}
+	storedSecond, err := store.GetQOTDQuestion(context.Background(), "g1", second.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(second) failed: %v", err)
+	}
+	if storedSecond == nil || storedSecond.Status != string(QuestionStatusReady) || storedSecond.UsedAt != nil {
+		t.Fatalf("expected manual fallback question to remain untouched, got %+v", storedSecond)
 	}
 }
 

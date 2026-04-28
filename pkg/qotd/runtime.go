@@ -106,24 +106,21 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		if isQOTDScheduledPublishConflict(err) {
-			existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
-			if lookupErr != nil {
-				return false, lookupErr
-			}
-			if existing != nil && !isOfficialPostPublished(*existing) {
-				recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
-				if recoverErr != nil {
-					return false, recoverErr
-				}
-				if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-					return false, err
-				}
-				return true, nil
-			}
-			return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+		existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, publishDate, err)
+		if conflictErr != nil {
+			return false, conflictErr
 		}
-		return false, err
+		if !isOfficialPostPublished(*existing) {
+			recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+			if recoverErr != nil {
+				return false, recoverErr
+			}
+			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
 	}
 
 	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(

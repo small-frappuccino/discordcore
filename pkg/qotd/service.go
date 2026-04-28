@@ -654,21 +654,29 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 }
 
 func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string, publishDate time.Time, err error) error {
-	if !isQOTDScheduledPublishConflict(err) {
-		return err
-	}
-
-	existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	existing, lookupErr := s.lookupPublishConflictPost(ctx, guildID, publishDate, err)
 	if lookupErr != nil {
 		return lookupErr
-	}
-	if existing == nil {
-		return err
 	}
 	if isOfficialPostPublished(*existing) {
 		return ErrAlreadyPublished
 	}
 	return ErrPublishInProgress
+}
+
+func (s *Service) lookupPublishConflictPost(ctx context.Context, guildID string, publishDate time.Time, err error) (*storage.QOTDOfficialPostRecord, error) {
+	if !isQOTDScheduledPublishConflict(err) {
+		return nil, err
+	}
+
+	existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	if lookupErr != nil {
+		return nil, lookupErr
+	}
+	if existing == nil {
+		return nil, err
+	}
+	return existing, nil
 }
 
 func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {
