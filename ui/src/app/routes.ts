@@ -22,8 +22,6 @@ export const appRoutes = {
   partnerBoardDeliveryPattern: "/manage/:guildId/partner-board/delivery",
   dashboardQOTDPattern: "/manage/:guildId/qotd",
   qotdSettingsPattern: "/manage/:guildId/qotd/settings",
-  qotdQuestionsPattern: "/manage/:guildId/qotd/questions",
-  qotdCollectorPattern: "/manage/:guildId/qotd/collector",
   dashboardRolesPattern: "/manage/:guildId/roles",
   dashboardRolesAutorolePattern: "/manage/:guildId/roles/autorole",
   dashboardRolesLevelRolesPattern: "/manage/:guildId/roles/level-roles",
@@ -55,10 +53,6 @@ export const appRoutes = {
   qotdBase: (guildId: string) => `/manage/${encodeGuildID(guildId)}/qotd`,
   qotdSettings: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/qotd/settings`,
-  qotdQuestions: (guildId: string) =>
-    `/manage/${encodeGuildID(guildId)}/qotd/questions`,
-  qotdCollector: (guildId: string) =>
-    `/manage/${encodeGuildID(guildId)}/qotd/collector`,
   dashboardRoles: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/roles`,
   dashboardRolesAutorole: (guildId: string) =>
@@ -78,14 +72,6 @@ export function buildPartnerBoardTabs(guildId: string) {
     { label: "Entries", path: appRoutes.partnerBoardEntries(guildId) },
     { label: "Layout", path: appRoutes.partnerBoardLayout(guildId) },
     { label: "Destination", path: appRoutes.partnerBoardDelivery(guildId) },
-  ] as const;
-}
-
-export function buildQOTDTabs(guildId: string) {
-  return [
-    { label: "Settings", path: appRoutes.qotdSettings(guildId) },
-    { label: "Question Bank", path: appRoutes.qotdQuestions(guildId) },
-    { label: "Collector", path: appRoutes.qotdCollector(guildId) },
   ] as const;
 }
 
@@ -161,11 +147,9 @@ export function mapLegacyDashboardPathForGuild(
       return appRoutes.partnerBoardDelivery(normalizedGuildID);
     case "qotd":
     case "qotd/settings":
-      return appRoutes.qotdSettings(normalizedGuildID);
     case "qotd/questions":
-      return appRoutes.qotdQuestions(normalizedGuildID);
     case "qotd/collector":
-      return appRoutes.qotdCollector(normalizedGuildID);
+      return appRoutes.qotdSettings(normalizedGuildID);
     case "roles":
     case "roles-members":
       return appRoutes.dashboardRolesAutorole(normalizedGuildID);

@@ -3,18 +3,15 @@ import {
   createContext,
   useContext,
   useEffect,
-  useRef,
+  useEffectEvent,
   useState,
   type ReactNode,
 } from "react";
 import type {
   QOTDConfig,
   QOTDCollectorConfig,
-  QOTDCollectorRemoveDuplicatesResult,
   QOTDDeck,
   QOTDDeckSummary,
-  QOTDQuestion,
-  QOTDQuestionMutation,
   QOTDSummary,
 } from "../../api/control";
 import type { Notice } from "../../app/types";
@@ -31,15 +28,6 @@ type WorkspaceState =
 
 export const QOTD_BUSY_LABELS = {
   refreshWorkspace: "Refreshing QOTD workspace...",
-  reconcilePosts: "Reconciling QOTD with Discord...",
-  saveSettings: "Saving QOTD settings...",
-  removeCollectorDeckDuplicates: "Removing collector duplicates...",
-  createQuestion: "Creating question...",
-  createQuestions: "Importing questions...",
-  updateQuestion: "Updating question...",
-  deleteQuestion: "Deleting question...",
-  reorderQuestions: "Reordering question bank...",
-  publishNow: "Publishing manual QOTD...",
 } as const;
 
 interface QOTDContextValue {
@@ -48,28 +36,10 @@ interface QOTDContextValue {
   hasLoadedAttempt: boolean;
   loading: boolean;
   notice: Notice | null;
-  questions: QOTDQuestion[];
-  selectedDeckID: string;
   settings: QOTDConfig;
-  summary: QOTDSummary | null;
   workspaceState: WorkspaceState;
-  clearNotice: () => void;
-  createQuestion: (payload: QOTDQuestionMutation) => Promise<void>;
-  createQuestions: (payloads: QOTDQuestionMutation[]) => Promise<boolean>;
-  deleteQuestion: (questionId: number) => Promise<void>;
-  removeCollectorDeckDuplicates: (
-    deckId: string,
-  ) => Promise<QOTDCollectorRemoveDuplicatesResult | null>;
-  publishNow: () => Promise<void>;
-  reconcilePosts: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
-  reorderQuestions: (orderedIDs: number[]) => Promise<void>;
   saveSettings: (settings: QOTDConfig) => Promise<QOTDConfig | null>;
-  selectDeck: (deckId: string) => Promise<void>;
-  updateQuestion: (
-    questionId: number,
-    payload: QOTDQuestionMutation,
-  ) => Promise<void>;
 }
 
 const defaultDeck: QOTDDeck = {
@@ -98,18 +68,11 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
   } = useDashboardSession();
   const normalizedGuildID = selectedGuildID.trim();
   const [settings, setSettings] = useState<QOTDConfig>(emptySettings);
-  const [questions, setQuestions] = useState<QOTDQuestion[]>([]);
   const [summary, setSummary] = useState<QOTDSummary | null>(emptySummary);
-  const [selectedDeckID, setSelectedDeckID] = useState("");
   const [loading, setLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [hasLoadedAttempt, setHasLoadedAttempt] = useState(false);
-  const selectedDeckRef = useRef("");
-
-  useEffect(() => {
-    selectedDeckRef.current = selectedDeckID.trim();
-  }, [selectedDeckID]);
 
   const deckSummaries = summary?.decks ?? [];
 
@@ -128,16 +91,14 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
   function resetWorkspace() {
     setSettings(emptySettings);
-    setQuestions([]);
     setSummary(emptySummary);
-    setSelectedDeckID("");
     setLoading(false);
     setBusyLabel("");
     setNotice(null);
     setHasLoadedAttempt(false);
   }
 
-  async function loadWorkspace(preferredDeckID = "", background = false) {
+  const loadWorkspace = useEffectEvent(async (background = false) => {
     if (!canReadSelectedGuild || normalizedGuildID === "") {
       return;
     }
@@ -152,18 +113,8 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         client.getQOTDSummary(normalizedGuildID),
       ]);
       const nextSettings = normalizeQOTDSettings(settingsResponse.settings);
-      const nextDeckID = chooseDeckID(
-        preferredDeckID || selectedDeckRef.current,
-        nextSettings,
-      );
-      const questionsResponse = await client.listQOTDQuestions(
-        normalizedGuildID,
-        nextDeckID,
-      );
       setSettings(nextSettings);
       setSummary(normalizeQOTDSummary(summaryResponse.summary, nextSettings));
-      setSelectedDeckID(nextDeckID);
-      setQuestions(questionsResponse.questions);
       setHasLoadedAttempt(true);
       if (!background) {
         setNotice(null);
@@ -181,7 +132,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         setBusyLabel("");
       }
     }
-  }
+  });
 
   useEffect(() => {
     if (authState !== "signed_in" || normalizedGuildID === "") {
@@ -201,18 +152,11 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
           client.getQOTDSummary(normalizedGuildID),
         ]);
         const nextSettings = normalizeQOTDSettings(settingsResponse.settings);
-        const nextDeckID = chooseDeckID(selectedDeckRef.current, nextSettings);
-        const questionsResponse = await client.listQOTDQuestions(
-          normalizedGuildID,
-          nextDeckID,
-        );
         if (cancelled) {
           return;
         }
         setSettings(nextSettings);
         setSummary(normalizeQOTDSummary(summaryResponse.summary, nextSettings));
-        setSelectedDeckID(nextDeckID);
-        setQuestions(questionsResponse.questions);
         setHasLoadedAttempt(true);
         setNotice(null);
       } catch (error) {
@@ -241,7 +185,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
 
   async function refreshWorkspace() {
     setBusyLabel(QOTD_BUSY_LABELS.refreshWorkspace);
-    await loadWorkspace(selectedDeckRef.current);
+    await loadWorkspace();
   }
 
   async function saveSettings(nextSettings: QOTDConfig) {
@@ -249,7 +193,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    setBusyLabel(QOTD_BUSY_LABELS.saveSettings);
     try {
       const response = await client.updateQOTDSettings(
         normalizedGuildID,
@@ -257,9 +200,7 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
       );
       const updatedSettings = normalizeQOTDSettings(response.settings);
       setSettings(updatedSettings);
-      await loadWorkspace(
-        chooseDeckID(selectedDeckRef.current, updatedSettings),
-      );
+      await loadWorkspace();
       setNotice(null);
       return updatedSettings;
     } catch (error) {
@@ -273,288 +214,6 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function createQuestion(payload: QOTDQuestionMutation) {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    const targetDeckID = chooseDeckID(
-      payload.deck_id ?? selectedDeckRef.current,
-      settings,
-    );
-    if (targetDeckID === "") {
-      return;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.createQuestion);
-    try {
-      const response = await client.createQOTDQuestion(normalizedGuildID, {
-        ...payload,
-        deck_id: targetDeckID,
-      });
-      if (targetDeckID === selectedDeckRef.current) {
-        setQuestions((prev) => [...prev, response.question]);
-      }
-      void loadWorkspace(targetDeckID, true);
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function createQuestions(payloads: QOTDQuestionMutation[]) {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return false;
-    }
-
-    const normalizedPayloads = payloads
-      .map((payload) => {
-        const targetDeckID = chooseDeckID(
-          payload.deck_id ?? selectedDeckRef.current,
-          settings,
-        );
-        const body = payload.body.trim();
-        if (targetDeckID === "" || body === "") {
-          return null;
-        }
-        return {
-          ...payload,
-          body,
-          deck_id: targetDeckID,
-        };
-      })
-      .filter(
-        (
-          payload,
-        ): payload is QOTDQuestionMutation & {
-          deck_id: string;
-        } => payload !== null,
-      );
-
-    if (normalizedPayloads.length === 0) {
-      return false;
-    }
-
-    const reloadDeckID =
-      normalizedPayloads[normalizedPayloads.length - 1]?.deck_id ??
-      selectedDeckRef.current;
-
-    setBusyLabel(QOTD_BUSY_LABELS.createQuestions);
-    try {
-      await client.createQOTDQuestionsBatch(normalizedGuildID, {
-        questions: normalizedPayloads,
-      });
-      await loadWorkspace(reloadDeckID);
-      setNotice({
-        tone: "success",
-        message:
-          normalizedPayloads.length === 1
-            ? "Created 1 question."
-            : `Created ${normalizedPayloads.length} questions.`,
-      });
-      return true;
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-      return false;
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function updateQuestion(
-    questionId: number,
-    payload: QOTDQuestionMutation,
-  ) {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    const targetDeckID =
-      payload.deck_id && payload.deck_id.trim() !== ""
-        ? payload.deck_id.trim()
-        : selectedDeckRef.current;
-
-    setBusyLabel(QOTD_BUSY_LABELS.updateQuestion);
-    try {
-      const response = await client.updateQOTDQuestion(normalizedGuildID, questionId, payload);
-      if (targetDeckID === selectedDeckRef.current) {
-        setQuestions((prev) =>
-          prev.map((q) => (q.id === questionId ? response.question : q)),
-        );
-      } else {
-        setQuestions((prev) => prev.filter((q) => q.id !== questionId));
-      }
-      void loadWorkspace(targetDeckID, true);
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function deleteQuestion(questionId: number) {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.deleteQuestion);
-    try {
-      await client.deleteQOTDQuestion(normalizedGuildID, questionId);
-      setQuestions((prev) => prev.filter((q) => q.id !== questionId));
-      void loadWorkspace(selectedDeckRef.current, true);
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function removeCollectorDeckDuplicates(deckId: string) {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return null;
-    }
-
-    const targetDeckID = chooseDeckID(deckId, settings);
-    if (targetDeckID === "") {
-      return null;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.removeCollectorDeckDuplicates);
-    try {
-      const response = await client.removeQOTDCollectorDeckDuplicates(
-        normalizedGuildID,
-        targetDeckID,
-      );
-      void loadWorkspace(targetDeckID, true);
-      return response.result;
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function reorderQuestions(orderedIDs: number[]) {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    const targetDeckID = chooseDeckID(selectedDeckRef.current, settings);
-    if (targetDeckID === "") {
-      return;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.reorderQuestions);
-    try {
-      const response = await client.reorderQOTDQuestions(
-        normalizedGuildID,
-        targetDeckID,
-        orderedIDs,
-      );
-      setQuestions(response.questions);
-      void loadWorkspace(targetDeckID, true);
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function publishNow() {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.publishNow);
-    try {
-      const response = await client.publishQOTDNow(normalizedGuildID);
-      await loadWorkspace(selectedDeckRef.current);
-      setNotice({
-        tone: "success",
-        message: response.result.post_url
-          ? "Manual QOTD published to Discord. Use the post link to verify it."
-          : "Manual QOTD published to Discord.",
-      });
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function reconcilePosts() {
-    if (!canEditSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-
-    setBusyLabel(QOTD_BUSY_LABELS.reconcilePosts);
-    try {
-      const response = await client.reconcileQOTD(normalizedGuildID);
-      const nextSettings = normalizeQOTDSettings(response.summary.settings);
-      const nextDeckID = chooseDeckID(selectedDeckRef.current, nextSettings);
-      setSettings(nextSettings);
-      setSummary(normalizeQOTDSummary(response.summary, nextSettings));
-      setSelectedDeckID(nextDeckID);
-      setHasLoadedAttempt(true);
-      setNotice({
-        tone: "success",
-        message: "QOTD Discord state reconciled.",
-      });
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setBusyLabel("");
-    }
-  }
-
-  async function selectDeck(deckId: string) {
-    if (!canReadSelectedGuild || normalizedGuildID === "") {
-      return;
-    }
-    const nextDeckID = chooseDeckID(deckId, settings);
-    if (nextDeckID === "" || nextDeckID === selectedDeckRef.current) {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await client.listQOTDQuestions(
-        normalizedGuildID,
-        nextDeckID,
-      );
-      setSelectedDeckID(nextDeckID);
-      setQuestions(response.questions);
-      setNotice(null);
-    } catch (error) {
-      setNotice({
-        tone: "error",
-        message: formatError(error),
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <QOTDContext.Provider
       value={{
@@ -563,23 +222,10 @@ export function QOTDProvider({ children }: { children: ReactNode }) {
         hasLoadedAttempt,
         loading,
         notice,
-        questions,
-        selectedDeckID,
         settings,
-        summary,
         workspaceState,
-        clearNotice: () => setNotice(null),
-        createQuestion,
-        createQuestions,
-        deleteQuestion,
-        removeCollectorDeckDuplicates,
-        publishNow,
-        reconcilePosts,
         refreshWorkspace,
-        reorderQuestions,
         saveSettings,
-        selectDeck,
-        updateQuestion,
       }}
     >
       {children}

@@ -1,26 +1,11 @@
 import type { ReactNode } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { buildQOTDTabs } from "../../app/routes";
-import { FlatPageLayout, SurfaceCard } from "../../components/ui";
+import { Outlet, useLocation } from "react-router-dom";
+import { FlatPageLayout } from "../../components/ui";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { QOTD_BUSY_LABELS, useQOTD } from "./QOTDContext";
 
 export function QOTDLayout() {
-  const location = useLocation();
-  const {
-    canEditSelectedGuild,
-    selectedGuildID,
-  } = useDashboardSession();
-  const {
-    busyLabel,
-    notice,
-    publishNow,
-    workspaceState,
-  } = useQOTD();
-  const normalizedGuildID = selectedGuildID.trim();
-  const isQuestionsRoute = location.pathname.endsWith("/questions");
-  const tabs = normalizedGuildID === "" ? [] : buildQOTDTabs(normalizedGuildID);
-  const publishBusy = busyLabel === QOTD_BUSY_LABELS.publishNow;
+  const { notice, workspaceState } = useQOTD();
 
   return (
     <section className="page-shell qotd-page">
@@ -34,18 +19,6 @@ export function QOTDLayout() {
           <div className="card-copy">
             <div className="qotd-page-title-row">
               <h1>QOTD</h1>
-              {workspaceState === "ready" &&
-              isQuestionsRoute &&
-              canEditSelectedGuild ? (
-                <button
-                  className="button-primary"
-                  type="button"
-                  disabled={publishBusy}
-                  onClick={() => void publishNow()}
-                >
-                  {publishBusy ? "Publishing..." : "Publish manual QOTD"}
-                </button>
-              ) : null}
             </div>
           </div>
         </div>
@@ -53,30 +26,7 @@ export function QOTDLayout() {
         {workspaceState !== "ready" ? (
           <QOTDWorkspaceState />
         ) : (
-          <SurfaceCard className="workspace-panel qotd-workspace-panel">
-            {tabs.length > 0 ? (
-              <nav
-                className="subnav workspace-tabs qotd-workspace-tabs"
-                aria-label="QOTD sections"
-              >
-                {tabs.map((tab) => (
-                  <NavLink
-                    key={tab.path}
-                    className={({ isActive }) =>
-                      isActive ? "subnav-link is-active" : "subnav-link"
-                    }
-                    to={tab.path}
-                  >
-                    {tab.label}
-                  </NavLink>
-                ))}
-              </nav>
-            ) : null}
-
-            <div className="workspace-panel-body qotd-workspace-panel-body">
-              <Outlet />
-            </div>
-          </SurfaceCard>
+          <Outlet />
         )}
       </FlatPageLayout>
     </section>
@@ -129,7 +79,7 @@ function QOTDWorkspaceState() {
     return (
       <WorkspaceStateMessage
         title="Loading QOTD"
-        description="Fetching the current settings and question bank for this server."
+        description="Fetching the current settings for this server."
       />
     );
   }

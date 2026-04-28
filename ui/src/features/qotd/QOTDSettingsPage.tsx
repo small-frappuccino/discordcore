@@ -98,16 +98,10 @@ export function QOTDSettingsPage() {
       <GroupedSettingsStack className="qotd-grouped-stack">
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
-            <p className="section-label">Settings</p>
             <GroupedSettingsHeading as="h2" variant="section">
               Workflow settings
             </GroupedSettingsHeading>
           </GroupedSettingsCopy>
-
-            <GroupedSettingsInlineMessage
-            message="Create the QOTD text channel manually in Discord. This page only controls whether publishing is enabled and which existing text channel receives the daily post."
-            tone="info"
-            />
 
           {channelOptions.notice ? (
             <GroupedSettingsInlineMessage
@@ -170,7 +164,6 @@ export function QOTDSettingsPage() {
 
         <GroupedSettingsSection>
           <GroupedSettingsCopy>
-            <p className="section-label">Decks</p>
             <GroupedSettingsHeading as="h2" variant="section">
               Manage decks
             </GroupedSettingsHeading>

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,39 +7,24 @@ import type {
   ControlApiClient,
   QOTDConfig,
   QOTDDeckSummary,
-  QOTDOfficialPost,
-  QOTDQuestion,
   QOTDSummary,
 } from "../../api/control";
 import { appRoutes } from "../../app/routes";
 import { QOTDLayout } from "./QOTDLayout";
-import { QOTDCollectorPage } from "./QOTDCollectorPage";
-import { QOTDQuestionsPage } from "./QOTDQuestionsPage";
 import { QOTDSettingsPage } from "./QOTDSettingsPage";
 
 const dashboardSessionMock: {
   authState: string;
   beginLogin: ReturnType<typeof vi.fn>;
   canEditSelectedGuild: boolean;
-  client: Pick<
-    ControlApiClient,
-    | "downloadQOTDCollectorExport"
-    | "getQOTDCollectorSummary"
-    | "removeQOTDCollectorDeckDuplicates"
-    | "runQOTDCollector"
-  >;
+  client: Pick<ControlApiClient, never>;
   selectedGuild: AccessibleGuild | null;
   selectedGuildID: string;
 } = {
   authState: "signed_in",
   beginLogin: vi.fn(),
   canEditSelectedGuild: true,
-  client: {
-    downloadQOTDCollectorExport: vi.fn(),
-    getQOTDCollectorSummary: vi.fn(),
-    removeQOTDCollectorDeckDuplicates: vi.fn(),
-    runQOTDCollector: vi.fn(),
-  },
+  client: {},
   selectedGuild: {
     id: "guild-1",
     name: "Test Guild",
@@ -57,56 +42,10 @@ const qotdMock = {
   hasLoadedAttempt: true,
   loading: false,
   notice: null,
-  questions: [
-    createQuestion({
-      id: 1,
-      deck_id: "default",
-      queue_position: 1,
-      body: "What is one thing you shipped this week?",
-      status: "ready",
-    }),
-    createQuestion({
-      id: 2,
-      deck_id: "default",
-      queue_position: 2,
-      body: "What UI detail still feels off?",
-      status: "draft",
-    }),
-  ] as QOTDQuestion[],
-  selectedDeckID: "default",
   settings: createQOTDSettings(),
-  summary: createQOTDSummary(),
   workspaceState: "ready",
-  clearNotice: vi.fn(),
-  createQuestion: vi.fn(),
-  createQuestions: vi.fn(),
-  deleteQuestion: vi.fn(),
-  publishNow: vi.fn(),
-  reconcilePosts: vi.fn(),
-  removeCollectorDeckDuplicates: vi.fn(),
   refreshWorkspace: vi.fn(),
-  reorderQuestions: vi.fn(),
   saveSettings: vi.fn(),
-  selectDeck: vi.fn(),
-  updateQuestion: vi.fn(),
-};
-
-const collectorSummaryMock = {
-  total_questions: 1,
-  recent_questions: [
-    {
-      id: 91,
-      source_channel_id: "question-channel-1",
-      source_message_id: "message-91",
-      source_author_id: "bot-1",
-      source_author_name: "QOTD Bot",
-      source_created_at: "2026-04-13T15:00:00Z",
-      embed_title: "Question Of The Day",
-      question_text: "What is one habit you want to keep this month?",
-      created_at: "2026-04-13T15:00:00Z",
-      updated_at: "2026-04-13T15:00:00Z",
-    },
-  ],
 };
 
 const channelOptionsMock = {
@@ -168,63 +107,10 @@ describe("QOTD UI", () => {
     qotdMock.deckSummaries = createQOTDDeckSummaries();
     qotdMock.loading = false;
     qotdMock.notice = null;
-    qotdMock.selectedDeckID = "default";
     qotdMock.settings = createQOTDSettings();
-    qotdMock.summary = createQOTDSummary();
     qotdMock.workspaceState = "ready";
-    qotdMock.createQuestions.mockReset().mockResolvedValue(true);
-    qotdMock.reconcilePosts.mockReset().mockResolvedValue(undefined);
-    qotdMock.removeCollectorDeckDuplicates.mockReset().mockResolvedValue({
-      deck_id: "default",
-      scanned_messages: 8,
-      matched_messages: 3,
-      duplicate_questions: 2,
-      deleted_questions: 1,
-    });
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
-    qotdMock.selectDeck.mockReset().mockResolvedValue(undefined);
     channelOptionsMock.refresh.mockReset();
-    dashboardSessionMock.client.getQOTDCollectorSummary = vi
-      .fn()
-      .mockResolvedValue({
-        status: "ok",
-        guild_id: "guild-1",
-        summary: collectorSummaryMock,
-      });
-    dashboardSessionMock.client.runQOTDCollector = vi.fn().mockResolvedValue({
-      status: "ok",
-      guild_id: "guild-1",
-      result: {
-        scanned_messages: 8,
-        matched_messages: 3,
-        new_questions: 2,
-        total_questions: 3,
-      },
-      summary: {
-        total_questions: 3,
-        recent_questions: [
-          {
-            id: 99,
-            source_channel_id: "question-channel-1",
-            source_message_id: "message-99",
-            source_author_id: "bot-1",
-            source_author_name: "QOTD Bot",
-            source_created_at: "2026-04-13T16:00:00Z",
-            embed_title: "question!!",
-            question_text: "What are you excited to try next?",
-            created_at: "2026-04-13T16:00:00Z",
-            updated_at: "2026-04-13T16:00:00Z",
-          },
-          ...collectorSummaryMock.recent_questions,
-        ],
-      },
-    });
-    dashboardSessionMock.client.downloadQOTDCollectorExport = vi
-      .fn()
-      .mockResolvedValue({
-        filename: "qotd-collected-questions.txt",
-        text: "First exported question\nSecond exported question\n",
-      });
   });
 
   it("keeps refresh actions out of the ready settings shell", () => {
@@ -251,6 +137,9 @@ describe("QOTD UI", () => {
       screen.queryByRole("button", { name: "Publish manual QOTD" }),
     ).not.toBeInTheDocument();
     expect(
+      screen.queryByRole("navigation", { name: "QOTD sections" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole("button", { name: /refresh/i }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Workspace status")).not.toBeInTheDocument();
@@ -270,8 +159,13 @@ describe("QOTD UI", () => {
       screen.getByRole("heading", { name: "Workflow settings", level: 2 }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/create the qotd text channel manually in discord/i),
+      screen.getByRole("heading", { name: "Manage decks", level: 2 }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
+    expect(screen.queryByText("Decks")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/create the qotd text channel manually in discord/i),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Staff roles", level: 2 }),
     ).not.toBeInTheDocument();
@@ -414,10 +308,10 @@ describe("QOTD UI", () => {
         },
       ],
     });
-    qotdMock.summary = createQOTDSummary({
+    const nextSummary = createQOTDSummary({
       settings: qotdMock.settings,
     });
-    qotdMock.deckSummaries = qotdMock.summary.decks;
+    qotdMock.deckSummaries = nextSummary.decks;
     view.rerender(
       <MemoryRouter>
         <QOTDSettingsPage />
@@ -451,7 +345,7 @@ describe("QOTD UI", () => {
         },
       ],
     });
-    qotdMock.summary = createQOTDSummary({
+    const nextSummary = createQOTDSummary({
       settings: qotdMock.settings,
       decks: [
         createQOTDDeckSummaries({
@@ -483,7 +377,7 @@ describe("QOTD UI", () => {
         },
       ],
     });
-    qotdMock.deckSummaries = qotdMock.summary.decks;
+    qotdMock.deckSummaries = nextSummary.decks;
 
     render(
       <MemoryRouter>
@@ -505,504 +399,7 @@ describe("QOTD UI", () => {
       ),
     ).toBeEnabled();
   });
-
-  it("renders the queue editor with question cards and local actions", () => {
-    render(
-      <MemoryRouter>
-        <QOTDQuestionsPage />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByText("Add a question")).toBeInTheDocument();
-    expect(screen.getByText("Question order")).toBeInTheDocument();
-    expect(
-      screen.getByText("What is one thing you shipped this week?"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("1 ready")).not.toBeInTheDocument();
-    expect(screen.queryByText("2 total")).not.toBeInTheDocument();
-    expect(screen.queryByText("Status Ready")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Move up" })).not.toHaveLength(
-      0,
-    );
-  });
-
-  it("renders operational QOTD status with current and previous Discord links", () => {
-    qotdMock.summary = createQOTDSummary({
-      current_publish_date_utc: "2026-04-04T12:30:00Z",
-      published_for_current_slot: true,
-      current_post: createOfficialPost({
-        publish_mode: "manual",
-        publish_date_utc: "2026-04-04T00:00:00Z",
-        state: "current",
-        question_text: "What shipped today?",
-        published_at: "2026-04-04T12:30:00Z",
-        becomes_previous_at: "2026-04-05T00:00:00Z",
-        answers_close_at: "2026-04-06T00:00:00Z",
-        post_url:
-          "https://discord.com/channels/guild-1/question-channel-1/message-current",
-        thread_id: "thread-current",
-        thread_url: "https://discord.com/channels/guild-1/thread-current",
-        answer_channel_id: "thread-current",
-        answer_channel_url:
-          "https://discord.com/channels/guild-1/thread-current",
-      }),
-      previous_post: createOfficialPost({
-        state: "previous",
-        question_text: "Yesterday's question",
-        post_url:
-          "https://discord.com/channels/guild-1/question-channel-1/message-previous",
-        thread_id: "thread-previous",
-        thread_url: "https://discord.com/channels/guild-1/thread-previous",
-        answer_channel_id: "thread-previous",
-        answer_channel_url:
-          "https://discord.com/channels/guild-1/thread-previous",
-      }),
-    });
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDQuestionsPage />
-      </MemoryRouter>,
-    );
-
-    expect(within(view.container).getByText("Official post status")).toBeInTheDocument();
-    expect(within(view.container).getByText("Current slot published")).toBeInTheDocument();
-    expect(within(view.container).getByText("What shipped today?")).toBeInTheDocument();
-    expect(within(view.container).getByText("Yesterday's question")).toBeInTheDocument();
-    expect(
-      within(view.container).getByRole("link", { name: "Open current post embed" }),
-    ).toHaveAttribute(
-      "href",
-      "https://discord.com/channels/guild-1/question-channel-1/message-current",
-    );
-    expect(
-      within(view.container).getByRole("link", { name: "Open current post thread" }),
-    ).toHaveAttribute(
-      "href",
-      "https://discord.com/channels/guild-1/thread-current",
-    );
-    expect(
-      within(view.container).getByRole("link", { name: "Open previous post embed" }),
-    ).toHaveAttribute(
-      "href",
-      "https://discord.com/channels/guild-1/question-channel-1/message-previous",
-    );
-    expect(
-      within(view.container).getByRole("link", { name: "Open previous post thread" }),
-    ).toHaveAttribute(
-      "href",
-      "https://discord.com/channels/guild-1/thread-previous",
-    );
-    expect(within(view.container).getAllByText(/Turns previous/)).not.toHaveLength(0);
-    expect(within(view.container).getAllByText(/Answers close/)).not.toHaveLength(0);
-  });
-
-  it("exposes reconcile when an official post is missing or failed in Discord", async () => {
-    const user = userEvent.setup();
-    qotdMock.summary = createQOTDSummary({
-      current_post: createOfficialPost({
-        state: "missing_discord",
-        thread_id: "thread-missing",
-        thread_url: "https://discord.com/channels/guild-1/thread-missing",
-        answer_channel_id: "thread-missing",
-        answer_channel_url:
-          "https://discord.com/channels/guild-1/thread-missing",
-      }),
-    });
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDQuestionsPage />
-      </MemoryRouter>,
-    );
-
-    expect(
-      within(view.container).getByText(/need a Discord reconcile/i),
-    ).toBeInTheDocument();
-
-    await user.click(
-      within(view.container).getByRole("button", {
-        name: "Reconcile Discord state",
-      }),
-    );
-
-    expect(qotdMock.reconcilePosts).toHaveBeenCalledTimes(1);
-  });
-
-  it("imports questions from a text file into the selected deck", async () => {
-    const user = userEvent.setup();
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDQuestionsPage />
-      </MemoryRouter>,
-    );
-
-    const input = within(view.container).getByLabelText("Import from .txt");
-    const fileContents =
-      "First imported question\n\nSecond imported question  \r\nThird imported question";
-    const file = new File([fileContents], "qotd.txt", {
-      type: "text/plain",
-    });
-    Object.defineProperty(file, "text", {
-      value: vi.fn().mockResolvedValue(fileContents),
-    });
-
-    await user.upload(input, file);
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText("3 questions ready to import."),
-      ).toBeInTheDocument();
-    });
-
-    await user.click(
-      within(view.container).getByRole("button", { name: "Import .txt" }),
-    );
-
-    expect(qotdMock.createQuestions).toHaveBeenCalledWith([
-      {
-        deck_id: "default",
-        body: "First imported question",
-        status: "ready",
-      },
-      {
-        deck_id: "default",
-        body: "Second imported question",
-        status: "ready",
-      },
-      {
-        deck_id: "default",
-        body: "Third imported question",
-        status: "ready",
-      },
-    ]);
-  });
-
-  it("keeps manual publish on the questions route only", () => {
-    render(
-      <MemoryRouter initialEntries={[appRoutes.qotdQuestions("guild-1")]}>
-        <Routes>
-          <Route path="/manage/:guildId/qotd" element={<QOTDLayout />}>
-            <Route path="questions" element={<div>Questions body</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Publish manual QOTD" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Questions body")).toBeInTheDocument();
-  });
-
-  it("saves collector settings without dropping the rest of the qotd config", async () => {
-    const user = userEvent.setup();
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDCollectorPage />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText("1 collected question stored"),
-      ).toBeInTheDocument();
-    });
-
-    await user.selectOptions(
-      within(view.container).getByLabelText("Historical embeds channel"),
-      "answers-channel-1",
-    );
-    await user.clear(
-      within(view.container).getByLabelText("Allowed author IDs"),
-    );
-    await user.type(
-      within(view.container).getByLabelText("Allowed author IDs"),
-      "111111111111111111\n222222222222222222",
-    );
-    await user.clear(
-      within(view.container).getByLabelText("Embed title patterns"),
-    );
-    await user.type(
-      within(view.container).getByLabelText("Embed title patterns"),
-      "Question Of The Day\nquestion!!",
-    );
-    await user.type(
-      within(view.container).getByLabelText("Earliest message date"),
-      "2026-01-01",
-    );
-
-    await user.click(
-      within(view.container).getByRole("button", { name: "Save changes" }),
-    );
-
-    expect(qotdMock.saveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        active_deck_id: "default",
-        decks: expect.any(Array),
-        collector: {
-          source_channel_id: "answers-channel-1",
-          author_ids: ["111111111111111111", "222222222222222222"],
-          title_patterns: ["Question Of The Day", "question!!"],
-          start_date: "2026-01-01",
-        },
-      }),
-    );
-  });
-
-  it("distinguishes archived collector imports from the live qotd post flow", async () => {
-    const view = render(
-      <MemoryRouter>
-        <QOTDCollectorPage />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText("1 collected question stored"),
-      ).toBeInTheDocument();
-    });
-
-    expect(
-      within(view.container).getByLabelText("Historical embeds channel"),
-    ).toBeInTheDocument();
-    expect(
-      within(view.container).getByText(
-        /scan archived QOTD embeds from older channels or other bots/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(view.container).getByText(
-        /does not read the current discordcore post, its answer button, or the thread opened from that live post/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(view.container).getByText(
-        /does not republish the current QOTD message or modify the live answer button and thread workflow/i,
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("normalizes collector draft values after save and clears the unsaved state", async () => {
-    const user = userEvent.setup();
-    qotdMock.saveSettings.mockImplementation(async (next) =>
-      createQOTDSettings({
-        ...next,
-        collector: {
-          source_channel_id: "answers-channel-1",
-          author_ids: ["111111111111111111", "222222222222222222"],
-          title_patterns: ["Question Of The Day", "question!!"],
-          start_date: "2026-01-01",
-        },
-      }),
-    );
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDCollectorPage />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText("1 collected question stored"),
-      ).toBeInTheDocument();
-    });
-
-    await user.selectOptions(
-      within(view.container).getByLabelText("Historical embeds channel"),
-      "answers-channel-1",
-    );
-    await user.type(
-      within(view.container).getByLabelText("Allowed author IDs"),
-      "111111111111111111\n111111111111111111\n222222222222222222",
-    );
-    await user.type(
-      within(view.container).getByLabelText("Embed title patterns"),
-      "Question Of The Day\nquestion of the day\nquestion!!",
-    );
-    await user.type(
-      within(view.container).getByLabelText("Earliest message date"),
-      "2026-01-01",
-    );
-
-    await user.click(
-      within(view.container).getByRole("button", { name: "Save changes" }),
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).queryByRole("button", { name: "Save changes" }),
-      ).not.toBeInTheDocument();
-    });
-
-    expect(
-      within(view.container).getByLabelText("Allowed author IDs"),
-    ).toHaveValue("111111111111111111\n222222222222222222");
-    expect(
-      within(view.container).getByLabelText("Embed title patterns"),
-    ).toHaveValue("Question Of The Day\nquestion!!");
-  });
-
-  it("runs collector scans and downloads the exported text file", async () => {
-    const user = userEvent.setup();
-    qotdMock.settings = createQOTDSettings({
-      collector: {
-        source_channel_id: "question-channel-1",
-        author_ids: ["bot-1"],
-        title_patterns: ["Question Of The Day", "question!!"],
-      },
-    });
-    if (!("createObjectURL" in URL)) {
-      Object.defineProperty(URL, "createObjectURL", {
-        configurable: true,
-        writable: true,
-        value: () => "blob:collector",
-      });
-    }
-    if (!("revokeObjectURL" in URL)) {
-      Object.defineProperty(URL, "revokeObjectURL", {
-        configurable: true,
-        writable: true,
-        value: () => undefined,
-      });
-    }
-    const createObjectURL = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:collector");
-    const revokeObjectURL = vi
-      .spyOn(URL, "revokeObjectURL")
-      .mockImplementation(() => undefined);
-    const anchorClick = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => undefined);
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDCollectorPage />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText("1 collected question stored"),
-      ).toBeInTheDocument();
-    });
-
-    await user.click(
-      within(view.container).getByRole("button", {
-        name: "Import historical questions",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText(
-          "Scanned 8 historical messages, matched 3 embeds, and stored 2 new questions. 3 total questions are ready for export.",
-        ),
-      ).toBeInTheDocument();
-    });
-
-    expect(dashboardSessionMock.client.runQOTDCollector).toHaveBeenCalledWith(
-      "guild-1",
-    );
-    expect(
-      within(view.container).getByText("3 collected questions stored"),
-    ).toBeInTheDocument();
-
-    await user.click(
-      within(view.container).getByRole("button", { name: "Download .txt" }),
-    );
-
-    expect(
-      dashboardSessionMock.client.downloadQOTDCollectorExport,
-    ).toHaveBeenCalledWith("guild-1");
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:collector");
-
-    createObjectURL.mockRestore();
-    revokeObjectURL.mockRestore();
-    anchorClick.mockRestore();
-  });
-
-  it("removes deck duplicates from stored collector history", async () => {
-    const user = userEvent.setup();
-    qotdMock.settings = createQOTDSettings({
-      active_deck_id: "default",
-      decks: [
-        {
-          id: "default",
-          name: "Default",
-          enabled: true,
-          channel_id: "question-channel-1",
-        },
-        {
-          id: "icebreakers",
-          name: "Icebreakers",
-          enabled: true,
-          channel_id: "answers-channel-1",
-        },
-      ],
-    });
-    qotdMock.removeCollectorDeckDuplicates.mockResolvedValue({
-      deck_id: "icebreakers",
-      scanned_messages: 8,
-      matched_messages: 3,
-      duplicate_questions: 2,
-      deleted_questions: 1,
-    });
-
-    const view = render(
-      <MemoryRouter>
-        <QOTDCollectorPage />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText("1 collected question stored"),
-      ).toBeInTheDocument();
-    });
-
-    await user.selectOptions(
-      within(view.container).getByLabelText("Target deck"),
-      "icebreakers",
-    );
-    await user.click(
-      within(view.container).getByRole("button", {
-        name: "Remove deck duplicates",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(
-        within(view.container).getByText(
-          "Scanned 8 historical messages, matched 3 embeds, found 2 duplicate questions in Icebreakers, removed 1 duplicate question, and kept 1 scheduled or used question.",
-        ),
-      ).toBeInTheDocument();
-    });
-
-    expect(
-      qotdMock.removeCollectorDeckDuplicates,
-    ).toHaveBeenCalledWith("icebreakers");
-  });
 });
-
-function createQuestion(overrides: Partial<QOTDQuestion>): QOTDQuestion {
-  return {
-    id: 1,
-    display_id: 1,
-    deck_id: "default",
-    body: "Question",
-    status: "ready",
-    queue_position: 1,
-    created_at: "2026-04-04T00:00:00Z",
-    updated_at: "2026-04-04T00:00:00Z",
-    ...overrides,
-  };
-}
 
 function createQOTDSettings(overrides: Partial<QOTDConfig> = {}): QOTDConfig {
   return {
@@ -1058,30 +455,7 @@ function createQOTDSummary(overrides: Partial<QOTDSummary> = {}): QOTDSummary {
     current_publish_date_utc: "2026-04-04T00:00:00Z",
     decks,
     published_for_current_slot: false,
-    previous_post: createOfficialPost(),
     ...overrides,
     settings,
-  };
-}
-
-function createOfficialPost(
-  overrides: Partial<QOTDOfficialPost> = {},
-): QOTDOfficialPost {
-  return {
-    deck_id: "default",
-    deck_name: "Default",
-    publish_mode: "scheduled",
-    publish_date_utc: "2026-04-03T00:00:00Z",
-    state: "previous",
-    question_text: "Yesterday's question",
-    becomes_previous_at: "2026-04-04T00:00:00Z",
-    answers_close_at: "2026-04-05T00:00:00Z",
-    thread_id: "thread-previous",
-    thread_url: "https://discord.com/channels/guild-1/thread-previous",
-    answer_channel_id: "thread-previous",
-    answer_channel_url: "https://discord.com/channels/guild-1/thread-previous",
-    post_url:
-      "https://discord.com/channels/guild-1/question-channel-1/message-previous",
-    ...overrides,
   };
 }

@@ -43,7 +43,7 @@ describe("app route contracts", () => {
       appRoutes.dashboardModerationLogging("guild-1"),
     );
     expect(mapLegacyDashboardPathForGuild("/dashboard/qotd/questions", "guild-1")).toBe(
-      appRoutes.qotdQuestions("guild-1"),
+      appRoutes.qotdSettings("guild-1"),
     );
     expect(mapLegacyDashboardPathForGuild("/dashboard/roles-members", "guild-1")).toBe(
       appRoutes.dashboardRolesAutorole("guild-1"),

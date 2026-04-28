@@ -267,7 +267,7 @@ describe("ControlApiClient feature routes", () => {
     );
   });
 
-  it("loads and mutates qotd routes with the expected guild-scoped paths", async () => {
+  it("loads qotd summary with the expected guild-scoped path", async () => {
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL) => {
         const url = typeof input === "string" ? input : input.toString();
@@ -369,50 +369,7 @@ describe("ControlApiClient feature routes", () => {
           });
         }
 
-        if (url.endsWith("/qotd/actions/publish-now")) {
-          return jsonResponse({
-            status: "ok",
-            guild_id: "guild-1",
-            result: {
-              post_url:
-                "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
-              question: {
-                id: 1,
-                display_id: 1,
-                deck_id: "default",
-                body: "What should we build next?",
-                status: "used",
-                queue_position: 1,
-                created_at: "2026-04-03T00:00:00Z",
-                updated_at: "2026-04-03T00:00:00Z",
-              },
-              official_post: {
-                deck_id: "default",
-                deck_name: "Default",
-                publish_mode: "manual",
-                publish_date_utc: "2026-04-03T00:00:00Z",
-                state: "current",
-                question_text: "What should we build next?",
-                published_at: "2026-04-03T00:00:00Z",
-                becomes_previous_at: "2026-04-04T00:00:00Z",
-                answers_close_at: "2026-04-05T00:00:00Z",
-                thread_id: "thread-20260403",
-                thread_url: "https://discord.com/channels/guild-1/thread-20260403",
-                answer_channel_id: "thread-20260403",
-                answer_channel_url:
-                  "https://discord.com/channels/guild-1/thread-20260403",
-                post_url:
-                  "https://discord.com/channels/guild-1/question-channel-1/message-20260403",
-              },
-            },
-          });
-        }
-
-        return jsonResponse({
-          status: "ok",
-          guild_id: "guild-1",
-          questions: [],
-        });
+        throw new Error(`Unexpected request: ${url}`);
       },
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -422,8 +379,6 @@ describe("ControlApiClient feature routes", () => {
     });
 
     const summary = await client.getQOTDSummary("guild-1");
-    const publish = await client.publishQOTDNow("guild-1");
-    await client.reorderQOTDQuestions("guild-1", "default", [3, 1, 2]);
 
     expect(summary.summary.settings.active_deck_id).toBe("default");
     expect(summary.summary.published_for_current_slot).toBe(true);
@@ -433,13 +388,6 @@ describe("ControlApiClient feature routes", () => {
     expect(summary.summary.current_post?.answer_channel_url).toBe(
       "https://discord.com/channels/guild-1/thread-20260403",
     );
-    expect(publish.result.official_post.state).toBe("current");
-    expect(publish.result.official_post.thread_url).toBe(
-      "https://discord.com/channels/guild-1/thread-20260403",
-    );
-    expect(publish.result.official_post.answer_channel_id).toBe(
-      "thread-20260403",
-    );
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/v1/guilds/guild-1/qotd",
@@ -448,32 +396,6 @@ describe("ControlApiClient feature routes", () => {
         headers: expect.any(Headers),
         credentials: "include",
         body: undefined,
-      },
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/guilds/guild-1/qotd/actions/publish-now",
-      {
-        method: "POST",
-        headers: expect.objectContaining({
-          get: expect.any(Function),
-        }),
-        credentials: "include",
-        body: undefined,
-      },
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-		  4,
-      "/v1/guilds/guild-1/qotd/questions/reorder",
-      {
-        method: "POST",
-        headers: expect.objectContaining({
-          get: expect.any(Function),
-        }),
-        credentials: "include",
-        body: JSON.stringify({
-          deck_id: "default",
-          ordered_ids: [3, 1, 2],
-        }),
       },
     );
   });

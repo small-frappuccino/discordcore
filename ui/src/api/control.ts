@@ -69,13 +69,6 @@ export interface SyncResponse {
   synced: boolean;
 }
 
-export type QOTDQuestionStatus =
-  | "draft"
-  | "ready"
-  | "reserved"
-  | "used"
-  | "disabled";
-
 export interface QOTDDeck {
   id: string;
   name: string;
@@ -101,20 +94,6 @@ export interface QOTDConfig {
   decks?: QOTDDeck[];
   collector?: QOTDCollectorConfig;
   schedule?: QOTDPublishScheduleConfig;
-}
-
-export interface QOTDQuestion {
-  id: number;
-  display_id: number;
-  deck_id: string;
-  body: string;
-  status: QOTDQuestionStatus;
-  queue_position: number;
-  created_by?: string;
-  scheduled_for_date_utc?: string;
-  used_at?: string;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface QOTDQuestionCounts {
@@ -171,92 +150,10 @@ export interface QOTDSettingsResponse {
   settings: QOTDConfig;
 }
 
-export interface QOTDQuestionsResponse {
-  status: string;
-  guild_id: string;
-  questions: QOTDQuestion[];
-}
-
-export interface QOTDQuestionResponse {
-  status: string;
-  guild_id: string;
-  question: QOTDQuestion;
-}
-
 export interface QOTDSummaryResponse {
   status: string;
   guild_id: string;
   summary: QOTDSummary;
-}
-
-export interface QOTDPublishResult {
-  post_url?: string;
-  question: QOTDQuestion;
-  official_post: QOTDOfficialPost;
-}
-
-export interface QOTDQuestionMutation {
-  deck_id?: string;
-  body: string;
-  status: QOTDQuestionStatus;
-}
-
-export interface QOTDPublishResponse {
-  status: string;
-  guild_id: string;
-  result: QOTDPublishResult;
-}
-
-export interface QOTDCollectedQuestion {
-  id: number;
-  source_channel_id: string;
-  source_message_id: string;
-  source_author_id?: string;
-  source_author_name?: string;
-  source_created_at: string;
-  embed_title: string;
-  question_text: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface QOTDCollectorSummary {
-  total_questions: number;
-  recent_questions: QOTDCollectedQuestion[];
-}
-
-export interface QOTDCollectorRunResult {
-  scanned_messages: number;
-  matched_messages: number;
-  new_questions: number;
-  total_questions: number;
-}
-
-export interface QOTDCollectorRemoveDuplicatesResult {
-  deck_id: string;
-  scanned_messages: number;
-  matched_messages: number;
-  duplicate_questions: number;
-  deleted_questions: number;
-}
-
-export interface QOTDCollectorSummaryResponse {
-  status: string;
-  guild_id: string;
-  summary: QOTDCollectorSummary;
-}
-
-export interface QOTDCollectorRunResponse {
-  status: string;
-  guild_id: string;
-  result: QOTDCollectorRunResult;
-  summary: QOTDCollectorSummary;
-}
-
-export interface QOTDCollectorRemoveDuplicatesResponse {
-  status: string;
-  guild_id: string;
-  result: QOTDCollectorRemoveDuplicatesResult;
 }
 
 export type DashboardGuildAccessLevel = "read" | "write";
@@ -580,140 +477,6 @@ export class ControlApiClient {
       "PUT",
       `/v1/guilds/${encodeURIComponent(guildId)}/qotd/settings`,
       payload,
-    );
-  }
-
-  async listQOTDQuestions(
-    guildId: string,
-    deckId?: string,
-  ): Promise<QOTDQuestionsResponse> {
-    const params = new URLSearchParams();
-    if (deckId && deckId.trim() !== "") {
-      params.set("deck_id", deckId.trim());
-    }
-    return this.request<QOTDQuestionsResponse>(
-      "GET",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions${params.size > 0 ? `?${params.toString()}` : ""}`,
-    );
-  }
-
-  async createQOTDQuestion(
-    guildId: string,
-    payload: QOTDQuestionMutation,
-  ): Promise<QOTDQuestionResponse> {
-    return this.request<QOTDQuestionResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions`,
-      payload,
-    );
-  }
-
-  async createQOTDQuestionsBatch(
-    guildId: string,
-    payload: { questions: QOTDQuestionMutation[] },
-  ): Promise<QOTDQuestionsResponse> {
-    return this.request<QOTDQuestionsResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/batch`,
-      payload,
-    );
-  }
-
-  async updateQOTDQuestion(
-    guildId: string,
-    questionId: number,
-    payload: QOTDQuestionMutation,
-  ): Promise<QOTDQuestionResponse> {
-    return this.request<QOTDQuestionResponse>(
-      "PUT",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/${questionId}`,
-      payload,
-    );
-  }
-
-  async deleteQOTDQuestion(guildId: string, questionId: number): Promise<void> {
-    await this.request<Record<string, unknown>>(
-      "DELETE",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/${questionId}`,
-    );
-  }
-
-  async reorderQOTDQuestions(
-    guildId: string,
-    deckId: string,
-    orderedIDs: number[],
-  ): Promise<QOTDQuestionsResponse> {
-    return this.request<QOTDQuestionsResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/questions/reorder`,
-      {
-        deck_id: deckId,
-        ordered_ids: orderedIDs,
-      },
-    );
-  }
-
-  async publishQOTDNow(guildId: string): Promise<QOTDPublishResponse> {
-    return this.request<QOTDPublishResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/publish-now`,
-    );
-  }
-
-  async getQOTDCollectorSummary(
-    guildId: string,
-  ): Promise<QOTDCollectorSummaryResponse> {
-    return this.request<QOTDCollectorSummaryResponse>(
-      "GET",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector`,
-    );
-  }
-
-  async runQOTDCollector(guildId: string): Promise<QOTDCollectorRunResponse> {
-    return this.request<QOTDCollectorRunResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/collect`,
-    );
-  }
-
-  async removeQOTDCollectorDeckDuplicates(
-    guildId: string,
-    deckId: string,
-  ): Promise<QOTDCollectorRemoveDuplicatesResponse> {
-    return this.request<QOTDCollectorRemoveDuplicatesResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/remove-duplicates`,
-      {
-        deck_id: deckId.trim(),
-      },
-    );
-  }
-
-  async downloadQOTDCollectorExport(
-    guildId: string,
-  ): Promise<{ filename: string; text: string }> {
-    const path = `/v1/guilds/${encodeURIComponent(guildId)}/qotd/collector/export`;
-    const url = this.baseUrl === "" ? path : `${this.baseUrl}${path}`;
-    const response = await this.fetchWithTransientGetRetry(url);
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(
-        `Control API GET ${path} failed: ${response.status} ${response.statusText} - ${text}`.trim(),
-      );
-    }
-
-    const disposition = response.headers.get("Content-Disposition") ?? "";
-    const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
-    return {
-      filename: filenameMatch?.[1]?.trim() || "qotd-collected-questions.txt",
-      text: await response.text(),
-    };
-  }
-
-  async reconcileQOTD(guildId: string): Promise<QOTDSummaryResponse> {
-    return this.request<QOTDSummaryResponse>(
-      "POST",
-      `/v1/guilds/${encodeURIComponent(guildId)}/qotd/actions/reconcile`,
     );
   }
 
