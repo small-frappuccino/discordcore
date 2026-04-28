@@ -41,7 +41,8 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			display_id,
 			created_by,
 			scheduled_for_date_utc,
-			used_at
+			used_at,
+			published_once_at
 		)
 		VALUES (
 			?,
@@ -68,6 +69,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at`,
 		normalized.GuildID,
@@ -83,6 +85,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		normalized.CreatedBy,
 		nullableTime(normalized.ScheduledForDateUTC),
 		nullableTime(normalized.UsedAt),
+		nullableTime(normalized.PublishedOnceAt),
 	)
 	created, err := scanQOTDQuestionRecord(row)
 	if err != nil {
@@ -146,6 +149,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			created_by = ?,
 			scheduled_for_date_utc = ?,
 			used_at = ?,
+			published_once_at = ?,
 			updated_at = NOW()
 		WHERE id = ? AND guild_id = ?
 		RETURNING
@@ -159,6 +163,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at`,
 		normalized.DeckID,
@@ -175,6 +180,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		normalized.CreatedBy,
 		nullableTime(normalized.ScheduledForDateUTC),
 		nullableTime(normalized.UsedAt),
+		nullableTime(normalized.PublishedOnceAt),
 		normalized.ID,
 		normalized.GuildID,
 	)
@@ -497,6 +503,7 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at
 		FROM qotd_questions
@@ -550,6 +557,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at
 		FROM qotd_questions
@@ -699,6 +707,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at
 		FROM qotd_questions
@@ -706,6 +715,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		  AND deck_id = ?
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
+		  AND published_once_at IS NULL
 		ORDER BY queue_position ASC, id ASC
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
@@ -738,6 +748,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at`,
 		publishDateUTC,
@@ -787,6 +798,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at
 		FROM qotd_questions
@@ -794,6 +806,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		  AND deck_id = ?
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
+		  AND published_once_at IS NULL
 		ORDER BY queue_position ASC, id ASC
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
@@ -825,6 +838,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at`,
 		record.ID,
@@ -1599,6 +1613,7 @@ func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, er
 	rec.QueuePosition = maxInt64(rec.QueuePosition, 0)
 	rec.ScheduledForDateUTC = normalizeQOTDDatePtr(rec.ScheduledForDateUTC)
 	rec.UsedAt = normalizeQOTDTimePtr(rec.UsedAt)
+	rec.PublishedOnceAt = normalizeQOTDTimePtr(rec.PublishedOnceAt)
 
 	if rec.GuildID == "" {
 		return QOTDQuestionRecord{}, fmt.Errorf("guild_id is required")
@@ -1837,6 +1852,7 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 	var record QOTDQuestionRecord
 	var scheduledFor sql.NullTime
 	var usedAt sql.NullTime
+	var publishedOnceAt sql.NullTime
 	if err := scanner.Scan(
 		&record.ID,
 		&record.DisplayID,
@@ -1848,6 +1864,7 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 		&record.CreatedBy,
 		&scheduledFor,
 		&usedAt,
+		&publishedOnceAt,
 		&record.CreatedAt,
 		&record.UpdatedAt,
 	); err != nil {
@@ -1855,6 +1872,7 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 	}
 	record.ScheduledForDateUTC = timePtrFromNull(scheduledFor)
 	record.UsedAt = timePtrFromNull(usedAt)
+	record.PublishedOnceAt = timePtrFromNull(publishedOnceAt)
 	return &record, nil
 }
 
@@ -1878,6 +1896,7 @@ func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, question
 			created_by,
 			scheduled_for_date_utc,
 			used_at,
+			published_once_at,
 			created_at,
 			updated_at
 		FROM qotd_questions

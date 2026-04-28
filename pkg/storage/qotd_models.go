@@ -16,6 +16,7 @@ type QOTDQuestionRecord struct {
 	CreatedBy           string
 	ScheduledForDateUTC *time.Time
 	UsedAt              *time.Time
+	PublishedOnceAt     *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }

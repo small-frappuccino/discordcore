@@ -290,6 +290,17 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 	result := ResetDeckResult{}
 	for idx := range questions {
 		question := questions[idx]
+		if question.PublishedOnceAt != nil && !question.PublishedOnceAt.IsZero() {
+			question.PublishedOnceAt = nil
+			question.Status = string(QuestionStatusReady)
+			question.ScheduledForDateUTC = nil
+			question.UsedAt = nil
+			if _, err := s.store.UpdateQOTDQuestion(ctx, question); err != nil {
+				return result, err
+			}
+			result.QuestionsReset++
+			continue
+		}
 		switch QuestionStatus(strings.TrimSpace(question.Status)) {
 		case QuestionStatusReserved, QuestionStatusUsed:
 			question.Status = string(QuestionStatusReady)
@@ -753,6 +764,9 @@ func normalizeQuestionMutation(mutation QuestionMutation) (string, QuestionStatu
 }
 
 func isImmutableQuestion(question storage.QOTDQuestionRecord) bool {
+	if question.PublishedOnceAt != nil && !question.PublishedOnceAt.IsZero() {
+		return true
+	}
 	if question.ScheduledForDateUTC != nil && !question.ScheduledForDateUTC.IsZero() {
 		return true
 	}
@@ -940,6 +954,9 @@ func firstReadyUnscheduledQuestion(questions []storage.QOTDQuestionRecord) *stor
 	for idx := range questions {
 		question := questions[idx]
 		if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusReady {
+			continue
+		}
+		if question.PublishedOnceAt != nil && !question.PublishedOnceAt.IsZero() {
 			continue
 		}
 		if question.ScheduledForDateUTC != nil && !question.ScheduledForDateUTC.IsZero() {

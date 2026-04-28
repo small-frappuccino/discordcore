@@ -508,4 +508,28 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_questions DROP COLUMN IF EXISTS display_id`,
 		},
 	},
+	{
+		Version: 16,
+		UpSQL: []string{
+			`ALTER TABLE qotd_questions
+			 ADD COLUMN IF NOT EXISTS published_once_at TIMESTAMPTZ`,
+			`UPDATE qotd_questions
+			 SET published_once_at = used_at
+			 WHERE published_once_at IS NULL
+			   AND used_at IS NOT NULL`,
+			`UPDATE qotd_questions AS questions
+			 SET published_once_at = published.published_at
+			 FROM (
+				SELECT question_id, MAX(published_at) AS published_at
+				FROM qotd_official_posts
+				WHERE published_at IS NOT NULL
+				GROUP BY question_id
+			 ) AS published
+			 WHERE questions.id = published.question_id
+			   AND questions.published_once_at IS NULL`,
+		},
+		DownSQL: []string{
+			`ALTER TABLE qotd_questions DROP COLUMN IF EXISTS published_once_at`,
+		},
+	},
 }

@@ -931,6 +931,13 @@ func TestServiceResetDeckStatePreservesPublishedCurrentSlotGuard(t *testing.T) {
 	if official == nil || official.PublishedAt == nil {
 		t.Fatalf("expected reset to preserve the published current-slot record, got %+v", official)
 	}
+	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", 1)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(used) failed: %v", err)
+	}
+	if usedQuestion == nil || usedQuestion.PublishedOnceAt == nil || usedQuestion.PublishedOnceAt.IsZero() {
+		t.Fatalf("expected published question to carry the published-once marker before reset cleanup, got %+v", usedQuestion)
+	}
 
 	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
 	if err != nil {
@@ -941,6 +948,28 @@ func TestServiceResetDeckStatePreservesPublishedCurrentSlotGuard(t *testing.T) {
 	}
 	if len(fake.publishedParams) != 1 {
 		t.Fatalf("expected only the original manual publish attempt, got %d", len(fake.publishedParams))
+	}
+
+	resetQuestions, err := service.ListQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions(after reset) failed: %v", err)
+	}
+	if len(resetQuestions) < 2 || resetQuestions[0].PublishedOnceAt != nil || resetQuestions[1].PublishedOnceAt != nil {
+		t.Fatalf("expected reset to clear published-once markers from deck questions, got %+v", resetQuestions)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 4, 13, 0, 0, 0, time.UTC)
+	}
+	result, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishNow(next day after reset) failed: %v", err)
+	}
+	if result.Question.ID != resetQuestions[0].ID {
+		t.Fatalf("expected reset to make the first previously-published question eligible again on a future slot, got %+v", result)
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected future-slot republish after reset, got %d publish attempts", len(fake.publishedParams))
 	}
 }
 

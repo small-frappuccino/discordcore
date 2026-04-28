@@ -105,6 +105,9 @@ func canQuestionPublishNext(question storage.QOTDQuestionRecord) bool {
 	if strings.TrimSpace(question.Status) != "ready" {
 		return false
 	}
+	if question.PublishedOnceAt != nil && !question.PublishedOnceAt.IsZero() {
+		return false
+	}
 	if question.ScheduledForDateUTC != nil && !question.ScheduledForDateUTC.IsZero() {
 		return false
 	}

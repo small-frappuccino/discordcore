@@ -82,6 +82,22 @@ func TestQOTDTablesInitialized(t *testing.T) {
 			t.Fatalf("expected legacy column %s.%s to be removed", legacyColumn.tableName, legacyColumn.columnName)
 		}
 	}
+
+	var publishedOnceExists bool
+	if err := store.db.QueryRow(
+		`SELECT EXISTS(
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'qotd_questions'
+			  AND column_name = 'published_once_at'
+		)`,
+	).Scan(&publishedOnceExists); err != nil {
+		t.Fatalf("query qotd_questions.published_once_at existence: %v", err)
+	}
+	if !publishedOnceExists {
+		t.Fatal("expected qotd_questions.published_once_at to exist")
+	}
 }
 
 func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
@@ -220,6 +236,87 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	}
 	if reserved.ScheduledForDateUTC == nil || !reserved.ScheduledForDateUTC.Equal(publishDate) {
 		t.Fatalf("expected scheduled publish date %s, got %+v", publishDate.Format(time.RFC3339), reserved.ScheduledForDateUTC)
+	}
+}
+
+func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+
+	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Already published question",
+		Status:        "ready",
+		QueuePosition: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
+	}
+	first.PublishedOnceAt = &publishedAt
+	if first, err = store.UpdateQOTDQuestion(ctx, *first); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(first) failed: %v", err)
+	}
+
+	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Still publishable question",
+		Status:        "ready",
+		QueuePosition: 2,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate)
+	if err != nil {
+		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
+	}
+	if reserved == nil || reserved.ID != second.ID {
+		t.Fatalf("expected scheduled reservation to skip already-published question, got %+v", reserved)
+	}
+}
+
+func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+
+	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Already published question",
+		Status:        "ready",
+		QueuePosition: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
+	}
+	first.PublishedOnceAt = &publishedAt
+	if first, err = store.UpdateQOTDQuestion(ctx, *first); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(first) failed: %v", err)
+	}
+
+	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Still publishable question",
+		Status:        "ready",
+		QueuePosition: 2,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
+	}
+
+	reserved, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default")
+	if err != nil {
+		t.Fatalf("ReserveNextReadyQOTDQuestion() failed: %v", err)
+	}
+	if reserved == nil || reserved.ID != second.ID {
+		t.Fatalf("expected manual reservation to skip already-published question, got %+v", reserved)
 	}
 }
 

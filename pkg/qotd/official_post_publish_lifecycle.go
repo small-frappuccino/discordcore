@@ -140,15 +140,28 @@ func (s *Service) completeOfficialPostProvisioning(
 	}
 
 	var updatedQuestion *storage.QOTDQuestionRecord
-	if question != nil && question.Status != string(QuestionStatusUsed) {
-		question.Status = string(QuestionStatusUsed)
-		question.UsedAt = &publishedAt
-		updatedQuestion, err = s.store.UpdateQOTDQuestion(ctx, *question)
-		if err != nil {
-			return nil, nil, "", err
+	if question != nil {
+		needsQuestionUpdate := false
+		if question.Status != string(QuestionStatusUsed) {
+			question.Status = string(QuestionStatusUsed)
+			needsQuestionUpdate = true
 		}
-	} else {
-		updatedQuestion = question
+		if question.UsedAt == nil || question.UsedAt.IsZero() {
+			question.UsedAt = &publishedAt
+			needsQuestionUpdate = true
+		}
+		if question.PublishedOnceAt == nil || question.PublishedOnceAt.IsZero() {
+			question.PublishedOnceAt = &publishedAt
+			needsQuestionUpdate = true
+		}
+		if needsQuestionUpdate {
+			updatedQuestion, err = s.store.UpdateQOTDQuestion(ctx, *question)
+			if err != nil {
+				return nil, nil, "", err
+			}
+		} else {
+			updatedQuestion = question
+		}
 	}
 
 	postURL := OfficialPostJumpURL(*finalized)
