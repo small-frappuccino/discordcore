@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +17,8 @@ import (
 )
 
 const collectorRecentQuestionLimit = 25
+
+var defaultCollectorTitlePatterns = []string{"Question Of The Day", "question!!"}
 
 type CollectorSummary struct {
 	TotalQuestions  int
@@ -33,6 +38,26 @@ type CollectorRemoveDuplicatesResult struct {
 	MatchedMessages    int
 	DuplicateQuestions int
 	DeletedQuestions   int
+}
+
+type ImportArchivedQuestionsParams struct {
+	DeckID          string
+	SourceChannelID string
+	AuthorIDs       []string
+	TitlePatterns   []string
+	StartDate       string
+	BackupDir       string
+}
+
+type ImportArchivedQuestionsResult struct {
+	DeckID             string
+	ScannedMessages    int
+	MatchedMessages    int
+	StoredQuestions    int
+	ImportedQuestions  int
+	DuplicateQuestions int
+	DeletedQuestions   int
+	BackupPath         string
 }
 
 func (s *Service) GetCollectorSummary(ctx context.Context, guildID string) (CollectorSummary, error) {
@@ -163,6 +188,137 @@ func (s *Service) RemoveDeckDuplicatesFromCollector(ctx context.Context, guildID
 	return result, nil
 }
 
+func (s *Service) ImportArchivedQuestions(
+	ctx context.Context,
+	guildID, actorID string,
+	session *discordgo.Session,
+	params ImportArchivedQuestionsParams,
+) (ImportArchivedQuestionsResult, error) {
+	if err := s.validate(); err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+	if session == nil {
+		return ImportArchivedQuestionsResult{}, ErrDiscordUnavailable
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return ImportArchivedQuestionsResult{}, fmt.Errorf("%w: guild id is required", files.ErrInvalidQOTDInput)
+	}
+
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
+	deck, err := s.resolveDashboardDeck(guildID, params.DeckID)
+	if err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+	collector, err := s.collectorConfigForImport(guildID, params)
+	if err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+
+	matchedRecords, scanned, err := s.collectArchivedQuestionMatches(ctx, guildID, collector, session)
+	if err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+	orderedRecords := orderedCollectedQuestionRecords(matchedRecords)
+	result := ImportArchivedQuestionsResult{
+		DeckID:          deck.ID,
+		ScannedMessages: scanned,
+		MatchedMessages: len(orderedRecords),
+	}
+	if len(orderedRecords) == 0 {
+		return result, nil
+	}
+
+	storedQuestions, err := s.store.CreateQOTDCollectedQuestions(ctx, orderedRecords)
+	if err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+	result.StoredQuestions = storedQuestions
+
+	backupPath, err := writeCollectedQuestionsBackupTXT(params.BackupDir, guildID, deck.ID, orderedRecords, s.clock())
+	if err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+	result.BackupPath = backupPath
+
+	uniqueRecords := uniqueCollectedQuestionRecords(orderedRecords)
+	matchedText := make(map[string]struct{}, len(uniqueRecords))
+	for _, record := range uniqueRecords {
+		key := normalizeCollectorQuestionComparisonText(record.QuestionText)
+		if key == "" {
+			continue
+		}
+		matchedText[key] = struct{}{}
+	}
+
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	if err != nil {
+		return ImportArchivedQuestionsResult{}, err
+	}
+
+	existingImmutableText := make(map[string]struct{}, len(matchedText))
+	for _, question := range questions {
+		key := normalizeCollectorQuestionComparisonText(question.Body)
+		if _, ok := matchedText[key]; !ok {
+			continue
+		}
+		result.DuplicateQuestions++
+		if isImmutableQuestion(question) {
+			existingImmutableText[key] = struct{}{}
+			continue
+		}
+		if err := s.store.DeleteQOTDQuestion(ctx, guildID, question.ID); err != nil {
+			return ImportArchivedQuestionsResult{}, err
+		}
+		result.DeletedQuestions++
+	}
+
+	importedIDs := make([]int64, 0, len(uniqueRecords))
+	for _, record := range uniqueRecords {
+		key := normalizeCollectorQuestionComparisonText(record.QuestionText)
+		if key == "" {
+			continue
+		}
+		if _, exists := existingImmutableText[key]; exists {
+			continue
+		}
+		usedAt := record.SourceCreatedAt.UTC()
+		created, err := s.store.CreateQOTDQuestion(ctx, storage.QOTDQuestionRecord{
+			GuildID:         guildID,
+			DeckID:          deck.ID,
+			Body:            strings.Join(strings.Fields(record.QuestionText), " "),
+			Status:          string(QuestionStatusUsed),
+			CreatedBy:       normalizeActorID(actorID),
+			UsedAt:          &usedAt,
+			PublishedOnceAt: &usedAt,
+		})
+		if err != nil {
+			return ImportArchivedQuestionsResult{}, err
+		}
+		importedIDs = append(importedIDs, created.ID)
+		result.ImportedQuestions++
+	}
+
+	if len(importedIDs) > 0 {
+		questions, err = s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		if err != nil {
+			return ImportArchivedQuestionsResult{}, err
+		}
+		orderedIDs := importedQuestionOrder(questions, importedIDs)
+		if len(orderedIDs) > 0 {
+			if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, orderedIDs); err != nil {
+				return ImportArchivedQuestionsResult{}, err
+			}
+		}
+	}
+
+	return result, nil
+}
+
 func (s *Service) ExportCollectedQuestionsTXT(ctx context.Context, guildID string) (string, error) {
 	if err := s.validate(); err != nil {
 		return "", err
@@ -176,8 +332,65 @@ func (s *Service) ExportCollectedQuestionsTXT(ctx context.Context, guildID strin
 	if err != nil {
 		return "", err
 	}
+	return renderCollectedQuestionsTXT(records), nil
+}
+
+func (s *Service) collectorConfigForImport(guildID string, params ImportArchivedQuestionsParams) (files.QOTDCollectorConfig, error) {
+	collector := files.QOTDCollectorConfig{
+		SourceChannelID: strings.TrimSpace(params.SourceChannelID),
+		StartDate:       strings.TrimSpace(params.StartDate),
+	}
+	if collector.SourceChannelID == "" {
+		return files.QOTDCollectorConfig{}, fmt.Errorf("%w: collector source_channel_id is required", files.ErrInvalidQOTDInput)
+	}
+	if !isDigitsOnly(collector.SourceChannelID) {
+		return files.QOTDCollectorConfig{}, fmt.Errorf("%w: collector source_channel_id must be numeric", files.ErrInvalidQOTDInput)
+	}
+	if _, err := collectorStartTime(collector.StartDate); err != nil {
+		return files.QOTDCollectorConfig{}, err
+	}
+
+	seenAuthorIDs := make(map[string]struct{}, len(params.AuthorIDs))
+	for idx, authorID := range params.AuthorIDs {
+		authorID = strings.TrimSpace(authorID)
+		if authorID == "" {
+			continue
+		}
+		if !isDigitsOnly(authorID) {
+			return files.QOTDCollectorConfig{}, fmt.Errorf("%w: collector author_ids[%d] must be numeric", files.ErrInvalidQOTDInput, idx)
+		}
+		if _, exists := seenAuthorIDs[authorID]; exists {
+			continue
+		}
+		seenAuthorIDs[authorID] = struct{}{}
+		collector.AuthorIDs = append(collector.AuthorIDs, authorID)
+	}
+	if len(collector.AuthorIDs) == 0 {
+		return files.QOTDCollectorConfig{}, fmt.Errorf("%w: collector author_ids must include at least one id", files.ErrInvalidQOTDInput)
+	}
+
+	titlePatterns := append([]string(nil), params.TitlePatterns...)
+	if len(titlePatterns) == 0 {
+		settings, err := s.Settings(guildID)
+		if err != nil {
+			return files.QOTDCollectorConfig{}, err
+		}
+		titlePatterns = append(titlePatterns, settings.Collector.TitlePatterns...)
+	}
+	if len(titlePatterns) == 0 {
+		titlePatterns = append(titlePatterns, defaultCollectorTitlePatterns...)
+	}
+	collector.TitlePatterns = normalizeCollectorTitlePatterns(titlePatterns)
+	if len(collector.TitlePatterns) == 0 {
+		return files.QOTDCollectorConfig{}, fmt.Errorf("%w: collector title_patterns must include at least one pattern", files.ErrInvalidQOTDInput)
+	}
+
+	return collector, nil
+}
+
+func renderCollectedQuestionsTXT(records []storage.QOTDCollectedQuestionRecord) string {
 	if len(records) == 0 {
-		return "", nil
+		return ""
 	}
 
 	var builder strings.Builder
@@ -185,7 +398,163 @@ func (s *Service) ExportCollectedQuestionsTXT(ctx context.Context, guildID strin
 		builder.WriteString(strings.Join(strings.Fields(record.QuestionText), " "))
 		builder.WriteByte('\n')
 	}
-	return builder.String(), nil
+	return builder.String()
+}
+
+func orderedCollectedQuestionRecords(records []storage.QOTDCollectedQuestionRecord) []storage.QOTDCollectedQuestionRecord {
+	if len(records) == 0 {
+		return nil
+	}
+
+	ordered := append([]storage.QOTDCollectedQuestionRecord(nil), records...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		left := ordered[i].SourceCreatedAt.UTC()
+		right := ordered[j].SourceCreatedAt.UTC()
+		if !left.Equal(right) {
+			return left.Before(right)
+		}
+		return strings.TrimSpace(ordered[i].SourceMessageID) < strings.TrimSpace(ordered[j].SourceMessageID)
+	})
+	return ordered
+}
+
+func uniqueCollectedQuestionRecords(records []storage.QOTDCollectedQuestionRecord) []storage.QOTDCollectedQuestionRecord {
+	if len(records) == 0 {
+		return nil
+	}
+
+	unique := make([]storage.QOTDCollectedQuestionRecord, 0, len(records))
+	seen := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		key := normalizeCollectorQuestionComparisonText(record.QuestionText)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, record)
+	}
+	return unique
+}
+
+func importedQuestionOrder(questions []storage.QOTDQuestionRecord, importedIDs []int64) []int64 {
+	if len(questions) == 0 {
+		return nil
+	}
+
+	importedSet := make(map[int64]struct{}, len(importedIDs))
+	for _, id := range importedIDs {
+		importedSet[id] = struct{}{}
+	}
+
+	existingIDs := make([]int64, 0, len(questions))
+	firstMutableIndex := -1
+	for _, question := range questions {
+		if _, imported := importedSet[question.ID]; imported {
+			continue
+		}
+		if firstMutableIndex < 0 && !isImmutableQuestion(question) {
+			firstMutableIndex = len(existingIDs)
+		}
+		existingIDs = append(existingIDs, question.ID)
+	}
+	if firstMutableIndex < 0 {
+		firstMutableIndex = len(existingIDs)
+	}
+
+	ordered := make([]int64, 0, len(existingIDs)+len(importedIDs))
+	ordered = append(ordered, existingIDs[:firstMutableIndex]...)
+	ordered = append(ordered, importedIDs...)
+	ordered = append(ordered, existingIDs[firstMutableIndex:]...)
+	return ordered
+}
+
+func writeCollectedQuestionsBackupTXT(dir, guildID, deckID string, records []storage.QOTDCollectedQuestionRecord, now time.Time) (string, error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" || len(records) == 0 {
+		return "", nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create qotd backup directory: %w", err)
+	}
+
+	filename := fmt.Sprintf(
+		"qotd-import-%s-%s-%s.txt",
+		sanitizeBackupFileToken(guildID),
+		sanitizeBackupFileToken(deckID),
+		now.UTC().Format("20060102-150405"),
+	)
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, []byte(renderCollectedQuestionsTXT(records)), 0o644); err != nil {
+		return "", fmt.Errorf("write qotd backup file: %w", err)
+	}
+	return path, nil
+}
+
+func sanitizeBackupFileToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+
+	var builder strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			builder.WriteRune(r)
+		case r >= '0' && r <= '9':
+			builder.WriteRune(r)
+		case r == '-', r == '_':
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('-')
+		}
+	}
+
+	cleaned := strings.Trim(builder.String(), "-")
+	if cleaned == "" {
+		return "unknown"
+	}
+	return cleaned
+}
+
+func normalizeCollectorTitlePatterns(patterns []string) []string {
+	if len(patterns) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(patterns))
+	seen := make(map[string]struct{}, len(patterns))
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		key := strings.ToLower(pattern)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, pattern)
+	}
+	return normalized
+}
+
+func isDigitsOnly(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) collectorConfigForRun(guildID string) (files.QOTDCollectorConfig, error) {

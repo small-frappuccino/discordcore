@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,9 +29,13 @@ const (
 	questionsNextSubCommand   = "next"
 	questionsResetSubCommand  = "reset"
 	questionsRemoveSubCommand = "remove"
+	questionsImportSubCommand = "import"
 	questionsBodyOptionName   = "question"
 	questionsDeckOptionName   = "deck"
 	questionsIDOptionName     = "id"
+	questionsImportUsersName  = "user_ids"
+	questionsImportChannel    = "channel"
+	questionsImportStartDate  = "start_date"
 	questionsPageSize         = 10
 	questionsListRouteFirst   = "qotd:questions:list:first"
 	questionsListRoutePrev    = "qotd:questions:list:prev"
@@ -49,6 +55,7 @@ type QuestionCatalogService interface {
 	SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	ResetDeckState(ctx context.Context, guildID, deckID string) (applicationqotd.ResetDeckResult, error)
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
+	ImportArchivedQuestions(ctx context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error)
 	PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
 }
 
@@ -70,6 +77,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	listCommand := &questionsListCommand{service: c.service}
 	queueCommand := &questionsQueueCommand{service: c.service}
 	nextCommand := &questionsNextCommand{service: c.service}
+	importCommand := &questionsImportCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
 	resetCommand := &questionsResetCommand{service: c.service}
 	removeCommand := &questionsRemoveCommand{service: c.service}
@@ -78,6 +86,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	questionsGroup.AddSubCommand(listCommand)
 	questionsGroup.AddSubCommand(queueCommand)
 	questionsGroup.AddSubCommand(nextCommand)
+	questionsGroup.AddSubCommand(importCommand)
 	questionsGroup.AddSubCommand(resetCommand)
 	questionsGroup.AddSubCommand(removeCommand)
 
@@ -126,6 +135,10 @@ type questionsQueueCommand struct {
 }
 
 type questionsRemoveCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsImportCommand struct {
 	service QuestionCatalogService
 }
 
@@ -293,6 +306,45 @@ func (c *questionsRemoveCommand) RequiresPermissions() bool { return true }
 
 func (c *questionsResetCommand) Name() string { return questionsResetSubCommand }
 
+func (c *questionsImportCommand) Name() string { return questionsImportSubCommand }
+
+func (c *questionsImportCommand) Description() string {
+	return "Import historical QOTD posts from another bot into the current deck as used questions"
+}
+
+func (c *questionsImportCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsImportUsersName,
+			Description: "One user ID or a comma/space-separated list of bot user IDs to import from",
+			Required:    true,
+		},
+		{
+			Type:         discordgo.ApplicationCommandOptionChannel,
+			Name:         questionsImportChannel,
+			Description:  "Text channel to backread for historical QOTD posts",
+			Required:     true,
+			ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsImportStartDate,
+			Description: "Import only messages sent on or after this UTC date (YYYY-MM-DD)",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsDeckOptionName,
+			Description: "Deck ID or exact deck name. Defaults to the active deck.",
+			Required:    false,
+		},
+	}
+}
+
+func (c *questionsImportCommand) RequiresGuild() bool       { return true }
+func (c *questionsImportCommand) RequiresPermissions() bool { return true }
+
 func (c *questionsResetCommand) Description() string {
 	return "Reset question states and clear automatic/manual QOTD publish state"
 }
@@ -331,6 +383,52 @@ func (c *questionsResetCommand) Handle(ctx *core.Context) error {
 
 	return core.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, describeResetDeckResult(result, deck.Name))
+}
+
+func (c *questionsImportCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	rawUserIDs, err := extractor.StringRequired(questionsImportUsersName)
+	if err != nil {
+		return err
+	}
+	authorIDs, err := parseQuestionsImportAuthorIDs(rawUserIDs)
+	if err != nil {
+		return err
+	}
+	channelID := questionsChannelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), questionsImportChannel)
+	if channelID == "" {
+		return core.NewCommandError("Channel is required.", false)
+	}
+	startDate, err := extractor.StringRequired(questionsImportStartDate)
+	if err != nil {
+		return err
+	}
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+
+	result, err := c.service.ImportArchivedQuestions(context.Background(), ctx.GuildID, ctx.UserID, ctx.Session, applicationqotd.ImportArchivedQuestionsParams{
+		DeckID:          deck.ID,
+		SourceChannelID: channelID,
+		AuthorIDs:       authorIDs,
+		StartDate:       startDate,
+		BackupDir:       defaultQuestionsImportBackupDir(),
+	})
+	if err != nil {
+		return translateQuestionsImportError(err)
+	}
+	if result.MatchedMessages == 0 {
+		return core.NewResponseBuilder(ctx.Session).
+			Info(ctx.Interaction, fmt.Sprintf("No historical QOTD questions matched in <#%s> since %s for deck `%s`.", channelID, startDate, deck.Name))
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Success(ctx.Interaction, describeQuestionsImportResult(deck.Name, channelID, result))
 }
 
 func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
@@ -797,6 +895,108 @@ func visibleQuestionID(question storage.QOTDQuestionRecord) int64 {
 	return question.ID
 }
 
+func questionsChannelOptionID(session *discordgo.Session, options []*discordgo.ApplicationCommandInteractionDataOption, name string) string {
+	for _, option := range options {
+		if option == nil || option.Name != name {
+			continue
+		}
+		if channel := option.ChannelValue(session); channel != nil {
+			return strings.TrimSpace(channel.ID)
+		}
+		if value, ok := option.Value.(string); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func parseQuestionsImportAuthorIDs(value string) ([]string, error) {
+	parts := strings.FieldsFunc(strings.TrimSpace(value), func(r rune) bool {
+		switch r {
+		case ',', ';', '\n', '\r', '\t', ' ':
+			return true
+		default:
+			return false
+		}
+	})
+	if len(parts) == 0 {
+		return nil, core.NewCommandError("Provide one user ID or a comma/space-separated list of user IDs.", false)
+	}
+
+	ids := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		part = strings.TrimPrefix(part, "<@!")
+		part = strings.TrimPrefix(part, "<@")
+		part = strings.TrimSuffix(part, ">")
+		if part == "" {
+			continue
+		}
+		if !isCommandNumericID(part) {
+			return nil, core.NewCommandError("User IDs must be numeric Discord IDs.", false)
+		}
+		if _, exists := seen[part]; exists {
+			continue
+		}
+		seen[part] = struct{}{}
+		ids = append(ids, part)
+	}
+	if len(ids) == 0 {
+		return nil, core.NewCommandError("Provide at least one numeric Discord user ID.", false)
+	}
+	return ids, nil
+}
+
+func isCommandNumericID(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func defaultQuestionsImportBackupDir() string {
+	if wd, err := os.Getwd(); err == nil && strings.TrimSpace(wd) != "" {
+		return filepath.Join(wd, "backups", "qotd-imports")
+	}
+	return filepath.Join("backups", "qotd-imports")
+}
+
+func displayQuestionsImportBackupPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if wd, err := os.Getwd(); err == nil && strings.TrimSpace(wd) != "" {
+		if rel, err := filepath.Rel(wd, path); err == nil && rel != "" && rel != "." && !strings.HasPrefix(rel, "..") {
+			return rel
+		}
+	}
+	return path
+}
+
+func describeQuestionsImportResult(deckName, channelID string, result applicationqotd.ImportArchivedQuestionsResult) string {
+	parts := []string{fmt.Sprintf("Scanned %d messages in <#%s> and matched %d historical QOTD prompts for deck `%s`.", result.ScannedMessages, channelID, result.MatchedMessages, deckName)}
+	parts = append(parts, fmt.Sprintf("Imported %s as used history.", formatCountNoun(result.ImportedQuestions, "historical QOTD question", "historical QOTD questions")))
+	if result.DeletedQuestions > 0 {
+		parts = append(parts, fmt.Sprintf("Removed %s duplicate questions from the current queue.", formatCountNoun(result.DeletedQuestions, "duplicate question", "duplicate questions")))
+	} else if result.DuplicateQuestions > 0 {
+		parts = append(parts, fmt.Sprintf("Found %s already locked in history.", formatCountNoun(result.DuplicateQuestions, "duplicate question", "duplicate questions")))
+	}
+	if result.StoredQuestions > 0 {
+		parts = append(parts, fmt.Sprintf("Stored %s in local collector history.", formatCountNoun(result.StoredQuestions, "historical message", "historical messages")))
+	}
+	if backupPath := displayQuestionsImportBackupPath(result.BackupPath); backupPath != "" {
+		parts = append(parts, fmt.Sprintf("Local backup: `%s`.", backupPath))
+	}
+	return strings.Join(parts, " ")
+}
+
 func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string {
 	deckName := strings.TrimSpace(state.Deck.Name)
 	if deckName == "" {
@@ -957,6 +1157,16 @@ func translateQuestionsSetNextError(questionID int64, err error) error {
 	return translateQuestionsMutationError(err)
 }
 
+func translateQuestionsImportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
+		return core.NewCommandError("Discord session unavailable for QOTD history import.", false)
+	}
+	return translateQuestionsMutationError(err)
+}
+
 func translatePublishNowError(err error) error {
 	if err == nil {
 		return nil
@@ -983,6 +1193,7 @@ var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
 var _ core.SubCommand = (*questionsQueueCommand)(nil)
 var _ core.SubCommand = (*questionsNextCommand)(nil)
+var _ core.SubCommand = (*questionsImportCommand)(nil)
 var _ core.SubCommand = (*questionsResetCommand)(nil)
 var _ core.SubCommand = (*questionsRemoveCommand)(nil)
 var _ core.SubCommand = (*qotdPublishCommand)(nil)

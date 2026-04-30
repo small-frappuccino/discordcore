@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -1572,6 +1573,135 @@ func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T)
 	}
 	if remaining[0].ID != immutableDuplicate.ID || remaining[0].Status != string(QuestionStatusUsed) {
 		t.Fatalf("expected immutable duplicate to remain, got %+v", remaining)
+	}
+}
+
+func TestServiceImportArchivedQuestionsPrependsUsedHistoryAndWritesBackup(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	duplicate, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "What habit helps you reset after a long day?",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(duplicate) failed: %v", err)
+	}
+	remainingReady, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "What would you learn if you had an extra free hour?",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(remaining ready) failed: %v", err)
+	}
+
+	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
+		integrationCollectorChannelID: {
+			{
+				MessageID:          "message-3",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"What place would you revisit without changing a thing?"}]`),
+				CreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
+			},
+			{
+				MessageID:          "message-2",
+				AuthorID:           "999999999999999999",
+				AuthorNameSnapshot: "QOTD Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"What habit helps you reset after a long day?\nAsked by another bot"}]`),
+				CreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
+			},
+			{
+				MessageID:          "message-1",
+				AuthorID:           "555555555555555555",
+				AuthorNameSnapshot: "Ignored Bot",
+				AuthorIsBot:        true,
+				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Ignored question"}]`),
+				CreatedAt:          time.Date(2026, 4, 11, 15, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	backupDir := t.TempDir()
+	result, err := service.ImportArchivedQuestions(context.Background(), "g1", "importer-1", &discordgo.Session{}, ImportArchivedQuestionsParams{
+		DeckID:          files.LegacyQOTDDefaultDeckID,
+		SourceChannelID: integrationCollectorChannelID,
+		AuthorIDs:       []string{"999999999999999999"},
+		StartDate:       "2026-04-01",
+		BackupDir:       backupDir,
+	})
+	if err != nil {
+		t.Fatalf("ImportArchivedQuestions() failed: %v", err)
+	}
+	if result.DeckID != files.LegacyQOTDDefaultDeckID {
+		t.Fatalf("expected default deck id, got %+v", result)
+	}
+	if result.ScannedMessages != 3 || result.MatchedMessages != 2 {
+		t.Fatalf("unexpected scan result: %+v", result)
+	}
+	if result.StoredQuestions != 2 || result.ImportedQuestions != 2 {
+		t.Fatalf("unexpected import counts: %+v", result)
+	}
+	if result.DuplicateQuestions != 1 || result.DeletedQuestions != 1 {
+		t.Fatalf("unexpected duplicate removal counts: %+v", result)
+	}
+	if result.BackupPath == "" {
+		t.Fatalf("expected backup path, got %+v", result)
+	}
+
+	backupBytes, err := os.ReadFile(result.BackupPath)
+	if err != nil {
+		t.Fatalf("ReadFile(backup) failed: %v", err)
+	}
+	backupText := string(backupBytes)
+	expectedBackup := "What habit helps you reset after a long day?\nWhat place would you revisit without changing a thing?\n"
+	if backupText != expectedBackup {
+		t.Fatalf("unexpected backup text:\n%s", backupText)
+	}
+
+	deleted, err := store.GetQOTDQuestion(context.Background(), "g1", duplicate.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(deleted duplicate) failed: %v", err)
+	}
+	if deleted != nil {
+		t.Fatalf("expected duplicate ready question to be deleted, got %+v", deleted)
+	}
+
+	questions, err := service.ListQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions() failed: %v", err)
+	}
+	if len(questions) != 3 {
+		t.Fatalf("expected three questions after import, got %+v", questions)
+	}
+	if questions[0].DisplayID != 1 || questions[0].Body != "What habit helps you reset after a long day?" {
+		t.Fatalf("expected oldest imported question first, got %+v", questions)
+	}
+	if questions[0].Status != string(QuestionStatusUsed) || questions[0].UsedAt == nil || questions[0].PublishedOnceAt == nil {
+		t.Fatalf("expected oldest imported question to be marked used, got %+v", questions[0])
+	}
+	if questions[1].DisplayID != 2 || questions[1].Body != "What place would you revisit without changing a thing?" {
+		t.Fatalf("expected second imported question next, got %+v", questions)
+	}
+	if questions[1].Status != string(QuestionStatusUsed) || questions[1].UsedAt == nil || questions[1].PublishedOnceAt == nil {
+		t.Fatalf("expected second imported question to be marked used, got %+v", questions[1])
+	}
+	if questions[2].ID != remainingReady.ID || questions[2].DisplayID != 3 || questions[2].Status != string(QuestionStatusReady) {
+		t.Fatalf("expected original ready question to shift after imported history, got %+v", questions)
+	}
+
+	totalCollected, err := store.CountQOTDCollectedQuestions(context.Background(), "g1")
+	if err != nil {
+		t.Fatalf("CountQOTDCollectedQuestions() failed: %v", err)
+	}
+	if totalCollected != 2 {
+		t.Fatalf("expected two stored collected questions, got %d", totalCollected)
 	}
 }
 

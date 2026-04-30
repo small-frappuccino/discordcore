@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -150,6 +151,75 @@ func TestDescribeResetDeckResultMentionsCurrentSlotPause(t *testing.T) {
 	}
 	if !strings.Contains(message, "cleared 1 QOTD publish record") {
 		t.Fatalf("expected reset description to preserve the reset summary, got %q", message)
+	}
+}
+
+func TestQuestionsImportCommandParsesIDsAndReportsSummary(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &importCommandStubService{
+		settings: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:   files.LegacyQOTDDefaultDeckID,
+				Name: files.LegacyQOTDDefaultDeckName,
+			}},
+		},
+		importResult: applicationqotd.ImportArchivedQuestionsResult{
+			DeckID:             files.LegacyQOTDDefaultDeckID,
+			ScannedMessages:    42,
+			MatchedMessages:    12,
+			StoredQuestions:    12,
+			ImportedQuestions:  10,
+			DuplicateQuestions: 2,
+			DeletedQuestions:   2,
+			BackupPath:         filepath.Join("backups", "qotd-imports", "qotd-import-guild-1-default-20260429-120000.txt"),
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsImportSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
+		{Name: questionsImportUsersName, Type: discordgo.ApplicationCommandOptionString, Value: "123456789012345678, <@!987654321098765432>"},
+		{Name: questionsImportChannel, Type: discordgo.ApplicationCommandOptionChannel, Value: "223456789012345678"},
+		{Name: questionsImportStartDate, Type: discordgo.ApplicationCommandOptionString, Value: "2026-01-01"},
+	}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "Scanned 42 messages") {
+		t.Fatalf("expected import summary to mention scan count, got %q", resp.Data.Content)
+	}
+	if !strings.Contains(resp.Data.Content, "Imported 10 historical QOTD questions as used history.") {
+		t.Fatalf("expected import summary to mention imported count, got %q", resp.Data.Content)
+	}
+	if !strings.Contains(resp.Data.Content, "qotd-imports") {
+		t.Fatalf("expected import summary to mention local backup path, got %q", resp.Data.Content)
+	}
+	if service.importCalls != 1 {
+		t.Fatalf("expected import command to call ImportArchivedQuestions once, got %d", service.importCalls)
+	}
+	if service.lastImportGuild != guildID || service.lastImportActor != ownerID || service.lastImportSession != session {
+		t.Fatalf("expected import command to forward guild, actor, and session, got guild=%q actor=%q session=%p", service.lastImportGuild, service.lastImportActor, service.lastImportSession)
+	}
+	if service.lastImportParams.DeckID != files.LegacyQOTDDefaultDeckID {
+		t.Fatalf("expected import command to use the active deck, got %+v", service.lastImportParams)
+	}
+	if service.lastImportParams.SourceChannelID != "223456789012345678" {
+		t.Fatalf("expected import command to forward the selected channel, got %+v", service.lastImportParams)
+	}
+	if service.lastImportParams.StartDate != "2026-01-01" {
+		t.Fatalf("expected import command to forward the start date, got %+v", service.lastImportParams)
+	}
+	if len(service.lastImportParams.AuthorIDs) != 2 || service.lastImportParams.AuthorIDs[0] != "123456789012345678" || service.lastImportParams.AuthorIDs[1] != "987654321098765432" {
+		t.Fatalf("expected import command to parse user ids, got %+v", service.lastImportParams.AuthorIDs)
+	}
+	if strings.TrimSpace(service.lastImportParams.BackupDir) == "" {
+		t.Fatalf("expected import command to provide a backup directory, got %+v", service.lastImportParams)
 	}
 }
 

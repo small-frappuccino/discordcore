@@ -32,6 +32,17 @@ type listCommandStubService struct {
 	listCalls int
 }
 
+type importCommandStubService struct {
+	settings          files.QOTDConfig
+	importResult      applicationqotd.ImportArchivedQuestionsResult
+	importErr         error
+	importCalls       int
+	lastImportGuild   string
+	lastImportActor   string
+	lastImportSession *discordgo.Session
+	lastImportParams  applicationqotd.ImportArchivedQuestionsParams
+}
+
 func (s *publishCommandStubService) Settings(string) (files.QOTDConfig, error) {
 	return s.settings, nil
 }
@@ -58,6 +69,10 @@ func (s *publishCommandStubService) ResetDeckState(context.Context, string, stri
 
 func (s *publishCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
 	panic("unexpected GetAutomaticQueueState call")
+}
+
+func (s *publishCommandStubService) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
+	panic("unexpected ImportArchivedQuestions call")
 }
 
 func (s *publishCommandStubService) PublishNow(_ context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error) {
@@ -103,7 +118,52 @@ func (s *listCommandStubService) GetAutomaticQueueState(context.Context, string,
 	panic("unexpected GetAutomaticQueueState call")
 }
 
+func (s *listCommandStubService) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
+	panic("unexpected ImportArchivedQuestions call")
+}
+
 func (s *listCommandStubService) PublishNow(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
+	panic("unexpected PublishNow call")
+}
+
+func (s *importCommandStubService) Settings(string) (files.QOTDConfig, error) {
+	return s.settings, nil
+}
+
+func (s *importCommandStubService) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
+	panic("unexpected ListQuestions call")
+}
+
+func (s *importCommandStubService) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected CreateQuestion call")
+}
+
+func (s *importCommandStubService) DeleteQuestion(context.Context, string, int64) error {
+	panic("unexpected DeleteQuestion call")
+}
+
+func (s *importCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected SetNextQuestion call")
+}
+
+func (s *importCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
+	panic("unexpected ResetDeckState call")
+}
+
+func (s *importCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
+	panic("unexpected GetAutomaticQueueState call")
+}
+
+func (s *importCommandStubService) ImportArchivedQuestions(_ context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
+	s.importCalls++
+	s.lastImportGuild = guildID
+	s.lastImportActor = actorID
+	s.lastImportSession = session
+	s.lastImportParams = params
+	return s.importResult, s.importErr
+}
+
+func (s *importCommandStubService) PublishNow(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
 	panic("unexpected PublishNow call")
 }
 
