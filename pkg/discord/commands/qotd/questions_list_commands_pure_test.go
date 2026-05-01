@@ -190,15 +190,19 @@ func TestQuestionsImportCommandParsesIDsAndReportsSummary(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "Scanned 42 messages") {
-		t.Fatalf("expected import summary to mention scan count, got %q", resp.Data.Content)
+	if resp.Type != discordgo.InteractionResponseDeferredChannelMessageWithSource {
+		t.Fatalf("expected import command to defer initial response, got type %v", resp.Type)
 	}
-	if !strings.Contains(resp.Data.Content, "Imported 10 historical QOTD questions as used history.") {
-		t.Fatalf("expected import summary to mention imported count, got %q", resp.Data.Content)
+
+	finalContent := rec.lastEdit(t)
+	if !strings.Contains(finalContent, "Scanned 42 messages") {
+		t.Fatalf("expected import summary to mention scan count, got %q", finalContent)
 	}
-	if !strings.Contains(resp.Data.Content, "qotd-imports") {
-		t.Fatalf("expected import summary to mention local backup path, got %q", resp.Data.Content)
+	if !strings.Contains(finalContent, "Imported 10 historical QOTD questions as used history.") {
+		t.Fatalf("expected import summary to mention imported count, got %q", finalContent)
+	}
+	if !strings.Contains(finalContent, "qotd-imports") {
+		t.Fatalf("expected import summary to mention local backup path, got %q", finalContent)
 	}
 	if service.importCalls != 1 {
 		t.Fatalf("expected import command to call ImportArchivedQuestions once, got %d", service.importCalls)

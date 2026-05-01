@@ -412,6 +412,11 @@ func (c *questionsImportCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
+	rm := core.NewResponseManager(ctx.Session)
+	if err := rm.DeferResponse(ctx.Interaction, false); err != nil {
+		return err
+	}
+
 	result, err := c.service.ImportArchivedQuestions(context.Background(), ctx.GuildID, ctx.UserID, ctx.Session, applicationqotd.ImportArchivedQuestionsParams{
 		DeckID:          deck.ID,
 		SourceChannelID: channelID,
@@ -420,15 +425,24 @@ func (c *questionsImportCommand) Handle(ctx *core.Context) error {
 		BackupDir:       defaultQuestionsImportBackupDir(),
 	})
 	if err != nil {
-		return translateQuestionsImportError(err)
+		return rm.EditResponse(ctx.Interaction, describeQuestionsImportError(translateQuestionsImportError(err)))
 	}
 	if result.MatchedMessages == 0 {
-		return core.NewResponseBuilder(ctx.Session).
-			Info(ctx.Interaction, fmt.Sprintf("No historical QOTD questions matched in <#%s> since %s for deck `%s`.", channelID, startDate, deck.Name))
+		return rm.EditResponse(ctx.Interaction, fmt.Sprintf("No historical QOTD questions matched in <#%s> since %s for deck `%s`.", channelID, startDate, deck.Name))
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, describeQuestionsImportResult(deck.Name, channelID, result))
+	return rm.EditResponse(ctx.Interaction, describeQuestionsImportResult(deck.Name, channelID, result))
+}
+
+func describeQuestionsImportError(err error) string {
+	if err == nil {
+		return "An error occurred while importing historical QOTD questions."
+	}
+	var cmdErr *core.CommandError
+	if errors.As(err, &cmdErr) && cmdErr != nil && strings.TrimSpace(cmdErr.Message) != "" {
+		return cmdErr.Message
+	}
+	return err.Error()
 }
 
 func (c *questionsQueueCommand) Handle(ctx *core.Context) error {

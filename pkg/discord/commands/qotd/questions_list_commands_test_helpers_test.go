@@ -170,6 +170,7 @@ func (s *importCommandStubService) PublishNow(context.Context, string, *discordg
 type interactionRecorder struct {
 	mu        sync.Mutex
 	responses []discordgo.InteractionResponse
+	edits     []string
 }
 
 func (r *interactionRecorder) addResponse(resp discordgo.InteractionResponse) {
@@ -188,6 +189,22 @@ func (r *interactionRecorder) lastResponse(t *testing.T) discordgo.InteractionRe
 	return r.responses[len(r.responses)-1]
 }
 
+func (r *interactionRecorder) addEdit(content string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.edits = append(r.edits, content)
+}
+
+func (r *interactionRecorder) lastEdit(t *testing.T) string {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.edits) == 0 {
+		t.Fatal("expected at least one webhook edit")
+	}
+	return r.edits[len(r.edits)-1]
+}
+
 func newQOTDCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRecorder) {
 	t.Helper()
 
@@ -200,14 +217,31 @@ func newQOTDCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRe
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		if req.Method == http.MethodPatch && strings.Contains(req.URL.Path, "/messages/@original") {
+			var payload struct {
+				Content *string `json:"content"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&payload)
+			if payload.Content != nil {
+				rec.addEdit(*payload.Content)
+			} else {
+				rec.addEdit("")
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":"message-1"}`))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(server.Close)
 
 	oldAPI := discordgo.EndpointAPI
+	oldWebhooks := discordgo.EndpointWebhooks
 	discordgo.EndpointAPI = server.URL + "/"
+	discordgo.EndpointWebhooks = discordgo.EndpointAPI + "webhooks/"
 	t.Cleanup(func() {
 		discordgo.EndpointAPI = oldAPI
+		discordgo.EndpointWebhooks = oldWebhooks
 	})
 
 	session, err := discordgo.New("Bot test-token")
