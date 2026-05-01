@@ -45,6 +45,7 @@ const (
 	questionsListUnknownDeck  = "QOTD deck not found"
 	questionsListMissingGuild = "This command can only be used in a server"
 	questionsListIdleTimeout  = 60 * time.Second
+	questionsListPageJumpSize = 10
 )
 
 type QuestionCatalogService interface {
@@ -591,7 +592,7 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 		DeckID: view.deck.ID,
 		Page:   0,
 	}
-	if err := respondQuestionsList(ctx, view, state, false, questionsListRouteFirst); err != nil {
+	if err := respondQuestionsList(ctx, view, state, false, true); err != nil {
 		return err
 	}
 	c.armQuestionsListIdleTimeoutForOriginalResponse(ctx)
@@ -617,7 +618,7 @@ func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
 
 	totalPages := discordqotdBuildPageCount(len(view.questions))
 	state.Page = nextQuestionsListPage(action, state.Page, totalPages)
-	if err := respondQuestionsList(ctx, view, state, false, action); err != nil {
+	if err := respondQuestionsList(ctx, view, state, false, false); err != nil {
 		return err
 	}
 	c.armQuestionsListIdleTimeoutForMessage(ctx)
@@ -685,7 +686,7 @@ func respondQuestionsList(
 	view questionsListView,
 	state questionsListState,
 	ephemeral bool,
-	action string,
+	initial bool,
 ) error {
 	totalQuestions := len(view.questions)
 	totalPages := discordqotdBuildPageCount(totalQuestions)
@@ -698,7 +699,7 @@ func respondQuestionsList(
 		TotalQuestions: totalQuestions,
 	})
 	components := buildQuestionsListComponents(state, totalPages)
-	return sendQuestionsListResponse(ctx, embed, components, ephemeral, action == questionsListRouteFirst)
+	return sendQuestionsListResponse(ctx, embed, components, ephemeral, initial)
 }
 
 func buildQuestionsListComponents(state questionsListState, totalPages int) []discordgo.MessageComponent {
@@ -765,13 +766,13 @@ func nextQuestionsListPage(action string, currentPage int, totalPages int) int {
 	currentPage = normalizeQuestionsListPage(currentPage, totalPages)
 	switch action {
 	case questionsListRouteFirst:
-		return 0
+		return normalizeQuestionsListPage(currentPage-questionsListPageJumpSize, totalPages)
 	case questionsListRoutePrev:
 		return normalizeQuestionsListPage(currentPage-1, totalPages)
 	case questionsListRouteNext:
 		return normalizeQuestionsListPage(currentPage+1, totalPages)
 	case questionsListRouteLast:
-		return normalizeQuestionsListPage(totalPages-1, totalPages)
+		return normalizeQuestionsListPage(currentPage+questionsListPageJumpSize, totalPages)
 	default:
 		return currentPage
 	}

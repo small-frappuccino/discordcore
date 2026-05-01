@@ -99,6 +99,70 @@ func TestQuestionsListPaginationStillUpdatesAfterUnderlyingStateChanges(t *testi
 	}
 }
 
+func TestQuestionsListFirstRouteUpdatesExistingMessage(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &listCommandStubService{
+		settings: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:   files.LegacyQOTDDefaultDeckID,
+				Name: files.LegacyQOTDDefaultDeckName,
+			}},
+		},
+	}
+	questions := make([]storage.QOTDQuestionRecord, 0, 25)
+	for idx := 1; idx <= 25; idx++ {
+		questions = append(questions, storage.QOTDQuestionRecord{
+			ID:            int64(idx),
+			DisplayID:     int64(idx),
+			GuildID:       guildID,
+			DeckID:        files.LegacyQOTDDefaultDeckID,
+			Body:          fmt.Sprintf("Question %02d", idx),
+			Status:        string(applicationqotd.QuestionStatusReady),
+			QueuePosition: int64(idx),
+		})
+	}
+	service.views = [][]storage.QOTDQuestionRecord{questions}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDComponentInteraction(guildID, ownerID, encodeQuestionsListState(questionsListRouteFirst, questionsListState{
+		UserID: ownerID,
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Page:   2,
+	})))
+
+	resp := rec.lastResponse(t)
+	if resp.Type != discordgo.InteractionResponseUpdateMessage {
+		t.Fatalf("expected << interaction to update the existing message, got type %v", resp.Type)
+	}
+	if !strings.Contains(resp.Data.Embeds[0].Description, "Question 01") {
+		t.Fatalf("expected << to jump back to the first page from page 3, got %q", resp.Data.Embeds[0].Description)
+	}
+}
+
+func TestNextQuestionsListPageJumpsTenPagesForDoubleArrows(t *testing.T) {
+	const totalPages = 78
+
+	if got := nextQuestionsListPage(questionsListRouteLast, 33, totalPages); got != 43 {
+		t.Fatalf("expected >> to jump forward 10 pages from 34 to 44, got page index %d", got)
+	}
+	if got := nextQuestionsListPage(questionsListRouteFirst, 33, totalPages); got != 23 {
+		t.Fatalf("expected << to jump back 10 pages from 34 to 24, got page index %d", got)
+	}
+	if got := nextQuestionsListPage(questionsListRouteLast, 72, totalPages); got != 77 {
+		t.Fatalf("expected >> to clamp at the last page, got page index %d", got)
+	}
+	if got := nextQuestionsListPage(questionsListRouteFirst, 4, totalPages); got != 0 {
+		t.Fatalf("expected << to clamp at the first page, got page index %d", got)
+	}
+}
+
 func TestQuestionsListIdleTimeoutResetsOnActivity(t *testing.T) {
 	fired := make(chan struct{}, 2)
 	command := &questionsListCommand{
