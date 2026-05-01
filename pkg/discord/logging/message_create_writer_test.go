@@ -333,6 +333,88 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 	service.messageCreateWriter = nil
 }
 
+func TestMessageEventService_ProcessMessageDeleteSkipsRetryWhenMessageProcessDisabled(t *testing.T) {
+	const (
+		guildID   = "g-message-delete-no-process"
+		channelID = "c-message-delete-no-process"
+		messageID = "m-message-delete-no-process"
+	)
+
+	store, _ := newLoggingStore(t, "message-delete-no-process.db")
+	messageProcess := false
+	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
+		MessageDelete: "c-message-delete-log",
+	}, func(cfg *files.GuildConfig) {
+		cfg.Features.Logging.MessageProcess = &messageProcess
+	})
+
+	session := newMessageWriterTestSession(t, guildID, "c-message-delete-log")
+	session.Identify.Intents = discordgo.IntentsGuildMessages
+
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service.cacheEnabled = true
+	service.versioningEnabled = true
+
+	err := service.processMessageDelete(context.Background(), session, &discordgo.MessageDelete{
+		Message: &discordgo.Message{
+			ID:        messageID,
+			GuildID:   guildID,
+			ChannelID: channelID,
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("expected no retry error when message processing is disabled, got %v", err)
+	}
+}
+
+func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(t *testing.T) {
+	const (
+		guildID      = "g-message-delete-bot"
+		channelID    = "c-message-delete-bot"
+		logChannelID = "c-message-delete-bot-log"
+		messageID    = "m-message-delete-bot"
+	)
+
+	store, _ := newLoggingStore(t, "message-delete-bot.db")
+	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
+		MessageDelete: logChannelID,
+	})
+
+	session := newMessageWriterTestSession(t, guildID, logChannelID)
+	session.Identify.Intents = discordgo.IntentsGuildMessages
+	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID}); err != nil {
+		t.Fatalf("add guild to state: %v", err)
+	}
+	if err := session.State.ChannelAdd(&discordgo.Channel{ID: channelID, GuildID: guildID, Type: discordgo.ChannelTypeGuildText}); err != nil {
+		t.Fatalf("add channel to state: %v", err)
+	}
+	session.State.MaxMessageCount = 10
+	session.State.MessageAdd(&discordgo.Message{
+		ID:        messageID,
+		GuildID:   guildID,
+		ChannelID: channelID,
+		Author: &discordgo.User{
+			ID:  "bot-user",
+			Bot: true,
+		},
+	})
+
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service.cacheEnabled = true
+	service.versioningEnabled = true
+
+	err := service.processMessageDelete(context.Background(), session, &discordgo.MessageDelete{
+		Message: &discordgo.Message{
+			ID:        messageID,
+			GuildID:   guildID,
+			ChannelID: channelID,
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("expected no retry error for bot message found in state, got %v", err)
+	}
+}
+
 func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
 	writer := newMessageCreateWriter(nil)
 	writer.flushInterval = time.Hour

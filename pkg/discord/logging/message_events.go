@@ -718,6 +718,10 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 	cached := mes.lookupCachedMessage(guildID, m.ID, allowWait)
 	if cached == nil {
 		if !allowWait && mes.store != nil && guildID != "" {
+			if !mes.shouldRetryMessageDeleteCacheMiss(s, guildID, m) {
+				slog.Debug("MessageDelete: cache miss for uncached message; skipping retry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID)
+				return nil
+			}
 			return fmt.Errorf("%w: message delete cache miss", task.ErrRetrySilent)
 		}
 		slog.Info("Message delete detected but original not in cache/persistence", "messageID", m.ID, "channelID", m.ChannelID)
@@ -788,6 +792,30 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 	// Versioned history (delete) - hardcoded enabled
 	mes.persistMessageDelete(cached, mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil, mes.versioningEnabled && mes.store != nil && cached.Author != nil, "message_delete")
 	return nil
+}
+
+func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(s *discordgo.Session, guildID string, m *discordgo.MessageDelete) bool {
+	if mes == nil || strings.TrimSpace(guildID) == "" || m == nil {
+		return false
+	}
+
+	processDecision := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageProcess, guildID)
+	if !processDecision.Enabled {
+		return false
+	}
+
+	deleteDecision := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageDelete, guildID)
+	if !deleteDecision.Enabled {
+		return false
+	}
+
+	if s != nil && s.State != nil {
+		if msg, err := s.State.Message(m.ChannelID, m.ID); err == nil && msg != nil && msg.Author != nil && msg.Author.Bot {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (mes *MessageEventService) lookupCachedMessage(guildID, messageID string, allowWait bool) *CachedMessage {
