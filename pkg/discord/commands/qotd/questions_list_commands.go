@@ -975,10 +975,7 @@ func isCommandNumericID(value string) bool {
 }
 
 func defaultQuestionsImportBackupDir() string {
-	if wd, err := os.Getwd(); err == nil && strings.TrimSpace(wd) != "" {
-		return filepath.Join(wd, "backups", "qotd-imports")
-	}
-	return filepath.Join("backups", "qotd-imports")
+	return filepath.Join("D:", "backups", "qotd-imports")
 }
 
 func displayQuestionsImportBackupPath(path string) string {
