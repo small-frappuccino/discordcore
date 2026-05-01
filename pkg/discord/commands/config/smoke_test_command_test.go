@@ -20,7 +20,7 @@ func TestSmokeTestSubCommandReportsDormantBootstrapAndQOTDActions(t *testing.T) 
 	})
 
 	resp := harness.runSlash(t, smokeTestSubCommandName)
-	assertEphemeralContains(t, resp, "General / Initial Setup")
+	assertPublicContains(t, resp, "General / Initial Setup")
 	if !strings.Contains(resp.Data.Content, "/config list remains available while this guild is still dormant") {
 		t.Fatalf("expected dormant /config list readiness in response, got %q", resp.Data.Content)
 	}
@@ -42,7 +42,7 @@ func TestSmokeTestSubCommandReportsReadyQOTDAndUnlockedCommands(t *testing.T) {
 	mustSetGuildQOTDConfig(t, harness.cm, guildID, buildTestQOTDConfig(false, "qotd-123", testCommandSchedule()))
 
 	resp := harness.runSlash(t, smokeTestSubCommandName)
-	assertEphemeralContains(t, resp, "QOTD")
+	assertPublicContains(t, resp, "QOTD")
 	if !strings.Contains(resp.Data.Content, "Full slash command surface is enabled") {
 		t.Fatalf("expected full slash enabled line in response, got %q", resp.Data.Content)
 	}

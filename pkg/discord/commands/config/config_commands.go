@@ -232,7 +232,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	persister := core.NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("Failed to save configuration", true)
+		return core.NewCommandError("Failed to save configuration", false)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
@@ -353,8 +353,7 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 
 	builder := core.NewResponseBuilder(ctx.Session).
 		WithEmbed().
-		WithTitle("Configuration Options").
-		Ephemeral()
+		WithTitle("Configuration Options")
 
 	return builder.Info(ctx.Interaction, strings.Join(options, "\n"))
 }

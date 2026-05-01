@@ -18,6 +18,6 @@ func TestQOTDConfigChannelCommandSetsActiveDeckChannel(t *testing.T) {
 		channelOpt(qotdChannelOptionName, "123456789012345678"),
 	)
 
-	assertEphemeralContains(t, resp, "QOTD channel set to")
+	assertPublicContains(t, resp, "QOTD channel set to")
 	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", false, files.QOTDPublishScheduleConfig{})
 }

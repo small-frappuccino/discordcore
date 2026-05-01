@@ -117,14 +117,12 @@ func intOpt(name string, value int64) *discordgo.ApplicationCommandInteractionDa
 	}
 }
 
-func assertEphemeralContains(t *testing.T, resp discordgo.InteractionResponse, want string) {
+func assertPublicContains(t *testing.T, resp discordgo.InteractionResponse, want string) {
 	t.Helper()
 
-	if err := ephemeralError(resp); err != nil {
-		t.Fatal(err)
-	}
+	assertPublicResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, want) {
-		t.Fatalf("expected ephemeral response to contain %q, got %q", want, resp.Data.Content)
+		t.Fatalf("expected public response to contain %q, got %q", want, resp.Data.Content)
 	}
 }
 

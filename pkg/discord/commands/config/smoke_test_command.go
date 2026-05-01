@@ -42,7 +42,6 @@ func (c *SmokeTestSubCommand) Handle(ctx *core.Context) error {
 	lines = append(lines, qotdSmokeTestLines(ctx)...)
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
 		Info(ctx.Interaction, strings.Join(lines, "\n"))
 }
 

@@ -33,9 +33,7 @@ func TestCommandsEnabledSubCommandPersistsFeatureToggle(t *testing.T) {
 		boolOpt(commandEnabledOptionName, true),
 	}))
 	resp := rec.lastResponse(t)
-	if err := ephemeralError(resp); err != nil {
-		t.Fatal(err)
-	}
+	assertPublicResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "now enabled") {
 		t.Fatalf("unexpected commands_enabled response: %q", resp.Data.Content)
 	}
@@ -59,9 +57,7 @@ func TestCommandChannelSubCommandSetsChannel(t *testing.T) {
 		channelOpt(commandChannelOptionName, "987654321098765432"),
 	}))
 	resp := rec.lastResponse(t)
-	if err := ephemeralError(resp); err != nil {
-		t.Fatal(err)
-	}
+	assertPublicResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "<#987654321098765432>") {
 		t.Fatalf("unexpected command_channel response: %q", resp.Data.Content)
 	}
@@ -85,18 +81,14 @@ func TestAllowedRoleCommandsAddListAndRemove(t *testing.T) {
 		roleOpt(allowedRoleOptionName, "role-123"),
 	}))
 	addResp := rec.lastResponse(t)
-	if err := ephemeralError(addResp); err != nil {
-		t.Fatal(err)
-	}
+	assertPublicResponse(t, addResp)
 	if !strings.Contains(addResp.Data.Content, "role-123") {
 		t.Fatalf("unexpected allowed_role_add response: %q", addResp.Data.Content)
 	}
 
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, allowedRoleListSubCommandName, nil))
 	listResp := rec.lastResponse(t)
-	if err := ephemeralError(listResp); err != nil {
-		t.Fatal(err)
-	}
+	assertPublicResponse(t, listResp)
 	if !strings.Contains(listResp.Data.Content, "<@&role-123>") {
 		t.Fatalf("unexpected allowed_role_list response: %q", listResp.Data.Content)
 	}
@@ -105,9 +97,7 @@ func TestAllowedRoleCommandsAddListAndRemove(t *testing.T) {
 		roleOpt(allowedRoleOptionName, "role-123"),
 	}))
 	removeResp := rec.lastResponse(t)
-	if err := ephemeralError(removeResp); err != nil {
-		t.Fatal(err)
-	}
+	assertPublicResponse(t, removeResp)
 	if !strings.Contains(removeResp.Data.Content, "role-123") {
 		t.Fatalf("unexpected allowed_role_remove response: %q", removeResp.Data.Content)
 	}

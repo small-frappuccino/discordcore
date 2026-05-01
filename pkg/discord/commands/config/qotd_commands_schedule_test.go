@@ -17,6 +17,6 @@ func TestQOTDConfigScheduleCommandPersistsSchedule(t *testing.T) {
 		intOpt(qotdScheduleMinuteOptionName, 43),
 	)
 
-	assertEphemeralContains(t, resp, "QOTD publish schedule set to")
+	assertPublicContains(t, resp, "QOTD publish schedule set to")
 	assertActiveQOTDDeckState(t, harness.cm, guildID, "", false, testCommandSchedule())
 }

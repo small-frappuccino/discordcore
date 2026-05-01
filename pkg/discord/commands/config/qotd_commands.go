@@ -52,7 +52,7 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, func(deck *files.QOTDDeckConfig) error {
 		if enabled && strings.TrimSpace(deck.ChannelID) == "" {
-			return core.NewCommandError("Set a QOTD channel before enabling publishing", true)
+			return core.NewCommandError("Set a QOTD channel before enabling publishing", false)
 		}
 		deck.Enabled = enabled
 		return nil
@@ -67,7 +67,6 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
 		Success(ctx.Interaction, fmt.Sprintf("QOTD is now %s for deck `%s`.", state, updatedDeck.Name))
 }
 
@@ -101,7 +100,7 @@ func (c *QOTDChannelSubCommand) RequiresPermissions() bool { return true }
 func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 	channelID := channelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), qotdChannelOptionName)
 	if channelID == "" {
-		return core.NewCommandError("Channel is required", true)
+		return core.NewCommandError("Channel is required", false)
 	}
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, func(deck *files.QOTDDeckConfig) error {
@@ -118,7 +117,6 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
 		Success(ctx.Interaction, fmt.Sprintf("QOTD channel set to <#%s> for deck `%s`. Publishing remains %s.", channelID, updatedDeck.Name, state))
 }
 
@@ -169,7 +167,6 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Ephemeral().
 		Success(ctx.Interaction, fmt.Sprintf("QOTD publish schedule set to %s UTC.", formatQOTDSchedule(updatedConfig.Schedule)))
 }
 
@@ -204,7 +201,7 @@ func updateQOTDConfig(
 	persister := core.NewConfigPersister(configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save QOTD config: %v", err)
-		return files.QOTDConfig{}, core.NewCommandError("Failed to save configuration", true)
+		return files.QOTDConfig{}, core.NewCommandError("Failed to save configuration", false)
 	}
 
 	return updatedConfig, nil
@@ -218,7 +215,7 @@ func updateActiveQOTDDeck(
 	updatedConfig, err := updateQOTDConfig(ctx, configManager, func(cfg *files.QOTDConfig) error {
 		deckIndex := activeQOTDDeckIndex(*cfg)
 		if deckIndex < 0 {
-			return core.NewCommandError("QOTD configuration is unavailable", true)
+			return core.NewCommandError("QOTD configuration is unavailable", false)
 		}
 		return mutate(&cfg.Decks[deckIndex])
 	})
@@ -227,7 +224,7 @@ func updateActiveQOTDDeck(
 	}
 	deckIndex := activeQOTDDeckIndex(updatedConfig)
 	if deckIndex < 0 {
-		return files.QOTDDeckConfig{}, core.NewCommandError("QOTD configuration is unavailable", true)
+		return files.QOTDDeckConfig{}, core.NewCommandError("QOTD configuration is unavailable", false)
 	}
 	return updatedConfig.Decks[deckIndex], nil
 }
@@ -272,7 +269,7 @@ func translateQOTDConfigError(err error) error {
 		if message == "schedule.hour_utc and schedule.minute_utc are required when enabled" {
 			message = "Set the QOTD publish hour and minute before enabling publishing"
 		}
-		return core.NewCommandError(message, true)
+		return core.NewCommandError(message, false)
 	}
 	return err
 }

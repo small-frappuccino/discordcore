@@ -443,7 +443,7 @@ func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption {
 		{
 			Type:        discordgo.ApplicationCommandOptionBoolean,
 			Name:        "ephemeral",
-			Description: "Show panel as ephemeral (recommended)",
+			Description: "Show panel as ephemeral",
 			Required:    false,
 		},
 	}
@@ -455,7 +455,7 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	ephemeral := extractor.Bool("ephemeral")
 	if !optionWasProvided(ctx.Interaction, "ephemeral") {
-		ephemeral = true
+		ephemeral = false
 	}
 
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
