@@ -134,6 +134,44 @@ func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
 	return s.Settings(guildID)
 }
 
+// PurgeTestQuestions removes every question whose body contains the word
+// "TESTING" (case-insensitive) from all decks in the given guild.
+// This bypasses the normal immutability guard so that already-used test
+// questions are also removed. Intended for one-off startup cleanup only.
+func (s *Service) PurgeTestQuestions(ctx context.Context, guildID string) (int, error) {
+	if err := s.validate(); err != nil {
+		return 0, err
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return 0, nil
+	}
+
+	settings, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return 0, err
+	}
+
+	removed := 0
+	for _, deck := range settings.Decks {
+		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		if err != nil {
+			return removed, fmt.Errorf("list questions for deck %s: %w", deck.ID, err)
+		}
+		for _, q := range questions {
+			if !strings.Contains(strings.ToUpper(q.Body), "TESTING") {
+				continue
+			}
+			if err := s.store.DeleteQOTDQuestion(ctx, guildID, q.ID); err != nil {
+				log.ApplicationLogger().Warn("Failed to purge test question", "guildID", guildID, "questionID", q.ID, "err", err)
+				continue
+			}
+			removed++
+		}
+	}
+	return removed, nil
+}
+
 func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, err

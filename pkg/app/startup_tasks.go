@@ -141,6 +141,41 @@ func scheduleStartupWebhookEmbedUpdates(
 	startupTasks.GoLight("startup_webhook_embed_updates", run)
 }
 
+func scheduleQOTDTestQuestionPurge(startupTasks *startupTaskOrchestrator, configManager *files.ConfigManager, qotdService *qotd.Service) {
+	if qotdService == nil || configManager == nil {
+		return
+	}
+
+	run := func(ctx context.Context) error {
+		cfg := configManager.Config()
+		if cfg == nil {
+			return nil
+		}
+		for _, guild := range cfg.Guilds {
+			guildID := strings.TrimSpace(guild.GuildID)
+			if guildID == "" {
+				continue
+			}
+			removed, err := qotdService.PurgeTestQuestions(ctx, guildID)
+			if err != nil {
+				log.ApplicationLogger().Warn("QOTD test question purge failed", "guildID", guildID, "err", err)
+				continue
+			}
+			if removed > 0 {
+				log.ApplicationLogger().Info("Purged QOTD test questions", "guildID", guildID, "removed", removed)
+			}
+		}
+		return nil
+	}
+
+	if startupTasks == nil {
+		_ = run(context.Background())
+		return
+	}
+
+	startupTasks.GoLight("qotd_test_question_purge", run)
+}
+
 func scheduleControlServerStartup(startupTasks *startupTaskOrchestrator, opts controlStartupTaskOptions) {
 	run := func(ctx context.Context) error {
 		return startControlServerStartupTask(ctx, opts)
