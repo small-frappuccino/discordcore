@@ -11,9 +11,7 @@ import (
 )
 
 const (
-	legacyOfficialIndexThreadName    = "questions list!"
-	legacyOfficialIndexThreadMessage = "daily qotd prompts are archived here."
-	defaultThreadAutoArchiveMinutes  = 4320
+	defaultThreadAutoArchiveMinutes  = 10080
 	officialQuestionEmbedColor       = 0xF48FB1
 )
 
@@ -299,68 +297,6 @@ func buildOfficialQuestionFooter(deckName string, availableQuestions int, displa
 		return fmt.Sprintf("Question ID %d from %s -- %d questions remaining", displayID, deckName, availableQuestions)
 	}
 	return fmt.Sprintf("%s -- %d questions remaining", deckName, availableQuestions)
-}
-
-func (p *Publisher) ensureLegacyOfficialIndexThread(ctx context.Context, session *discordgo.Session, parentChannelID, preferredThreadID string) (string, error) {
-	thread, err := resolveThreadByParentChannelID(ctx, session, parentChannelID, preferredThreadID)
-	if err != nil {
-		return "", err
-	}
-	if thread == nil {
-		thread, err = session.ForumThreadStartComplex(
-			parentChannelID,
-			&discordgo.ThreadStart{
-				Name:                legacyOfficialIndexThreadName,
-				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
-			},
-			&discordgo.MessageSend{
-				Content:         legacyOfficialIndexThreadMessage,
-				AllowedMentions: &discordgo.MessageAllowedMentions{},
-			},
-		)
-		if err != nil {
-			return "", fmt.Errorf("create qotd legacy index thread: %w", err)
-		}
-	}
-
-	threadID := ""
-	if thread != nil {
-		threadID = strings.TrimSpace(thread.ID)
-	}
-	if threadID == "" {
-		return "", fmt.Errorf("resolve qotd legacy index thread: missing thread id")
-	}
-	return threadID, nil
-}
-
-func resolveThreadByParentChannelID(ctx context.Context, session *discordgo.Session, parentChannelID, threadID string) (*discordgo.Channel, error) {
-	parentChannelID = strings.TrimSpace(parentChannelID)
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return nil, nil
-	}
-	if parentChannelID == "" {
-		return nil, fmt.Errorf("resolve qotd legacy index thread by id: parent channel id is required")
-	}
-	if session == nil {
-		return nil, fmt.Errorf("resolve qotd legacy index thread by id: discord session is required")
-	}
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-	}
-	thread, err := session.Channel(threadID)
-	if err != nil {
-		if isNotFoundRESTError(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("resolve qotd legacy index thread by id: %w", err)
-	}
-	if thread == nil || strings.TrimSpace(thread.ParentID) != parentChannelID {
-		return nil, nil
-	}
-	return thread, nil
 }
 
 func normalizeOfficialQuestionText(questionText string) string {

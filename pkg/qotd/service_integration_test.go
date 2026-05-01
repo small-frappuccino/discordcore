@@ -2234,8 +2234,8 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	if len(fake.fetchCalls) != 1 {
 		t.Fatalf("expected reconcile to fetch the official thread archive only, got %v", fake.fetchCalls)
 	}
-	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
-		t.Fatalf("expected archived official thread state, got %+v", fake.threadStates["official-thread-archive"])
+	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}) {
+		t.Fatalf("expected archived official thread to remain available, got %+v", fake.threadStates["official-thread-archive"])
 	}
 
 	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {

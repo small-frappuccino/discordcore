@@ -178,7 +178,7 @@ func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.S
 
 	if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
 		Pinned:   false,
-		Locked:   !lifecycle.AnswerWindow.IsOpen,
+		Locked:   false,
 		Archived: false,
 	}); err != nil {
 		return err
@@ -231,8 +231,8 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 		state = string(OfficialPostStateMissingDiscord)
 	} else if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
 		Pinned:   false,
-		Locked:   true,
-		Archived: true,
+		Locked:   false,
+		Archived: false,
 	}); err != nil {
 		return err
 	} else if missing {
