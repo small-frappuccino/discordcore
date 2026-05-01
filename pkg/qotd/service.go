@@ -558,7 +558,7 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 		return nil, err
 	}
 
-	if firstMutableIndex >= 0 && movedIndex != firstMutableIndex {
+	if firstMutableIndex >= 0 && movedIndex > firstMutableIndex {
 		orderedIDs := reorderQuestionIDsToIndex(questions, movedIndex, firstMutableIndex)
 		if len(orderedIDs) > 0 {
 			if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, orderedIDs); err != nil {

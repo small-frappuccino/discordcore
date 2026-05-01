@@ -475,6 +475,63 @@ func TestServiceRestoreUsedQuestionRejectsNonUsedQuestion(t *testing.T) {
 	}
 }
 
+func TestServiceRestoreUsedQuestionKeepsRecoveredQuestionAheadOfPriorNextReady(t *testing.T) {
+	service, store, _ := newIntegrationTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	created := make([]*storage.QOTDQuestionRecord, 0, 4)
+	for idx := 1; idx <= 4; idx++ {
+		question, err := service.CreateQuestion(context.Background(), "g1", fmt.Sprintf("user-%d", idx), QuestionMutation{
+			Body:   fmt.Sprintf("Question %d", idx),
+			Status: QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+		created = append(created, question)
+	}
+
+	for _, idx := range []int{0, 1} {
+		usedAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+		created[idx].Status = string(QuestionStatusUsed)
+		created[idx].UsedAt = &usedAt
+		if _, err := store.UpdateQOTDQuestion(context.Background(), *created[idx]); err != nil {
+			t.Fatalf("UpdateQOTDQuestion(%d) failed: %v", idx, err)
+		}
+	}
+
+	restored, err := service.RestoreUsedQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created[0].ID)
+	if err != nil {
+		t.Fatalf("RestoreUsedQuestion() failed: %v", err)
+	}
+	if restored == nil {
+		t.Fatal("expected restored question")
+	}
+	if restored.DisplayID != 1 {
+		t.Fatalf("expected restored question to remain ahead of the prior ready queue at visible ID 1, got %+v", restored)
+	}
+
+	persisted, err := service.ListQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions() failed: %v", err)
+	}
+	if len(persisted) != 4 {
+		t.Fatalf("expected four questions after recover, got %+v", persisted)
+	}
+	if persisted[0].ID != created[0].ID || persisted[0].DisplayID != 1 || persisted[0].Status != string(QuestionStatusReady) {
+		t.Fatalf("expected recovered question to become the next ready question at visible ID 1, got %+v", persisted)
+	}
+	if persisted[1].ID != created[1].ID || persisted[1].Status != string(QuestionStatusUsed) {
+		t.Fatalf("expected the other used question to keep its relative position behind the recovered one, got %+v", persisted)
+	}
+	if persisted[2].ID != created[2].ID || persisted[2].DisplayID != 3 {
+		t.Fatalf("expected the prior next-ready question to stay behind the recovered one, got %+v", persisted)
+	}
+}
+
 func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 	service, store, _ := newIntegrationTestQOTDService(t)
 

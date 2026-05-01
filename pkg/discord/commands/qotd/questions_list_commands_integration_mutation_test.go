@@ -286,6 +286,90 @@ func TestQuestionsRecoverCommandMovesUsedQuestionBackToReady(t *testing.T) {
 	}
 }
 
+func TestQuestionsRecoverCommandMakesRecoveredQuestionNextWhenItAlreadySitsBeforeReadyQueue(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, store := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:   files.LegacyQOTDDefaultDeckID,
+			Name: files.LegacyQOTDDefaultDeckName,
+		}},
+	})
+
+	created := make([]*storage.QOTDQuestionRecord, 0, 4)
+	for idx := 1; idx <= 4; idx++ {
+		question, err := service.CreateQuestion(context.Background(), guildID, ownerID, applicationqotd.QuestionMutation{
+			DeckID: files.LegacyQOTDDefaultDeckID,
+			Body:   fmt.Sprintf("Question %d", idx),
+			Status: applicationqotd.QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+		created = append(created, question)
+	}
+
+	for _, idx := range []int{0, 1} {
+		usedAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+		created[idx].Status = string(applicationqotd.QuestionStatusUsed)
+		created[idx].UsedAt = &usedAt
+		if _, err := store.UpdateQOTDQuestion(context.Background(), *created[idx]); err != nil {
+			t.Fatalf("UpdateQOTDQuestion(%d) failed: %v", idx, err)
+		}
+	}
+
+	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions(before) failed: %v", err)
+	}
+	if questions[0].ID != created[0].ID || questions[0].DisplayID != 1 {
+		t.Fatalf("expected recover target to start at visible ID 1, got %+v", questions)
+	}
+	if questions[2].ID != created[2].ID || questions[2].DisplayID != 3 {
+		t.Fatalf("expected question 3 to be the next ready question before recover, got %+v", questions)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsRecoverSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
+		qotdIntOpt(questionsIDOptionName, 1),
+	}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "Recovered QOTD question ID 1 from used to ready") {
+		t.Fatalf("expected recover confirmation with ID, got %q", resp.Data.Content)
+	}
+	if strings.Contains(resp.Data.Content, "listed as ID") {
+		t.Fatalf("expected recovered question to keep visible ID 1 when it becomes next, got %q", resp.Data.Content)
+	}
+
+	updated, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions() failed: %v", err)
+	}
+	if updated[0].ID != created[0].ID || updated[0].DisplayID != 1 || updated[0].Status != string(applicationqotd.QuestionStatusReady) {
+		t.Fatalf("expected recovered question to become the next ready slot at visible ID 1, got %+v", updated)
+	}
+	if updated[2].ID != created[2].ID || updated[2].DisplayID != 3 {
+		t.Fatalf("expected prior next-ready question to remain behind the recovered question, got %+v", updated)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsListSubCommand, nil))
+	listResp := rec.lastResponse(t)
+	requirePublicResponse(t, listResp)
+	if len(listResp.Data.Embeds) != 1 {
+		t.Fatalf("expected one embed after list command, got %+v", listResp.Data.Embeds)
+	}
+	if !strings.Contains(listResp.Data.Embeds[0].Description, "Question 1\" (ID:1 • ready • publishes next)") {
+		t.Fatalf("expected recovered question to be marked as publishes next in list, got %q", listResp.Data.Embeds[0].Description)
+	}
+}
+
 func TestQuestionsRecoverCommandShowsSpecificErrorForNonUsedQuestion(t *testing.T) {
 	const (
 		guildID = "guild-1"
