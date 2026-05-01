@@ -519,11 +519,30 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 		return nil, err
 	}
 
-	question, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 	if err != nil {
 		return nil, err
 	}
-	if question == nil || question.DeckID != deck.ID {
+	if len(questions) == 0 {
+		return nil, ErrQuestionNotFound
+	}
+
+	movedIndex := -1
+	firstMutableIndex := -1
+	for idx, question := range questions {
+		if firstMutableIndex < 0 && !isImmutableQuestion(question) {
+			firstMutableIndex = idx
+		}
+		if question.ID == questionID {
+			movedIndex = idx
+		}
+	}
+	if movedIndex < 0 {
+		return nil, ErrQuestionNotFound
+	}
+
+	question := &questions[movedIndex]
+	if question.DeckID != deck.ID {
 		return nil, ErrQuestionNotFound
 	}
 	if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusUsed {
@@ -535,7 +554,27 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 	question.ScheduledForDateUTC = nil
 	question.PublishedOnceAt = nil
 
-	return s.store.UpdateQOTDQuestion(ctx, *question)
+	if _, err := s.store.UpdateQOTDQuestion(ctx, *question); err != nil {
+		return nil, err
+	}
+
+	if firstMutableIndex >= 0 && movedIndex != firstMutableIndex {
+		orderedIDs := reorderQuestionIDsToIndex(questions, movedIndex, firstMutableIndex)
+		if len(orderedIDs) > 0 {
+			if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, orderedIDs); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	updated, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, ErrQuestionNotFound
+	}
+	return updated, nil
 }
 
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {

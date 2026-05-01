@@ -395,26 +395,34 @@ func TestServiceRestoreUsedQuestionMovesQuestionBackToReady(t *testing.T) {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
-	created, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
-		Body:   "Recover this question",
-		Status: QuestionStatusReady,
-	})
-	if err != nil {
-		t.Fatalf("CreateQuestion() failed: %v", err)
+	created := make([]*storage.QOTDQuestionRecord, 0, 4)
+	for idx := 1; idx <= 4; idx++ {
+		question, err := service.CreateQuestion(context.Background(), "g1", fmt.Sprintf("user-%d", idx), QuestionMutation{
+			Body:   fmt.Sprintf("Question %d", idx),
+			Status: QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+		created = append(created, question)
 	}
 
-	usedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
-	publishedOnceAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
-	slotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
-	created.Status = string(QuestionStatusUsed)
-	created.UsedAt = &usedAt
-	created.PublishedOnceAt = &publishedOnceAt
-	created.ScheduledForDateUTC = &slotDate
-	if _, err := store.UpdateQOTDQuestion(context.Background(), *created); err != nil {
-		t.Fatalf("UpdateQOTDQuestion() failed: %v", err)
+	for _, idx := range []int{0, 3} {
+		usedAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+		created[idx].Status = string(QuestionStatusUsed)
+		created[idx].UsedAt = &usedAt
+		if idx == 3 {
+			publishedOnceAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+			slotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+			created[idx].PublishedOnceAt = &publishedOnceAt
+			created[idx].ScheduledForDateUTC = &slotDate
+		}
+		if _, err := store.UpdateQOTDQuestion(context.Background(), *created[idx]); err != nil {
+			t.Fatalf("UpdateQOTDQuestion(%d) failed: %v", idx, err)
+		}
 	}
 
-	restored, err := service.RestoreUsedQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created.ID)
+	restored, err := service.RestoreUsedQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created[3].ID)
 	if err != nil {
 		t.Fatalf("RestoreUsedQuestion() failed: %v", err)
 	}
@@ -424,22 +432,25 @@ func TestServiceRestoreUsedQuestionMovesQuestionBackToReady(t *testing.T) {
 	if restored.Status != string(QuestionStatusReady) {
 		t.Fatalf("expected restored status ready, got %+v", restored)
 	}
+	if restored.DisplayID != 2 {
+		t.Fatalf("expected restored question to move ahead of the prior next-ready slot and become visible ID 2, got %+v", restored)
+	}
 	if restored.UsedAt != nil || restored.PublishedOnceAt != nil || restored.ScheduledForDateUTC != nil {
 		t.Fatalf("expected restore to clear used/scheduled/published markers, got %+v", restored)
 	}
 
-	persisted, err := store.GetQOTDQuestion(context.Background(), "g1", created.ID)
+	persisted, err := service.ListQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
-		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+		t.Fatalf("ListQuestions() failed: %v", err)
 	}
-	if persisted == nil {
-		t.Fatal("expected persisted question")
+	if len(persisted) != 4 {
+		t.Fatalf("expected four questions after recover, got %+v", persisted)
 	}
-	if persisted.Status != string(QuestionStatusReady) {
-		t.Fatalf("expected persisted status ready, got %+v", persisted)
+	if persisted[1].ID != created[3].ID || persisted[1].DisplayID != 2 {
+		t.Fatalf("expected recovered question to move to visible ID 2, got %+v", persisted)
 	}
-	if persisted.UsedAt != nil || persisted.PublishedOnceAt != nil || persisted.ScheduledForDateUTC != nil {
-		t.Fatalf("expected persisted restore markers to be cleared, got %+v", persisted)
+	if persisted[2].ID != created[1].ID || persisted[2].DisplayID != 3 {
+		t.Fatalf("expected previous next-ready question to shift back one slot, got %+v", persisted)
 	}
 }
 

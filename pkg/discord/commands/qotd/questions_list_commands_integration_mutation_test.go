@@ -213,48 +213,76 @@ func TestQuestionsRecoverCommandMovesUsedQuestionBackToReady(t *testing.T) {
 		}},
 	})
 
-	created, err := service.CreateQuestion(context.Background(), guildID, ownerID, applicationqotd.QuestionMutation{
-		DeckID: files.LegacyQOTDDefaultDeckID,
-		Body:   "Recover me",
-		Status: applicationqotd.QuestionStatusReady,
-	})
-	if err != nil {
-		t.Fatalf("CreateQuestion() failed: %v", err)
+	created := make([]*storage.QOTDQuestionRecord, 0, 4)
+	for idx := 1; idx <= 4; idx++ {
+		question, err := service.CreateQuestion(context.Background(), guildID, ownerID, applicationqotd.QuestionMutation{
+			DeckID: files.LegacyQOTDDefaultDeckID,
+			Body:   fmt.Sprintf("Question %d", idx),
+			Status: applicationqotd.QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
+		}
+		created = append(created, question)
 	}
 
-	usedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
-	publishedOnceAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
-	slotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
-	created.Status = string(applicationqotd.QuestionStatusUsed)
-	created.UsedAt = &usedAt
-	created.PublishedOnceAt = &publishedOnceAt
-	created.ScheduledForDateUTC = &slotDate
-	if _, err := store.UpdateQOTDQuestion(context.Background(), *created); err != nil {
-		t.Fatalf("UpdateQOTDQuestion() failed: %v", err)
+	for _, idx := range []int{0, 3} {
+		usedAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+		created[idx].Status = string(applicationqotd.QuestionStatusUsed)
+		created[idx].UsedAt = &usedAt
+		if idx == 3 {
+			publishedOnceAt := time.Date(2026, 4, 3, 13, idx, 0, 0, time.UTC)
+			slotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+			created[idx].PublishedOnceAt = &publishedOnceAt
+			created[idx].ScheduledForDateUTC = &slotDate
+		}
+		if _, err := store.UpdateQOTDQuestion(context.Background(), *created[idx]); err != nil {
+			t.Fatalf("UpdateQOTDQuestion(%d) failed: %v", idx, err)
+		}
+	}
+
+	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions(before) failed: %v", err)
+	}
+	if questions[1].ID != created[1].ID || questions[1].DisplayID != 2 {
+		t.Fatalf("expected question 2 to be the next ready question before recover, got %+v", questions)
+	}
+	if questions[3].ID != created[3].ID || questions[3].DisplayID != 4 {
+		t.Fatalf("expected recover target to start at visible ID 4, got %+v", questions)
 	}
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsRecoverSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
-		qotdIntOpt(questionsIDOptionName, created.DisplayID),
+		qotdIntOpt(questionsIDOptionName, 4),
 	}))
 
 	resp := rec.lastResponse(t)
 	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, fmt.Sprintf("Recovered QOTD question ID %d from used to ready", created.DisplayID)) {
+	if !strings.Contains(resp.Data.Content, "Recovered QOTD question ID 4 from used to ready") {
 		t.Fatalf("expected recover confirmation with ID, got %q", resp.Data.Content)
+	}
+	if !strings.Contains(resp.Data.Content, "ID 2") {
+		t.Fatalf("expected recover confirmation to mention the new visible ID, got %q", resp.Data.Content)
 	}
 
 	updated, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
 	if err != nil {
 		t.Fatalf("ListQuestions() failed: %v", err)
 	}
-	if len(updated) != 1 {
-		t.Fatalf("expected one question after recover, got %+v", updated)
+	if len(updated) != 4 {
+		t.Fatalf("expected four questions after recover, got %+v", updated)
 	}
-	if updated[0].Status != string(applicationqotd.QuestionStatusReady) {
-		t.Fatalf("expected recovered question status ready, got %+v", updated[0])
+	if updated[1].ID != created[3].ID || updated[1].DisplayID != 2 {
+		t.Fatalf("expected recovered question to move to visible ID 2, got %+v", updated)
 	}
-	if updated[0].UsedAt != nil || updated[0].PublishedOnceAt != nil || updated[0].ScheduledForDateUTC != nil {
-		t.Fatalf("expected recovered question to clear used/scheduled/published markers, got %+v", updated[0])
+	if updated[1].Status != string(applicationqotd.QuestionStatusReady) {
+		t.Fatalf("expected recovered question status ready, got %+v", updated[1])
+	}
+	if updated[1].UsedAt != nil || updated[1].PublishedOnceAt != nil || updated[1].ScheduledForDateUTC != nil {
+		t.Fatalf("expected recovered question to clear used/scheduled/published markers, got %+v", updated[1])
+	}
+	if updated[2].ID != created[1].ID || updated[2].DisplayID != 3 {
+		t.Fatalf("expected previous next-ready question to shift back one slot, got %+v", updated)
 	}
 }
 

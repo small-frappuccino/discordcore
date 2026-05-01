@@ -632,12 +632,20 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 		return translateQuestionsRecoverError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
-	if _, err := c.service.RestoreUsedQuestion(context.Background(), ctx.GuildID, deck.ID, question.ID); err != nil {
+	updated, err := c.service.RestoreUsedQuestion(context.Background(), ctx.GuildID, deck.ID, question.ID)
+	if err != nil {
 		return translateQuestionsRecoverError(displayID, err)
+	}
+	if updated == nil {
+		return translateQuestionsRecoverError(displayID, applicationqotd.ErrQuestionNotFound)
+	}
+	if visibleQuestionID(*updated) == displayID {
+		return core.NewResponseBuilder(ctx.Session).
+			Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s`.", displayID, deck.Name))
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s`.", displayID, deck.Name))
+		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s` and it is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
 }
 
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
