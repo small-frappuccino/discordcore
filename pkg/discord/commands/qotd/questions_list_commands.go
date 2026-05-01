@@ -28,6 +28,7 @@ const (
 	questionsQueueSubCommand  = "queue"
 	questionsNextSubCommand   = "next"
 	questionsResetSubCommand  = "reset"
+	questionsRecoverSubCommand = "recover"
 	questionsRemoveSubCommand = "remove"
 	questionsImportSubCommand = "import"
 	questionsBodyOptionName   = "question"
@@ -54,6 +55,7 @@ type QuestionCatalogService interface {
 	CreateQuestion(ctx context.Context, guildID, actorID string, mutation applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error)
 	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
 	SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
+	RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	ResetDeckState(ctx context.Context, guildID, deckID string) (applicationqotd.ResetDeckResult, error)
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
 	ImportArchivedQuestions(ctx context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error)
@@ -81,6 +83,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	importCommand := &questionsImportCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
 	resetCommand := &questionsResetCommand{service: c.service}
+	recoverCommand := &questionsRecoverCommand{service: c.service}
 	removeCommand := &questionsRemoveCommand{service: c.service}
 	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
 	questionsGroup.AddSubCommand(addCommand)
@@ -89,6 +92,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	questionsGroup.AddSubCommand(nextCommand)
 	questionsGroup.AddSubCommand(importCommand)
 	questionsGroup.AddSubCommand(resetCommand)
+	questionsGroup.AddSubCommand(recoverCommand)
 	questionsGroup.AddSubCommand(removeCommand)
 
 	var group *core.GroupCommand
@@ -132,6 +136,10 @@ type questionsNextCommand struct {
 }
 
 type questionsQueueCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsRecoverCommand struct {
 	service QuestionCatalogService
 }
 
@@ -259,6 +267,12 @@ func (c *questionsRemoveCommand) Description() string {
 	return "Remove a question from QOTD by visible ID"
 }
 
+func (c *questionsRecoverCommand) Name() string { return questionsRecoverSubCommand }
+
+func (c *questionsRecoverCommand) Description() string {
+	return "Exceptionally move a used QOTD question back to ready by visible ID"
+}
+
 func (c *questionsNextCommand) Name() string { return questionsNextSubCommand }
 
 func (c *questionsNextCommand) Description() string {
@@ -304,6 +318,26 @@ func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption
 
 func (c *questionsRemoveCommand) RequiresGuild() bool       { return true }
 func (c *questionsRemoveCommand) RequiresPermissions() bool { return true }
+
+func (c *questionsRecoverCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        questionsIDOptionName,
+			Description: "Question ID from the questions list embed",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsDeckOptionName,
+			Description: "Deck ID or exact deck name. Defaults to the active deck.",
+			Required:    false,
+		},
+	}
+}
+
+func (c *questionsRecoverCommand) RequiresGuild() bool       { return true }
+func (c *questionsRecoverCommand) RequiresPermissions() bool { return true }
 
 func (c *questionsResetCommand) Name() string { return questionsResetSubCommand }
 
@@ -573,6 +607,37 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 
 	return core.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d from deck `%s`.", displayID, deck.Name))
+}
+
+func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	displayID := extractor.Int(questionsIDOptionName)
+	if displayID <= 0 {
+		return core.NewCommandError("Question ID must be greater than zero.", false)
+	}
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
+	if err != nil {
+		return err
+	}
+	question := findQuestionByDisplayID(questions, displayID)
+	if question == nil {
+		return translateQuestionsRecoverError(displayID, applicationqotd.ErrQuestionNotFound)
+	}
+
+	if _, err := c.service.RestoreUsedQuestion(context.Background(), ctx.GuildID, deck.ID, question.ID); err != nil {
+		return translateQuestionsRecoverError(displayID, err)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s`.", displayID, deck.Name))
 }
 
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
@@ -1169,6 +1234,19 @@ func translateQuestionsSetNextError(questionID int64, err error) error {
 	return translateQuestionsMutationError(err)
 }
 
+func translateQuestionsRecoverError(questionID int64, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotUsed) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", questionID), false)
+	}
+	return translateQuestionsMutationError(err)
+}
+
 func translateQuestionsImportError(err error) error {
 	if err == nil {
 		return nil
@@ -1207,6 +1285,7 @@ var _ core.SubCommand = (*questionsQueueCommand)(nil)
 var _ core.SubCommand = (*questionsNextCommand)(nil)
 var _ core.SubCommand = (*questionsImportCommand)(nil)
 var _ core.SubCommand = (*questionsResetCommand)(nil)
+var _ core.SubCommand = (*questionsRecoverCommand)(nil)
 var _ core.SubCommand = (*questionsRemoveCommand)(nil)
 var _ core.SubCommand = (*qotdPublishCommand)(nil)
 

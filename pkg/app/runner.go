@@ -331,7 +331,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
 	scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), defaultSession)
-	scheduleQOTDTestQuestionPurge(startupTasks, configManager, qotdService)
 	scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
 		runOptions:            opts,
 		configManager:         configManager,

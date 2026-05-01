@@ -196,3 +196,103 @@ func TestQuestionsNextCommandShowsSpecificErrorForUsedQuestion(t *testing.T) {
 		t.Fatalf("expected command-specific error response, got generic fallback %q", resp.Data.Content)
 	}
 }
+
+func TestQuestionsRecoverCommandMovesUsedQuestionBackToReady(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, store := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:   files.LegacyQOTDDefaultDeckID,
+			Name: files.LegacyQOTDDefaultDeckName,
+		}},
+	})
+
+	created, err := service.CreateQuestion(context.Background(), guildID, ownerID, applicationqotd.QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "Recover me",
+		Status: applicationqotd.QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	usedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	publishedOnceAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	slotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	created.Status = string(applicationqotd.QuestionStatusUsed)
+	created.UsedAt = &usedAt
+	created.PublishedOnceAt = &publishedOnceAt
+	created.ScheduledForDateUTC = &slotDate
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *created); err != nil {
+		t.Fatalf("UpdateQOTDQuestion() failed: %v", err)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsRecoverSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
+		qotdIntOpt(questionsIDOptionName, created.DisplayID),
+	}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, fmt.Sprintf("Recovered QOTD question ID %d from used to ready", created.DisplayID)) {
+		t.Fatalf("expected recover confirmation with ID, got %q", resp.Data.Content)
+	}
+
+	updated, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("ListQuestions() failed: %v", err)
+	}
+	if len(updated) != 1 {
+		t.Fatalf("expected one question after recover, got %+v", updated)
+	}
+	if updated[0].Status != string(applicationqotd.QuestionStatusReady) {
+		t.Fatalf("expected recovered question status ready, got %+v", updated[0])
+	}
+	if updated[0].UsedAt != nil || updated[0].PublishedOnceAt != nil || updated[0].ScheduledForDateUTC != nil {
+		t.Fatalf("expected recovered question to clear used/scheduled/published markers, got %+v", updated[0])
+	}
+}
+
+func TestQuestionsRecoverCommandShowsSpecificErrorForNonUsedQuestion(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouter(t, session, guildID, ownerID)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Decks: []files.QOTDDeckConfig{{
+			ID:   files.LegacyQOTDDefaultDeckID,
+			Name: files.LegacyQOTDDefaultDeckName,
+		}},
+	})
+
+	created, err := service.CreateQuestion(context.Background(), guildID, ownerID, applicationqotd.QuestionMutation{
+		DeckID: files.LegacyQOTDDefaultDeckID,
+		Body:   "Still ready",
+		Status: applicationqotd.QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsRecoverSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{
+		qotdIntOpt(questionsIDOptionName, created.DisplayID),
+	}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", created.DisplayID)) {
+		t.Fatalf("expected non-used recover error, got %q", resp.Data.Content)
+	}
+	if strings.Contains(resp.Data.Content, "An error occurred while executing the command") {
+		t.Fatalf("expected command-specific error response, got generic fallback %q", resp.Data.Content)
+	}
+}

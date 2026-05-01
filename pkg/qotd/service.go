@@ -24,6 +24,7 @@ var (
 	ErrNoQuestionsAvailable = errors.New("no qotd questions available")
 	ErrImmutableQuestion    = errors.New("qotd question is already scheduled or used")
 	ErrQuestionNotFound     = errors.New("qotd question not found")
+	ErrQuestionNotUsed      = errors.New("qotd question is not used")
 	ErrQuestionNotReady     = errors.New("qotd question is not ready")
 	ErrDeckNotFound         = errors.New("qotd deck not found")
 	ErrDiscordUnavailable   = errors.New("discord session unavailable")
@@ -132,44 +133,6 @@ func (s *Service) Settings(guildID string) (files.QOTDConfig, error) {
 
 func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
 	return s.Settings(guildID)
-}
-
-// PurgeTestQuestions removes every question whose body contains the word
-// "TESTING" (case-insensitive) from all decks in the given guild.
-// This bypasses the normal immutability guard so that already-used test
-// questions are also removed. Intended for one-off startup cleanup only.
-func (s *Service) PurgeTestQuestions(ctx context.Context, guildID string) (int, error) {
-	if err := s.validate(); err != nil {
-		return 0, err
-	}
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return 0, nil
-	}
-
-	settings, err := s.configManager.QOTDConfig(guildID)
-	if err != nil {
-		return 0, err
-	}
-
-	removed := 0
-	for _, deck := range settings.Decks {
-		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
-		if err != nil {
-			return removed, fmt.Errorf("list questions for deck %s: %w", deck.ID, err)
-		}
-		for _, q := range questions {
-			if !strings.Contains(strings.ToUpper(q.Body), "TESTING") {
-				continue
-			}
-			if err := s.store.DeleteQOTDQuestion(ctx, guildID, q.ID); err != nil {
-				log.ApplicationLogger().Warn("Failed to purge test question", "guildID", guildID, "questionID", q.ID, "err", err)
-				continue
-			}
-			removed++
-		}
-	}
-	return removed, nil
 }
 
 func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
@@ -535,6 +498,44 @@ func (s *Service) SetNextQuestion(ctx context.Context, guildID, deckID string, q
 		return nil, ErrQuestionNotFound
 	}
 	return updated, nil
+}
+
+func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
+	if err := s.validate(); err != nil {
+		return nil, err
+	}
+
+	if questionID <= 0 {
+		return nil, fmt.Errorf("%w: question id must be greater than zero", files.ErrInvalidQOTDInput)
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return nil, err
+	}
+
+	question, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+	if err != nil {
+		return nil, err
+	}
+	if question == nil || question.DeckID != deck.ID {
+		return nil, ErrQuestionNotFound
+	}
+	if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusUsed {
+		return nil, ErrQuestionNotUsed
+	}
+
+	question.Status = string(QuestionStatusReady)
+	question.UsedAt = nil
+	question.ScheduledForDateUTC = nil
+	question.PublishedOnceAt = nil
+
+	return s.store.UpdateQOTDQuestion(ctx, *question)
 }
 
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {

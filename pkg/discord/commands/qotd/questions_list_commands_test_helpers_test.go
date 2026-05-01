@@ -63,6 +63,10 @@ func (s *publishCommandStubService) SetNextQuestion(context.Context, string, str
 	panic("unexpected SetNextQuestion call")
 }
 
+func (s *publishCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected RestoreUsedQuestion call")
+}
+
 func (s *publishCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
 	panic("unexpected ResetDeckState call")
 }
@@ -110,6 +114,10 @@ func (s *listCommandStubService) SetNextQuestion(context.Context, string, string
 	panic("unexpected SetNextQuestion call")
 }
 
+func (s *listCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected RestoreUsedQuestion call")
+}
+
 func (s *listCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
 	panic("unexpected ResetDeckState call")
 }
@@ -144,6 +152,10 @@ func (s *importCommandStubService) DeleteQuestion(context.Context, string, int64
 
 func (s *importCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	panic("unexpected SetNextQuestion call")
+}
+
+func (s *importCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected RestoreUsedQuestion call")
 }
 
 func (s *importCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {

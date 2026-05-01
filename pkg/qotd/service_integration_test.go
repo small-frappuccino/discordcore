@@ -388,6 +388,82 @@ func TestServiceSetNextQuestionReturnsImmutableForUsedQuestion(t *testing.T) {
 	}
 }
 
+func TestServiceRestoreUsedQuestionMovesQuestionBackToReady(t *testing.T) {
+	service, store, _ := newIntegrationTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	created, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Recover this question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	usedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	publishedOnceAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	slotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	created.Status = string(QuestionStatusUsed)
+	created.UsedAt = &usedAt
+	created.PublishedOnceAt = &publishedOnceAt
+	created.ScheduledForDateUTC = &slotDate
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *created); err != nil {
+		t.Fatalf("UpdateQOTDQuestion() failed: %v", err)
+	}
+
+	restored, err := service.RestoreUsedQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created.ID)
+	if err != nil {
+		t.Fatalf("RestoreUsedQuestion() failed: %v", err)
+	}
+	if restored == nil {
+		t.Fatal("expected restored question")
+	}
+	if restored.Status != string(QuestionStatusReady) {
+		t.Fatalf("expected restored status ready, got %+v", restored)
+	}
+	if restored.UsedAt != nil || restored.PublishedOnceAt != nil || restored.ScheduledForDateUTC != nil {
+		t.Fatalf("expected restore to clear used/scheduled/published markers, got %+v", restored)
+	}
+
+	persisted, err := store.GetQOTDQuestion(context.Background(), "g1", created.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if persisted == nil {
+		t.Fatal("expected persisted question")
+	}
+	if persisted.Status != string(QuestionStatusReady) {
+		t.Fatalf("expected persisted status ready, got %+v", persisted)
+	}
+	if persisted.UsedAt != nil || persisted.PublishedOnceAt != nil || persisted.ScheduledForDateUTC != nil {
+		t.Fatalf("expected persisted restore markers to be cleared, got %+v", persisted)
+	}
+}
+
+func TestServiceRestoreUsedQuestionRejectsNonUsedQuestion(t *testing.T) {
+	service, _, _ := newIntegrationTestQOTDService(t)
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	created, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Still ready",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	_, err = service.RestoreUsedQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, created.ID)
+	if !errors.Is(err, ErrQuestionNotUsed) {
+		t.Fatalf("expected ErrQuestionNotUsed, got %v", err)
+	}
+}
+
 func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 	service, store, _ := newIntegrationTestQOTDService(t)
 
