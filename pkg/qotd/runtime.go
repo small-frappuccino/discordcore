@@ -48,7 +48,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 
-	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	existing, err := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, publishDate)
 	if err != nil {
 		return false, err
 	}

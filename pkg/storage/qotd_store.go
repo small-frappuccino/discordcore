@@ -1118,8 +1118,9 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 		      AND answer_channel_id IS NOT NULL THEN 0
 		    ELSE 1
 		  END,
-		  updated_at DESC,
-		  id DESC
+		  COALESCE(published_at, updated_at) DESC,
+		  id DESC,
+		  updated_at DESC
 		LIMIT 1`,
 		guildID,
 		publishDateUTC,

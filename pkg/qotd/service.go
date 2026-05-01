@@ -389,7 +389,7 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 		state.SlotPublishAtUTC = PublishTimeUTC(schedule, state.SlotDateUTC)
 		state.CanPublish = deck.Enabled && canPublishQOTD(deck)
 
-		officialPost, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, state.SlotDateUTC)
+		officialPost, err := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, state.SlotDateUTC)
 		if err != nil {
 			return AutomaticQueueState{}, err
 		}
@@ -633,7 +633,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	var currentSlotPost *storage.QOTDOfficialPostRecord
 	if scheduleErr == nil {
 		currentPublishDate = CurrentPublishDateUTC(schedule, now)
-		currentSlotPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
+		currentSlotPost, err = s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
 		if err != nil {
 			return Summary{}, err
 		}
@@ -691,10 +691,14 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		return nil, err
 	}
 	if existing != nil {
-		if isOfficialPostPublished(*existing) {
-			return nil, ErrAlreadyPublished
+		if existing.PublishMode == string(PublishModeManual) && isOfficialPostPublished(*existing) {
+			existing = nil
+		} else {
+			if isOfficialPostPublished(*existing) {
+				return nil, ErrAlreadyPublished
+			}
+			return nil, ErrPublishInProgress
 		}
-		return nil, ErrPublishInProgress
 	}
 
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)

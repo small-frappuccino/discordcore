@@ -657,19 +657,19 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	if err != nil {
 		t.Fatalf("GetSummary() failed: %v", err)
 	}
-	if !summary.PublishedForCurrentSlot {
-		t.Fatalf("expected manual publish to occupy the current slot, got %+v", summary)
+	if summary.PublishedForCurrentSlot {
+		t.Fatalf("expected manual publish to leave the automatic slot unpublished, got %+v", summary)
 	}
 
 	automaticQueue, err := service.GetAutomaticQueueState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusPublished {
-		t.Fatalf("expected manual publish to occupy the automatic slot, got %+v", automaticQueue)
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusDue {
+		t.Fatalf("expected manual publish to leave the automatic slot due, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotOfficialPost == nil || automaticQueue.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected manual publish to create the current slot record, got %+v", automaticQueue)
+	if automaticQueue.SlotOfficialPost != nil {
+		t.Fatalf("expected automatic slot to ignore manual official posts, got %+v", automaticQueue)
 	}
 	if automaticQueue.NextReadyQuestion != nil {
 		t.Fatalf("expected no next ready question after the only ready question was published manually, got %+v", automaticQueue)
@@ -684,7 +684,7 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	}
 }
 
-func TestServicePublishNowBlocksAdditionalManualPublishesForCurrentSlot(t *testing.T) {
+func TestServicePublishNowAllowsAdditionalManualPublishesForCurrentSlot(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -717,11 +717,18 @@ func TestServicePublishNowBlocksAdditionalManualPublishesForCurrentSlot(t *testi
 		t.Fatalf("expected first manual publish to consume the first question, got %+v", firstResult.Question)
 	}
 
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); !errors.Is(err, ErrAlreadyPublished) {
-		t.Fatalf("expected second manual publish to be blocked for the same current slot, got %v", err)
+	secondResult, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishNow(second) failed: %v", err)
 	}
-	if len(fake.publishedParams) != 1 {
-		t.Fatalf("expected only one real publish attempt for the current slot, got %d", len(fake.publishedParams))
+	if secondResult.Question.ID != created[1].ID {
+		t.Fatalf("expected second manual publish to use the next ready question, got %+v", secondResult.Question)
+	}
+	if secondResult.Question.Status != string(QuestionStatusUsed) || secondResult.Question.UsedAt == nil {
+		t.Fatalf("expected second manual publish to consume the second question, got %+v", secondResult.Question)
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected two real publish attempts for the current slot, got %d", len(fake.publishedParams))
 	}
 
 	firstStored, err := store.GetQOTDQuestion(context.Background(), "g1", created[0].ID)
@@ -735,12 +742,20 @@ func TestServicePublishNowBlocksAdditionalManualPublishesForCurrentSlot(t *testi
 	if err != nil {
 		t.Fatalf("GetQOTDQuestion(second) failed: %v", err)
 	}
-	if secondStored == nil || secondStored.Status != string(QuestionStatusReady) || secondStored.UsedAt != nil {
-		t.Fatalf("expected the blocked second publish to leave the next question untouched, got %+v", secondStored)
+	if secondStored == nil || secondStored.Status != string(QuestionStatusUsed) || secondStored.UsedAt == nil {
+		t.Fatalf("expected the second manual publish to consume the next question, got %+v", secondStored)
+	}
+
+	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if official == nil || official.QuestionID != created[1].ID || official.PublishMode != string(PublishModeManual) {
+		t.Fatalf("expected current slot pointer to advance to the latest manual publish, got %+v", official)
 	}
 }
 
-func TestServicePublishScheduledIfDueDoesNotRepublishCurrentSlotAfterManualPublish(t *testing.T) {
+func TestServicePublishScheduledIfDuePublishesNextQuestionAfterManualPublish(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -773,14 +788,14 @@ func TestServicePublishScheduledIfDueDoesNotRepublishCurrentSlotAfterManualPubli
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusPublished {
-		t.Fatalf("expected manual publish to occupy the current automatic slot, got %+v", automaticQueue)
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusDue {
+		t.Fatalf("expected manual publish to leave the current automatic slot due, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotOfficialPost == nil || automaticQueue.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected current slot to point at the manual official post, got %+v", automaticQueue)
+	if automaticQueue.SlotOfficialPost != nil {
+		t.Fatalf("expected automatic slot to ignore the manual official post, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotQuestion == nil || automaticQueue.SlotQuestion.ID != first.ID {
-		t.Fatalf("expected current slot question to stay anchored to the manual publish, got %+v", automaticQueue)
+	if automaticQueue.SlotQuestion != nil {
+		t.Fatalf("expected no scheduled slot question before automatic publish, got %+v", automaticQueue)
 	}
 	if automaticQueue.NextReadyQuestion == nil || automaticQueue.NextReadyQuestion.ID != second.ID {
 		t.Fatalf("expected the next ready question to move on after the manual publish, got %+v", automaticQueue)
@@ -790,27 +805,27 @@ func TestServicePublishScheduledIfDueDoesNotRepublishCurrentSlotAfterManualPubli
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
-	if published {
-		t.Fatal("expected scheduled publish to skip a slot already occupied by the manual publish")
+	if !published {
+		t.Fatal("expected scheduled publish to consume the next ready question after manual publish")
 	}
-	if len(fake.publishedParams) != 1 {
-		t.Fatalf("expected only the explicit manual publish attempt, got %d", len(fake.publishedParams))
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected one manual and one scheduled publish attempt, got %d", len(fake.publishedParams))
 	}
 
-	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	official, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
 	if err != nil {
-		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate() failed: %v", err)
 	}
-	if official == nil || official.PublishMode != string(PublishModeManual) || official.PublishedAt == nil {
-		t.Fatalf("expected manual official post to remain the only current-slot publish, got %+v", official)
+	if official == nil || official.PublishMode != string(PublishModeScheduled) || official.PublishedAt == nil || official.QuestionID != second.ID {
+		t.Fatalf("expected scheduled publish to use the next ready question for the current slot, got %+v", official)
 	}
 
 	storedSecond, err := store.GetQOTDQuestion(context.Background(), "g1", second.ID)
 	if err != nil {
 		t.Fatalf("GetQOTDQuestion(second) failed: %v", err)
 	}
-	if storedSecond == nil || storedSecond.Status != string(QuestionStatusReady) || storedSecond.UsedAt != nil {
-		t.Fatalf("expected the remaining question to stay unpublished, got %+v", storedSecond)
+	if storedSecond == nil || storedSecond.Status != string(QuestionStatusUsed) || storedSecond.UsedAt == nil {
+		t.Fatalf("expected scheduled publish to consume the remaining question, got %+v", storedSecond)
 	}
 	storedFirst, err := store.GetQOTDQuestion(context.Background(), "g1", first.ID)
 	if err != nil {
@@ -829,7 +844,7 @@ func TestServicePublishScheduledIfDueDoesNotRepublishCurrentSlotAfterManualPubli
 	}
 }
 
-func TestServiceGetAutomaticQueueStateTreatsManualPublishAsCurrentSlotPublish(t *testing.T) {
+func TestServiceGetAutomaticQueueStateIgnoresManualPublishForCurrentSlot(t *testing.T) {
 	service, _, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -862,14 +877,14 @@ func TestServiceGetAutomaticQueueStateTreatsManualPublishAsCurrentSlotPublish(t 
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if state.SlotStatus != AutomaticQueueSlotStatusPublished {
-		t.Fatalf("expected automatic queue to mark the current slot published after a manual publish, got %+v", state)
+	if state.SlotStatus != AutomaticQueueSlotStatusDue {
+		t.Fatalf("expected automatic queue to keep the current slot due after a manual publish, got %+v", state)
 	}
-	if state.SlotOfficialPost == nil || state.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected current slot to surface the manual official post, got %+v", state)
+	if state.SlotOfficialPost != nil {
+		t.Fatalf("expected automatic queue to ignore manual official posts, got %+v", state)
 	}
-	if state.SlotQuestion == nil || state.SlotQuestion.ID != first.ID {
-		t.Fatalf("expected current slot question to match the manual publish, got %+v", state)
+	if state.SlotQuestion != nil {
+		t.Fatalf("expected no scheduled slot question after manual publish alone, got %+v", state)
 	}
 	if state.NextReadyQuestion == nil || state.NextReadyQuestion.ID != second.ID {
 		t.Fatalf("expected the next automatic question to skip the manual publish, got %+v", state)
@@ -938,12 +953,12 @@ func TestServicePublishNowUsesCurrentScheduledSlotBeforeBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if state.SlotStatus != AutomaticQueueSlotStatusPublished || state.SlotOfficialPost == nil {
-		t.Fatalf("expected manual pre-boundary publish to occupy the active slot, got %+v", state)
+	if state.SlotStatus != AutomaticQueueSlotStatusDue || state.SlotOfficialPost != nil {
+		t.Fatalf("expected manual pre-boundary publish to leave the active automatic slot due, got %+v", state)
 	}
 }
 
-func TestServicePublishNowBlocksSecondCurrentSlotPublish(t *testing.T) {
+func TestServicePublishNowAllowsSecondCurrentSlotPublish(t *testing.T) {
 	service, _, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -965,11 +980,11 @@ func TestServicePublishNowBlocksSecondCurrentSlotPublish(t *testing.T) {
 	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
 		t.Fatalf("PublishNow(first) failed: %v", err)
 	}
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); !errors.Is(err, ErrAlreadyPublished) {
-		t.Fatalf("expected second manual publish to be blocked for the same current slot, got %v", err)
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishNow(second) failed: %v", err)
 	}
-	if len(fake.publishedParams) != 1 {
-		t.Fatalf("expected only one real publish attempt across both commands, got %d", len(fake.publishedParams))
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected two real publish attempts across both commands, got %d", len(fake.publishedParams))
 	}
 }
 
