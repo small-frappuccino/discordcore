@@ -77,6 +77,19 @@ func TestNormalizeReorderInputValidatesAndPreservesRemainingQuestions(t *testing
 	}
 }
 
+func TestReorderQuestionIDsToIndexMovesQuestionInBothDirections(t *testing.T) {
+	t.Parallel()
+
+	questions := []storage.QOTDQuestionRecord{{ID: 10}, {ID: 20}, {ID: 30}, {ID: 40}}
+
+	if got := reorderQuestionIDsToIndex(questions, 3, 1); len(got) != 4 || got[0] != 10 || got[1] != 40 || got[2] != 20 || got[3] != 30 {
+		t.Fatalf("expected later question to move earlier, got %+v", got)
+	}
+	if got := reorderQuestionIDsToIndex(questions, 0, 2); len(got) != 4 || got[0] != 20 || got[1] != 30 || got[2] != 10 || got[3] != 40 {
+		t.Fatalf("expected earlier question to move later, got %+v", got)
+	}
+}
+
 func TestQuestionSelectionHelpersIgnorePublishedAndScheduledQuestions(t *testing.T) {
 	t.Parallel()
 

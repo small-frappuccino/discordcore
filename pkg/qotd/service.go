@@ -1040,7 +1040,11 @@ func reorderQuestionIDsToIndex(current []storage.QOTDQuestionRecord, movedIndex,
 
 	ordered := append([]storage.QOTDQuestionRecord(nil), current...)
 	moved := ordered[movedIndex]
-	copy(ordered[targetIndex+1:movedIndex+1], ordered[targetIndex:movedIndex])
+	if targetIndex < movedIndex {
+		copy(ordered[targetIndex+1:movedIndex+1], ordered[targetIndex:movedIndex])
+	} else {
+		copy(ordered[movedIndex:targetIndex], ordered[movedIndex+1:targetIndex+1])
+	}
 	ordered[targetIndex] = moved
 	return idsFromQuestions(ordered)
 }
