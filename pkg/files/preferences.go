@@ -498,37 +498,6 @@ func HasSendPermission(session *discordgo.Session, channelID string) bool {
 	return false
 }
 
-func FindOrCreateEntryLeaveChannel(session *discordgo.Session, guildID string) string {
-	// Verify session state is properly initialized
-	if session == nil || session.State == nil || session.State.User == nil {
-		return ""
-	}
-	channels, err := session.GuildChannels(guildID)
-	if err == nil {
-		for _, channel := range channels {
-			if channel.Type == discordgo.ChannelTypeGuildText {
-				name := strings.ToLower(channel.Name)
-				if name == "user-entry-leave" || name == "entry-leave" || name == "joins-leaves" || name == "join-leave" || name == "member-log" || name == "members-log" || name == "member-logs" || name == "user-logs" || name == "welcome-goodbye" {
-					if perms, err2 := session.UserChannelPermissions(session.State.User.ID, channel.ID); err2 == nil && (perms&discordgo.PermissionSendMessages) != 0 {
-						return channel.ID
-					}
-				}
-			}
-		}
-	}
-
-	newCh, err := session.GuildChannelCreateComplex(guildID, discordgo.GuildChannelCreateData{
-		Name:  "user-entry-leave",
-		Type:  discordgo.ChannelTypeGuildText,
-		Topic: "User entry/leave notifications",
-	})
-	if err == nil && newCh != nil {
-		return newCh.ID
-	}
-
-	return FindSuitableChannel(session, guildID)
-}
-
 func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []string {
 	var allowedRoles []string
 	roles, err := session.GuildRoles(guildID)
