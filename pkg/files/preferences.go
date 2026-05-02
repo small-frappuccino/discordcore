@@ -476,18 +476,6 @@ func FindEntryLeaveChannel(session *discordgo.Session, guildID string) string {
 	return ""
 }
 
-// Deprecated: prefer FindEntryLeaveChannel. This function may create a new channel;
-// avoid using it during detection/registration flows.
-func IsCanonicalEntryLeaveName(name string) bool {
-	name = strings.ToLower(name)
-	switch name {
-	case "user-entry-leave", "entry-leave", "joins-leaves", "join-leave", "member-log", "members-log", "member-logs", "user-logs", "welcome-goodbye":
-		return true
-	default:
-		return false
-	}
-}
-
 func HasSendPermission(session *discordgo.Session, channelID string) bool {
 	if session == nil || session.State == nil || session.State.User == nil || channelID == "" {
 		return false
