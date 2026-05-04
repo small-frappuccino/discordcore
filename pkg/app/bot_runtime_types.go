@@ -277,6 +277,24 @@ func validateConfiguredBotInstances(
 		if _, ok := runtimes[botInstanceID]; !ok {
 			return fmt.Errorf("guild %s references unknown bot instance %q", guild.GuildID, botInstanceID)
 		}
+		for domain, explicitBotInstanceID := range guild.DomainBotInstanceIDs {
+			normalizedDomain := files.NormalizeBotDomain(domain)
+			if normalizedDomain == "" {
+				return fmt.Errorf("guild %s has an empty domain bot binding key", guild.GuildID)
+			}
+			switch normalizedDomain {
+			case "core", "default":
+				return fmt.Errorf("guild %s uses reserved domain %q; use bot_instance_id instead", guild.GuildID, normalizedDomain)
+			}
+
+			normalizedBotInstanceID := files.NormalizeBotInstanceID(explicitBotInstanceID)
+			if normalizedBotInstanceID == "" {
+				return fmt.Errorf("guild %s domain %q does not resolve to a bot instance", guild.GuildID, normalizedDomain)
+			}
+			if _, ok := runtimes[normalizedBotInstanceID]; !ok {
+				return fmt.Errorf("guild %s domain %q references unknown bot instance %q", guild.GuildID, normalizedDomain, normalizedBotInstanceID)
+			}
+		}
 	}
 	return nil
 }

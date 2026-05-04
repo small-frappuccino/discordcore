@@ -156,3 +156,88 @@ func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) 
 		t.Fatalf("expected validation error, got: %v", err)
 	}
 }
+
+func TestValidateBotConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
+	cfg := &BotConfig{
+		Guilds: []GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: " alice ",
+			DomainBotInstanceIDs: map[string]string{
+				" QOTD ": " yuzuha ",
+			},
+		}},
+	}
+
+	if err := validateBotConfig(cfg); err != nil {
+		t.Fatalf("expected domain bot bindings to validate, got: %v", err)
+	}
+	if got := cfg.Guilds[0].BotInstanceID; got != "alice" {
+		t.Fatalf("expected guild bot instance to normalize to alice, got %q", got)
+	}
+	if got := cfg.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
+		t.Fatalf("expected qotd override to normalize to yuzuha, got %q", got)
+	}
+}
+
+func TestValidateBotConfigRejectsReservedDomainBotInstanceBinding(t *testing.T) {
+	cfg := &BotConfig{
+		Guilds: []GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				"default": "yuzuha",
+			},
+		}},
+	}
+
+	err := validateBotConfig(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for reserved domain binding")
+	}
+	if !strings.Contains(err.Error(), "use bot_instance_id for the implicit default domain") {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) {
+	store := NewMemoryConfigStore()
+	input := BotConfig{
+		Guilds: []GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: " alice ",
+			DomainBotInstanceIDs: map[string]string{
+				" QOTD ": " yuzuha ",
+			},
+		}},
+	}
+	if err := store.Save(&input); err != nil {
+		t.Fatalf("seed config store: %v", err)
+	}
+
+	mgr := NewConfigManagerWithStore(store)
+	if err := mgr.LoadConfig(); err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	gcfg := mgr.GuildConfig("g1")
+	if gcfg == nil {
+		t.Fatalf("expected guild g1 after load")
+	}
+	if got := gcfg.BotInstanceID; got != "alice" {
+		t.Fatalf("expected guild bot instance normalized to alice, got %q", got)
+	}
+	if got := gcfg.DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
+		t.Fatalf("expected qotd override persisted as yuzuha, got %q", got)
+	}
+
+	persisted, err := store.Load()
+	if err != nil {
+		t.Fatalf("load persisted config: %v", err)
+	}
+	if got := persisted.Guilds[0].BotInstanceID; got != "alice" {
+		t.Fatalf("expected persisted guild bot instance normalized to alice, got %q", got)
+	}
+	if got := persisted.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
+		t.Fatalf("expected persisted qotd override normalized to yuzuha, got %q", got)
+	}
+}

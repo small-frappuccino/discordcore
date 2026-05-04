@@ -340,12 +340,16 @@ type UserPruneConfig struct {
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID       string         `json:"guild_id"`
-	BotInstanceID string         `json:"bot_instance_id,omitempty"`
-	Features      FeatureToggles `json:"features,omitempty"`
-	Channels      ChannelsConfig `json:"channels,omitempty"`
-	Roles         RolesConfig    `json:"roles,omitempty"`
-	Stats         StatsConfig    `json:"stats,omitempty"`
+	GuildID       string            `json:"guild_id"`
+	BotInstanceID string            `json:"bot_instance_id,omitempty"`
+	// DomainBotInstanceIDs overrides the owning bot instance for specialized
+	// domains such as qotd. Domains not listed here fall back to BotInstanceID
+	// and then the runtime default bot instance.
+	DomainBotInstanceIDs map[string]string `json:"domain_bot_instance_ids,omitempty"`
+	Features             FeatureToggles    `json:"features,omitempty"`
+	Channels             ChannelsConfig    `json:"channels,omitempty"`
+	Roles                RolesConfig       `json:"roles,omitempty"`
+	Stats                StatsConfig       `json:"stats,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
 	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")

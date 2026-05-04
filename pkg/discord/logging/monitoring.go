@@ -443,6 +443,15 @@ type cachedRoleUpdateAudit struct {
 	entries   []*discordgo.AuditLogEntry
 }
 
+func (ms *MonitoringService) ensureRoleUpdateAuditStateLocked() {
+	if ms.roleUpdateAuditCache == nil {
+		ms.roleUpdateAuditCache = make(map[string]cachedRoleUpdateAudit)
+	}
+	if ms.roleUpdateAuditDebounce == nil {
+		ms.roleUpdateAuditDebounce = make(map[string]time.Time)
+	}
+}
+
 type presenceSnapshot struct {
 	Status       discordgo.Status
 	ClientStatus discordgo.ClientStatus
@@ -1192,11 +1201,14 @@ func (ms *MonitoringService) scopedConfig() *files.BotConfig {
 }
 
 func (ms *MonitoringService) handlesGuild(guildID string) bool {
-	if ms == nil || ms.configManager == nil {
+	if ms == nil {
 		return false
 	}
 	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" && files.NormalizeBotInstanceID(ms.defaultBotInstanceID) == "" {
 		return true
+	}
+	if ms.configManager == nil {
+		return false
 	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {

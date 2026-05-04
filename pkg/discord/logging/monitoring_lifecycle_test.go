@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -12,6 +13,9 @@ import (
 
 func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	store, _ := newLoggingStore(t, "monitoring-restart.db")
+	if err := store.SetHeartbeatForBot(context.Background(), "default", time.Now().UTC()); err != nil {
+		t.Fatalf("seed heartbeat: %v", err)
+	}
 
 	cfgMgr := files.NewMemoryConfigManager()
 	if _, err := cfgMgr.UpdateRuntimeConfig(func(rc *files.RuntimeConfig) error {
@@ -22,13 +26,44 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("update runtime config: %v", err)
 	}
+	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
+		GuildID: "g-restart",
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: testBoolPtr(true),
+			},
+			StatsChannels: testBoolPtr(true),
+		},
+		Stats: files.StatsConfig{
+			Enabled:            true,
+			UpdateIntervalMins: 1,
+			Channels: []files.StatsChannelConfig{{
+				ChannelID:    "c-restart",
+				Label:        "Members",
+				NameTemplate: "{label} | {count}",
+				MemberType:   "all",
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("add guild config: %v", err)
+	}
 
 	session := &discordgo.Session{State: discordgo.NewState()}
 	session.State.User = &discordgo.User{ID: "bot-1"}
 
-	ms, err := NewMonitoringService(session, cfgMgr, store)
+	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", "default")
 	if err != nil {
 		t.Fatalf("new monitoring service: %v", err)
+	}
+	ms.statsLastRun = map[string]time.Time{
+		"g-restart": time.Now().UTC(),
+	}
+	preseeded := newStatsGuildState("", nil)
+	preseeded.initialized = true
+	preseeded.dirty = false
+	preseeded.lastReconciled = time.Now().UTC()
+	ms.statsGuilds = map[string]*statsGuildState{
+		"g-restart": preseeded,
 	}
 
 	firstRouter := ms.TaskRouter()

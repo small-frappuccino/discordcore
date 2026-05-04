@@ -12,8 +12,9 @@ func NewMinimalGuildConfig(guildID, botInstanceID string) GuildConfig {
 	disabled := false
 
 	return GuildConfig{
-		GuildID:       strings.TrimSpace(guildID),
-		BotInstanceID: NormalizeBotInstanceID(botInstanceID),
+		GuildID:              strings.TrimSpace(guildID),
+		BotInstanceID:        NormalizeBotInstanceID(botInstanceID),
+		DomainBotInstanceIDs: nil,
 		Features: FeatureToggles{
 			Services: FeatureServiceToggles{
 				Monitoring:    boolPtr(disabled),

@@ -52,6 +52,11 @@ func (mgr *ConfigManager) LoadConfig() error {
 	if err != nil {
 		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.ConfigPath())
 	}
+	domainBindingMigrated, validationErr := normalizeDomainBotInstanceBindings(mgr.config)
+	if validationErr != nil {
+		mgr.mu.Unlock()
+		return wrapValidationError(validationErr)
+	}
 	orderMigrated := normalizeAutoAssignmentRoleOrder(mgr.config)
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
 		mgr.mu.Unlock()
@@ -60,11 +65,11 @@ func (mgr *ConfigManager) LoadConfig() error {
 	mgr.publishSnapshotLocked()
 	mgr.mu.Unlock()
 
-	if dupCount > 0 || orderMigrated {
+	if dupCount > 0 || orderMigrated || domainBindingMigrated {
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
 			return fmt.Errorf("save config after normalization: %w", saveErr)
 		}
-		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.ConfigPath(), "duplicates", dupCount, "autoRoleOrderMigrated", orderMigrated)
+		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.ConfigPath(), "duplicates", dupCount, "autoRoleOrderMigrated", orderMigrated, "domainBindingsMigrated", domainBindingMigrated)
 	} else if exists, err := mgr.store.Exists(); err == nil && !exists {
 		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigFileNotFound, mgr.ConfigPath()))
 	}

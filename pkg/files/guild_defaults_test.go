@@ -18,6 +18,9 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 	if guild.BotInstanceID != "yuzuha" {
 		t.Fatalf("expected bot instance binding to be preserved, got %+v", guild)
 	}
+	if guild.DomainBotInstanceIDs != nil {
+		t.Fatalf("expected minimal guild to start without domain overrides, got %+v", guild.DomainBotInstanceIDs)
+	}
 	if guild.Channels != (ChannelsConfig{}) {
 		t.Fatalf("expected minimal guild to avoid channel bootstrap, got %+v", guild.Channels)
 	}
@@ -101,6 +104,39 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuild(t *testing.T) {
 	}
 	if resolved := loaded.ResolveFeatures("guild-new"); resolved.Logging.MemberJoin {
 		t.Fatalf("expected persisted dormant guild member_join feature to be disabled, got %+v", resolved.Logging)
+	}
+}
+
+func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t *testing.T) {
+	t.Parallel()
+
+	store := NewMemoryConfigStore()
+	mgr := NewConfigManagerWithStore(store)
+	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		cfg.Guilds = []GuildConfig{{
+			GuildID: "guild-existing",
+			DomainBotInstanceIDs: map[string]string{
+				BotDomainQOTD: "yuzuha",
+			},
+		}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed existing guild config: %v", err)
+	}
+
+	if err := mgr.EnsureMinimalGuildConfigForBot("guild-existing", "alice"); err != nil {
+		t.Fatalf("ensure minimal guild config: %v", err)
+	}
+
+	snapshot := mgr.SnapshotConfig()
+	if len(snapshot.Guilds) != 1 {
+		t.Fatalf("expected one guild in snapshot, got %+v", snapshot.Guilds)
+	}
+	if got := snapshot.Guilds[0].BotInstanceID; got != "alice" {
+		t.Fatalf("expected guild-wide bot binding alice, got %q", got)
+	}
+	if got := snapshot.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
+		t.Fatalf("expected qotd override to be preserved, got %q", got)
 	}
 }
 

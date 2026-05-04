@@ -303,3 +303,27 @@ func TestValidateConfiguredBotInstancesRejectsUnknownBinding(t *testing.T) {
 		t.Fatal("expected validation error for unknown bot instance binding")
 	}
 }
+
+func TestValidateConfiguredBotInstancesRejectsUnknownDomainBinding(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "missing",
+			},
+		}},
+	}
+
+	err := validateConfiguredBotInstances(cfg, map[string]*botRuntime{
+		"alice": {instanceID: "alice"},
+	}, "alice")
+	if err == nil {
+		t.Fatal("expected validation error for unknown domain bot instance binding")
+	}
+	if got := err.Error(); got != `guild g1 domain "qotd" references unknown bot instance "missing"` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

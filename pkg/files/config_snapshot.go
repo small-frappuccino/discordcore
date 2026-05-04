@@ -161,21 +161,33 @@ func cloneGuildConfigs(in []GuildConfig) []GuildConfig {
 
 func cloneGuildConfig(in GuildConfig) GuildConfig {
 	return GuildConfig{
-		GuildID:         in.GuildID,
-		BotInstanceID:   in.BotInstanceID,
-		Features:        cloneFeatureToggles(in.Features),
-		Channels:        in.Channels,
-		Roles:           cloneRolesConfig(in.Roles),
-		Stats:           cloneStatsConfig(in.Stats),
-		RolesCacheTTL:   in.RolesCacheTTL,
-		MemberCacheTTL:  in.MemberCacheTTL,
-		GuildCacheTTL:   in.GuildCacheTTL,
-		ChannelCacheTTL: in.ChannelCacheTTL,
-		UserPrune:       cloneUserPruneConfig(in.UserPrune),
-		PartnerBoard:    clonePartnerBoardConfig(in.PartnerBoard),
-		QOTD:            cloneQOTDConfig(in.QOTD),
-		RuntimeConfig:   cloneRuntimeConfig(in.RuntimeConfig),
+		GuildID:              in.GuildID,
+		BotInstanceID:        in.BotInstanceID,
+		DomainBotInstanceIDs: cloneStringMap(in.DomainBotInstanceIDs),
+		Features:             cloneFeatureToggles(in.Features),
+		Channels:             in.Channels,
+		Roles:                cloneRolesConfig(in.Roles),
+		Stats:                cloneStatsConfig(in.Stats),
+		RolesCacheTTL:        in.RolesCacheTTL,
+		MemberCacheTTL:       in.MemberCacheTTL,
+		GuildCacheTTL:        in.GuildCacheTTL,
+		ChannelCacheTTL:      in.ChannelCacheTTL,
+		UserPrune:            cloneUserPruneConfig(in.UserPrune),
+		PartnerBoard:         clonePartnerBoardConfig(in.PartnerBoard),
+		QOTD:                 cloneQOTDConfig(in.QOTD),
+		RuntimeConfig:        cloneRuntimeConfig(in.RuntimeConfig),
 	}
+}
+
+func cloneStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {

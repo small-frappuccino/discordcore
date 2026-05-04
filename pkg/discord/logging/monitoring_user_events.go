@@ -91,6 +91,7 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 	now := time.Now()
 
 	ms.roleUpdateAuditMu.Lock()
+	ms.ensureRoleUpdateAuditStateLocked()
 	if !forceRefresh {
 		if entry, ok := ms.roleUpdateAuditCache[guildID]; ok && now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
 			entries := append([]*discordgo.AuditLogEntry(nil), entry.entries...)
@@ -141,6 +142,7 @@ func (ms *MonitoringService) shouldDebounceRoleUpdateAuditRefresh(guildID, userI
 
 	ms.roleUpdateAuditMu.Lock()
 	defer ms.roleUpdateAuditMu.Unlock()
+	ms.ensureRoleUpdateAuditStateLocked()
 
 	if last, ok := ms.roleUpdateAuditDebounce[key]; ok && now.Sub(last) < monitoringRoleAuditDebounceTTL {
 		return true

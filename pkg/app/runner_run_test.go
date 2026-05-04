@@ -99,7 +99,9 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 				DBCleanup: boolPtr(false),
 			},
 		},
-		Guilds: []files.GuildConfig{},
+		Guilds: []files.GuildConfig{{
+			GuildID: "guild-1",
+		}},
 	}
 	seedRunnerConfig(t, configStore, cfg)
 
