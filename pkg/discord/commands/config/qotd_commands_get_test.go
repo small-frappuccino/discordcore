@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestQOTDConfigGetReportsCurrentState(t *testing.T) {
+func TestQOTDConfigGetReportsCurrentStatePrivately(t *testing.T) {
 	const (
 		guildID = "guild-1"
 		ownerID = "owner-1"
@@ -15,7 +15,7 @@ func TestQOTDConfigGetReportsCurrentState(t *testing.T) {
 	mustSetGuildQOTDConfig(t, harness.cm, guildID, buildTestQOTDConfig(true, "channel-555", testCommandSchedule()))
 
 	resp := harness.runSlash(t, "get")
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if len(resp.Data.Embeds) != 1 {
 		t.Fatalf("expected config get response to include one embed, got %+v", resp.Data.Embeds)
 	}

@@ -52,7 +52,7 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, func(deck *files.QOTDDeckConfig) error {
 		if enabled && strings.TrimSpace(deck.ChannelID) == "" {
-			return core.NewCommandError("QOTD publishing couldn't be turned on yet because this deck still has no channel. This reply stays private so that can be fixed first.", true)
+			return qotdConfigDetailedCommandError("QOTD publishing couldn't be turned on yet because this deck still has no channel. This reply stays private so that can be fixed first.")
 		}
 		deck.Enabled = enabled
 		return nil
@@ -66,7 +66,7 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 		state = "enabled"
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("QOTD publishing is now %s for deck `%s`.", state, updatedDeck.Name))
 }
 
@@ -100,7 +100,7 @@ func (c *QOTDChannelSubCommand) RequiresPermissions() bool { return true }
 func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 	channelID := channelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), qotdChannelOptionName)
 	if channelID == "" {
-		return core.NewCommandError("This change needs a channel before it can be applied, so this reply stays private.", true)
+		return qotdConfigDetailedCommandError("This change needs a channel before it can be applied, so this reply stays private.")
 	}
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, func(deck *files.QOTDDeckConfig) error {
@@ -116,7 +116,7 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 		state = "enabled"
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("QOTD posts for deck `%s` will now go to <#%s>. Publishing stays %s.", updatedDeck.Name, channelID, state))
 }
 
@@ -166,7 +166,7 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("QOTD for the active deck will now post at %s UTC.", formatQOTDSchedule(updatedConfig.Schedule)))
 }
 
@@ -201,7 +201,7 @@ func updateQOTDConfig(
 	persister := core.NewConfigPersister(configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save QOTD config: %v", err)
-		return files.QOTDConfig{}, core.NewCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
+		return files.QOTDConfig{}, qotdConfigDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}
 
 	return updatedConfig, nil
@@ -215,7 +215,7 @@ func updateActiveQOTDDeck(
 	updatedConfig, err := updateQOTDConfig(ctx, configManager, func(cfg *files.QOTDConfig) error {
 		deckIndex := activeQOTDDeckIndex(*cfg)
 		if deckIndex < 0 {
-			return core.NewCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.", true)
+			return qotdConfigDetailedCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.")
 		}
 		return mutate(&cfg.Decks[deckIndex])
 	})
@@ -224,7 +224,7 @@ func updateActiveQOTDDeck(
 	}
 	deckIndex := activeQOTDDeckIndex(updatedConfig)
 	if deckIndex < 0 {
-		return files.QOTDDeckConfig{}, core.NewCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.", true)
+		return files.QOTDDeckConfig{}, qotdConfigDetailedCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.")
 	}
 	return updatedConfig.Decks[deckIndex], nil
 }
@@ -269,7 +269,7 @@ func translateQOTDConfigError(err error) error {
 		if message == "schedule.hour_utc and schedule.minute_utc are required when enabled" {
 			message = "QOTD publishing couldn't be turned on yet because the schedule is incomplete. This reply stays private so the setup can be finished first."
 		}
-		return core.NewCommandError(message, true)
+		return qotdConfigDetailedCommandError(message)
 	}
 	return err
 }

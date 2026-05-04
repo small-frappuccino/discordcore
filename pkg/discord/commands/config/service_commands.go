@@ -58,7 +58,7 @@ func (c *CommandsEnabledSubCommand) Handle(ctx *core.Context) error {
 	if enabled {
 		state = "enabled"
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Slash commands are now %s in this server.", state))
+	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Slash commands are now %s in this server.", state))
 }
 
 type CommandChannelSubCommand struct {
@@ -87,7 +87,7 @@ func (c *CommandChannelSubCommand) RequiresPermissions() bool { return true }
 func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 	channelID := channelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), commandChannelOptionName)
 	if channelID == "" {
-		return core.NewCommandError("This change needs a channel before it can be applied, so this reply stays private.", true)
+		return serviceConfigDetailedCommandError("This change needs a channel before it can be applied, so this reply stays private.")
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Channels.Commands = channelID
@@ -98,7 +98,7 @@ func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
 		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Command references will now point people to <#%s>.", channelID))
+	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Command references will now point people to <#%s>.", channelID))
 }
 
 type AllowedRoleAddSubCommand struct {
@@ -126,7 +126,7 @@ func (c *AllowedRoleAddSubCommand) RequiresPermissions() bool { return true }
 func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 	roleID := roleOptionID(core.GetSubCommandOptions(ctx.Interaction), allowedRoleOptionName)
 	if roleID == "" {
-		return core.NewCommandError("This change needs a role before it can be applied, so this reply stays private.", true)
+		return serviceConfigDetailedCommandError("This change needs a role before it can be applied, so this reply stays private.")
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		if slices.Contains(guildConfig.Roles.Allowed, roleID) {
@@ -140,7 +140,7 @@ func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
 		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can now use the admin slash commands.", roleID))
+	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can now use the admin slash commands.", roleID))
 }
 
 type AllowedRoleRemoveSubCommand struct {
@@ -168,7 +168,7 @@ func (c *AllowedRoleRemoveSubCommand) RequiresPermissions() bool { return true }
 func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 	roleID := roleOptionID(core.GetSubCommandOptions(ctx.Interaction), allowedRoleOptionName)
 	if roleID == "" {
-		return core.NewCommandError("This change needs a role before it can be applied, so this reply stays private.", true)
+		return serviceConfigDetailedCommandError("This change needs a role before it can be applied, so this reply stays private.")
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Roles.Allowed = removeString(guildConfig.Roles.Allowed, roleID)
@@ -179,7 +179,7 @@ func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
 		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can no longer use the admin slash commands.", roleID))
+	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can no longer use the admin slash commands.", roleID))
 }
 
 type AllowedRoleListSubCommand struct {
@@ -202,7 +202,7 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if len(ctx.GuildConfig.Roles.Allowed) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")
+		return serviceConfigSetupStateResponseBuilder(ctx.Session).Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")
 	}
 	roles := make([]string, 0, len(ctx.GuildConfig.Roles.Allowed))
 	for _, roleID := range ctx.GuildConfig.Roles.Allowed {
@@ -213,17 +213,17 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 		roles = append(roles, fmt.Sprintf("- <@&%s>", roleID))
 	}
 	if len(roles) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")
+		return serviceConfigSetupStateResponseBuilder(ctx.Session).Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")
 	}
 	message := "These roles can use the admin slash commands. This reply stays private because it reflects the current server setup:\n" + strings.Join(roles, "\n")
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, message)
+	return serviceConfigSetupStateResponseBuilder(ctx.Session).Info(ctx.Interaction, message)
 }
 
 func persistGuildConfig(ctx *core.Context, configManager *files.ConfigManager) error {
 	persister := core.NewConfigPersister(configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
+		return serviceConfigDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}
 	return nil
 }

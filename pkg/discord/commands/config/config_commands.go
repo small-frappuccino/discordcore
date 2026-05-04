@@ -235,10 +235,10 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	persister := core.NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
+		return configCommandDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` is now set to `%s`.", key, value))
+	return configCommandShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` is now set to `%s`.", key, value))
 }
 
 // ConfigGetSubCommand - subcommand to get configuration values
@@ -293,7 +293,7 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	b.WriteString(fmt.Sprintf("QOTD Schedule (UTC): %s\n", formatQOTDSchedule(qotdSettings.Schedule)))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
-	builder := core.NewResponseBuilder(ctx.Session).
+	builder := configCommandCurrentStateResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("Server Configuration").
 		WithColor(theme.Info())
@@ -354,7 +354,7 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`/config webhook_embed_list` - List webhook embed patch entries",
 	}
 
-	builder := core.NewResponseBuilder(ctx.Session).
+	builder := configCommandAvailableOptionsResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("Configuration Options")
 
