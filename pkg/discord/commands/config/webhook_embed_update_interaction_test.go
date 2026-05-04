@@ -269,7 +269,7 @@ func TestWebhookEmbedCommandsCRUDInteractions(t *testing.T) {
 	}))
 	createResp := rec.lastResponse(t)
 	assertPublicResponse(t, createResp)
-	if !strings.Contains(createResp.Data.Content, "Created webhook embed update") {
+	if !strings.Contains(createResp.Data.Content, "Webhook embed updates for") {
 		t.Fatalf("unexpected create response: %q", createResp.Data.Content)
 	}
 
@@ -303,7 +303,7 @@ func TestWebhookEmbedCommandsCRUDInteractions(t *testing.T) {
 	}))
 	updateResp := rec.lastResponse(t)
 	assertPublicResponse(t, updateResp)
-	if !strings.Contains(updateResp.Data.Content, "Updated webhook embed entry") {
+	if !strings.Contains(updateResp.Data.Content, "now points to") {
 		t.Fatalf("unexpected update response: %q", updateResp.Data.Content)
 	}
 
@@ -328,7 +328,7 @@ func TestWebhookEmbedCommandsCRUDInteractions(t *testing.T) {
 	}))
 	deleteResp := rec.lastResponse(t)
 	assertPublicResponse(t, deleteResp)
-	if !strings.Contains(deleteResp.Data.Content, "Deleted webhook embed update") {
+	if !strings.Contains(deleteResp.Data.Content, "was removed from") {
 		t.Fatalf("unexpected delete response: %q", deleteResp.Data.Content)
 	}
 	if _, err := cm.GetWebhookEmbedUpdate(guildID, "m2"); !errorsIsNotFound(err) {
@@ -362,7 +362,7 @@ func TestWebhookEmbedCreateApplyNowInteraction(t *testing.T) {
 
 	resp := rec.lastResponse(t)
 	assertPublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "apply_now=true") {
+	if !strings.Contains(resp.Data.Content, "Webhook embed updates for") {
 		t.Fatalf("unexpected apply_now response: %q", resp.Data.Content)
 	}
 

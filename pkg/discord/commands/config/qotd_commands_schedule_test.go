@@ -17,6 +17,6 @@ func TestQOTDConfigScheduleCommandPersistsSchedule(t *testing.T) {
 		intOpt(qotdScheduleMinuteOptionName, 43),
 	)
 
-	assertPublicContains(t, resp, "QOTD publish schedule set to")
+	assertPublicContains(t, resp, "QOTD for the active deck will now post at")
 	assertActiveQOTDDeckState(t, harness.cm, guildID, "", false, testCommandSchedule())
 }

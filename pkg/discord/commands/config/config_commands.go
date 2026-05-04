@@ -94,7 +94,7 @@ func (c *pingCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *pingCommand) RequiresGuild() bool       { return false }
 func (c *pingCommand) RequiresPermissions() bool { return false }
 func (c *pingCommand) Handle(ctx *core.Context) error {
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "🏓 Pong!")
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Bot is responding normally.")
 }
 
 type echoCommand struct{}
@@ -132,9 +132,12 @@ func (c *echoCommand) Handle(ctx *core.Context) error {
 
 	builder := core.NewResponseBuilder(ctx.Session)
 	if ephemeral {
-		builder = builder.Ephemeral()
+		return builder.Ephemeral().Info(
+			ctx.Interaction,
+			fmt.Sprintf("Here is the text you asked me to echo. I'm keeping it private because echo output is usually only useful to you: %s", message),
+		)
 	}
-	return builder.Info(ctx.Interaction, fmt.Sprintf("Echo: %s", message))
+	return builder.Info(ctx.Interaction, fmt.Sprintf("Echo from this command: %s", message))
 }
 
 // -----------------------------------------
@@ -232,10 +235,10 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	persister := core.NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("Failed to save configuration", false)
+		return core.NewCommandError("I couldn't save that change. I'm keeping this reply private so you can adjust it and try again without extra channel noise.", true)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` is now set to `%s`.", key, value))
 }
 
 // ConfigGetSubCommand - subcommand to get configuration values

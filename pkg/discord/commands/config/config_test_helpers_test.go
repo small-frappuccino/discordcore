@@ -142,6 +142,15 @@ func assertEphemeralResponse(t *testing.T, resp discordgo.InteractionResponse) {
 	}
 }
 
+func assertEphemeralContains(t *testing.T, resp discordgo.InteractionResponse, want string) {
+	t.Helper()
+
+	assertEphemeralResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, want) {
+		t.Fatalf("expected ephemeral response to contain %q, got %q", want, resp.Data.Content)
+	}
+}
+
 func assertActiveQOTDDeckState(
 	t *testing.T,
 	cm *files.ConfigManager,

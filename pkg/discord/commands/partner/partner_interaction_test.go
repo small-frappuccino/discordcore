@@ -247,7 +247,7 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 	if err := partnerEphemeralError(addResp); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(addResp.Data.Content, "Partner added") {
+	if !strings.Contains(addResp.Data.Content, "I added the partner entry") {
 		t.Fatalf("unexpected add response: %q", addResp.Data.Content)
 	}
 
@@ -267,7 +267,7 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 	if err := partnerEphemeralError(readResp); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(readResp.Data.Content, "Partner details") {
+	if !strings.Contains(readResp.Data.Content, "saved details for that partner entry") {
 		t.Fatalf("unexpected read response: %q", readResp.Data.Content)
 	}
 	if !strings.Contains(readResp.Data.Content, "https://discord.gg/citlali") {
@@ -285,7 +285,7 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 	if err := partnerEphemeralError(updateResp); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(updateResp.Data.Content, "Partner updated") {
+	if !strings.Contains(updateResp.Data.Content, "I updated the partner entry") {
 		t.Fatalf("unexpected update response: %q", updateResp.Data.Content)
 	}
 	updated, err := cm.Partner(guildID, "Citlali Hub")
@@ -317,7 +317,7 @@ func TestPartnerCommandsCRUDInteractions(t *testing.T) {
 	if err := partnerEphemeralError(deleteResp); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(deleteResp.Data.Content, "deleted") {
+	if !strings.Contains(deleteResp.Data.Content, "I removed partner") {
 		t.Fatalf("unexpected delete response: %q", deleteResp.Data.Content)
 	}
 	if _, err := cm.Partner(guildID, "Citlali Hub"); err == nil {
@@ -343,7 +343,7 @@ func TestPartnerCommandsDuplicateValidation(t *testing.T) {
 	if err := partnerEphemeralError(firstAdd); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(firstAdd.Data.Content, "Partner added") {
+	if !strings.Contains(firstAdd.Data.Content, "I added the partner entry") {
 		t.Fatalf("unexpected first add response: %q", firstAdd.Data.Content)
 	}
 
@@ -356,7 +356,7 @@ func TestPartnerCommandsDuplicateValidation(t *testing.T) {
 	if err := partnerEphemeralError(secondAdd); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.ToLower(secondAdd.Data.Content), "already exists") {
+	if !strings.Contains(strings.ToLower(secondAdd.Data.Content), "already uses the same name or invite") {
 		t.Fatalf("expected duplicate error response, got: %q", secondAdd.Data.Content)
 	}
 }
@@ -392,7 +392,7 @@ func TestPartnerSyncCommandWebhookTargetSuccess(t *testing.T) {
 	if err := partnerEphemeralError(resp); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.ToLower(resp.Data.Content), "synced successfully") {
+	if !strings.Contains(strings.ToLower(resp.Data.Content), "synced the partner board") {
 		t.Fatalf("unexpected sync response: %q", resp.Data.Content)
 	}
 	if rec.webhookPatchCount() != 1 {
@@ -476,7 +476,7 @@ func TestPartnerSyncCommandChannelTargetSuccess(t *testing.T) {
 	if err := partnerEphemeralError(resp); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.ToLower(resp.Data.Content), "synced successfully") {
+	if !strings.Contains(strings.ToLower(resp.Data.Content), "synced the partner board") {
 		t.Fatalf("unexpected sync response: %q", resp.Data.Content)
 	}
 	if rec.channelPatchCount() != 1 {

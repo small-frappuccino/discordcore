@@ -876,15 +876,18 @@ func buildBanCommandMessage(targetUsername, reason string, truncated bool) strin
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
-	message := fmt.Sprintf("Banned **%s**. Reason: %s", targetLabel, reason)
+	message := fmt.Sprintf("%s was banned. Reason: %s.", targetLabel, reason)
 	if truncated {
-		message += " (reason truncated to 512 characters)"
+		message += " Reason was truncated to fit this reply."
 	}
 	return message
 }
 
 func buildMassBanCommandMessage(banned int) string {
-	return fmt.Sprintf("Banned %d user(s).", banned)
+	if banned == 1 {
+		return "1 user was banned."
+	}
+	return fmt.Sprintf("%d users were banned.", banned)
 }
 
 func buildKickCommandMessage(targetUsername, reason string, truncated bool) string {
@@ -892,9 +895,9 @@ func buildKickCommandMessage(targetUsername, reason string, truncated bool) stri
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
-	message := fmt.Sprintf("Kicked **%s**. Reason: %s", targetLabel, reason)
+	message := fmt.Sprintf("%s was kicked. Reason: %s.", targetLabel, reason)
 	if truncated {
-		message += " (reason truncated to 512 characters)"
+		message += " Reason was truncated to fit this reply."
 	}
 	return message
 }
@@ -904,9 +907,9 @@ func buildMuteCommandMessage(targetUsername string, muteRole *discordgo.Role, re
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
-	message := fmt.Sprintf("Muted **%s** with **%s**. Reason: %s", targetLabel, formatRoleDisplayName(muteRole), reason)
+	message := fmt.Sprintf("%s was muted with role %s. Reason: %s.", targetLabel, formatRoleDisplayName(muteRole), reason)
 	if truncated {
-		message += " (reason truncated to 512 characters)"
+		message += " Reason was truncated to fit this reply."
 	}
 	return message
 }
@@ -916,9 +919,9 @@ func buildTimeoutCommandMessage(targetUsername string, minutes int64, reason str
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
-	message := fmt.Sprintf("Timed out **%s** for %s. Reason: %s", targetLabel, formatTimeoutDuration(minutes), reason)
+	message := fmt.Sprintf("%s was timed out for %s. Reason: %s.", targetLabel, formatTimeoutDuration(minutes), reason)
 	if truncated {
-		message += " (reason truncated to 512 characters)"
+		message += " Reason was truncated to fit this reply."
 	}
 	return message
 }
@@ -928,9 +931,9 @@ func buildWarnCommandMessage(targetUsername string, caseNumber int64, reason str
 	if targetLabel == "" {
 		targetLabel = "unknown user"
 	}
-	message := fmt.Sprintf("Warned **%s**. Case #%d. Reason: %s", targetLabel, caseNumber, reason)
+	message := fmt.Sprintf("%s was warned. Case #%d. Reason: %s.", targetLabel, caseNumber, reason)
 	if truncated {
-		message += " (reason truncated to 512 characters)"
+		message += " Reason was truncated to fit this reply."
 	}
 	return message
 }
@@ -941,10 +944,10 @@ func buildWarningsCommandMessage(targetUsername string, warnings []storage.Moder
 		targetLabel = "unknown user"
 	}
 	if len(warnings) == 0 {
-		return fmt.Sprintf("No warnings recorded for **%s**.", targetLabel)
+		return fmt.Sprintf("No warnings are recorded for %s. I'm keeping this private because moderation history should stay private.", targetLabel)
 	}
 
-	lines := []string{fmt.Sprintf("Recent warnings for **%s**:", targetLabel)}
+	lines := []string{fmt.Sprintf("Here is the recent warning history for %s. I'm keeping this private because moderation history should stay private:", targetLabel)}
 	for _, warning := range warnings {
 		reason := strings.TrimSpace(warning.Reason)
 		if reason == "" {

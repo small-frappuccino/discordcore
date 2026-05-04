@@ -19,14 +19,14 @@ func TestQOTDConfigEnabledCommandTogglesEnabledState(t *testing.T) {
 		boolOpt(qotdEnabledOptionName, true),
 	)
 
-	assertPublicContains(t, enableResp, "QOTD is now enabled")
+	assertPublicContains(t, enableResp, "QOTD publishing is now enabled")
 	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", true, testCommandSchedule())
 
 	disableResp := harness.runSlash(t, qotdEnabledSubCommandName,
 		boolOpt(qotdEnabledOptionName, false),
 	)
 
-	assertPublicContains(t, disableResp, "QOTD is now disabled")
+	assertPublicContains(t, disableResp, "QOTD publishing is now disabled")
 	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", false, testCommandSchedule())
 }
 
@@ -42,7 +42,7 @@ func TestQOTDConfigEnabledCommandRejectsEnableWithoutChannel(t *testing.T) {
 		boolOpt(qotdEnabledOptionName, true),
 	)
 
-	assertPublicContains(t, resp, "Set a QOTD channel before enabling publishing")
+	assertEphemeralContains(t, resp, "this deck still has no channel")
 
 	qotdConfig, err := harness.cm.QOTDConfig(guildID)
 	if err != nil {
@@ -66,6 +66,6 @@ func TestQOTDConfigEnabledCommandRejectsEnableWithoutSchedule(t *testing.T) {
 		boolOpt(qotdEnabledOptionName, true),
 	)
 
-	assertPublicContains(t, resp, "Set the QOTD publish hour and minute before enabling publishing")
+	assertEphemeralContains(t, resp, "the schedule is incomplete")
 	assertActiveQOTDDeckState(t, harness.cm, guildID, "123456789012345678", false, files.QOTDPublishScheduleConfig{})
 }

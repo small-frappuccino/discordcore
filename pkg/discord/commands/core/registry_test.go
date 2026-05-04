@@ -199,7 +199,7 @@ func TestHandleSlashCommandUnknownCommand(t *testing.T) {
 	if len(responses) != 1 {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
-	if !strings.Contains(responses[0].Data.Content, "Command not found") {
+	if !strings.Contains(responses[0].Data.Content, "couldn't find that command") {
 		t.Fatalf("unexpected content: %q", responses[0].Data.Content)
 	}
 	if responses[0].Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
@@ -223,7 +223,7 @@ func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 	if len(responses) != 1 {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
-	if !strings.Contains(responses[0].Data.Content, "only be used in a server") {
+	if !strings.Contains(responses[0].Data.Content, "only works inside a server") {
 		t.Fatalf("unexpected content: %q", responses[0].Data.Content)
 	}
 }
@@ -245,7 +245,7 @@ func TestHandleSlashCommandPermissionDenied(t *testing.T) {
 	if len(responses) != 1 {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
-	if !strings.Contains(responses[0].Data.Content, "permission") {
+	if !strings.Contains(responses[0].Data.Content, "don't have access") {
 		t.Fatalf("unexpected content: %q", responses[0].Data.Content)
 	}
 	if responses[0].Data.Flags&discordgo.MessageFlagsEphemeral == 0 {

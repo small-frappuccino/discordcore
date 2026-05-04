@@ -35,7 +35,7 @@ func TestBuildMassBanCommandMessageOnlyCount(t *testing.T) {
 	t.Parallel()
 
 	got := buildMassBanCommandMessage(4)
-	if got != "Banned 4 user(s)." {
+	if got != "4 users were banned." {
 		t.Fatalf("unexpected message: %q", got)
 	}
 }

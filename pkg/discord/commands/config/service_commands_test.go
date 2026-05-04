@@ -88,7 +88,7 @@ func TestAllowedRoleCommandsAddListAndRemove(t *testing.T) {
 
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, allowedRoleListSubCommandName, nil))
 	listResp := rec.lastResponse(t)
-	assertPublicResponse(t, listResp)
+	assertEphemeralResponse(t, listResp)
 	if !strings.Contains(listResp.Data.Content, "<@&role-123>") {
 		t.Fatalf("unexpected allowed_role_list response: %q", listResp.Data.Content)
 	}

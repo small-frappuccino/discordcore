@@ -58,7 +58,7 @@ func (c *CommandsEnabledSubCommand) Handle(ctx *core.Context) error {
 	if enabled {
 		state = "enabled"
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Slash commands are now %s for this guild.", state))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Slash commands are now %s in this server.", state))
 }
 
 type CommandChannelSubCommand struct {
@@ -87,7 +87,7 @@ func (c *CommandChannelSubCommand) RequiresPermissions() bool { return true }
 func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 	channelID := channelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), commandChannelOptionName)
 	if channelID == "" {
-		return core.NewCommandError("Channel is required", false)
+		return core.NewCommandError("I need a channel before I can apply this change, so I'm keeping this reply private.", true)
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Channels.Commands = channelID
@@ -98,7 +98,7 @@ func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
 		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Command channel set to <#%s>.", channelID))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Command references will now point people to <#%s>.", channelID))
 }
 
 type AllowedRoleAddSubCommand struct {
@@ -126,7 +126,7 @@ func (c *AllowedRoleAddSubCommand) RequiresPermissions() bool { return true }
 func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 	roleID := roleOptionID(core.GetSubCommandOptions(ctx.Interaction), allowedRoleOptionName)
 	if roleID == "" {
-		return core.NewCommandError("Role is required", false)
+		return core.NewCommandError("I need a role before I can apply this change, so I'm keeping this reply private.", true)
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		if slices.Contains(guildConfig.Roles.Allowed, roleID) {
@@ -140,7 +140,7 @@ func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
 		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Allowed role added: <@&%s>.", roleID))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can now use the admin slash commands.", roleID))
 }
 
 type AllowedRoleRemoveSubCommand struct {
@@ -168,7 +168,7 @@ func (c *AllowedRoleRemoveSubCommand) RequiresPermissions() bool { return true }
 func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 	roleID := roleOptionID(core.GetSubCommandOptions(ctx.Interaction), allowedRoleOptionName)
 	if roleID == "" {
-		return core.NewCommandError("Role is required", false)
+		return core.NewCommandError("I need a role before I can apply this change, so I'm keeping this reply private.", true)
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Roles.Allowed = removeString(guildConfig.Roles.Allowed, roleID)
@@ -179,7 +179,7 @@ func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
 		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Allowed role removed: <@&%s>.", roleID))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can no longer use the admin slash commands.", roleID))
 }
 
 type AllowedRoleListSubCommand struct {
@@ -202,7 +202,7 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if len(ctx.GuildConfig.Roles.Allowed) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Info(ctx.Interaction, "No allowed admin roles are configured.")
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. I'm keeping this private because it reflects the current server setup.")
 	}
 	roles := make([]string, 0, len(ctx.GuildConfig.Roles.Allowed))
 	for _, roleID := range ctx.GuildConfig.Roles.Allowed {
@@ -213,16 +213,17 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 		roles = append(roles, fmt.Sprintf("- <@&%s>", roleID))
 	}
 	if len(roles) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Info(ctx.Interaction, "No allowed admin roles are configured.")
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. I'm keeping this private because it reflects the current server setup.")
 	}
-	return core.NewResponseBuilder(ctx.Session).Info(ctx.Interaction, "Allowed admin roles:\n"+strings.Join(roles, "\n"))
+	message := "These roles can use the admin slash commands. I'm keeping this private because it reflects the current server setup:\n" + strings.Join(roles, "\n")
+	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, message)
 }
 
 func persistGuildConfig(ctx *core.Context, configManager *files.ConfigManager) error {
 	persister := core.NewConfigPersister(configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("Failed to save configuration", false)
+		return core.NewCommandError("I couldn't save that change. I'm keeping this reply private so you can adjust it and try again without extra channel noise.", true)
 	}
 	return nil
 }

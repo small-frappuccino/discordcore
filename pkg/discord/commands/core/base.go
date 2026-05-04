@@ -108,11 +108,11 @@ func CommandLogEntry(i *discordgo.InteractionCreate, command string, userID stri
 // ValidateGuildContext validates if the context has the required server information
 func ValidateGuildContext(ctx *Context) error {
 	if ctx.GuildID == "" {
-		return NewCommandError("This command can only be used in a server", true)
+		return NewCommandError("This command only works inside a server, so I'm keeping this failure private.", true)
 	}
 
 	if ctx.GuildConfig == nil {
-		return NewCommandError("Server configuration not found", true)
+		return NewCommandError("I couldn't find this server's configuration, so I'm keeping this reply private.", true)
 	}
 
 	return nil
@@ -121,7 +121,7 @@ func ValidateGuildContext(ctx *Context) error {
 // ValidateUserContext validates if the context has the required user information
 func ValidateUserContext(ctx *Context) error {
 	if ctx.UserID == "" {
-		return NewCommandError("Unable to identify user", true)
+		return NewCommandError("I couldn't identify who ran this command, so I'm keeping this reply private.", true)
 	}
 
 	return nil
@@ -207,7 +207,7 @@ func RequiresGuildConfig(ctx *Context) error {
 	}
 
 	if ctx.GuildConfig == nil {
-		return NewCommandError("Server configuration is required for this command", true)
+		return NewCommandError("This command needs a server configuration before it can run, so I'm keeping this reply private.", true)
 	}
 
 	return nil

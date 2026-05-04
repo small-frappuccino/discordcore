@@ -82,14 +82,14 @@ func TestTranslateQOTDConfigError(t *testing.T) {
 		{
 			name:               "generic invalid qotd input becomes command error",
 			input:              fmt.Errorf("%w: %s", files.ErrInvalidQOTDInput, ""),
-			wantCommandMessage: "Invalid QOTD configuration",
-			wantEphemeral:      false,
+			wantCommandMessage: "I couldn't apply that QOTD setup because part of the configuration is invalid. I'm keeping this reply private.",
+			wantEphemeral:      true,
 		},
 		{
 			name:               "missing schedule validation maps to command guidance",
 			input:              fmt.Errorf("%w: %s", files.ErrInvalidQOTDInput, "schedule.hour_utc and schedule.minute_utc are required when enabled"),
-			wantCommandMessage: "Set the QOTD publish hour and minute before enabling publishing",
-			wantEphemeral:      false,
+			wantCommandMessage: "I couldn't turn on QOTD publishing yet because the schedule is incomplete. I'm keeping this reply private so you can finish the setup first.",
+			wantEphemeral:      true,
 		},
 	}
 

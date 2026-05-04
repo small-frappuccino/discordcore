@@ -445,7 +445,7 @@ func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
 func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("Failed to load runtime config: %v", err))
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err))
 	}
 
 	st := panelState{
@@ -793,23 +793,23 @@ func renderMainEmbed(rc files.RuntimeConfig, st panelState) *discordgo.MessageEm
 	}
 
 	desc := strings.Join([]string{
-		"Painel para editar **runtime_config** (substitui as env vars operacionais).",
+		"This panel lets you edit the persisted runtime configuration that replaced the old operational environment variables.",
 		"",
-		fmt.Sprintf("Escopo: **%s**", scopeDesc),
-		fmt.Sprintf("Selecionada: `%s` • Tipo: **%s** • Default: **%s** • %s", sp.Key, sp.Type, sp.DefaultHint, sp.RestartHint),
-		"Use os menus para filtrar e navegar, e os botões para editar.",
+		fmt.Sprintf("Scope: **%s**", scopeDesc),
+		fmt.Sprintf("Selected: `%s` | Type: **%s** | Default: **%s** | %s", sp.Key, sp.Type, sp.DefaultHint, sp.RestartHint),
+		"Use the menus to filter and navigate, then use the buttons to edit the selected setting.",
 	}, "\n")
 
 	fields := []*discordgo.MessageEmbedField{}
 	fields = append(fields, groupFieldsForMain(rc, st)...)
 
 	return &discordgo.MessageEmbed{
-		Title:       "CONFIG (RUNTIME)",
+		Title:       "Runtime Configuration",
 		Description: desc,
 		Color:       theme.Info(),
 		Fields:      fields,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Dica: alterações podem ser aplicadas em tempo real para THEME e alguns ALICE_DISABLE_*.",
+			Text: "Some changes can be applied immediately, especially THEME and selected ALICE_DISABLE_* settings.",
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -935,11 +935,11 @@ func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.Messag
 	}
 
 	if sp.GuildOnly {
-		lines = append(lines, "", "⚠️ **Note:** This setting can only be configured per-guild.")
+		lines = append(lines, "", "**Note:** This setting can only be configured per guild.")
 	}
 
 	return &discordgo.MessageEmbed{
-		Title:       "CONFIG (RUNTIME) — DETAILS",
+		Title:       "Runtime Configuration - Details",
 		Description: strings.Join(lines, "\n"),
 		Color:       theme.Muted(),
 		Footer: &discordgo.MessageEmbedFooter{
@@ -954,19 +954,19 @@ func renderHelpEmbed() *discordgo.MessageEmbed {
 		"This panel edits the persisted `runtime_config`.",
 		"",
 		"**Notes:**",
-		"• Names stay in ALL CAPS to preserve mental compatibility with env vars.",
-		"• The bot no longer reads these options from the environment (the token is still env).",
-		"• Some changes can be hot-applied (THEME and some ALICE_DISABLE_*).",
+		"- Names stay in ALL CAPS so they still map cleanly to the old env var mental model.",
+		"- The bot no longer reads these options from the environment, except for the token.",
+		"- Some changes can be hot-applied, especially THEME and selected ALICE_DISABLE_* settings.",
 		"",
 		"**How to edit:**",
-		"1) Filter by group (optional) and select a key.",
-		"2) Boolean: use TOGGLE.",
-		"3) Other types: use EDIT and fill the modal.",
-		"4) RESET clears the value and restores the code default.",
+		"1) Filter by group if needed and select a key.",
+		"2) For boolean values, use TOGGLE.",
+		"3) For other values, use EDIT and fill in the modal.",
+		"4) RESET clears the saved value and restores the code default.",
 	}, "\n")
 
 	return &discordgo.MessageEmbed{
-		Title:       "CONFIG (RUNTIME) — HELP",
+		Title:       "Runtime Configuration - Help",
 		Description: desc,
 		Color:       theme.Info(),
 		Timestamp:   time.Now().Format(time.RFC3339),
@@ -1233,13 +1233,13 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 				Data: &discordgo.InteractionResponseData{
 					Flags: discordgo.MessageFlagsEphemeral,
 					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed(fmt.Sprintf("Failed to load runtime config: %v", err)),
+						errorEmbed(fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err)),
 					},
 				},
 			}, "load_runtime_config_error")
 			return
 		}
-		edit(errorEmbed(fmt.Sprintf("Failed to load runtime config: %v", err)), nil, "load_runtime_config_error")
+		edit(errorEmbed(fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err)), nil, "load_runtime_config_error")
 		return
 	}
 
@@ -1467,7 +1467,7 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 
 	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
-		edit(errorEmbed(fmt.Sprintf("Failed to load runtime config: %v", err)), nil, "load_runtime_config_error")
+		edit(errorEmbed(fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err)), nil, "load_runtime_config_error")
 		return
 	}
 
@@ -1584,7 +1584,7 @@ func withHotApplyWarning(embed *discordgo.MessageEmbed, applyErr error) *discord
 
 	clone := *embed
 	msg := fmt.Sprintf(
-		"Saved runtime config, but failed to apply changes immediately. Restart may be required.\nError: %v",
+		"I saved the runtime configuration, but I couldn't apply the change immediately. A restart may be required.\nError: %v",
 		applyErr,
 	)
 	if strings.TrimSpace(clone.Description) == "" {
@@ -1683,7 +1683,7 @@ func editInteractionMessage(s *discordgo.Session, i *discordgo.InteractionCreate
 
 func errorEmbed(msg string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
-		Title:       "CONFIG (RUNTIME) — ERROR",
+		Title:       "Runtime Configuration - Error",
 		Description: msg,
 		Color:       theme.Error(),
 		Timestamp:   time.Now().Format(time.RFC3339),

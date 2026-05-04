@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	runtimeConfigInteractionDeniedText  = "Only the user who opened this runtime config panel can use it."
-	runtimeConfigInteractionExpiredText = "This runtime config panel is no longer valid. Reopen /config runtime."
+	runtimeConfigInteractionDeniedText  = "Only the person who opened this runtime config panel can use it. I'm keeping this reply private because it belongs to that admin session."
+	runtimeConfigInteractionExpiredText = "This runtime config panel is no longer valid. Reopen /config runtime to continue."
 )
 
 type runtimeVisibilityClass string

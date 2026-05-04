@@ -131,12 +131,13 @@ func (cmd *MetricsCommand) RequiresPermissions() bool {
 func (cmd *MetricsCommand) Handle(ctx *core.Context) error {
 	summary := cmd.formatMetrics(ctx)
 	if strings.TrimSpace(summary) == "" {
-		summary = "No metrics available"
+		summary = "No service metrics are available right now. I'm keeping this private because these details are only useful for admin review."
 	}
 
 	builder := core.NewResponseBuilder(ctx.Session).
+		Ephemeral().
 		WithEmbed().
-		WithTitle("📊 Metrics").
+		WithTitle("Service Metrics").
 		WithColor(theme.Info()).
 		WithTimestamp()
 
@@ -263,7 +264,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 	}
 
 	// Acknowledge start
-	if err := core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Starting metrics watch: interval=%ds, duration=%ds", intervalSec, durationSec)); err != nil {
+	if err := core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Starting a live metrics watch for this channel. Updates will run every %ds for %ds.", intervalSec, durationSec)); err != nil {
 		return err
 	}
 
@@ -273,7 +274,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 	format := func() string { return mc.formatMetrics(ctx) }
 	send := func() (*discordgo.Message, error) {
 		embed := &discordgo.MessageEmbed{
-			Title:       "📊 Metrics (live)",
+			Title:       "Live Service Metrics",
 			Description: format(),
 			Color:       theme.Info(),
 			Timestamp:   time.Now().Format(time.RFC3339),
@@ -299,7 +300,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 			select {
 			case <-ticker.C:
 				embed := &discordgo.MessageEmbed{
-					Title:       "📊 Metrics (live)",
+					Title:       "Live Service Metrics",
 					Description: format(),
 					Color:       theme.Info(),
 					Timestamp:   time.Now().Format(time.RFC3339),
@@ -350,12 +351,12 @@ func (cmd *ServiceStatusCommand) RequiresPermissions() bool {
 func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("Service name is required", true)
+		return core.NewCommandError("I need a service name before I can continue, so I'm keeping this reply private.", true)
 	}
 
 	info, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Service '%s' not found", serviceName), true)
+		return core.NewCommandError(fmt.Sprintf("I couldn't find a service named %s, so I'm keeping this reply private.", serviceName), true)
 	}
 
 	// Perform health check
@@ -366,7 +367,7 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	stats := info.Service.Stats()
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🔧 Service Status: %s", serviceName),
+		Title: fmt.Sprintf("Service Status: %s", serviceName),
 		Color: cmd.adminCommands.getStatusColor(info.State, health.Healthy),
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -435,7 +436,9 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 		})
 	}
 
-	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
+	return core.NewResponseManager(ctx.Session).
+		WithConfig(core.ResponseConfig{Ephemeral: true}).
+		Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // ServiceListCommand lists all registered services
@@ -467,9 +470,9 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🔧 Registered Services",
+		Title:       "Registered Services",
 		Color:       theme.ServiceList(),
-		Description: fmt.Sprintf("Total services: %d", len(services)),
+		Description: fmt.Sprintf("Here is the current service registry. I'm keeping this private because it is operational state. Total services: %d", len(services)),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
@@ -485,7 +488,7 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 		info := services[name]
 		sType := info.Service.Type()
 		status := cmd.adminCommands.getServiceStatusIcon(info.State)
-		servicesByType[sType] = append(servicesByType[sType], fmt.Sprintf("%s %s", status, name))
+		servicesByType[sType] = append(servicesByType[sType], fmt.Sprintf("%s: %s", status, name))
 		if !seenType[sType] {
 			seenType[sType] = true
 			typeOrder = append(typeOrder, sType)
@@ -504,7 +507,9 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 		})
 	}
 
-	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
+	return core.NewResponseManager(ctx.Session).
+		WithConfig(core.ResponseConfig{Ephemeral: true}).
+		Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // ServiceRestartCommand restarts a specific service
@@ -542,18 +547,18 @@ func (cmd *ServiceRestartCommand) RequiresPermissions() bool {
 func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("Service name is required", true)
+		return core.NewCommandError("I need a service name before I can continue, so I'm keeping this reply private.", true)
 	}
 
 	// Check if service exists
 	_, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Service '%s' not found", serviceName), true)
+		return core.NewCommandError(fmt.Sprintf("I couldn't find a service named %s, so I'm keeping this reply private.", serviceName), true)
 	}
 
 	// Send initial response
-	rm := core.NewResponseManager(ctx.Session)
-	if err := rm.Info(ctx.Interaction, fmt.Sprintf("🔄 Restarting service: %s", serviceName)); err != nil {
+	rm := core.NewResponseManager(ctx.Session).WithConfig(core.ResponseConfig{Ephemeral: true})
+	if err := rm.Info(ctx.Interaction, fmt.Sprintf("Restarting service %s now. I'm keeping this private while the restart runs.", serviceName)); err != nil {
 		return err
 	}
 
@@ -562,10 +567,10 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 		if err := cmd.adminCommands.serviceManager.RestartService(serviceName); err != nil {
 			ctx.Logger.Error().Errorf("Failed to restart service: %v", err)
 			// Try to follow up with error message
-			rm.EditResponse(ctx.Interaction, fmt.Sprintf("❌ Failed to restart service '%s': %v", serviceName, err))
+			rm.EditResponse(ctx.Interaction, fmt.Sprintf("I couldn't restart service %s. I'm keeping this private because it includes internal service details: %v", serviceName, err))
 		} else {
 			// Follow up with success message
-			rm.EditResponse(ctx.Interaction, fmt.Sprintf("✅ Service '%s' restarted successfully", serviceName))
+			rm.EditResponse(ctx.Interaction, fmt.Sprintf("Service %s was restarted.", serviceName))
 		}
 	}()
 
@@ -627,8 +632,9 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "🏥 System Health Check",
+		Title: "System Health Check",
 		Color: color,
+		Description: "Here is the current system health snapshot. I'm keeping this private because it reflects internal service status.",
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Overall Status",
@@ -646,13 +652,15 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 
 	if len(unhealthyServices) > 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "❌ Unhealthy Services",
+			Name:   "Unhealthy Services",
 			Value:  strings.Join(unhealthyServices, "\n"),
 			Inline: false,
 		})
 	}
 
-	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
+	return core.NewResponseManager(ctx.Session).
+		WithConfig(core.ResponseConfig{Ephemeral: true}).
+		Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // SystemInfoCommand shows general system information
@@ -690,8 +698,9 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "ℹ️ System Information",
+		Title: "System Information",
 		Color: theme.SystemInfo(),
+		Description: "Here is the current runtime and service summary. I'm keeping this private because it is operational data.",
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Bot",
@@ -717,7 +726,9 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	return core.NewResponseManager(ctx.Session).Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
+	return core.NewResponseManager(ctx.Session).
+		WithConfig(core.ResponseConfig{Ephemeral: true}).
+		Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 // Helper methods
@@ -735,32 +746,32 @@ func (ac *AdminCommands) getStatusColor(state service.ServiceState, healthy bool
 
 func (ac *AdminCommands) getHealthString(healthy bool) string {
 	if healthy {
-		return "✅ Healthy"
+		return "Healthy"
 	}
-	return "❌ Unhealthy"
+	return "Unhealthy"
 }
 
 func (ac *AdminCommands) getOverallHealthString(healthy bool) string {
 	if healthy {
-		return "✅ All systems operational"
+		return "All systems operational"
 	}
-	return "❌ Issues detected"
+	return "Issues detected"
 }
 
 func (ac *AdminCommands) getServiceStatusIcon(state service.ServiceState) string {
 	switch state {
 	case service.StateRunning:
-		return "✅"
+		return "Running"
 	case service.StateError:
-		return "❌"
+		return "Error"
 	case service.StateStopped:
-		return "⏹️"
+		return "Stopped"
 	case service.StateInitializing:
-		return "🔄"
+		return "Initializing"
 	case service.StateStopping:
-		return "⏸️"
+		return "Stopping"
 	default:
-		return "❓"
+		return "Unknown"
 	}
 }
 

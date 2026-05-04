@@ -138,20 +138,7 @@ func (rm *ResponseManager) sendEmbedResponse(i *discordgo.InteractionCreate, mes
 
 // formatTextMessage formats a text message based on the type
 func (rm *ResponseManager) formatTextMessage(message string, responseType ResponseType) string {
-	switch responseType {
-	case ResponseSuccess:
-		return "✅ " + message
-	case ResponseError:
-		return "❌ " + message
-	case ResponseWarning:
-		return "⚠️ " + message
-	case ResponseInfo:
-		return "ℹ️ " + message
-	case ResponseLoading:
-		return "⏳ " + message
-	default:
-		return message
-	}
+	return message
 }
 
 // createEmbed creates an embed based on the response type
