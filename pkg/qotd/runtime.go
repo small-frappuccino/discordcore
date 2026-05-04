@@ -20,7 +20,7 @@ const (
 )
 
 // PublishScheduledIfDue publishes the scheduled QOTD for the active slot when
-// the publish boundary has passed and no scheduled post exists yet.
+// the publish boundary has passed and no official post exists yet.
 func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (bool, error) {
 	if err := s.validate(); err != nil {
 		return false, err
@@ -48,7 +48,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 
-	existing, err := s.store.GetScheduledQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
 	if err != nil {
 		return false, err
 	}
