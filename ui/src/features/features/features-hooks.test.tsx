@@ -370,6 +370,35 @@ describe("feature hooks", () => {
     expect(result.current.notice).toBeNull();
   });
 
+  it("loads guild channel options for a requested domain", async () => {
+    const channels: GuildChannelOption[] = [
+      {
+        id: "channel-qotd",
+        name: "qotd",
+        display_name: "#qotd",
+        kind: "text",
+        supports_message_route: true,
+      },
+    ];
+    mockDashboardSession.client.listGuildChannelOptions.mockResolvedValue({
+      status: "ok",
+      guild_id: "guild-1",
+      channels,
+    });
+
+    const { result } = renderHook(() =>
+      useGuildChannelOptions({ domain: "qotd" }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.channels).toEqual(channels);
+    });
+
+    expect(
+      mockDashboardSession.client.listGuildChannelOptions,
+    ).toHaveBeenCalledWith("guild-1", { domain: "qotd" });
+  });
+
   it("reuses cached guild channel options across mounts", async () => {
     const channels: GuildChannelOption[] = [
       {
@@ -398,6 +427,58 @@ describe("feature hooks", () => {
     expect(
       mockDashboardSession.client.listGuildChannelOptions,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it("separates cached guild channel options by domain", async () => {
+    const defaultChannels: GuildChannelOption[] = [
+      {
+        id: "channel-default",
+        name: "general",
+        display_name: "#general",
+        kind: "text",
+        supports_message_route: true,
+      },
+    ];
+    const qotdChannels: GuildChannelOption[] = [
+      {
+        id: "channel-qotd",
+        name: "qotd",
+        display_name: "#qotd",
+        kind: "text",
+        supports_message_route: true,
+      },
+    ];
+    mockDashboardSession.client.listGuildChannelOptions
+      .mockResolvedValueOnce({
+        status: "ok",
+        guild_id: "guild-1",
+        channels: defaultChannels,
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        guild_id: "guild-1",
+        channels: qotdChannels,
+      });
+
+    const defaultHook = renderHook(() => useGuildChannelOptions());
+    await waitFor(() => {
+      expect(defaultHook.result.current.channels).toEqual(defaultChannels);
+    });
+    defaultHook.unmount();
+
+    const qotdHook = renderHook(() =>
+      useGuildChannelOptions({ domain: "qotd" }),
+    );
+    await waitFor(() => {
+      expect(qotdHook.result.current.channels).toEqual(qotdChannels);
+    });
+
+    expect(
+      mockDashboardSession.client.listGuildChannelOptions,
+    ).toHaveBeenNthCalledWith(1, "guild-1");
+    expect(
+      mockDashboardSession.client.listGuildChannelOptions,
+    ).toHaveBeenNthCalledWith(2, "guild-1", { domain: "qotd" });
   });
 
   it("loads guild member options for the selected server", async () => {

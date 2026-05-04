@@ -367,6 +367,10 @@ interface GuildListRequestOptions {
   fresh?: boolean;
 }
 
+interface GuildChannelOptionsRequestOptions {
+  domain?: string;
+}
+
 const transientGetRetryStatuses = new Set([502, 504]);
 const transientGetRetryDelaysMs = [80, 160];
 
@@ -586,10 +590,18 @@ export class ControlApiClient {
 
   async listGuildChannelOptions(
     guildId: string,
+    options: GuildChannelOptionsRequestOptions = {},
   ): Promise<GuildChannelOptionsResponse> {
+    const params = new URLSearchParams();
+    const domain = options.domain?.trim() ?? "";
+    if (domain !== "") {
+      params.set("domain", domain);
+    }
+
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
     return this.request<GuildChannelOptionsResponse>(
       "GET",
-      `/v1/guilds/${encodeURIComponent(guildId)}/channel-options`,
+      `/v1/guilds/${encodeURIComponent(guildId)}/channel-options${suffix}`,
     );
   }
 

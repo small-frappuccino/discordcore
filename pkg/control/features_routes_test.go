@@ -582,6 +582,37 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 	})
 
+	t.Run("lists guild channel options for a requested domain", func(t *testing.T) {
+		t.Parallel()
+
+		srv, _ := newControlTestServer(t)
+		var resolvedGuildID string
+		var resolvedDomain string
+		srv.SetDiscordSessionResolverForDomain(func(guildID, domain string) (*discordgo.Session, error) {
+			resolvedGuildID = guildID
+			resolvedDomain = domain
+			return newTestDiscordSessionWithGuildChannels("g1",
+				&discordgo.Channel{ID: "qotd", Name: "qotd", Type: discordgo.ChannelTypeGuildText, Position: 1},
+			), nil
+		})
+
+		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/channel-options?domain=qotd", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /v1/guilds/g1/channel-options?domain=qotd status=%d body=%q", rec.Code, rec.Body.String())
+		}
+
+		response := decodeFeatureResponse[guildChannelOptionsResponse](t, rec)
+		if len(response.Channels) != 1 || response.Channels[0].ID != "qotd" {
+			t.Fatalf("expected qotd channel option, got %+v", response.Channels)
+		}
+		if resolvedGuildID != "g1" {
+			t.Fatalf("expected resolver guild g1, got %q", resolvedGuildID)
+		}
+		if resolvedDomain != files.BotDomainQOTD {
+			t.Fatalf("expected resolver domain %q, got %q", files.BotDomainQOTD, resolvedDomain)
+		}
+	})
+
 	t.Run("lists guild member options with selected member pinned", func(t *testing.T) {
 		t.Parallel()
 

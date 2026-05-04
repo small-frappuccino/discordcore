@@ -84,6 +84,8 @@ const channelOptionsMock = {
   refresh: vi.fn(),
 };
 
+const useGuildChannelOptionsMock = vi.fn(() => channelOptionsMock);
+
 vi.mock("../../context/DashboardSessionContext", () => ({
   useDashboardSession: () => dashboardSessionMock,
 }));
@@ -98,7 +100,7 @@ vi.mock("./QOTDContext", async () => {
 });
 
 vi.mock("../features/useGuildChannelOptions", () => ({
-  useGuildChannelOptions: () => channelOptionsMock,
+  useGuildChannelOptions: useGuildChannelOptionsMock,
 }));
 
 describe("QOTD UI", () => {
@@ -111,6 +113,7 @@ describe("QOTD UI", () => {
     qotdMock.workspaceState = "ready";
     qotdMock.saveSettings.mockReset().mockImplementation(async (next) => next);
     channelOptionsMock.refresh.mockReset();
+	useGuildChannelOptionsMock.mockReset().mockImplementation(() => channelOptionsMock);
   });
 
   it("keeps refresh actions out of the ready settings shell", () => {
@@ -179,6 +182,18 @@ describe("QOTD UI", () => {
     expect(
       screen.queryByRole("button", { name: /qotd setup/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("requests qotd-scoped channel options", () => {
+    render(
+      <MemoryRouter>
+        <QOTDSettingsPage />
+      </MemoryRouter>,
+    );
+
+    expect(useGuildChannelOptionsMock).toHaveBeenCalledWith({
+      domain: "qotd",
+    });
   });
 
   it("shows the unsaved changes bar and resets the local draft", async () => {

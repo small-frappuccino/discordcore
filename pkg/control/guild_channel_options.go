@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 type guildChannelOption struct {
@@ -18,8 +19,13 @@ type guildChannelOption struct {
 	position             int    `json:"-"`
 }
 
-func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, guildID string) {
-	session, err := s.discordSessionForGuild(guildID)
+func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, r *http.Request, guildID string) {
+	domain := ""
+	if r != nil {
+		domain = files.NormalizeBotDomain(r.URL.Query().Get("domain"))
+	}
+
+	session, err := s.discordSessionForGuildDomain(guildID, domain)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve guild channel options: %v", err), http.StatusServiceUnavailable)
 		return

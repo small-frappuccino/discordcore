@@ -8,14 +8,23 @@ import {
   peekGuildChannelOptions,
 } from "./guildResourceCache";
 
-export function useGuildChannelOptions() {
+interface UseGuildChannelOptionsOptions {
+  domain?: string;
+}
+
+export function useGuildChannelOptions(
+  options: UseGuildChannelOptionsOptions = {},
+) {
   const { authState, baseUrl, client, selectedGuildID } = useDashboardSession();
   const normalizedGuildID = selectedGuildID.trim();
+  const normalizedDomain = options.domain?.trim().toLowerCase() ?? "";
   const [channels, setChannels] = useState<GuildChannelOption[]>(() => {
     if (authState !== "signed_in" || normalizedGuildID === "") {
       return [];
     }
-    return peekGuildChannelOptions(baseUrl, normalizedGuildID);
+    return peekGuildChannelOptions(baseUrl, normalizedGuildID, {
+      domain: normalizedDomain,
+    });
   });
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -39,13 +48,16 @@ export function useGuildChannelOptions() {
         baseUrl,
         normalizedGuildID,
         {
+          domain: normalizedDomain,
           force: true,
         },
       );
       setChannels(nextChannels);
       setNotice(null);
     } catch (error) {
-      const cachedChannels = peekGuildChannelOptions(baseUrl, normalizedGuildID);
+      const cachedChannels = peekGuildChannelOptions(baseUrl, normalizedGuildID, {
+        domain: normalizedDomain,
+      });
       setChannels(cachedChannels);
       if (cachedChannels.length === 0) {
         setNotice({
@@ -66,7 +78,9 @@ export function useGuildChannelOptions() {
       return;
     }
 
-    const cachedChannels = peekGuildChannelOptions(baseUrl, normalizedGuildID);
+    const cachedChannels = peekGuildChannelOptions(baseUrl, normalizedGuildID, {
+      domain: normalizedDomain,
+    });
     setChannels(cachedChannels);
     setNotice(null);
 
@@ -80,6 +94,7 @@ export function useGuildChannelOptions() {
           client,
           baseUrl,
           normalizedGuildID,
+          { domain: normalizedDomain },
         );
         if (cancelled) {
           return;
@@ -90,7 +105,9 @@ export function useGuildChannelOptions() {
         if (cancelled) {
           return;
         }
-        const cachedErrorChannels = peekGuildChannelOptions(baseUrl, normalizedGuildID);
+        const cachedErrorChannels = peekGuildChannelOptions(baseUrl, normalizedGuildID, {
+          domain: normalizedDomain,
+        });
         setChannels(cachedErrorChannels);
         if (cachedErrorChannels.length === 0) {
           setNotice({
@@ -112,7 +129,7 @@ export function useGuildChannelOptions() {
     return () => {
       cancelled = true;
     };
-  }, [authState, baseUrl, client, normalizedGuildID]);
+    }, [authState, baseUrl, client, normalizedDomain, normalizedGuildID]);
 
   return {
     channels,

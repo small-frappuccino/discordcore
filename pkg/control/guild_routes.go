@@ -61,7 +61,7 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		s.handleGuildChannelOptionsGet(w, guildID)
+		s.handleGuildChannelOptionsGet(w, r, guildID)
 		return
 	case len(tail) == 1 && tail[0] == "member-options":
 		if r.Method != http.MethodGet {

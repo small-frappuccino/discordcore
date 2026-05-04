@@ -29,10 +29,12 @@ interface SettingsDraft {
   collector?: QOTDCollectorConfig;
 }
 
+const qotdChannelDomain = "qotd";
+
 export function QOTDSettingsPage() {
   const { canEditSelectedGuild } = useDashboardSession();
 	const { deckSummaries, saveSettings, settings } = useQOTD();
-  const channelOptions = useGuildChannelOptions();
+  const channelOptions = useGuildChannelOptions({ domain: qotdChannelDomain });
   const workflowHeadingId = useId();
   const savedDraftRef = useRef<SettingsDraft>(createSettingsDraft(settings));
   const [draft, setDraft] = useState<SettingsDraft>(

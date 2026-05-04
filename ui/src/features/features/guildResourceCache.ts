@@ -36,6 +36,10 @@ function normalizeGuildID(guildID: string) {
   return guildID.trim();
 }
 
+function normalizeGuildResourceDomain(domain: string) {
+  return domain.trim().toLowerCase();
+}
+
 function featureWorkspaceCacheKey(
   baseUrl: string,
   scope: FeatureWorkspaceScope,
@@ -45,8 +49,8 @@ function featureWorkspaceCacheKey(
   return `${baseUrl}::${scope}::${normalizedGuildID}`;
 }
 
-function guildScopedCacheKey(baseUrl: string, guildID: string) {
-  return `${baseUrl}::${normalizeGuildID(guildID)}`;
+function guildScopedCacheKey(baseUrl: string, guildID: string, domain = "") {
+  return `${baseUrl}::${normalizeGuildID(guildID)}::${normalizeGuildResourceDomain(domain)}`;
 }
 
 function createCacheEntry<T>(): ResourceCacheEntry<T> {
@@ -112,10 +116,14 @@ export function peekFeatureWorkspace(
 export function peekGuildChannelOptions(
   baseUrl: string,
   guildID: string,
+  options: {
+    domain?: string;
+  } = {},
 ): GuildChannelOption[] {
   return (
-    guildChannelOptionsCache.get(guildScopedCacheKey(baseUrl, guildID))?.value
-      ?.channels ?? []
+    guildChannelOptionsCache.get(
+      guildScopedCacheKey(baseUrl, guildID, options.domain ?? ""),
+    )?.value?.channels ?? []
   );
 }
 
@@ -156,12 +164,22 @@ export async function loadGuildChannelOptions(
   guildID: string,
   options: {
     force?: boolean;
+    domain?: string;
   } = {},
 ) {
+  const normalizedDomain = normalizeGuildResourceDomain(options.domain ?? "");
   const response = await loadCachedResource(
     guildChannelOptionsCache,
-    guildScopedCacheKey(baseUrl, guildID),
-    () => client.listGuildChannelOptions(normalizeGuildID(guildID)),
+    guildScopedCacheKey(baseUrl, guildID, normalizedDomain),
+    () => {
+      const normalizedGuildID = normalizeGuildID(guildID);
+      if (normalizedDomain === "") {
+        return client.listGuildChannelOptions(normalizedGuildID);
+      }
+      return client.listGuildChannelOptions(normalizedGuildID, {
+        domain: normalizedDomain,
+      });
+    },
     options.force,
   );
   return response.channels;

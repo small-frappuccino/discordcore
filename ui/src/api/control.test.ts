@@ -49,6 +49,33 @@ describe("ControlApiClient feature routes", () => {
     });
   });
 
+  it("loads guild channel options with an optional domain query", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        status: "ok",
+        guild_id: "guild-1",
+        channels: [],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    await client.listGuildChannelOptions("guild-1", { domain: "qotd" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/guilds/guild-1/channel-options?domain=qotd",
+      {
+        method: "GET",
+        headers: expect.any(Headers),
+        credentials: "include",
+        body: undefined,
+      },
+    );
+  });
+
   it("patches a guild feature with PATCH and a CSRF token", async () => {
     const updatedFeature: FeatureRecord = {
       id: "logging.member_join",
