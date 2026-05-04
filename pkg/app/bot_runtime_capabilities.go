@@ -31,8 +31,16 @@ func resolveBotRuntimeCapabilities(
 	}
 
 	guilds := cfg.GuildsForBotInstance(botInstanceID, defaultBotInstanceID)
-	if len(guilds) == 0 {
+	qotdGuilds := cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, botInstanceID, defaultBotInstanceID)
+	if len(guilds) == 0 && len(qotdGuilds) == 0 {
 		return capabilities
+	}
+
+	for _, guild := range qotdGuilds {
+		if !guild.QOTD.IsZero() {
+			capabilities.qotd = true
+			break
+		}
 	}
 
 	for _, guild := range guilds {
@@ -44,10 +52,6 @@ func resolveBotRuntimeCapabilities(
 			if features.Services.AdminCommands {
 				capabilities.admin = true
 			}
-		}
-
-		if !guild.QOTD.IsZero() {
-			capabilities.qotd = true
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {

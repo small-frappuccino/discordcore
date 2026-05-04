@@ -205,3 +205,70 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
 	}
 }
+
+func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := &files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring:    boolPtr(false),
+				Automod:       boolPtr(false),
+				Commands:      boolPtr(false),
+				AdminCommands: boolPtr(false),
+			},
+			Logging: files.FeatureLoggingToggles{
+				AvatarLogging:  boolPtr(false),
+				RoleUpdate:     boolPtr(false),
+				MemberJoin:     boolPtr(false),
+				MemberLeave:    boolPtr(false),
+				MessageProcess: boolPtr(false),
+				MessageEdit:    boolPtr(false),
+				MessageDelete:  boolPtr(false),
+				ReactionMetric: boolPtr(false),
+				AutomodAction:  boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			Features: files.FeatureToggles{
+				Services: files.FeatureServiceToggles{
+					Commands: boolPtr(true),
+				},
+			},
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "yuzuha",
+			},
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-yuzuha",
+				}},
+			},
+		}},
+	}
+
+	aliceCapabilities := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
+	if !aliceCapabilities.commands {
+		t.Fatal("expected alice runtime to keep command capability from guild-wide binding")
+	}
+	if aliceCapabilities.qotd {
+		t.Fatalf("expected alice runtime to lose qotd capability when qotd domain is overridden, got %+v", aliceCapabilities)
+	}
+
+	yuzuhaCapabilities := resolveBotRuntimeCapabilities(cfg, "yuzuha", "alice")
+	if !yuzuhaCapabilities.qotd {
+		t.Fatal("expected yuzuha runtime to gain qotd capability from domain override")
+	}
+	if yuzuhaCapabilities.commands || yuzuhaCapabilities.admin || yuzuhaCapabilities.monitoring || yuzuhaCapabilities.userPrune {
+		t.Fatalf("expected yuzuha runtime to gain only qotd capability from domain override, got %+v", yuzuhaCapabilities)
+	}
+	if yuzuhaCapabilities.intents != discordgo.IntentsGuilds {
+		t.Fatalf("expected qotd-only runtime to keep minimal intents, got %d", yuzuhaCapabilities.intents)
+	}
+}

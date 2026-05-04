@@ -96,3 +96,78 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		t.Fatalf("unexpected reconcile target order: %v", fake.reconcileCalls)
 	}
 }
+
+func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
+	t.Parallel()
+
+	configManager := files.NewMemoryConfigManager()
+	for _, guild := range []files.GuildConfig{
+		{
+			GuildID:       "g-qotd-enabled",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "yuzuha",
+			},
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-enabled",
+				}},
+			},
+		},
+		{
+			GuildID:       "g-qotd-configured-disabled",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "yuzuha",
+			},
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					ChannelID: "question-disabled",
+				}},
+			},
+		},
+		{
+			GuildID:       "g-legacy-alice",
+			BotInstanceID: "alice",
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-alice",
+				}},
+			},
+		},
+	} {
+		if err := configManager.AddGuildConfig(guild); err != nil {
+			t.Fatalf("AddGuildConfig(%s) failed: %v", guild.GuildID, err)
+		}
+	}
+
+	fake := &fakeGuildLifecycleService{}
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "yuzuha", "alice")
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	service.runPublishCycle(service.clock())
+	service.runReconcileCycle(service.clock())
+
+	if len(fake.publishCalls) != 1 || fake.publishCalls[0] != "g-qotd-enabled" {
+		t.Fatalf("expected publish cycle to include only enabled qotd-domain guilds for yuzuha, got %v", fake.publishCalls)
+	}
+	if len(fake.reconcileCalls) != 2 {
+		t.Fatalf("expected reconcile cycle to include configured qotd-domain guilds for yuzuha, got %v", fake.reconcileCalls)
+	}
+	if fake.reconcileCalls[0] != "g-qotd-enabled" || fake.reconcileCalls[1] != "g-qotd-configured-disabled" {
+		t.Fatalf("unexpected reconcile target order: %v", fake.reconcileCalls)
+	}
+}

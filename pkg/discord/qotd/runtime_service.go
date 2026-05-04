@@ -170,7 +170,7 @@ func (s *RuntimeService) configuredGuildIDs(requireEnabled bool) []string {
 		return nil
 	}
 
-	guilds := cfg.GuildsForBotInstance(s.botInstanceID, s.defaultBotID)
+	guilds := cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, s.botInstanceID, s.defaultBotID)
 	if len(guilds) == 0 {
 		return nil
 	}
