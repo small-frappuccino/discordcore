@@ -199,7 +199,7 @@ func TestHandleSlashCommandUnknownCommand(t *testing.T) {
 	if len(responses) != 1 {
 		t.Fatalf("expected 1 response, got %d", len(responses))
 	}
-	if !strings.Contains(responses[0].Data.Content, "couldn't find that command") {
+	if !strings.Contains(responses[0].Data.Content, "command couldn't be found") {
 		t.Fatalf("unexpected content: %q", responses[0].Data.Content)
 	}
 	if responses[0].Data.Flags&discordgo.MessageFlagsEphemeral == 0 {

@@ -110,7 +110,7 @@ func handleActivity(ctx *core.Context) error {
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
-		return respondError(s, i, "This command only works inside a server, so I'm keeping this reply private.")
+		return respondError(s, i, "This command only works inside a server, so this reply stays private.")
 	}
 
 	// Parse options
@@ -128,7 +128,7 @@ func handleActivity(ctx *core.Context) error {
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, "I couldn't reach the metrics store, so I'm keeping this reply private.")
+		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -145,7 +145,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, "I couldn't load the activity metrics from the database right now, so I'm keeping this reply private. Try again shortly.")
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	msgTotalsByUser, err := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
@@ -158,7 +158,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, "I couldn't load the activity metrics from the database right now, so I'm keeping this reply private. Try again shortly.")
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	reactTotalsByChannel, err := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
@@ -171,7 +171,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, "I couldn't load the activity metrics from the database right now, so I'm keeping this reply private. Try again shortly.")
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	reactTotalsByUser, err := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
@@ -184,7 +184,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, "I couldn't load the activity metrics from the database right now, so I'm keeping this reply private. Try again shortly.")
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	// Build embed
@@ -232,7 +232,7 @@ func handleActivity(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Color:       theme.Primary(),
-		Description: "Here is the recent message and reaction activity. I'm keeping this private because it is operational data.",
+		Description: "Here is the recent message and reaction activity. This reply stays private because it is operational data.",
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields:      fields,
 	}
@@ -270,12 +270,12 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
-		return respondError(s, i, "This command only works inside a server, so I'm keeping this reply private.")
+		return respondError(s, i, "This command only works inside a server, so this reply stays private.")
 	}
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, "I couldn't reach the metrics store, so I'm keeping this reply private.")
+		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -347,7 +347,7 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Server Health Stats",
 		Color:       theme.Info(),
-		Description: fmt.Sprintf("Here is the current server health snapshot. I'm keeping this private because it combines database and cache data.\nDatabase size: `%s`", dbSizeLabel),
+		Description: fmt.Sprintf("Here is the current server health snapshot. This reply stays private because it combines database and cache data.\nDatabase size: `%s`", dbSizeLabel),
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
@@ -362,12 +362,12 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
-		return respondError(s, i, "This command only works inside a server, so I'm keeping this reply private.")
+		return respondError(s, i, "This command only works inside a server, so this reply stays private.")
 	}
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, "I couldn't reach the metrics store, so I'm keeping this reply private.")
+		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -401,7 +401,7 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:     fmt.Sprintf("Server Stats (%s)", label),
 		Color:     theme.Success(),
-		Description: "Here is the recent member movement snapshot. I'm keeping this private because it is operational data.",
+		Description: "Here is the recent member movement snapshot. This reply stays private because it is operational data.",
 		Fields:    fields,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -611,11 +611,11 @@ func handleBackfillRun(ctx *core.Context) error {
 
 	router := ctx.Router()
 	if router == nil {
-		return respondError(s, i, "I couldn't start the backfill because the command router is unavailable. I'm keeping this reply private.")
+		return respondError(s, i, "The backfill couldn't start because the command router is unavailable. This reply stays private.")
 	}
 	taskRouter := router.GetTaskRouter()
 	if taskRouter == nil {
-		return respondError(s, i, "I couldn't start the backfill because the task router is unavailable. I'm keeping this reply private.")
+		return respondError(s, i, "The backfill couldn't start because the task router is unavailable. This reply stays private.")
 	}
 
 	channelID := getChannelOpt(s, i, "channel", "")
@@ -626,7 +626,7 @@ func handleBackfillRun(ctx *core.Context) error {
 	}
 
 	if channelID == "" {
-		return respondError(s, i, "I couldn't start the backfill because there is no channel selected or configured by default. I'm keeping this reply private.")
+		return respondError(s, i, "The backfill couldn't start because there is no channel selected or configured by default. This reply stays private.")
 	}
 
 	days := getIntOpt(i, "days", 7)
@@ -640,7 +640,7 @@ func handleBackfillRun(ctx *core.Context) error {
 		// Day mode
 		_, err := time.Parse("2006-01-02", startDateRaw)
 		if err != nil {
-			return respondError(s, i, "I couldn't start the backfill because start_date must use YYYY-MM-DD. I'm keeping this reply private.")
+			return respondError(s, i, "The backfill couldn't start because start_date must use YYYY-MM-DD. This reply stays private.")
 		}
 		taskType = "monitor.backfill_entry_exit_day"
 		payload = struct{ ChannelID, Day string }{ChannelID: channelID, Day: startDateRaw}
@@ -662,12 +662,12 @@ func handleBackfillRun(ctx *core.Context) error {
 	})
 
 	if err != nil {
-		return respondError(s, i, fmt.Sprintf("I couldn't dispatch the backfill task right now, so I'm keeping this reply private: %v", err))
+		return respondError(s, i, fmt.Sprintf("The backfill task couldn't be dispatched right now, so this reply stays private: %v", err))
 	}
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Backfill Started",
-		Description: "I started the backfill request. I'm keeping this private because it is an admin operation.\n" + desc,
+		Description: "The backfill request started. This reply stays private because it is an admin operation.\n" + desc,
 		Color:       theme.Info(),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: "This process runs in the background. Use /metrics backfill-status to check progress.",

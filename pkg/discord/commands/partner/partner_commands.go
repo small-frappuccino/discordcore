@@ -137,7 +137,7 @@ func (c *PartnerAddSubCommand) Handle(ctx *core.Context) error {
 	}
 	if err := c.boardService.CreatePartner(ctx.GuildID, entry); err != nil {
 		if errors.Is(err, files.ErrPartnerAlreadyExists) {
-			return core.NewCommandError("I couldn't add that partner because another entry already uses the same name or invite. I'm keeping this reply private.", true)
+			return core.NewCommandError("That partner couldn't be added because another entry already uses the same name or invite. This reply stays private.", true)
 		}
 		return core.NewCommandError(fmt.Sprintf("Failed to create partner: %v", err), true)
 	}
@@ -147,7 +147,7 @@ func (c *PartnerAddSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Partner created but lookup failed: %v", err), true)
 	}
 
-	content := formatPartnerEntry("I added the partner entry and kept this private because it changes the partner board setup for this server.", saved)
+	content := formatPartnerEntry("The partner entry was added and this reply stays private because it changes the partner board setup for this server.", saved)
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, content)
 }
 
@@ -186,12 +186,12 @@ func (c *PartnerReadSubCommand) Handle(ctx *core.Context) error {
 	entry, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
-			return core.NewCommandError("I couldn't find that partner entry, so I'm keeping this reply private because it concerns the partner board setup.", true)
+			return core.NewCommandError("That partner entry couldn't be found, so this reply stays private because it concerns the partner board setup.", true)
 		}
 		return core.NewCommandError(fmt.Sprintf("Failed to read partner: %v", err), true)
 	}
 
-	content := formatPartnerEntry("Here are the saved details for that partner entry. I'm keeping this private because it shows the current partner board setup.", entry)
+	content := formatPartnerEntry("Here are the saved details for that partner entry. This reply stays private because it shows the current partner board setup.", entry)
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, content)
 }
 
@@ -256,7 +256,7 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 	existing, err := c.boardService.Partner(ctx.GuildID, currentName)
 	if err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
-			return core.NewCommandError("I couldn't find that partner entry, so I'm keeping this reply private because it concerns the partner board setup.", true)
+			return core.NewCommandError("That partner entry couldn't be found, so this reply stays private because it concerns the partner board setup.", true)
 		}
 		return core.NewCommandError(fmt.Sprintf("Failed to load current partner: %v", err), true)
 	}
@@ -273,7 +273,7 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 	}
 	if err := c.boardService.UpdatePartner(ctx.GuildID, currentName, entry); err != nil {
 		if errors.Is(err, files.ErrPartnerAlreadyExists) {
-			return core.NewCommandError("I couldn't update that partner because another entry already uses the same name or invite. I'm keeping this reply private.", true)
+			return core.NewCommandError("That partner couldn't be updated because another entry already uses the same name or invite. This reply stays private.", true)
 		}
 		return core.NewCommandError(fmt.Sprintf("Failed to update partner: %v", err), true)
 	}
@@ -283,7 +283,7 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Partner updated but lookup failed: %v", err), true)
 	}
 
-	content := formatPartnerEntry("I updated the partner entry and kept this private because it changes the partner board setup for this server.", saved)
+	content := formatPartnerEntry("The partner entry was updated and this reply stays private because it changes the partner board setup for this server.", saved)
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, content)
 }
 
@@ -321,14 +321,14 @@ func (c *PartnerDeleteSubCommand) Handle(ctx *core.Context) error {
 
 	if err := c.boardService.DeletePartner(ctx.GuildID, name); err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
-			return core.NewCommandError("I couldn't find that partner entry, so I'm keeping this reply private because it concerns the partner board setup.", true)
+			return core.NewCommandError("That partner entry couldn't be found, so this reply stays private because it concerns the partner board setup.", true)
 		}
 		return core.NewCommandError(fmt.Sprintf("Failed to delete partner: %v", err), true)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(
 		ctx.Interaction,
-		fmt.Sprintf("I removed partner `%s` and kept this private because it changes the partner board setup for this server.", strings.TrimSpace(name)),
+		fmt.Sprintf("Partner `%s` was removed and this reply stays private because it changes the partner board setup for this server.", strings.TrimSpace(name)),
 	)
 }
 
@@ -355,11 +355,11 @@ func (c *PartnerListSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError(fmt.Sprintf("Failed to list partners: %v", err), true)
 	}
 	if len(partners) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No partners are configured yet. I'm keeping this private because it reflects the current partner board setup.")
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No partners are configured yet. This reply stays private because it reflects the current partner board setup.")
 	}
 
 	var b strings.Builder
-	b.WriteString("These are the configured partner entries. I'm keeping this private because it reflects the current partner board setup:\n")
+	b.WriteString("These are the configured partner entries. This reply stays private because it reflects the current partner board setup:\n")
 	for i, p := range partners {
 		fandom := strings.TrimSpace(p.Fandom)
 		if fandom == "" {
@@ -426,6 +426,6 @@ func (c *PartnerSyncSubCommand) Handle(ctx *core.Context) error {
 
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(
 		ctx.Interaction,
-		"I synced the partner board and kept this private because it is an internal admin action.",
+		"The partner board was synced and this reply stays private because it is an internal admin action.",
 	)
 }

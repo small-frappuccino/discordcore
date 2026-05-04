@@ -445,7 +445,7 @@ func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
 func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err))
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err))
 	}
 
 	st := panelState{
@@ -1233,13 +1233,13 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 				Data: &discordgo.InteractionResponseData{
 					Flags: discordgo.MessageFlagsEphemeral,
 					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed(fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err)),
+						errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)),
 					},
 				},
 			}, "load_runtime_config_error")
 			return
 		}
-		edit(errorEmbed(fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err)), nil, "load_runtime_config_error")
+		edit(errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)), nil, "load_runtime_config_error")
 		return
 	}
 
@@ -1467,7 +1467,7 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 
 	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
-		edit(errorEmbed(fmt.Sprintf("I couldn't load the runtime configuration, so I'm keeping this reply private: %v", err)), nil, "load_runtime_config_error")
+		edit(errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)), nil, "load_runtime_config_error")
 		return
 	}
 
@@ -1584,7 +1584,7 @@ func withHotApplyWarning(embed *discordgo.MessageEmbed, applyErr error) *discord
 
 	clone := *embed
 	msg := fmt.Sprintf(
-		"I saved the runtime configuration, but I couldn't apply the change immediately. A restart may be required.\nError: %v",
+		"The runtime configuration was saved, but the change couldn't be applied immediately. A restart may be required.\nError: %v",
 		applyErr,
 	)
 	if strings.TrimSpace(clone.Description) == "" {

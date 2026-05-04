@@ -131,7 +131,7 @@ func (c *ConfigWebhookEmbedCreateSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	msg := strings.Join([]string{
-		fmt.Sprintf("I saved the webhook embed update for `%s`, and I'm keeping this reply private because it also includes validation details.", renderScopeLabel(scopeGuildID)),
+		fmt.Sprintf("The webhook embed update for `%s` was saved, and this reply stays private because it also includes validation details.", renderScopeLabel(scopeGuildID)),
 		fmt.Sprintf("Message ID: `%s`", strings.TrimSpace(messageID)),
 		fmt.Sprintf("Webhook: `%s`", maskWebhookURL(webhookURL)),
 		fmt.Sprintf("apply_now=%t", applyNow),
@@ -197,7 +197,7 @@ func (c *ConfigWebhookEmbedReadSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	content := strings.Join([]string{
-		"Here is the saved webhook embed update for that message. I'm keeping this private because it includes the stored payload and target webhook details.",
+		"Here is the saved webhook embed update for that message. This reply stays private because it includes the stored payload and target webhook details.",
 		"",
 		fmt.Sprintf("Scope: `%s`", renderScopeLabel(scopeGuildID)),
 		fmt.Sprintf("Message ID: `%s`", strings.TrimSpace(entry.MessageID)),
@@ -351,7 +351,7 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	msg := strings.Join([]string{
-		fmt.Sprintf("I updated the webhook embed entry for `%s`, and I'm keeping this reply private because it also includes validation details.", renderScopeLabel(scopeGuildID)),
+		fmt.Sprintf("The webhook embed entry for `%s` was updated, and this reply stays private because it also includes validation details.", renderScopeLabel(scopeGuildID)),
 		fmt.Sprintf("Previous message ID: `%s`", strings.TrimSpace(targetMessageID)),
 		fmt.Sprintf("Current message ID: `%s`", strings.TrimSpace(newMessageID)),
 		fmt.Sprintf("Webhook: `%s`", maskWebhookURL(webhookURL)),
@@ -479,12 +479,12 @@ func (c *ConfigWebhookEmbedListSubCommand) Handle(ctx *core.Context) error {
 	if len(updates) == 0 {
 		return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityList).Info(
 			ctx.Interaction,
-			fmt.Sprintf("No webhook embed updates are configured in `%s`. I'm keeping this private because it reflects the current patch setup.", renderScopeLabel(scopeGuildID)),
+			fmt.Sprintf("No webhook embed updates are configured in `%s`. This reply stays private because it reflects the current patch setup.", renderScopeLabel(scopeGuildID)),
 		)
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("These are the webhook embed updates configured in `%s`. I'm keeping this private because it reflects the current patch setup:\n", renderScopeLabel(scopeGuildID)))
+	b.WriteString(fmt.Sprintf("These are the webhook embed updates configured in `%s`. This reply stays private because it reflects the current patch setup:\n", renderScopeLabel(scopeGuildID)))
 
 	limit := len(updates)
 	if limit > maxListEntries {

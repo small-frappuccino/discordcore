@@ -944,10 +944,10 @@ func buildWarningsCommandMessage(targetUsername string, warnings []storage.Moder
 		targetLabel = "unknown user"
 	}
 	if len(warnings) == 0 {
-		return fmt.Sprintf("No warnings are recorded for %s. I'm keeping this private because moderation history should stay private.", targetLabel)
+		return fmt.Sprintf("No warnings are recorded for %s. This reply stays private because moderation history should stay private.", targetLabel)
 	}
 
-	lines := []string{fmt.Sprintf("Here is the recent warning history for %s. I'm keeping this private because moderation history should stay private:", targetLabel)}
+	lines := []string{fmt.Sprintf("Here is the recent warning history for %s. This reply stays private because moderation history should stay private:", targetLabel)}
 	for _, warning := range warnings {
 		reason := strings.TrimSpace(warning.Reason)
 		if reason == "" {
@@ -1052,7 +1052,7 @@ func prepareBanContext(ctx *core.Context) (*banContext, error) {
 		ctx,
 		discordgo.PermissionBanMembers,
 		"You need the Ban Members permission to use this command.",
-		"I need the Ban Members permission to ban members.",
+		"The bot needs the Ban Members permission to ban members.",
 	)
 }
 
@@ -1061,7 +1061,7 @@ func prepareKickContext(ctx *core.Context) (*banContext, error) {
 		ctx,
 		discordgo.PermissionKickMembers,
 		"You need the Kick Members permission to use this command.",
-		"I need the Kick Members permission to kick members.",
+		"The bot needs the Kick Members permission to kick members.",
 	)
 }
 
@@ -1070,7 +1070,7 @@ func prepareTimeoutContext(ctx *core.Context) (*banContext, error) {
 		ctx,
 		discordgo.PermissionModerateMembers,
 		"You need the Moderate Members permission to use this command.",
-		"I need the Moderate Members permission to timeout members.",
+		"The bot needs the Moderate Members permission to timeout members.",
 	)
 }
 
@@ -1079,7 +1079,7 @@ func prepareMuteContext(ctx *core.Context) (*banContext, error) {
 		ctx,
 		discordgo.PermissionManageRoles,
 		"You need the Manage Roles permission to use this command.",
-		"I need the Manage Roles permission to mute members with the configured mute role.",
+		"The bot needs the Manage Roles permission to mute members with the configured mute role.",
 	)
 }
 
@@ -1088,7 +1088,7 @@ func prepareWarnContext(ctx *core.Context) (*banContext, error) {
 		ctx,
 		discordgo.PermissionModerateMembers,
 		"You need the Moderate Members permission to use this command.",
-		"I need the Moderate Members permission to manage warnings.",
+		"The bot needs the Moderate Members permission to manage warnings.",
 	)
 }
 

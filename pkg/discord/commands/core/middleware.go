@@ -71,17 +71,17 @@ func (cr *CommandRouter) permissionGateMiddleware() InteractionMiddleware {
 
 			if handler.RequiresGuild() && ctx.GuildID == "" {
 				slog.Warn("Command used outside of guild", "commandPath", ctx.RouteKey.Path)
-				return NewCommandError("This command only works inside a server, so I'm keeping this failure private.", true)
+				return NewCommandError("This command only works inside a server, so this failure stays private.", true)
 			}
 
 			if ctx.GuildConfig != nil && len(ctx.GuildConfig.Roles.Allowed) > 0 && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
 				slog.Warn("User without allowed role tried to use command", "commandPath", ctx.RouteKey.Path)
-				return NewCommandError("You don't have access to this command, so I'm keeping this reply private.", true)
+				return NewCommandError("You don't have access to this command, so this reply stays private.", true)
 			}
 
 			if handler.RequiresPermissions() && !cr.permChecker.HasPermission(ctx.GuildID, ctx.UserID) {
 				slog.Warn("User without permission tried to use command", "commandPath", ctx.RouteKey.Path)
-				return NewCommandError("You don't have access to this command, so I'm keeping this reply private.", true)
+				return NewCommandError("You don't have access to this command, so this reply stays private.", true)
 			}
 
 			return next(ctx)
@@ -156,7 +156,7 @@ func respondToSlashError(ctx *Context, err error) {
 		return
 	}
 
-	NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "An error occurred while executing the command. I'm keeping this reply private because this result is mainly for the person who ran the command.")
+	NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "An error occurred while executing the command. This reply stays private because the result is mainly for the person who ran the command.")
 }
 
 func chainInteractionMiddleware(routeKey InteractionRouteKey, final InteractionHandlerFunc, middlewares []InteractionMiddleware) InteractionHandlerFunc {

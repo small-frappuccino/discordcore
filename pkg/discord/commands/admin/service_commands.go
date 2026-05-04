@@ -131,7 +131,7 @@ func (cmd *MetricsCommand) RequiresPermissions() bool {
 func (cmd *MetricsCommand) Handle(ctx *core.Context) error {
 	summary := cmd.formatMetrics(ctx)
 	if strings.TrimSpace(summary) == "" {
-		summary = "No service metrics are available right now. I'm keeping this private because these details are only useful for admin review."
+		summary = "No service metrics are available right now. This reply stays private because these details are only useful for admin review."
 	}
 
 	builder := core.NewResponseBuilder(ctx.Session).
@@ -351,12 +351,12 @@ func (cmd *ServiceStatusCommand) RequiresPermissions() bool {
 func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("I need a service name before I can continue, so I'm keeping this reply private.", true)
+		return core.NewCommandError("This command needs a service name before it can continue, so this reply stays private.", true)
 	}
 
 	info, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("I couldn't find a service named %s, so I'm keeping this reply private.", serviceName), true)
+		return core.NewCommandError(fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), true)
 	}
 
 	// Perform health check
@@ -472,7 +472,7 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Registered Services",
 		Color:       theme.ServiceList(),
-		Description: fmt.Sprintf("Here is the current service registry. I'm keeping this private because it is operational state. Total services: %d", len(services)),
+		Description: fmt.Sprintf("Here is the current service registry. This reply stays private because it is operational state. Total services: %d", len(services)),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
@@ -547,18 +547,18 @@ func (cmd *ServiceRestartCommand) RequiresPermissions() bool {
 func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("I need a service name before I can continue, so I'm keeping this reply private.", true)
+		return core.NewCommandError("This command needs a service name before it can continue, so this reply stays private.", true)
 	}
 
 	// Check if service exists
 	_, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("I couldn't find a service named %s, so I'm keeping this reply private.", serviceName), true)
+		return core.NewCommandError(fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), true)
 	}
 
 	// Send initial response
 	rm := core.NewResponseManager(ctx.Session).WithConfig(core.ResponseConfig{Ephemeral: true})
-	if err := rm.Info(ctx.Interaction, fmt.Sprintf("Restarting service %s now. I'm keeping this private while the restart runs.", serviceName)); err != nil {
+	if err := rm.Info(ctx.Interaction, fmt.Sprintf("Restarting service %s now. This reply stays private while the restart runs.", serviceName)); err != nil {
 		return err
 	}
 
@@ -567,7 +567,7 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 		if err := cmd.adminCommands.serviceManager.RestartService(serviceName); err != nil {
 			ctx.Logger.Error().Errorf("Failed to restart service: %v", err)
 			// Try to follow up with error message
-			rm.EditResponse(ctx.Interaction, fmt.Sprintf("I couldn't restart service %s. I'm keeping this private because it includes internal service details: %v", serviceName, err))
+			rm.EditResponse(ctx.Interaction, fmt.Sprintf("Service %s couldn't be restarted. This reply stays private because it includes internal service details: %v", serviceName, err))
 		} else {
 			// Follow up with success message
 			rm.EditResponse(ctx.Interaction, fmt.Sprintf("Service %s was restarted.", serviceName))
@@ -634,7 +634,7 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title: "System Health Check",
 		Color: color,
-		Description: "Here is the current system health snapshot. I'm keeping this private because it reflects internal service status.",
+		Description: "Here is the current system health snapshot. This reply stays private because it reflects internal service status.",
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Overall Status",
@@ -700,7 +700,7 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title: "System Information",
 		Color: theme.SystemInfo(),
-		Description: "Here is the current runtime and service summary. I'm keeping this private because it is operational data.",
+		Description: "Here is the current runtime and service summary. This reply stays private because it is operational data.",
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Bot",

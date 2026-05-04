@@ -87,7 +87,7 @@ func (c *CommandChannelSubCommand) RequiresPermissions() bool { return true }
 func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 	channelID := channelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), commandChannelOptionName)
 	if channelID == "" {
-		return core.NewCommandError("I need a channel before I can apply this change, so I'm keeping this reply private.", true)
+		return core.NewCommandError("This change needs a channel before it can be applied, so this reply stays private.", true)
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Channels.Commands = channelID
@@ -126,7 +126,7 @@ func (c *AllowedRoleAddSubCommand) RequiresPermissions() bool { return true }
 func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 	roleID := roleOptionID(core.GetSubCommandOptions(ctx.Interaction), allowedRoleOptionName)
 	if roleID == "" {
-		return core.NewCommandError("I need a role before I can apply this change, so I'm keeping this reply private.", true)
+		return core.NewCommandError("This change needs a role before it can be applied, so this reply stays private.", true)
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		if slices.Contains(guildConfig.Roles.Allowed, roleID) {
@@ -168,7 +168,7 @@ func (c *AllowedRoleRemoveSubCommand) RequiresPermissions() bool { return true }
 func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 	roleID := roleOptionID(core.GetSubCommandOptions(ctx.Interaction), allowedRoleOptionName)
 	if roleID == "" {
-		return core.NewCommandError("I need a role before I can apply this change, so I'm keeping this reply private.", true)
+		return core.NewCommandError("This change needs a role before it can be applied, so this reply stays private.", true)
 	}
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Roles.Allowed = removeString(guildConfig.Roles.Allowed, roleID)
@@ -202,7 +202,7 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if len(ctx.GuildConfig.Roles.Allowed) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. I'm keeping this private because it reflects the current server setup.")
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")
 	}
 	roles := make([]string, 0, len(ctx.GuildConfig.Roles.Allowed))
 	for _, roleID := range ctx.GuildConfig.Roles.Allowed {
@@ -213,9 +213,9 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 		roles = append(roles, fmt.Sprintf("- <@&%s>", roleID))
 	}
 	if len(roles) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. I'm keeping this private because it reflects the current server setup.")
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")
 	}
-	message := "These roles can use the admin slash commands. I'm keeping this private because it reflects the current server setup:\n" + strings.Join(roles, "\n")
+	message := "These roles can use the admin slash commands. This reply stays private because it reflects the current server setup:\n" + strings.Join(roles, "\n")
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, message)
 }
 
@@ -223,7 +223,7 @@ func persistGuildConfig(ctx *core.Context, configManager *files.ConfigManager) e
 	persister := core.NewConfigPersister(configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("I couldn't save that change. I'm keeping this reply private so you can adjust it and try again without extra channel noise.", true)
+		return core.NewCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
 	}
 	return nil
 }

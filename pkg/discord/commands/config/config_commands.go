@@ -134,7 +134,7 @@ func (c *echoCommand) Handle(ctx *core.Context) error {
 	if ephemeral {
 		return builder.Ephemeral().Info(
 			ctx.Interaction,
-			fmt.Sprintf("Here is the text you asked me to echo. I'm keeping it private because echo output is usually only useful to you: %s", message),
+			fmt.Sprintf("Here is the requested echo text. This reply stays private because echo output is usually only useful to the person who ran the command: %s", message),
 		)
 	}
 	return builder.Info(ctx.Interaction, fmt.Sprintf("Echo from this command: %s", message))
@@ -235,7 +235,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	persister := core.NewConfigPersister(c.configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return core.NewCommandError("I couldn't save that change. I'm keeping this reply private so you can adjust it and try again without extra channel noise.", true)
+		return core.NewCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` is now set to `%s`.", key, value))

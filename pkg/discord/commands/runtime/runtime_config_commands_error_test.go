@@ -321,7 +321,7 @@ func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 	if rec.webhookPatchCount() == 0 {
 		t.Fatalf("expected panel edit after modal submit")
 	}
-	if !strings.Contains(rec.patchBody(), "I saved the runtime configuration, but I couldn't apply the change immediately") {
+	if !strings.Contains(rec.patchBody(), "The runtime configuration was saved, but the change couldn't be applied immediately") {
 		t.Fatalf("expected hot-apply warning in edited embed payload, got body=%q", rec.patchBody())
 	}
 
