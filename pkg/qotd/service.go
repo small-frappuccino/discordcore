@@ -292,17 +292,12 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 		return ResetDeckResult{}, err
 	}
 	if activeDeck, ok := settings.ActiveDeck(); ok && activeDeck.ID == deck.ID {
-		if schedule, scheduleErr := resolvePublishSchedule(settings); scheduleErr == nil {
-			currentPublishDate := CurrentPublishDateUTC(schedule, now)
-			if !now.Before(PublishTimeUTC(schedule, currentPublishDate)) {
-				existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
-				if lookupErr != nil {
-					return ResetDeckResult{}, lookupErr
-				}
-				if existing != nil && existing.DeckID == deck.ID && hasPublishedOfficialPostTarget(existing) {
-					suppressCurrentSlotDate = currentPublishDate
-				}
-			}
+		slotState, slotErr := s.loadCurrentSlotState(ctx, guildID, settings, now)
+		if slotErr != nil {
+			return ResetDeckResult{}, slotErr
+		}
+		if slotState.ScheduleConfigured && slotState.BoundaryPassed(now) && slotState.HasPublishedOfficialPost() && slotState.OfficialPost.DeckID == deck.ID {
+			suppressCurrentSlotDate = slotState.PublishDateUTC
 		}
 	}
 
@@ -381,21 +376,19 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 	if err != nil {
 		return AutomaticQueueState{}, err
 	}
-	schedule, scheduleErr := resolvePublishSchedule(settings)
-	if scheduleErr == nil {
+	slotState, err := s.loadCurrentSlotState(ctx, guildID, settings, now)
+	if err != nil {
+		return AutomaticQueueState{}, err
+	}
+	if slotState.ScheduleConfigured {
 		state.ScheduleConfigured = true
-		state.Schedule = schedule
-		state.SlotDateUTC = CurrentPublishDateUTC(schedule, now)
-		state.SlotPublishAtUTC = PublishTimeUTC(schedule, state.SlotDateUTC)
+		state.Schedule = slotState.Schedule
+		state.SlotDateUTC = slotState.PublishDateUTC
+		state.SlotPublishAtUTC = slotState.PublishAtUTC
 		state.CanPublish = deck.Enabled && canPublishQOTD(deck)
-
-		officialPost, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, state.SlotDateUTC)
-		if err != nil {
-			return AutomaticQueueState{}, err
-		}
-		state.SlotOfficialPost = officialPost
-		if officialPost != nil {
-			state.SlotQuestion = questionByID(questions, officialPost.QuestionID)
+		state.SlotOfficialPost = slotState.OfficialPost
+		if slotState.OfficialPost != nil {
+			state.SlotQuestion = questionByID(questions, slotState.OfficialPost.QuestionID)
 		}
 		if state.SlotQuestion == nil {
 			state.SlotQuestion = reservedQuestionForDate(questions, state.SlotDateUTC)
@@ -620,7 +613,7 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 		return Summary{}, err
 	}
 	displaySettings := files.DashboardQOTDConfig(settings)
-	schedule, scheduleErr := resolvePublishSchedule(displaySettings)
+	_, scheduleErr := resolvePublishSchedule(displaySettings)
 	questions, err := s.store.ListQOTDQuestions(ctx, guildID, "")
 	if err != nil {
 		return Summary{}, err
@@ -629,22 +622,21 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	if err != nil {
 		return Summary{}, err
 	}
-	currentPublishDate := time.Time{}
-	var currentSlotPost *storage.QOTDOfficialPostRecord
-	if scheduleErr == nil {
-		currentPublishDate = CurrentPublishDateUTC(schedule, now)
-		currentSlotPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, currentPublishDate)
-		if err != nil {
-			return Summary{}, err
-		}
+	slotState, err := s.loadCurrentSlotState(ctx, guildID, displaySettings, now)
+	if err != nil {
+		return Summary{}, err
 	}
 
 	summary := Summary{
 		Settings:                displaySettings,
 		Counts:                  summarizeActiveDeckQuestions(displaySettings, questions),
 		Decks:                   buildDeckSummaries(displaySettings, questions),
-		CurrentPublishDateUTC:   currentPublishDate,
-		PublishedForCurrentSlot: hasPublishedOfficialPostTarget(currentSlotPost),
+		CurrentPublishDateUTC:   time.Time{},
+		PublishedForCurrentSlot: false,
+	}
+	if scheduleErr == nil {
+		summary.CurrentPublishDateUTC = slotState.PublishDateUTC
+		summary.PublishedForCurrentSlot = slotState.HasPublishedOfficialPost()
 	}
 
 	for idx := range posts {
@@ -678,17 +670,24 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if err != nil {
 		return nil, err
 	}
+	slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
+	if err != nil {
+		return nil, err
+	}
 	publishDate := NormalizePublishDateUTC(now)
-	if schedule, scheduleErr := resolvePublishSchedule(cfg); scheduleErr == nil {
-		publishDate = CurrentPublishDateUTC(schedule, now)
+	var existing *storage.QOTDOfficialPostRecord
+	if slotState.ScheduleConfigured {
+		publishDate = slotState.PublishDateUTC
+		existing = slotState.OfficialPost
+	} else {
+		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
+		if err != nil {
+			return nil, err
+		}
 	}
 	deck, ok := cfg.ActiveDeck()
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return nil, ErrQOTDDisabled
-	}
-	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
-	if err != nil {
-		return nil, err
 	}
 	if existing != nil {
 		if isOfficialPostPublished(*existing) {
@@ -803,7 +802,7 @@ func (s *Service) lookupPublishConflictPost(ctx context.Context, guildID string,
 		return nil, err
 	}
 
-	existing, lookupErr := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	existing, lookupErr := s.loadSlotOfficialPost(ctx, guildID, publishDate)
 	if lookupErr != nil {
 		return nil, lookupErr
 	}

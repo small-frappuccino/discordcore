@@ -95,9 +95,9 @@ func (c *ConfigWebhookEmbedCreateSubCommand) Handle(ctx *core.Context) error {
 	})
 	if err != nil {
 		if errors.Is(err, files.ErrWebhookEmbedUpdateAlreadyExists) {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "A webhook embed update with this message_id already exists in the selected scope")
+			return webhookEmbedDetailedCommandError("A webhook embed update with this message_id already exists in the selected scope")
 		}
-		return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to create webhook embed update: %v", err))
+		return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to create webhook embed update: %v", err))
 	}
 
 	if applyNow {
@@ -105,26 +105,22 @@ func (c *ConfigWebhookEmbedCreateSubCommand) Handle(ctx *core.Context) error {
 		if err != nil {
 			rollbackErr := rollbackCreatedWebhookEmbedUpdate(c.configManager, scopeGuildID, messageID)
 			if rollbackErr != nil {
-				return webhookEmbedCommandError(
-					webhookEmbedVisibilityDetailedError,
+				return webhookEmbedDetailedCommandError(
 					fmt.Sprintf("Create aborted: apply_now lookup failed and rollback failed (lookup=%v rollback=%v)", err, rollbackErr),
 				)
 			}
-			return webhookEmbedCommandError(
-				webhookEmbedVisibilityDetailedError,
+			return webhookEmbedDetailedCommandError(
 				fmt.Sprintf("Create aborted because apply_now lookup failed; entry was rolled back: %v", err),
 			)
 		}
 		if err := patchWebhookMessageNow(ctx, scopeGuildID, saved); err != nil {
 			rollbackErr := rollbackCreatedWebhookEmbedUpdate(c.configManager, scopeGuildID, saved.MessageID)
 			if rollbackErr != nil {
-				return webhookEmbedCommandError(
-					webhookEmbedVisibilityDetailedError,
+				return webhookEmbedDetailedCommandError(
 					fmt.Sprintf("Create aborted: apply_now failed and rollback failed (apply=%v rollback=%v)", err, rollbackErr),
 				)
 			}
-			return webhookEmbedCommandError(
-				webhookEmbedVisibilityDetailedError,
+			return webhookEmbedDetailedCommandError(
 				fmt.Sprintf("Create aborted because apply_now failed; entry was rolled back: %v", err),
 			)
 		}
@@ -138,9 +134,9 @@ func (c *ConfigWebhookEmbedCreateSubCommand) Handle(ctx *core.Context) error {
 	}, "\n")
 	if validationWarning != "" {
 		msg += "\n" + validationWarning
-		return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityDetailedError).Info(ctx.Interaction, msg)
+		return webhookEmbedDetailedResponseBuilder(ctx.Session).Info(ctx.Interaction, msg)
 	}
-	return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityShortConfirmation).Success(
+	return webhookEmbedShortConfirmationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Webhook embed updates for `%s` now include message `%s`.", renderScopeLabel(scopeGuildID), strings.TrimSpace(messageID)),
 	)
@@ -191,9 +187,9 @@ func (c *ConfigWebhookEmbedReadSubCommand) Handle(ctx *core.Context) error {
 	entry, err := c.configManager.GetWebhookEmbedUpdate(scopeGuildID, messageID)
 	if err != nil {
 		if errors.Is(err, files.ErrWebhookEmbedUpdateNotFound) {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "No webhook embed update found with that message_id in the selected scope")
+			return webhookEmbedDetailedCommandError("No webhook embed update found with that message_id in the selected scope")
 		}
-		return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to read webhook embed update: %v", err))
+		return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to read webhook embed update: %v", err))
 	}
 
 	content := strings.Join([]string{
@@ -206,7 +202,7 @@ func (c *ConfigWebhookEmbedReadSubCommand) Handle(ctx *core.Context) error {
 		renderEmbedPreview(entry.Embed),
 	}, "\n")
 
-	return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityRenderedPayload).Info(ctx.Interaction, content)
+	return webhookEmbedRenderedPayloadResponseBuilder(ctx.Session).Info(ctx.Interaction, content)
 }
 
 // ConfigWebhookEmbedUpdateSubCommand - update an existing webhook embed update entry.
@@ -287,9 +283,9 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Handle(ctx *core.Context) error {
 	previous, err := c.configManager.GetWebhookEmbedUpdate(scopeGuildID, targetMessageID)
 	if err != nil {
 		if errors.Is(err, files.ErrWebhookEmbedUpdateNotFound) {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "No webhook embed update found with that message_id in the selected scope")
+			return webhookEmbedDetailedCommandError("No webhook embed update found with that message_id in the selected scope")
 		}
-		return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to load webhook embed update before update: %v", err))
+		return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to load webhook embed update before update: %v", err))
 	}
 
 	if !applyNow {
@@ -312,12 +308,12 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Handle(ctx *core.Context) error {
 	})
 	if err != nil {
 		if errors.Is(err, files.ErrWebhookEmbedUpdateNotFound) {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "No webhook embed update found with that message_id in the selected scope")
+			return webhookEmbedDetailedCommandError("No webhook embed update found with that message_id in the selected scope")
 		}
 		if errors.Is(err, files.ErrWebhookEmbedUpdateAlreadyExists) {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "The new message_id is already used by another entry in the selected scope")
+			return webhookEmbedDetailedCommandError("The new message_id is already used by another entry in the selected scope")
 		}
-		return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to update webhook embed update: %v", err))
+		return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to update webhook embed update: %v", err))
 	}
 
 	if applyNow {
@@ -325,26 +321,22 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Handle(ctx *core.Context) error {
 		if err != nil {
 			rollbackErr := rollbackUpdatedWebhookEmbedUpdate(c.configManager, scopeGuildID, newMessageID, previous)
 			if rollbackErr != nil {
-				return webhookEmbedCommandError(
-					webhookEmbedVisibilityDetailedError,
+				return webhookEmbedDetailedCommandError(
 					fmt.Sprintf("Update aborted: apply_now lookup failed and rollback failed (lookup=%v rollback=%v)", err, rollbackErr),
 				)
 			}
-			return webhookEmbedCommandError(
-				webhookEmbedVisibilityDetailedError,
+			return webhookEmbedDetailedCommandError(
 				fmt.Sprintf("Update aborted because apply_now lookup failed; previous entry was restored: %v", err),
 			)
 		}
 		if err := patchWebhookMessageNow(ctx, scopeGuildID, saved); err != nil {
 			rollbackErr := rollbackUpdatedWebhookEmbedUpdate(c.configManager, scopeGuildID, saved.MessageID, previous)
 			if rollbackErr != nil {
-				return webhookEmbedCommandError(
-					webhookEmbedVisibilityDetailedError,
+				return webhookEmbedDetailedCommandError(
 					fmt.Sprintf("Update aborted: apply_now failed and rollback failed (apply=%v rollback=%v)", err, rollbackErr),
 				)
 			}
-			return webhookEmbedCommandError(
-				webhookEmbedVisibilityDetailedError,
+			return webhookEmbedDetailedCommandError(
 				fmt.Sprintf("Update aborted because apply_now failed; previous entry was restored: %v", err),
 			)
 		}
@@ -359,9 +351,9 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Handle(ctx *core.Context) error {
 	}, "\n")
 	if validationWarning != "" {
 		msg += "\n" + validationWarning
-		return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityDetailedError).Info(ctx.Interaction, msg)
+		return webhookEmbedDetailedResponseBuilder(ctx.Session).Info(ctx.Interaction, msg)
 	}
-	return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityShortConfirmation).Success(
+	return webhookEmbedShortConfirmationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf(
 			"Webhook embed update `%s` now points to `%s` in `%s`.",
@@ -420,21 +412,21 @@ func (c *ConfigWebhookEmbedDeleteSubCommand) Handle(ctx *core.Context) error {
 		current, err := c.configManager.GetWebhookEmbedUpdate(scopeGuildID, messageID)
 		if err != nil {
 			if errors.Is(err, files.ErrWebhookEmbedUpdateNotFound) {
-				return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "No webhook embed update found with that message_id in the selected scope")
+				return webhookEmbedDetailedCommandError("No webhook embed update found with that message_id in the selected scope")
 			}
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to load webhook embed update before delete: %v", err))
+			return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to load webhook embed update before delete: %v", err))
 		}
 
 		if err := patchWebhookMessageNow(ctx, scopeGuildID, current); err != nil {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Delete aborted because apply_now failed: %v", err))
+			return webhookEmbedDetailedCommandError(fmt.Sprintf("Delete aborted because apply_now failed: %v", err))
 		}
 	}
 
 	if err := c.configManager.DeleteWebhookEmbedUpdate(scopeGuildID, messageID); err != nil {
 		if errors.Is(err, files.ErrWebhookEmbedUpdateNotFound) {
-			return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "No webhook embed update found with that message_id in the selected scope")
+			return webhookEmbedDetailedCommandError("No webhook embed update found with that message_id in the selected scope")
 		}
-		return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to delete webhook embed update: %v", err))
+		return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to delete webhook embed update: %v", err))
 	}
 
 	msg := fmt.Sprintf(
@@ -442,7 +434,7 @@ func (c *ConfigWebhookEmbedDeleteSubCommand) Handle(ctx *core.Context) error {
 		strings.TrimSpace(messageID),
 		renderScopeLabel(scopeGuildID),
 	)
-	return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityShortConfirmation).Success(ctx.Interaction, msg)
+	return webhookEmbedShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, msg)
 }
 
 // ConfigWebhookEmbedListSubCommand - list webhook embed update entries.
@@ -474,10 +466,10 @@ func (c *ConfigWebhookEmbedListSubCommand) Handle(ctx *core.Context) error {
 	}
 	updates, err := c.configManager.ListWebhookEmbedUpdates(scopeGuildID)
 	if err != nil {
-		return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, fmt.Sprintf("Failed to list webhook embed updates: %v", err))
+		return webhookEmbedDetailedCommandError(fmt.Sprintf("Failed to list webhook embed updates: %v", err))
 	}
 	if len(updates) == 0 {
-		return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityList).Info(
+		return webhookEmbedListResponseBuilder(ctx.Session).Info(
 			ctx.Interaction,
 			fmt.Sprintf("No webhook embed updates are configured in `%s`. This reply stays private because it reflects the current patch setup.", renderScopeLabel(scopeGuildID)),
 		)
@@ -506,7 +498,7 @@ func (c *ConfigWebhookEmbedListSubCommand) Handle(ctx *core.Context) error {
 	}
 	b.WriteString("Use `/config webhook_embed_read` with `message_id` for full details.")
 
-	return webhookEmbedResponseBuilder(ctx.Session, webhookEmbedVisibilityList).Info(ctx.Interaction, b.String())
+	return webhookEmbedListResponseBuilder(ctx.Session).Info(ctx.Interaction, b.String())
 }
 
 func rollbackCreatedWebhookEmbedUpdate(configManager *files.ConfigManager, scopeGuildID, messageID string) error {
@@ -610,8 +602,7 @@ func validateWebhookTargetBeforePersist(
 	}
 
 	if validation.Mode == files.WebhookEmbedValidationModeStrict {
-		return "", webhookEmbedCommandError(
-			webhookEmbedVisibilityDetailedError,
+		return "", webhookEmbedDetailedCommandError(
 			fmt.Sprintf("Webhook target validation failed in strict mode; config was not saved: %v", err),
 		)
 	}

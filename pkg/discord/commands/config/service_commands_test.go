@@ -107,3 +107,20 @@ func TestAllowedRoleCommandsAddListAndRemove(t *testing.T) {
 		t.Fatalf("expected allowed roles to be empty after removal, got %+v", guild)
 	}
 }
+
+func TestAllowedRoleListWithoutRolesStaysPrivate(t *testing.T) {
+	const (
+		guildID = "guild-empty-list"
+		ownerID = "owner-empty-list"
+	)
+
+	session, rec := newConfigCommandTestSession(t)
+	router, _ := newConfigCommandTestRouter(t, session, guildID, ownerID)
+
+	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, allowedRoleListSubCommandName, nil))
+	resp := rec.lastResponse(t)
+	assertEphemeralResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "No roles have admin slash command access yet") {
+		t.Fatalf("unexpected allowed_role_list empty response: %q", resp.Data.Content)
+	}
+}

@@ -49,7 +49,7 @@ func parseScope(ctx *core.Context, extractor *core.OptionExtractor) (string, err
 		return "", nil
 	case scopeGuild:
 		if strings.TrimSpace(ctx.GuildID) == "" {
-			return "", webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, "Guild scope requires a guild context")
+			return "", webhookEmbedDetailedCommandError("Guild scope requires a guild context")
 		}
 		return ctx.GuildID, nil
 	default:

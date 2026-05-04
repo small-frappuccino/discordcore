@@ -39,22 +39,20 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if err != nil {
 		return false, err
 	}
-	schedule, err := resolvePublishSchedule(cfg)
-	if err != nil {
-		return false, ErrQOTDDisabled
-	}
-	publishDate := CurrentPublishDateUTC(schedule, now)
-	if now.Before(PublishTimeUTC(schedule, publishDate)) {
-		return false, nil
-	}
-
-	existing, err := s.store.GetQOTDOfficialPostByDate(ctx, guildID, publishDate)
+	slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
 	if err != nil {
 		return false, err
 	}
-	if existing != nil {
-		if !isOfficialPostPublished(*existing) {
-			recovered, err := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+	if !slotState.ScheduleConfigured {
+		return false, ErrQOTDDisabled
+	}
+	if !slotState.BoundaryPassed(now) {
+		return false, nil
+	}
+
+	if slotState.HasOfficialPostRecord() {
+		if slotState.HasProvisioningOfficialPost() {
+			recovered, err := s.resumeOfficialPostProvisioning(ctx, session, *slotState.OfficialPost, now)
 			if err != nil {
 				return false, err
 			}
@@ -63,7 +61,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 			}
 			return true, nil
 		}
-		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, existing.ID); err != nil {
+		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, slotState.OfficialPost.ID); err != nil {
 			return false, err
 		}
 		return false, nil
@@ -72,11 +70,11 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return false, ErrQOTDDisabled
 	}
-	if isScheduledPublishSuppressed(cfg, publishDate) {
+	if isScheduledPublishSuppressed(cfg, slotState.PublishDateUTC) {
 		return false, nil
 	}
 
-	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, publishDate)
+	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC)
 	if err != nil {
 		return false, err
 	}
@@ -91,14 +89,14 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, err
 	}
 
-	lifecycle := EvaluateOfficialPost(schedule, publishDate, now)
+	lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, now)
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
 		GuildID:              guildID,
 		DeckID:               deck.ID,
 		DeckNameSnapshot:     deck.Name,
 		QuestionID:           question.ID,
 		PublishMode:          string(PublishModeScheduled),
-		PublishDateUTC:       publishDate,
+		PublishDateUTC:       slotState.PublishDateUTC,
 		State:                string(OfficialPostStateProvisioning),
 		ChannelID:            strings.TrimSpace(deck.ChannelID),
 		QuestionTextSnapshot: question.Body,
@@ -109,7 +107,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, publishDate, err)
+		existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, slotState.PublishDateUTC, err)
 		if conflictErr != nil {
 			return false, conflictErr
 		}

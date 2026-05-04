@@ -42,3 +42,23 @@ func webhookEmbedResponseBuilder(session *discordgo.Session, class webhookEmbedV
 func webhookEmbedCommandError(class webhookEmbedVisibilityClass, message string) error {
 	return core.NewCommandError(message, webhookEmbedVisibilityIsEphemeral(class))
 }
+
+func webhookEmbedDetailedCommandError(message string) error {
+	return webhookEmbedCommandError(webhookEmbedVisibilityDetailedError, message)
+}
+
+func webhookEmbedDetailedResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+	return webhookEmbedResponseBuilder(session, webhookEmbedVisibilityDetailedError)
+}
+
+func webhookEmbedRenderedPayloadResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+	return webhookEmbedResponseBuilder(session, webhookEmbedVisibilityRenderedPayload)
+}
+
+func webhookEmbedListResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+	return webhookEmbedResponseBuilder(session, webhookEmbedVisibilityList)
+}
+
+func webhookEmbedShortConfirmationResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+	return webhookEmbedResponseBuilder(session, webhookEmbedVisibilityShortConfirmation)
+}
