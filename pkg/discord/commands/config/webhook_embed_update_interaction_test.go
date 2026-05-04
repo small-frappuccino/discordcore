@@ -286,7 +286,7 @@ func TestWebhookEmbedCommandsCRUDInteractions(t *testing.T) {
 		stringOpt(optionMessageID, "m1"),
 	}))
 	readResp := rec.lastResponse(t)
-	assertPublicResponse(t, readResp)
+	assertEphemeralResponse(t, readResp)
 	if !strings.Contains(readResp.Data.Content, "Scope: `guild:"+guildID+"`") {
 		t.Fatalf("unexpected read scope output: %q", readResp.Data.Content)
 	}
@@ -317,7 +317,7 @@ func TestWebhookEmbedCommandsCRUDInteractions(t *testing.T) {
 	// LIST
 	router.HandleInteraction(session, newConfigSlashInteraction(guildID, ownerID, "webhook_embed_list", nil))
 	listResp := rec.lastResponse(t)
-	assertPublicResponse(t, listResp)
+	assertEphemeralResponse(t, listResp)
 	if !strings.Contains(listResp.Data.Content, "message_id=`m2`") {
 		t.Fatalf("unexpected list response: %q", listResp.Data.Content)
 	}
@@ -404,7 +404,7 @@ func TestWebhookEmbedUpdateApplyNowFailureInteraction(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "apply_now failed") {
 		t.Fatalf("unexpected update apply_now failure response: %q", resp.Data.Content)
 	}
@@ -454,7 +454,7 @@ func TestWebhookEmbedDeleteApplyNowFailureInteraction(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "Delete aborted because apply_now failed") {
 		t.Fatalf("unexpected delete apply_now failure response: %q", resp.Data.Content)
 	}
@@ -484,7 +484,7 @@ func TestWebhookEmbedCreateApplyNowFailureInteraction(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "Create aborted because apply_now failed") {
 		t.Fatalf("unexpected create apply_now failure response: %q", resp.Data.Content)
 	}
@@ -522,7 +522,7 @@ func TestWebhookEmbedCreateStrictValidationFailureBlocksPersist(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "strict mode") {
 		t.Fatalf("unexpected strict validation response: %q", resp.Data.Content)
 	}
@@ -559,7 +559,7 @@ func TestWebhookEmbedCreateSoftValidationFailurePersistsWithWarning(t *testing.T
 	}))
 
 	resp := rec.lastResponse(t)
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "Warning: webhook target validation failed in soft mode") {
 		t.Fatalf("unexpected soft validation response: %q", resp.Data.Content)
 	}
@@ -605,7 +605,7 @@ func TestWebhookEmbedUpdateStrictValidationFailureBlocksPersist(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	assertPublicResponse(t, resp)
+	assertEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content, "strict mode") {
 		t.Fatalf("unexpected strict update response: %q", resp.Data.Content)
 	}

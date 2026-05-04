@@ -71,6 +71,15 @@ func (catalog runtimeInteractionCatalog) componentHandler() core.ComponentHandle
 		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
 		defer done()
 
+		ackPolicy := runtimeComponentAckPolicy(ctx.RouteKey.Path)
+		handled, err := authorizeRuntimeComponentInteraction(ctx, ackPolicy)
+		if err != nil {
+			return err
+		}
+		if handled {
+			return nil
+		}
+
 		handleComponent(ctx.Session, ctx.Interaction, catalog.configManager, runtimeInteractionApplier(ctx))
 		return nil
 	})
@@ -84,6 +93,15 @@ func (catalog runtimeInteractionCatalog) modalHandler() core.ModalHandler {
 
 		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
 		defer done()
+
+		ackPolicy := core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+		handled, err := authorizeRuntimeModalInteraction(ctx, ackPolicy)
+		if err != nil {
+			return err
+		}
+		if handled {
+			return nil
+		}
 
 		handleModalSubmit(ctx.Session, ctx.Interaction, catalog.configManager, runtimeInteractionApplier(ctx))
 		return nil

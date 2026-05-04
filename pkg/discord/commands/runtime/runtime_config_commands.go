@@ -438,26 +438,11 @@ func (c *runtimeSubCommand) Name() string { return commandName }
 func (c *runtimeSubCommand) Description() string {
 	return "View and edit bot runtime configuration (replaces env vars)"
 }
-func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionBoolean,
-			Name:        "ephemeral",
-			Description: "Show panel as ephemeral",
-			Required:    false,
-		},
-	}
-}
+func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
 func (c *runtimeSubCommand) RequiresGuild() bool       { return false }
 func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
 
 func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	ephemeral := extractor.Bool("ephemeral")
-	if !optionWasProvided(ctx.Interaction, "ephemeral") {
-		ephemeral = false
-	}
-
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {
 		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("Failed to load runtime config: %v", err))
@@ -482,7 +467,7 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 
 	rm := core.NewResponseBuilder(ctx.Session).Build()
 	cfg := core.ResponseConfig{
-		Ephemeral:  ephemeral,
+		Ephemeral:  runtimeVisibilityIsEphemeral(runtimeVisibilityAdministrativePanel),
 		WithEmbed:  true,
 		Title:      embed.Title,
 		Color:      embed.Color,
@@ -1427,7 +1412,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		respond(&discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseModal,
 			Data: &discordgo.InteractionResponseData{
-				CustomID: modalEditValueID + stateSep + st.encode(),
+				CustomID: encodeRuntimeModalState(st, runtimeInteractionUserID(i)),
 				Title:    string(sp.Key),
 				Components: []discordgo.MessageComponent{
 					discordgo.ActionsRow{
@@ -1457,7 +1442,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 
 func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
 	m := i.ModalSubmitData()
-	rawState, ok := runtimeModalState(m.CustomID)
+	st, _, ok := decodeRuntimeModalState(m.CustomID)
 	if !ok {
 		return
 	}
@@ -1465,8 +1450,6 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 	edit := func(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent, stage string) {
 		editInteractionMessageWithLog(s, i, embed, components, "modal_submit."+stage)
 	}
-
-	st := decodeState(rawState)
 
 	sp, ok := specByKey(st.Key)
 	if !ok {
@@ -1670,14 +1653,6 @@ func parseActionAndState(customID string) (action string, st panelState) {
 	default:
 		return "", panelState{}
 	}
-}
-
-func runtimeModalState(customID string) (string, bool) {
-	routeID, rawState, hasState := strings.Cut(customID, stateSep)
-	if routeID != modalEditValueID || !hasState {
-		return "", false
-	}
-	return rawState, true
 }
 
 func isKnownRuntimeComponentRoute(routeID string) bool {

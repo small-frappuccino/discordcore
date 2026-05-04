@@ -20,20 +20,49 @@ import (
 type runtimePanelRecorder struct {
 	mu             sync.Mutex
 	callbackCalls  int
+	lastCallback   string
+	followupPosts  int
+	lastFollowup   string
 	webhookPatches int
 	lastPatchBody  string
 }
 
-func (r *runtimePanelRecorder) addCallbackCall() {
+func (r *runtimePanelRecorder) addCallbackCall(body string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.callbackCalls++
+	r.lastCallback = body
 }
 
 func (r *runtimePanelRecorder) callbackCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.callbackCalls
+}
+
+func (r *runtimePanelRecorder) callbackBody() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.lastCallback
+}
+
+func (r *runtimePanelRecorder) addFollowupPost(body string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.followupPosts++
+	r.lastFollowup = body
+}
+
+func (r *runtimePanelRecorder) followupCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.followupPosts
+}
+
+func (r *runtimePanelRecorder) followupBody() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.lastFollowup
 }
 
 func (r *runtimePanelRecorder) addWebhookPatch(body string) {
@@ -73,7 +102,8 @@ func newRuntimePanelTestSession(
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		switch {
 		case strings.Contains(req.URL.Path, "/callback"):
-			rec.addCallbackCall()
+			body, _ := io.ReadAll(req.Body)
+			rec.addCallbackCall(string(body))
 			if callbackStatus != http.StatusOK {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(callbackStatus)
@@ -81,6 +111,13 @@ func newRuntimePanelTestSession(
 				return
 			}
 			w.WriteHeader(http.StatusOK)
+			return
+
+		case strings.Contains(req.URL.Path, "/webhooks/") && req.Method == http.MethodPost:
+			body, _ := io.ReadAll(req.Body)
+			rec.addFollowupPost(string(body))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"followup-message","content":""}`))
 			return
 
 		case strings.Contains(req.URL.Path, "/webhooks/") && req.Method == http.MethodPatch:
@@ -130,14 +167,22 @@ func withCapturedDefaultLogger(t *testing.T) *bytes.Buffer {
 }
 
 func newRuntimeComponentInteraction(customID string) *discordgo.InteractionCreate {
+	return newRuntimeComponentInteractionForUsers(customID, "guild-1", "user-1", "user-1")
+}
+
+func newRuntimeComponentInteractionForUsers(customID, guildID, actorUserID, ownerUserID string) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
 			ID:      "interaction-component",
 			AppID:   "app-id",
 			Token:   "token-id",
 			Type:    discordgo.InteractionMessageComponent,
-			GuildID: "guild-1",
-			Member:  &discordgo.Member{User: &discordgo.User{ID: "user-1"}},
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: actorUserID}},
+			Message: &discordgo.Message{
+				InteractionMetadata: &discordgo.MessageInteractionMetadata{User: &discordgo.User{ID: ownerUserID}},
+				Interaction:         &discordgo.MessageInteraction{User: &discordgo.User{ID: ownerUserID}},
+			},
 			Data: discordgo.MessageComponentInteractionData{
 				CustomID: customID,
 			},
@@ -146,16 +191,20 @@ func newRuntimeComponentInteraction(customID string) *discordgo.InteractionCreat
 }
 
 func newRuntimeModalInteraction(st panelState, value string) *discordgo.InteractionCreate {
+	return newRuntimeModalInteractionForUsers(st, value, "guild-1", "user-1", "user-1")
+}
+
+func newRuntimeModalInteractionForUsers(st panelState, value, guildID, actorUserID, ownerUserID string) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
 			ID:      "interaction-modal",
 			AppID:   "app-id",
 			Token:   "token-id",
 			Type:    discordgo.InteractionModalSubmit,
-			GuildID: "guild-1",
-			Member:  &discordgo.Member{User: &discordgo.User{ID: "user-1"}},
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: actorUserID}},
 			Data: discordgo.ModalSubmitInteractionData{
-				CustomID: modalEditValueID + stateSep + st.encode(),
+				CustomID: encodeRuntimeModalState(st, ownerUserID),
 				Components: []discordgo.MessageComponent{
 					&discordgo.ActionsRow{
 						Components: []discordgo.MessageComponent{
@@ -166,6 +215,26 @@ func newRuntimeModalInteraction(st panelState, value string) *discordgo.Interact
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func newRuntimeSlashInteraction(guildID, userID string) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:      "interaction-runtime-slash",
+			AppID:   "app-id",
+			Token:   "token-id",
+			Type:    discordgo.InteractionApplicationCommand,
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: groupName,
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
+					Name: commandName,
+					Type: discordgo.ApplicationCommandOptionSubCommand,
+				}},
 			},
 		},
 	}
@@ -265,6 +334,35 @@ func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 	}
 }
 
+func TestRuntimeSubCommand_AdminPanelUsesEphemeralPolicy(t *testing.T) {
+	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
+	cm := files.NewMemoryConfigManager()
+	if err := cm.LoadConfig(); err != nil {
+		t.Fatalf("failed to load config manager: %v", err)
+	}
+
+	ctx := &core.Context{
+		Session:     session,
+		Interaction: newRuntimeSlashInteraction("guild-1", "user-1"),
+		Config:      cm,
+		GuildID:     "guild-1",
+		UserID:      "user-1",
+	}
+
+	if err := newRuntimeSubCommand(cm).Handle(ctx); err != nil {
+		t.Fatalf("runtime slash handle failed: %v", err)
+	}
+	if rec.callbackCount() != 1 {
+		t.Fatalf("expected one slash callback, got %d", rec.callbackCount())
+	}
+	if !strings.Contains(rec.callbackBody(), `"flags":64`) {
+		t.Fatalf("expected runtime panel callback to be ephemeral, got body=%q", rec.callbackBody())
+	}
+	if len(newRuntimeSubCommand(cm).Options()) != 0 {
+		t.Fatalf("expected runtime panel to expose no public visibility toggle")
+	}
+}
+
 func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
 	cm := files.NewMemoryConfigManager()
@@ -288,6 +386,46 @@ func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) 
 	}
 	if rec.webhookPatchCount() == 0 {
 		t.Fatalf("expected runtime component to be handled through core router")
+	}
+}
+
+func TestRegisterCommands_RuntimeComponentRejectsDifferentUser(t *testing.T) {
+	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
+	cm := files.NewMemoryConfigManager()
+	if err := cm.LoadConfig(); err != nil {
+		t.Fatalf("failed to load config manager: %v", err)
+	}
+
+	router := core.NewCommandRouter(session, cm)
+	NewRuntimeConfigCommands(cm).RegisterCommands(router)
+
+	interaction := newRuntimeComponentInteractionForUsers(
+		cidButtonMain+stateSep+panelState{
+			Mode:  pageMain,
+			Group: "ALL",
+			Key:   runtimeKeyBotTheme,
+			Scope: "global",
+		}.encode(),
+		"guild-1",
+		"user-2",
+		"user-1",
+	)
+	router.HandleInteraction(session, interaction)
+
+	if rec.callbackCount() != 1 {
+		t.Fatalf("expected one deferred component ack, got %d", rec.callbackCount())
+	}
+	if rec.webhookPatchCount() != 0 {
+		t.Fatalf("expected denied component to avoid editing the panel, got %d patches", rec.webhookPatchCount())
+	}
+	if rec.followupCount() != 1 {
+		t.Fatalf("expected one ephemeral follow-up denial, got %d", rec.followupCount())
+	}
+	if !strings.Contains(rec.followupBody(), runtimeConfigInteractionDeniedText) {
+		t.Fatalf("expected denial follow-up body to mention authorization, got %q", rec.followupBody())
+	}
+	if !strings.Contains(rec.followupBody(), `"flags":64`) {
+		t.Fatalf("expected denial follow-up to be ephemeral, got %q", rec.followupBody())
 	}
 }
 
@@ -322,5 +460,48 @@ func TestRegisterCommands_RoutesRuntimeModalThroughCoreRouter(t *testing.T) {
 	}
 	if rc.BotTheme != "nebula" {
 		t.Fatalf("expected runtime modal to persist updated bot_theme, got %q", rc.BotTheme)
+	}
+}
+
+func TestRegisterCommands_RuntimeModalRejectsDifferentUser(t *testing.T) {
+	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
+	cm := files.NewMemoryConfigManager()
+	if err := cm.LoadConfig(); err != nil {
+		t.Fatalf("failed to load config manager: %v", err)
+	}
+
+	router := core.NewCommandRouter(session, cm)
+	NewRuntimeConfigCommands(cm).RegisterCommands(router)
+
+	st := panelState{
+		Mode:  pageMain,
+		Group: "ALL",
+		Key:   runtimeKeyBotTheme,
+		Scope: "global",
+	}
+	router.HandleInteraction(session, newRuntimeModalInteractionForUsers(st, "nebula", "guild-1", "user-2", "user-1"))
+
+	if rec.callbackCount() != 1 {
+		t.Fatalf("expected one deferred modal ack, got %d", rec.callbackCount())
+	}
+	if rec.webhookPatchCount() != 0 {
+		t.Fatalf("expected denied modal to avoid editing the panel, got %d patches", rec.webhookPatchCount())
+	}
+	if rec.followupCount() != 1 {
+		t.Fatalf("expected one modal denial follow-up, got %d", rec.followupCount())
+	}
+	if !strings.Contains(rec.followupBody(), runtimeConfigInteractionDeniedText) {
+		t.Fatalf("expected modal denial follow-up body to mention authorization, got %q", rec.followupBody())
+	}
+	if !strings.Contains(rec.followupBody(), `"flags":64`) {
+		t.Fatalf("expected modal denial follow-up to be ephemeral, got %q", rec.followupBody())
+	}
+
+	rc, err := loadRuntimeConfig(cm, "global")
+	if err != nil {
+		t.Fatalf("failed to reload runtime config: %v", err)
+	}
+	if rc.BotTheme == "nebula" {
+		t.Fatalf("expected denied modal to avoid persisting bot_theme")
 	}
 }

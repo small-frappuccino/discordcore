@@ -134,6 +134,14 @@ func assertPublicResponse(t *testing.T, resp discordgo.InteractionResponse) {
 	}
 }
 
+func assertEphemeralResponse(t *testing.T, resp discordgo.InteractionResponse) {
+	t.Helper()
+
+	if resp.Data.Flags&discordgo.MessageFlagsEphemeral == 0 {
+		t.Fatalf("expected ephemeral response, got flags=%v content=%q", resp.Data.Flags, resp.Data.Content)
+	}
+}
+
 func assertActiveQOTDDeckState(
 	t *testing.T,
 	cm *files.ConfigManager,
