@@ -189,8 +189,8 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	controlServer.SetPartnerBoardService(opts.partnerBoardService)
 	controlServer.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 	controlServer.SetQOTDService(opts.qotdService)
-	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
-		return opts.runtimeResolver.sessionForGuild(guildID)
+	controlServer.SetDiscordSessionResolverForDomain(func(guildID, domain string) (*discordgo.Session, error) {
+		return opts.runtimeResolver.sessionForGuildDomain(guildID, domain)
 	})
 	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
 		return opts.runtimeResolver.guildBindings(ctx)

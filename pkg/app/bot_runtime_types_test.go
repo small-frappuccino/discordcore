@@ -51,6 +51,45 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	}
 }
 
+func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T) {
+	t.Parallel()
+
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{
+		GuildID:       "g1",
+		BotInstanceID: "alice",
+		DomainBotInstanceIDs: map[string]string{
+			files.BotDomainQOTD: "yuzuha",
+		},
+	}); err != nil {
+		t.Fatalf("add guild g1: %v", err)
+	}
+
+	aliceSession, err := discordgo.New("Bot alice-token")
+	if err != nil {
+		t.Fatalf("create alice session: %v", err)
+	}
+	yuzuhaSession, err := discordgo.New("Bot yuzuha-token")
+	if err != nil {
+		t.Fatalf("create yuzuha session: %v", err)
+	}
+
+	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
+		"alice":  {instanceID: "alice", session: aliceSession},
+		"yuzuha": {instanceID: "yuzuha", session: yuzuhaSession},
+	}, "alice")
+
+	if got, err := resolver.sessionForGuild("g1"); err != nil || got != aliceSession {
+		t.Fatalf("expected legacy guild lookup to stay on alice, got %p err=%v want %p", got, err, aliceSession)
+	}
+	if got, err := resolver.sessionForGuildDomain("g1", files.BotDomainQOTD); err != nil || got != yuzuhaSession {
+		t.Fatalf("expected qotd domain lookup to use yuzuha, got %p err=%v want %p", got, err, yuzuhaSession)
+	}
+	if got, err := resolver.sessionForGuildDomain("g1", "moderation"); err != nil || got != aliceSession {
+		t.Fatalf("expected unspecified domain lookup to fall back to alice, got %p err=%v want %p", got, err, aliceSession)
+	}
+}
+
 func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
 	t.Parallel()
 

@@ -164,6 +164,10 @@ func (r *botRuntimeResolver) defaultRuntime() (*botRuntime, string, error) {
 }
 
 func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, string, error) {
+	return r.runtimeForGuildDomain(guildID, "")
+}
+
+func (r *botRuntimeResolver) runtimeForGuildDomain(guildID, domain string) (*botRuntime, string, error) {
 	if r == nil {
 		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
 	}
@@ -178,7 +182,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 	if guild == nil {
 		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
-	botInstanceID := guild.EffectiveBotInstanceID(r.defaultBotInstanceID)
+	botInstanceID := guild.EffectiveBotInstanceIDForDomain(domain, r.defaultBotInstanceID)
 	if botInstanceID == "" {
 		return nil, "", fmt.Errorf("guild %s does not resolve to a bot instance", guildID)
 	}
@@ -190,7 +194,11 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 }
 
 func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session, error) {
-	runtime, botInstanceID, err := r.runtimeForGuild(guildID)
+	return r.sessionForGuildDomain(guildID, "")
+}
+
+func (r *botRuntimeResolver) sessionForGuildDomain(guildID, domain string) (*discordgo.Session, error) {
+	runtime, botInstanceID, err := r.runtimeForGuildDomain(guildID, domain)
 	if err != nil {
 		return nil, err
 	}

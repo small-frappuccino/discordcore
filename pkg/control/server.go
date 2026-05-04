@@ -32,6 +32,7 @@ type botGuildIDsProvider func(context.Context) ([]string, error)
 type botGuildBindingsProvider func(context.Context) ([]BotGuildBinding, error)
 type guildRegistrationFunc func(context.Context, string, string) error
 type discordSessionResolver func(string) (*discordgo.Session, error)
+type discordSessionDomainResolver func(string, string) (*discordgo.Session, error)
 
 // BotGuildBinding associates a guild visible to the control plane with a bot
 // instance identifier from the host runtime catalog.
@@ -63,7 +64,7 @@ type Server struct {
 	partnerBoardSyncer   partners.GuildSyncExecutor
 	qotdService          *qotd.Service
 	guildRegistration    guildRegistrationFunc
-	discordSession       discordSessionResolver
+	discordSession       discordSessionDomainResolver
 	defaultBotInstanceID string
 	discordOAuth         *discordOAuthProvider
 	publicOrigin         controlPublicOrigin
@@ -203,7 +204,7 @@ func (s *Server) SetDiscordSessionProvider(provider func() *discordgo.Session) {
 	if s == nil || provider == nil {
 		return
 	}
-	s.discordSession = func(string) (*discordgo.Session, error) {
+	s.discordSession = func(string, string) (*discordgo.Session, error) {
 		return provider(), nil
 	}
 }
@@ -211,6 +212,17 @@ func (s *Server) SetDiscordSessionProvider(provider func() *discordgo.Session) {
 // SetDiscordSessionResolver exposes a guild-aware Discord session resolver for
 // readiness inspection.
 func (s *Server) SetDiscordSessionResolver(resolver func(string) (*discordgo.Session, error)) {
+	if s == nil || resolver == nil {
+		return
+	}
+	s.discordSession = func(guildID, _ string) (*discordgo.Session, error) {
+		return resolver(guildID)
+	}
+}
+
+// SetDiscordSessionResolverForDomain exposes a guild+domain-aware Discord
+// session resolver for control routes that need specialized bot ownership.
+func (s *Server) SetDiscordSessionResolverForDomain(resolver func(string, string) (*discordgo.Session, error)) {
 	if s == nil || resolver == nil {
 		return
 	}
