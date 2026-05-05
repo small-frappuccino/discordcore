@@ -21,6 +21,7 @@ export interface GuildRolesSettingsSnapshot {
 export interface GuildBotRoutingSnapshot {
   botInstanceID: string;
   availableBotInstanceIDs: string[];
+  domainOverrideBotInstanceIDs: string[];
   domainBotInstanceIDs: Record<string, string>;
   editableDomains: string[];
 }
@@ -42,6 +43,7 @@ function createEmptyBotRoutingSnapshot(): GuildBotRoutingSnapshot {
   return {
     botInstanceID: "",
     availableBotInstanceIDs: [],
+    domainOverrideBotInstanceIDs: [],
     domainBotInstanceIDs: {},
     editableDomains: [],
   };
@@ -271,9 +273,15 @@ function mapGuildRolesSettings(roles: GuildRolesSettingsSection) {
 function mapGuildBotRoutingSettings(
   botRouting: GuildBotRoutingSettingsSection | undefined,
 ): GuildBotRoutingSnapshot {
+  const availableBotInstanceIDs = normalizeStringList(botRouting?.available_bot_instance_ids);
   return {
     botInstanceID: normalizeStringValue(botRouting?.bot_instance_id),
-    availableBotInstanceIDs: normalizeStringList(botRouting?.available_bot_instance_ids),
+    availableBotInstanceIDs,
+    domainOverrideBotInstanceIDs: normalizeStringList(
+      botRouting?.domain_override_bot_instance_ids,
+    ).length > 0
+      ? normalizeStringList(botRouting?.domain_override_bot_instance_ids)
+      : availableBotInstanceIDs,
     domainBotInstanceIDs: normalizeDomainBotInstanceIDs(botRouting?.domain_bot_instance_ids),
     editableDomains: normalizeStringList(botRouting?.editable_domains).map((domain) =>
       domain.toLowerCase(),

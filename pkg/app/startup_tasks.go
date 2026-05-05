@@ -198,6 +198,13 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		controlServer.SetBearerToken(opts.controlBearerToken)
 	}
 	controlServer.SetDefaultBotInstanceID(opts.defaultBotInstanceID)
+	if opts.runtimeResolver != nil {
+		controlServer.SetKnownBotInstanceIDs(
+			knownBotInstanceCatalogSlice(
+				knownBotInstanceCatalog(opts.runtimeResolver.runtimes, opts.runOptions.KnownBotInstanceIDs),
+			),
+		)
+	}
 	controlServer.SetPartnerBoardService(opts.partnerBoardService)
 	controlServer.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 	controlServer.SetQOTDService(opts.qotdService)

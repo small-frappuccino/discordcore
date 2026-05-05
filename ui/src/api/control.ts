@@ -332,6 +332,7 @@ export interface GuildRolesSettingsSection {
 export interface GuildBotRoutingSettingsSection {
   bot_instance_id?: string;
   available_bot_instance_ids?: string[];
+  domain_override_bot_instance_ids?: string[];
   domain_bot_instance_ids?: Record<string, string>;
   editable_domains?: string[];
 }

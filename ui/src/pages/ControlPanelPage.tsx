@@ -73,6 +73,12 @@ export function ControlPanelPage() {
       label: formatBotInstanceLabel(instanceID),
     }),
   );
+  const domainBotInstanceOptions = rolesSettings.botRouting.domainOverrideBotInstanceIDs.map(
+    (instanceID) => ({
+      value: instanceID,
+      label: formatBotInstanceLabel(instanceID),
+    }),
+  );
 
   async function handleSave() {
     if (authState !== "signed_in" || selectedGuildID.trim() === "" || !canEditSelectedGuild) {
@@ -221,9 +227,9 @@ export function ControlPanelPage() {
                 key={domain}
                 label={`${formatBotRoutingDomainLabel(domain)} domain`}
                 value={domainBotInstanceIDs[domain] ?? ""}
-                options={botInstanceOptions}
+                options={domainBotInstanceOptions}
                 placeholder={`Inherit ${formatBotInstanceLabel(botInstanceID)}`}
-                disabled={controlsDisabled || botInstanceOptions.length === 0}
+                disabled={controlsDisabled || domainBotInstanceOptions.length === 0}
                 onChange={(value) => setDomainBotInstanceID(domain, value)}
                 note={`Leave this inherited to keep ${formatBotRoutingDomainLabel(domain)} on the default bot instance.`}
               />
@@ -749,19 +755,28 @@ function readBotRoutingSnapshot(workspace: {
     bot_routing?: {
       bot_instance_id?: string;
       available_bot_instance_ids?: string[];
+      domain_override_bot_instance_ids?: string[];
       domain_bot_instance_ids?: Record<string, string>;
       editable_domains?: string[];
     };
   };
 }) {
   const section = workspace.sections.bot_routing;
+  const availableBotInstanceIDs = normalizeRoleIds(
+    section?.available_bot_instance_ids ?? workspace.available_bot_instance_ids,
+  );
+  const domainOverrideBotInstanceIDs = normalizeRoleIds(
+    section?.domain_override_bot_instance_ids,
+  );
   return {
     botInstanceID: normalizeBotInstanceID(
       section?.bot_instance_id ?? workspace.bot_instance_id,
     ),
-    availableBotInstanceIDs: normalizeRoleIds(
-      section?.available_bot_instance_ids ?? workspace.available_bot_instance_ids,
-    ),
+    availableBotInstanceIDs,
+    domainOverrideBotInstanceIDs:
+      domainOverrideBotInstanceIDs.length > 0
+        ? domainOverrideBotInstanceIDs
+        : availableBotInstanceIDs,
     domainBotInstanceIDs: normalizeDomainBotInstanceIDs(
       section?.domain_bot_instance_ids ?? {},
     ),

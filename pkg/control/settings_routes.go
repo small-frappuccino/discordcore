@@ -197,6 +197,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), status)
 		return
 	}
+	domainOverrideBotInstanceIDs := s.resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs)
 	botInstanceID, err := selectGuildBotInstanceID(payload.BotInstanceID, availableBotInstanceIDs)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -210,7 +211,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 			"status":    "ok",
 			"guild_id":  guildID,
 			"created":   false,
-			"workspace": buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+			"workspace": buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 		})
 		return
 	}
@@ -242,7 +243,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		"status":    "ok",
 		"guild_id":  guildID,
 		"created":   true,
-		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -258,10 +259,11 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 		return
 	}
+	domainOverrideBotInstanceIDs := s.resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
-		"workspace": buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+		"workspace": buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -276,6 +278,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	}
 	var (
 		availableBotInstanceIDs []string
+		domainOverrideBotInstanceIDs []string
 		nextBotInstanceID       string
 		nextDomainBotInstanceIDs map[string]string
 		updateBotInstanceID     bool
@@ -289,6 +292,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		availableBotInstanceIDs = available
+		domainOverrideBotInstanceIDs = s.resolveDomainOverrideBotInstanceIDs(available)
 
 		requestedBotInstanceID := ""
 		switch {
@@ -311,7 +315,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		if payload.BotRouting != nil {
 			normalizedDomainBotInstanceIDs, err := normalizeRequestedDomainBotInstanceIDs(
 				payload.BotRouting.DomainBotInstanceIDs,
-				available,
+				domainOverrideBotInstanceIDs,
 				settingsEditableBotRoutingDomains(),
 			)
 			if err != nil {
@@ -401,10 +405,11 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 	}
+	domainOverrideBotInstanceIDs = s.resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
-		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -691,6 +696,14 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 		}
 	}
 	return available, nil
+}
+
+func (s *Server) resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs []string) []string {
+	merged := slices.Clone(availableBotInstanceIDs)
+	if s != nil {
+		merged = append(merged, s.knownBotInstanceIDs...)
+	}
+	return normalizeBotInstanceIDs(merged)
 }
 
 func guildIDPresentInBindings(bindings []BotGuildBinding, guildID string) bool {

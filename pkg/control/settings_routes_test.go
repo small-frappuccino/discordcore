@@ -44,6 +44,13 @@ func setTestBotGuildBindings(srv *Server, bindings ...BotGuildBinding) {
 	})
 }
 
+func setTestKnownBotInstanceIDs(srv *Server, ids ...string) {
+	if srv == nil {
+		return
+	}
+	srv.SetKnownBotInstanceIDs(ids)
+}
+
 func TestSettingsOverviewReturnsCatalogGlobalWorkspaceAndGuildSummaries(t *testing.T) {
 	t.Parallel()
 
@@ -326,6 +333,9 @@ func TestGuildSettingsPutPersistsBotRoutingOverrides(t *testing.T) {
 	if strings.Join(response.Workspace.Sections.BotRouting.AvailableBotInstanceIDs, ",") != "companion,main" {
 		t.Fatalf("unexpected bot routing available bot instances: %+v", response.Workspace.Sections.BotRouting)
 	}
+	if strings.Join(response.Workspace.Sections.BotRouting.DomainOverrideBotInstanceIDs, ",") != "companion,main" {
+		t.Fatalf("unexpected bot routing override bot instances: %+v", response.Workspace.Sections.BotRouting)
+	}
 	if got := response.Workspace.Sections.BotRouting.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
 		t.Fatalf("expected qotd domain override=companion, got %+v", response.Workspace.Sections.BotRouting.DomainBotInstanceIDs)
 	}
@@ -346,6 +356,54 @@ func TestGuildSettingsPutPersistsBotRoutingOverrides(t *testing.T) {
 	}
 	if response.Workspace.BotInstanceID != "main" {
 		t.Fatalf("expected workspace top-level bot_instance_id=main, got %+v", response.Workspace)
+	}
+}
+
+func TestGuildSettingsPutAllowsKnownDomainOverrideBotInstances(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(
+		srv,
+		BotGuildBinding{GuildID: "g1", BotInstanceID: "main"},
+	)
+	setTestKnownBotInstanceIDs(srv, "main", "companion")
+
+	payload := updateGuildSettingsRequest{
+		BotRouting: &guildBotRoutingSection{
+			BotInstanceID: "main",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "companion",
+			},
+		},
+	}
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /v1/guilds/g1/settings status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var response guildSettingsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode guild settings response: %v", err)
+	}
+	if strings.Join(response.Workspace.Sections.BotRouting.AvailableBotInstanceIDs, ",") != "main" {
+		t.Fatalf("unexpected default bot instance options: %+v", response.Workspace.Sections.BotRouting)
+	}
+	if strings.Join(response.Workspace.Sections.BotRouting.DomainOverrideBotInstanceIDs, ",") != "companion,main" {
+		t.Fatalf("unexpected domain override bot instances: %+v", response.Workspace.Sections.BotRouting)
+	}
+	if got := response.Workspace.Sections.BotRouting.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
+		t.Fatalf("expected qotd domain override=companion, got %+v", response.Workspace.Sections.BotRouting.DomainBotInstanceIDs)
+	}
+
+	cfg := cm.SnapshotConfig()
+	guild, ok := findGuildSettings(cfg, "g1")
+	if !ok {
+		t.Fatal("expected guild g1 in config after bot routing update")
+	}
+	if got := guild.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
+		t.Fatalf("expected persisted qotd bot binding=companion, got %+v", guild.DomainBotInstanceIDs)
 	}
 }
 

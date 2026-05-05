@@ -141,6 +141,18 @@ func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []strin
 	return known
 }
 
+func knownBotInstanceCatalogSlice(catalog map[string]struct{}) []string {
+	if len(catalog) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(catalog))
+	for botInstanceID := range catalog {
+		out = append(out, botInstanceID)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func resolveBotToken(tokenEnv string) string {
 	tokenEnv = strings.TrimSpace(tokenEnv)
 	if tokenEnv == "" {

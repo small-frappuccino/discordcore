@@ -60,6 +60,7 @@ type Server struct {
 	tlsCertFile          string
 	tlsKeyFile           string
 	configManager        *files.ConfigManager
+	knownBotInstanceIDs  []string
 	partnerBoardService  partners.BoardService
 	partnerBoardSyncer   partners.GuildSyncExecutor
 	qotdService          *qotd.Service
@@ -197,6 +198,16 @@ func (s *Server) SetBotGuildBindingsProvider(provider func(context.Context) ([]B
 	if s.botGuildSource != nil {
 		s.botGuildSource.SetBindingsProvider(provider)
 	}
+}
+
+// SetKnownBotInstanceIDs configures bot instance identifiers that may be used
+// for domain-level routing overrides even when this process does not host their
+// Discord session locally.
+func (s *Server) SetKnownBotInstanceIDs(ids []string) {
+	if s == nil {
+		return
+	}
+	s.knownBotInstanceIDs = normalizeBotInstanceIDs(ids)
 }
 
 // SetDiscordSessionProvider exposes a fallback Discord session for readiness inspection.

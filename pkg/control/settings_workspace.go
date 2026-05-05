@@ -103,6 +103,7 @@ type guildSettingsWorkspace struct {
 type guildBotRoutingSection struct {
 	BotInstanceID           string            `json:"bot_instance_id,omitempty"`
 	AvailableBotInstanceIDs []string          `json:"available_bot_instance_ids,omitempty"`
+	DomainOverrideBotInstanceIDs []string     `json:"domain_override_bot_instance_ids,omitempty"`
 	DomainBotInstanceIDs    map[string]string `json:"domain_bot_instance_ids,omitempty"`
 	EditableDomains         []string          `json:"editable_domains,omitempty"`
 }
@@ -332,6 +333,7 @@ func buildGuildSettingsWorkspaceWithBindings(
 	cfg files.BotConfig,
 	guild files.GuildConfig,
 	availableBotInstanceIDs []string,
+	domainOverrideBotInstanceIDs []string,
 	defaultBotInstanceID string,
 ) guildSettingsWorkspace {
 	return guildSettingsWorkspace{
@@ -340,7 +342,7 @@ func buildGuildSettingsWorkspaceWithBindings(
 		BotInstanceID:           guild.EffectiveBotInstanceID(defaultBotInstanceID),
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
-			BotRouting: buildGuildBotRoutingSection(guild, availableBotInstanceIDs, defaultBotInstanceID),
+			BotRouting: buildGuildBotRoutingSection(guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, defaultBotInstanceID),
 			Features: guild.Features,
 			Channels: guild.Channels,
 			Roles:    guild.Roles,
@@ -365,13 +367,15 @@ func buildGuildSettingsWorkspaceWithBindings(
 func buildGuildBotRoutingSection(
 	guild files.GuildConfig,
 	availableBotInstanceIDs []string,
+	domainOverrideBotInstanceIDs []string,
 	defaultBotInstanceID string,
 ) guildBotRoutingSection {
 	return guildBotRoutingSection{
-		BotInstanceID:           guild.EffectiveBotInstanceID(defaultBotInstanceID),
-		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
-		DomainBotInstanceIDs:    cloneEditableDomainBotInstanceIDs(guild.DomainBotInstanceIDs),
-		EditableDomains:         settingsEditableBotRoutingDomains(),
+		BotInstanceID:                 guild.EffectiveBotInstanceID(defaultBotInstanceID),
+		AvailableBotInstanceIDs:       slices.Clone(availableBotInstanceIDs),
+		DomainOverrideBotInstanceIDs:  slices.Clone(domainOverrideBotInstanceIDs),
+		DomainBotInstanceIDs:          cloneEditableDomainBotInstanceIDs(guild.DomainBotInstanceIDs),
+		EditableDomains:               settingsEditableBotRoutingDomains(),
 	}
 }
 
