@@ -76,6 +76,7 @@ func (cc *ConfigCommands) RegisterQOTDCommands(router *core.CommandRouter) {
 	}
 
 	cc.registerConfigSubcommands(router, files.BotDomainQOTD,
+		NewQOTDGetSubCommand(cc.configManager),
 		NewQOTDEnabledSubCommand(cc.configManager),
 		NewQOTDChannelSubCommand(cc.configManager),
 		NewQOTDScheduleSubCommand(cc.configManager),
@@ -382,6 +383,7 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"Use `/config set <key> <value>` to modify these settings.",
 		"",
 		"`/config qotd_schedule <hour> <minute>` - Set the QOTD publish schedule in UTC",
+		"`/config qotd_get` - Show the current reduced QOTD configuration",
 		"`/config qotd_enabled <enabled>` - Enable or disable QOTD publishing for the active deck",
 		"`/config qotd_channel <channel>` - Set the QOTD delivery channel for the active deck",
 		"",

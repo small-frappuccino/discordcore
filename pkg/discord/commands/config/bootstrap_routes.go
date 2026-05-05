@@ -19,6 +19,7 @@ var dormantGuildBootstrapRoutesByDomain = map[string]map[string]struct{}{
 		"config allowed_role_list":   {},
 	},
 	files.BotDomainQOTD: {
+		"config qotd_get":      {},
 		"config qotd_channel":  {},
 		"config qotd_enabled":  {},
 		"config qotd_schedule": {},

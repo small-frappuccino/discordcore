@@ -33,6 +33,7 @@ func TestConfigCommandFragmentsRegisterIndependently(t *testing.T) {
 		"webhook_embed_list",
 	})
 	assertConfigGroupOmitsSubcommands(t, router, []string{
+		"qotd_get",
 		"qotd_enabled",
 		"qotd_channel",
 		"qotd_schedule",
@@ -43,10 +44,14 @@ func TestConfigCommandFragmentsRegisterIndependently(t *testing.T) {
 
 	commands.RegisterQOTDCommands(router)
 	assertConfigGroupContainsSubcommands(t, router, []string{
+		"qotd_get",
 		"qotd_enabled",
 		"qotd_channel",
 		"qotd_schedule",
 	})
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_get"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd_get config route domain, got %q", got)
+	}
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd config route domain, got %q", got)
 	}
@@ -73,6 +78,7 @@ func TestConfigRuntimeCoexistenceRegisterOrderConfigThenRuntime(t *testing.T) {
 		"allowed_role_add",
 		"allowed_role_remove",
 		"allowed_role_list",
+		"qotd_get",
 		"qotd_enabled",
 		"qotd_channel",
 		"qotd_schedule",
@@ -103,6 +109,7 @@ func TestConfigRuntimeCoexistenceRegisterOrderRuntimeThenConfig(t *testing.T) {
 		"allowed_role_add",
 		"allowed_role_remove",
 		"allowed_role_list",
+		"qotd_get",
 		"qotd_enabled",
 		"qotd_channel",
 		"qotd_schedule",

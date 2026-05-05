@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestQOTDConfigGetReportsCurrentStatePrivately(t *testing.T) {
+func TestQOTDConfigGetReportsReducedStatePrivately(t *testing.T) {
 	const (
 		guildID = "guild-1"
 		ownerID = "owner-1"
@@ -14,13 +14,19 @@ func TestQOTDConfigGetReportsCurrentStatePrivately(t *testing.T) {
 	harness := newConfigCommandTestHarness(t, guildID, ownerID)
 	mustSetGuildQOTDConfig(t, harness.cm, guildID, buildTestQOTDConfig(true, "channel-555", testCommandSchedule()))
 
-	resp := harness.runSlash(t, "get")
+	resp := harness.runSlash(t, "qotd_get")
 	assertEphemeralResponse(t, resp)
 	if len(resp.Data.Embeds) != 1 {
 		t.Fatalf("expected config get response to include one embed, got %+v", resp.Data.Embeds)
 	}
 	description := resp.Data.Embeds[0].Description
+	if !strings.Contains(description, "Active Deck: Default") {
+		t.Fatalf("expected active deck line in qotd config output, got %q", description)
+	}
 	if !strings.Contains(description, "QOTD Channel: channel-555") {
 		t.Fatalf("expected qotd channel line in config output, got %q", description)
+	}
+	if strings.Contains(description, "Command Channel:") {
+		t.Fatalf("expected reduced qotd config output to omit base command fields, got %q", description)
 	}
 }

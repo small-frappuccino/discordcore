@@ -346,6 +346,64 @@ func TestResolveBotRuntimeCapabilitiesKeepsDormantQOTDCommandCatalogOnDomainOwne
 	}
 }
 
+func TestResolveBotRuntimeCapabilitiesKeepsDormantQOTDCommandCatalogOnGuildOwnerFallback(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := &files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring:    boolPtr(false),
+				Automod:       boolPtr(false),
+				Commands:      boolPtr(false),
+				AdminCommands: boolPtr(false),
+			},
+			Logging: files.FeatureLoggingToggles{
+				AvatarLogging:  boolPtr(false),
+				RoleUpdate:     boolPtr(false),
+				MemberJoin:     boolPtr(false),
+				MemberLeave:    boolPtr(false),
+				MessageProcess: boolPtr(false),
+				MessageEdit:    boolPtr(false),
+				MessageDelete:  boolPtr(false),
+				ReactionMetric: boolPtr(false),
+				AutomodAction:  boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "companion",
+			Features: files.FeatureToggles{
+				Services: files.FeatureServiceToggles{
+					Commands: boolPtr(false),
+				},
+			},
+		}},
+	}
+
+	mainCapabilities := resolveBotRuntimeCapabilities(cfg, "main", "main")
+	if mainCapabilities.commands || mainCapabilities.commandsQOTDDomain || mainCapabilities.qotdRuntime {
+		t.Fatalf("expected main runtime to stay idle when guild ownership falls back to companion, got %+v", mainCapabilities)
+	}
+
+	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main")
+	if !companionCapabilities.commands {
+		t.Fatalf("expected companion runtime to start command handling for dormant qotd bootstrap routes via guild fallback, got %+v", companionCapabilities)
+	}
+	if !companionCapabilities.commandsQOTDDomain {
+		t.Fatalf("expected companion runtime to retain qotd command catalog via guild fallback, got %+v", companionCapabilities)
+	}
+	if companionCapabilities.qotdRuntime {
+		t.Fatalf("expected companion runtime to keep background qotd service off while qotd config is empty, got %+v", companionCapabilities)
+	}
+	if companionCapabilities.commandsDefaultDomain || companionCapabilities.admin || companionCapabilities.monitoring || companionCapabilities.userPrune {
+		t.Fatalf("expected dormant qotd companion runtime to stay limited to qotd command catalog via guild fallback, got %+v", companionCapabilities)
+	}
+	if companionCapabilities.intents != discordgo.IntentsGuilds {
+		t.Fatalf("expected dormant qotd bootstrap runtime to keep minimal intents, got %d", companionCapabilities.intents)
+	}
+}
+
 func TestResolveBotRuntimeCapabilitiesForDomainsCanDisableQOTDFallbackOnDefaultOwner(t *testing.T) {
 	t.Parallel()
 

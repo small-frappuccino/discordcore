@@ -46,14 +46,11 @@ func resolveBotRuntimeCapabilitiesForDomains(
 		return capabilities
 	}
 
-	normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
 	if domainSupport.supports(files.BotDomainQOTD) {
 		qotdGuilds := cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, botInstanceID, defaultBotInstanceID)
 		for _, guild := range qotdGuilds {
-			if botRuntimeNeedsQOTDCommandCatalog(guild, normalizedBotInstanceID) {
-				capabilities.commands = true
-				capabilities.commandsQOTDDomain = true
-			}
+			capabilities.commands = true
+			capabilities.commandsQOTDDomain = true
 			if botRuntimeNeedsQOTDRuntime(guild) {
 				capabilities.qotdRuntime = true
 			}
@@ -112,18 +109,6 @@ func resolveBotRuntimeCapabilitiesForDomains(
 	}
 
 	return capabilities
-}
-
-func botRuntimeNeedsQOTDCommandCatalog(guild files.GuildConfig, botInstanceID string) bool {
-	if botRuntimeNeedsQOTDRuntime(guild) {
-		return true
-	}
-
-	if botInstanceID == "" {
-		return false
-	}
-
-	return guild.BotInstanceIDOverrideForDomain(files.BotDomainQOTD) == botInstanceID
 }
 
 func botRuntimeNeedsQOTDRuntime(guild files.GuildConfig) bool {

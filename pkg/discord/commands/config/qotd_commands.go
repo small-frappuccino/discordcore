@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	qotdGetSubCommandName = "qotd_get"
 	qotdEnabledSubCommandName = "qotd_enabled"
 	qotdChannelSubCommandName = "qotd_channel"
 	qotdScheduleSubCommandName = "qotd_schedule"
@@ -19,6 +20,52 @@ const (
 	qotdScheduleHourOptionName = "hour"
 	qotdScheduleMinuteOptionName = "minute"
 )
+
+type QOTDGetSubCommand struct {
+	configManager *files.ConfigManager
+}
+
+func NewQOTDGetSubCommand(configManager *files.ConfigManager) *QOTDGetSubCommand {
+	return &QOTDGetSubCommand{configManager: configManager}
+}
+
+func (c *QOTDGetSubCommand) Name() string { return qotdGetSubCommandName }
+
+func (c *QOTDGetSubCommand) Description() string {
+	return "Show current QOTD configuration for the active deck"
+}
+
+func (c *QOTDGetSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
+
+func (c *QOTDGetSubCommand) RequiresGuild() bool       { return true }
+func (c *QOTDGetSubCommand) RequiresPermissions() bool { return true }
+
+func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
+	if err := core.RequiresGuildConfig(ctx); err != nil {
+		return err
+	}
+
+	settings := files.DashboardQOTDConfig(ctx.GuildConfig.QOTD)
+	deck, _ := settings.ActiveDeck()
+	deckLabel := strings.TrimSpace(deck.Name)
+	if deckLabel == "" {
+		deckLabel = strings.TrimSpace(deck.ID)
+	}
+
+	lines := []string{"**QOTD Configuration:**"}
+	if deckLabel != "" {
+		lines = append(lines, fmt.Sprintf("Active Deck: %s", deckLabel))
+	}
+	lines = append(lines, fmt.Sprintf("QOTD Enabled: %t", deck.Enabled))
+	lines = append(lines, fmt.Sprintf("QOTD Channel: %s", emptyToDash(deck.ChannelID)))
+	lines = append(lines, fmt.Sprintf("QOTD Schedule (UTC): %s", formatQOTDSchedule(settings.Schedule)))
+
+	builder := configCommandCurrentStateResponseBuilder(ctx.Session).
+		WithEmbed().
+		WithTitle("QOTD Configuration")
+
+	return builder.Info(ctx.Interaction, strings.Join(lines, "\n"))
+}
 
 type QOTDEnabledSubCommand struct {
 	configManager *files.ConfigManager

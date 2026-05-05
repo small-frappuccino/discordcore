@@ -233,6 +233,9 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
 		t.Fatal("expected dormant guild qotd bootstrap route to move to the qotd bot instance")
 	}
+	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_get"}) {
+		t.Fatal("expected dormant guild qotd get route to move to the qotd bot instance")
+	}
 	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
 		t.Fatal("expected non-bootstrap route to remain disabled for dormant guild")
 	}
@@ -240,6 +243,9 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "main")
 	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
 		t.Fatal("expected dormant guild qotd bootstrap route to remain enabled on the qotd bot instance")
+	}
+	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_get"}) {
+		t.Fatal("expected dormant guild qotd get route to remain enabled on the qotd bot instance")
 	}
 	if companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}) {
 		t.Fatal("expected base bootstrap route to stay off the qotd bot instance")
