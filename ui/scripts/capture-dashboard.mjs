@@ -554,8 +554,8 @@ Recommended first run:
 
 That stores the authenticated session in the persistent profile so later runs can stay fully automatic.
 
-If the capture host is Alicebot on https://alice.localhost:8443, rebuild ui/dist
-and restart Alicebot before capturing. The script verifies the expected Home
+If the capture host is discordmain on https://discordmain.localhost:8443, rebuild ui/dist
+and restart discordmain before capturing. The script verifies the expected Home
 surface and now fails fast when the host still serves stale embedded assets.
 `);
 }

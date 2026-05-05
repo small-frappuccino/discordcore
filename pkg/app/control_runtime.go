@@ -16,15 +16,25 @@ import (
 
 const (
 	defaultLocalHTTPSControlAddr    = "127.0.0.1:8443"
-	defaultLocalHTTPSPublicOrigin   = "https://alice.localhost:8443"
+	defaultLocalHTTPSPublicOrigin   = "https://localhost:8443"
 	controlPublicOriginEnv          = "ALICE_CONTROL_PUBLIC_ORIGIN"
-	defaultLocalTLSCommonName       = "alice.localhost"
+	defaultLocalTLSCommonName       = "localhost"
 	defaultLocalTLSOrganizationName = "Small Frappuccino"
 )
 
 var errControlLocalTLSUnavailable = errors.New("control local tls unavailable")
 
+type RunProfile string
+
+const (
+	RunProfileDiscordMain RunProfile = "discordmain"
+	RunProfileDiscordQOTD RunProfile = "discordqotd"
+)
+
 type RunOptions struct {
+	// Profile identifies the runtime profile driving this process, such as the
+	// primary main runtime or the qotd-specialized runtime.
+	Profile RunProfile
 	// Control configures the optional local control plane served by this process.
 	Control ControlOptions
 	// BotCatalog is the set of bot instances whose tokens are hosted locally.
@@ -60,7 +70,41 @@ type resolvedControlRuntime struct {
 	tlsKeyFile   string
 }
 
+func normalizeRunProfile(profile RunProfile) RunProfile {
+	switch strings.TrimSpace(string(profile)) {
+	case string(RunProfileDiscordMain):
+		return RunProfileDiscordMain
+	case string(RunProfileDiscordQOTD):
+		return RunProfileDiscordQOTD
+	default:
+		return ""
+	}
+}
+
+func defaultLocalHTTPSPublicOriginForProfile(profile RunProfile) string {
+	switch normalizeRunProfile(profile) {
+	case RunProfileDiscordMain:
+		return "https://discordmain.localhost:8443"
+	case RunProfileDiscordQOTD:
+		return "https://discordqotd.localhost:8443"
+	default:
+		return defaultLocalHTTPSPublicOrigin
+	}
+}
+
+func defaultLocalTLSCommonNameForProfile(profile RunProfile) string {
+	switch normalizeRunProfile(profile) {
+	case RunProfileDiscordMain:
+		return "discordmain.localhost"
+	case RunProfileDiscordQOTD:
+		return "discordqotd.localhost"
+	default:
+		return defaultLocalTLSCommonName
+	}
+}
+
 func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedControlRuntime, error) {
+	profile := normalizeRunProfile(opts.Profile)
 	bindAddr := strings.TrimSpace(opts.Control.BindAddr)
 	publicOrigin := strings.TrimSpace(util.EnvString(controlPublicOriginEnv, opts.Control.PublicOrigin))
 	if opts.Control.LocalHTTPS.Enabled {
@@ -68,7 +112,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 			bindAddr = defaultLocalHTTPSControlAddr
 		}
 		if publicOrigin == "" {
-			publicOrigin = defaultLocalHTTPSPublicOrigin
+			publicOrigin = defaultLocalHTTPSPublicOriginForProfile(profile)
 		}
 	}
 	if bindAddr == "" {
@@ -80,7 +124,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 		return resolvedControlRuntime{}, fmt.Errorf("load control tls config: %w", err)
 	}
 	if tlsCertFile == "" && tlsKeyFile == "" && opts.Control.LocalHTTPS.Enabled {
-		ready, readyErr := prepareManagedLocalTLS(ctx, publicOrigin, opts.Control.LocalHTTPS.AutoTrust)
+		ready, readyErr := prepareManagedLocalTLS(ctx, profile, publicOrigin, opts.Control.LocalHTTPS.AutoTrust)
 		if readyErr != nil {
 			return resolvedControlRuntime{}, fmt.Errorf("%w: %w", errControlLocalTLSUnavailable, readyErr)
 		}
@@ -102,8 +146,8 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 	}, nil
 }
 
-func prepareManagedLocalTLS(ctx context.Context, publicOrigin string, autoTrust bool) (localtls.ReadyResult, error) {
-	hostName, ipAddresses, err := localTLSSANs(publicOrigin)
+func prepareManagedLocalTLS(ctx context.Context, profile RunProfile, publicOrigin string, autoTrust bool) (localtls.ReadyResult, error) {
+	hostName, ipAddresses, err := localTLSSANs(profile, publicOrigin)
 	if err != nil {
 		return localtls.ReadyResult{}, fmt.Errorf("resolve local tls sans: %w", err)
 	}
@@ -118,9 +162,9 @@ func prepareManagedLocalTLS(ctx context.Context, publicOrigin string, autoTrust 
 	})
 }
 
-func localTLSSANs(publicOrigin string) (string, []net.IP, error) {
+func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, error) {
 	if strings.TrimSpace(publicOrigin) == "" {
-		return defaultLocalTLSCommonName, []net.IP{net.ParseIP("127.0.0.1")}, nil
+		return defaultLocalTLSCommonNameForProfile(profile), []net.IP{net.ParseIP("127.0.0.1")}, nil
 	}
 	parsed, err := url.Parse(publicOrigin)
 	if err != nil {

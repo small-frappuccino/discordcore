@@ -14,31 +14,31 @@ func TestFormatStartupMessage(t *testing.T) {
 	}{
 		{
 			name:        "no app version includes discordcore",
-			appName:     "alicebot",
+			appName:     "discordmain",
 			appVersion:  "",
 			coreVersion: "v0.146.0",
-			want:        "🚀 Starting alicebot (discordcore v0.146.0)...",
+			want:        "🚀 Starting discordmain (discordcore v0.146.0)...",
 		},
 		{
 			name:        "different versions include both",
-			appName:     "alicebot",
+			appName:     "discordmain",
 			appVersion:  "v0.114.0",
 			coreVersion: "v0.146.0",
-			want:        "🚀 Starting alicebot v0.114.0 (discordcore v0.146.0)...",
+			want:        "🚀 Starting discordmain v0.114.0 (discordcore v0.146.0)...",
 		},
 		{
 			name:        "same versions omit discordcore suffix",
-			appName:     "alicebot",
+			appName:     "discordmain",
 			appVersion:  "v0.146.0",
 			coreVersion: "v0.146.0",
-			want:        "🚀 Starting alicebot v0.146.0...",
+			want:        "🚀 Starting discordmain v0.146.0...",
 		},
 		{
 			name:        "trims spaces",
-			appName:     " alicebot ",
+			appName:     " discordmain ",
 			appVersion:  " v0.146.0 ",
 			coreVersion: " v0.146.0 ",
-			want:        "🚀 Starting alicebot v0.146.0...",
+			want:        "🚀 Starting discordmain v0.146.0...",
 		},
 	}
 

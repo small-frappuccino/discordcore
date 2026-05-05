@@ -345,8 +345,8 @@ func TestDashboardBrandAssetAccessibleWithoutSession(t *testing.T) {
 		path            string
 		expectedSubtype string
 	}{
-		{path: "/manage/brand/alicebot.webp", expectedSubtype: "image/webp"},
-		{path: "/dashboard/brand/alicebot.webp", expectedSubtype: "image/webp"},
+		{path: "/manage/brand/discordmain.webp", expectedSubtype: "image/webp"},
+		{path: "/dashboard/brand/discordmain.webp", expectedSubtype: "image/webp"},
 	}
 
 	for _, tc := range testCases {

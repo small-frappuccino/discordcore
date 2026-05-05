@@ -55,7 +55,7 @@ func darwinHomeDir() string {
 func sanitizeAppNameForPath(name string) string {
 	n := strings.TrimSpace(name)
 	if n == "" {
-		return "alicebot"
+		return "discordmain"
 	}
 
 	// Avoid path separators.
@@ -64,7 +64,7 @@ func sanitizeAppNameForPath(name string) string {
 
 	n = strings.TrimSpace(n)
 	if n == "" {
-		return "alicebot"
+		return "discordmain"
 	}
 	return n
 }

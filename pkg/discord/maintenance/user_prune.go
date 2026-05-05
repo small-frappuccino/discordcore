@@ -193,7 +193,7 @@ func (s *UserPruneService) executeGuildPrune(guildID string) (uint32, uint32, er
 		)
 	}
 
-	reason := truncateAuditReason("automatic monthly Discord prune via alicebot (day 28, 30 days inactive)")
+	reason := truncateAuditReason("automatic monthly Discord prune via discordmain (day 28, 30 days inactive)")
 	pruned, pruneErr := s.guildPrune(guildID, pruneInactiveDays, reason)
 	if pruneErr != nil {
 		return 0, estimated, pruneErr

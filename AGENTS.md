@@ -52,7 +52,8 @@ Default product split:
 
 Use this map before editing:
 
-- `cmd/discordcore/`: example runner only, not reusable product logic
+- `cmd/discordmain/`: principal main runtime entrypoint
+- `cmd/discordqotd/`: principal QOTD runtime entrypoint
 - `pkg/app/`: runtime orchestration and startup wiring
 - `pkg/control/`: control API, auth/session handling, dashboard serving, guild/settings/feature routes for the complementary web surface
 - `pkg/files/`: canonical config model, normalization, persistence adapters, and `ConfigManager`

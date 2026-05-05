@@ -48,7 +48,7 @@ func platformHomeDir() string {
 func sanitizeAppNameForPath(name string) string {
 	n := strings.TrimSpace(name)
 	if n == "" {
-		return "alicebot"
+		return "discordmain"
 	}
 
 	// Replace common path separators and characters that can break paths.
@@ -60,7 +60,7 @@ func sanitizeAppNameForPath(name string) string {
 	n = strings.TrimSpace(n)
 
 	if n == "" {
-		return "alicebot"
+		return "discordmain"
 	}
 	return n
 }

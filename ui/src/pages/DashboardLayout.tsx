@@ -23,7 +23,7 @@ import {
 } from "../components/ui";
 import "../shell.css";
 
-const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
+const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/discordmain.webp`;
 
 export function DashboardLayout() {
   const location = useLocation();

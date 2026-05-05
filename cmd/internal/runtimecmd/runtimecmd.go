@@ -15,14 +15,12 @@ import (
 const (
 	MainBotInstanceID       = "main"
 	QOTDBotInstanceID       = "companion"
-	MainRuntimeAppName      = "alicebot"
-	QOTDRuntimeAppName      = "qotdbot"
+	MainRuntimeAppName      = "discordmain"
+	QOTDRuntimeAppName      = "discordqotd"
 	MainProductionTokenEnv  = "ALICE_BOT_PRODUCTION_TOKEN"
 	MainDevelopmentTokenEnv = "ALICE_BOT_DEVELOPMENT_TOKEN"
 	QOTDProductionTokenEnv  = "QOTD_BOT_PRODUCTION_TOKEN"
 	QOTDDevelopmentTokenEnv = "QOTD_BOT_DEVELOPMENT_TOKEN"
-	LocalControlAddr        = "127.0.0.1:8443"
-	LocalControlOrigin      = "https://alice.localhost:8443"
 )
 
 type Spec struct {
@@ -109,9 +107,8 @@ func QOTDSpec(commandName string) Spec {
 
 func buildMainRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 	return discordcoreapp.RunOptions{
+		Profile: discordcoreapp.RunProfileDiscordMain,
 		Control: discordcoreapp.ControlOptions{
-			BindAddr:     LocalControlAddr,
-			PublicOrigin: LocalControlOrigin,
 			LocalHTTPS: discordcoreapp.ControlLocalHTTPSOptions{
 				Enabled:   true,
 				AutoTrust: true,
@@ -130,6 +127,7 @@ func buildMainRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 
 func buildQOTDRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 	return discordcoreapp.RunOptions{
+		Profile: discordcoreapp.RunProfileDiscordQOTD,
 		// The persisted QOTD owner still uses the legacy companion instance id.
 		BotCatalog: []discordcoreapp.BotInstanceDefinition{{
 			ID:       QOTDBotInstanceID,

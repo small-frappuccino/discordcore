@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const publicDashboardBrandAssetPath = "brand/alicebot.webp"
+const publicDashboardBrandAssetPath = "brand/discordmain.webp"
 
 type dashboardAccessHandler struct {
 	next   http.Handler

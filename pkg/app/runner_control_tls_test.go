@@ -85,12 +85,11 @@ func TestResolveControlRuntimeUsesManagedLocalHTTPS(t *testing.T) {
 	t.Setenv(controlTLSKeyFileEnv, "")
 	t.Setenv(controlDiscordOAuthClientSecretEnv, "")
 	t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
-	util.SetAppName("alicebot-run-options-test")
+	util.SetAppName("discordmain-run-options-test")
 
 	runtime, err := resolveControlRuntime(context.Background(), RunOptions{
+		Profile: RunProfileDiscordMain,
 		Control: ControlOptions{
-			BindAddr:     defaultLocalHTTPSControlAddr,
-			PublicOrigin: defaultLocalHTTPSPublicOrigin,
 			LocalHTTPS: ControlLocalHTTPSOptions{
 				Enabled:   true,
 				AutoTrust: false,
@@ -103,7 +102,7 @@ func TestResolveControlRuntimeUsesManagedLocalHTTPS(t *testing.T) {
 	if runtime.bindAddr != defaultLocalHTTPSControlAddr {
 		t.Fatalf("unexpected bind addr: %+v", runtime)
 	}
-	if runtime.publicOrigin != defaultLocalHTTPSPublicOrigin {
+	if runtime.publicOrigin != defaultLocalHTTPSPublicOriginForProfile(RunProfileDiscordMain) {
 		t.Fatalf("unexpected public origin: %+v", runtime)
 	}
 	if runtime.tlsCertFile == "" || runtime.tlsKeyFile == "" {
@@ -126,11 +125,12 @@ func TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin(t *testing.T)
 
 	tempAppData := t.TempDir()
 	t.Setenv("APPDATA", tempAppData)
-	util.SetAppName("alicebot-run-options-test")
+	util.SetAppName("discordmain-run-options-test")
 
 	runtime, err := resolveControlRuntime(context.Background(), RunOptions{
+		Profile: RunProfileDiscordMain,
 		Control: ControlOptions{
-			PublicOrigin: "https://alice.localhost:8443",
+			PublicOrigin: "https://discordmain.localhost:8443",
 		},
 	})
 	if err != nil {
@@ -139,7 +139,7 @@ func TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin(t *testing.T)
 	if runtime.oauthConfig == nil {
 		t.Fatal("expected oauth config")
 	}
-	if runtime.oauthConfig.RedirectURI != "https://alice.localhost:8443/auth/discord/callback" {
+	if runtime.oauthConfig.RedirectURI != "https://discordmain.localhost:8443/auth/discord/callback" {
 		t.Fatalf("unexpected derived redirect uri: %+v", runtime.oauthConfig)
 	}
 	wantStorePath := filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")

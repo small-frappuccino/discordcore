@@ -52,6 +52,9 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if called.opts.DefaultOwnerBotInstanceID != MainBotInstanceID {
 		t.Fatalf("expected main as the default owner, got %+v", called.opts)
 	}
+	if called.opts.Profile != discordcoreapp.RunProfileDiscordMain {
+		t.Fatalf("expected main run profile, got %+v", called.opts)
+	}
 	if called.opts.DisableControl {
 		t.Fatalf("expected control plane to stay enabled for main runtime, got %+v", called.opts)
 	}
@@ -67,8 +70,8 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if !called.opts.Control.LocalHTTPS.Enabled || !called.opts.Control.LocalHTTPS.AutoTrust {
 		t.Fatalf("expected local https control options, got %+v", called.opts.Control)
 	}
-	if called.opts.Control.BindAddr != LocalControlAddr || called.opts.Control.PublicOrigin != LocalControlOrigin {
-		t.Fatalf("unexpected control options: %+v", called.opts.Control)
+	if called.opts.Control.BindAddr != "" || called.opts.Control.PublicOrigin != "" {
+		t.Fatalf("expected main profile to derive control defaults later, got %+v", called.opts.Control)
 	}
 }
 
@@ -95,6 +98,9 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 	}
 	if called.opts.DefaultOwnerBotInstanceID != MainBotInstanceID {
 		t.Fatalf("expected qotd runtime to keep main as the global default owner, got %+v", called.opts)
+	}
+	if called.opts.Profile != discordcoreapp.RunProfileDiscordQOTD {
+		t.Fatalf("expected qotd run profile, got %+v", called.opts)
 	}
 	if !called.opts.DisableControl {
 		t.Fatalf("expected qotd runtime to keep control disabled, got %+v", called.opts)

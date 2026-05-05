@@ -51,7 +51,7 @@ func windowsAppDataBase() string {
 func sanitizeAppNameForPath(name string) string {
 	n := strings.TrimSpace(name)
 	if n == "" {
-		n = "alicebot"
+		n = "discordmain"
 	}
 
 	// Replace path separators first.
@@ -73,7 +73,7 @@ func sanitizeAppNameForPath(name string) string {
 	n = strings.TrimRight(n, " .")
 
 	if strings.TrimSpace(n) == "" {
-		return "alicebot"
+		return "discordmain"
 	}
 	return n
 }

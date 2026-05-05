@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.469.0"
+const DiscordCoreVersion = "v0.470.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string
@@ -123,7 +123,7 @@ func EffectiveBotName() string {
 		return n
 	}
 	// Final fallback.
-	return "alicebot"
+	return "discordmain"
 }
 
 // GetApplicationSupportPath returns the base path for configuration files using the unified OS rules:

@@ -15,7 +15,7 @@ import {
 import { useDashboardSession } from "../context/DashboardSessionContext";
 import "../shell.css";
 
-const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/alicebot.webp`;
+const siteBrandIconSrc = `${import.meta.env.BASE_URL}brand/discordmain.webp`;
 const signedOutNotice = "Sign in with Discord to continue.";
 const signedOutConfirmationNotice = "Signed out.";
 

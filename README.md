@@ -16,7 +16,8 @@ Discordcore is the core Discord bot library and service layer used by Alicebot. 
 ## Repository layout
 
 ```
-cmd/discordcore/      # Example runner
+cmd/discordmain/      # Primary main runtime entrypoint
+cmd/discordqotd/      # QOTD-specialized runtime entrypoint
 pkg/discord/          # Discord services, logging, commands, cache
 pkg/files/            # Bot config model and persistence stores
 pkg/persistence/      # DB connection, health, migrator
@@ -228,10 +229,10 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 ## Control API (Bearer + OAuth session)
 
-When the shared runner is used via `Run`, the Control API starts on the default listener `127.0.0.1:8376`. Hosts can override the listener and public origin through `RunWithOptions`; `alicebot` uses that path to expose embedded local HTTPS on `127.0.0.1:8443` with canonical public origin `https://alice.localhost:8443`. The control server serves a minimal landing page at `/`, while the embedded dashboard is mounted canonically under `/manage/` with `/dashboard/` retained only as a legacy compatibility alias.
+When the shared runner is used via `Run`, the Control API starts on the default listener `127.0.0.1:8376`. Hosts can override the listener and public origin through `RunWithOptions`; `discordmain` uses that path to expose embedded local HTTPS on `127.0.0.1:8443` with canonical public origin `https://discordmain.localhost:8443`. The control server serves a minimal landing page at `/`, while the embedded dashboard is mounted canonically under `/manage/` with `/dashboard/` retained only as a legacy compatibility alias.
 
 - `ALICE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
-- `ALICE_CONTROL_PUBLIC_ORIGIN` (optional; absolute canonical browser origin such as `https://alice.localhost:8443`)
+- `ALICE_CONTROL_PUBLIC_ORIGIN` (optional; absolute canonical browser origin such as `https://discordmain.localhost:8443`)
 - optional TLS listener:
   - `ALICE_CONTROL_TLS_CERT_FILE`
   - `ALICE_CONTROL_TLS_KEY_FILE`
@@ -278,7 +279,7 @@ Enable OAuth routes by setting these vars:
 - `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
 - `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` (optional when `ALICE_CONTROL_PUBLIC_ORIGIN` or host `RunWithOptions` wiring can derive the callback)
 - `ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
-- use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or configure host-managed HTTPS such as Alicebot's embedded local TLS mode.
+- use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or configure host-managed HTTPS such as `discordmain`'s embedded local TLS mode.
 
 The product ships with a versioned default Discord OAuth client ID (`1396606252506681395`).
 Set `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID` only if you need to override that default with a different Discord application.
@@ -381,7 +382,7 @@ Embedded dashboard build flow:
 cd ui
 bun run build
 cd ../../alicebot
-go build -o alicebot ./cmd/alicebot
+go build -o discordmain ./cmd/discordmain
 ```
 
 Build behavior:
@@ -390,7 +391,7 @@ Build behavior:
 - when `.vite/manifest.json` and hashed assets are present, the shell loads the built React entrypoint from `/manage/`
 - when frontend assets are absent, the shell stays in placeholder mode with a clear message instead of embedding broken hashed paths
 
-`discordcore` owns the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend. The final executable remains the `alicebot` binary, which embeds the assets produced in `discordcore/ui/dist`.
+`discordcore` owns the Control API routes, OAuth/session handling, partner board services, and all Discord/domain rules consumed by that frontend. The final executable remains the `discordmain` binary, which embeds the assets produced in `discordcore/ui/dist`.
 
 Policy precedence for logging/event emission:
 

@@ -528,7 +528,7 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 		msg += fmt.Sprintf(" %s", appVersion)
 	}
 
-	// Avoid duplicated versions like: "alicebot v0.146.0 (discordcore v0.146.0)"
+	// Avoid duplicated versions like: "discordmain v0.146.0 (discordcore v0.146.0)"
 	if coreVersion == "" || (appVersion != "" && appVersion == coreVersion) {
 		return msg + "..."
 	}

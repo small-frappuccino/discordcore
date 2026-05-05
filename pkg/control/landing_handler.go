@@ -195,7 +195,7 @@ const controlLandingHTML = `<!doctype html>
     <header class="shell">
       <div class="topbar">
         <div class="brand" aria-hidden="true">
-          <img src="/manage/brand/alicebot.webp" alt="" />
+          <img src="/manage/brand/discordmain.webp" alt="" />
         </div>
 
         <div class="session-panel">

@@ -67,11 +67,11 @@ func seedRunnerConfig(t *testing.T, store files.ConfigStore, cfg files.BotConfig
 
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	const (
-		appName  = "alicebot-run-test"
+		appName  = "discordmain-run-test"
 		tokenEnv = "ALICE_TEST_TOKEN"
 	)
 
-	appDataDir, err := os.MkdirTemp("", "alicebot-run-test-*")
+	appDataDir, err := os.MkdirTemp("", "discordmain-run-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)
 	}
@@ -165,11 +165,11 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 
 func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	const (
-		appName  = "alicebot-run-shutdown-error-test"
+		appName  = "discordmain-run-shutdown-error-test"
 		tokenEnv = "ALICE_TEST_TOKEN"
 	)
 
-	appDataDir, err := os.MkdirTemp("", "alicebot-run-shutdown-error-test-*")
+	appDataDir, err := os.MkdirTemp("", "discordmain-run-shutdown-error-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)
 	}
@@ -270,11 +270,11 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 
 func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	const (
-		appName  = "alicebot-run-bind-warning-test"
+		appName  = "discordmain-run-bind-warning-test"
 		tokenEnv = "ALICE_TEST_TOKEN"
 	)
 
-	appDataDir, err := os.MkdirTemp("", "alicebot-run-bind-warning-test-*")
+	appDataDir, err := os.MkdirTemp("", "discordmain-run-bind-warning-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)
 	}

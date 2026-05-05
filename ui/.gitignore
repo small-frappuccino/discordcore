@@ -5,7 +5,7 @@ node_modules/
 dist/*
 !dist/index.html
 !dist/brand/
-!dist/brand/alicebot.webp
+!dist/brand/discordmain.webp
 debug-screenshots/
 
 # Tooling caches
