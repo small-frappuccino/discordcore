@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,38 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
+
+type handlerQOTDServiceStub struct{}
+
+func (handlerQOTDServiceStub) Settings(string) (files.QOTDConfig, error) { return files.QOTDConfig{}, nil }
+func (handlerQOTDServiceStub) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
+	return nil, nil
+}
+func (handlerQOTDServiceStub) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
+	return nil, nil
+}
+func (handlerQOTDServiceStub) DeleteQuestion(context.Context, string, int64) error { return nil }
+func (handlerQOTDServiceStub) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	return nil, nil
+}
+func (handlerQOTDServiceStub) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	return nil, nil
+}
+func (handlerQOTDServiceStub) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
+	return applicationqotd.ResetDeckResult{}, nil
+}
+func (handlerQOTDServiceStub) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
+	return applicationqotd.AutomaticQueueState{}, nil
+}
+func (handlerQOTDServiceStub) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
+	return applicationqotd.ImportArchivedQuestionsResult{}, nil
+}
+func (handlerQOTDServiceStub) PublishNow(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
+	return nil, nil
+}
 
 func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {
 	t.Helper()
@@ -199,5 +231,57 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 	}
 	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
 		t.Fatal("expected non-bootstrap route to remain disabled for dormant guild")
+	}
+}
+
+func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
+	t.Parallel()
+
+	cfgMgr := files.NewMemoryConfigManager()
+	handler := NewCommandHandler(nil, cfgMgr)
+	handler.SetSupportedDomains(files.BotDomainQOTD)
+	handler.SetQOTDService(handlerQOTDServiceStub{})
+	handler.commandManager = core.NewCommandManager(nil, cfgMgr)
+
+	if err := handler.registerCommandCatalog(); err != nil {
+		t.Fatalf("registerCommandCatalog() failed: %v", err)
+	}
+
+	router := handler.commandManager.GetRouter()
+	configCommand, ok := router.GetRegistry().GetCommand("config")
+	if !ok {
+		t.Fatal("expected /config to be registered for qotd domain")
+	}
+	options := configCommand.Options()
+	got := make(map[string]struct{}, len(options))
+	for _, option := range options {
+		if option != nil {
+			got[option.Name] = struct{}{}
+		}
+	}
+	for _, name := range []string{"qotd_enabled", "qotd_channel", "qotd_schedule"} {
+		if _, ok := got[name]; !ok {
+			t.Fatalf("expected qotd-only config fragment to include %q, got %#v", name, got)
+		}
+	}
+	for _, name := range []string{"commands_enabled", "command_channel", "allowed_role_add"} {
+		if _, ok := got[name]; ok {
+			t.Fatalf("expected qotd-only config fragment to omit %q, got %#v", name, got)
+		}
+	}
+	if _, ok := router.GetRegistry().GetCommand("ping"); ok {
+		t.Fatal("expected qotd-only catalog to omit /ping")
+	}
+	if _, ok := router.GetRegistry().GetCommand("partner"); ok {
+		t.Fatal("expected qotd-only catalog to omit /partner")
+	}
+	if _, ok := router.GetRegistry().GetCommand("qotd"); !ok {
+		t.Fatal("expected qotd-only catalog to include /qotd")
+	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd config route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd publish route domain, got %q", got)
 	}
 }

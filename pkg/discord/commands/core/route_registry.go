@@ -1,12 +1,17 @@
 package core
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
 
 type interactionRouteRegistry struct {
 	routes map[string]*interactionRouteEntry
 }
 
 type interactionRouteEntry struct {
+	domain       string
 	slash        slashRouteEntry
 	autocomplete autocompleteRouteEntry
 	component    componentRouteEntry
@@ -49,9 +54,30 @@ func (cr *CommandRouter) RegisterInteractionRoute(binding InteractionRouteBindin
 	cr.RegisterInteractionRoutes(binding)
 }
 
+// RegisterInteractionRouteForDomain registers a route binding under the
+// requested domain classification.
+func (cr *CommandRouter) RegisterInteractionRouteForDomain(domain string, binding InteractionRouteBinding) {
+	cr.RegisterInteractionRoutesForDomain(domain, binding)
+}
+
 // RegisterInteractionRoutes registers one or more interaction route bindings.
 func (cr *CommandRouter) RegisterInteractionRoutes(bindings ...InteractionRouteBinding) {
 	cr.registerInteractionRoutes(true, bindings...)
+}
+
+// RegisterInteractionRoutesForDomain registers one or more route bindings under
+// the requested domain classification.
+func (cr *CommandRouter) RegisterInteractionRoutesForDomain(domain string, bindings ...InteractionRouteBinding) {
+	if cr == nil {
+		return
+	}
+	normalizedDomain := files.NormalizeBotDomain(domain)
+	scopedBindings := make([]InteractionRouteBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		binding.Domain = normalizedDomain
+		scopedBindings = append(scopedBindings, binding)
+	}
+	cr.registerInteractionRoutes(true, scopedBindings...)
 }
 
 // RegisterSlashRoute registers a slash route by canonical route path.
@@ -150,22 +176,40 @@ func (cr *CommandRouter) lookupInteractionAckPolicy(routeKey InteractionRouteKey
 	}
 }
 
+// InteractionRouteDomain returns the domain classification associated with the
+// normalized interaction route path, or an empty string for the default domain.
+func (cr *CommandRouter) InteractionRouteDomain(routeKey InteractionRouteKey) string {
+	entry, exists := cr.lookupInteractionRouteEntry(routeKey.Path)
+	if !exists || entry == nil {
+		return ""
+	}
+	return entry.domain
+}
+
 func (cr *CommandRouter) registerSlashCommandRoutes(cmd Command) {
+	cr.registerSlashCommandRoutesForDomain("", cmd)
+}
+
+func (cr *CommandRouter) registerSlashCommandRoutesForDomain(domain string, cmd Command) {
 	if cr == nil || cr.routeRegistry == nil || cmd == nil {
 		return
 	}
-	cr.registerDerivedInteractionRouteTree(strings.TrimSpace(cmd.Name()), cmd)
+	cr.registerDerivedInteractionRouteTree(strings.TrimSpace(cmd.Name()), files.NormalizeBotDomain(domain), cmd)
 }
 
 func (cr *CommandRouter) registerSlashSubCommandRoutes(parentName string, subcmd SubCommand) {
+	cr.registerSlashSubCommandRoutesForDomain("", parentName, subcmd)
+}
+
+func (cr *CommandRouter) registerSlashSubCommandRoutesForDomain(domain, parentName string, subcmd SubCommand) {
 	if cr == nil || cr.routeRegistry == nil || subcmd == nil {
 		return
 	}
-	cr.registerDerivedInteractionRouteTree(JoinRoutePath(parentName, subcmd.Name()), subcmd)
+	cr.registerDerivedInteractionRouteTree(JoinRoutePath(parentName, subcmd.Name()), files.NormalizeBotDomain(domain), subcmd)
 }
 
-func (cr *CommandRouter) registerDerivedInteractionRouteTree(path string, handler SlashHandler) {
-	cr.registerInteractionRoutes(false, collectInteractionRouteBindings(path, handler)...)
+func (cr *CommandRouter) registerDerivedInteractionRouteTree(path, domain string, handler SlashHandler) {
+	cr.registerInteractionRoutes(false, collectInteractionRouteBindings(path, domain, handler)...)
 }
 
 func (cr *CommandRouter) registerInteractionRoutes(explicit bool, bindings ...InteractionRouteBinding) {
@@ -192,6 +236,10 @@ func (cr *CommandRouter) storeInteractionRoute(binding InteractionRouteBinding, 
 		cr.routeRegistry.routes[path] = entry
 	}
 
+	if domain := files.NormalizeBotDomain(binding.Domain); domain != "" {
+		entry.domain = domain
+	}
+
 	if binding.Slash != nil && !(entry.slash.explicit && !explicit) {
 		entry.slash = slashRouteEntry{handler: binding.Slash, ackPolicy: binding.AckPolicy, explicit: explicit}
 	}
@@ -206,13 +254,13 @@ func (cr *CommandRouter) storeInteractionRoute(binding InteractionRouteBinding, 
 	}
 }
 
-func collectInteractionRouteBindings(path string, handler SlashHandler) []InteractionRouteBinding {
+func collectInteractionRouteBindings(path, domain string, handler SlashHandler) []InteractionRouteBinding {
 	path = strings.TrimSpace(path)
 	if path == "" || handler == nil {
 		return nil
 	}
 
-	binding := InteractionRouteBinding{Path: path, Slash: handler}
+	binding := InteractionRouteBinding{Path: path, Domain: files.NormalizeBotDomain(domain), Slash: handler}
 	if provider, ok := handler.(AutocompleteRouteProvider); ok {
 		binding.Autocomplete = provider.AutocompleteRouteHandler()
 	}
@@ -228,7 +276,7 @@ func collectInteractionRouteBindings(path string, handler SlashHandler) []Intera
 
 	for _, subcmd := range group.subcommands {
 		childPath := JoinRoutePath(path, subcmd.Name())
-		bindings = append(bindings, collectInteractionRouteBindings(childPath, subcmd)...)
+		bindings = append(bindings, collectInteractionRouteBindings(childPath, domain, subcmd)...)
 	}
 
 	return bindings

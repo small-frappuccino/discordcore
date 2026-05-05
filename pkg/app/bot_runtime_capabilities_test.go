@@ -265,8 +265,11 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 	if !yuzuhaCapabilities.qotd {
 		t.Fatal("expected yuzuha runtime to gain qotd capability from domain override")
 	}
-	if yuzuhaCapabilities.commands || yuzuhaCapabilities.admin || yuzuhaCapabilities.monitoring || yuzuhaCapabilities.userPrune {
-		t.Fatalf("expected yuzuha runtime to gain only qotd capability from domain override, got %+v", yuzuhaCapabilities)
+	if !yuzuhaCapabilities.commands {
+		t.Fatalf("expected yuzuha runtime to start command handling for qotd-only catalog, got %+v", yuzuhaCapabilities)
+	}
+	if yuzuhaCapabilities.commandsDefaultDomain || yuzuhaCapabilities.admin || yuzuhaCapabilities.monitoring || yuzuhaCapabilities.userPrune {
+		t.Fatalf("expected yuzuha runtime to gain only qotd command catalog capability from domain override, got %+v", yuzuhaCapabilities)
 	}
 	if yuzuhaCapabilities.intents != discordgo.IntentsGuilds {
 		t.Fatalf("expected qotd-only runtime to keep minimal intents, got %d", yuzuhaCapabilities.intents)

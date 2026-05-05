@@ -8,11 +8,28 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
+
+func TestQOTDCommandsRegisterRoutesUnderQOTDDomain(t *testing.T) {
+	session, _ := newQOTDCommandTestSession(t)
+	service := &publishCommandStubService{}
+	router, _ := newQOTDCommandTestRouterWithService(t, session, "guild-1", "owner-1", service)
+
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd publish slash route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions list"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd questions list slash route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: questionsListRouteNext}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd questions component route domain, got %q", got)
+	}
+}
 
 func TestQuestionsListPaginationStillUpdatesAfterUnderlyingStateChanges(t *testing.T) {
 	const (

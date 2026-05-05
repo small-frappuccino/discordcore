@@ -59,11 +59,17 @@ func NewCommandRouter(
 // RegisterSlashCommand registers a slash command tree in both the sync registry
 // and the slash route registry.
 func (cr *CommandRouter) RegisterSlashCommand(cmd Command) {
+	cr.RegisterSlashCommandForDomain("", cmd)
+}
+
+// RegisterSlashCommandForDomain registers a slash command tree in both the
+// sync registry and the slash route registry under the requested domain.
+func (cr *CommandRouter) RegisterSlashCommandForDomain(domain string, cmd Command) {
 	if cr == nil || cmd == nil {
 		return
 	}
 	cr.registry.Register(cmd)
-	cr.registerSlashCommandRoutes(cmd)
+	cr.registerSlashCommandRoutesForDomain(domain, cmd)
 }
 
 // RegisterCommand is the compatibility API; prefer RegisterSlashCommand for new slash trees.
@@ -74,11 +80,17 @@ func (cr *CommandRouter) RegisterCommand(cmd Command) {
 // RegisterSlashSubCommand registers a slash subcommand in both the sync registry
 // and the slash route registry.
 func (cr *CommandRouter) RegisterSlashSubCommand(parentName string, subcmd SubCommand) {
+	cr.RegisterSlashSubCommandForDomain("", parentName, subcmd)
+}
+
+// RegisterSlashSubCommandForDomain registers a slash subcommand in both the
+// sync registry and the slash route registry under the requested domain.
+func (cr *CommandRouter) RegisterSlashSubCommandForDomain(domain, parentName string, subcmd SubCommand) {
 	if cr == nil || subcmd == nil {
 		return
 	}
 	cr.registry.RegisterSubCommand(parentName, subcmd)
-	cr.registerSlashSubCommandRoutes(parentName, subcmd)
+	cr.registerSlashSubCommandRoutesForDomain(domain, parentName, subcmd)
 }
 
 // RegisterSubCommand is the compatibility API; prefer RegisterSlashSubCommand for new slash trees.

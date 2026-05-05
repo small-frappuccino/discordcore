@@ -10,6 +10,7 @@ import (
 type botRuntimeCapabilities struct {
 	monitoring bool
 	commands   bool
+	commandsDefaultDomain bool
 	admin      bool
 	automod    bool
 	userPrune  bool
@@ -39,6 +40,7 @@ func resolveBotRuntimeCapabilities(
 	for _, guild := range qotdGuilds {
 		if !guild.QOTD.IsZero() {
 			capabilities.qotd = true
+			capabilities.commands = true
 			break
 		}
 	}
@@ -49,6 +51,7 @@ func resolveBotRuntimeCapabilities(
 
 		if features.Services.Commands {
 			capabilities.commands = true
+			capabilities.commandsDefaultDomain = true
 			if features.Services.AdminCommands {
 				capabilities.admin = true
 			}

@@ -201,6 +201,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 
 	if runtime.capabilities.commands {
 		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+		commandHandler.SetSupportedDomains(commandCatalogDomainsForRuntime(runtime.capabilities)...)
 		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 		commandHandler.SetQOTDService(opts.qotdCommandService)
@@ -229,6 +230,20 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.startupTasks)
 	scheduleRuntimeWarmup(runtime, opts.store, opts.startupTasks)
 	return nil
+}
+
+func commandCatalogDomainsForRuntime(capabilities botRuntimeCapabilities) []string {
+	domains := make([]string, 0, 2)
+	if capabilities.commandsDefaultDomain {
+		domains = append(domains, "")
+	}
+	if capabilities.qotd {
+		domains = append(domains, files.BotDomainQOTD)
+	}
+	if len(domains) == 0 && capabilities.commands {
+		domains = append(domains, "")
+	}
+	return domains
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext

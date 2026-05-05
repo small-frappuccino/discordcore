@@ -16,6 +16,11 @@ type ConfigCommands struct {
 	configManager *files.ConfigManager
 }
 
+const (
+	configGroupName        = "config"
+	configGroupDescription = "Manage server configuration"
+)
+
 // NewConfigCommands creates a new config commands registrar.
 func NewConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
 	return &ConfigCommands{configManager: configManager}
@@ -23,6 +28,13 @@ func NewConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
 
 // RegisterCommands registers the /config command group and optional simple commands in the provided router.
 func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
+	cc.RegisterBaseCommands(router)
+	cc.RegisterQOTDCommands(router)
+}
+
+// RegisterBaseCommands registers the default-domain /config surface and the
+// simple root commands used for bootstrap checks.
+func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 	if router == nil {
 		return
 	}
@@ -36,46 +48,72 @@ func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
 	allowedRoleAddCmd := NewAllowedRoleAddSubCommand(cc.configManager)
 	allowedRoleRemoveCmd := NewAllowedRoleRemoveSubCommand(cc.configManager)
 	allowedRoleListCmd := NewAllowedRoleListSubCommand(cc.configManager)
-	qotdEnabledCmd := NewQOTDEnabledSubCommand(cc.configManager)
-	qotdChannelCmd := NewQOTDChannelSubCommand(cc.configManager)
-	qotdScheduleCmd := NewQOTDScheduleSubCommand(cc.configManager)
 	webhookCatalog := newWebhookEmbedInteractionCatalog(cc.configManager)
 	pingCmd := NewPingCommand()
 	echoCmd := NewEchoCommand()
 
-	// Build /config group with permission checks (or reuse existing group).
-	var group *core.GroupCommand
-	if existing, ok := router.GetRegistry().GetCommand("config"); ok {
-		if g, ok := existing.(*core.GroupCommand); ok {
-			group = g
-		}
-	}
-	if group == nil {
-		checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-		group = core.NewGroupCommand("config", "Manage server configuration", checker)
-	}
-
-	// Attach subcommands
-	group.AddSubCommand(setCmd)
-	group.AddSubCommand(getCmd)
-	group.AddSubCommand(listCmd)
-	group.AddSubCommand(smokeTestCmd)
-	group.AddSubCommand(commandsEnabledCmd)
-	group.AddSubCommand(commandChannelCmd)
-	group.AddSubCommand(allowedRoleAddCmd)
-	group.AddSubCommand(allowedRoleRemoveCmd)
-	group.AddSubCommand(allowedRoleListCmd)
-	group.AddSubCommand(qotdEnabledCmd)
-	group.AddSubCommand(qotdChannelCmd)
-	group.AddSubCommand(qotdScheduleCmd)
-	webhookCatalog.appendToGroup(group)
-
-	// Register (or refresh) the group.
-	router.RegisterSlashCommand(group)
+	cc.registerConfigSubcommands(router, "", append([]core.SubCommand{
+		setCmd,
+		getCmd,
+		listCmd,
+		smokeTestCmd,
+		commandsEnabledCmd,
+		commandChannelCmd,
+		allowedRoleAddCmd,
+		allowedRoleRemoveCmd,
+		allowedRoleListCmd,
+	}, webhookCatalog.subcommands()...)...)
 
 	// Optionally register simple commands (useful for quick health checks of the routing stack)
 	router.RegisterSlashCommand(pingCmd)
 	router.RegisterSlashCommand(echoCmd)
+}
+
+// RegisterQOTDCommands registers the qotd-scoped /config subcommands.
+func (cc *ConfigCommands) RegisterQOTDCommands(router *core.CommandRouter) {
+	if router == nil {
+		return
+	}
+
+	cc.registerConfigSubcommands(router, files.BotDomainQOTD,
+		NewQOTDEnabledSubCommand(cc.configManager),
+		NewQOTDChannelSubCommand(cc.configManager),
+		NewQOTDScheduleSubCommand(cc.configManager),
+	)
+}
+
+func (cc *ConfigCommands) registerConfigSubcommands(router *core.CommandRouter, domain string, subcommands ...core.SubCommand) {
+	if router == nil || len(subcommands) == 0 {
+		return
+	}
+
+	var group *core.GroupCommand
+	if existing, ok := router.GetRegistry().GetCommand(configGroupName); ok {
+		if g, ok := existing.(*core.GroupCommand); ok {
+			group = g
+		}
+	}
+
+	if group == nil {
+		checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+		group = core.NewGroupCommand(configGroupName, configGroupDescription, checker)
+		for _, subcommand := range subcommands {
+			if subcommand == nil {
+				continue
+			}
+			group.AddSubCommand(subcommand)
+		}
+		router.RegisterSlashCommandForDomain(domain, group)
+		return
+	}
+
+	for _, subcommand := range subcommands {
+		if subcommand == nil {
+			continue
+		}
+		group.AddSubCommand(subcommand)
+		router.RegisterSlashSubCommandForDomain(domain, configGroupName, subcommand)
+	}
 }
 
 // ------------------------------

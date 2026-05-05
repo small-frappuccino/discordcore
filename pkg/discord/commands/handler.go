@@ -24,10 +24,16 @@ type CommandHandler struct {
 	configManager        *files.ConfigManager
 	botInstanceID        string
 	defaultBotInstanceID string
+	supportedDomains     map[string]struct{}
 	commandManager       *core.CommandManager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
 	qotdService          qotdcmd.QuestionCatalogService
+}
+
+type commandCatalogFragment struct {
+	domain   string
+	register func(*core.CommandRouter)
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -71,8 +77,8 @@ func (ch *CommandHandler) SetupCommands() error {
 		router.SetGuildRouteFilter(ch.handlesGuildRoute)
 	}
 
-	// Register configuration commands
-	if err := ch.registerConfigCommands(); err != nil {
+	// Register configuration and feature command catalogs.
+	if err := ch.registerCommandCatalog(); err != nil {
 		return fmt.Errorf("failed to register config commands: %w", err)
 	}
 
@@ -111,34 +117,82 @@ func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService)
 	ch.qotdService = service
 }
 
-// registerConfigCommands registers configuration-related commands
-func (ch *CommandHandler) registerConfigCommands() error {
-	router := ch.commandManager.GetRouter()
-
-	// Register the /config group and simple commands (ping/echo)
-	config.NewConfigCommands(ch.configManager).RegisterCommands(router)
-
-	// Register the /config runtime panel (replaces env-var operational toggles)
-	runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
-
-	// Register metrics commands (activity, members)
-	metrics.RegisterMetricsCommands(router)
-	// Register partner CRUD commands
-	if ch.partnerBoardService != nil || ch.partnerSyncExecutor != nil {
-		boardService := ch.partnerBoardService
-		if boardService == nil {
-			boardService = partners.NewBoardApplicationService(ch.configManager, nil)
-		}
-		partner.NewPartnerCommandsWithServices(boardService, ch.partnerSyncExecutor).RegisterCommands(router)
-	} else {
-		partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
+// SetSupportedDomains limits catalog registration to the provided domains. If
+// not called, the handler preserves the legacy behavior and registers every
+// known fragment.
+func (ch *CommandHandler) SetSupportedDomains(domains ...string) {
+	if ch == nil {
+		return
 	}
-	// Register moderation commands
-	moderation.RegisterModerationCommands(router)
-	qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
+	if len(domains) == 0 {
+		ch.supportedDomains = nil
+		return
+	}
+	ch.supportedDomains = make(map[string]struct{}, len(domains))
+	for _, domain := range domains {
+		ch.supportedDomains[files.NormalizeBotDomain(domain)] = struct{}{}
+	}
+}
 
-	log.ApplicationLogger().Info("Config, partner, metrics, and moderation commands registered successfully")
+func (ch *CommandHandler) registerCommandCatalog() error {
+	router := ch.commandManager.GetRouter()
+	for _, fragment := range ch.commandCatalogFragments() {
+		if fragment.register == nil {
+			continue
+		}
+		fragment.register(router)
+	}
+
+	log.ApplicationLogger().Info("Command catalog fragments registered successfully")
 	return nil
+}
+
+func (ch *CommandHandler) commandCatalogFragments() []commandCatalogFragment {
+	configCommands := config.NewConfigCommands(ch.configManager)
+	fragments := []commandCatalogFragment{{
+		domain: "",
+		register: func(router *core.CommandRouter) {
+			configCommands.RegisterBaseCommands(router)
+			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
+			metrics.RegisterMetricsCommands(router)
+			if ch.partnerBoardService != nil || ch.partnerSyncExecutor != nil {
+				boardService := ch.partnerBoardService
+				if boardService == nil {
+					boardService = partners.NewBoardApplicationService(ch.configManager, nil)
+				}
+				partner.NewPartnerCommandsWithServices(boardService, ch.partnerSyncExecutor).RegisterCommands(router)
+			} else {
+				partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
+			}
+			moderation.RegisterModerationCommands(router)
+		},
+	}, {
+		domain: files.BotDomainQOTD,
+		register: func(router *core.CommandRouter) {
+			configCommands.RegisterQOTDCommands(router)
+			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
+		},
+	}}
+
+	if ch.supportedDomains == nil {
+		return fragments
+	}
+
+	filtered := make([]commandCatalogFragment, 0, len(fragments))
+	for _, fragment := range fragments {
+		if ch.supportsDomain(fragment.domain) {
+			filtered = append(filtered, fragment)
+		}
+	}
+	return filtered
+}
+
+func (ch *CommandHandler) supportsDomain(domain string) bool {
+	if ch == nil || ch.supportedDomains == nil {
+		return true
+	}
+	_, ok := ch.supportedDomains[files.NormalizeBotDomain(domain)]
+	return ok
 }
 
 // Shutdown performs cleanup for the command handler resources

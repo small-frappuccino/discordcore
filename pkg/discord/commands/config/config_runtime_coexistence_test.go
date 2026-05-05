@@ -9,6 +9,52 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
+func TestConfigCommandFragmentsRegisterIndependently(t *testing.T) {
+	session, _ := newConfigCommandTestSession(t)
+	cm := files.NewMemoryConfigManager()
+	router := core.NewCommandRouter(session, cm)
+	commands := NewConfigCommands(cm)
+
+	commands.RegisterBaseCommands(router)
+	assertConfigGroupContainsSubcommands(t, router, []string{
+		"set",
+		"get",
+		"list",
+		"smoke_test",
+		"commands_enabled",
+		"command_channel",
+		"allowed_role_add",
+		"allowed_role_remove",
+		"allowed_role_list",
+		"webhook_embed_create",
+		"webhook_embed_read",
+		"webhook_embed_update",
+		"webhook_embed_delete",
+		"webhook_embed_list",
+	})
+	assertConfigGroupOmitsSubcommands(t, router, []string{
+		"qotd_enabled",
+		"qotd_channel",
+		"qotd_schedule",
+	})
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}); got != "" {
+		t.Fatalf("expected default-domain config bootstrap route, got %q", got)
+	}
+
+	commands.RegisterQOTDCommands(router)
+	assertConfigGroupContainsSubcommands(t, router, []string{
+		"qotd_enabled",
+		"qotd_channel",
+		"qotd_schedule",
+	})
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd config route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}); got != "" {
+		t.Fatalf("expected base config route to remain in default domain, got %q", got)
+	}
+}
+
 func TestConfigRuntimeCoexistenceRegisterOrderConfigThenRuntime(t *testing.T) {
 	session, _ := newConfigCommandTestSession(t)
 	cm := files.NewMemoryConfigManager()
@@ -97,6 +143,28 @@ func assertConfigGroupContainsSubcommands(t *testing.T, router *core.CommandRout
 	}
 	if _, ok := all["echo"]; !ok {
 		t.Fatalf("expected /echo command to be registered")
+	}
+}
+
+func assertConfigGroupOmitsSubcommands(t *testing.T, router *core.CommandRouter, names []string) {
+	t.Helper()
+
+	cmd, ok := router.GetRegistry().GetCommand("config")
+	if !ok {
+		t.Fatal("expected /config command to be registered")
+	}
+
+	got := make(map[string]struct{}, len(cmd.Options()))
+	for _, opt := range cmd.Options() {
+		if opt != nil {
+			got[opt.Name] = struct{}{}
+		}
+	}
+
+	for _, name := range names {
+		if _, ok := got[name]; ok {
+			t.Fatalf("expected /config to omit subcommand %q, got %#v", name, got)
+		}
 	}
 }
 

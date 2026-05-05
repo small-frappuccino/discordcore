@@ -281,6 +281,7 @@ func (fn ModalHandlerFunc) HandleModal(ctx *Context) error {
 // interaction route path or stable route ID.
 type InteractionRouteBinding struct {
 	Path         string
+	Domain       string
 	Slash        SlashHandler
 	Autocomplete AutocompleteHandler
 	Component    ComponentHandler

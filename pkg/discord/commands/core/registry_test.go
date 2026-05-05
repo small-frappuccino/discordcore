@@ -665,6 +665,58 @@ func TestRegisterInteractionRouteDispatchesComponentAndModalHandlers(t *testing.
 	}
 }
 
+func TestInteractionRouteDomainTracksSlashAutocompleteComponentAndModal(t *testing.T) {
+	session, _ := newTestSession(t)
+	config := files.NewMemoryConfigManager()
+	router := NewCommandRouter(session, config)
+	checker := NewPermissionChecker(session, config)
+
+	baseGroup := NewGroupCommand("config", "", checker)
+	baseSubcommand := testCommand{name: "smoke_test"}
+	baseGroup.AddSubCommand(baseSubcommand)
+	router.RegisterSlashCommand(baseGroup)
+
+	qotdSubcommand := testCommand{
+		name: "qotd_channel",
+		autocomplete: AutocompleteHandlerFunc(func(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+			return nil, nil
+		}),
+	}
+	baseGroup.AddSubCommand(qotdSubcommand)
+	router.RegisterSlashSubCommandForDomain(files.BotDomainQOTD, "config", qotdSubcommand)
+	router.RegisterInteractionRoutesForDomain(
+		files.BotDomainQOTD,
+		InteractionRouteBinding{Path: "qotd:questions:list:next", Component: ComponentHandlerFunc(func(ctx *Context) error { return nil })},
+		InteractionRouteBinding{Path: "qotd:questions:list:edit", Modal: ModalHandlerFunc(func(ctx *Context) error { return nil })},
+	)
+
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindSlash, Path: "config smoke_test"}); got != "" {
+		t.Fatalf("expected default-domain slash route, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindSlash, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd slash route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindAutocomplete, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd autocomplete route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindComponent, Path: "qotd:questions:list:next"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd component route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindModal, Path: "qotd:questions:list:edit"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd modal route domain, got %q", got)
+	}
+
+	// Re-registering the config group from the default domain should not erase
+	// an existing specialized-domain subcommand classification.
+	router.RegisterSlashCommand(baseGroup)
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindSlash, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd slash route domain to survive config re-registration, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(InteractionRouteKey{Kind: InteractionKindAutocomplete, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd autocomplete route domain to survive config re-registration, got %q", got)
+	}
+}
+
 func TestHandleInteractionUsesGuildRouteFilter(t *testing.T) {
 	session, _ := newTestSession(t)
 	config := files.NewMemoryConfigManager()
