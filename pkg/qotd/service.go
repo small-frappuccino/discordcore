@@ -296,7 +296,7 @@ func (s *Service) ResetDeckState(ctx context.Context, guildID, deckID string) (R
 		if slotErr != nil {
 			return ResetDeckResult{}, slotErr
 		}
-		if slotState.ScheduleConfigured && slotState.BoundaryPassed(now) && slotState.HasPublishedOfficialPost() && slotState.OfficialPost.DeckID == deck.ID {
+		if slotState.ScheduleConfigured && slotState.HasPublishedOfficialPost() && slotState.OfficialPost.DeckID == deck.ID {
 			suppressCurrentSlotDate = slotState.PublishDateUTC
 		}
 	}
@@ -682,8 +682,8 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	publishDate := NormalizePublishDateUTC(now)
 	var existing *storage.QOTDOfficialPostRecord
 	if slotState.ScheduleConfigured {
-		publishDate = slotState.PublishDateUTC
 		if consumeAutomaticSlot {
+			publishDate = slotState.PublishDateUTC
 			existing = slotState.OfficialPost
 		}
 	} else {

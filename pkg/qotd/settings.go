@@ -54,7 +54,7 @@ func suppressedPublishDateOnEnable(current, next files.QOTDConfig, now time.Time
 	if err != nil {
 		return time.Time{}, false
 	}
-	return CurrentPublishDateUTC(schedule, now), true
+	return DuePublishDateUTC(schedule, now), true
 }
 
 func qotdAutomaticPublishConfigured(cfg files.QOTDConfig) bool {
