@@ -65,7 +65,7 @@ func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 	mgr := newTestConfigManager([]GuildConfig{
 		{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				BotDomainQOTD: "companion",
 			},

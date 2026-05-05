@@ -14,9 +14,9 @@ func TestBotPartnerSyncDispatcherStartIsLazy(t *testing.T) {
 		files.NewMemoryConfigManager(),
 		&partners.BoardSyncService{},
 		map[string]*botRuntime{
-			"alice": {instanceID: "alice"},
+			"main": {instanceID: "main"},
 		},
-		"alice",
+		"main",
 	)
 	if err := dispatcher.Start(); err != nil {
 		t.Fatalf("start dispatcher: %v", err)

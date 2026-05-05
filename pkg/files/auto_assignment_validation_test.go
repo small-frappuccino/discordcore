@@ -161,7 +161,7 @@ func TestValidateBotConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
 	cfg := &BotConfig{
 		Guilds: []GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: " main ",
+			BotInstanceID: " alice ",
 			DomainBotInstanceIDs: map[string]string{
 				" QOTD ": " companion ",
 			},
@@ -204,7 +204,7 @@ func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) 
 	input := BotConfig{
 		Guilds: []GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: " main ",
+			BotInstanceID: " alice ",
 			DomainBotInstanceIDs: map[string]string{
 				" QOTD ": " companion ",
 			},

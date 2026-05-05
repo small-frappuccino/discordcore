@@ -284,7 +284,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *tes
 			if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 				cfg.Guilds = []files.GuildConfig{{
 					GuildID:       "g1",
-					BotInstanceID: "alice",
+					BotInstanceID: "main",
 					DomainBotInstanceIDs: map[string]string{
 						files.BotDomainQOTD: "companion",
 					},

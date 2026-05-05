@@ -174,7 +174,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:       "guild-1",
-				BotInstanceID: "alice",
+				BotInstanceID: "main",
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(false),
@@ -196,7 +196,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	handler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
+	handler := NewCommandHandlerForBot(nil, cfgMgr, "main", "main")
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
 	}
@@ -208,7 +208,7 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{{
 			GuildID:       "guild-1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -223,7 +223,7 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	handler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
+	handler := NewCommandHandlerForBot(nil, cfgMgr, "main", "main")
 	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}) {
 		t.Fatal("expected dormant guild bootstrap command route to remain enabled")
 	}
@@ -237,7 +237,7 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 		t.Fatal("expected non-bootstrap route to remain disabled for dormant guild")
 	}
 
-	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "alice")
+	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "main")
 	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
 		t.Fatal("expected dormant guild qotd bootstrap route to remain enabled on the qotd bot instance")
 	}
@@ -254,7 +254,7 @@ func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{{
 			GuildID:       "guild-1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -269,31 +269,31 @@ func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	aliceHandler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
-	aliceHandler.SetQOTDService(handlerQOTDServiceStub{})
-	aliceHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
-	if err := aliceHandler.registerCommandCatalog(); err != nil {
-		t.Fatalf("register alice command catalog: %v", err)
+	mainHandler := NewCommandHandlerForBot(nil, cfgMgr, "main", "main")
+	mainHandler.SetQOTDService(handlerQOTDServiceStub{})
+	mainHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
+	if err := mainHandler.registerCommandCatalog(); err != nil {
+		t.Fatalf("register main command catalog: %v", err)
 	}
 
-	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "alice")
+	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "main")
 	companionHandler.SetQOTDService(handlerQOTDServiceStub{})
 	companionHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
 	if err := companionHandler.registerCommandCatalog(); err != nil {
 		t.Fatalf("register companion command catalog: %v", err)
 	}
 
-	if !aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
-		t.Fatal("expected base-domain slash route to stay on alice")
+	if !mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
+		t.Fatal("expected base-domain slash route to stay on main")
 	}
-	if aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
-		t.Fatal("expected qotd slash route to move off alice")
+	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
+		t.Fatal("expected qotd slash route to move off main")
 	}
-	if aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindAutocomplete, Path: "config qotd_channel"}) {
-		t.Fatal("expected qotd autocomplete route to move off alice")
+	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindAutocomplete, Path: "config qotd_channel"}) {
+		t.Fatal("expected qotd autocomplete route to move off main")
 	}
-	if aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
-		t.Fatal("expected qotd component route to move off alice")
+	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
+		t.Fatal("expected qotd component route to move off main")
 	}
 
 	if companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {

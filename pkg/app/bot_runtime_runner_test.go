@@ -20,7 +20,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:       "guild-1",
-				BotInstanceID: "alice",
+				BotInstanceID: "main",
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(false),
@@ -62,12 +62,12 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	}
 
 	runtime := &botRuntime{
-		instanceID:   "alice",
+		instanceID:   "main",
 		capabilities: botRuntimeCapabilities{qotdRuntime: true},
 		session:      session,
 	}
 	err = initializeBotRuntime(runtime, botRuntimeOptions{
-		defaultBotInstanceID: "alice",
+		defaultBotInstanceID: "main",
 		runtimeCount:         1,
 		configManager:        cfgMgr,
 	})
@@ -121,7 +121,7 @@ func TestInitializeBotRuntimeStartsCommandHandlerForDormantQOTDCommandCatalog(t 
 		session: session,
 	}
 	err = initializeBotRuntime(runtime, botRuntimeOptions{
-		defaultBotInstanceID: "alice",
+		defaultBotInstanceID: "main",
 		runtimeCount:         2,
 		configManager:        cfgMgr,
 	})

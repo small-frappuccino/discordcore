@@ -31,7 +31,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-enabled",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -44,7 +44,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-configured-disabled",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -69,7 +69,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-empty",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 		},
 	} {
 		if err := configManager.AddGuildConfig(guild); err != nil {
@@ -78,7 +78,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "alice", "alice")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main", "main")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -104,7 +104,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-qotd-enabled",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -120,7 +120,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-qotd-configured-disabled",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -134,8 +134,8 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 			},
 		},
 		{
-			GuildID:       "g-legacy-alice",
-			BotInstanceID: "alice",
+			GuildID:       "g-default-main",
+			BotInstanceID: "main",
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -153,7 +153,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "companion", "alice")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "companion", "main")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}

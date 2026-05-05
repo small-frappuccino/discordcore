@@ -36,7 +36,7 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 	}
 
 	runtime := &botRuntime{
-		instanceID: "alice",
+		instanceID: "main",
 		capabilities: botRuntimeCapabilities{
 			warmup: true,
 		},
@@ -91,7 +91,7 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 	}
 
 	runtime := &botRuntime{
-		instanceID: "alice",
+		instanceID: "main",
 		capabilities: botRuntimeCapabilities{
 			warmup: true,
 		},

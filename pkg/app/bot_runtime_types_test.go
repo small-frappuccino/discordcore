@@ -412,6 +412,24 @@ func TestValidateConfiguredBotInstancesAllowsKnownRemoteOwners(t *testing.T) {
 	}
 }
 
+func TestValidateConfiguredBotInstancesRejectsLegacyAliceBindingWithoutNormalization(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+		}},
+	}
+
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
+		"main": {instanceID: "main"},
+	}, nil), "main")
+	if err == nil {
+		t.Fatal("expected legacy alice binding to be rejected without prior normalization")
+	}
+}
+
 func TestValidateConfiguredBotInstancesAllowsDomainOverrideWithRuntimeDefaultFallback(t *testing.T) {
 	t.Parallel()
 

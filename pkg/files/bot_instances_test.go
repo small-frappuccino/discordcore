@@ -5,6 +5,17 @@ import (
 	"testing"
 )
 
+func TestNormalizeBotInstanceIDTrimsWhitespace(t *testing.T) {
+	t.Parallel()
+
+	if got := NormalizeBotInstanceID(" alice "); got != "alice" {
+		t.Fatalf("expected bot instance id to trim whitespace only, got %q", got)
+	}
+	if got := NormalizeBotInstanceID("main"); got != "main" {
+		t.Fatalf("expected main to remain unchanged, got %q", got)
+	}
+}
+
 func TestGuildConfigEffectiveBotInstanceIDForDomainUsesOverrideAndFallback(t *testing.T) {
 	t.Parallel()
 

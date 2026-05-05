@@ -8,7 +8,33 @@ import (
 const (
 	botDomainCore    = "core"
 	botDomainDefault = "default"
+	legacyBotInstanceIDAlice = "alice"
+	canonicalMainBotInstanceID = "main"
 )
+
+func normalizeConfiguredBotInstanceID(botInstanceID string) string {
+	normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID)
+	if strings.EqualFold(normalizedBotInstanceID, legacyBotInstanceIDAlice) {
+		return canonicalMainBotInstanceID
+	}
+	return normalizedBotInstanceID
+}
+
+func normalizeGuildBotInstanceBindings(cfg *BotConfig) bool {
+	if cfg == nil {
+		return false
+	}
+
+	changed := false
+	for idx := range cfg.Guilds {
+		normalizedBotInstanceID := normalizeConfiguredBotInstanceID(cfg.Guilds[idx].BotInstanceID)
+		if cfg.Guilds[idx].BotInstanceID != normalizedBotInstanceID {
+			cfg.Guilds[idx].BotInstanceID = normalizedBotInstanceID
+			changed = true
+		}
+	}
+	return changed
+}
 
 // normalizeAutoAssignmentRoleOrder backfills explicit ordering anchors for
 // legacy configs. The canonical ordering is:
@@ -46,12 +72,14 @@ func validateBotConfig(cfg *BotConfig) error {
 		return nil
 	}
 
+	normalizeGuildBotInstanceBindings(cfg)
+
 	if _, err := normalizeDomainBotInstanceBindings(cfg); err != nil {
 		return err
 	}
 
 	for idx := range cfg.Guilds {
-		cfg.Guilds[idx].BotInstanceID = NormalizeBotInstanceID(cfg.Guilds[idx].BotInstanceID)
+		cfg.Guilds[idx].BotInstanceID = normalizeConfiguredBotInstanceID(cfg.Guilds[idx].BotInstanceID)
 
 		if err := validateGuildAutoAssignmentOrder(&cfg.Guilds[idx], idx); err != nil {
 			return err
@@ -104,7 +132,7 @@ func normalizeGuildDomainBotInstanceBindings(in map[string]string, guildIndex in
 			)
 		}
 
-		botInstanceID := NormalizeBotInstanceID(rawBotInstanceID)
+		botInstanceID := normalizeConfiguredBotInstanceID(rawBotInstanceID)
 		if botInstanceID == "" {
 			return nil, changed, NewValidationError(
 				fmt.Sprintf("%s.%s", fieldBase, domain),
