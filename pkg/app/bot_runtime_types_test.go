@@ -411,3 +411,73 @@ func TestValidateConfiguredBotInstancesAllowsKnownRemoteOwners(t *testing.T) {
 		t.Fatalf("expected known remote owners to validate, got %v", err)
 	}
 }
+
+func TestValidateConfiguredBotInstancesAllowsDomainOverrideWithRuntimeDefaultFallback(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
+			GuildID: "g1",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "companion",
+			},
+		}},
+	}
+
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
+		"companion": {instanceID: "companion"},
+	}, []string{"main"}), "main")
+	if err != nil {
+		t.Fatalf("expected runtime default fallback plus qotd override to validate, got %v", err)
+	}
+}
+
+func TestValidateConfiguredBotInstancesRejectsReservedDomainBinding(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "main",
+			DomainBotInstanceIDs: map[string]string{
+				"default": "companion",
+			},
+		}},
+	}
+
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
+		"main":      {instanceID: "main"},
+		"companion": {instanceID: "companion"},
+	}, nil), "main")
+	if err == nil {
+		t.Fatal("expected validation error for reserved domain binding")
+	}
+	if got := err.Error(); got != `guild g1 uses reserved domain "default"; use bot_instance_id instead` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateConfiguredBotInstancesRejectsEmptyDomainBindingKey(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "main",
+			DomainBotInstanceIDs: map[string]string{
+				"   ": "companion",
+			},
+		}},
+	}
+
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
+		"main":      {instanceID: "main"},
+		"companion": {instanceID: "companion"},
+	}, nil), "main")
+	if err == nil {
+		t.Fatal("expected validation error for empty domain binding key")
+	}
+	if got := err.Error(); got != `guild g1 has an empty domain bot binding key` {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
