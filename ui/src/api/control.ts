@@ -329,10 +329,20 @@ export interface GuildRolesSettingsSection {
   dashboard_write?: string[];
 }
 
+export interface GuildBotRoutingSettingsSection {
+  bot_instance_id?: string;
+  available_bot_instance_ids?: string[];
+  domain_bot_instance_ids?: Record<string, string>;
+  editable_domains?: string[];
+}
+
 export interface GuildSettingsWorkspace {
   scope: string;
   guild_id: string;
+  bot_instance_id?: string;
+  available_bot_instance_ids?: string[];
   sections: {
+    bot_routing: GuildBotRoutingSettingsSection;
     roles: GuildRolesSettingsSection;
   };
 }
@@ -514,6 +524,8 @@ export class ControlApiClient {
   async updateGuildSettings(
     guildId: string,
     payload: {
+      bot_instance_id?: string;
+      bot_routing?: GuildBotRoutingSettingsSection;
       roles?: GuildRolesSettingsSection;
     },
   ): Promise<GuildSettingsWorkspaceResponse> {

@@ -100,7 +100,15 @@ type guildSettingsWorkspace struct {
 	Effective               guildSettingsEffective `json:"effective"`
 }
 
+type guildBotRoutingSection struct {
+	BotInstanceID           string            `json:"bot_instance_id,omitempty"`
+	AvailableBotInstanceIDs []string          `json:"available_bot_instance_ids,omitempty"`
+	DomainBotInstanceIDs    map[string]string `json:"domain_bot_instance_ids,omitempty"`
+	EditableDomains         []string          `json:"editable_domains,omitempty"`
+}
+
 type guildSettingsSections struct {
+	BotRouting   guildBotRoutingSection      `json:"bot_routing"`
 	Features     files.FeatureToggles      `json:"features"`
 	Channels     files.ChannelsConfig      `json:"channels"`
 	Roles        files.RolesConfig         `json:"roles"`
@@ -190,6 +198,7 @@ type updateGlobalSettingsRequest struct {
 
 type updateGuildSettingsRequest struct {
 	BotInstanceID *string                    `json:"bot_instance_id,omitempty"`
+	BotRouting    *guildBotRoutingSection    `json:"bot_routing,omitempty"`
 	Features      *files.FeatureToggles      `json:"features,omitempty"`
 	Channels      *files.ChannelsConfig      `json:"channels,omitempty"`
 	Roles         *files.RolesConfig         `json:"roles,omitempty"`
@@ -219,6 +228,13 @@ func buildSettingsCatalog() settingsCatalog {
 			},
 		},
 		Guild: []settingsCatalogSection{
+			{
+				ID:          "bot_routing",
+				Title:       "Bot routing",
+				Description: "Default bot ownership for this server plus specialized domain overrides such as QOTD.",
+				Scope:       "guild",
+				Kind:        "object",
+			},
 			{
 				ID:                  "features",
 				Title:               "Guild feature overrides",
@@ -324,6 +340,7 @@ func buildGuildSettingsWorkspaceWithBindings(
 		BotInstanceID:           guild.EffectiveBotInstanceID(defaultBotInstanceID),
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
+			BotRouting: buildGuildBotRoutingSection(guild, availableBotInstanceIDs, defaultBotInstanceID),
 			Features: guild.Features,
 			Channels: guild.Channels,
 			Roles:    guild.Roles,
@@ -343,6 +360,51 @@ func buildGuildSettingsWorkspaceWithBindings(
 			Runtime:  groupRuntimeSettings(cfg.ResolveRuntimeConfig(guild.GuildID)),
 		},
 	}
+}
+
+func buildGuildBotRoutingSection(
+	guild files.GuildConfig,
+	availableBotInstanceIDs []string,
+	defaultBotInstanceID string,
+) guildBotRoutingSection {
+	return guildBotRoutingSection{
+		BotInstanceID:           guild.EffectiveBotInstanceID(defaultBotInstanceID),
+		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
+		DomainBotInstanceIDs:    cloneEditableDomainBotInstanceIDs(guild.DomainBotInstanceIDs),
+		EditableDomains:         settingsEditableBotRoutingDomains(),
+	}
+}
+
+func settingsEditableBotRoutingDomains() []string {
+	return []string{files.BotDomainQOTD}
+}
+
+func cloneEditableDomainBotInstanceIDs(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return nil
+	}
+
+	editableDomains := make(map[string]struct{}, len(settingsEditableBotRoutingDomains()))
+	for _, domain := range settingsEditableBotRoutingDomains() {
+		editableDomains[files.NormalizeBotDomain(domain)] = struct{}{}
+	}
+
+	cloned := make(map[string]string, len(input))
+	for domain, botInstanceID := range input {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		if _, ok := editableDomains[normalizedDomain]; !ok {
+			continue
+		}
+		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+		if normalizedBotInstanceID == "" {
+			continue
+		}
+		cloned[normalizedDomain] = normalizedBotInstanceID
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
 }
 
 func buildConfiguredGuildSummaries(

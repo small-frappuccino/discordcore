@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { useGuildRolesSettings } from "./useGuildRolesSettings";
+import {
+  clearGuildRolesSettingsCache,
+  useGuildRolesSettings,
+} from "./useGuildRolesSettings";
 
 let mockDashboardSession: {
   authState: string;
@@ -24,6 +27,14 @@ describe("useGuildRolesSettings", () => {
         getGuildSettings: vi.fn().mockResolvedValue({
           workspace: {
             sections: {
+              bot_routing: {
+                bot_instance_id: "alice",
+                available_bot_instance_ids: ["alice", "companion"],
+                domain_bot_instance_ids: {
+                  qotd: "companion",
+                },
+                editable_domains: ["qotd"],
+              },
               roles: {
                 allowed: [],
                 dashboard_read: [],
@@ -38,6 +49,7 @@ describe("useGuildRolesSettings", () => {
   });
 
   afterEach(() => {
+    clearGuildRolesSettingsCache();
     vi.clearAllMocks();
   });
 
@@ -58,6 +70,14 @@ describe("useGuildRolesSettings", () => {
       dashboardReadRoleIds: [],
       dashboardWriteRoleIds: [],
     });
+    expect(firstHook.result.current.botRouting).toEqual({
+      botInstanceID: "alice",
+      availableBotInstanceIDs: ["alice", "companion"],
+      domainBotInstanceIDs: {
+        qotd: "companion",
+      },
+      editableDomains: ["qotd"],
+    });
 
     firstHook.unmount();
 
@@ -68,6 +88,14 @@ describe("useGuildRolesSettings", () => {
       allowedRoleIds: [],
       dashboardReadRoleIds: [],
       dashboardWriteRoleIds: [],
+    });
+    expect(secondHook.result.current.botRouting).toEqual({
+      botInstanceID: "alice",
+      availableBotInstanceIDs: ["alice", "companion"],
+      domainBotInstanceIDs: {
+        qotd: "companion",
+      },
+      editableDomains: ["qotd"],
     });
 
     await waitFor(() => {

@@ -4,6 +4,7 @@ import {
   EntityMultiPickerField,
   EmptyState,
   PageHeader,
+  SettingsSelectField,
   UnsavedChangesBar,
 } from "../components/ui";
 import { useDashboardSession } from "../context/DashboardSessionContext";
@@ -30,8 +31,8 @@ export function ControlPanelPage() {
   const {
     dashboardReadRoleIds,
     dashboardWriteRoleIds,
-    hasUnsavedChanges,
-    replaceDrafts,
+    hasUnsavedChanges: hasRoleDraftChanges,
+    replaceDrafts: replaceRoleDrafts,
     toggleDashboardReadRole,
     toggleDashboardWriteRole,
   } = useDashboardAccessRoleDrafts({
@@ -40,6 +41,20 @@ export function ControlPanelPage() {
     dashboardReadRoleIds: rolesSettings.roles.dashboardReadRoleIds,
     dashboardWriteRoleIds: rolesSettings.roles.dashboardWriteRoleIds,
   });
+  const {
+    botInstanceID,
+    domainBotInstanceIDs,
+    hasUnsavedChanges: hasBotRoutingDraftChanges,
+    replaceDrafts: replaceBotRoutingDrafts,
+    setBotInstanceID,
+    setDomainBotInstanceID,
+  } = useGuildBotRoutingDrafts({
+    authState,
+    selectedGuildID,
+    botInstanceID: rolesSettings.botRouting.botInstanceID,
+    domainBotInstanceIDs: rolesSettings.botRouting.domainBotInstanceIDs,
+  });
+  const hasUnsavedChanges = hasRoleDraftChanges || hasBotRoutingDraftChanges;
 
   const controlsDisabled =
     authState !== "signed_in" ||
@@ -52,6 +67,12 @@ export function ControlPanelPage() {
     value: role.id,
     label: formatRoleOptionLabel(role),
   }));
+  const botInstanceOptions = rolesSettings.botRouting.availableBotInstanceIDs.map(
+    (instanceID) => ({
+      value: instanceID,
+      label: formatBotInstanceLabel(instanceID),
+    }),
+  );
 
   async function handleSave() {
     if (authState !== "signed_in" || selectedGuildID.trim() === "" || !canEditSelectedGuild) {
@@ -65,7 +86,16 @@ export function ControlPanelPage() {
         dashboard_read: normalizeRoleIds(dashboardReadRoleIds),
         dashboard_write: normalizeRoleIds(dashboardWriteRoleIds),
       };
+      const nextBotRoutingPayload = {
+        bot_instance_id: normalizeBotInstanceID(botInstanceID),
+        domain_bot_instance_ids: buildRequestedDomainBotInstanceIDs(
+          domainBotInstanceIDs,
+          rolesSettings.botRouting.editableDomains,
+          botInstanceID,
+        ),
+      };
       const response = await client.updateGuildSettings(selectedGuildID.trim(), {
+        bot_routing: nextBotRoutingPayload,
         roles,
       });
       const nextReadRoles = normalizeRoleIds(
@@ -74,11 +104,19 @@ export function ControlPanelPage() {
       const nextWriteRoles = normalizeRoleIds(
         response.workspace.sections.roles.dashboard_write,
       );
-      replaceDrafts(nextReadRoles, nextWriteRoles);
-      rolesSettings.updateCachedRoles({
-        ...rolesSettings.roles,
-        dashboardReadRoleIds: nextReadRoles,
-        dashboardWriteRoleIds: nextWriteRoles,
+      const nextBotRouting = readBotRoutingSnapshot(response.workspace);
+      replaceRoleDrafts(nextReadRoles, nextWriteRoles);
+      replaceBotRoutingDrafts(
+        nextBotRouting.botInstanceID,
+        nextBotRouting.domainBotInstanceIDs,
+      );
+      rolesSettings.updateCachedSettings({
+        roles: {
+          ...rolesSettings.roles,
+          dashboardReadRoleIds: nextReadRoles,
+          dashboardWriteRoleIds: nextWriteRoles,
+        },
+        botRouting: nextBotRouting,
       });
       setNotice(null);
     } catch (error) {
@@ -92,9 +130,13 @@ export function ControlPanelPage() {
   }
 
   function handleReset() {
-    replaceDrafts(
+    replaceRoleDrafts(
       normalizeRoleIds(rolesSettings.roles.dashboardReadRoleIds),
       normalizeRoleIds(rolesSettings.roles.dashboardWriteRoleIds),
+    );
+    replaceBotRoutingDrafts(
+      normalizeBotInstanceID(rolesSettings.botRouting.botInstanceID),
+      normalizeDomainBotInstanceIDs(rolesSettings.botRouting.domainBotInstanceIDs),
     );
     setNotice(null);
     rolesSettings.clearNotice();
@@ -144,6 +186,57 @@ export function ControlPanelPage() {
 
     return (
       <div className="workspace-view control-panel-workspace">
+        <section className="control-panel-flat-section">
+          <div className="workspace-view-header">
+            <div className="card-copy">
+              <p className="section-label">Bot routing</p>
+              <h2>Domain ownership</h2>
+              <p className="section-description">
+                Choose which bot instance owns the default server surface and specialized domains like QOTD.
+              </p>
+            </div>
+            <div className="workspace-view-meta">
+              <span className="meta-note">
+                {botInstanceOptions.length} bot instances
+              </span>
+              <span className="meta-note">
+                {countConfiguredDomainOverrides(domainBotInstanceIDs)} domain overrides
+              </span>
+            </div>
+          </div>
+
+          <div className="control-panel-grid">
+            <SettingsSelectField
+              label="Default bot instance"
+              value={botInstanceID}
+              options={botInstanceOptions}
+              placeholder="Select bot instance"
+              disabled={controlsDisabled || botInstanceOptions.length === 0}
+              onChange={setBotInstanceID}
+              note="Domains without an explicit override inherit this bot instance."
+            />
+
+            {rolesSettings.botRouting.editableDomains.map((domain) => (
+              <SettingsSelectField
+                key={domain}
+                label={`${formatBotRoutingDomainLabel(domain)} domain`}
+                value={domainBotInstanceIDs[domain] ?? ""}
+                options={botInstanceOptions}
+                placeholder={`Inherit ${formatBotInstanceLabel(botInstanceID)}`}
+                disabled={controlsDisabled || botInstanceOptions.length === 0}
+                onChange={(value) => setDomainBotInstanceID(domain, value)}
+                note={`Leave this inherited to keep ${formatBotRoutingDomainLabel(domain)} on the default bot instance.`}
+              />
+            ))}
+          </div>
+
+          {botInstanceOptions.length === 0 ? (
+            <p className="meta-note">
+              No bot instances are currently available for this server.
+            </p>
+          ) : null}
+        </section>
+
         <section className="control-panel-flat-section">
           <div className="workspace-view-header">
             <div className="card-copy">
@@ -262,6 +355,20 @@ interface DashboardAccessRoleDraftsState {
   hasUnsavedChanges: boolean;
 }
 
+interface GuildBotRoutingDraftsArgs {
+  authState: string;
+  selectedGuildID: string;
+  botInstanceID: string;
+  domainBotInstanceIDs: Record<string, string>;
+}
+
+interface GuildBotRoutingDraftsState {
+  guildID: string;
+  botInstanceID: string;
+  domainBotInstanceIDs: Record<string, string>;
+  hasUnsavedChanges: boolean;
+}
+
 function useDashboardAccessRoleDrafts({
   authState,
   selectedGuildID,
@@ -342,6 +449,88 @@ function useDashboardAccessRoleDrafts({
   };
 }
 
+function useGuildBotRoutingDrafts({
+  authState,
+  selectedGuildID,
+  botInstanceID,
+  domainBotInstanceIDs,
+}: GuildBotRoutingDraftsArgs) {
+  const normalizedGuildID = selectedGuildID.trim();
+  const [drafts, setDrafts] = useState<GuildBotRoutingDraftsState>(() =>
+    createGuildBotRoutingDraftsState(
+      authState,
+      normalizedGuildID,
+      botInstanceID,
+      domainBotInstanceIDs,
+    ),
+  );
+
+  useEffect(() => {
+    setDrafts((currentDrafts) => {
+      const nextDrafts = createGuildBotRoutingDraftsState(
+        authState,
+        normalizedGuildID,
+        botInstanceID,
+        domainBotInstanceIDs,
+      );
+
+      if (
+        authState !== "signed_in" ||
+        normalizedGuildID === "" ||
+        currentDrafts.guildID !== normalizedGuildID ||
+        !currentDrafts.hasUnsavedChanges
+      ) {
+        return areGuildBotRoutingDraftsEqual(currentDrafts, nextDrafts)
+          ? currentDrafts
+          : nextDrafts;
+      }
+
+      return currentDrafts;
+    });
+  }, [authState, botInstanceID, domainBotInstanceIDs, normalizedGuildID]);
+
+  function replaceDrafts(
+    nextBotInstanceID: string,
+    nextDomainBotInstanceIDs: Record<string, string>,
+  ) {
+    setDrafts({
+      guildID: normalizedGuildID,
+      botInstanceID: normalizeBotInstanceID(nextBotInstanceID),
+      domainBotInstanceIDs: normalizeDomainBotInstanceIDs(nextDomainBotInstanceIDs),
+      hasUnsavedChanges: false,
+    });
+  }
+
+  function setBotInstanceID(nextBotInstanceID: string) {
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      botInstanceID: normalizeBotInstanceID(nextBotInstanceID),
+      hasUnsavedChanges: true,
+    }));
+  }
+
+  function setDomainBotInstanceID(domain: string, nextBotInstanceID: string) {
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      domainBotInstanceIDs: updateDomainBotInstanceID(
+        currentDrafts.domainBotInstanceIDs,
+        domain,
+        nextBotInstanceID,
+      ),
+      hasUnsavedChanges: true,
+    }));
+  }
+
+  return {
+    botInstanceID: drafts.botInstanceID,
+    domainBotInstanceIDs: drafts.domainBotInstanceIDs,
+    hasUnsavedChanges: drafts.hasUnsavedChanges,
+    replaceDrafts,
+    setBotInstanceID,
+    setDomainBotInstanceID,
+  };
+}
+
 function createDashboardAccessRoleDraftsState(
   authState: string,
   normalizedGuildID: string,
@@ -365,6 +554,29 @@ function createDashboardAccessRoleDraftsState(
   };
 }
 
+function createGuildBotRoutingDraftsState(
+  authState: string,
+  normalizedGuildID: string,
+  botInstanceID: string,
+  domainBotInstanceIDs: Record<string, string>,
+): GuildBotRoutingDraftsState {
+  if (authState !== "signed_in" || normalizedGuildID === "") {
+    return {
+      guildID: "",
+      botInstanceID: "",
+      domainBotInstanceIDs: {},
+      hasUnsavedChanges: false,
+    };
+  }
+
+  return {
+    guildID: normalizedGuildID,
+    botInstanceID: normalizeBotInstanceID(botInstanceID),
+    domainBotInstanceIDs: normalizeDomainBotInstanceIDs(domainBotInstanceIDs),
+    hasUnsavedChanges: false,
+  };
+}
+
 function areDashboardAccessRoleDraftsEqual(
   currentDrafts: DashboardAccessRoleDraftsState,
   nextDrafts: DashboardAccessRoleDraftsState,
@@ -383,10 +595,45 @@ function areDashboardAccessRoleDraftsEqual(
   );
 }
 
+function areGuildBotRoutingDraftsEqual(
+  currentDrafts: GuildBotRoutingDraftsState,
+  nextDrafts: GuildBotRoutingDraftsState,
+) {
+  return (
+    currentDrafts.guildID === nextDrafts.guildID &&
+    currentDrafts.botInstanceID === nextDrafts.botInstanceID &&
+    currentDrafts.hasUnsavedChanges === nextDrafts.hasUnsavedChanges &&
+    areStringMapsEqual(
+      currentDrafts.domainBotInstanceIDs,
+      nextDrafts.domainBotInstanceIDs,
+    )
+  );
+}
+
 function areStringListsEqual(currentValues: string[], nextValues: string[]) {
   return (
     currentValues.length === nextValues.length &&
     currentValues.every((value, index) => value === nextValues[index])
+  );
+}
+
+function areStringMapsEqual(
+  currentValues: Record<string, string>,
+  nextValues: Record<string, string>,
+) {
+  const currentEntries = Object.entries(currentValues).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const nextEntries = Object.entries(nextValues).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+
+  return (
+    currentEntries.length === nextEntries.length &&
+    currentEntries.every(([key, value], index) => {
+      const [nextKey, nextValue] = nextEntries[index] ?? [];
+      return key === nextKey && value === nextValue;
+    })
   );
 }
 
@@ -404,6 +651,122 @@ function toggleRole(currentRoleIds: string[], roleId: string) {
   }
 
   return Array.from(next);
+}
+
+function updateDomainBotInstanceID(
+  currentDomainBotInstanceIDs: Record<string, string>,
+  domain: string,
+  botInstanceID: string,
+) {
+  const normalized = normalizeDomainBotInstanceIDs(currentDomainBotInstanceIDs);
+  const normalizedDomain = domain.trim().toLowerCase();
+  const normalizedBotInstanceID = normalizeBotInstanceID(botInstanceID);
+  if (normalizedDomain === "") {
+    return normalized;
+  }
+  if (normalizedBotInstanceID === "") {
+    delete normalized[normalizedDomain];
+    return normalized;
+  }
+  normalized[normalizedDomain] = normalizedBotInstanceID;
+  return normalized;
+}
+
+function normalizeBotInstanceID(botInstanceID: string | undefined) {
+  if (typeof botInstanceID !== "string") {
+    return "";
+  }
+  return botInstanceID.trim();
+}
+
+function normalizeDomainBotInstanceIDs(domainBotInstanceIDs: Record<string, string>) {
+  const normalized: Record<string, string> = {};
+  for (const [domain, botInstanceID] of Object.entries(domainBotInstanceIDs)) {
+    const normalizedDomain = domain.trim().toLowerCase();
+    const normalizedBotInstanceID = normalizeBotInstanceID(botInstanceID);
+    if (normalizedDomain === "" || normalizedBotInstanceID === "") {
+      continue;
+    }
+    normalized[normalizedDomain] = normalizedBotInstanceID;
+  }
+  return normalized;
+}
+
+function buildRequestedDomainBotInstanceIDs(
+  domainBotInstanceIDs: Record<string, string>,
+  editableDomains: string[],
+  botInstanceID: string,
+) {
+  const normalizedBotInstanceID = normalizeBotInstanceID(botInstanceID);
+  const requested: Record<string, string> = {};
+
+  for (const domain of editableDomains) {
+    const normalizedDomain = domain.trim().toLowerCase();
+    const normalizedDomainBotInstanceID = normalizeBotInstanceID(
+      domainBotInstanceIDs[normalizedDomain],
+    );
+    if (
+      normalizedDomain === "" ||
+      normalizedDomainBotInstanceID === "" ||
+      normalizedDomainBotInstanceID === normalizedBotInstanceID
+    ) {
+      continue;
+    }
+    requested[normalizedDomain] = normalizedDomainBotInstanceID;
+  }
+
+  return requested;
+}
+
+function countConfiguredDomainOverrides(domainBotInstanceIDs: Record<string, string>) {
+  return Object.keys(normalizeDomainBotInstanceIDs(domainBotInstanceIDs)).length;
+}
+
+function formatBotInstanceLabel(botInstanceID: string) {
+  const normalizedBotInstanceID = normalizeBotInstanceID(botInstanceID);
+  if (normalizedBotInstanceID === "") {
+    return "the default bot";
+  }
+  return normalizedBotInstanceID
+    .split(/[-_\s]+/)
+    .filter((segment) => segment !== "")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function formatBotRoutingDomainLabel(domain: string) {
+  const normalizedDomain = domain.trim().toLowerCase();
+  if (normalizedDomain === "qotd") {
+    return "QOTD";
+  }
+  return formatBotInstanceLabel(normalizedDomain);
+}
+
+function readBotRoutingSnapshot(workspace: {
+  bot_instance_id?: string;
+  available_bot_instance_ids?: string[];
+  sections: {
+    bot_routing?: {
+      bot_instance_id?: string;
+      available_bot_instance_ids?: string[];
+      domain_bot_instance_ids?: Record<string, string>;
+      editable_domains?: string[];
+    };
+  };
+}) {
+  const section = workspace.sections.bot_routing;
+  return {
+    botInstanceID: normalizeBotInstanceID(
+      section?.bot_instance_id ?? workspace.bot_instance_id,
+    ),
+    availableBotInstanceIDs: normalizeRoleIds(
+      section?.available_bot_instance_ids ?? workspace.available_bot_instance_ids,
+    ),
+    domainBotInstanceIDs: normalizeDomainBotInstanceIDs(
+      section?.domain_bot_instance_ids ?? {},
+    ),
+    editableDomains: normalizeRoleIds(section?.editable_domains),
+  };
 }
 
 function normalizeRoleIds(roleIds: string[] | undefined) {

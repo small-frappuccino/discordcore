@@ -9,6 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { appRoutes } from "./app/routes";
+import { clearGuildRolesSettingsCache } from "./features/control-panel/useGuildRolesSettings";
 import type {
   GuildChannelOption,
   FeatureRecord,
@@ -92,6 +93,12 @@ function createFetchMock() {
         dashboard_read: string[];
         dashboard_write: string[];
       };
+      botRouting: {
+        bot_instance_id: string;
+        available_bot_instance_ids: string[];
+        domain_bot_instance_ids: Record<string, string>;
+        editable_domains: string[];
+      };
     }
   > = {
     "guild-1": {
@@ -100,12 +107,26 @@ function createFetchMock() {
         dashboard_read: ["role-target"],
         dashboard_write: ["role-guard"],
       },
+      botRouting: {
+        bot_instance_id: "alice",
+        available_bot_instance_ids: ["alice", "companion"],
+        domain_bot_instance_ids: {
+          qotd: "companion",
+        },
+        editable_domains: ["qotd"],
+      },
     },
     "guild-2": {
       roles: {
         allowed: [],
         dashboard_read: [],
         dashboard_write: [],
+      },
+      botRouting: {
+        bot_instance_id: "alice",
+        available_bot_instance_ids: ["alice"],
+        domain_bot_instance_ids: {},
+        editable_domains: ["qotd"],
       },
     },
   };
@@ -1056,6 +1077,12 @@ function createFetchMock() {
         dashboard_read: [],
         dashboard_write: [],
       },
+      botRouting: {
+        bot_instance_id: "alice",
+        available_bot_instance_ids: ["alice"],
+        domain_bot_instance_ids: {},
+        editable_domains: ["qotd"],
+      },
     };
 
     return {
@@ -1063,7 +1090,15 @@ function createFetchMock() {
       workspace: {
         scope: "guild",
         guild_id: guildID,
+        bot_instance_id: settings.botRouting.bot_instance_id,
+        available_bot_instance_ids: [...settings.botRouting.available_bot_instance_ids],
         sections: {
+          bot_routing: {
+            bot_instance_id: settings.botRouting.bot_instance_id,
+            available_bot_instance_ids: [...settings.botRouting.available_bot_instance_ids],
+            domain_bot_instance_ids: { ...settings.botRouting.domain_bot_instance_ids },
+            editable_domains: [...settings.botRouting.editable_domains],
+          },
           roles: {
             allowed: [...settings.roles.allowed],
             dashboard_read: [...settings.roles.dashboard_read],
@@ -1072,6 +1107,22 @@ function createFetchMock() {
         },
       },
     };
+  }
+
+  function normalizeStringRecord(input: unknown) {
+    if (typeof input !== "object" || input === null) {
+      return {} as Record<string, string>;
+    }
+
+    const normalized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (typeof value !== "string") {
+        continue;
+      }
+      normalized[key] = value;
+    }
+
+    return normalized;
   }
 
   const fetchMock = vi.fn(
@@ -1157,23 +1208,55 @@ function createFetchMock() {
           const guildID = decodeURIComponent(match[1] ?? "");
           const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
           settingsUpdates.push({ guildID, payload });
+          const currentSettings = guildSettingsByGuild[guildID] ?? {
+            roles: {
+              allowed: [],
+              dashboard_read: [],
+              dashboard_write: [],
+            },
+            botRouting: {
+              bot_instance_id: "alice",
+              available_bot_instance_ids: ["alice"],
+              domain_bot_instance_ids: {},
+              editable_domains: ["qotd"],
+            },
+          };
           const rolesPayload =
             typeof payload.roles === "object" && payload.roles !== null
               ? (payload.roles as Record<string, unknown>)
               : {};
+          const botRoutingPayload =
+            typeof payload.bot_routing === "object" && payload.bot_routing !== null
+              ? (payload.bot_routing as Record<string, unknown>)
+              : {};
           guildSettingsByGuild[guildID] = {
             roles: {
-              allowed: guildSettingsByGuild[guildID]?.roles.allowed ?? [],
+              allowed: currentSettings.roles.allowed,
               dashboard_read: Array.isArray(rolesPayload.dashboard_read)
                 ? rolesPayload.dashboard_read.filter(
                     (value): value is string => typeof value === "string",
                   )
-                : [],
+                : currentSettings.roles.dashboard_read,
               dashboard_write: Array.isArray(rolesPayload.dashboard_write)
                 ? rolesPayload.dashboard_write.filter(
                     (value): value is string => typeof value === "string",
                   )
-                : [],
+                : currentSettings.roles.dashboard_write,
+            },
+            botRouting: {
+              bot_instance_id:
+                typeof botRoutingPayload.bot_instance_id === "string"
+                  ? botRoutingPayload.bot_instance_id.trim()
+                  : currentSettings.botRouting.bot_instance_id,
+              available_bot_instance_ids: [...currentSettings.botRouting.available_bot_instance_ids],
+              domain_bot_instance_ids:
+                Object.prototype.hasOwnProperty.call(
+                  botRoutingPayload,
+                  "domain_bot_instance_ids",
+                )
+                  ? normalizeStringRecord(botRoutingPayload.domain_bot_instance_ids)
+                  : { ...currentSettings.botRouting.domain_bot_instance_ids },
+              editable_domains: [...currentSettings.botRouting.editable_domains],
             },
           };
           return jsonResponse(buildGuildSettingsWorkspace(guildID));
@@ -1623,6 +1706,7 @@ describe("dashboard routing and workspace", () => {
 
   afterEach(() => {
     cleanup();
+    clearGuildRolesSettingsCache();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     window.history.replaceState({}, "", "/");
@@ -1813,6 +1897,12 @@ describe("dashboard routing and workspace", () => {
         {
           guildID: "guild-1",
           payload: {
+            bot_routing: {
+              bot_instance_id: "alice",
+              domain_bot_instance_ids: {
+                qotd: "companion",
+              },
+            },
             roles: {
               dashboard_read: ["role-target"],
               dashboard_write: ["role-guard", "role-target"],
@@ -1828,6 +1918,52 @@ describe("dashboard routing and workspace", () => {
     expect(
       screen.queryAllByRole("button", { name: "Save changes" }),
     ).toHaveLength(0);
+  });
+
+  it("saves bot routing changes from the dedicated Control Panel page", async () => {
+    const { fetchMock, settingsUpdates } = createFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", appRoutes.legacyControlPanel);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Control Panel", level: 1 });
+    const defaultBotSelect = await screen.findByRole("combobox", {
+      name: "Default bot instance",
+    });
+    await waitFor(() => {
+      expect(within(defaultBotSelect).getByRole("option", { name: "Companion" })).toBeInTheDocument();
+    });
+
+    await userEvent.selectOptions(
+      defaultBotSelect,
+      "companion",
+    );
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "QOTD domain" }),
+      "",
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Save changes" }).at(-1)!,
+    );
+
+    await waitFor(() => {
+      expect(settingsUpdates).toEqual([
+        {
+          guildID: "guild-1",
+          payload: {
+            bot_routing: {
+              bot_instance_id: "companion",
+              domain_bot_instance_ids: {},
+            },
+            roles: {
+              dashboard_read: ["role-target"],
+              dashboard_write: ["role-guard"],
+            },
+          },
+        },
+      ]);
+    });
   });
 
   it("keeps Control Panel writes disabled when the selected server is read-only", async () => {

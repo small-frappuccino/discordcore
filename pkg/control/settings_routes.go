@@ -277,21 +277,50 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	var (
 		availableBotInstanceIDs []string
 		nextBotInstanceID       string
+		nextDomainBotInstanceIDs map[string]string
+		updateBotInstanceID     bool
+		updateDomainBotRouting  bool
 		invalidateAccessCache   bool
 	)
-	if payload.BotInstanceID != nil {
+	if payload.BotInstanceID != nil || payload.BotRouting != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 			return
 		}
-		selectedBotInstanceID, err := selectGuildBotInstanceID(*payload.BotInstanceID, available)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
 		availableBotInstanceIDs = available
-		nextBotInstanceID = selectedBotInstanceID
+
+		requestedBotInstanceID := ""
+		switch {
+		case payload.BotInstanceID != nil:
+			requestedBotInstanceID = *payload.BotInstanceID
+			updateBotInstanceID = true
+		case payload.BotRouting != nil:
+			requestedBotInstanceID = payload.BotRouting.BotInstanceID
+			updateBotInstanceID = true
+		}
+		if updateBotInstanceID {
+			selectedBotInstanceID, err := selectGuildBotInstanceID(requestedBotInstanceID, available)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			nextBotInstanceID = selectedBotInstanceID
+		}
+
+		if payload.BotRouting != nil {
+			normalizedDomainBotInstanceIDs, err := normalizeRequestedDomainBotInstanceIDs(
+				payload.BotRouting.DomainBotInstanceIDs,
+				available,
+				settingsEditableBotRoutingDomains(),
+			)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			nextDomainBotInstanceIDs = dropRedundantDomainBotInstanceIDs(normalizedDomainBotInstanceIDs, nextBotInstanceID)
+			updateDomainBotRouting = true
+		}
 	}
 
 	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
@@ -299,8 +328,20 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		if !ok {
 			return fmt.Errorf("%w: register this guild first (guild_id=%s)", errGuildRegistrationRequired, guildID)
 		}
-		if payload.BotInstanceID != nil {
+		if updateBotInstanceID {
 			guild.BotInstanceID = nextBotInstanceID
+			guild.DomainBotInstanceIDs = mergeEditableDomainBotInstanceIDs(
+				guild.DomainBotInstanceIDs,
+				dropRedundantDomainBotInstanceIDs(guild.DomainBotInstanceIDs, guild.BotInstanceID),
+				settingsEditableBotRoutingDomains(),
+			)
+		}
+		if updateDomainBotRouting {
+			guild.DomainBotInstanceIDs = mergeEditableDomainBotInstanceIDs(
+				guild.DomainBotInstanceIDs,
+				nextDomainBotInstanceIDs,
+				settingsEditableBotRoutingDomains(),
+			)
 		}
 		if payload.Features != nil {
 			guild.Features = *payload.Features
@@ -460,6 +501,7 @@ func normalizeSettingsRoutePath(path string) string {
 
 func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 	return payload.BotInstanceID == nil &&
+		payload.BotRouting == nil &&
 		payload.Features == nil &&
 		payload.Channels == nil &&
 		payload.Roles == nil &&
@@ -468,6 +510,119 @@ func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 		payload.UserPrune == nil &&
 		payload.PartnerBoard == nil &&
 		payload.Runtime == nil
+}
+
+func normalizeRequestedDomainBotInstanceIDs(
+	requested map[string]string,
+	availableBotInstanceIDs []string,
+	editableDomains []string,
+) (map[string]string, error) {
+	if requested == nil {
+		return nil, nil
+	}
+
+	editableDomainSet := make(map[string]struct{}, len(editableDomains))
+	for _, domain := range editableDomains {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		if normalizedDomain == "" {
+			continue
+		}
+		editableDomainSet[normalizedDomain] = struct{}{}
+	}
+
+	normalized := make(map[string]string, len(requested))
+	for domain, botInstanceID := range requested {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		if normalizedDomain == "" {
+			return nil, fmt.Errorf("domain_bot_instance_ids contains an empty domain key")
+		}
+		if _, ok := editableDomainSet[normalizedDomain]; !ok {
+			return nil, fmt.Errorf("domain_bot_instance_ids.%s is not editable via settings", normalizedDomain)
+		}
+
+		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+		if normalizedBotInstanceID == "" {
+			continue
+		}
+		selectedBotInstanceID, err := selectGuildBotInstanceID(normalizedBotInstanceID, availableBotInstanceIDs)
+		if err != nil {
+			return nil, fmt.Errorf("domain_bot_instance_ids.%s: %w", normalizedDomain, err)
+		}
+		normalized[normalizedDomain] = selectedBotInstanceID
+	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
+}
+
+func dropRedundantDomainBotInstanceIDs(domainBotInstanceIDs map[string]string, botInstanceID string) map[string]string {
+	if len(domainBotInstanceIDs) == 0 {
+		return nil
+	}
+
+	normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+	trimmed := make(map[string]string, len(domainBotInstanceIDs))
+	for domain, explicitBotInstanceID := range domainBotInstanceIDs {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		normalizedExplicitBotInstanceID := files.NormalizeBotInstanceID(explicitBotInstanceID)
+		if normalizedDomain == "" || normalizedExplicitBotInstanceID == "" {
+			continue
+		}
+		if normalizedExplicitBotInstanceID == normalizedBotInstanceID {
+			continue
+		}
+		trimmed[normalizedDomain] = normalizedExplicitBotInstanceID
+	}
+	if len(trimmed) == 0 {
+		return nil
+	}
+	return trimmed
+}
+
+func mergeEditableDomainBotInstanceIDs(
+	existing map[string]string,
+	editableDomainBotInstanceIDs map[string]string,
+	editableDomains []string,
+) map[string]string {
+	merged := make(map[string]string, len(existing)+len(editableDomainBotInstanceIDs))
+	editableDomainSet := make(map[string]struct{}, len(editableDomains))
+	for _, domain := range editableDomains {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		if normalizedDomain == "" {
+			continue
+		}
+		editableDomainSet[normalizedDomain] = struct{}{}
+	}
+
+	for domain, botInstanceID := range existing {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		if normalizedDomain == "" {
+			continue
+		}
+		if _, ok := editableDomainSet[normalizedDomain]; ok {
+			continue
+		}
+		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+		if normalizedBotInstanceID == "" {
+			continue
+		}
+		merged[normalizedDomain] = normalizedBotInstanceID
+	}
+
+	for domain, botInstanceID := range editableDomainBotInstanceIDs {
+		normalizedDomain := files.NormalizeBotDomain(domain)
+		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+		if normalizedDomain == "" || normalizedBotInstanceID == "" {
+			continue
+		}
+		merged[normalizedDomain] = normalizedBotInstanceID
+	}
+
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
 }
 
 func dashboardAccessRolesChanged(before, after files.RolesConfig) bool {

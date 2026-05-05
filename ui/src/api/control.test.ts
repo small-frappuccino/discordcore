@@ -294,6 +294,93 @@ describe("ControlApiClient feature routes", () => {
     );
   });
 
+  it("updates guild settings with bot routing payload", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        void init;
+        const url = typeof input === "string" ? input : input.toString();
+
+        if (url.endsWith("/auth/me")) {
+          return jsonResponse({
+            status: "ok",
+            user: {
+              id: "user-1",
+              username: "alice",
+            },
+            scopes: ["identify"],
+            csrf_token: "csrf-token",
+            expires_at: "2099-01-01T00:00:00Z",
+          });
+        }
+
+        return jsonResponse({
+          status: "ok",
+          workspace: {
+            scope: "guild",
+            guild_id: "guild-1",
+            bot_instance_id: "alice",
+            available_bot_instance_ids: ["alice", "companion"],
+            sections: {
+              bot_routing: {
+                bot_instance_id: "alice",
+                available_bot_instance_ids: ["alice", "companion"],
+                domain_bot_instance_ids: {
+                  qotd: "companion",
+                },
+                editable_domains: ["qotd"],
+              },
+              roles: {
+                allowed: [],
+                dashboard_read: [],
+                dashboard_write: [],
+              },
+            },
+          },
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ControlApiClient({
+      baseUrl: "",
+    });
+
+    await client.updateGuildSettings("guild-1", {
+      bot_routing: {
+        bot_instance_id: "alice",
+        domain_bot_instance_ids: {
+          qotd: "companion",
+        },
+      },
+      roles: {
+        dashboard_read: ["role-target"],
+      },
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/guilds/guild-1/settings", {
+      method: "PUT",
+      headers: expect.objectContaining({
+        get: expect.any(Function),
+      }),
+      credentials: "include",
+      body: JSON.stringify({
+        bot_routing: {
+          bot_instance_id: "alice",
+          domain_bot_instance_ids: {
+            qotd: "companion",
+          },
+        },
+        roles: {
+          dashboard_read: ["role-target"],
+        },
+      }),
+    });
+
+    const secondCall = fetchMock.mock.calls[1];
+    const headers = secondCall?.[1]?.headers as Headers;
+    expect(headers.get("X-CSRF-Token")).toBe("csrf-token");
+  });
+
   it("loads qotd summary with the expected guild-scoped path", async () => {
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL) => {
