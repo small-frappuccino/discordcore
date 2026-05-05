@@ -653,6 +653,10 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 }
 
 func (s *Service) PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error) {
+	return s.PublishNowWithParams(ctx, guildID, session, PublishNowParams{})
+}
+
+func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params PublishNowParams) (*PublishResult, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
 	}
@@ -674,11 +678,14 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if err != nil {
 		return nil, err
 	}
+	consumeAutomaticSlot := params.ShouldConsumeAutomaticSlot()
 	publishDate := NormalizePublishDateUTC(now)
 	var existing *storage.QOTDOfficialPostRecord
 	if slotState.ScheduleConfigured {
 		publishDate = slotState.PublishDateUTC
-		existing = slotState.OfficialPost
+		if consumeAutomaticSlot {
+			existing = slotState.OfficialPost
+		}
 	} else {
 		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
 		if err != nil {
@@ -718,6 +725,7 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 		DeckNameSnapshot:     deck.Name,
 		QuestionID:           question.ID,
 		PublishMode:          string(PublishModeManual),
+		ConsumeAutomaticSlot: consumeAutomaticSlot,
 		PublishDateUTC:       publishDate,
 		State:                string(OfficialPostStateProvisioning),
 		ChannelID:            strings.TrimSpace(deck.ChannelID),
@@ -751,7 +759,9 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
 		return nil, err
 	}
-	s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
+	if consumeAutomaticSlot {
+		s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
+	}
 
 	return &PublishResult{
 		Question:     *question,

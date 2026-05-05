@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 )
@@ -161,5 +162,53 @@ func TestQOTDPublishCommandBlocksSecondPublishForCurrentSlot(t *testing.T) {
 	}
 	if len(questions) != 2 || questions[0].Status != string(applicationqotd.QuestionStatusUsed) || questions[0].UsedAt == nil || questions[1].Status != string(applicationqotd.QuestionStatusReady) || questions[1].UsedAt != nil {
 		t.Fatalf("expected only the first manual publish to consume a question, got %+v", questions)
+	}
+}
+
+func TestQOTDPublishCommandCanSkipAutomaticSlotConsumptionIntegration(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	fake := &fakePublisher{}
+	session, rec := newQOTDCommandTestSession(t)
+	router, cm, service, _ := newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, fake)
+	mustConfigureQOTDDecks(t, cm, guildID, files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     dueQOTDCommandSchedule(),
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: integrationDeckChannelID,
+		}},
+	})
+	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Manual non-consuming publish", applicationqotd.QuestionStatusReady)
+	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Still due automatically", applicationqotd.QuestionStatusReady)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{{
+		Name:  publishConsumeAutomaticSlotOptionName,
+		Type:  discordgo.ApplicationCommandOptionBoolean,
+		Value: false,
+	}}))
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "without consuming the automatic slot") {
+		t.Fatalf("expected non-consuming publish confirmation, got %q", resp.Data.Content)
+	}
+
+	queue, err := service.GetAutomaticQueueState(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
+	}
+	if queue.SlotStatus != applicationqotd.AutomaticQueueSlotStatusDue {
+		t.Fatalf("expected current automatic slot to remain due, got %+v", queue)
+	}
+	if queue.SlotOfficialPost != nil {
+		t.Fatalf("expected non-consuming publish to leave the automatic slot unoccupied, got %+v", queue)
+	}
+	if queue.NextReadyQuestion == nil || queue.NextReadyQuestion.Body != "Still due automatically" {
+		t.Fatalf("expected next automatic question to advance after manual non-consuming publish, got %+v", queue)
 	}
 }

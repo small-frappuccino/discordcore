@@ -49,7 +49,7 @@ func (s *Service) loadCurrentSlotState(ctx context.Context, guildID string, cfg 
 	state.Schedule = schedule
 	state.PublishDateUTC = CurrentPublishDateUTC(schedule, now)
 	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
-	state.OfficialPost, err = s.loadSlotOfficialPost(ctx, guildID, state.PublishDateUTC)
+	state.OfficialPost, err = s.loadAutomaticSlotOfficialPost(ctx, guildID, state.PublishDateUTC)
 	if err != nil {
 		return currentSlotState{}, err
 	}
@@ -62,4 +62,12 @@ func (s *Service) loadSlotOfficialPost(ctx context.Context, guildID string, publ
 		return nil, nil
 	}
 	return s.store.GetQOTDOfficialPostByDate(ctx, strings.TrimSpace(guildID), publishDate)
+}
+
+func (s *Service) loadAutomaticSlotOfficialPost(ctx context.Context, guildID string, publishDate time.Time) (*storage.QOTDOfficialPostRecord, error) {
+	publishDate = NormalizePublishDateUTC(publishDate)
+	if publishDate.IsZero() {
+		return nil, nil
+	}
+	return s.store.GetAutomaticSlotQOTDOfficialPostByDate(ctx, strings.TrimSpace(guildID), publishDate)
 }

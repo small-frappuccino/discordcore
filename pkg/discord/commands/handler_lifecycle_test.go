@@ -42,7 +42,7 @@ func (handlerQOTDServiceStub) GetAutomaticQueueState(context.Context, string, st
 func (handlerQOTDServiceStub) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
 	return applicationqotd.ImportArchivedQuestionsResult{}, nil
 }
-func (handlerQOTDServiceStub) PublishNow(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
+func (handlerQOTDServiceStub) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	return nil, nil
 }
 

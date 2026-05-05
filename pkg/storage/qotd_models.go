@@ -28,6 +28,7 @@ type QOTDOfficialPostRecord struct {
 	DeckNameSnapshot           string
 	QuestionID                 int64
 	PublishMode                string
+	ConsumeAutomaticSlot       bool
 	PublishDateUTC             time.Time
 	State                      string
 	ChannelID                  string

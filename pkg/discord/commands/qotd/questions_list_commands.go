@@ -27,6 +27,7 @@ const (
 	questionsListSubCommand   = "list"
 	questionsQueueSubCommand  = "queue"
 	questionsNextSubCommand   = "next"
+	publishConsumeAutomaticSlotOptionName = "consume_automatic_slot"
 	questionsResetSubCommand  = "reset"
 	questionsRecoverSubCommand = "recover"
 	questionsRemoveSubCommand = "remove"
@@ -59,7 +60,7 @@ type QuestionCatalogService interface {
 	ResetDeckState(ctx context.Context, guildID, deckID string) (applicationqotd.ResetDeckResult, error)
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
 	ImportArchivedQuestions(ctx context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error)
-	PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
+	PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error)
 }
 
 type Commands struct {
@@ -545,7 +546,14 @@ func (c *qotdPublishCommand) Description() string {
 	return "Publish the next ready QOTD question immediately"
 }
 
-func (c *qotdPublishCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
+func (c *qotdPublishCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{{
+		Type:        discordgo.ApplicationCommandOptionBoolean,
+		Name:        publishConsumeAutomaticSlotOptionName,
+		Description: "Whether this manual publish should occupy the current automatic slot",
+		Required:    false,
+	}}
+}
 
 func (c *qotdPublishCommand) RequiresGuild() bool       { return true }
 func (c *qotdPublishCommand) RequiresPermissions() bool { return true }
@@ -565,13 +573,27 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 	if strings.TrimSpace(deck.ChannelID) == "" {
 		return core.NewCommandError("Set a QOTD channel for the active deck before publishing manually.", false)
 	}
+	consumeAutomaticSlot := true
+	options := core.GetSubCommandOptions(ctx.Interaction)
+	for _, option := range options {
+		if option == nil || option.Name != publishConsumeAutomaticSlotOptionName {
+			continue
+		}
+		consumeAutomaticSlot = core.NewOptionExtractor(options).Bool(publishConsumeAutomaticSlotOptionName)
+		break
+	}
 
-	result, err := c.service.PublishNow(context.Background(), ctx.GuildID, ctx.Session)
+	result, err := c.service.PublishNowWithParams(context.Background(), ctx.GuildID, ctx.Session, applicationqotd.PublishNowParams{
+		ConsumeAutomaticSlot: &consumeAutomaticSlot,
+	})
 	if err != nil {
 		return translatePublishNowError(err)
 	}
 
 	message := fmt.Sprintf("Published QOTD question ID %d manually.", visibleQuestionID(result.Question))
+	if !consumeAutomaticSlot {
+		message = fmt.Sprintf("Published QOTD question ID %d manually without consuming the automatic slot.", visibleQuestionID(result.Question))
+	}
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
 	}

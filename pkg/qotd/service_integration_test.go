@@ -898,6 +898,82 @@ func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *t
 	}
 }
 
+func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, "123456789012345678")); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	first, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question 1",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(first) failed: %v", err)
+	}
+	second, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		Body:   "Question 2",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(second) failed: %v", err)
+	}
+
+	consumeAutomaticSlot := false
+	result, err := service.PublishNowWithParams(context.Background(), "g1", &discordgo.Session{}, PublishNowParams{
+		ConsumeAutomaticSlot: &consumeAutomaticSlot,
+	})
+	if err != nil {
+		t.Fatalf("PublishNowWithParams() failed: %v", err)
+	}
+	if result.Question.ID != first.ID {
+		t.Fatalf("expected non-consuming manual publish to use the first question, got %+v", result.Question)
+	}
+	if result.OfficialPost.ConsumeAutomaticSlot {
+		t.Fatalf("expected non-consuming manual publish record, got %+v", result.OfficialPost)
+	}
+
+	automaticQueue, err := service.GetAutomaticQueueState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
+	}
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusDue {
+		t.Fatalf("expected automatic slot to remain due, got %+v", automaticQueue)
+	}
+	if automaticQueue.SlotOfficialPost != nil {
+		t.Fatalf("expected no occupying automatic-slot post after non-consuming manual publish, got %+v", automaticQueue)
+	}
+	if automaticQueue.NextReadyQuestion == nil || automaticQueue.NextReadyQuestion.ID != second.ID {
+		t.Fatalf("expected next ready question to advance to the second item, got %+v", automaticQueue)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected scheduled publish to still run for the current slot")
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected one manual and one scheduled publish attempt, got %d", len(fake.publishedParams))
+	}
+
+	scheduledOfficial, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if scheduledOfficial == nil || scheduledOfficial.QuestionID != second.ID {
+		t.Fatalf("expected scheduled slot to still publish the second question, got %+v", scheduledOfficial)
+	}
+}
+
 func TestServiceGetAutomaticQueueStateReflectsManualPublishForCurrentSlot(t *testing.T) {
 	service, _, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
@@ -1934,6 +2010,67 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	}
 	if usedQuestion == nil || usedQuestion.Status != string(QuestionStatusUsed) || usedQuestion.UsedAt == nil {
 		t.Fatalf("expected scheduled question to be marked used, got %+v", usedQuestion)
+	}
+}
+
+func TestServiceEnableAfterCurrentSlotDueSuppressesImmediatePublish(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return afterBoundary }
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(false, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings(disabled) failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question held while QOTD is disabled",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	updated, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID))
+	if err != nil {
+		t.Fatalf("UpdateSettings(enabled) failed: %v", err)
+	}
+	if updated.SuppressScheduledPublishDateUTC != "2026-04-03" {
+		t.Fatalf("expected enabling after the boundary to suppress the current slot, got %+v", updated)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected scheduler to stay idle for the current slot immediately after enabling QOTD")
+	}
+	if len(fake.publishedParams) != 0 {
+		t.Fatalf("expected no publish attempts while the enabled slot is suppressed, got %+v", fake.publishedParams)
+	}
+
+	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if official != nil {
+		t.Fatalf("expected no official post for the suppressed current slot, got %+v", official)
+	}
+
+	storedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if storedQuestion == nil || storedQuestion.Status != string(QuestionStatusReady) || storedQuestion.UsedAt != nil {
+		t.Fatalf("expected ready question to remain untouched while the current slot is suppressed, got %+v", storedQuestion)
+	}
+
+	settings, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() failed: %v", err)
+	}
+	if settings.SuppressScheduledPublishDateUTC != "2026-04-03" {
+		t.Fatalf("expected persisted suppression for the current slot after enabling, got %+v", settings)
 	}
 }
 

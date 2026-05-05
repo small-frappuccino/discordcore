@@ -532,4 +532,21 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_questions DROP COLUMN IF EXISTS published_once_at`,
 		},
 	},
+	{
+		Version: 17,
+		UpSQL: []string{
+			`ALTER TABLE qotd_official_posts
+			 ADD COLUMN IF NOT EXISTS consume_automatic_slot BOOLEAN`,
+			`UPDATE qotd_official_posts
+			 SET consume_automatic_slot = TRUE
+			 WHERE consume_automatic_slot IS NULL`,
+			`ALTER TABLE qotd_official_posts
+			 ALTER COLUMN consume_automatic_slot SET DEFAULT TRUE`,
+			`ALTER TABLE qotd_official_posts
+			 ALTER COLUMN consume_automatic_slot SET NOT NULL`,
+		},
+		DownSQL: []string{
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS consume_automatic_slot`,
+		},
+	},
 }

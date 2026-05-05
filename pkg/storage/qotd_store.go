@@ -876,6 +876,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -892,7 +893,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			archived_at,
 			last_reconciled_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING
 			id,
 			guild_id,
@@ -900,6 +901,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -922,6 +924,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 		normalized.DeckNameSnapshot,
 		normalized.QuestionID,
 		normalized.PublishMode,
+		normalized.ConsumeAutomaticSlot,
 		normalized.PublishDateUTC,
 		normalized.State,
 		normalized.ChannelID,
@@ -988,6 +991,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1038,6 +1042,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1089,6 +1094,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1135,6 +1141,75 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 	return record, nil
 }
 
+func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
+	if guildID == "" || publishDateUTC.IsZero() {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	row := s.queryRowContext(ctx,
+		`SELECT
+			id,
+			guild_id,
+			deck_id,
+			deck_name_snapshot,
+			question_id,
+			publish_mode,
+			consume_automatic_slot,
+			publish_date_utc,
+			state,
+			channel_id,
+			question_list_thread_id,
+			question_list_entry_message_id,
+			discord_thread_id,
+			discord_starter_message_id,
+			answer_channel_id,
+			question_text_snapshot,
+			published_at,
+			grace_until,
+			archive_at,
+			closed_at,
+			archived_at,
+			last_reconciled_at,
+			created_at,
+			updated_at
+		FROM qotd_official_posts
+		WHERE guild_id = ?
+		  AND publish_date_utc = ?
+		  AND (publish_mode = 'scheduled' OR consume_automatic_slot = TRUE)
+		ORDER BY
+		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
+		  CASE
+		    WHEN published_at IS NOT NULL
+		      AND discord_thread_id IS NOT NULL
+		      AND discord_starter_message_id IS NOT NULL
+		      AND answer_channel_id IS NOT NULL THEN 0
+		    ELSE 1
+		  END,
+		  CASE WHEN publish_mode = 'scheduled' THEN 0 ELSE 1 END,
+		  COALESCE(published_at, updated_at) DESC,
+		  id DESC,
+		  updated_at DESC
+		LIMIT 1`,
+		guildID,
+		publishDateUTC,
+	)
+	record, err := scanQOTDOfficialPostRecord(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get automatic-slot qotd official post by date: %w", err)
+	}
+	return record, nil
+}
+
 func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -1156,6 +1231,7 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1227,6 +1303,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1294,6 +1371,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1368,6 +1446,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 			deck_name_snapshot,
 			question_id,
 			publish_mode,
+			consume_automatic_slot,
 			publish_date_utc,
 			state,
 			channel_id,
@@ -1655,6 +1734,9 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 
 	if rec.PublishMode == "" {
 		rec.PublishMode = "scheduled"
+	}
+	if rec.PublishMode == "scheduled" {
+		rec.ConsumeAutomaticSlot = true
 	}
 
 	if rec.GuildID == "" {
@@ -1967,6 +2049,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	var threadID sql.NullString
 	var starterMessageID sql.NullString
 	var answerChannelID sql.NullString
+	var consumeAutomaticSlot bool
 	var publishedAt sql.NullTime
 	var closedAt sql.NullTime
 	var archivedAt sql.NullTime
@@ -1978,6 +2061,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 		&record.DeckNameSnapshot,
 		&record.QuestionID,
 		&record.PublishMode,
+		&consumeAutomaticSlot,
 		&record.PublishDateUTC,
 		&record.State,
 		&record.ChannelID,
@@ -1998,6 +2082,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	); err != nil {
 		return nil, err
 	}
+	record.ConsumeAutomaticSlot = consumeAutomaticSlot
 	record.QuestionListThreadID = strings.TrimSpace(questionListThreadID.String)
 	record.QuestionListEntryMessageID = strings.TrimSpace(questionListEntryMessageID.String)
 	record.DiscordThreadID = threadID.String

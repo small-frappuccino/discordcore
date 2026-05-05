@@ -350,6 +350,61 @@ func TestQOTDRoutesPublishNowReturnsThreadAndAnswerChannelTargets(t *testing.T) 
 	}
 }
 
+func TestQOTDRoutesPublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
+	t.Parallel()
+
+	srv, service, store, _ := newQOTDControlTestServer(t)
+	handler := srv.httpServer.Handler
+	schedule := routeQOTDSchedule()
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
+		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+		Schedule:     schedule,
+		Decks: []files.QOTDDeckConfig{{
+			ID:        files.LegacyQOTDDefaultDeckID,
+			Name:      files.LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: qotdRouteChannelID,
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", qotd.QuestionMutation{
+		Body:   "Publish route without consuming the automatic slot",
+		Status: qotd.QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	publishDate := qotd.CurrentPublishDateUTC(schedule, time.Now().UTC())
+	publishRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/actions/publish-now", map[string]any{
+		"consume_automatic_slot": false,
+	})
+	if publishRec.Code != 200 {
+		t.Fatalf("publish qotd status=%d body=%q", publishRec.Code, publishRec.Body.String())
+	}
+
+	publishResp := decodeQOTDPublishRouteResponse(t, publishRec.Body.String())
+	if publishResp.Result.OfficialPost == nil {
+		t.Fatalf("expected official post payload, got body=%q", publishRec.Body.String())
+	}
+
+	officialPost, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", publishDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if officialPost == nil {
+		t.Fatal("expected stored manual official post")
+	}
+	if officialPost.PublishMode != string(qotd.PublishModeManual) {
+		t.Fatalf("expected manual publish mode, got %+v", officialPost)
+	}
+	if officialPost.ConsumeAutomaticSlot {
+		t.Fatalf("expected non-consuming manual official post, got %+v", officialPost)
+	}
+}
+
 func TestQOTDRoutesCollectAndExportArchivedQuestions(t *testing.T) {
 	t.Parallel()
 

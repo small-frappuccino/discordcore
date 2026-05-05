@@ -395,4 +395,69 @@ func TestQOTDPublishCommandTreatsRecoveredPublishedResultAsSuccess(t *testing.T)
 	if service.lastPublishGuild != guildID || service.lastPublishSession != session {
 		t.Fatalf("expected publish command to forward guild and session, got guild=%q session=%p", service.lastPublishGuild, service.lastPublishSession)
 	}
+	if service.lastPublishParams.ConsumeAutomaticSlot == nil || !*service.lastPublishParams.ConsumeAutomaticSlot {
+		t.Fatalf("expected publish command to default to consuming the automatic slot, got %+v", service.lastPublishParams)
+	}
+}
+
+func TestQOTDPublishCommandCanSkipAutomaticSlotConsumption(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	service := &publishCommandStubService{
+		settings: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "channel-123",
+			}},
+		},
+		publishResult: &applicationqotd.PublishResult{
+			Question: storage.QOTDQuestionRecord{
+				ID:        18,
+				DisplayID: 18,
+				GuildID:   guildID,
+				DeckID:    files.LegacyQOTDDefaultDeckID,
+				Body:      "Non-consuming publish",
+				Status:    string(applicationqotd.QuestionStatusUsed),
+				UsedAt:    &publishedAt,
+			},
+			OfficialPost: storage.QOTDOfficialPostRecord{
+				ID:                    100,
+				GuildID:               guildID,
+				DeckID:                files.LegacyQOTDDefaultDeckID,
+				DeckNameSnapshot:      files.LegacyQOTDDefaultDeckName,
+				QuestionID:            18,
+				PublishMode:           string(applicationqotd.PublishModeManual),
+				ConsumeAutomaticSlot:  false,
+				PublishDateUTC:        time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+				ChannelID:             "channel-123",
+				DiscordStarterMessageID: "message-100",
+				PublishedAt:           &publishedAt,
+			},
+			PostURL: discordqotd.BuildMessageJumpURL(guildID, "channel-123", "message-100"),
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{{
+		Name:  publishConsumeAutomaticSlotOptionName,
+		Type:  discordgo.ApplicationCommandOptionBoolean,
+		Value: false,
+	}}))
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "without consuming the automatic slot") {
+		t.Fatalf("expected publish response to mention non-consuming mode, got %q", resp.Data.Content)
+	}
+	if service.lastPublishParams.ConsumeAutomaticSlot == nil || *service.lastPublishParams.ConsumeAutomaticSlot {
+		t.Fatalf("expected publish command to forward consume_automatic_slot=false, got %+v", service.lastPublishParams)
+	}
 }

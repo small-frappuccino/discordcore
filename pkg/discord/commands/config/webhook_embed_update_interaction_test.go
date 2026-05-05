@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"

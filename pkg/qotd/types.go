@@ -23,6 +23,14 @@ const (
 	PublishModeManual    PublishMode = "manual"
 )
 
+type PublishNowParams struct {
+	ConsumeAutomaticSlot *bool `json:"consume_automatic_slot,omitempty"`
+}
+
+func (p PublishNowParams) ShouldConsumeAutomaticSlot() bool {
+	return p.ConsumeAutomaticSlot == nil || *p.ConsumeAutomaticSlot
+}
+
 type OfficialPostState string
 
 const (

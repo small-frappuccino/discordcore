@@ -24,6 +24,7 @@ type publishCommandStubService struct {
 	publishCalls       int
 	lastPublishGuild   string
 	lastPublishSession *discordgo.Session
+	lastPublishParams  applicationqotd.PublishNowParams
 }
 
 type listCommandStubService struct {
@@ -79,10 +80,11 @@ func (s *publishCommandStubService) ImportArchivedQuestions(context.Context, str
 	panic("unexpected ImportArchivedQuestions call")
 }
 
-func (s *publishCommandStubService) PublishNow(_ context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error) {
+func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	s.publishCalls++
 	s.lastPublishGuild = guildID
 	s.lastPublishSession = session
+	s.lastPublishParams = params
 	return s.publishResult, s.publishErr
 }
 
@@ -130,8 +132,8 @@ func (s *listCommandStubService) ImportArchivedQuestions(context.Context, string
 	panic("unexpected ImportArchivedQuestions call")
 }
 
-func (s *listCommandStubService) PublishNow(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
-	panic("unexpected PublishNow call")
+func (s *listCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
+	panic("unexpected PublishNowWithParams call")
 }
 
 func (s *importCommandStubService) Settings(string) (files.QOTDConfig, error) {
@@ -175,8 +177,8 @@ func (s *importCommandStubService) ImportArchivedQuestions(_ context.Context, gu
 	return s.importResult, s.importErr
 }
 
-func (s *importCommandStubService) PublishNow(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
-	panic("unexpected PublishNow call")
+func (s *importCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
+	panic("unexpected PublishNowWithParams call")
 }
 
 type interactionRecorder struct {

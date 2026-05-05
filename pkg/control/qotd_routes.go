@@ -1,8 +1,10 @@
 package control
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -423,19 +425,35 @@ func (s *Server) handleQOTDCollectorRemoveDuplicatesPost(w http.ResponseWriter, 
 }
 
 func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
+	type publishNowRequest struct {
+		ConsumeAutomaticSlot *bool `json:"consume_automatic_slot,omitempty"`
+	}
+	payload := publishNowRequest{}
+	if r.Body != nil && r.ContentLength != 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, defaultMaxBodyBytes)
+		defer r.Body.Close()
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+			http.Error(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
 	session, err := s.discordSessionForGuildDomain(guildID, files.BotDomainQOTD)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve discord session: %v", err), http.StatusServiceUnavailable)
 		return
 	}
 
-	result, err := s.qotdService.PublishNow(r.Context(), guildID, session)
+	result, err := s.qotdService.PublishNowWithParams(r.Context(), guildID, session, qotd.PublishNowParams{
+		ConsumeAutomaticSlot: payload.ConsumeAutomaticSlot,
+	})
 	if err != nil {
 		status := qotdErrorStatus(err)
 		log.ApplicationLogger().Warn(
 			"QOTD manual publish failed",
 			"operation", "control.qotd.publish_now",
 			"guildID", guildID,
+			"consumeAutomaticSlot", payload.ConsumeAutomaticSlot == nil || *payload.ConsumeAutomaticSlot,
 			"userID", settingsRequestUserID(auth),
 			"err", err,
 		)

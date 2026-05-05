@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
