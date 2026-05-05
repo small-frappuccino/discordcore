@@ -47,6 +47,54 @@ func TestDuePublishDateUTCBeforeDailyBoundaryUsesPreviousDay(t *testing.T) {
 	}
 }
 
+func TestCurrentPublishDateUTCExactBoundaryUsesToday(t *testing.T) {
+	t.Parallel()
+
+	schedule := testSchedule(t, 12, 43)
+	now := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	got := CurrentPublishDateUTC(schedule, now)
+	want := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("expected current publish date %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
+	}
+}
+
+func TestCurrentPublishDateUTCAfterBoundaryUsesTomorrow(t *testing.T) {
+	t.Parallel()
+
+	schedule := testSchedule(t, 12, 43)
+	now := time.Date(2026, 4, 3, 12, 43, 1, 0, time.UTC)
+	got := CurrentPublishDateUTC(schedule, now)
+	want := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("expected current publish date %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
+	}
+}
+
+func TestDuePublishDateUTCExactBoundaryUsesToday(t *testing.T) {
+	t.Parallel()
+
+	schedule := testSchedule(t, 12, 43)
+	now := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	got := DuePublishDateUTC(schedule, now)
+	want := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("expected due publish date %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
+	}
+}
+
+func TestDuePublishDateUTCAfterBoundaryUsesToday(t *testing.T) {
+	t.Parallel()
+
+	schedule := testSchedule(t, 12, 43)
+	now := time.Date(2026, 4, 3, 12, 43, 1, 0, time.UTC)
+	got := DuePublishDateUTC(schedule, now)
+	want := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("expected due publish date %s, got %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
+	}
+}
+
 func TestUpcomingPublishDateUTCTracksNextBoundary(t *testing.T) {
 	t.Parallel()
 

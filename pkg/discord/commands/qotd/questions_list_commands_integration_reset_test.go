@@ -179,7 +179,7 @@ func TestQuestionsResetAfterManualPublishKeepsCurrentSlotPausedAndListPagination
 	if !strings.Contains(firstResetResp.Data.Content, "cleared 1 QOTD publish record") {
 		t.Fatalf("expected first reset to clear the current-slot publish record, got %q", firstResetResp.Data.Content)
 	}
-	if !strings.Contains(firstResetResp.Data.Content, "Automatic publishing for the current slot is paused until you publish manually.") {
+	if !strings.Contains(firstResetResp.Data.Content, "Automatic publishing for this slot remains paused while it is suppressed.") {
 		t.Fatalf("expected first reset to pause the current slot after clearing it, got %q", firstResetResp.Data.Content)
 	}
 
@@ -238,7 +238,7 @@ func TestQuestionsResetAfterManualPublishKeepsCurrentSlotPausedAndListPagination
 	if !strings.Contains(secondResetResp.Data.Content, "cleared 1 QOTD publish record") {
 		t.Fatalf("expected second reset to clear the republished current-slot record, got %q", secondResetResp.Data.Content)
 	}
-	if !strings.Contains(secondResetResp.Data.Content, "Automatic publishing for the current slot is paused until you publish manually.") {
+	if !strings.Contains(secondResetResp.Data.Content, "Automatic publishing for this slot remains paused while it is suppressed.") {
 		t.Fatalf("expected second reset to keep the current slot paused, got %q", secondResetResp.Data.Content)
 	}
 	if len(fake.publishedParams) != 2 {
