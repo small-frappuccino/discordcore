@@ -286,7 +286,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *tes
 					GuildID:       "g1",
 					BotInstanceID: "alice",
 					DomainBotInstanceIDs: map[string]string{
-						files.BotDomainQOTD: "yuzuha",
+						files.BotDomainQOTD: "companion",
 					},
 				}}
 				return nil

@@ -64,8 +64,8 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 			},
 			{
-				GuildID:       "yuzuha-guild",
-				BotInstanceID: "yuzuha",
+				GuildID:       "companion-guild",
+				BotInstanceID: "companion",
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Monitoring:    boolPtr(true),
@@ -84,28 +84,28 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 						ID:        files.LegacyQOTDDefaultDeckID,
 						Name:      files.LegacyQOTDDefaultDeckName,
 						Enabled:   true,
-						ChannelID: "question-yuzuha",
+						ChannelID: "question-companion",
 					}},
 				},
 			},
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "yuzuha", "alice")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
 	if !capabilities.monitoring {
-		t.Fatal("expected monitoring capability for yuzuha runtime")
+		t.Fatal("expected monitoring capability for companion runtime")
 	}
 	if !capabilities.commands {
-		t.Fatal("expected commands capability for yuzuha runtime")
+		t.Fatal("expected commands capability for companion runtime")
 	}
 	if !capabilities.admin {
-		t.Fatal("expected admin commands capability for yuzuha runtime")
+		t.Fatal("expected admin commands capability for companion runtime")
 	}
 	if !capabilities.userPrune {
-		t.Fatal("expected user prune capability for yuzuha runtime")
+		t.Fatal("expected user prune capability for companion runtime")
 	}
 	if !capabilities.qotd {
-		t.Fatal("expected qotd capability for yuzuha runtime")
+		t.Fatal("expected qotd capability for companion runtime")
 	}
 
 	required := discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessageReactions
@@ -126,7 +126,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
-	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "yuzuha", "alice")
+	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "alice")
 	if capabilities.monitoring || capabilities.commands || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotd {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
@@ -239,7 +239,7 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 				},
 			},
 			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "yuzuha",
+				files.BotDomainQOTD: "companion",
 			},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
@@ -247,7 +247,7 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 					ID:        files.LegacyQOTDDefaultDeckID,
 					Name:      files.LegacyQOTDDefaultDeckName,
 					Enabled:   true,
-					ChannelID: "question-yuzuha",
+					ChannelID: "question-companion",
 				}},
 			},
 		}},
@@ -261,17 +261,17 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 		t.Fatalf("expected alice runtime to lose qotd capability when qotd domain is overridden, got %+v", aliceCapabilities)
 	}
 
-	yuzuhaCapabilities := resolveBotRuntimeCapabilities(cfg, "yuzuha", "alice")
-	if !yuzuhaCapabilities.qotd {
-		t.Fatal("expected yuzuha runtime to gain qotd capability from domain override")
+	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
+	if !companionCapabilities.qotd {
+		t.Fatal("expected companion runtime to gain qotd capability from domain override")
 	}
-	if !yuzuhaCapabilities.commands {
-		t.Fatalf("expected yuzuha runtime to start command handling for qotd-only catalog, got %+v", yuzuhaCapabilities)
+	if !companionCapabilities.commands {
+		t.Fatalf("expected companion runtime to start command handling for qotd-only catalog, got %+v", companionCapabilities)
 	}
-	if yuzuhaCapabilities.commandsDefaultDomain || yuzuhaCapabilities.admin || yuzuhaCapabilities.monitoring || yuzuhaCapabilities.userPrune {
-		t.Fatalf("expected yuzuha runtime to gain only qotd command catalog capability from domain override, got %+v", yuzuhaCapabilities)
+	if companionCapabilities.commandsDefaultDomain || companionCapabilities.admin || companionCapabilities.monitoring || companionCapabilities.userPrune {
+		t.Fatalf("expected companion runtime to gain only qotd command catalog capability from domain override, got %+v", companionCapabilities)
 	}
-	if yuzuhaCapabilities.intents != discordgo.IntentsGuilds {
-		t.Fatalf("expected qotd-only runtime to keep minimal intents, got %d", yuzuhaCapabilities.intents)
+	if companionCapabilities.intents != discordgo.IntentsGuilds {
+		t.Fatalf("expected qotd-only runtime to keep minimal intents, got %d", companionCapabilities.intents)
 	}
 }

@@ -12,16 +12,16 @@ func TestGuildConfigEffectiveBotInstanceIDForDomainUsesOverrideAndFallback(t *te
 		GuildID:       "guild-1",
 		BotInstanceID: "alice",
 		DomainBotInstanceIDs: map[string]string{
-			" QOTD ": " yuzuha ",
+			" QOTD ": " companion ",
 			"tickets": "   ",
 		},
 	}
 
-	if got := guild.BotInstanceIDOverrideForDomain(BotDomainQOTD); got != "yuzuha" {
-		t.Fatalf("expected qotd override to resolve yuzuha, got %q", got)
+	if got := guild.BotInstanceIDOverrideForDomain(BotDomainQOTD); got != "companion" {
+		t.Fatalf("expected qotd override to resolve companion, got %q", got)
 	}
-	if got := guild.EffectiveBotInstanceIDForDomain(BotDomainQOTD, "default"); got != "yuzuha" {
-		t.Fatalf("expected qotd effective binding=yuzuha, got %q", got)
+	if got := guild.EffectiveBotInstanceIDForDomain(BotDomainQOTD, "default"); got != "companion" {
+		t.Fatalf("expected qotd effective binding=companion, got %q", got)
 	}
 	if got := guild.EffectiveBotInstanceIDForDomain("tickets", "default"); got != "alice" {
 		t.Fatalf("expected empty tickets override to fall back to guild binding alice, got %q", got)
@@ -45,11 +45,11 @@ func TestBotConfigGuildsForBotInstanceForDomainUsesDomainAwareResolution(t *test
 			GuildID:       "g1",
 			BotInstanceID: "alice",
 			DomainBotInstanceIDs: map[string]string{
-				BotDomainQOTD: "yuzuha",
+				BotDomainQOTD: "companion",
 			},
 		},
 		{GuildID: "g2", BotInstanceID: "alice"},
-		{GuildID: "g3", BotInstanceID: "yuzuha"},
+		{GuildID: "g3", BotInstanceID: "companion"},
 		{GuildID: "g4"},
 	}}
 
@@ -59,8 +59,8 @@ func TestBotConfigGuildsForBotInstanceForDomainUsesDomainAwareResolution(t *test
 	if got := guildIDsForTest(cfg.GuildsForBotInstanceForDomain(BotDomainQOTD, "alice", "alice")); !reflect.DeepEqual(got, []string{"g2", "g4"}) {
 		t.Fatalf("expected qotd alice guilds [g2 g4], got %+v", got)
 	}
-	if got := guildIDsForTest(cfg.GuildsForBotInstanceForDomain(BotDomainQOTD, "yuzuha", "alice")); !reflect.DeepEqual(got, []string{"g1", "g3"}) {
-		t.Fatalf("expected qotd yuzuha guilds [g1 g3], got %+v", got)
+	if got := guildIDsForTest(cfg.GuildsForBotInstanceForDomain(BotDomainQOTD, "companion", "alice")); !reflect.DeepEqual(got, []string{"g1", "g3"}) {
+		t.Fatalf("expected qotd companion guilds [g1 g3], got %+v", got)
 	}
 	if got := guildIDsForTest(cfg.GuildsForBotInstanceForDomain("moderation", "alice", "alice")); !reflect.DeepEqual(got, []string{"g1", "g2", "g4"}) {
 		t.Fatalf("expected unspecified domain to fall back to legacy guild binding, got %+v", got)
@@ -82,7 +82,7 @@ func TestBotConfigHasDomainBotInstanceOverrides(t *testing.T) {
 		t.Fatal("expected blank domain override values to be ignored")
 	}
 
-	cfg.Guilds[1].DomainBotInstanceIDs[BotDomainQOTD] = "yuzuha"
+	cfg.Guilds[1].DomainBotInstanceIDs[BotDomainQOTD] = "companion"
 	if !cfg.HasDomainBotInstanceOverrides() {
 		t.Fatal("expected qotd override to trigger domain override detection")
 	}

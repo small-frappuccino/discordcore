@@ -163,7 +163,7 @@ func TestValidateBotConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
 			GuildID:       "g1",
 			BotInstanceID: " alice ",
 			DomainBotInstanceIDs: map[string]string{
-				" QOTD ": " yuzuha ",
+				" QOTD ": " companion ",
 			},
 		}},
 	}
@@ -174,8 +174,8 @@ func TestValidateBotConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
 	if got := cfg.Guilds[0].BotInstanceID; got != "alice" {
 		t.Fatalf("expected guild bot instance to normalize to alice, got %q", got)
 	}
-	if got := cfg.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
-		t.Fatalf("expected qotd override to normalize to yuzuha, got %q", got)
+	if got := cfg.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
+		t.Fatalf("expected qotd override to normalize to companion, got %q", got)
 	}
 }
 
@@ -185,7 +185,7 @@ func TestValidateBotConfigRejectsReservedDomainBotInstanceBinding(t *testing.T) 
 			GuildID:       "g1",
 			BotInstanceID: "alice",
 			DomainBotInstanceIDs: map[string]string{
-				"default": "yuzuha",
+				"default": "companion",
 			},
 		}},
 	}
@@ -206,7 +206,7 @@ func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) 
 			GuildID:       "g1",
 			BotInstanceID: " alice ",
 			DomainBotInstanceIDs: map[string]string{
-				" QOTD ": " yuzuha ",
+				" QOTD ": " companion ",
 			},
 		}},
 	}
@@ -226,8 +226,8 @@ func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) 
 	if got := gcfg.BotInstanceID; got != "alice" {
 		t.Fatalf("expected guild bot instance normalized to alice, got %q", got)
 	}
-	if got := gcfg.DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
-		t.Fatalf("expected qotd override persisted as yuzuha, got %q", got)
+	if got := gcfg.DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
+		t.Fatalf("expected qotd override persisted as companion, got %q", got)
 	}
 
 	persisted, err := store.Load()
@@ -237,7 +237,7 @@ func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) 
 	if got := persisted.Guilds[0].BotInstanceID; got != "alice" {
 		t.Fatalf("expected persisted guild bot instance normalized to alice, got %q", got)
 	}
-	if got := persisted.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
-		t.Fatalf("expected persisted qotd override normalized to yuzuha, got %q", got)
+	if got := persisted.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
+		t.Fatalf("expected persisted qotd override normalized to companion, got %q", got)
 	}
 }

@@ -123,7 +123,7 @@ func TestRunExplainsMissingKnownTokens(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing token error")
 	}
-	for _, tokenEnv := range []string{productionTokenEnv, developmentTokenEnv, yuzuhaTokenEnv} {
+	for _, tokenEnv := range []string{productionTokenEnv, developmentTokenEnv, companionTokenEnv} {
 		if !strings.Contains(err.Error(), tokenEnv) {
 			t.Fatalf("expected error to mention %s, got %v", tokenEnv, err)
 		}
@@ -138,16 +138,16 @@ func TestRunRejectsUnknownFlag(t *testing.T) {
 	}
 }
 
-func TestConfiguredBotCatalogAllowsAliceAndYuzuhaFallback(t *testing.T) {
+func TestConfiguredBotCatalogAllowsAliceAndCompanionFallback(t *testing.T) {
 	catalog := configuredBotCatalog(productionTokenEnv)
 	if len(catalog) != 2 {
-		t.Fatalf("expected alice+yuzuha catalog, got %+v", catalog)
+		t.Fatalf("expected alice+companion catalog, got %+v", catalog)
 	}
 	if catalog[0].ID != "alice" || catalog[0].TokenEnv != productionTokenEnv || !catalog[0].Optional {
 		t.Fatalf("unexpected alice catalog entry: %+v", catalog[0])
 	}
-	if catalog[1].ID != "yuzuha" || catalog[1].TokenEnv != yuzuhaTokenEnv || !catalog[1].Optional {
-		t.Fatalf("unexpected yuzuha catalog entry: %+v", catalog[1])
+	if catalog[1].ID != "companion" || catalog[1].TokenEnv != companionTokenEnv || !catalog[1].Optional {
+		t.Fatalf("unexpected companion catalog entry: %+v", catalog[1])
 	}
 }
 

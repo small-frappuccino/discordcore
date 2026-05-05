@@ -535,7 +535,7 @@ func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
 	srv.SetDefaultBotInstanceID("alice")
 	setTestBotGuildBindings(srv,
 		BotGuildBinding{GuildID: "g2", BotInstanceID: "alice"},
-		BotGuildBinding{GuildID: "g2", BotInstanceID: "yuzuha"},
+		BotGuildBinding{GuildID: "g2", BotInstanceID: "companion"},
 	)
 	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
 		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
@@ -553,7 +553,7 @@ func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
 		srv.httpServer.Handler,
 		http.MethodPost,
 		"/v1/settings/guilds",
-		registerGuildRequest{GuildID: "g2", BotInstanceID: "yuzuha"},
+		registerGuildRequest{GuildID: "g2", BotInstanceID: "companion"},
 	)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
@@ -563,10 +563,10 @@ func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode guild registration response: %v", err)
 	}
-	if response.Workspace.BotInstanceID != "yuzuha" {
-		t.Fatalf("expected workspace bot_instance_id=yuzuha, got %+v", response.Workspace)
+	if response.Workspace.BotInstanceID != "companion" {
+		t.Fatalf("expected workspace bot_instance_id=companion, got %+v", response.Workspace)
 	}
-	if strings.Join(response.Workspace.AvailableBotInstanceIDs, ",") != "alice,yuzuha" {
+	if strings.Join(response.Workspace.AvailableBotInstanceIDs, ",") != "alice,companion" {
 		t.Fatalf("unexpected available bot instances: %+v", response.Workspace.AvailableBotInstanceIDs)
 	}
 
@@ -575,8 +575,8 @@ func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
 	if !ok {
 		t.Fatal("expected registered guild g2 in config")
 	}
-	if guild.BotInstanceID != "yuzuha" {
-		t.Fatalf("expected persisted bot_instance_id=yuzuha, got %+v", guild)
+	if guild.BotInstanceID != "companion" {
+		t.Fatalf("expected persisted bot_instance_id=companion, got %+v", guild)
 	}
 }
 

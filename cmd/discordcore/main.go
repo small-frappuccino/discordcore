@@ -20,7 +20,7 @@ const (
 	runtimeAppName      = "alicebot"
 	productionTokenEnv  = "ALICE_BOT_PRODUCTION_TOKEN"
 	developmentTokenEnv = "ALICE_BOT_DEVELOPMENT_TOKEN"
-	yuzuhaTokenEnv      = "YUZUHA_BOT_TOKEN"
+	companionTokenEnv   = "COMPANION_BOT_TOKEN"
 	localControlAddr    = "127.0.0.1:8443"
 	localControlOrigin  = "https://alice.localhost:8443"
 )
@@ -74,8 +74,8 @@ func configuredBotCatalog(primaryTokenEnv string) []discordcoreapp.BotInstanceDe
 			Optional: true,
 		},
 		{
-			ID:       "yuzuha",
-			TokenEnv: yuzuhaTokenEnv,
+			ID:       "companion",
+			TokenEnv: companionTokenEnv,
 			Optional: true,
 		},
 	}
@@ -110,7 +110,7 @@ func availableTokenEnv() string {
 
 func loadKnownBotTokenEnvs(primaryTokenEnv string) {
 	_, _ = util.LoadEnvWithLocalBinFallback(primaryTokenEnv)
-	_, _ = util.LoadEnvWithLocalBinFallback(yuzuhaTokenEnv)
+	_, _ = util.LoadEnvWithLocalBinFallback(companionTokenEnv)
 }
 
 func normalizeRunError(err error, testMode bool) error {
@@ -121,7 +121,7 @@ func normalizeRunError(err error, testMode bool) error {
 		return err
 	}
 
-	checkedEnvs := []string{developmentTokenEnv, yuzuhaTokenEnv}
+	checkedEnvs := []string{developmentTokenEnv, companionTokenEnv}
 	if !testMode {
 		checkedEnvs = append([]string{productionTokenEnv}, checkedEnvs...)
 	}

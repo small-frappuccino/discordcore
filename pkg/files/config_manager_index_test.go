@@ -67,7 +67,7 @@ func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 			GuildID:       "g1",
 			BotInstanceID: "alice",
 			DomainBotInstanceIDs: map[string]string{
-				BotDomainQOTD: "yuzuha",
+				BotDomainQOTD: "companion",
 			},
 			Channels: ChannelsConfig{
 				MessageDelete: "c1",
@@ -90,7 +90,7 @@ func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 	if got := fresh.Guilds[0].Channels.MessageDelete; got != "c1" {
 		t.Fatalf("expected original channel to remain unchanged, got %q", got)
 	}
-	if got := fresh.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "yuzuha" {
+	if got := fresh.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
 		t.Fatalf("expected original domain bot binding to remain unchanged, got %q", got)
 	}
 }

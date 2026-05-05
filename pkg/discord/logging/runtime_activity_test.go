@@ -41,7 +41,7 @@ func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:        runErrWithTimeoutContext,
 		EventTimeout:  time.Second,
-		BotInstanceID: "yuzuha",
+		BotInstanceID: "companion",
 		Now: func() time.Time {
 			return expected
 		},
@@ -49,7 +49,7 @@ func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
 
 	activity.MarkEvent(context.Background(), "test")
 
-	got, ok, err := store.LastEventForBot(context.Background(), "yuzuha")
+	got, ok, err := store.LastEventForBot(context.Background(), "companion")
 	if err != nil {
 		t.Fatalf("get last event by bot: %v", err)
 	}

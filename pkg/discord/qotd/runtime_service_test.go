@@ -106,7 +106,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 			GuildID:       "g-qotd-enabled",
 			BotInstanceID: "alice",
 			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "yuzuha",
+				files.BotDomainQOTD: "companion",
 			},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
@@ -122,7 +122,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 			GuildID:       "g-qotd-configured-disabled",
 			BotInstanceID: "alice",
 			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "yuzuha",
+				files.BotDomainQOTD: "companion",
 			},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
@@ -153,7 +153,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "yuzuha", "alice")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "companion", "alice")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -162,10 +162,10 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	service.runReconcileCycle(service.clock())
 
 	if len(fake.publishCalls) != 1 || fake.publishCalls[0] != "g-qotd-enabled" {
-		t.Fatalf("expected publish cycle to include only enabled qotd-domain guilds for yuzuha, got %v", fake.publishCalls)
+		t.Fatalf("expected publish cycle to include only enabled qotd-domain guilds for companion, got %v", fake.publishCalls)
 	}
 	if len(fake.reconcileCalls) != 2 {
-		t.Fatalf("expected reconcile cycle to include configured qotd-domain guilds for yuzuha, got %v", fake.reconcileCalls)
+		t.Fatalf("expected reconcile cycle to include configured qotd-domain guilds for companion, got %v", fake.reconcileCalls)
 	}
 	if fake.reconcileCalls[0] != "g-qotd-enabled" || fake.reconcileCalls[1] != "g-qotd-configured-disabled" {
 		t.Fatalf("unexpected reconcile target order: %v", fake.reconcileCalls)

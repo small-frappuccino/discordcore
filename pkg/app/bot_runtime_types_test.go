@@ -16,7 +16,7 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g2", BotInstanceID: "yuzuha"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g2", BotInstanceID: "companion"}); err != nil {
 		t.Fatalf("add guild g2: %v", err)
 	}
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g3", BotInstanceID: "alice"}); err != nil {
@@ -27,21 +27,21 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create alice session: %v", err)
 	}
-	yuzuhaSession, err := discordgo.New("Bot yuzuha-token")
+	companionSession, err := discordgo.New("Bot companion-token")
 	if err != nil {
-		t.Fatalf("create yuzuha session: %v", err)
+		t.Fatalf("create companion session: %v", err)
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice":  {instanceID: "alice", session: aliceSession},
-		"yuzuha": {instanceID: "yuzuha", session: yuzuhaSession},
+		"alice":     {instanceID: "alice", session: aliceSession},
+		"companion": {instanceID: "companion", session: companionSession},
 	}, "alice")
 
 	if got, err := resolver.sessionForGuild("g1"); err != nil || got != aliceSession {
 		t.Fatalf("expected alice session for g1, got %p err=%v want %p", got, err, aliceSession)
 	}
-	if got, err := resolver.sessionForGuild("g2"); err != nil || got != yuzuhaSession {
-		t.Fatalf("expected yuzuha session for g2, got %p err=%v want %p", got, err, yuzuhaSession)
+	if got, err := resolver.sessionForGuild("g2"); err != nil || got != companionSession {
+		t.Fatalf("expected companion session for g2, got %p err=%v want %p", got, err, companionSession)
 	}
 	if got, err := resolver.sessionForGuild("g3"); err != nil || got != aliceSession {
 		t.Fatalf("expected alice session for g3, got %p err=%v want %p", got, err, aliceSession)
@@ -59,7 +59,7 @@ func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T)
 		GuildID:       "g1",
 		BotInstanceID: "alice",
 		DomainBotInstanceIDs: map[string]string{
-			files.BotDomainQOTD: "yuzuha",
+			files.BotDomainQOTD: "companion",
 		},
 	}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
@@ -69,21 +69,21 @@ func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T)
 	if err != nil {
 		t.Fatalf("create alice session: %v", err)
 	}
-	yuzuhaSession, err := discordgo.New("Bot yuzuha-token")
+	companionSession, err := discordgo.New("Bot companion-token")
 	if err != nil {
-		t.Fatalf("create yuzuha session: %v", err)
+		t.Fatalf("create companion session: %v", err)
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice":  {instanceID: "alice", session: aliceSession},
-		"yuzuha": {instanceID: "yuzuha", session: yuzuhaSession},
+		"alice":     {instanceID: "alice", session: aliceSession},
+		"companion": {instanceID: "companion", session: companionSession},
 	}, "alice")
 
 	if got, err := resolver.sessionForGuild("g1"); err != nil || got != aliceSession {
 		t.Fatalf("expected legacy guild lookup to stay on alice, got %p err=%v want %p", got, err, aliceSession)
 	}
-	if got, err := resolver.sessionForGuildDomain("g1", files.BotDomainQOTD); err != nil || got != yuzuhaSession {
-		t.Fatalf("expected qotd domain lookup to use yuzuha, got %p err=%v want %p", got, err, yuzuhaSession)
+	if got, err := resolver.sessionForGuildDomain("g1", files.BotDomainQOTD); err != nil || got != companionSession {
+		t.Fatalf("expected qotd domain lookup to use companion, got %p err=%v want %p", got, err, companionSession)
 	}
 	if got, err := resolver.sessionForGuildDomain("g1", "moderation"); err != nil || got != aliceSession {
 		t.Fatalf("expected unspecified domain lookup to fall back to alice, got %p err=%v want %p", got, err, aliceSession)
@@ -159,17 +159,17 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create alice session: %v", err)
 	}
-	yuzuhaSession, err := discordgo.New("Bot yuzuha-token")
+	companionSession, err := discordgo.New("Bot companion-token")
 	if err != nil {
-		t.Fatalf("create yuzuha session: %v", err)
+		t.Fatalf("create companion session: %v", err)
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice":  {instanceID: "alice", session: aliceSession},
-		"yuzuha": {instanceID: "yuzuha", session: yuzuhaSession},
+		"alice":     {instanceID: "alice", session: aliceSession},
+		"companion": {instanceID: "companion", session: companionSession},
 	}, "alice")
 
-	if err := resolver.registerGuild(context.Background(), "g-new", "yuzuha"); err != nil {
+	if err := resolver.registerGuild(context.Background(), "g-new", "companion"); err != nil {
 		t.Fatalf("register guild: %v", err)
 	}
 
@@ -184,8 +184,8 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 	if guild == nil {
 		t.Fatal("expected dormant guild to be persisted")
 	}
-	if guild.BotInstanceID != "yuzuha" {
-		t.Fatalf("expected bot instance binding yuzuha, got %+v", guild)
+	if guild.BotInstanceID != "companion" {
+		t.Fatalf("expected bot instance binding companion, got %+v", guild)
 	}
 	if guild.Channels != (files.ChannelsConfig{}) {
 		t.Fatalf("expected no channel bootstrap during manual registration, got %+v", guild.Channels)
@@ -212,13 +212,13 @@ func TestResolveBotInstancesSkipsOptionalInstancesWithoutToken(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("ALICE_TOKEN", "alice-token")
-	t.Setenv("YUZUHA_TOKEN", "")
+	t.Setenv("COMPANION_TOKEN", "")
 
 	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
 		DefaultBotInstanceID: "alice",
 		BotCatalog: []BotInstanceDefinition{
 			{ID: "alice", TokenEnv: "ALICE_TOKEN"},
-			{ID: "yuzuha", TokenEnv: "YUZUHA_TOKEN", Optional: true},
+			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
 	if err != nil {
@@ -239,24 +239,24 @@ func TestResolveBotInstancesUsesFirstAvailableOptionalBotAsDefault(t *testing.T)
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("ALICE_TOKEN", "")
-	t.Setenv("YUZUHA_TOKEN", "yuzuha-token")
+	t.Setenv("COMPANION_TOKEN", "companion-token")
 
 	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
 		BotCatalog: []BotInstanceDefinition{
 			{ID: "alice", TokenEnv: "ALICE_TOKEN", Optional: true},
-			{ID: "yuzuha", TokenEnv: "YUZUHA_TOKEN", Optional: true},
+			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
 	if err != nil {
 		t.Fatalf("resolve bot instances: %v", err)
 	}
-	if defaultBotInstanceID != "yuzuha" {
-		t.Fatalf("expected yuzuha to become the default bot instance, got %q", defaultBotInstanceID)
+	if defaultBotInstanceID != "companion" {
+		t.Fatalf("expected companion to become the default bot instance, got %q", defaultBotInstanceID)
 	}
 	if len(resolved) != 1 {
-		t.Fatalf("expected only yuzuha to resolve, got %+v", resolved)
+		t.Fatalf("expected only companion to resolve, got %+v", resolved)
 	}
-	if resolved[0].ID != "yuzuha" || resolved[0].TokenEnv != "YUZUHA_TOKEN" || resolved[0].Token != "yuzuha-token" {
+	if resolved[0].ID != "companion" || resolved[0].TokenEnv != "COMPANION_TOKEN" || resolved[0].Token != "companion-token" {
 		t.Fatalf("unexpected resolved instance: %+v", resolved[0])
 	}
 }
@@ -285,12 +285,12 @@ func TestResolveBotInstancesReturnsSentinelWhenNoOptionalTokensAreConfigured(t *
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("ALICE_TOKEN", "")
-	t.Setenv("YUZUHA_TOKEN", "")
+	t.Setenv("COMPANION_TOKEN", "")
 
 	_, _, err := resolveBotInstances("", RunOptions{
 		BotCatalog: []BotInstanceDefinition{
 			{ID: "alice", TokenEnv: "ALICE_TOKEN", Optional: true},
-			{ID: "yuzuha", TokenEnv: "YUZUHA_TOKEN", Optional: true},
+			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
 	if err == nil {
@@ -308,19 +308,19 @@ func TestResolveBotInstancesRejectsDefaultWhenOptionalInstanceIsUnavailable(t *t
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("ALICE_TOKEN", "alice-token")
-	t.Setenv("YUZUHA_TOKEN", "")
+	t.Setenv("COMPANION_TOKEN", "")
 
 	_, _, err := resolveBotInstances("", RunOptions{
-		DefaultBotInstanceID: "yuzuha",
+		DefaultBotInstanceID: "companion",
 		BotCatalog: []BotInstanceDefinition{
 			{ID: "alice", TokenEnv: "ALICE_TOKEN"},
-			{ID: "yuzuha", TokenEnv: "YUZUHA_TOKEN", Optional: true},
+			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
 	if err == nil {
 		t.Fatal("expected missing default optional bot instance to fail")
 	}
-	if got := err.Error(); got != `default bot instance "yuzuha" is not present in the runtime catalog` {
+	if got := err.Error(); got != `default bot instance "companion" is not present in the runtime catalog` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

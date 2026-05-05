@@ -17,7 +17,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		botInstanceID: "yuzuha",
+		botInstanceID: "companion",
 	}
 
 	ms.handleGuildCreate(session, &discordgo.GuildCreate{
@@ -28,7 +28,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 	if len(cfg.Guilds) != 1 {
 		t.Fatalf("expected one guild persisted after guild create, got %+v", cfg.Guilds)
 	}
-	if cfg.Guilds[0].GuildID != guildID || cfg.Guilds[0].BotInstanceID != "yuzuha" {
+	if cfg.Guilds[0].GuildID != guildID || cfg.Guilds[0].BotInstanceID != "companion" {
 		t.Fatalf("unexpected persisted guild after guild create: %+v", cfg.Guilds[0])
 	}
 	if cfg.Guilds[0].Channels != (files.ChannelsConfig{}) {
