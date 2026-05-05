@@ -345,3 +345,91 @@ func TestResolveBotRuntimeCapabilitiesKeepsDormantQOTDCommandCatalogOnDomainOwne
 		t.Fatalf("expected dormant qotd bootstrap runtime to keep minimal intents, got %d", companionCapabilities.intents)
 	}
 }
+
+func TestResolveBotRuntimeCapabilitiesForDomainsCanDisableQOTDFallbackOnDefaultOwner(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := &files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: boolPtr(false),
+				Commands:   boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			Features: files.FeatureToggles{
+				Services: files.FeatureServiceToggles{
+					Commands: boolPtr(true),
+				},
+			},
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-alice",
+				}},
+			},
+		}},
+	}
+
+	capabilities := resolveBotRuntimeCapabilitiesForDomains(
+		cfg,
+		"alice",
+		"alice",
+		newRuntimeDomainSupport([]string{runtimeDefaultDomain}),
+	)
+	if !capabilities.commands || !capabilities.commandsDefaultDomain {
+		t.Fatalf("expected default-domain commands to stay enabled, got %+v", capabilities)
+	}
+	if capabilities.commandsQOTDDomain || capabilities.qotdRuntime {
+		t.Fatalf("expected qotd workload to stay disabled for a default-domain-only runtime, got %+v", capabilities)
+	}
+}
+
+func TestResolveBotRuntimeCapabilitiesForDomainsCanRunQOTDWithoutDefaultDomain(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := &files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: boolPtr(false),
+				Commands:   boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "companion",
+			},
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:        files.LegacyQOTDDefaultDeckID,
+					Name:      files.LegacyQOTDDefaultDeckName,
+					Enabled:   true,
+					ChannelID: "question-companion",
+				}},
+			},
+		}},
+	}
+
+	capabilities := resolveBotRuntimeCapabilitiesForDomains(
+		cfg,
+		"companion",
+		"alice",
+		newRuntimeDomainSupport([]string{files.BotDomainQOTD}),
+	)
+	if !capabilities.commands || !capabilities.commandsQOTDDomain || !capabilities.qotdRuntime {
+		t.Fatalf("expected qotd-only runtime to keep qotd workload, got %+v", capabilities)
+	}
+	if capabilities.commandsDefaultDomain || capabilities.monitoring || capabilities.admin || capabilities.userPrune {
+		t.Fatalf("expected qotd-only runtime to stay off the default-domain workload, got %+v", capabilities)
+	}
+}

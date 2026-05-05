@@ -235,6 +235,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	runtimeCapabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
 	controlServerRegistry := &controlServerHolder{}
+	domainSupport := newRuntimeDomainSupport(opts.SupportedDomains)
 	cleanupRuntimesOnReturn := true
 	defer func() {
 		if !cleanupRuntimesOnReturn {
@@ -278,7 +279,12 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	configSnapshot := configManager.Config()
 	for _, instance := range botInstances {
-		runtimeCapabilities[instance.ID] = resolveBotRuntimeCapabilities(configSnapshot, instance.ID, defaultBotInstanceID)
+		runtimeCapabilities[instance.ID] = resolveBotRuntimeCapabilitiesForDomains(
+			configSnapshot,
+			instance.ID,
+			defaultBotInstanceID,
+			domainSupport,
+		)
 	}
 
 	var openErr error
@@ -287,14 +293,21 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		return openErr
 	}
 
-	if err := validateConfiguredBotInstances(configManager.Config(), runtimes, defaultBotInstanceID); err != nil {
+	if err := validateConfiguredBotInstances(
+		configManager.Config(),
+		knownBotInstanceCatalog(runtimes, opts.KnownBotInstanceIDs),
+		defaultBotInstanceID,
+	); err != nil {
 		return fmt.Errorf("validate configured bot instances: %w", err)
 	}
 
 	runtimeResolver := newBotRuntimeResolver(configManager, runtimes, defaultBotInstanceID)
-	defaultSession, err := runtimeResolver.sessionForGuild("")
-	if err != nil {
-		return fmt.Errorf("resolve default discord session: %w", err)
+	var defaultSession *discordgo.Session
+	if domainSupport.supportsDefaultDomain() {
+		defaultSession, err = runtimeResolver.sessionForGuild("")
+		if err != nil {
+			return fmt.Errorf("resolve default discord session: %w", err)
+		}
 	}
 
 	partnerSyncService := partners.NewBoardSyncService(configManager)

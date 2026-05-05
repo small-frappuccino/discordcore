@@ -28,6 +28,9 @@ type RunOptions struct {
 	Control              ControlOptions
 	BotCatalog           []BotInstanceDefinition
 	DefaultBotInstanceID string
+	KnownBotInstanceIDs  []string
+	SupportedDomains     []string
+	DisableControl       bool
 }
 
 type ControlOptions struct {

@@ -9,9 +9,8 @@ import (
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 )
 
-var runDiscordCore = discordcoreapp.RunWithOptions
+var runDiscordQOTD = discordcoreapp.RunWithOptions
 
-// main is the entry point of the Discord bot runtime hosted in discordcore.
 func main() {
 	if err := run(os.Args[1:], os.Stderr); err != nil {
 		slog.Error("Fatal", "err", err)
@@ -20,5 +19,5 @@ func main() {
 }
 
 func run(args []string, output io.Writer) error {
-	return runtimecmd.Run(args, output, runtimecmd.MainSpec("discordcore"), runDiscordCore)
+	return runtimecmd.Run(args, output, runtimecmd.QOTDSpec("discordqotd"), runDiscordQOTD)
 }

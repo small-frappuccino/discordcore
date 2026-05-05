@@ -141,8 +141,12 @@ func scheduleStartupWebhookEmbedUpdates(
 	startupTasks.GoLight("startup_webhook_embed_updates", run)
 }
 
-
 func scheduleControlServerStartup(startupTasks *startupTaskOrchestrator, opts controlStartupTaskOptions) {
+	if opts.runOptions.DisableControl {
+		log.ApplicationLogger().Info("Control server startup skipped; disabled by run options")
+		return
+	}
+
 	run := func(ctx context.Context) error {
 		return startControlServerStartupTask(ctx, opts)
 	}

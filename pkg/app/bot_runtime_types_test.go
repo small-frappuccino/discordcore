@@ -325,6 +325,30 @@ func TestResolveBotInstancesRejectsDefaultWhenOptionalInstanceIsUnavailable(t *t
 	}
 }
 
+func TestResolveBotInstancesAllowsRemoteDefaultWhenDefaultDomainIsUnsupported(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("COMPANION_TOKEN", "companion-token")
+
+	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
+		DefaultBotInstanceID: "alice",
+		SupportedDomains:     []string{files.BotDomainQOTD},
+		BotCatalog: []BotInstanceDefinition{{
+			ID:       "companion",
+			TokenEnv: "COMPANION_TOKEN",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("resolve bot instances: %v", err)
+	}
+	if defaultBotInstanceID != "alice" {
+		t.Fatalf("expected remote default bot instance alice, got %q", defaultBotInstanceID)
+	}
+	if len(resolved) != 1 || resolved[0].ID != "companion" {
+		t.Fatalf("expected only companion to resolve locally, got %+v", resolved)
+	}
+}
+
 func TestValidateConfiguredBotInstancesRejectsUnknownBinding(t *testing.T) {
 	t.Parallel()
 
@@ -335,9 +359,9 @@ func TestValidateConfiguredBotInstancesRejectsUnknownBinding(t *testing.T) {
 		}},
 	}
 
-	err := validateConfiguredBotInstances(cfg, map[string]*botRuntime{
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
 		"alice": {instanceID: "alice"},
-	}, "alice")
+	}, nil), "alice")
 	if err == nil {
 		t.Fatal("expected validation error for unknown bot instance binding")
 	}
@@ -356,13 +380,34 @@ func TestValidateConfiguredBotInstancesRejectsUnknownDomainBinding(t *testing.T)
 		}},
 	}
 
-	err := validateConfiguredBotInstances(cfg, map[string]*botRuntime{
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
 		"alice": {instanceID: "alice"},
-	}, "alice")
+	}, nil), "alice")
 	if err == nil {
 		t.Fatal("expected validation error for unknown domain bot instance binding")
 	}
 	if got := err.Error(); got != `guild g1 domain "qotd" references unknown bot instance "missing"` {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateConfiguredBotInstancesAllowsKnownRemoteOwners(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "companion",
+			},
+		}},
+	}
+
+	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
+		"companion": {instanceID: "companion"},
+	}, []string{"alice"}), "alice")
+	if err != nil {
+		t.Fatalf("expected known remote owners to validate, got %v", err)
 	}
 }

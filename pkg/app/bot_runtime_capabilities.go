@@ -8,22 +8,36 @@ import (
 )
 
 type botRuntimeCapabilities struct {
-	monitoring bool
-	commands   bool
+	monitoring            bool
+	commands              bool
 	commandsDefaultDomain bool
-	commandsQOTDDomain   bool
-	admin      bool
-	automod    bool
-	userPrune  bool
-	qotdRuntime bool
-	warmup     bool
-	intents    discordgo.Intent
+	commandsQOTDDomain    bool
+	admin                 bool
+	automod               bool
+	userPrune             bool
+	qotdRuntime           bool
+	warmup                bool
+	intents               discordgo.Intent
 }
 
 func resolveBotRuntimeCapabilities(
 	cfg *files.BotConfig,
 	botInstanceID string,
 	defaultBotInstanceID string,
+) botRuntimeCapabilities {
+	return resolveBotRuntimeCapabilitiesForDomains(
+		cfg,
+		botInstanceID,
+		defaultBotInstanceID,
+		newRuntimeDomainSupport(nil),
+	)
+}
+
+func resolveBotRuntimeCapabilitiesForDomains(
+	cfg *files.BotConfig,
+	botInstanceID string,
+	defaultBotInstanceID string,
+	domainSupport runtimeDomainSupport,
 ) botRuntimeCapabilities {
 	capabilities := botRuntimeCapabilities{
 		intents: discordgo.IntentsGuilds,
@@ -32,23 +46,25 @@ func resolveBotRuntimeCapabilities(
 		return capabilities
 	}
 
-	guilds := cfg.GuildsForBotInstance(botInstanceID, defaultBotInstanceID)
-	qotdGuilds := cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, botInstanceID, defaultBotInstanceID)
-	if len(guilds) == 0 && len(qotdGuilds) == 0 {
+	normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+	if domainSupport.supports(files.BotDomainQOTD) {
+		qotdGuilds := cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, botInstanceID, defaultBotInstanceID)
+		for _, guild := range qotdGuilds {
+			if botRuntimeNeedsQOTDCommandCatalog(guild, normalizedBotInstanceID) {
+				capabilities.commands = true
+				capabilities.commandsQOTDDomain = true
+			}
+			if botRuntimeNeedsQOTDRuntime(guild) {
+				capabilities.qotdRuntime = true
+			}
+		}
+	}
+
+	if !domainSupport.supportsDefaultDomain() {
 		return capabilities
 	}
 
-	normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
-	for _, guild := range qotdGuilds {
-		if botRuntimeNeedsQOTDCommandCatalog(guild, normalizedBotInstanceID) {
-			capabilities.commands = true
-			capabilities.commandsQOTDDomain = true
-		}
-		if botRuntimeNeedsQOTDRuntime(guild) {
-			capabilities.qotdRuntime = true
-		}
-	}
-
+	guilds := cfg.GuildsForBotInstance(botInstanceID, defaultBotInstanceID)
 	for _, guild := range guilds {
 		features := cfg.ResolveFeatures(guild.GuildID)
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)

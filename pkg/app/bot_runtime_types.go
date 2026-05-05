@@ -54,6 +54,7 @@ type botRuntimeResolver struct {
 func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBotInstance, string, error) {
 	catalog := opts.BotCatalog
 	defaultBotInstanceID := strings.TrimSpace(opts.DefaultBotInstanceID)
+	domainSupport := newRuntimeDomainSupport(opts.SupportedDomains)
 	if len(catalog) == 0 {
 		primaryTokenEnv = strings.TrimSpace(primaryTokenEnv)
 		if primaryTokenEnv == "" {
@@ -111,11 +112,33 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 	if defaultBotInstanceID == "" && len(resolved) > 0 {
 		defaultBotInstanceID = resolved[0].ID
 	}
-	if _, ok := resolvedIDs[defaultBotInstanceID]; !ok {
-		return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultBotInstanceID)
+	if domainSupport.supportsDefaultDomain() {
+		if _, ok := resolvedIDs[defaultBotInstanceID]; !ok {
+			return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultBotInstanceID)
+		}
 	}
 
 	return resolved, defaultBotInstanceID, nil
+}
+
+func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []string) map[string]struct{} {
+	known := make(map[string]struct{}, len(runtimes)+len(additional))
+	for botInstanceID := range runtimes {
+		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+		if normalizedBotInstanceID == "" {
+			continue
+		}
+		known[normalizedBotInstanceID] = struct{}{}
+	}
+	for _, botInstanceID := range additional {
+		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+		if normalizedBotInstanceID == "" {
+			continue
+		}
+		known[normalizedBotInstanceID] = struct{}{}
+	}
+
+	return known
 }
 
 func resolveBotToken(tokenEnv string) string {
@@ -271,7 +294,7 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *discord
 
 func validateConfiguredBotInstances(
 	cfg *files.BotConfig,
-	runtimes map[string]*botRuntime,
+	knownBotInstanceIDs map[string]struct{},
 	defaultBotInstanceID string,
 ) error {
 	if cfg == nil {
@@ -282,7 +305,7 @@ func validateConfiguredBotInstances(
 		if botInstanceID == "" {
 			return fmt.Errorf("guild %s does not resolve to a bot instance", guild.GuildID)
 		}
-		if _, ok := runtimes[botInstanceID]; !ok {
+		if _, ok := knownBotInstanceIDs[botInstanceID]; !ok {
 			return fmt.Errorf("guild %s references unknown bot instance %q", guild.GuildID, botInstanceID)
 		}
 		for domain, explicitBotInstanceID := range guild.DomainBotInstanceIDs {
@@ -299,7 +322,7 @@ func validateConfiguredBotInstances(
 			if normalizedBotInstanceID == "" {
 				return fmt.Errorf("guild %s domain %q does not resolve to a bot instance", guild.GuildID, normalizedDomain)
 			}
-			if _, ok := runtimes[normalizedBotInstanceID]; !ok {
+			if _, ok := knownBotInstanceIDs[normalizedBotInstanceID]; !ok {
 				return fmt.Errorf("guild %s domain %q references unknown bot instance %q", guild.GuildID, normalizedDomain, normalizedBotInstanceID)
 			}
 		}
