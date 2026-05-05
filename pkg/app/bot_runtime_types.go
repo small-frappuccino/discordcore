@@ -53,7 +53,7 @@ type botRuntimeResolver struct {
 
 func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBotInstance, string, error) {
 	catalog := opts.BotCatalog
-	defaultBotInstanceID := strings.TrimSpace(opts.DefaultBotInstanceID)
+	defaultOwnerBotInstanceID := strings.TrimSpace(opts.DefaultOwnerBotInstanceID)
 	domainSupport := newRuntimeDomainSupport(opts.SupportedDomains)
 	if len(catalog) == 0 {
 		primaryTokenEnv = strings.TrimSpace(primaryTokenEnv)
@@ -109,16 +109,16 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 	if len(resolved) == 0 {
 		return nil, "", ErrNoBotTokensConfigured
 	}
-	if defaultBotInstanceID == "" && len(resolved) > 0 {
-		defaultBotInstanceID = resolved[0].ID
+	if defaultOwnerBotInstanceID == "" && len(resolved) > 0 {
+		defaultOwnerBotInstanceID = resolved[0].ID
 	}
 	if domainSupport.supportsDefaultDomain() {
-		if _, ok := resolvedIDs[defaultBotInstanceID]; !ok {
-			return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultBotInstanceID)
+		if _, ok := resolvedIDs[defaultOwnerBotInstanceID]; !ok {
+			return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultOwnerBotInstanceID)
 		}
 	}
 
-	return resolved, defaultBotInstanceID, nil
+	return resolved, defaultOwnerBotInstanceID, nil
 }
 
 func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []string) map[string]struct{} {

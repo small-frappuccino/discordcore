@@ -28,8 +28,8 @@ describe("useGuildRolesSettings", () => {
           workspace: {
             sections: {
               bot_routing: {
-                bot_instance_id: "alice",
-                available_bot_instance_ids: ["alice", "companion"],
+                bot_instance_id: "main",
+                available_bot_instance_ids: ["main", "companion"],
                 domain_bot_instance_ids: {
                   qotd: "companion",
                 },
@@ -71,8 +71,8 @@ describe("useGuildRolesSettings", () => {
       dashboardWriteRoleIds: [],
     });
     expect(firstHook.result.current.botRouting).toEqual({
-      botInstanceID: "alice",
-      availableBotInstanceIDs: ["alice", "companion"],
+      botInstanceID: "main",
+      availableBotInstanceIDs: ["main", "companion"],
       domainBotInstanceIDs: {
         qotd: "companion",
       },
@@ -90,8 +90,8 @@ describe("useGuildRolesSettings", () => {
       dashboardWriteRoleIds: [],
     });
     expect(secondHook.result.current.botRouting).toEqual({
-      botInstanceID: "alice",
-      availableBotInstanceIDs: ["alice", "companion"],
+      botInstanceID: "main",
+      availableBotInstanceIDs: ["main", "companion"],
       domainBotInstanceIDs: {
         qotd: "companion",
       },

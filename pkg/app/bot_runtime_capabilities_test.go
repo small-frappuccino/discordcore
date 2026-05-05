@@ -46,8 +46,8 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		},
 		Guilds: []files.GuildConfig{
 			{
-				GuildID:       "alice-guild",
-				BotInstanceID: "alice",
+				GuildID:       "main-guild",
+				BotInstanceID: "main",
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(true),
@@ -59,7 +59,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 						ID:        files.LegacyQOTDDefaultDeckID,
 						Name:      files.LegacyQOTDDefaultDeckName,
 						Enabled:   true,
-						ChannelID: "question-alice",
+						ChannelID: "question-main",
 					}},
 				},
 			},
@@ -91,7 +91,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main")
 	if !capabilities.monitoring {
 		t.Fatal("expected monitoring capability for companion runtime")
 	}
@@ -129,7 +129,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
-	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "alice")
+	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "main")
 	if capabilities.monitoring || capabilities.commands || capabilities.commandsDefaultDomain || capabilities.commandsQOTDDomain || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
@@ -155,7 +155,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		Guilds: []files.GuildConfig{
 			{
 				GuildID:       "g1",
-				BotInstanceID: "alice",
+				BotInstanceID: "main",
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(true),
@@ -173,7 +173,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 			},
 			{
 				GuildID:       "g2",
-				BotInstanceID: "alice",
+				BotInstanceID: "main",
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Monitoring: boolPtr(true),
@@ -194,18 +194,18 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "main", "main")
 	if !capabilities.commands {
-		t.Fatal("expected commands capability to include any guild assigned to alice")
+		t.Fatal("expected commands capability to include any guild assigned to main")
 	}
 	if !capabilities.monitoring {
-		t.Fatal("expected monitoring capability to include any guild assigned to alice")
+		t.Fatal("expected monitoring capability to include any guild assigned to main")
 	}
 	if !capabilities.commandsQOTDDomain {
-		t.Fatal("expected qotd command catalog capability to include any configured guild assigned to alice")
+		t.Fatal("expected qotd command catalog capability to include any configured guild assigned to main")
 	}
 	if !capabilities.qotdRuntime {
-		t.Fatal("expected qotd runtime capability to include any configured guild assigned to alice")
+		t.Fatal("expected qotd runtime capability to include any configured guild assigned to main")
 	}
 	if capabilities.intents&discordgo.IntentsGuildMessageReactions == 0 {
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
@@ -238,7 +238,7 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			Features: files.FeatureToggles{
 				Services: files.FeatureServiceToggles{
 					Commands: boolPtr(true),
@@ -259,15 +259,15 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 		}},
 	}
 
-	aliceCapabilities := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
-	if !aliceCapabilities.commands {
-		t.Fatal("expected alice runtime to keep command capability from guild-wide binding")
+	mainCapabilities := resolveBotRuntimeCapabilities(cfg, "main", "main")
+	if !mainCapabilities.commands {
+		t.Fatal("expected main runtime to keep command capability from guild-wide binding")
 	}
-	if aliceCapabilities.commandsQOTDDomain || aliceCapabilities.qotdRuntime {
-		t.Fatalf("expected alice runtime to lose qotd-specific capabilities when qotd domain is overridden, got %+v", aliceCapabilities)
+	if mainCapabilities.commandsQOTDDomain || mainCapabilities.qotdRuntime {
+		t.Fatalf("expected main runtime to lose qotd-specific capabilities when qotd domain is overridden, got %+v", mainCapabilities)
 	}
 
-	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
+	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main")
 	if !companionCapabilities.commandsQOTDDomain {
 		t.Fatal("expected companion runtime to gain qotd command catalog capability from domain override")
 	}
@@ -311,7 +311,7 @@ func TestResolveBotRuntimeCapabilitiesKeepsDormantQOTDCommandCatalogOnDomainOwne
 		},
 		Guilds: []files.GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -323,12 +323,12 @@ func TestResolveBotRuntimeCapabilitiesKeepsDormantQOTDCommandCatalogOnDomainOwne
 		}},
 	}
 
-	aliceCapabilities := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
-	if aliceCapabilities.commands || aliceCapabilities.commandsQOTDDomain || aliceCapabilities.qotdRuntime {
-		t.Fatalf("expected alice runtime to stay idle for dormant qotd override, got %+v", aliceCapabilities)
+	mainCapabilities := resolveBotRuntimeCapabilities(cfg, "main", "main")
+	if mainCapabilities.commands || mainCapabilities.commandsQOTDDomain || mainCapabilities.qotdRuntime {
+		t.Fatalf("expected main runtime to stay idle for dormant qotd override, got %+v", mainCapabilities)
 	}
 
-	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
+	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main")
 	if !companionCapabilities.commands {
 		t.Fatalf("expected companion runtime to start command handling for dormant qotd bootstrap routes, got %+v", companionCapabilities)
 	}
@@ -359,7 +359,7 @@ func TestResolveBotRuntimeCapabilitiesForDomainsCanDisableQOTDFallbackOnDefaultO
 		},
 		Guilds: []files.GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			Features: files.FeatureToggles{
 				Services: files.FeatureServiceToggles{
 					Commands: boolPtr(true),
@@ -371,7 +371,7 @@ func TestResolveBotRuntimeCapabilitiesForDomainsCanDisableQOTDFallbackOnDefaultO
 					ID:        files.LegacyQOTDDefaultDeckID,
 					Name:      files.LegacyQOTDDefaultDeckName,
 					Enabled:   true,
-					ChannelID: "question-alice",
+					ChannelID: "question-main",
 				}},
 			},
 		}},
@@ -379,8 +379,8 @@ func TestResolveBotRuntimeCapabilitiesForDomainsCanDisableQOTDFallbackOnDefaultO
 
 	capabilities := resolveBotRuntimeCapabilitiesForDomains(
 		cfg,
-		"alice",
-		"alice",
+		"main",
+		"main",
 		newRuntimeDomainSupport([]string{runtimeDefaultDomain}),
 	)
 	if !capabilities.commands || !capabilities.commandsDefaultDomain {
@@ -404,7 +404,7 @@ func TestResolveBotRuntimeCapabilitiesForDomainsCanRunQOTDWithoutDefaultDomain(t
 		},
 		Guilds: []files.GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -423,7 +423,7 @@ func TestResolveBotRuntimeCapabilitiesForDomainsCanRunQOTDWithoutDefaultDomain(t
 	capabilities := resolveBotRuntimeCapabilitiesForDomains(
 		cfg,
 		"companion",
-		"alice",
+		"main",
 		newRuntimeDomainSupport([]string{files.BotDomainQOTD}),
 	)
 	if !capabilities.commands || !capabilities.commandsQOTDDomain || !capabilities.qotdRuntime {

@@ -49,8 +49,8 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if called.name != MainRuntimeAppName || called.env != MainProductionTokenEnv {
 		t.Fatalf("unexpected call args: %+v", called)
 	}
-	if called.opts.DefaultBotInstanceID != MainBotInstanceID {
-		t.Fatalf("expected alice as the default bot instance, got %+v", called.opts)
+	if called.opts.DefaultOwnerBotInstanceID != MainBotInstanceID {
+		t.Fatalf("expected main as the default owner, got %+v", called.opts)
 	}
 	if called.opts.DisableControl {
 		t.Fatalf("expected control plane to stay enabled for main runtime, got %+v", called.opts)
@@ -93,8 +93,8 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 	if called.name != QOTDRuntimeAppName || called.env != QOTDProductionTokenEnv {
 		t.Fatalf("unexpected call args: %+v", called)
 	}
-	if called.opts.DefaultBotInstanceID != MainBotInstanceID {
-		t.Fatalf("expected qotd runtime to keep alice as the global default owner, got %+v", called.opts)
+	if called.opts.DefaultOwnerBotInstanceID != MainBotInstanceID {
+		t.Fatalf("expected qotd runtime to keep main as the global default owner, got %+v", called.opts)
 	}
 	if !called.opts.DisableControl {
 		t.Fatalf("expected qotd runtime to keep control disabled, got %+v", called.opts)

@@ -13,19 +13,19 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	t.Parallel()
 
 	configManager := files.NewMemoryConfigManager()
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g2", BotInstanceID: "companion"}); err != nil {
 		t.Fatalf("add guild g2: %v", err)
 	}
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g3", BotInstanceID: "alice"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g3", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g3: %v", err)
 	}
 
-	aliceSession, err := discordgo.New("Bot alice-token")
+	mainSession, err := discordgo.New("Bot main-token")
 	if err != nil {
-		t.Fatalf("create alice session: %v", err)
+		t.Fatalf("create main session: %v", err)
 	}
 	companionSession, err := discordgo.New("Bot companion-token")
 	if err != nil {
@@ -33,21 +33,21 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice":     {instanceID: "alice", session: aliceSession},
+		"main":      {instanceID: "main", session: mainSession},
 		"companion": {instanceID: "companion", session: companionSession},
-	}, "alice")
+	}, "main")
 
-	if got, err := resolver.sessionForGuild("g1"); err != nil || got != aliceSession {
-		t.Fatalf("expected alice session for g1, got %p err=%v want %p", got, err, aliceSession)
+	if got, err := resolver.sessionForGuild("g1"); err != nil || got != mainSession {
+		t.Fatalf("expected main session for g1, got %p err=%v want %p", got, err, mainSession)
 	}
 	if got, err := resolver.sessionForGuild("g2"); err != nil || got != companionSession {
 		t.Fatalf("expected companion session for g2, got %p err=%v want %p", got, err, companionSession)
 	}
-	if got, err := resolver.sessionForGuild("g3"); err != nil || got != aliceSession {
-		t.Fatalf("expected alice session for g3, got %p err=%v want %p", got, err, aliceSession)
+	if got, err := resolver.sessionForGuild("g3"); err != nil || got != mainSession {
+		t.Fatalf("expected main session for g3, got %p err=%v want %p", got, err, mainSession)
 	}
-	if got, err := resolver.sessionForGuild(""); err != nil || got != aliceSession {
-		t.Fatalf("expected default alice session for empty guild, got %p err=%v want %p", got, err, aliceSession)
+	if got, err := resolver.sessionForGuild(""); err != nil || got != mainSession {
+		t.Fatalf("expected default main session for empty guild, got %p err=%v want %p", got, err, mainSession)
 	}
 }
 
@@ -57,7 +57,7 @@ func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T)
 	configManager := files.NewMemoryConfigManager()
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g1",
-		BotInstanceID: "alice",
+		BotInstanceID: "main",
 		DomainBotInstanceIDs: map[string]string{
 			files.BotDomainQOTD: "companion",
 		},
@@ -65,9 +65,9 @@ func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T)
 		t.Fatalf("add guild g1: %v", err)
 	}
 
-	aliceSession, err := discordgo.New("Bot alice-token")
+	mainSession, err := discordgo.New("Bot main-token")
 	if err != nil {
-		t.Fatalf("create alice session: %v", err)
+		t.Fatalf("create main session: %v", err)
 	}
 	companionSession, err := discordgo.New("Bot companion-token")
 	if err != nil {
@@ -75,18 +75,18 @@ func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T)
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice":     {instanceID: "alice", session: aliceSession},
+		"main":      {instanceID: "main", session: mainSession},
 		"companion": {instanceID: "companion", session: companionSession},
-	}, "alice")
+	}, "main")
 
-	if got, err := resolver.sessionForGuild("g1"); err != nil || got != aliceSession {
-		t.Fatalf("expected legacy guild lookup to stay on alice, got %p err=%v want %p", got, err, aliceSession)
+	if got, err := resolver.sessionForGuild("g1"); err != nil || got != mainSession {
+		t.Fatalf("expected legacy guild lookup to stay on main, got %p err=%v want %p", got, err, mainSession)
 	}
 	if got, err := resolver.sessionForGuildDomain("g1", files.BotDomainQOTD); err != nil || got != companionSession {
 		t.Fatalf("expected qotd domain lookup to use companion, got %p err=%v want %p", got, err, companionSession)
 	}
-	if got, err := resolver.sessionForGuildDomain("g1", "moderation"); err != nil || got != aliceSession {
-		t.Fatalf("expected unspecified domain lookup to fall back to alice, got %p err=%v want %p", got, err, aliceSession)
+	if got, err := resolver.sessionForGuildDomain("g1", "moderation"); err != nil || got != mainSession {
+		t.Fatalf("expected unspecified domain lookup to fall back to main, got %p err=%v want %p", got, err, mainSession)
 	}
 }
 
@@ -94,18 +94,18 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
 	t.Parallel()
 
 	configManager := files.NewMemoryConfigManager()
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 
-	aliceSession, err := discordgo.New("Bot alice-token")
+	mainSession, err := discordgo.New("Bot main-token")
 	if err != nil {
-		t.Fatalf("create alice session: %v", err)
+		t.Fatalf("create main session: %v", err)
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice": {instanceID: "alice", session: aliceSession},
-	}, "alice")
+		"main": {instanceID: "main", session: mainSession},
+	}, "main")
 
 	if got, err := resolver.sessionForGuild("missing"); err == nil {
 		t.Fatalf("expected missing guild lookup to fail, got session %p", got)
@@ -118,15 +118,15 @@ func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T
 	t.Parallel()
 
 	configManager := files.NewMemoryConfigManager()
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 
-	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{}, "alice")
+	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{}, "main")
 
 	if got, err := resolver.sessionForGuild("g1"); err == nil {
 		t.Fatalf("expected unavailable runtime to fail, got session %p", got)
-	} else if gotErr := err.Error(); gotErr != `bot instance "alice" is unavailable for guild g1` {
+	} else if gotErr := err.Error(); gotErr != `bot instance "main" is unavailable for guild g1` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -135,17 +135,17 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 
 	configManager := files.NewMemoryConfigManager()
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "alice"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice": {instanceID: "alice"},
-	}, "alice")
+		"main": {instanceID: "main"},
+	}, "main")
 
 	if got, err := resolver.sessionForGuild("g1"); err == nil {
 		t.Fatalf("expected missing session to fail, got session %p", got)
-	} else if gotErr := err.Error(); gotErr != `discord session for guild g1 (bot instance "alice") is unavailable` {
+	} else if gotErr := err.Error(); gotErr != `discord session for guild g1 (bot instance "main") is unavailable` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -155,9 +155,9 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 
 	configManager := files.NewMemoryConfigManager()
 
-	aliceSession, err := discordgo.New("Bot alice-token")
+	mainSession, err := discordgo.New("Bot main-token")
 	if err != nil {
-		t.Fatalf("create alice session: %v", err)
+		t.Fatalf("create main session: %v", err)
 	}
 	companionSession, err := discordgo.New("Bot companion-token")
 	if err != nil {
@@ -165,9 +165,9 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 	}
 
 	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"alice":     {instanceID: "alice", session: aliceSession},
+		"main":      {instanceID: "main", session: mainSession},
 		"companion": {instanceID: "companion", session: companionSession},
-	}, "alice")
+	}, "main")
 
 	if err := resolver.registerGuild(context.Background(), "g-new", "companion"); err != nil {
 		t.Fatalf("register guild: %v", err)
@@ -211,26 +211,26 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 func TestResolveBotInstancesSkipsOptionalInstancesWithoutToken(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("ALICE_TOKEN", "alice-token")
+	t.Setenv("MAIN_TOKEN", "main-token")
 	t.Setenv("COMPANION_TOKEN", "")
 
-	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
-		DefaultBotInstanceID: "alice",
+	resolved, defaultOwnerBotInstanceID, err := resolveBotInstances("", RunOptions{
+		DefaultOwnerBotInstanceID: "main",
 		BotCatalog: []BotInstanceDefinition{
-			{ID: "alice", TokenEnv: "ALICE_TOKEN"},
+			{ID: "main", TokenEnv: "MAIN_TOKEN"},
 			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
 	if err != nil {
 		t.Fatalf("resolve bot instances: %v", err)
 	}
-	if defaultBotInstanceID != "alice" {
-		t.Fatalf("expected default bot instance alice, got %q", defaultBotInstanceID)
+	if defaultOwnerBotInstanceID != "main" {
+		t.Fatalf("expected default owner main, got %q", defaultOwnerBotInstanceID)
 	}
 	if len(resolved) != 1 {
-		t.Fatalf("expected only alice to resolve, got %+v", resolved)
+		t.Fatalf("expected only main to resolve, got %+v", resolved)
 	}
-	if resolved[0].ID != "alice" || resolved[0].TokenEnv != "ALICE_TOKEN" || resolved[0].Token != "alice-token" {
+	if resolved[0].ID != "main" || resolved[0].TokenEnv != "MAIN_TOKEN" || resolved[0].Token != "main-token" {
 		t.Fatalf("unexpected resolved instance: %+v", resolved[0])
 	}
 }
@@ -238,20 +238,20 @@ func TestResolveBotInstancesSkipsOptionalInstancesWithoutToken(t *testing.T) {
 func TestResolveBotInstancesUsesFirstAvailableOptionalBotAsDefault(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("ALICE_TOKEN", "")
+	t.Setenv("MAIN_TOKEN", "")
 	t.Setenv("COMPANION_TOKEN", "companion-token")
 
-	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
+	resolved, defaultOwnerBotInstanceID, err := resolveBotInstances("", RunOptions{
 		BotCatalog: []BotInstanceDefinition{
-			{ID: "alice", TokenEnv: "ALICE_TOKEN", Optional: true},
+			{ID: "main", TokenEnv: "MAIN_TOKEN", Optional: true},
 			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
 	if err != nil {
 		t.Fatalf("resolve bot instances: %v", err)
 	}
-	if defaultBotInstanceID != "companion" {
-		t.Fatalf("expected companion to become the default bot instance, got %q", defaultBotInstanceID)
+	if defaultOwnerBotInstanceID != "companion" {
+		t.Fatalf("expected companion to become the default owner, got %q", defaultOwnerBotInstanceID)
 	}
 	if len(resolved) != 1 {
 		t.Fatalf("expected only companion to resolve, got %+v", resolved)
@@ -264,19 +264,19 @@ func TestResolveBotInstancesUsesFirstAvailableOptionalBotAsDefault(t *testing.T)
 func TestResolveBotInstancesRejectsMissingRequiredToken(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("ALICE_TOKEN", "")
+	t.Setenv("MAIN_TOKEN", "")
 
 	_, _, err := resolveBotInstances("", RunOptions{
-		DefaultBotInstanceID: "alice",
+		DefaultOwnerBotInstanceID: "main",
 		BotCatalog: []BotInstanceDefinition{{
-			ID:       "alice",
-			TokenEnv: "ALICE_TOKEN",
+			ID:       "main",
+			TokenEnv: "MAIN_TOKEN",
 		}},
 	})
 	if err == nil {
 		t.Fatal("expected missing required token to fail")
 	}
-	if got := err.Error(); got != "ALICE_TOKEN not set in environment or .env file" {
+	if got := err.Error(); got != "MAIN_TOKEN not set in environment or .env file" {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -284,12 +284,12 @@ func TestResolveBotInstancesRejectsMissingRequiredToken(t *testing.T) {
 func TestResolveBotInstancesReturnsSentinelWhenNoOptionalTokensAreConfigured(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("ALICE_TOKEN", "")
+	t.Setenv("MAIN_TOKEN", "")
 	t.Setenv("COMPANION_TOKEN", "")
 
 	_, _, err := resolveBotInstances("", RunOptions{
 		BotCatalog: []BotInstanceDefinition{
-			{ID: "alice", TokenEnv: "ALICE_TOKEN", Optional: true},
+			{ID: "main", TokenEnv: "MAIN_TOKEN", Optional: true},
 			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
@@ -307,13 +307,13 @@ func TestResolveBotInstancesReturnsSentinelWhenNoOptionalTokensAreConfigured(t *
 func TestResolveBotInstancesRejectsDefaultWhenOptionalInstanceIsUnavailable(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("ALICE_TOKEN", "alice-token")
+	t.Setenv("MAIN_TOKEN", "main-token")
 	t.Setenv("COMPANION_TOKEN", "")
 
 	_, _, err := resolveBotInstances("", RunOptions{
-		DefaultBotInstanceID: "companion",
+		DefaultOwnerBotInstanceID: "companion",
 		BotCatalog: []BotInstanceDefinition{
-			{ID: "alice", TokenEnv: "ALICE_TOKEN"},
+			{ID: "main", TokenEnv: "MAIN_TOKEN"},
 			{ID: "companion", TokenEnv: "COMPANION_TOKEN", Optional: true},
 		},
 	})
@@ -330,8 +330,8 @@ func TestResolveBotInstancesAllowsRemoteDefaultWhenDefaultDomainIsUnsupported(t 
 	t.Setenv("HOME", homeDir)
 	t.Setenv("COMPANION_TOKEN", "companion-token")
 
-	resolved, defaultBotInstanceID, err := resolveBotInstances("", RunOptions{
-		DefaultBotInstanceID: "alice",
+	resolved, defaultOwnerBotInstanceID, err := resolveBotInstances("", RunOptions{
+		DefaultOwnerBotInstanceID: "main",
 		SupportedDomains:     []string{files.BotDomainQOTD},
 		BotCatalog: []BotInstanceDefinition{{
 			ID:       "companion",
@@ -341,8 +341,8 @@ func TestResolveBotInstancesAllowsRemoteDefaultWhenDefaultDomainIsUnsupported(t 
 	if err != nil {
 		t.Fatalf("resolve bot instances: %v", err)
 	}
-	if defaultBotInstanceID != "alice" {
-		t.Fatalf("expected remote default bot instance alice, got %q", defaultBotInstanceID)
+	if defaultOwnerBotInstanceID != "main" {
+		t.Fatalf("expected remote default owner main, got %q", defaultOwnerBotInstanceID)
 	}
 	if len(resolved) != 1 || resolved[0].ID != "companion" {
 		t.Fatalf("expected only companion to resolve locally, got %+v", resolved)
@@ -360,8 +360,8 @@ func TestValidateConfiguredBotInstancesRejectsUnknownBinding(t *testing.T) {
 	}
 
 	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"alice": {instanceID: "alice"},
-	}, nil), "alice")
+		"main": {instanceID: "main"},
+	}, nil), "main")
 	if err == nil {
 		t.Fatal("expected validation error for unknown bot instance binding")
 	}
@@ -373,7 +373,7 @@ func TestValidateConfiguredBotInstancesRejectsUnknownDomainBinding(t *testing.T)
 	cfg := &files.BotConfig{
 		Guilds: []files.GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "missing",
 			},
@@ -381,8 +381,8 @@ func TestValidateConfiguredBotInstancesRejectsUnknownDomainBinding(t *testing.T)
 	}
 
 	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"alice": {instanceID: "alice"},
-	}, nil), "alice")
+		"main": {instanceID: "main"},
+	}, nil), "main")
 	if err == nil {
 		t.Fatal("expected validation error for unknown domain bot instance binding")
 	}
@@ -397,7 +397,7 @@ func TestValidateConfiguredBotInstancesAllowsKnownRemoteOwners(t *testing.T) {
 	cfg := &files.BotConfig{
 		Guilds: []files.GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: "alice",
+			BotInstanceID: "main",
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -406,7 +406,7 @@ func TestValidateConfiguredBotInstancesAllowsKnownRemoteOwners(t *testing.T) {
 
 	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
 		"companion": {instanceID: "companion"},
-	}, []string{"alice"}), "alice")
+	}, []string{"main"}), "main")
 	if err != nil {
 		t.Fatalf("expected known remote owners to validate, got %v", err)
 	}

@@ -318,12 +318,12 @@ describe("ControlApiClient feature routes", () => {
           workspace: {
             scope: "guild",
             guild_id: "guild-1",
-            bot_instance_id: "alice",
-            available_bot_instance_ids: ["alice", "companion"],
+              bot_instance_id: "main",
+              available_bot_instance_ids: ["main", "companion"],
             sections: {
               bot_routing: {
-                bot_instance_id: "alice",
-                available_bot_instance_ids: ["alice", "companion"],
+                  bot_instance_id: "main",
+                  available_bot_instance_ids: ["main", "companion"],
                 domain_bot_instance_ids: {
                   qotd: "companion",
                 },
@@ -347,7 +347,7 @@ describe("ControlApiClient feature routes", () => {
 
     await client.updateGuildSettings("guild-1", {
       bot_routing: {
-        bot_instance_id: "alice",
+        bot_instance_id: "main",
         domain_bot_instance_ids: {
           qotd: "companion",
         },
@@ -365,7 +365,7 @@ describe("ControlApiClient feature routes", () => {
       credentials: "include",
       body: JSON.stringify({
         bot_routing: {
-          bot_instance_id: "alice",
+          bot_instance_id: "main",
           domain_bot_instance_ids: {
             qotd: "companion",
           },

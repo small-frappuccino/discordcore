@@ -124,7 +124,7 @@ func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t
 		t.Fatalf("seed existing guild config: %v", err)
 	}
 
-	if err := mgr.EnsureMinimalGuildConfigForBot("guild-existing", "alice"); err != nil {
+	if err := mgr.EnsureMinimalGuildConfigForBot("guild-existing", "main"); err != nil {
 		t.Fatalf("ensure minimal guild config: %v", err)
 	}
 
@@ -132,8 +132,8 @@ func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t
 	if len(snapshot.Guilds) != 1 {
 		t.Fatalf("expected one guild in snapshot, got %+v", snapshot.Guilds)
 	}
-	if got := snapshot.Guilds[0].BotInstanceID; got != "alice" {
-		t.Fatalf("expected guild-wide bot binding alice, got %q", got)
+	if got := snapshot.Guilds[0].BotInstanceID; got != "main" {
+		t.Fatalf("expected guild-wide bot binding main, got %q", got)
 	}
 	if got := snapshot.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
 		t.Fatalf("expected qotd override to be preserved, got %q", got)
@@ -144,7 +144,7 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuildToPostgres(t *testing
 	store := openIsolatedPostgresConfigStore(t)
 	mgr := NewConfigManagerWithStore(store)
 
-	if err := mgr.EnsureMinimalGuildConfigForBot("guild-pg", "alice"); err != nil {
+	if err := mgr.EnsureMinimalGuildConfigForBot("guild-pg", "main"); err != nil {
 		t.Fatalf("ensure minimal guild config in postgres: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuildToPostgres(t *testing
 	if len(loaded.Guilds) != 1 {
 		t.Fatalf("expected one persisted guild in postgres, got %+v", loaded.Guilds)
 	}
-	if loaded.Guilds[0].GuildID != "guild-pg" || loaded.Guilds[0].BotInstanceID != "alice" {
+	if loaded.Guilds[0].GuildID != "guild-pg" || loaded.Guilds[0].BotInstanceID != "main" {
 		t.Fatalf("unexpected postgres-backed guild config: %+v", loaded.Guilds[0])
 	}
 	if resolved := loaded.ResolveFeatures("guild-pg"); resolved.Services.Monitoring || resolved.Services.Commands || resolved.Logging.MemberJoin {

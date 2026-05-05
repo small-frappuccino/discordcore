@@ -108,8 +108,8 @@ function createFetchMock() {
         dashboard_write: ["role-guard"],
       },
       botRouting: {
-        bot_instance_id: "alice",
-        available_bot_instance_ids: ["alice", "companion"],
+        bot_instance_id: "main",
+        available_bot_instance_ids: ["main", "companion"],
         domain_bot_instance_ids: {
           qotd: "companion",
         },
@@ -123,8 +123,8 @@ function createFetchMock() {
         dashboard_write: [],
       },
       botRouting: {
-        bot_instance_id: "alice",
-        available_bot_instance_ids: ["alice"],
+        bot_instance_id: "main",
+        available_bot_instance_ids: ["main"],
         domain_bot_instance_ids: {},
         editable_domains: ["qotd"],
       },
@@ -1078,8 +1078,8 @@ function createFetchMock() {
         dashboard_write: [],
       },
       botRouting: {
-        bot_instance_id: "alice",
-        available_bot_instance_ids: ["alice"],
+          bot_instance_id: "main",
+          available_bot_instance_ids: ["main"],
         domain_bot_instance_ids: {},
         editable_domains: ["qotd"],
       },
@@ -1215,8 +1215,8 @@ function createFetchMock() {
               dashboard_write: [],
             },
             botRouting: {
-              bot_instance_id: "alice",
-              available_bot_instance_ids: ["alice"],
+              bot_instance_id: "main",
+              available_bot_instance_ids: ["main"],
               domain_bot_instance_ids: {},
               editable_domains: ["qotd"],
             },
@@ -1898,7 +1898,7 @@ describe("dashboard routing and workspace", () => {
           guildID: "guild-1",
           payload: {
             bot_routing: {
-              bot_instance_id: "alice",
+                bot_instance_id: "main",
               domain_bot_instance_ids: {
                 qotd: "companion",
               },

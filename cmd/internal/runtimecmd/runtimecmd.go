@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	MainBotInstanceID       = "alice"
+	MainBotInstanceID       = "main"
 	QOTDBotInstanceID       = "companion"
 	MainRuntimeAppName      = "alicebot"
 	QOTDRuntimeAppName      = "qotdbot"
@@ -122,9 +122,9 @@ func buildMainRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 			TokenEnv: primaryTokenEnv,
 			Optional: true,
 		}},
-		DefaultBotInstanceID: MainBotInstanceID,
-		KnownBotInstanceIDs:  []string{QOTDBotInstanceID},
-		SupportedDomains:     []string{"default"},
+		DefaultOwnerBotInstanceID: MainBotInstanceID,
+		KnownBotInstanceIDs:       []string{QOTDBotInstanceID},
+		SupportedDomains:          []string{"default"},
 	}
 }
 
@@ -136,10 +136,10 @@ func buildQOTDRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 			TokenEnv: primaryTokenEnv,
 			Optional: true,
 		}},
-		DefaultBotInstanceID: MainBotInstanceID,
-		KnownBotInstanceIDs:  []string{MainBotInstanceID},
-		SupportedDomains:     []string{files.BotDomainQOTD},
-		DisableControl:       true,
+		DefaultOwnerBotInstanceID: MainBotInstanceID,
+		KnownBotInstanceIDs:       []string{MainBotInstanceID},
+		SupportedDomains:          []string{files.BotDomainQOTD},
+		DisableControl:            true,
 	}
 }
 
