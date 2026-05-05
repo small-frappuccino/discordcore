@@ -13,6 +13,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -358,5 +359,75 @@ func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
 	}
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd publish route domain, got %q", got)
+	}
+}
+
+func TestCommandHandlerAppliesInjectedCatalogRegistrars(t *testing.T) {
+	t.Parallel()
+
+	cfgMgr := files.NewMemoryConfigManager()
+	handler := NewCommandHandler(nil, cfgMgr)
+	handler.SetSupportedDomains(files.BotDomainQOTD)
+	handler.commandManager = core.NewCommandManager(nil, cfgMgr)
+
+	called := make([]string, 0, 2)
+	handler.SetCommandCatalogRegistrars(
+		CommandCatalogRegistrar{
+			Domain: "",
+			Register: func(*CommandHandler, *core.CommandRouter) {
+				called = append(called, "default")
+			},
+		},
+		CommandCatalogRegistrar{
+			Domain: files.BotDomainQOTD,
+			Register: func(*CommandHandler, *core.CommandRouter) {
+				called = append(called, files.BotDomainQOTD)
+			},
+		},
+		CommandCatalogRegistrar{
+			Domain: "",
+			RequiredCapabilities: CommandCatalogCapabilities{
+				Admin: true,
+			},
+			Register: func(*CommandHandler, *core.CommandRouter) {
+				called = append(called, "admin")
+			},
+		},
+	)
+
+	if err := handler.registerCommandCatalog(); err != nil {
+		t.Fatalf("registerCommandCatalog() failed: %v", err)
+	}
+	if len(called) != 1 || called[0] != files.BotDomainQOTD {
+		t.Fatalf("expected only qotd registrar to run, got %#v", called)
+	}
+}
+
+func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfgMgr := files.NewMemoryConfigManager()
+
+	withoutCapability := NewCommandHandler(nil, cfgMgr)
+	withoutCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
+	withoutCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
+	withoutCapability.SetAdminCommandServices(service.NewServiceManager(nil), nil, nil)
+	if err := withoutCapability.registerCommandCatalog(); err != nil {
+		t.Fatalf("register admin catalog without capability: %v", err)
+	}
+	if _, ok := withoutCapability.commandManager.GetRouter().GetRegistry().GetCommand("admin"); ok {
+		t.Fatal("expected admin catalog to stay disabled without admin capability")
+	}
+
+	withCapability := NewCommandHandler(nil, cfgMgr)
+	withCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
+	withCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
+	withCapability.SetCommandCatalogCapabilities(CommandCatalogCapabilities{Admin: true})
+	withCapability.SetAdminCommandServices(service.NewServiceManager(nil), nil, nil)
+	if err := withCapability.registerCommandCatalog(); err != nil {
+		t.Fatalf("register admin catalog with capability: %v", err)
+	}
+	if _, ok := withCapability.commandManager.GetRouter().GetRegistry().GetCommand("admin"); !ok {
+		t.Fatal("expected admin catalog to register when admin capability is enabled")
 	}
 }

@@ -6,16 +6,15 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
+	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // CommandHandler manages bot command setup and handling
@@ -25,15 +24,15 @@ type CommandHandler struct {
 	botInstanceID        string
 	defaultBotInstanceID string
 	supportedDomains     map[string]struct{}
+	catalogCapabilities  CommandCatalogCapabilities
+	catalogRegistrars    []CommandCatalogRegistrar
 	commandManager       *core.CommandManager
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
 	qotdService          qotdcmd.QuestionCatalogService
-}
-
-type commandCatalogFragment struct {
-	domain   string
-	register func(*core.CommandRouter)
+	adminServiceManager  *service.ServiceManager
+	adminUnifiedCache    *cache.UnifiedCache
+	adminStore           *storage.Store
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -56,6 +55,7 @@ func NewCommandHandlerForBot(
 		configManager:        configManager,
 		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
+		catalogRegistrars:    DefaultCommandCatalogRegistrars(),
 	}
 }
 
@@ -117,6 +117,35 @@ func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService)
 	ch.qotdService = service
 }
 
+// SetAdminCommandServices injects runtime services consumed by the admin
+// command catalog.
+func (ch *CommandHandler) SetAdminCommandServices(serviceManager *service.ServiceManager, unifiedCache *cache.UnifiedCache, store *storage.Store) {
+	if ch == nil {
+		return
+	}
+	ch.adminServiceManager = serviceManager
+	ch.adminUnifiedCache = unifiedCache
+	ch.adminStore = store
+}
+
+// SetCommandCatalogRegistrars overrides the slash command catalogs registered by
+// this handler.
+func (ch *CommandHandler) SetCommandCatalogRegistrars(registrars ...CommandCatalogRegistrar) {
+	if ch == nil {
+		return
+	}
+	ch.catalogRegistrars = append([]CommandCatalogRegistrar(nil), registrars...)
+}
+
+// SetCommandCatalogCapabilities sets runtime capabilities used to filter
+// capability-gated command registrars.
+func (ch *CommandHandler) SetCommandCatalogCapabilities(capabilities CommandCatalogCapabilities) {
+	if ch == nil {
+		return
+	}
+	ch.catalogCapabilities = capabilities
+}
+
 // SetSupportedDomains limits catalog registration to the provided domains. If
 // not called, the handler preserves the legacy behavior and registers every
 // known fragment.
@@ -136,55 +165,43 @@ func (ch *CommandHandler) SetSupportedDomains(domains ...string) {
 
 func (ch *CommandHandler) registerCommandCatalog() error {
 	router := ch.commandManager.GetRouter()
-	for _, fragment := range ch.commandCatalogFragments() {
-		if fragment.register == nil {
+	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
+		if registrar.Register == nil {
 			continue
 		}
-		fragment.register(router)
+		registrar.Register(ch, router)
 	}
 
 	log.ApplicationLogger().Info("Command catalog fragments registered successfully")
 	return nil
 }
 
-func (ch *CommandHandler) commandCatalogFragments() []commandCatalogFragment {
-	configCommands := config.NewConfigCommands(ch.configManager)
-	fragments := []commandCatalogFragment{{
-		domain: "",
-		register: func(router *core.CommandRouter) {
-			configCommands.RegisterBaseCommands(router)
-			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
-			metrics.RegisterMetricsCommands(router)
-			if ch.partnerBoardService != nil || ch.partnerSyncExecutor != nil {
-				boardService := ch.partnerBoardService
-				if boardService == nil {
-					boardService = partners.NewBoardApplicationService(ch.configManager, nil)
-				}
-				partner.NewPartnerCommandsWithServices(boardService, ch.partnerSyncExecutor).RegisterCommands(router)
-			} else {
-				partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
-			}
-			moderation.RegisterModerationCommands(router)
-		},
-	}, {
-		domain: files.BotDomainQOTD,
-		register: func(router *core.CommandRouter) {
-			configCommands.RegisterQOTDCommands(router)
-			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
-		},
-	}}
 
+func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogRegistrar {
 	if ch.supportedDomains == nil {
-		return fragments
+		filtered := make([]CommandCatalogRegistrar, 0, len(ch.catalogRegistrars))
+		for _, registrar := range ch.catalogRegistrars {
+			if ch.supportsCatalogCapabilities(registrar.RequiredCapabilities) {
+				filtered = append(filtered, registrar)
+			}
+		}
+		return filtered
 	}
 
-	filtered := make([]commandCatalogFragment, 0, len(fragments))
-	for _, fragment := range fragments {
-		if ch.supportsDomain(fragment.domain) {
-			filtered = append(filtered, fragment)
+	filtered := make([]CommandCatalogRegistrar, 0, len(ch.catalogRegistrars))
+	for _, registrar := range ch.catalogRegistrars {
+		if ch.supportsDomain(registrar.Domain) && ch.supportsCatalogCapabilities(registrar.RequiredCapabilities) {
+			filtered = append(filtered, registrar)
 		}
 	}
 	return filtered
+}
+
+func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCapabilities) bool {
+	if required.Admin && !ch.catalogCapabilities.Admin {
+		return false
+	}
+	return true
 }
 
 func (ch *CommandHandler) supportsDomain(domain string) bool {

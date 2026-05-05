@@ -11,6 +11,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/control/localtls"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
@@ -47,6 +48,9 @@ type RunOptions struct {
 	// SupportedDomains limits which domains this process should host. Empty means
 	// all domains, including the implicit default domain.
 	SupportedDomains []string
+	// CommandCatalogRegistrars optionally override the default slash command
+	// catalog composition for handlers started by this process.
+	CommandCatalogRegistrars []commands.CommandCatalogRegistrar
 	// DisableControl skips starting the local control plane for this process.
 	DisableControl bool
 }

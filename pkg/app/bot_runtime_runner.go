@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
@@ -22,17 +22,18 @@ import (
 )
 
 type botRuntimeOptions struct {
-	defaultBotInstanceID string
-	runtimeCount         int
-	configManager        *files.ConfigManager
-	store                *storage.Store
-	errorHandler         *coreerrors.ErrorHandler
-	runtimeApplier       *runtimeapply.Manager
-	partnerBoardService  partners.BoardService
-	partnerSyncExecutor  partners.GuildSyncExecutor
-	qotdCommandService   *applicationqotd.Service
-	qotdLifecycleService discordqotd.GuildLifecycleService
-	startupTasks         *startupTaskOrchestrator
+	defaultBotInstanceID     string
+	runtimeCount             int
+	configManager            *files.ConfigManager
+	store                    *storage.Store
+	commandCatalogRegistrars []commands.CommandCatalogRegistrar
+	errorHandler             *coreerrors.ErrorHandler
+	runtimeApplier           *runtimeapply.Manager
+	partnerBoardService      partners.BoardService
+	partnerSyncExecutor      partners.GuildSyncExecutor
+	qotdCommandService       *applicationqotd.Service
+	qotdLifecycleService     discordqotd.GuildLifecycleService
+	startupTasks             *startupTaskOrchestrator
 }
 
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
@@ -201,10 +202,15 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 
 	if runtime.capabilities.commands {
 		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+		if len(opts.commandCatalogRegistrars) > 0 {
+			commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
+		}
+		commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{Admin: runtime.capabilities.admin})
 		commandHandler.SetSupportedDomains(commandCatalogDomainsForRuntime(runtime.capabilities)...)
 		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 		commandHandler.SetQOTDService(opts.qotdCommandService)
+		commandHandler.SetAdminCommandServices(runtime.serviceManager, unifiedCache, opts.store)
 		if err := setupCommandHandler(commandHandler); err != nil {
 			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
 		}
@@ -217,10 +223,6 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 				}
 				router.SetRuntimeApplier(opts.runtimeApplier)
 			}
-		}
-		if runtime.capabilities.admin {
-			adminCommands := admin.NewAdminCommands(runtime.serviceManager, unifiedCache, opts.store)
-			adminCommands.RegisterCommands(commandHandler.GetCommandManager().GetRouter())
 		}
 		runtime.commandHandler = commandHandler
 	} else {

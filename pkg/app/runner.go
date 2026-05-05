@@ -331,6 +331,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		runtimeCount:         len(runtimeOrder),
 		configManager:        configManager,
 		store:                store,
+		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
 		errorHandler:         errorHandler,
 		runtimeApplier:       runtimeApplier,
 		partnerBoardService:  partnerBoardAppService,

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
+	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
@@ -122,6 +123,10 @@ func buildMainRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 		DefaultOwnerBotInstanceID: MainBotInstanceID,
 		KnownBotInstanceIDs:       []string{QOTDBotInstanceID},
 		SupportedDomains:          []string{"default"},
+		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
+			discordcommands.BaseCommandCatalogRegistrar(),
+			discordcommands.AdminCommandCatalogRegistrar(),
+		},
 	}
 }
 
@@ -137,6 +142,9 @@ func buildQOTDRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 		DefaultOwnerBotInstanceID: MainBotInstanceID,
 		KnownBotInstanceIDs:       []string{MainBotInstanceID},
 		SupportedDomains:          []string{files.BotDomainQOTD},
+		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
+			discordcommands.QOTDCommandCatalogRegistrar(),
+		},
 		DisableControl:            true,
 	}
 }
