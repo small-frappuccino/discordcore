@@ -220,7 +220,11 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
-	if !ch.matchesGuildBotInstance(guildID) {
+	domain := ch.routeDomain(routeKey)
+	if !ch.supportsDomain(domain) {
+		return false
+	}
+	if !ch.matchesGuildBotInstanceForDomain(guildID, domain) {
 		return false
 	}
 	cfg := ch.configManager.Config()
@@ -230,10 +234,14 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.Intera
 	if cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands {
 		return true
 	}
-	return config.AllowsDormantGuildBootstrapRoute(routeKey)
+	return config.AllowsDormantGuildBootstrapRouteForDomain(domain, routeKey)
 }
 
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
+	return ch.matchesGuildBotInstanceForDomain(guildID, "")
+}
+
+func (ch *CommandHandler) matchesGuildBotInstanceForDomain(guildID, domain string) bool {
 	if ch == nil {
 		return false
 	}
@@ -248,8 +256,23 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	if guild.EffectiveBotInstanceID(ch.defaultBotInstanceID) != files.NormalizeBotInstanceID(ch.botInstanceID) {
+	if guild.EffectiveBotInstanceIDForDomain(domain, ch.defaultBotInstanceID) != files.NormalizeBotInstanceID(ch.botInstanceID) {
 		return false
 	}
 	return true
+}
+
+func (ch *CommandHandler) routeDomain(routeKey core.InteractionRouteKey) string {
+	if ch != nil && ch.commandManager != nil {
+		if router := ch.commandManager.GetRouter(); router != nil {
+			if domain := router.InteractionRouteDomain(routeKey); domain != "" {
+				return domain
+			}
+		}
+	}
+
+	if domain, ok := config.DormantGuildBootstrapRouteDomain(routeKey); ok {
+		return domain
+	}
+	return ""
 }

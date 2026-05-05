@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
@@ -171,5 +172,177 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 	}
 	if cm.interactionHandlerCancel != nil {
 		t.Fatalf("expected interaction handler cancel to be cleared on rollback")
+	}
+}
+
+func TestCommandManagerSetupCommandsUsesGlobalSyncWithoutDomainOverrides(t *testing.T) {
+	requestPaths := make([]string, 0, 4)
+	session := newCommandManagerSession(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		requestPaths = append(requestPaths, r.Method+" "+r.URL.Path)
+
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+			var posted discordgo.ApplicationCommand
+			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
+				t.Fatalf("decode posted global command: %v", err)
+			}
+			if posted.ID == "" {
+				posted.ID = "created-id"
+			}
+			_ = json.NewEncoder(w).Encode(&posted)
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	})
+
+	cfgMgr := files.NewMemoryConfigManager()
+	cm := NewCommandManager(session, cfgMgr)
+	cm.GetRouter().RegisterCommand(testCommand{name: "ping"})
+
+	if err := cm.SetupCommands(); err != nil {
+		t.Fatalf("setup commands: %v", err)
+	}
+
+	if len(requestPaths) == 0 {
+		t.Fatal("expected global sync requests")
+	}
+	for _, path := range requestPaths {
+		if strings.Contains(path, "/guilds/") {
+			t.Fatalf("expected legacy sync to avoid guild-scoped endpoints, got %q", path)
+		}
+	}
+}
+
+func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *testing.T) {
+	tests := []struct {
+		name                  string
+		allowRoute            func(routeKey InteractionRouteKey) bool
+		wantConfigSubcommands []string
+		wantTopLevelCommands  []string
+	}{
+		{
+			name: "base app",
+			allowRoute: func(routeKey InteractionRouteKey) bool {
+				return routeKey.Path == "config commands_enabled"
+			},
+			wantConfigSubcommands: []string{"commands_enabled"},
+			wantTopLevelCommands:  []string{"config"},
+		},
+		{
+			name: "qotd app",
+			allowRoute: func(routeKey InteractionRouteKey) bool {
+				return routeKey.Path == "config qotd_channel" || routeKey.Path == "qotd"
+			},
+			wantConfigSubcommands: []string{"qotd_channel"},
+			wantTopLevelCommands:  []string{"config", "qotd"},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			globalDeletes := 0
+			guildFetches := 0
+			postedGuildCommands := make([]discordgo.ApplicationCommand, 0, 2)
+			session := newCommandManagerSession(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+
+				switch {
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+					_ = json.NewEncoder(w).Encode([]map[string]any{{
+						"id":          "legacy-global",
+						"name":        "legacy-global",
+						"description": "legacy global command",
+					}})
+				case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/app-id/commands/legacy-global"):
+					globalDeletes++
+					w.WriteHeader(http.StatusNoContent)
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
+					guildFetches++
+					_ = json.NewEncoder(w).Encode([]map[string]any{})
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
+					var posted discordgo.ApplicationCommand
+					if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
+						t.Fatalf("decode posted guild command: %v", err)
+					}
+					postedGuildCommands = append(postedGuildCommands, posted)
+					if posted.ID == "" {
+						posted.ID = posted.Name + "-id"
+					}
+					_ = json.NewEncoder(w).Encode(&posted)
+				default:
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(`{}`))
+				}
+			})
+
+			cfgMgr := files.NewMemoryConfigManager()
+			if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+				cfg.Guilds = []files.GuildConfig{{
+					GuildID:       "g1",
+					BotInstanceID: "alice",
+					DomainBotInstanceIDs: map[string]string{
+						files.BotDomainQOTD: "yuzuha",
+					},
+				}}
+				return nil
+			}); err != nil {
+				t.Fatalf("seed config: %v", err)
+			}
+
+			cm := NewCommandManager(session, cfgMgr)
+			router := cm.GetRouter()
+			checker := NewPermissionChecker(session, cfgMgr)
+
+			configGroup := NewGroupCommand("config", "config", checker)
+			baseSubcommand := testSubCommand{name: "commands_enabled"}
+			configGroup.AddSubCommand(baseSubcommand)
+			router.RegisterSlashCommand(configGroup)
+
+			qotdSubcommand := testSubCommand{name: "qotd_channel"}
+			configGroup.AddSubCommand(qotdSubcommand)
+			router.RegisterSlashSubCommandForDomain(files.BotDomainQOTD, "config", qotdSubcommand)
+			router.RegisterSlashCommandForDomain(files.BotDomainQOTD, testCommand{name: "qotd"})
+			router.SetGuildRouteFilter(func(guildID string, routeKey InteractionRouteKey) bool {
+				return guildID == "g1" && tc.allowRoute(routeKey)
+			})
+
+			if err := cm.SetupCommands(); err != nil {
+				t.Fatalf("setup commands: %v", err)
+			}
+
+			if globalDeletes != 1 {
+				t.Fatalf("expected global command cleanup once, got %d", globalDeletes)
+			}
+			if guildFetches != 1 {
+				t.Fatalf("expected exactly one guild command fetch, got %d", guildFetches)
+			}
+
+			gotNames := make([]string, 0, len(postedGuildCommands))
+			configOptionNames := make([]string, 0, 2)
+			for _, posted := range postedGuildCommands {
+				gotNames = append(gotNames, posted.Name)
+				if posted.Name == "config" {
+					for _, option := range posted.Options {
+						if option != nil {
+							configOptionNames = append(configOptionNames, option.Name)
+						}
+					}
+				}
+			}
+			sort.Strings(gotNames)
+			sort.Strings(configOptionNames)
+
+			if strings.Join(gotNames, ",") != strings.Join(tc.wantTopLevelCommands, ",") {
+				t.Fatalf("unexpected posted guild commands: got=%v want=%v", gotNames, tc.wantTopLevelCommands)
+			}
+			if strings.Join(configOptionNames, ",") != strings.Join(tc.wantConfigSubcommands, ",") {
+				t.Fatalf("unexpected config subcommands for guild sync: got=%v want=%v", configOptionNames, tc.wantConfigSubcommands)
+			}
+		})
 	}
 }

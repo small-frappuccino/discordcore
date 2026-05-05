@@ -89,3 +89,23 @@ func (cfg *BotConfig) GuildsForBotInstanceForDomain(domain, botInstanceID, defau
 	}
 	return out
 }
+
+// HasDomainBotInstanceOverrides reports whether any guild contains a non-empty
+// specialized domain binding override.
+func (cfg *BotConfig) HasDomainBotInstanceOverrides() bool {
+	if cfg == nil {
+		return false
+	}
+	for _, guild := range cfg.Guilds {
+		for domain, botInstanceID := range guild.DomainBotInstanceIDs {
+			if NormalizeBotDomain(domain) == "" {
+				continue
+			}
+			if NormalizeBotInstanceID(botInstanceID) == "" {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}

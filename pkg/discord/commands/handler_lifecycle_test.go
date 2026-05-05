@@ -208,6 +208,9 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 		cfg.Guilds = []files.GuildConfig{{
 			GuildID:       "guild-1",
 			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "yuzuha",
+			},
 			Features: files.FeatureToggles{
 				Services: files.FeatureServiceToggles{
 					Commands: boolPtr(false),
@@ -226,11 +229,83 @@ func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
 	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config smoke_test"}) {
 		t.Fatal("expected dormant guild smoke test route to remain enabled")
 	}
-	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
-		t.Fatal("expected dormant guild qotd bootstrap route to remain enabled")
+	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
+		t.Fatal("expected dormant guild qotd bootstrap route to move to the qotd bot instance")
 	}
 	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
 		t.Fatal("expected non-bootstrap route to remain disabled for dormant guild")
+	}
+
+	qotdHandler := NewCommandHandlerForBot(nil, cfgMgr, "yuzuha", "alice")
+	if !qotdHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
+		t.Fatal("expected dormant guild qotd bootstrap route to remain enabled on the qotd bot instance")
+	}
+	if qotdHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}) {
+		t.Fatal("expected base bootstrap route to stay off the qotd bot instance")
+	}
+}
+
+func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfgMgr := files.NewMemoryConfigManager()
+	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = []files.GuildConfig{{
+			GuildID:       "guild-1",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "yuzuha",
+			},
+			Features: files.FeatureToggles{
+				Services: files.FeatureServiceToggles{
+					Commands: boolPtr(true),
+				},
+			},
+		}}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	aliceHandler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
+	aliceHandler.SetQOTDService(handlerQOTDServiceStub{})
+	aliceHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
+	if err := aliceHandler.registerCommandCatalog(); err != nil {
+		t.Fatalf("register alice command catalog: %v", err)
+	}
+
+	yuzuhaHandler := NewCommandHandlerForBot(nil, cfgMgr, "yuzuha", "alice")
+	yuzuhaHandler.SetQOTDService(handlerQOTDServiceStub{})
+	yuzuhaHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
+	if err := yuzuhaHandler.registerCommandCatalog(); err != nil {
+		t.Fatalf("register yuzuha command catalog: %v", err)
+	}
+
+	if !aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
+		t.Fatal("expected base-domain slash route to stay on alice")
+	}
+	if aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
+		t.Fatal("expected qotd slash route to move off alice")
+	}
+	if aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindAutocomplete, Path: "config qotd_channel"}) {
+		t.Fatal("expected qotd autocomplete route to move off alice")
+	}
+	if aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
+		t.Fatal("expected qotd component route to move off alice")
+	}
+
+	if yuzuhaHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
+		t.Fatal("expected base-domain slash route to stay off yuzuha")
+	}
+	if !yuzuhaHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
+		t.Fatal("expected qotd slash route to move to yuzuha")
+	}
+	if !yuzuhaHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindAutocomplete, Path: "config qotd_channel"}) {
+		t.Fatal("expected qotd autocomplete route to move to yuzuha")
+	}
+	if !yuzuhaHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
+		t.Fatal("expected qotd component route to move to yuzuha")
 	}
 }
 

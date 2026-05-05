@@ -3,7 +3,8 @@ package core
 import (
 	"fmt"
 	"log/slog"
-	"maps"
+	"sort"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -165,6 +166,14 @@ type CommandManager struct {
 	interactionHandlerCancel func()
 }
 
+type commandSyncSummary struct {
+	created   int
+	updated   int
+	deleted   int
+	unchanged int
+	total     int
+}
+
 // NewCommandManager creates a new command manager
 func NewCommandManager(
 	session *discordgo.Session,
@@ -202,82 +211,16 @@ func (cm *CommandManager) SetupCommands() error {
 		}
 		return err
 	}
-
-	// Fetch commands already registered on Discord
-	registered, err := cm.session.ApplicationCommands(cm.session.State.User.ID, "")
-	if err != nil {
-		return rollback(fmt.Errorf("failed to fetch registered commands: %w", err))
-	}
-
-	// Build map of registered commands
-	regByName := make(map[string]*discordgo.ApplicationCommand, len(registered))
-	for _, rc := range registered {
-		regByName[rc.Name] = rc
-	}
-
-	// Build map of code-defined commands
-	codeCommands := cm.router.registry.GetAllCommands()
-	codeByName := maps.Clone(codeCommands)
-
-	// Create/Update commands as needed
-	created, updated, unchanged := 0, 0, 0
-	commandIDs := make(map[string]string, len(codeCommands))
-	for name, cmd := range codeCommands {
-		desired := &discordgo.ApplicationCommand{
-			Name:        cmd.Name(),
-			Description: cmd.Description(),
-			Options:     normalizeCommandOptions(cmd.Options()),
+	if cm.usesGuildScopedSync() {
+		if err := cm.syncGuildScopedCommands(); err != nil {
+			return rollback(err)
 		}
-		if existing, ok := regByName[name]; ok {
-			// Command already exists, check if it needs updating
-			if CompareCommands(existing, desired) {
-				slog.Info(fmt.Sprintf("Command unchanged: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
-				unchanged++
-				commandIDs[name] = existing.ID
-				continue
-			}
-
-			// Update command
-			updatedCmd, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, "", existing.ID, desired)
-			if err != nil {
-				return rollback(fmt.Errorf("error updating command '%s': %w", name, err))
-			}
-			if updatedCmd != nil {
-				commandIDs[name] = updatedCmd.ID
-			} else {
-				commandIDs[name] = existing.ID
-			}
-			slog.Info(fmt.Sprintf("Command updated: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
-			updated++
-		} else {
-			// Create new command
-			createdCmd, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, "", desired)
-			if err != nil {
-				return rollback(fmt.Errorf("error creating command '%s': %w", name, err))
-			}
-			if createdCmd != nil {
-				commandIDs[name] = createdCmd.ID
-			}
-			slog.Info(fmt.Sprintf("Command created: /%s %s - %s", name, FormatOptions(cmd.Options()), cmd.Description()))
-			created++
-		}
+		return nil
 	}
 
-	// Remove orphaned commands (present on Discord but not in code)
-	deleted := 0
-	for _, rc := range registered {
-		if _, exists := codeByName[rc.Name]; !exists {
-			if err := cm.session.ApplicationCommandDelete(cm.session.State.User.ID, "", rc.ID); err != nil {
-				slog.Warn(fmt.Sprintf("Error removing orphan command: %s, error: %v", rc.Name, err))
-				continue
-			}
-			slog.Info(fmt.Sprintf("Orphan command removed: /%s %s - %s", rc.Name, FormatOptions(rc.Options), rc.Description))
-			deleted++
-		}
+	if _, err := cm.syncCommandScope("", cm.globalDesiredCommands()); err != nil {
+		return rollback(err)
 	}
-	// Log do resumo
-	slog.Info(fmt.Sprintf("Command synchronization completed: created=%d, updated=%d, deleted=%d, unchanged=%d, total=%d, mode=incremental", created, updated, deleted, unchanged, len(codeCommands)))
-
 	return nil
 }
 
@@ -288,6 +231,304 @@ func (cm *CommandManager) Shutdown() error {
 		cm.interactionHandlerCancel = nil
 	}
 	return nil
+}
+
+func (cm *CommandManager) usesGuildScopedSync() bool {
+	if cm == nil || cm.router == nil {
+		return false
+	}
+	configManager := cm.router.GetConfigManager()
+	if configManager == nil {
+		return false
+	}
+	return configManager.Config().HasDomainBotInstanceOverrides()
+}
+
+func (cm *CommandManager) syncGuildScopedCommands() error {
+	if cm == nil || cm.router == nil {
+		return nil
+	}
+
+	summary := commandSyncSummary{}
+	globalSummary, err := cm.syncCommandScope("", map[string]*discordgo.ApplicationCommand{})
+	if err != nil {
+		return err
+	}
+	summary.add(globalSummary)
+
+	for _, guildID := range cm.guildScopedSyncTargets() {
+		guildSummary, err := cm.syncCommandScope(guildID, cm.guildDesiredCommands(guildID))
+		if err != nil {
+			return err
+		}
+		summary.add(guildSummary)
+	}
+
+	slog.Info(fmt.Sprintf("Command synchronization completed: created=%d, updated=%d, deleted=%d, unchanged=%d, total=%d, mode=guild", summary.created, summary.updated, summary.deleted, summary.unchanged, summary.total))
+	return nil
+}
+
+func (summary *commandSyncSummary) add(other commandSyncSummary) {
+	summary.created += other.created
+	summary.updated += other.updated
+	summary.deleted += other.deleted
+	summary.unchanged += other.unchanged
+	summary.total += other.total
+}
+
+func (cm *CommandManager) globalDesiredCommands() map[string]*discordgo.ApplicationCommand {
+	if cm == nil || cm.router == nil || cm.router.registry == nil {
+		return nil
+	}
+	codeCommands := cm.router.registry.GetAllCommands()
+	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands))
+	for name, cmd := range codeCommands {
+		desired[name] = &discordgo.ApplicationCommand{
+			Name:        cmd.Name(),
+			Description: cmd.Description(),
+			Options:     normalizeCommandOptions(cmd.Options()),
+		}
+	}
+	return desired
+}
+
+func (cm *CommandManager) guildDesiredCommands(guildID string) map[string]*discordgo.ApplicationCommand {
+	if cm == nil || cm.router == nil || cm.router.registry == nil {
+		return nil
+	}
+	codeCommands := cm.router.registry.GetAllCommands()
+	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands))
+	for _, name := range sortedCommandNames(codeCommands) {
+		cmd := codeCommands[name]
+		if cmd == nil {
+			continue
+		}
+		built := cm.buildGuildApplicationCommand(guildID, cmd)
+		if built == nil {
+			continue
+		}
+		desired[built.Name] = built
+	}
+	return desired
+}
+
+func (cm *CommandManager) buildGuildApplicationCommand(guildID string, cmd Command) *discordgo.ApplicationCommand {
+	if cm == nil || cmd == nil {
+		return nil
+	}
+	if group, ok := cmd.(*GroupCommand); ok {
+		options := cm.buildGuildGroupOptions(guildID, strings.TrimSpace(group.Name()), group)
+		if len(options) == 0 {
+			return nil
+		}
+		return &discordgo.ApplicationCommand{
+			Name:        group.Name(),
+			Description: group.Description(),
+			Options:     normalizeCommandOptions(options),
+		}
+	}
+
+	if !cm.shouldSyncSlashRoute(guildID, strings.TrimSpace(cmd.Name())) {
+		return nil
+	}
+	return &discordgo.ApplicationCommand{
+		Name:        cmd.Name(),
+		Description: cmd.Description(),
+		Options:     normalizeCommandOptions(cmd.Options()),
+	}
+}
+
+func (cm *CommandManager) buildGuildGroupOptions(guildID, parentPath string, group *GroupCommand) []*discordgo.ApplicationCommandOption {
+	if cm == nil || group == nil {
+		return nil
+	}
+	options := make([]*discordgo.ApplicationCommandOption, 0, len(group.subcommands))
+	for _, name := range sortedSubCommandNames(group.subcommands) {
+		subcmd := group.subcommands[name]
+		option, ok := cm.buildGuildSubCommandOption(guildID, JoinRoutePath(parentPath, name), subcmd)
+		if ok {
+			options = append(options, option)
+		}
+	}
+	return options
+}
+
+func (cm *CommandManager) buildGuildSubCommandOption(guildID, routePath string, subcmd SubCommand) (*discordgo.ApplicationCommandOption, bool) {
+	if cm == nil || subcmd == nil {
+		return nil, false
+	}
+
+	if group, ok := subcmd.(*GroupCommand); ok {
+		childOptions := cm.buildGuildGroupOptions(guildID, routePath, group)
+		if len(childOptions) == 0 {
+			return nil, false
+		}
+		optionType := discordgo.ApplicationCommandOptionSubCommand
+		for _, childOption := range childOptions {
+			if childOption == nil {
+				continue
+			}
+			if childOption.Type == discordgo.ApplicationCommandOptionSubCommand || childOption.Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+				optionType = discordgo.ApplicationCommandOptionSubCommandGroup
+				break
+			}
+		}
+		return &discordgo.ApplicationCommandOption{
+			Type:        optionType,
+			Name:        group.Name(),
+			Description: group.Description(),
+			Options:     normalizeCommandOptions(childOptions),
+		}, true
+	}
+
+	if !cm.shouldSyncSlashRoute(guildID, routePath) {
+		return nil, false
+	}
+	optionType := discordgo.ApplicationCommandOptionSubCommand
+	subOptions := normalizeCommandOptions(subcmd.Options())
+	for _, subOption := range subOptions {
+		if subOption == nil {
+			continue
+		}
+		if subOption.Type == discordgo.ApplicationCommandOptionSubCommand || subOption.Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+			optionType = discordgo.ApplicationCommandOptionSubCommandGroup
+			break
+		}
+	}
+	return &discordgo.ApplicationCommandOption{
+		Type:        optionType,
+		Name:        subcmd.Name(),
+		Description: subcmd.Description(),
+		Options:     subOptions,
+	}, true
+}
+
+func (cm *CommandManager) shouldSyncSlashRoute(guildID, path string) bool {
+	if cm == nil || cm.router == nil {
+		return false
+	}
+	return cm.router.shouldHandleInteraction(guildID, InteractionRouteKey{
+		Kind: InteractionKindSlash,
+		Path: JoinRoutePath(path),
+	})
+}
+
+func (cm *CommandManager) guildScopedSyncTargets() []string {
+	if cm == nil || cm.router == nil {
+		return nil
+	}
+	configManager := cm.router.GetConfigManager()
+	if configManager == nil {
+		return nil
+	}
+	cfg := configManager.Config()
+	if cfg == nil || len(cfg.Guilds) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(cfg.Guilds))
+	targets := make([]string, 0, len(cfg.Guilds))
+	for _, guild := range cfg.Guilds {
+		guildID := strings.TrimSpace(guild.GuildID)
+		if guildID == "" {
+			continue
+		}
+		if _, exists := seen[guildID]; exists {
+			continue
+		}
+		seen[guildID] = struct{}{}
+		targets = append(targets, guildID)
+	}
+	sort.Strings(targets)
+	return targets
+}
+
+func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*discordgo.ApplicationCommand) (commandSyncSummary, error) {
+	if desired == nil {
+		desired = map[string]*discordgo.ApplicationCommand{}
+	}
+
+	registered, err := cm.session.ApplicationCommands(cm.session.State.User.ID, guildID)
+	if err != nil {
+		return commandSyncSummary{}, fmt.Errorf("failed to fetch registered commands for %s scope: %w", commandSyncScopeLabel(guildID), err)
+	}
+
+	regByName := make(map[string]*discordgo.ApplicationCommand, len(registered))
+	for _, rc := range registered {
+		regByName[rc.Name] = rc
+	}
+
+	summary := commandSyncSummary{total: len(desired)}
+	for _, name := range sortedDesiredCommandNames(desired) {
+		desiredCommand := desired[name]
+		if existing, ok := regByName[name]; ok {
+			if CompareCommands(existing, desiredCommand) {
+				slog.Info(fmt.Sprintf("Command unchanged (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, FormatOptions(desiredCommand.Options), desiredCommand.Description))
+				summary.unchanged++
+				continue
+			}
+
+			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, guildID, existing.ID, desiredCommand); err != nil {
+				return commandSyncSummary{}, fmt.Errorf("error updating command '%s' in %s scope: %w", name, commandSyncScopeLabel(guildID), err)
+			}
+			slog.Info(fmt.Sprintf("Command updated (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, FormatOptions(desiredCommand.Options), desiredCommand.Description))
+			summary.updated++
+			continue
+		}
+
+		if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, guildID, desiredCommand); err != nil {
+			return commandSyncSummary{}, fmt.Errorf("error creating command '%s' in %s scope: %w", name, commandSyncScopeLabel(guildID), err)
+		}
+		slog.Info(fmt.Sprintf("Command created (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, FormatOptions(desiredCommand.Options), desiredCommand.Description))
+		summary.created++
+	}
+
+	for _, rc := range registered {
+		if _, exists := desired[rc.Name]; exists {
+			continue
+		}
+		if err := cm.session.ApplicationCommandDelete(cm.session.State.User.ID, guildID, rc.ID); err != nil {
+			slog.Warn(fmt.Sprintf("Error removing orphan command from %s scope: %s, error: %v", commandSyncScopeLabel(guildID), rc.Name, err))
+			continue
+		}
+		slog.Info(fmt.Sprintf("Orphan command removed (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), rc.Name, FormatOptions(rc.Options), rc.Description))
+		summary.deleted++
+	}
+
+	return summary, nil
+}
+
+func commandSyncScopeLabel(guildID string) string {
+	if strings.TrimSpace(guildID) == "" {
+		return "global"
+	}
+	return fmt.Sprintf("guild %s", guildID)
+}
+
+func sortedCommandNames(commands map[string]Command) []string {
+	names := make([]string, 0, len(commands))
+	for name := range commands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedDesiredCommandNames(commands map[string]*discordgo.ApplicationCommand) []string {
+	names := make([]string, 0, len(commands))
+	for name := range commands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedSubCommandNames(subcommands map[string]SubCommand) []string {
+	names := make([]string, 0, len(subcommands))
+	for name := range subcommands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // GroupCommand represents a command that contains subcommands

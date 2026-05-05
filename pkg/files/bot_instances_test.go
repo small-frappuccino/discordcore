@@ -67,6 +67,27 @@ func TestBotConfigGuildsForBotInstanceForDomainUsesDomainAwareResolution(t *test
 	}
 }
 
+func TestBotConfigHasDomainBotInstanceOverrides(t *testing.T) {
+	t.Parallel()
+
+	if (&BotConfig{}).HasDomainBotInstanceOverrides() {
+		t.Fatal("expected empty config to report no domain overrides")
+	}
+
+	cfg := &BotConfig{Guilds: []GuildConfig{
+		{GuildID: "g1", BotInstanceID: "alice"},
+		{GuildID: "g2", BotInstanceID: "alice", DomainBotInstanceIDs: map[string]string{"tickets": "   "}},
+	}}
+	if cfg.HasDomainBotInstanceOverrides() {
+		t.Fatal("expected blank domain override values to be ignored")
+	}
+
+	cfg.Guilds[1].DomainBotInstanceIDs[BotDomainQOTD] = "yuzuha"
+	if !cfg.HasDomainBotInstanceOverrides() {
+		t.Fatal("expected qotd override to trigger domain override detection")
+	}
+}
+
 func guildIDsForTest(guilds []GuildConfig) []string {
 	out := make([]string, 0, len(guilds))
 	for _, guild := range guilds {
