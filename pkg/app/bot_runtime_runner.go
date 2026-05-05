@@ -171,7 +171,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
 	}
 
-	if runtime.capabilities.qotd && opts.qotdLifecycleService != nil {
+	if runtime.capabilities.qotdRuntime && opts.qotdLifecycleService != nil {
 		qotdRuntimeService := discordqotd.NewRuntimeServiceForBot(
 			runtime.session,
 			opts.configManager,
@@ -237,7 +237,7 @@ func commandCatalogDomainsForRuntime(capabilities botRuntimeCapabilities) []stri
 	if capabilities.commandsDefaultDomain {
 		domains = append(domains, "")
 	}
-	if capabilities.qotd {
+	if capabilities.commandsQOTDDomain {
 		domains = append(domains, files.BotDomainQOTD)
 	}
 	if len(domains) == 0 && capabilities.commands {

@@ -54,7 +54,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 
 	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *commands.CommandHandler {
 		created = true
-		return nil
+		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID, defaultBotInstanceID)
 	}
 	setupCommandHandler = func(ch *commands.CommandHandler) error {
 		setupCommandsCalls++
@@ -63,7 +63,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 
 	runtime := &botRuntime{
 		instanceID:   "alice",
-		capabilities: botRuntimeCapabilities{qotd: true},
+		capabilities: botRuntimeCapabilities{qotdRuntime: true},
 		session:      session,
 	}
 	err = initializeBotRuntime(runtime, botRuntimeOptions{
@@ -83,5 +83,56 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	}
 	if runtime.commandHandler != nil {
 		t.Fatal("expected no command handler when commands are disabled")
+	}
+}
+
+func TestInitializeBotRuntimeStartsCommandHandlerForDormantQOTDCommandCatalog(t *testing.T) {
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("create discord session: %v", err)
+	}
+
+	cfgMgr := files.NewMemoryConfigManager()
+	origNewCommandHandlerForBot := newCommandHandlerForBot
+	origSetupCommandHandler := setupCommandHandler
+	defer func() {
+		newCommandHandlerForBot = origNewCommandHandlerForBot
+		setupCommandHandler = origSetupCommandHandler
+	}()
+
+	var created bool
+	var setupCommandsCalls int
+
+	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *commands.CommandHandler {
+		created = true
+		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID, defaultBotInstanceID)
+	}
+	setupCommandHandler = func(ch *commands.CommandHandler) error {
+		setupCommandsCalls++
+		return nil
+	}
+
+	runtime := &botRuntime{
+		instanceID: "companion",
+		capabilities: botRuntimeCapabilities{
+			commands:           true,
+			commandsQOTDDomain: true,
+		},
+		session: session,
+	}
+	err = initializeBotRuntime(runtime, botRuntimeOptions{
+		defaultBotInstanceID: "alice",
+		runtimeCount:         2,
+		configManager:        cfgMgr,
+	})
+	if err != nil {
+		t.Fatalf("initialize bot runtime: %v", err)
+	}
+
+	if !created {
+		t.Fatal("expected dormant qotd runtime to create a command handler")
+	}
+	if setupCommandsCalls != 1 {
+		t.Fatalf("expected slash command setup once, got %d calls", setupCommandsCalls)
 	}
 }

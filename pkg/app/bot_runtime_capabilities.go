@@ -11,10 +11,11 @@ type botRuntimeCapabilities struct {
 	monitoring bool
 	commands   bool
 	commandsDefaultDomain bool
+	commandsQOTDDomain   bool
 	admin      bool
 	automod    bool
 	userPrune  bool
-	qotd       bool
+	qotdRuntime bool
 	warmup     bool
 	intents    discordgo.Intent
 }
@@ -37,11 +38,14 @@ func resolveBotRuntimeCapabilities(
 		return capabilities
 	}
 
+	normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
 	for _, guild := range qotdGuilds {
-		if !guild.QOTD.IsZero() {
-			capabilities.qotd = true
+		if botRuntimeNeedsQOTDCommandCatalog(guild, normalizedBotInstanceID) {
 			capabilities.commands = true
-			break
+			capabilities.commandsQOTDDomain = true
+		}
+		if botRuntimeNeedsQOTDRuntime(guild) {
+			capabilities.qotdRuntime = true
 		}
 	}
 
@@ -92,6 +96,22 @@ func resolveBotRuntimeCapabilities(
 	}
 
 	return capabilities
+}
+
+func botRuntimeNeedsQOTDCommandCatalog(guild files.GuildConfig, botInstanceID string) bool {
+	if botRuntimeNeedsQOTDRuntime(guild) {
+		return true
+	}
+
+	if botInstanceID == "" {
+		return false
+	}
+
+	return guild.BotInstanceIDOverrideForDomain(files.BotDomainQOTD) == botInstanceID
+}
+
+func botRuntimeNeedsQOTDRuntime(guild files.GuildConfig) bool {
+	return !guild.QOTD.IsZero()
 }
 
 func botRuntimeNeedsMonitoring(

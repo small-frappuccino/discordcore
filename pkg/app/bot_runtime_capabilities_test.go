@@ -104,8 +104,11 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 	if !capabilities.userPrune {
 		t.Fatal("expected user prune capability for companion runtime")
 	}
-	if !capabilities.qotd {
-		t.Fatal("expected qotd capability for companion runtime")
+	if !capabilities.commandsQOTDDomain {
+		t.Fatal("expected qotd command catalog capability for companion runtime")
+	}
+	if !capabilities.qotdRuntime {
+		t.Fatal("expected qotd runtime capability for companion runtime")
 	}
 
 	required := discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessageReactions
@@ -127,7 +130,7 @@ func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
 	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "alice")
-	if capabilities.monitoring || capabilities.commands || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotd {
+	if capabilities.monitoring || capabilities.commands || capabilities.commandsDefaultDomain || capabilities.commandsQOTDDomain || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
 	if capabilities.intents != discordgo.IntentsGuilds {
@@ -198,8 +201,11 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 	if !capabilities.monitoring {
 		t.Fatal("expected monitoring capability to include any guild assigned to alice")
 	}
-	if !capabilities.qotd {
-		t.Fatal("expected qotd capability to include any configured guild assigned to alice")
+	if !capabilities.commandsQOTDDomain {
+		t.Fatal("expected qotd command catalog capability to include any configured guild assigned to alice")
+	}
+	if !capabilities.qotdRuntime {
+		t.Fatal("expected qotd runtime capability to include any configured guild assigned to alice")
 	}
 	if capabilities.intents&discordgo.IntentsGuildMessageReactions == 0 {
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
@@ -257,13 +263,16 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 	if !aliceCapabilities.commands {
 		t.Fatal("expected alice runtime to keep command capability from guild-wide binding")
 	}
-	if aliceCapabilities.qotd {
-		t.Fatalf("expected alice runtime to lose qotd capability when qotd domain is overridden, got %+v", aliceCapabilities)
+	if aliceCapabilities.commandsQOTDDomain || aliceCapabilities.qotdRuntime {
+		t.Fatalf("expected alice runtime to lose qotd-specific capabilities when qotd domain is overridden, got %+v", aliceCapabilities)
 	}
 
 	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
-	if !companionCapabilities.qotd {
-		t.Fatal("expected companion runtime to gain qotd capability from domain override")
+	if !companionCapabilities.commandsQOTDDomain {
+		t.Fatal("expected companion runtime to gain qotd command catalog capability from domain override")
+	}
+	if !companionCapabilities.qotdRuntime {
+		t.Fatal("expected companion runtime to gain qotd runtime capability from domain override")
 	}
 	if !companionCapabilities.commands {
 		t.Fatalf("expected companion runtime to start command handling for qotd-only catalog, got %+v", companionCapabilities)
@@ -273,5 +282,66 @@ func TestResolveBotRuntimeCapabilitiesUsesQOTDDomainBindings(t *testing.T) {
 	}
 	if companionCapabilities.intents != discordgo.IntentsGuilds {
 		t.Fatalf("expected qotd-only runtime to keep minimal intents, got %d", companionCapabilities.intents)
+	}
+}
+
+func TestResolveBotRuntimeCapabilitiesKeepsDormantQOTDCommandCatalogOnDomainOwner(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(v bool) *bool { return &v }
+	cfg := &files.BotConfig{
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring:    boolPtr(false),
+				Automod:       boolPtr(false),
+				Commands:      boolPtr(false),
+				AdminCommands: boolPtr(false),
+			},
+			Logging: files.FeatureLoggingToggles{
+				AvatarLogging:  boolPtr(false),
+				RoleUpdate:     boolPtr(false),
+				MemberJoin:     boolPtr(false),
+				MemberLeave:    boolPtr(false),
+				MessageProcess: boolPtr(false),
+				MessageEdit:    boolPtr(false),
+				MessageDelete:  boolPtr(false),
+				ReactionMetric: boolPtr(false),
+				AutomodAction:  boolPtr(false),
+			},
+		},
+		Guilds: []files.GuildConfig{{
+			GuildID:       "g1",
+			BotInstanceID: "alice",
+			DomainBotInstanceIDs: map[string]string{
+				files.BotDomainQOTD: "companion",
+			},
+			Features: files.FeatureToggles{
+				Services: files.FeatureServiceToggles{
+					Commands: boolPtr(false),
+				},
+			},
+		}},
+	}
+
+	aliceCapabilities := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
+	if aliceCapabilities.commands || aliceCapabilities.commandsQOTDDomain || aliceCapabilities.qotdRuntime {
+		t.Fatalf("expected alice runtime to stay idle for dormant qotd override, got %+v", aliceCapabilities)
+	}
+
+	companionCapabilities := resolveBotRuntimeCapabilities(cfg, "companion", "alice")
+	if !companionCapabilities.commands {
+		t.Fatalf("expected companion runtime to start command handling for dormant qotd bootstrap routes, got %+v", companionCapabilities)
+	}
+	if !companionCapabilities.commandsQOTDDomain {
+		t.Fatalf("expected companion runtime to retain qotd command catalog while guild is dormant, got %+v", companionCapabilities)
+	}
+	if companionCapabilities.qotdRuntime {
+		t.Fatalf("expected companion runtime to keep background qotd service off while qotd config is empty, got %+v", companionCapabilities)
+	}
+	if companionCapabilities.commandsDefaultDomain || companionCapabilities.admin || companionCapabilities.monitoring || companionCapabilities.userPrune {
+		t.Fatalf("expected dormant qotd companion runtime to stay limited to qotd command catalog, got %+v", companionCapabilities)
+	}
+	if companionCapabilities.intents != discordgo.IntentsGuilds {
+		t.Fatalf("expected dormant qotd bootstrap runtime to keep minimal intents, got %d", companionCapabilities.intents)
 	}
 }
