@@ -22,7 +22,22 @@ func newConfigCommandTestHarness(t *testing.T, guildID, ownerID string) *configC
 	t.Helper()
 
 	session, rec := newConfigCommandTestSession(t)
-	router, cm := newConfigCommandTestRouter(t, session, guildID, ownerID)
+	router, cm := newConfigCommandTestRouterWithClock(t, session, guildID, ownerID, nil)
+	return &configCommandTestHarness{
+		session: session,
+		rec:     rec,
+		router:  router,
+		cm:      cm,
+		guildID: guildID,
+		ownerID: ownerID,
+	}
+}
+
+func newConfigCommandTestHarnessWithClock(t *testing.T, guildID, ownerID string, now func() time.Time) *configCommandTestHarness {
+	t.Helper()
+
+	session, rec := newConfigCommandTestSession(t)
+	router, cm := newConfigCommandTestRouterWithClock(t, session, guildID, ownerID, now)
 	return &configCommandTestHarness{
 		session: session,
 		rec:     rec,
@@ -90,6 +105,18 @@ func testCommandSchedule() files.QOTDPublishScheduleConfig {
 	return files.QOTDPublishScheduleConfig{
 		HourUTC:   &hourUTC,
 		MinuteUTC: &minuteUTC,
+	}
+}
+
+func assertQOTDSuppressionDate(t *testing.T, cm *files.ConfigManager, guildID, want string) {
+	t.Helper()
+
+	qotdConfig, err := cm.QOTDConfig(guildID)
+	if err != nil {
+		t.Fatalf("QOTDConfig() failed: %v", err)
+	}
+	if qotdConfig.SuppressScheduledPublishDateUTC != want {
+		t.Fatalf("unexpected qotd suppression date: got %q want %q", qotdConfig.SuppressScheduledPublishDateUTC, want)
 	}
 }
 

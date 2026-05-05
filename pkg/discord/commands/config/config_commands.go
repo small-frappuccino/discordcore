@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
@@ -14,6 +15,7 @@ import (
 // It also optionally registers simple ping/echo commands to validate the routing pipeline.
 type ConfigCommands struct {
 	configManager *files.ConfigManager
+	now           func() time.Time
 }
 
 const (
@@ -23,7 +25,16 @@ const (
 
 // NewConfigCommands creates a new config commands registrar.
 func NewConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
-	return &ConfigCommands{configManager: configManager}
+	return NewConfigCommandsWithClock(configManager, nil)
+	}
+
+func NewConfigCommandsWithClock(configManager *files.ConfigManager, now func() time.Time) *ConfigCommands {
+	if now == nil {
+		now = func() time.Time {
+			return time.Now().UTC()
+		}
+	}
+	return &ConfigCommands{configManager: configManager, now: now}
 }
 
 // RegisterCommands registers the /config command group and optional simple commands in the provided router.
@@ -77,9 +88,9 @@ func (cc *ConfigCommands) RegisterQOTDCommands(router *core.CommandRouter) {
 
 	cc.registerConfigSubcommands(router, files.BotDomainQOTD,
 		NewQOTDGetSubCommand(cc.configManager),
-		NewQOTDEnabledSubCommand(cc.configManager),
-		NewQOTDChannelSubCommand(cc.configManager),
-		NewQOTDScheduleSubCommand(cc.configManager),
+		NewQOTDEnabledSubCommand(cc.configManager, cc.now),
+		NewQOTDChannelSubCommand(cc.configManager, cc.now),
+		NewQOTDScheduleSubCommand(cc.configManager, cc.now),
 	)
 }
 

@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	qotdservice "github.com/small-frappuccino/discordcore/pkg/qotd"
 )
 
 const (
@@ -69,10 +71,11 @@ func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 
 type QOTDEnabledSubCommand struct {
 	configManager *files.ConfigManager
+	now           func() time.Time
 }
 
-func NewQOTDEnabledSubCommand(configManager *files.ConfigManager) *QOTDEnabledSubCommand {
-	return &QOTDEnabledSubCommand{configManager: configManager}
+func NewQOTDEnabledSubCommand(configManager *files.ConfigManager, now func() time.Time) *QOTDEnabledSubCommand {
+	return &QOTDEnabledSubCommand{configManager: configManager, now: qotdConfigClock(now)}
 }
 
 func (c *QOTDEnabledSubCommand) Name() string { return qotdEnabledSubCommandName }
@@ -97,7 +100,7 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	enabled := extractor.Bool(qotdEnabledOptionName)
 
-	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, func(deck *files.QOTDDeckConfig) error {
+	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, c.now, func(deck *files.QOTDDeckConfig) error {
 		if enabled && strings.TrimSpace(deck.ChannelID) == "" {
 			return qotdConfigDetailedCommandError("QOTD publishing couldn't be turned on yet because this deck still has no channel. This reply stays private so that can be fixed first.")
 		}
@@ -119,10 +122,11 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 
 type QOTDChannelSubCommand struct {
 	configManager *files.ConfigManager
+	now           func() time.Time
 }
 
-func NewQOTDChannelSubCommand(configManager *files.ConfigManager) *QOTDChannelSubCommand {
-	return &QOTDChannelSubCommand{configManager: configManager}
+func NewQOTDChannelSubCommand(configManager *files.ConfigManager, now func() time.Time) *QOTDChannelSubCommand {
+	return &QOTDChannelSubCommand{configManager: configManager, now: qotdConfigClock(now)}
 }
 
 func (c *QOTDChannelSubCommand) Name() string { return qotdChannelSubCommandName }
@@ -150,7 +154,7 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 		return qotdConfigDetailedCommandError("This change needs a channel before it can be applied, so this reply stays private.")
 	}
 
-	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, func(deck *files.QOTDDeckConfig) error {
+	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, c.now, func(deck *files.QOTDDeckConfig) error {
 		deck.ChannelID = channelID
 		return nil
 	})
@@ -169,10 +173,11 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 
 type QOTDScheduleSubCommand struct {
 	configManager *files.ConfigManager
+	now           func() time.Time
 }
 
-func NewQOTDScheduleSubCommand(configManager *files.ConfigManager) *QOTDScheduleSubCommand {
-	return &QOTDScheduleSubCommand{configManager: configManager}
+func NewQOTDScheduleSubCommand(configManager *files.ConfigManager, now func() time.Time) *QOTDScheduleSubCommand {
+	return &QOTDScheduleSubCommand{configManager: configManager, now: qotdConfigClock(now)}
 }
 
 func (c *QOTDScheduleSubCommand) Name() string { return qotdScheduleSubCommandName }
@@ -202,7 +207,7 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 	hourUTC := int(extractor.Int(qotdScheduleHourOptionName))
 	minuteUTC := int(extractor.Int(qotdScheduleMinuteOptionName))
 
-	updatedConfig, err := updateQOTDConfig(ctx, c.configManager, func(cfg *files.QOTDConfig) error {
+	updatedConfig, err := updateQOTDConfig(ctx, c.configManager, c.now, func(cfg *files.QOTDConfig) error {
 		cfg.Schedule = files.QOTDPublishScheduleConfig{
 			HourUTC:   &hourUTC,
 			MinuteUTC: &minuteUTC,
@@ -220,6 +225,7 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 func updateQOTDConfig(
 	ctx *core.Context,
 	configManager *files.ConfigManager,
+	now func() time.Time,
 	mutate func(*files.QOTDConfig) error,
 ) (files.QOTDConfig, error) {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
@@ -228,12 +234,13 @@ func updateQOTDConfig(
 
 	var updatedConfig files.QOTDConfig
 	err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
-		next := files.DashboardQOTDConfig(guildConfig.QOTD)
+		current := files.DashboardQOTDConfig(guildConfig.QOTD)
+		next := current
 		if err := mutate(&next); err != nil {
 			return err
 		}
 
-		normalized, err := files.NormalizeQOTDConfig(next)
+		normalized, err := qotdservice.PrepareSettingsUpdate(current, next, now())
 		if err != nil {
 			return translateQOTDConfigError(err)
 		}
@@ -257,9 +264,10 @@ func updateQOTDConfig(
 func updateActiveQOTDDeck(
 	ctx *core.Context,
 	configManager *files.ConfigManager,
+	now func() time.Time,
 	mutate func(*files.QOTDDeckConfig) error,
 ) (files.QOTDDeckConfig, error) {
-	updatedConfig, err := updateQOTDConfig(ctx, configManager, func(cfg *files.QOTDConfig) error {
+	updatedConfig, err := updateQOTDConfig(ctx, configManager, now, func(cfg *files.QOTDConfig) error {
 		deckIndex := activeQOTDDeckIndex(*cfg)
 		if deckIndex < 0 {
 			return qotdConfigDetailedCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.")
@@ -274,6 +282,17 @@ func updateActiveQOTDDeck(
 		return files.QOTDDeckConfig{}, qotdConfigDetailedCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.")
 	}
 	return updatedConfig.Decks[deckIndex], nil
+}
+
+func qotdConfigClock(now func() time.Time) func() time.Time {
+	if now == nil {
+		return func() time.Time {
+			return time.Now().UTC()
+		}
+	}
+	return func() time.Time {
+		return now().UTC()
+	}
 }
 
 func activeQOTDDeckIndex(cfg files.QOTDConfig) int {

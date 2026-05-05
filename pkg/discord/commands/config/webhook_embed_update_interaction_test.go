@@ -205,6 +205,10 @@ func newConfigCommandTestSessionWithWebhookBehavior(
 }
 
 func newConfigCommandTestRouter(t *testing.T, session *discordgo.Session, guildID, ownerID string) (*core.CommandRouter, *files.ConfigManager) {
+	return newConfigCommandTestRouterWithClock(t, session, guildID, ownerID, nil)
+}
+
+func newConfigCommandTestRouterWithClock(t *testing.T, session *discordgo.Session, guildID, ownerID string, now func() time.Time) (*core.CommandRouter, *files.ConfigManager) {
 	t.Helper()
 
 	cm := files.NewMemoryConfigManager()
@@ -217,7 +221,7 @@ func newConfigCommandTestRouter(t *testing.T, session *discordgo.Session, guildI
 	}
 
 	router := core.NewCommandRouter(session, cm)
-	NewConfigCommands(cm).RegisterCommands(router)
+	NewConfigCommandsWithClock(cm, now).RegisterCommands(router)
 	return router, cm
 }
 

@@ -8,20 +8,28 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-func (s *Service) updateSettingsLocked(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
-	normalized, err := files.NormalizeQOTDConfig(cfg)
+func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files.QOTDConfig, error) {
+	normalized, err := files.NormalizeQOTDConfig(next)
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
+	if publishDate, suppress := suppressedPublishDateOnEnable(current, normalized, now); suppress {
+		normalized = suppressScheduledPublishDate(normalized, publishDate)
+	}
+	return normalized, nil
+}
+
+func (s *Service) updateSettingsLocked(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
 	current, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return files.QOTDConfig{}, err
+	}
+	normalized, err := PrepareSettingsUpdate(current, cfg, s.clock())
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
 	currentDashboard := files.DashboardQOTDConfig(current)
 	nextDashboard := files.DashboardQOTDConfig(normalized)
-	if publishDate, suppress := suppressedPublishDateOnEnable(current, normalized, s.clock()); suppress {
-		normalized = suppressScheduledPublishDate(normalized, publishDate)
-	}
 	if err := s.configManager.SetQOTDConfig(guildID, normalized); err != nil {
 		return files.QOTDConfig{}, err
 	}
