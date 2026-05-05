@@ -39,6 +39,14 @@ func (st currentSlotState) HasProvisioningOfficialPost() bool {
 }
 
 func (s *Service) loadCurrentSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time) (currentSlotState, error) {
+	return s.loadSlotState(ctx, guildID, cfg, now, CurrentPublishDateUTC)
+}
+
+func (s *Service) loadUpcomingSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time) (currentSlotState, error) {
+	return s.loadSlotState(ctx, guildID, cfg, now, UpcomingPublishDateUTC)
+}
+
+func (s *Service) loadSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time, publishDate func(PublishSchedule, time.Time) time.Time) (currentSlotState, error) {
 	state := currentSlotState{}
 	schedule, err := resolvePublishSchedule(cfg)
 	if err != nil {
@@ -47,7 +55,7 @@ func (s *Service) loadCurrentSlotState(ctx context.Context, guildID string, cfg 
 
 	state.ScheduleConfigured = true
 	state.Schedule = schedule
-	state.PublishDateUTC = CurrentPublishDateUTC(schedule, now)
+	state.PublishDateUTC = publishDate(schedule, now)
 	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
 	state.OfficialPost, err = s.loadAutomaticSlotOfficialPost(ctx, guildID, state.PublishDateUTC)
 	if err != nil {

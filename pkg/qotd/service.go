@@ -376,7 +376,7 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 	if err != nil {
 		return AutomaticQueueState{}, err
 	}
-	slotState, err := s.loadCurrentSlotState(ctx, guildID, settings, now)
+	slotState, err := s.loadUpcomingSlotState(ctx, guildID, settings, now)
 	if err != nil {
 		return AutomaticQueueState{}, err
 	}

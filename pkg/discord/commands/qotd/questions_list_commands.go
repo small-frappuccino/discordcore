@@ -1116,7 +1116,7 @@ func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string
 		lines = append(lines, "Automatic publish schedule is not configured.")
 	} else {
 		lines = append(lines, fmt.Sprintf("Automatic schedule: %s UTC.", formatAutomaticQueueSchedule(state.Schedule)))
-		lines = append(lines, fmt.Sprintf("Current automatic slot: %s (%s).", formatAutomaticQueueTimestamp(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
+		lines = append(lines, fmt.Sprintf("Next automatic slot: %s (%s).", formatAutomaticQueueTimestamp(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
 	}
 
 	if !state.Deck.Enabled {
@@ -1126,7 +1126,7 @@ func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string
 	}
 
 	if state.SlotQuestion != nil {
-		lines = append(lines, fmt.Sprintf("Current automatic slot question: %s.", formatAutomaticQueueQuestion(*state.SlotQuestion)))
+		lines = append(lines, fmt.Sprintf("Next automatic slot question: %s.", formatAutomaticQueueQuestion(*state.SlotQuestion)))
 	}
 
 	if state.NextReadyQuestion != nil {

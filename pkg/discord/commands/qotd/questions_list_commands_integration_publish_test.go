@@ -47,14 +47,17 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 	if !strings.Contains(resp.Data.Content, "Automatic QOTD queue") {
 		t.Fatalf("expected automatic queue summary, got %q", resp.Data.Content)
 	}
-	if !strings.Contains(resp.Data.Content, "slot already published") {
-		t.Fatalf("expected queue command to show the current slot is already occupied, got %q", resp.Data.Content)
+	if !strings.Contains(resp.Data.Content, "Next automatic slot:") {
+		t.Fatalf("expected queue command to describe the upcoming automatic slot, got %q", resp.Data.Content)
 	}
-	if !strings.Contains(resp.Data.Content, "After that: QOTD question ID 2") {
-		t.Fatalf("expected queue command to point at the remaining ready question, got %q", resp.Data.Content)
+	if !strings.Contains(resp.Data.Content, "waiting for the scheduled publish") {
+		t.Fatalf("expected queue command to show the upcoming slot is still waiting, got %q", resp.Data.Content)
 	}
-	if !strings.Contains(resp.Data.Content, "Current automatic slot question: QOTD question ID 1") {
-		t.Fatalf("expected manual publish to occupy the current automatic slot, got %q", resp.Data.Content)
+	if !strings.Contains(resp.Data.Content, "Next automatic question: QOTD question ID 2") {
+		t.Fatalf("expected queue command to point at the remaining ready question for the upcoming slot, got %q", resp.Data.Content)
+	}
+	if strings.Contains(resp.Data.Content, "Current automatic slot question: QOTD question ID 1") {
+		t.Fatalf("expected queue command to stop describing the already-published slot as the queue slot, got %q", resp.Data.Content)
 	}
 }
 
@@ -202,8 +205,8 @@ func TestQOTDPublishCommandCanSkipAutomaticSlotConsumptionIntegration(t *testing
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if queue.SlotStatus != applicationqotd.AutomaticQueueSlotStatusDue {
-		t.Fatalf("expected current automatic slot to remain due, got %+v", queue)
+	if queue.SlotStatus != applicationqotd.AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected automatic queue to move to the next upcoming slot, got %+v", queue)
 	}
 	if queue.SlotOfficialPost != nil {
 		t.Fatalf("expected non-consuming publish to leave the automatic slot unoccupied, got %+v", queue)

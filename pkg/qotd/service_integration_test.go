@@ -722,14 +722,17 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusPublished {
-		t.Fatalf("expected manual publish to mark the current slot as published, got %+v", automaticQueue)
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected automatic queue to move on to the next day's slot after the boundary, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotOfficialPost == nil || automaticQueue.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected automatic queue state to expose the occupying manual post, got %+v", automaticQueue)
+	if !automaticQueue.SlotDateUTC.Equal(time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected automatic queue to point at tomorrow's slot date, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotQuestion == nil || automaticQueue.SlotQuestion.ID != nextQuestion.ID {
-		t.Fatalf("expected automatic queue state to expose the current-slot question, got %+v", automaticQueue)
+	if !automaticQueue.SlotPublishAtUTC.Equal(time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC)) {
+		t.Fatalf("expected automatic queue to point at tomorrow's publish time, got %+v", automaticQueue)
+	}
+	if automaticQueue.SlotOfficialPost != nil || automaticQueue.SlotQuestion != nil {
+		t.Fatalf("expected the upcoming slot to remain unoccupied after today's manual publish, got %+v", automaticQueue)
 	}
 	if automaticQueue.NextReadyQuestion != nil {
 		t.Fatalf("expected no next ready question after the only ready question was published manually, got %+v", automaticQueue)
@@ -842,17 +845,17 @@ func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *t
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusPublished {
-		t.Fatalf("expected manual publish to occupy the current automatic slot, got %+v", automaticQueue)
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected automatic queue to point at the next day's slot after the boundary, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotOfficialPost == nil || automaticQueue.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected automatic queue to expose the occupying manual post, got %+v", automaticQueue)
+	if !automaticQueue.SlotDateUTC.Equal(time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected automatic queue to move to tomorrow's slot date, got %+v", automaticQueue)
 	}
-	if automaticQueue.SlotQuestion == nil || automaticQueue.SlotQuestion.ID != first.ID {
-		t.Fatalf("expected automatic queue to expose the current-slot question, got %+v", automaticQueue)
+	if automaticQueue.SlotOfficialPost != nil || automaticQueue.SlotQuestion != nil {
+		t.Fatalf("expected tomorrow's slot to remain unoccupied, got %+v", automaticQueue)
 	}
 	if automaticQueue.NextReadyQuestion == nil || automaticQueue.NextReadyQuestion.ID != second.ID {
-		t.Fatalf("expected the next ready question to move on after the manual publish, got %+v", automaticQueue)
+		t.Fatalf("expected the next ready question to stay queued for the upcoming slot, got %+v", automaticQueue)
 	}
 
 	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
@@ -944,8 +947,8 @@ func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusDue {
-		t.Fatalf("expected automatic slot to remain due, got %+v", automaticQueue)
+	if automaticQueue.SlotStatus != AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected automatic queue to point at the next day's slot after the boundary, got %+v", automaticQueue)
 	}
 	if automaticQueue.SlotOfficialPost != nil {
 		t.Fatalf("expected no occupying automatic-slot post after non-consuming manual publish, got %+v", automaticQueue)
@@ -1081,8 +1084,8 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState(day three before scheduler) failed: %v", err)
 	}
-	if dayThreeQueue.SlotStatus != AutomaticQueueSlotStatusDue || dayThreeQueue.SlotOfficialPost != nil {
-		t.Fatalf("expected non-consuming day-three manual publish to leave the automatic slot due, got %+v", dayThreeQueue)
+	if dayThreeQueue.SlotStatus != AutomaticQueueSlotStatusWaiting || dayThreeQueue.SlotOfficialPost != nil {
+		t.Fatalf("expected non-consuming day-three manual publish to move the queue to the next day's slot, got %+v", dayThreeQueue)
 	}
 	if dayThreeQueue.NextReadyQuestion == nil || dayThreeQueue.NextReadyQuestion.ID != created[3].ID {
 		t.Fatalf("expected the next automatic question to remain available for day-three scheduling, got %+v", dayThreeQueue)
@@ -1132,7 +1135,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	}
 }
 
-func TestServiceGetAutomaticQueueStateReflectsManualPublishForCurrentSlot(t *testing.T) {
+func TestServiceGetAutomaticQueueStateSkipsPublishedCurrentSlotAfterBoundary(t *testing.T) {
 	service, _, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -1165,14 +1168,14 @@ func TestServiceGetAutomaticQueueStateReflectsManualPublishForCurrentSlot(t *tes
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if state.SlotStatus != AutomaticQueueSlotStatusPublished {
-		t.Fatalf("expected automatic queue to show the current slot as published after a manual publish, got %+v", state)
+	if state.SlotStatus != AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected automatic queue to point at tomorrow's slot after the boundary, got %+v", state)
 	}
-	if state.SlotOfficialPost == nil || state.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected automatic queue to expose the occupying manual post, got %+v", state)
+	if state.SlotOfficialPost != nil {
+		t.Fatalf("expected the upcoming slot to be unoccupied after today's manual publish, got %+v", state)
 	}
-	if state.SlotQuestion == nil || state.SlotQuestion.ID != first.ID {
-		t.Fatalf("expected automatic queue to expose the current-slot question after manual publish, got %+v", state)
+	if state.SlotQuestion != nil {
+		t.Fatalf("expected the upcoming slot to have no reserved question yet, got %+v", state)
 	}
 	if state.NextReadyQuestion == nil || state.NextReadyQuestion.ID != second.ID {
 		t.Fatalf("expected the next automatic question to skip the manual publish, got %+v", state)
@@ -1180,10 +1183,10 @@ func TestServiceGetAutomaticQueueStateReflectsManualPublishForCurrentSlot(t *tes
 	if state.NextReadyQuestion.ID == first.ID {
 		t.Fatalf("expected the manually published question to be removed from the automatic queue, got %+v", state)
 	}
-	if !state.SlotPublishAtUTC.Equal(time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)) {
+	if !state.SlotPublishAtUTC.Equal(time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC)) {
 		t.Fatalf("unexpected automatic slot publish time: %+v", state)
 	}
-	if !state.SlotDateUTC.Equal(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)) {
+	if !state.SlotDateUTC.Equal(time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("unexpected automatic slot date: %+v", state)
 	}
 	if state.Deck.ID != files.LegacyQOTDDefaultDeckID {
@@ -1241,11 +1244,17 @@ func TestServicePublishNowUsesCurrentScheduledSlotBeforeBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	if state.SlotStatus != AutomaticQueueSlotStatusPublished || state.SlotOfficialPost == nil {
-		t.Fatalf("expected manual pre-boundary publish to occupy the active automatic slot, got %+v", state)
+	if state.SlotStatus != AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected queue state to point at today's upcoming slot before the boundary, got %+v", state)
 	}
-	if state.SlotOfficialPost.PublishMode != string(PublishModeManual) {
-		t.Fatalf("expected the active slot to be occupied by the manual post, got %+v", state)
+	if !state.SlotDateUTC.Equal(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected queue state to point at today's slot date before the boundary, got %+v", state)
+	}
+	if !state.SlotPublishAtUTC.Equal(time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)) {
+		t.Fatalf("expected queue state to point at today's publish time before the boundary, got %+v", state)
+	}
+	if state.SlotOfficialPost != nil {
+		t.Fatalf("expected today's upcoming slot to remain unoccupied after publishing the previous active slot, got %+v", state)
 	}
 }
 
@@ -1612,7 +1621,7 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 	}
 }
 
-func TestServiceGetAutomaticQueueStateUsesActiveScheduledSlotBeforeBoundary(t *testing.T) {
+func TestServiceGetAutomaticQueueStateUsesUpcomingScheduledSlotBeforeBoundary(t *testing.T) {
 	service, _, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 42, 0, 0, time.UTC)
@@ -1641,19 +1650,19 @@ func TestServiceGetAutomaticQueueStateUsesActiveScheduledSlotBeforeBoundary(t *t
 	if err != nil {
 		t.Fatalf("GetAutomaticQueueState() failed: %v", err)
 	}
-	wantSlotDate := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
+	wantSlotDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
 	if !state.SlotDateUTC.Equal(wantSlotDate) {
-		t.Fatalf("expected pre-boundary automatic queue to report the active previous-day slot, got %+v", state)
+		t.Fatalf("expected pre-boundary automatic queue to report today's upcoming slot, got %+v", state)
 	}
-	wantPublishAt := time.Date(2026, 4, 2, 12, 43, 0, 0, time.UTC)
+	wantPublishAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	if !state.SlotPublishAtUTC.Equal(wantPublishAt) {
-		t.Fatalf("expected pre-boundary automatic queue to report the active previous-day publish time, got %+v", state)
+		t.Fatalf("expected pre-boundary automatic queue to report today's publish time, got %+v", state)
 	}
-	if state.SlotStatus != AutomaticQueueSlotStatusDue {
-		t.Fatalf("expected the previous-day slot to remain due before today's boundary, got %+v", state)
+	if state.SlotStatus != AutomaticQueueSlotStatusWaiting {
+		t.Fatalf("expected the upcoming slot to remain waiting before today's boundary, got %+v", state)
 	}
 	if state.NextReadyQuestion == nil || state.NextReadyQuestion.ID != first.ID {
-		t.Fatalf("expected the first ready question to remain next for the active slot, got %+v", state)
+		t.Fatalf("expected the first ready question to remain next for the upcoming slot, got %+v", state)
 	}
 	if !state.CanPublish || !state.ScheduleConfigured {
 		t.Fatalf("expected the automatic queue to remain publishable before the boundary, got %+v", state)
@@ -1663,8 +1672,10 @@ func TestServiceGetAutomaticQueueStateUsesActiveScheduledSlotBeforeBoundary(t *t
 	}
 	if summary, err := service.GetSummary(context.Background(), "g1"); err != nil {
 		t.Fatalf("GetSummary() failed: %v", err)
-	} else if !summary.CurrentPublishDateUTC.Equal(wantSlotDate) {
-		t.Fatalf("expected queue state to match summary current publish date before the boundary, got summary=%+v state=%+v", summary, state)
+	} else if !summary.CurrentPublishDateUTC.Equal(time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected summary to keep the active previous-day slot before the boundary, got summary=%+v state=%+v", summary, state)
+	} else if summary.CurrentPublishDateUTC.Equal(state.SlotDateUTC) {
+		t.Fatalf("expected queue state to diverge from the active-slot summary before the boundary, got summary=%+v state=%+v", summary, state)
 	}
 }
 

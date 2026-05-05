@@ -35,6 +35,42 @@ func TestCurrentPublishDateUTCBeforeDailyBoundaryUsesPreviousDay(t *testing.T) {
 	}
 }
 
+func TestUpcomingPublishDateUTCTracksNextBoundary(t *testing.T) {
+	t.Parallel()
+
+	schedule := testSchedule(t, 12, 43)
+	tests := []struct {
+		name string
+		now  time.Time
+		want time.Time
+	}{
+		{
+			name: "before boundary uses today",
+			now:  time.Date(2026, 4, 3, 12, 42, 59, 0, time.UTC),
+			want: time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "exact boundary stays on today",
+			now:  time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC),
+			want: time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "after boundary moves to tomorrow",
+			now:  time.Date(2026, 4, 3, 12, 43, 1, 0, time.UTC),
+			want: time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := UpcomingPublishDateUTC(schedule, tc.now)
+			if !got.Equal(tc.want) {
+				t.Fatalf("expected upcoming publish date %s, got %s", tc.want.Format(time.RFC3339), got.Format(time.RFC3339))
+			}
+		})
+	}
+}
+
 func TestEvaluateOfficialPostTransitionsCurrentPreviousArchived(t *testing.T) {
 	t.Parallel()
 

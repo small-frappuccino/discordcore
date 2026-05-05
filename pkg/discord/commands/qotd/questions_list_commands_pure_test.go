@@ -308,7 +308,7 @@ func TestQuestionsImportCommandParsesIDsAndReportsSummary(t *testing.T) {
 	}
 }
 
-func TestFormatAutomaticQueueStateUsesCurrentSlotLabel(t *testing.T) {
+func TestFormatAutomaticQueueStateUsesNextSlotLabel(t *testing.T) {
 	message := formatAutomaticQueueState(applicationqotd.AutomaticQueueState{
 		Deck: files.QOTDDeckConfig{
 			ID:        files.LegacyQOTDDefaultDeckID,
@@ -323,11 +323,11 @@ func TestFormatAutomaticQueueStateUsesCurrentSlotLabel(t *testing.T) {
 		SlotStatus:         applicationqotd.AutomaticQueueSlotStatusDue,
 	})
 
-	if !strings.Contains(message, "Current automatic slot:") {
-		t.Fatalf("expected queue formatter to describe the active slot generically, got %q", message)
+	if !strings.Contains(message, "Next automatic slot:") {
+		t.Fatalf("expected queue formatter to describe the upcoming slot, got %q", message)
 	}
-	if strings.Contains(message, "Today's automatic slot:") {
-		t.Fatalf("expected queue formatter to avoid claiming the active slot is always today's, got %q", message)
+	if strings.Contains(message, "Current automatic slot:") {
+		t.Fatalf("expected queue formatter to stop describing the queue slot as the current slot, got %q", message)
 	}
 }
 
