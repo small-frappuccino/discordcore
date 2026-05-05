@@ -61,7 +61,7 @@ const (
 	LogMonitorGuild           = "Will monitor this guild"
 	LogConfigFileNotFound     = "Config file not found, creating: %s"
 
-	LogNoConfiguredGuilds    = "No configured guilds. Use /setup to configure."
+	LogNoConfiguredGuilds    = "No configured guilds are assigned to this runtime."
 	LogGuildNotAccessible    = "Guild not accessible; skipping"
 	LogFoundConfiguredGuilds = "%d configured guild(s) found"
 

@@ -104,6 +104,11 @@ func qotdSmokeTestLines(ctx *core.Context) []string {
 	}
 
 	lines := []string{fmt.Sprintf("[PASS] Active QOTD deck: %s.", deck.Name)}
+	if strings.TrimSpace(ctx.GuildConfig.BotInstanceIDOverrideForDomain(files.BotDomainQOTD)) == "" {
+		lines = append(lines, "[ACTION] QOTD currently follows the guild-wide/default bot binding. If you expect a separate QOTD bot, set Bot Routing -> QOTD in Control Panel first.")
+	} else {
+		lines = append(lines, "[PASS] QOTD domain routing override is configured.")
+	}
 	channelConfigured := strings.TrimSpace(deck.ChannelID) != ""
 	scheduleConfigured := settings.Schedule.IsComplete()
 

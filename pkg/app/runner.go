@@ -329,6 +329,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
 		defaultBotInstanceID: defaultBotInstanceID,
 		runtimeCount:         len(runtimeOrder),
+		supportedDomains:     opts.SupportedDomains,
 		configManager:        configManager,
 		store:                store,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,

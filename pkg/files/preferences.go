@@ -586,6 +586,27 @@ func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Sessio
 // instance. Legacy guilds without a binding are included when botInstanceID is
 // empty.
 func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.Session, botInstanceID, defaultBotInstanceID string) error {
+	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
+		guilds := cfg.Guilds
+		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
+			guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID, defaultBotInstanceID)
+		}
+		return guilds
+	})
+}
+
+// LogConfiguredGuildsForBotDomain logs the guild subset assigned to the
+// provided bot instance for a specific domain.
+func LogConfiguredGuildsForBotDomain(configManager *ConfigManager, session *discordgo.Session, domain, botInstanceID, defaultBotInstanceID string) error {
+	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
+		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
+			return cfg.GuildsForBotInstanceForDomain(domain, normalizedBotInstanceID, defaultBotInstanceID)
+		}
+		return cfg.Guilds
+	})
+}
+
+func logConfiguredGuildSubset(configManager *ConfigManager, session *discordgo.Session, resolve func(*BotConfig) []GuildConfig) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		log.ApplicationLogger().Warn(LogNoConfiguredGuilds)
@@ -593,8 +614,8 @@ func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.
 	}
 
 	guilds := cfg.Guilds
-	if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
-		guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID, defaultBotInstanceID)
+	if resolve != nil {
+		guilds = resolve(cfg)
 	}
 	if len(guilds) == 0 {
 		log.ApplicationLogger().Warn(LogNoConfiguredGuilds)

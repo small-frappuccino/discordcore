@@ -64,6 +64,7 @@ func scheduleRuntimeConfiguredGuildLogging(
 	runtime *botRuntime,
 	configManager *files.ConfigManager,
 	defaultBotInstanceID string,
+	supportedDomains []string,
 	startupTasks *startupTaskOrchestrator,
 ) {
 	if runtime == nil || runtime.session == nil || configManager == nil {
@@ -71,7 +72,14 @@ func scheduleRuntimeConfiguredGuildLogging(
 	}
 
 	run := func(context.Context) error {
-		if err := files.LogConfiguredGuildsForBot(configManager, runtime.session, runtime.instanceID, defaultBotInstanceID); err != nil {
+		domainSupport := newRuntimeDomainSupport(supportedDomains)
+		var err error
+		if domainSupport.supports(files.BotDomainQOTD) && !domainSupport.supportsDefaultDomain() {
+			err = files.LogConfiguredGuildsForBotDomain(configManager, runtime.session, files.BotDomainQOTD, runtime.instanceID, defaultBotInstanceID)
+		} else {
+			err = files.LogConfiguredGuildsForBot(configManager, runtime.session, runtime.instanceID, defaultBotInstanceID)
+		}
+		if err != nil {
 			log.ErrorLoggerRaw().Error(
 				"Some configured guilds could not be accessed",
 				"botInstanceID", runtime.instanceID,

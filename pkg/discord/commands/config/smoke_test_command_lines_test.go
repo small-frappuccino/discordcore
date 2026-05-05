@@ -21,6 +21,7 @@ func TestQOTDSmokeTestLines(t *testing.T) {
 			config: smokeTestQOTDConfig(false, "", files.QOTDPublishScheduleConfig{}),
 			want: []string{
 				"[PASS] Active QOTD deck: Default.",
+				"[ACTION] QOTD currently follows the guild-wide/default bot binding. If you expect a separate QOTD bot, set Bot Routing -> QOTD in Control Panel first.",
 				"[ACTION] QOTD channel is not configured. Run /config qotd_channel <channel>.",
 				"[ACTION] QOTD publish schedule is not complete (— UTC). Run /config qotd_schedule <hour> <minute>.",
 				"[ACTION] QOTD is not ready to enable yet. Set the QOTD channel and schedule first.",
@@ -31,6 +32,7 @@ func TestQOTDSmokeTestLines(t *testing.T) {
 			config: smokeTestQOTDConfig(false, "qotd-123", files.QOTDPublishScheduleConfig{}),
 			want: []string{
 				"[PASS] Active QOTD deck: Default.",
+				"[ACTION] QOTD currently follows the guild-wide/default bot binding. If you expect a separate QOTD bot, set Bot Routing -> QOTD in Control Panel first.",
 				"[PASS] QOTD channel configured: <#qotd-123>.",
 				"[ACTION] QOTD publish schedule is not complete (— UTC). Run /config qotd_schedule <hour> <minute>.",
 				"[ACTION] QOTD is not ready to enable yet. Set the QOTD publish hour and minute first.",
@@ -41,6 +43,7 @@ func TestQOTDSmokeTestLines(t *testing.T) {
 			config: smokeTestQOTDConfig(false, "", testCommandSchedule()),
 			want: []string{
 				"[PASS] Active QOTD deck: Default.",
+				"[ACTION] QOTD currently follows the guild-wide/default bot binding. If you expect a separate QOTD bot, set Bot Routing -> QOTD in Control Panel first.",
 				"[ACTION] QOTD channel is not configured. Run /config qotd_channel <channel>.",
 				"[PASS] QOTD publish schedule configured: 12:43 UTC.",
 				"[ACTION] QOTD is not ready to enable yet. Set the QOTD channel first.",
@@ -51,6 +54,7 @@ func TestQOTDSmokeTestLines(t *testing.T) {
 			config: smokeTestQOTDConfig(false, "qotd-123", testCommandSchedule()),
 			want: []string{
 				"[PASS] Active QOTD deck: Default.",
+				"[ACTION] QOTD currently follows the guild-wide/default bot binding. If you expect a separate QOTD bot, set Bot Routing -> QOTD in Control Panel first.",
 				"[PASS] QOTD channel configured: <#qotd-123>.",
 				"[PASS] QOTD publish schedule configured: 12:43 UTC.",
 				"[ACTION] QOTD is ready to enable. Run /config qotd_enabled true.",
@@ -61,19 +65,35 @@ func TestQOTDSmokeTestLines(t *testing.T) {
 			config: smokeTestQOTDConfig(true, "qotd-123", testCommandSchedule()),
 			want: []string{
 				"[PASS] Active QOTD deck: Default.",
+				"[ACTION] QOTD currently follows the guild-wide/default bot binding. If you expect a separate QOTD bot, set Bot Routing -> QOTD in Control Panel first.",
 				"[PASS] QOTD channel configured: <#qotd-123>.",
 				"[PASS] QOTD publish schedule configured: 12:43 UTC.",
 				"[PASS] QOTD publishing is enabled for deck Default.",
+			},
+		},
+		{
+			name:   "dedicated routing override configured",
+			config: smokeTestQOTDConfig(false, "qotd-123", testCommandSchedule()),
+			want: []string{
+				"[PASS] Active QOTD deck: Default.",
+				"[PASS] QOTD domain routing override is configured.",
+				"[PASS] QOTD channel configured: <#qotd-123>.",
+				"[PASS] QOTD publish schedule configured: 12:43 UTC.",
+				"[ACTION] QOTD is ready to enable. Run /config qotd_enabled true.",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := newSmokeTestContext(t, files.GuildConfig{
+			guildConfig := files.GuildConfig{
 				GuildID: "guild-1",
 				QOTD:    tt.config,
-			})
+			}
+			if tt.name == "dedicated routing override configured" {
+				guildConfig.DomainBotInstanceIDs = map[string]string{files.BotDomainQOTD: "companion"}
+			}
+			ctx := newSmokeTestContext(t, guildConfig)
 
 			if got := qotdSmokeTestLines(ctx); !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("qotdSmokeTestLines() = %#v, want %#v", got, tt.want)

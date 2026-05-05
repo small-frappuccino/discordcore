@@ -24,6 +24,7 @@ import (
 type botRuntimeOptions struct {
 	defaultBotInstanceID     string
 	runtimeCount             int
+	supportedDomains         []string
 	configManager            *files.ConfigManager
 	store                    *storage.Store
 	commandCatalogRegistrars []commands.CommandCatalogRegistrar
@@ -226,10 +227,24 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		}
 		runtime.commandHandler = commandHandler
 	} else {
-		log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
+		domainSupport := newRuntimeDomainSupport(opts.supportedDomains)
+		if domainSupport.supports(files.BotDomainQOTD) && !domainSupport.supportsDefaultDomain() {
+			qotdGuildCount := 0
+			if cfg != nil {
+				qotdGuildCount = len(cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, runtime.instanceID, opts.defaultBotInstanceID))
+			}
+			log.ApplicationLogger().Warn(
+				"Commands skipped; no guild routes the qotd domain to this runtime",
+				"botInstanceID", runtime.instanceID,
+				"qotdGuilds", qotdGuildCount,
+				"hint", "configure Bot Routing -> QOTD for at least one guild before expecting QOTD slash commands on this app",
+			)
+		} else {
+			log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
+		}
 	}
 
-	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.startupTasks)
+	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.supportedDomains, opts.startupTasks)
 	scheduleRuntimeWarmup(runtime, opts.store, opts.startupTasks)
 	return nil
 }
