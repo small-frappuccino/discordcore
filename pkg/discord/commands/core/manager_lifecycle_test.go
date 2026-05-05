@@ -346,3 +346,90 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *tes
 		})
 	}
 }
+
+func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState(t *testing.T) {
+	globalDeletes := 0
+	guildFetches := make([]string, 0, 2)
+	session := newCommandManagerSession(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"id":          "legacy-global",
+				"name":        "legacy-global",
+				"description": "legacy global command",
+			}})
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/app-id/commands/legacy-global"):
+			globalDeletes++
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
+			guildFetches = append(guildFetches, "g1")
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
+			var posted discordgo.ApplicationCommand
+			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
+				t.Fatalf("decode posted guild command: %v", err)
+			}
+			if posted.ID == "" {
+				posted.ID = posted.Name + "-id"
+			}
+			_ = json.NewEncoder(w).Encode(&posted)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g2/commands"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"Missing Access","code":50001}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	})
+	session.State.Guilds = []*discordgo.Guild{{ID: "g1"}}
+
+	cfgMgr := files.NewMemoryConfigManager()
+	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = []files.GuildConfig{
+			{
+				GuildID:       "g1",
+				BotInstanceID: "main",
+				DomainBotInstanceIDs: map[string]string{
+					files.BotDomainQOTD: "companion",
+				},
+			},
+			{
+				GuildID:       "g2",
+				BotInstanceID: "main",
+				DomainBotInstanceIDs: map[string]string{
+					files.BotDomainQOTD: "companion",
+				},
+			},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	cm := NewCommandManager(session, cfgMgr)
+	router := cm.GetRouter()
+	checker := NewPermissionChecker(session, cfgMgr)
+
+	configGroup := NewGroupCommand("config", "config", checker)
+	qotdSubcommand := testSubCommand{name: "qotd_channel"}
+	configGroup.AddSubCommand(qotdSubcommand)
+	router.RegisterSlashCommand(configGroup)
+	router.RegisterSlashSubCommandForDomain(files.BotDomainQOTD, "config", qotdSubcommand)
+	router.RegisterSlashCommandForDomain(files.BotDomainQOTD, testCommand{name: "qotd"})
+	router.SetGuildRouteFilter(func(guildID string, routeKey InteractionRouteKey) bool {
+		return guildID == "g1" && (routeKey.Path == "config qotd_channel" || routeKey.Path == "qotd")
+	})
+
+	if err := cm.SetupCommands(); err != nil {
+		t.Fatalf("setup commands: %v", err)
+	}
+
+	if globalDeletes != 1 {
+		t.Fatalf("expected global command cleanup once, got %d", globalDeletes)
+	}
+	if strings.Join(guildFetches, ",") != "g1" {
+		t.Fatalf("expected guild sync to target only session guild g1, got %v", guildFetches)
+	}
+}

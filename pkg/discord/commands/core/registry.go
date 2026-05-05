@@ -425,12 +425,19 @@ func (cm *CommandManager) guildScopedSyncTargets() []string {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
+	sessionGuildIDs := cm.sessionGuildIDSet()
+	filterBySession := len(sessionGuildIDs) > 0
 	seen := make(map[string]struct{}, len(cfg.Guilds))
 	targets := make([]string, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
 		guildID := strings.TrimSpace(guild.GuildID)
 		if guildID == "" {
 			continue
+		}
+		if filterBySession {
+			if _, ok := sessionGuildIDs[guildID]; !ok {
+				continue
+			}
 		}
 		if _, exists := seen[guildID]; exists {
 			continue
@@ -440,6 +447,28 @@ func (cm *CommandManager) guildScopedSyncTargets() []string {
 	}
 	sort.Strings(targets)
 	return targets
+}
+
+func (cm *CommandManager) sessionGuildIDSet() map[string]struct{} {
+	if cm == nil || cm.session == nil || cm.session.State == nil || len(cm.session.State.Guilds) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(cm.session.State.Guilds))
+	for _, guild := range cm.session.State.Guilds {
+		if guild == nil {
+			continue
+		}
+		guildID := strings.TrimSpace(guild.ID)
+		if guildID == "" {
+			continue
+		}
+		seen[guildID] = struct{}{}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	return seen
 }
 
 func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*discordgo.ApplicationCommand) (commandSyncSummary, error) {
