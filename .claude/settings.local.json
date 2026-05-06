@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\" -Force | Where-Object { $_.PSIsContainer } | Select-Object Name)",
+      "PowerShell(npm *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Set-Location *)",
+      "PowerShell(Join-Path *)",
+      "PowerShell(node \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\\\\cli.bundle.mjs\" doctor 2>&1)",
+      "PowerShell(Remove-Item *)",
+      "mcp__plugin_context-mode_context-mode__ctx_doctor",
+      "Bash(release *)",
+      "Bash(git reset *)",
+      "Bash(git restore *)"
+    ]
+  }
+}

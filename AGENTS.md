@@ -112,6 +112,40 @@ Inspect broadly when:
 
 Do not start by reading all of `pkg/control/`, `pkg/discord/logging/`, or `ui/src/pages/`.
 
+## Context-Mode MCP Discipline
+
+`context-mode` is registered as an MCP plugin in this environment (`.claude/settings.local.json`, `~/.claude/plugins/cache/context-mode/context-mode/<version>/cli.bundle.mjs`). It is complementary to `smallfrappuccino-mcp` (`.vscode/mcp.json`), not a replacement: `smallfrappuccino-mcp` answers graph-level orientation questions (`repo_overview`, `find_nodes`, `get_subgraph`, `task_context`, `list_observations`); `context-mode` runs commands, analyses, and external fetches inside a sandbox so raw output never floods the context window.
+
+Always route discovery, analysis, validation, and large-output work through `context-mode` before and during code edits. Treat raw `Bash`/`PowerShell` output as a cost the policy is paying to avoid.
+
+Required tools when editing code in this repo:
+
+- discovery and command runs: `mcp__plugin_context-mode_context-mode__ctx_batch_execute(commands, queries)`; pass labeled commands plus follow-up queries in one call so the indexed chunk titles are descriptive
+- follow-up lookups across indexed chunks: `mcp__plugin_context-mode_context-mode__ctx_search(queries)`; many queries per call, and after a resume lead with `sort: "timeline"` to recover prior session context
+- analysis or processing of large files: `mcp__plugin_context-mode_context-mode__ctx_execute_file(path, language, code)`; ad-hoc computation: `mcp__plugin_context-mode_context-mode__ctx_execute(language, code)`
+- fetching external docs, references, or pages: `mcp__plugin_context-mode_context-mode__ctx_fetch_and_index`
+- explicit indexing of an artifact already on disk: `mcp__plugin_context-mode_context-mode__ctx_index`
+- session telemetry, diagnostics, reset: `ctx_stats`, `ctx_doctor`, `ctx_purge`
+
+Forbidden when editing code:
+
+- `Bash` or `PowerShell` for any command whose output may exceed 20 lines; reserve raw shell tools for `git`, `mkdir`, `rm`, `mv`, and navigation
+- `Read` for exploratory analysis; `Read` is correct only when the file's contents must enter context to drive a follow-up `Edit` or `Write`
+- `Grep` or `Glob` runs whose hit set is large enough to risk flooding context; route those searches through `ctx_execute(language: "shell", code: "...")` so only the summary enters context
+- `WebFetch` for documentation or external references; use `ctx_fetch_and_index`
+- using `ctx_execute`, `ctx_execute_file`, or any shell tool to create or modify files; file edits always go through native `Write` and `Edit`
+- bypassing `context-mode` "to save a step"; the discipline is load-bearing across long sessions
+
+Editing flow when changing code in `pkg/`, `cmd/`, or `ui/`:
+
+1. orient with `ctx_batch_execute` (combine `git log`, `git status`, focused greps, and `smallfrappuccino-mcp` orientation calls) and follow-up `ctx_search` queries
+2. read only the exact files you will `Edit` or `Write` with `Read`; analyse everything else through `ctx_execute_file`
+3. apply edits with `Edit` or `Write`
+4. run validation (`go test ./...`, `go vet ./...`, `bun run test`, `bun run lint`, `bun run build`) through `ctx_batch_execute` so the output stays sandboxed; surface only the printed summary in the work report
+5. if a `context-mode`-backed step was skipped or failed, say so explicitly; do not pretend full validation ran
+
+After `/clear` or `/compact`, the `context-mode` knowledge base is preserved; resume with `ctx_search(sort: "timeline")` before asking the user to restate prior context.
+
 ## Preferred Strengths For This Repo
 
 Use Claude preferentially for:
