@@ -25,14 +25,23 @@ func (gc GuildConfig) EffectiveBotInstanceID(defaultBotInstanceID string) string
 
 // BotInstanceIDOverrideForDomain returns the explicit bot-instance override for
 // the provided domain, or an empty string when the domain falls back to the
-// guild-wide bot binding. DomainBotInstanceIDs is normalized at config write
-// time, so lookups are direct map reads.
+// guild-wide bot binding.
 func (gc GuildConfig) BotInstanceIDOverrideForDomain(domain string) string {
 	domain = NormalizeBotDomain(domain)
-	if domain == "" {
+	if domain == "" || len(gc.DomainBotInstanceIDs) == 0 {
 		return ""
 	}
-	return gc.DomainBotInstanceIDs[domain]
+
+	for configuredDomain, botInstanceID := range gc.DomainBotInstanceIDs {
+		if NormalizeBotDomain(configuredDomain) != domain {
+			continue
+		}
+		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
+			return normalizedBotInstanceID
+		}
+	}
+
+	return ""
 }
 
 // EffectiveBotInstanceIDForDomain resolves the bot binding for a specialized
@@ -81,14 +90,20 @@ func (cfg *BotConfig) GuildsForBotInstanceForDomain(domain, botInstanceID, defau
 	return out
 }
 
-// HasDomainBotInstanceOverrides reports whether any guild contains a
+// HasDomainBotInstanceOverrides reports whether any guild contains a non-empty
 // specialized domain binding override.
 func (cfg *BotConfig) HasDomainBotInstanceOverrides() bool {
 	if cfg == nil {
 		return false
 	}
 	for _, guild := range cfg.Guilds {
-		if len(guild.DomainBotInstanceIDs) > 0 {
+		for domain, botInstanceID := range guild.DomainBotInstanceIDs {
+			if NormalizeBotDomain(domain) == "" {
+				continue
+			}
+			if NormalizeBotInstanceID(botInstanceID) == "" {
+				continue
+			}
 			return true
 		}
 	}

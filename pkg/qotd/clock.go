@@ -58,6 +58,21 @@ func DuePublishDateUTC(schedule PublishSchedule, now time.Time) time.Time {
 	return today
 }
 
+// UpcomingPublishDateUTC returns the next scheduled publish date at the given time.
+func UpcomingPublishDateUTC(schedule PublishSchedule, now time.Time) time.Time {
+	return CurrentPublishDateUTC(schedule, now)
+}
+
+// PreviousPublishDateUTC returns the immediately previous publish date.
+func PreviousPublishDateUTC(schedule PublishSchedule, now time.Time) time.Time {
+	return CurrentPublishDateUTC(schedule, now).AddDate(0, 0, -1)
+}
+
+// NextPublishTimeUTC returns the next publish boundary after now.
+func NextPublishTimeUTC(schedule PublishSchedule, now time.Time) time.Time {
+	return PublishTimeUTC(schedule, CurrentPublishDateUTC(schedule, now))
+}
+
 func normalizeClockInput(now time.Time) time.Time {
 	if now.IsZero() {
 		return time.Now().UTC()

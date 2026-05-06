@@ -201,13 +201,13 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
 	}
 
-	if runtime.capabilities.hasCommands() {
+	if runtime.capabilities.commands {
 		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
 		if len(opts.commandCatalogRegistrars) > 0 {
 			commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 		}
 		commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{Admin: runtime.capabilities.admin})
-		commandHandler.SetSupportedDomains(runtime.capabilities.commandDomainList()...)
+		commandHandler.SetSupportedDomains(commandCatalogDomainsForRuntime(runtime.capabilities)...)
 		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 		commandHandler.SetQOTDService(opts.qotdCommandService)
@@ -247,6 +247,20 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.supportedDomains, opts.startupTasks)
 	scheduleRuntimeWarmup(runtime, opts.store, opts.startupTasks)
 	return nil
+}
+
+func commandCatalogDomainsForRuntime(capabilities botRuntimeCapabilities) []string {
+	domains := make([]string, 0, 2)
+	if capabilities.commandsDefaultDomain {
+		domains = append(domains, "")
+	}
+	if capabilities.commandsQOTDDomain {
+		domains = append(domains, files.BotDomainQOTD)
+	}
+	if len(domains) == 0 && capabilities.commands {
+		domains = append(domains, "")
+	}
+	return domains
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext

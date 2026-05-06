@@ -235,7 +235,7 @@ func updateQOTDConfig(
 	var updatedConfig files.QOTDConfig
 	err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		current := files.DashboardQOTDConfig(guildConfig.QOTD)
-		next := files.CloneQOTDConfig(current)
+		next := current
 		if err := mutate(&next); err != nil {
 			return err
 		}

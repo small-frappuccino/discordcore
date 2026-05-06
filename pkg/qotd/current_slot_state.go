@@ -43,7 +43,7 @@ func (s *Service) loadCurrentSlotState(ctx context.Context, guildID string, cfg 
 }
 
 func (s *Service) loadUpcomingSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time) (currentSlotState, error) {
-	return s.loadSlotState(ctx, guildID, cfg, now, CurrentPublishDateUTC)
+	return s.loadSlotState(ctx, guildID, cfg, now, UpcomingPublishDateUTC)
 }
 
 func (s *Service) loadSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time, publishDate func(PublishSchedule, time.Time) time.Time) (currentSlotState, error) {

@@ -1,6 +1,6 @@
 # Discordcore
 
-Discordcore is the core Discord bot library and service layer used by Discordcore. It owns all Discord-facing behavior, data persistence, caching, and runtime configuration.
+Discordcore is the core Discord bot library and service layer used by Alicebot. It owns all Discord-facing behavior, data persistence, caching, and runtime configuration.
 
 ## Highlights
 
@@ -381,7 +381,7 @@ Embedded dashboard build flow:
 ```bash
 cd ui
 bun run build
-cd ..
+cd ../../alicebot
 go build -o discordmain ./cmd/discordmain
 ```
 
@@ -414,7 +414,7 @@ Channels are resolved in this order:
 
 Parsed sources:
 
-- Discordcore embeds titled "Member Joined" / "Member Left"
+- Alicebot embeds titled "Member Joined" / "Member Left"
 - Mimu-style welcome/goodbye messages with mentions
 
 ## Gateway performance warnings
