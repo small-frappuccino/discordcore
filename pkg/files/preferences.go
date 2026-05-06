@@ -261,7 +261,7 @@ func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	guildCfg.BotInstanceID = normalizeConfiguredBotInstanceID(guildCfg.BotInstanceID)
+	guildCfg.BotInstanceID = NormalizeBotInstanceID(guildCfg.BotInstanceID)
 	next := cloneBotConfigPtr(mgr.config)
 	if next == nil {
 		next = &BotConfig{Guilds: []GuildConfig{}}
@@ -306,7 +306,7 @@ func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 // DetectGuildsForBot automatically detects guilds and binds them to a bot
 // instance when one is provided.
 func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInstanceID string) error {
-	botInstanceID = normalizeConfiguredBotInstanceID(botInstanceID)
+	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	detected := make([]GuildConfig, 0, len(session.State.Guilds))
 
 	for _, g := range session.State.Guilds {
@@ -368,7 +368,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 	if session == nil {
 		return fmt.Errorf("%w: discord session is unavailable", ErrGuildBootstrapDiscordFetch)
 	}
-	botInstanceID = normalizeConfiguredBotInstanceID(botInstanceID)
+	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	if mgr.GuildConfig(guildID) != nil {
 		log.ApplicationLogger().Info("Guild already configured, skipping", "guildID", guildID)
 		return nil

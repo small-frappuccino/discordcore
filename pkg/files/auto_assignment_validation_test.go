@@ -161,7 +161,7 @@ func TestValidateBotConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
 	cfg := &BotConfig{
 		Guilds: []GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: " alice ",
+			BotInstanceID: " main ",
 			DomainBotInstanceIDs: map[string]string{
 				" QOTD ": " companion ",
 			},
@@ -172,10 +172,10 @@ func TestValidateBotConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
 		t.Fatalf("expected domain bot bindings to validate, got: %v", err)
 	}
 	if got := cfg.Guilds[0].BotInstanceID; got != "main" {
-		t.Fatalf("expected guild bot instance to normalize to main, got %q", got)
+		t.Fatalf("expected guild bot instance to be trimmed to main, got %q", got)
 	}
 	if got := cfg.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected qotd override to normalize to companion, got %q", got)
+		t.Fatalf("expected qotd domain key to be lowercased and value trimmed to companion, got %q", got)
 	}
 }
 
@@ -199,12 +199,12 @@ func TestValidateBotConfigRejectsReservedDomainBotInstanceBinding(t *testing.T) 
 	}
 }
 
-func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) {
+func TestConfigManagerLoadConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
 	store := NewMemoryConfigStore()
 	input := BotConfig{
 		Guilds: []GuildConfig{{
 			GuildID:       "g1",
-			BotInstanceID: " alice ",
+			BotInstanceID: " main ",
 			DomainBotInstanceIDs: map[string]string{
 				" QOTD ": " companion ",
 			},
@@ -224,10 +224,10 @@ func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) 
 		t.Fatalf("expected guild g1 after load")
 	}
 	if got := gcfg.BotInstanceID; got != "main" {
-		t.Fatalf("expected guild bot instance normalized to main, got %q", got)
+		t.Fatalf("expected guild bot instance to be trimmed to main, got %q", got)
 	}
 	if got := gcfg.DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected qotd override persisted as companion, got %q", got)
+		t.Fatalf("expected qotd override stored as companion under canonical key, got %q", got)
 	}
 
 	persisted, err := store.Load()
@@ -235,7 +235,7 @@ func TestConfigManagerLoadConfigMigratesDomainBotInstanceBindings(t *testing.T) 
 		t.Fatalf("load persisted config: %v", err)
 	}
 	if got := persisted.Guilds[0].BotInstanceID; got != "main" {
-		t.Fatalf("expected persisted guild bot instance normalized to main, got %q", got)
+		t.Fatalf("expected persisted guild bot instance trimmed to main, got %q", got)
 	}
 	if got := persisted.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
 		t.Fatalf("expected persisted qotd override normalized to companion, got %q", got)
