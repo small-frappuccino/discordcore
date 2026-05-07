@@ -17,7 +17,9 @@ func TestLoadEnvWithLocalBinFallbackUsesHomeFile(t *testing.T) {
 		t.Fatalf("write env: %v", err)
 	}
 
-	t.Setenv("HOME", fakeHome)
+	orig := fallbackEnvPath
+	fallbackEnvPath = envPath
+	t.Cleanup(func() { fallbackEnvPath = orig })
 	_ = os.Unsetenv("TOKEN")
 
 	got, err := LoadEnvWithLocalBinFallback("TOKEN")

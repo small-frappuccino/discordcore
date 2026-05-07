@@ -55,7 +55,7 @@ const (
 // appName affects config/cache/log paths; tokenEnv is the environment variable containing the bot token.
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
 // Environment: the tokenEnv is read from the current process environment first; if empty,
-// a fallback $HOME/.local/bin/.env file will be loaded and the variable re-checked.
+// a fallback D:\Users\smallfrappuccino\.local\bin\.env file will be loaded and the variable re-checked.
 // Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
 // remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
 func Run(appName, tokenEnv string) error {
@@ -327,19 +327,19 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	qotdService := qotd.NewService(configManager, store, nil)
 
 	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
-		defaultBotInstanceID: defaultBotInstanceID,
-		runtimeCount:         len(runtimeOrder),
-		supportedDomains:     opts.SupportedDomains,
-		configManager:        configManager,
-		store:                store,
+		defaultBotInstanceID:     defaultBotInstanceID,
+		runtimeCount:             len(runtimeOrder),
+		supportedDomains:         opts.SupportedDomains,
+		configManager:            configManager,
+		store:                    store,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
-		errorHandler:         errorHandler,
-		runtimeApplier:       runtimeApplier,
-		partnerBoardService:  partnerBoardAppService,
-		partnerSyncExecutor:  partnerSyncDispatcher,
-		qotdCommandService:   qotdService,
-		qotdLifecycleService: qotdService,
-		startupTasks:         startupTasks,
+		errorHandler:             errorHandler,
+		runtimeApplier:           runtimeApplier,
+		partnerBoardService:      partnerBoardAppService,
+		partnerSyncExecutor:      partnerSyncDispatcher,
+		qotdCommandService:       qotdService,
+		qotdLifecycleService:     qotdService,
+		startupTasks:             startupTasks,
 	}); err != nil {
 		return err
 	}

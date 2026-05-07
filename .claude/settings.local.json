@@ -1,14 +1,25 @@
 {
   "permissions": {
     "allow": [
+      "mcp__plugin_context-mode_context-mode__ctx_upgrade",
+      "Bash(D:/Scoop/apps/nodejs/current/node.exe *)",
       "Bash(Get-ChildItem \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\" -Force)",
       "Bash(Select-Object Name, Mode)",
       "Bash(Format-Table -AutoSize)",
+      "Read(//c/Users/enzok/.claude/plugins/cache/context-mode/context-mode/1.0.111/**)",
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\" -Force | Where-Object { $_.PSIsContainer } | Select-Object Name)",
       "PowerShell(npm *)",
+      "Bash(npm rebuild *)",
+      "Bash(npm view *)",
       "PowerShell(New-Item *)",
       "PowerShell(Set-Location *)",
       "PowerShell(Join-Path *)",
+      "Bash(scoop list *)",
+      "Bash(scoop bucket *)",
+      "Bash(scoop search *)",
+      "Bash(scoop install *)",
+      "Bash(scoop reset *)",
+      "Bash(scoop uninstall *)",
       "PowerShell(node \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\\\\cli.bundle.mjs\" doctor 2>&1)",
       "PowerShell(Remove-Item *)",
       "mcp__plugin_context-mode_context-mode__ctx_doctor",
@@ -18,10 +29,13 @@
       "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
       "mcp__plugin_context-mode_context-mode__ctx_execute",
       "mcp__plugin_context-mode_context-mode__ctx_execute_file",
-      "Bash(go build *)"
+      "Bash(go build *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'refactor\\(env\\): use absolute fallback path and bump to v0.488.1 *)",
+      "Bash(git push *)"
     ]
   },
+  "outputStyle": "default",
   "spinnerTipsEnabled": false,
-  "prefersReducedMotion": false,
-  "outputStyle": "default"
+  "prefersReducedMotion": false
 }
