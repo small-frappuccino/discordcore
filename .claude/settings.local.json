@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context-mode_context-mode__ctx_upgrade",
+      "Bash(D:/Scoop/apps/nodejs/current/node.exe *)",
+      "Read(//c/Users/enzok/.claude/plugins/cache/context-mode/context-mode/1.0.111/**)",
+      "Bash(npm rebuild *)",
+      "Bash(npm view *)",
+      "Bash(scoop list *)",
+      "Bash(scoop bucket *)",
+      "Bash(scoop search *)",
+      "Bash(scoop install *)",
+      "Bash(scoop reset *)",
+      "Bash(scoop uninstall *)"
+    ]
+  }
+}
