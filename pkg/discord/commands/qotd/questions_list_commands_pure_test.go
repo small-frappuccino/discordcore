@@ -29,6 +29,9 @@ func TestQOTDCommandsRegisterRoutesUnderQOTDDomain(t *testing.T) {
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd clear_day"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd clear_day slash route domain, got %q", got)
 	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions mark_published"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd questions mark_published slash route domain, got %q", got)
+	}
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions list"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd questions list slash route domain, got %q", got)
 	}
@@ -119,6 +122,64 @@ func TestQuestionsListPaginationStillUpdatesAfterUnderlyingStateChanges(t *testi
 	}
 	if !strings.Contains(prevResp.Data.Embeds[0].Description, "ID:2 • ready • publishes next") {
 		t.Fatalf("expected updated first page to move the queue to question 2, got %q", prevResp.Data.Embeds[0].Description)
+	}
+}
+
+func TestQuestionsMarkPublishedCommandMarksVisibleIDWithoutTouchingDayState(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &listCommandStubService{
+		settings: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:   files.LegacyQOTDDefaultDeckID,
+				Name: files.LegacyQOTDDefaultDeckName,
+			}},
+		},
+		views: [][]storage.QOTDQuestionRecord{{
+			{
+				ID:            42,
+				DisplayID:     7,
+				GuildID:       guildID,
+				DeckID:        files.LegacyQOTDDefaultDeckID,
+				Body:          "Already posted elsewhere",
+				Status:        string(applicationqotd.QuestionStatusReady),
+				QueuePosition: 7,
+			},
+		}},
+		markPublishedResult: &storage.QOTDQuestionRecord{
+			ID:            42,
+			DisplayID:     7,
+			GuildID:       guildID,
+			DeckID:        files.LegacyQOTDDefaultDeckID,
+			Body:          "Already posted elsewhere",
+			Status:        string(applicationqotd.QuestionStatusUsed),
+			QueuePosition: 7,
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsMarkPublishedSubCommand, []*discordgo.ApplicationCommandInteractionDataOption{{
+		Name:  questionsIDOptionName,
+		Type:  discordgo.ApplicationCommandOptionInteger,
+		Value: float64(7),
+	}}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "Marked QOTD question ID 7 as already published") {
+		t.Fatalf("expected success message for mark_published, got %q", resp.Data.Content)
+	}
+	if service.markPublishedCalls != 1 {
+		t.Fatalf("expected mark_published command to call MarkQuestionPublished once, got %d", service.markPublishedCalls)
+	}
+	if service.lastMarkPublishedGuild != guildID || service.lastMarkPublishedDeckID != files.LegacyQOTDDefaultDeckID || service.lastMarkPublishedID != 42 {
+		t.Fatalf("expected command to forward resolved guild/deck/question ids, got guild=%q deck=%q question=%d", service.lastMarkPublishedGuild, service.lastMarkPublishedDeckID, service.lastMarkPublishedID)
 	}
 }
 

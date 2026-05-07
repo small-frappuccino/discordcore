@@ -36,9 +36,15 @@ type publishCommandStubService struct {
 }
 
 type listCommandStubService struct {
-	settings  files.QOTDConfig
-	views     [][]storage.QOTDQuestionRecord
-	listCalls int
+	settings                files.QOTDConfig
+	views                   [][]storage.QOTDQuestionRecord
+	listCalls               int
+	markPublishedResult     *storage.QOTDQuestionRecord
+	markPublishedErr        error
+	markPublishedCalls      int
+	lastMarkPublishedGuild  string
+	lastMarkPublishedDeckID string
+	lastMarkPublishedID     int64
 }
 
 type importCommandStubService struct {
@@ -74,6 +80,10 @@ func (s *publishCommandStubService) SetNextQuestion(context.Context, string, str
 
 func (s *publishCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	panic("unexpected RestoreUsedQuestion call")
+}
+
+func (s *publishCommandStubService) MarkQuestionPublished(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected MarkQuestionPublished call")
 }
 
 func (s *publishCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
@@ -140,6 +150,14 @@ func (s *listCommandStubService) RestoreUsedQuestion(context.Context, string, st
 	panic("unexpected RestoreUsedQuestion call")
 }
 
+func (s *listCommandStubService) MarkQuestionPublished(_ context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
+	s.markPublishedCalls++
+	s.lastMarkPublishedGuild = guildID
+	s.lastMarkPublishedDeckID = deckID
+	s.lastMarkPublishedID = questionID
+	return s.markPublishedResult, s.markPublishedErr
+}
+
 func (s *listCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
 	panic("unexpected ResetDeckState call")
 }
@@ -186,6 +204,10 @@ func (s *importCommandStubService) SetNextQuestion(context.Context, string, stri
 
 func (s *importCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	panic("unexpected RestoreUsedQuestion call")
+}
+
+func (s *importCommandStubService) MarkQuestionPublished(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
+	panic("unexpected MarkQuestionPublished call")
 }
 
 func (s *importCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {

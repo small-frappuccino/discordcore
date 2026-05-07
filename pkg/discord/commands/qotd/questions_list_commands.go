@@ -29,6 +29,7 @@ const (
 	questionsListSubCommand               = "list"
 	questionsQueueSubCommand              = "queue"
 	questionsNextSubCommand               = "next"
+	questionsMarkPublishedSubCommand      = "mark_published"
 	publishConsumeAutomaticSlotOptionName = "consume_automatic_slot"
 	slotDateOptionName                    = "date"
 	questionsResetSubCommand              = "reset"
@@ -60,6 +61,7 @@ type QuestionCatalogService interface {
 	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
 	SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
+	MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	ResetDeckState(ctx context.Context, guildID, deckID string) (applicationqotd.ResetDeckResult, error)
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
 	ImportArchivedQuestions(ctx context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error)
@@ -86,6 +88,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	listCommand := &questionsListCommand{service: c.service}
 	queueCommand := &questionsQueueCommand{service: c.service}
 	nextCommand := &questionsNextCommand{service: c.service}
+	markPublishedCommand := &questionsMarkPublishedCommand{service: c.service}
 	importCommand := &questionsImportCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
 	reanimateCommand := &qotdReanimateCommand{service: c.service}
@@ -98,6 +101,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	questionsGroup.AddSubCommand(listCommand)
 	questionsGroup.AddSubCommand(queueCommand)
 	questionsGroup.AddSubCommand(nextCommand)
+	questionsGroup.AddSubCommand(markPublishedCommand)
 	questionsGroup.AddSubCommand(importCommand)
 	questionsGroup.AddSubCommand(resetCommand)
 	questionsGroup.AddSubCommand(recoverCommand)
@@ -143,6 +147,10 @@ type questionsAddCommand struct {
 }
 
 type questionsNextCommand struct {
+	service QuestionCatalogService
+}
+
+type questionsMarkPublishedCommand struct {
 	service QuestionCatalogService
 }
 
@@ -294,6 +302,12 @@ func (c *questionsRecoverCommand) Description() string {
 
 func (c *questionsNextCommand) Name() string { return questionsNextSubCommand }
 
+func (c *questionsMarkPublishedCommand) Name() string { return questionsMarkPublishedSubCommand }
+
+func (c *questionsMarkPublishedCommand) Description() string {
+	return "Mark a ready QOTD question as already published"
+}
+
 func (c *questionsNextCommand) Description() string {
 	return "Set which ready QOTD question publishes next"
 }
@@ -315,8 +329,27 @@ func (c *questionsNextCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
-func (c *questionsNextCommand) RequiresGuild() bool       { return true }
-func (c *questionsNextCommand) RequiresPermissions() bool { return true }
+func (c *questionsMarkPublishedCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionInteger,
+			Name:        questionsIDOptionName,
+			Description: "Question ID from the questions list embed",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        questionsDeckOptionName,
+			Description: "Deck ID or exact deck name. Defaults to the active deck.",
+			Required:    false,
+		},
+	}
+}
+
+func (c *questionsNextCommand) RequiresGuild() bool                { return true }
+func (c *questionsNextCommand) RequiresPermissions() bool          { return true }
+func (c *questionsMarkPublishedCommand) RequiresGuild() bool       { return true }
+func (c *questionsMarkPublishedCommand) RequiresPermissions() bool { return true }
 
 func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
@@ -781,6 +814,41 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 
 	return core.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s` and it is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
+}
+
+func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	displayID := extractor.Int(questionsIDOptionName)
+	if displayID <= 0 {
+		return core.NewCommandError("Question ID must be greater than zero.", false)
+	}
+	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
+	if err != nil {
+		return err
+	}
+	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
+	if err != nil {
+		return err
+	}
+	question := findQuestionByDisplayID(questions, displayID)
+	if question == nil {
+		return translateQuestionsMarkPublishedError(displayID, applicationqotd.ErrQuestionNotFound)
+	}
+
+	updated, err := c.service.MarkQuestionPublished(context.Background(), ctx.GuildID, deck.ID, question.ID)
+	if err != nil {
+		return translateQuestionsMarkPublishedError(displayID, err)
+	}
+	if updated == nil {
+		return translateQuestionsMarkPublishedError(displayID, applicationqotd.ErrQuestionNotFound)
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Success(ctx.Interaction, fmt.Sprintf("Marked QOTD question ID %d as already published in deck `%s` without changing the day state.", displayID, deck.Name))
 }
 
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
@@ -1430,6 +1498,22 @@ func translateQuestionsRecoverError(questionID int64, err error) error {
 	return translateQuestionsMutationError(err)
 }
 
+func translateQuestionsMarkPublishedError(questionID int64, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
+	}
+	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or published and cannot be marked manually.", questionID), false)
+	}
+	if errors.Is(err, applicationqotd.ErrQuestionNotReady) {
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d must be ready before it can be marked as published.", questionID), false)
+	}
+	return translateQuestionsMutationError(err)
+}
+
 func translateQuestionsImportError(err error) error {
 	if err == nil {
 		return nil
@@ -1488,6 +1572,7 @@ var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
 var _ core.SubCommand = (*questionsQueueCommand)(nil)
 var _ core.SubCommand = (*questionsNextCommand)(nil)
+var _ core.SubCommand = (*questionsMarkPublishedCommand)(nil)
 var _ core.SubCommand = (*questionsImportCommand)(nil)
 var _ core.SubCommand = (*questionsResetCommand)(nil)
 var _ core.SubCommand = (*questionsRecoverCommand)(nil)

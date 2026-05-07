@@ -572,6 +572,71 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 	return updated, nil
 }
 
+func (s *Service) MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
+	if err := s.validate(); err != nil {
+		return nil, err
+	}
+
+	if questionID <= 0 {
+		return nil, fmt.Errorf("%w: question id must be greater than zero", files.ErrInvalidQOTDInput)
+	}
+
+	guildID = strings.TrimSpace(guildID)
+	lifecycleLock := s.guildLifecycleLock(guildID)
+	lifecycleLock.Lock()
+	defer lifecycleLock.Unlock()
+
+	deck, err := s.resolveDashboardDeck(guildID, deckID)
+	if err != nil {
+		return nil, err
+	}
+
+	question, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+	if err != nil {
+		return nil, err
+	}
+	if question == nil || question.DeckID != deck.ID {
+		return nil, ErrQuestionNotFound
+	}
+
+	status := QuestionStatus(strings.TrimSpace(question.Status))
+	if status == QuestionStatusUsed {
+		changed := false
+		publishedAt := s.clock()
+		if question.UsedAt == nil || question.UsedAt.IsZero() {
+			question.UsedAt = &publishedAt
+			changed = true
+		}
+		if question.PublishedOnceAt == nil || question.PublishedOnceAt.IsZero() {
+			question.PublishedOnceAt = &publishedAt
+			changed = true
+		}
+		if question.ScheduledForDateUTC != nil {
+			question.ScheduledForDateUTC = nil
+			changed = true
+		}
+		if !changed {
+			return question, nil
+		}
+		return s.store.UpdateQOTDQuestion(ctx, *question)
+	}
+
+	if isImmutableQuestion(*question) {
+		return nil, ErrImmutableQuestion
+	}
+	if status != QuestionStatusReady {
+		return nil, ErrQuestionNotReady
+	}
+
+	publishedAt := s.clock()
+	question.Status = string(QuestionStatusUsed)
+	question.UsedAt = &publishedAt
+	question.PublishedOnceAt = &publishedAt
+	question.ScheduledForDateUTC = nil
+
+	return s.store.UpdateQOTDQuestion(ctx, *question)
+}
+
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, err
