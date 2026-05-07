@@ -40,7 +40,16 @@ const (
 	OfficialPostStateArchiving      OfficialPostState = "archiving"
 	OfficialPostStateArchived       OfficialPostState = "archived"
 	OfficialPostStateMissingDiscord OfficialPostState = "missing_discord"
-	OfficialPostStateFailed         OfficialPostState = "failed"
+	// OfficialPostStateFailed is a transient failure (DB hiccup, DNS blip,
+	// 5xx from Discord). The reconcile loop retries it every cycle.
+	OfficialPostStateFailed OfficialPostState = "failed"
+	// OfficialPostStateAbandoned is a terminal failure that the bot cannot
+	// recover from on its own — the channel was deleted, the bot was kicked
+	// from the guild, or it lost the permissions to post. The reconcile loop
+	// must NOT retry these or it spams Discord every 15 minutes forever; an
+	// admin has to fix the Discord-side state and re-trigger publishing
+	// manually.
+	OfficialPostStateAbandoned OfficialPostState = "abandoned"
 )
 
 type AnswerRecordState string

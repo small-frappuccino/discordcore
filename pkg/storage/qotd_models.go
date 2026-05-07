@@ -38,14 +38,21 @@ type QOTDOfficialPostRecord struct {
 	DiscordStarterMessageID    string
 	AnswerChannelID            string
 	QuestionTextSnapshot       string
-	PublishedAt                *time.Time
-	GraceUntil                 time.Time
-	ArchiveAt                  time.Time
-	ClosedAt                   *time.Time
-	ArchivedAt                 *time.Time
-	LastReconciledAt           *time.Time
-	CreatedAt                  time.Time
-	UpdatedAt                  time.Time
+	// Nonce is sent to Discord with enforce_nonce=true so that retried
+	// publishes after a crash (record persisted, Discord call accepted, but
+	// the message ID never made it back to our DB) deduplicate server-side
+	// instead of producing a second QOTD post in the channel. Empty for
+	// legacy records created before the column existed; the publisher falls
+	// back to the non-idempotent send path in that case.
+	Nonce            string
+	PublishedAt      *time.Time
+	GraceUntil       time.Time
+	ArchiveAt        time.Time
+	ClosedAt         *time.Time
+	ArchivedAt       *time.Time
+	LastReconciledAt *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type QOTDSurfaceRecord struct {

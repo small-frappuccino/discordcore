@@ -703,6 +703,24 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		return nil, ErrPublishInProgress
 	}
 
+	// When the manual publish is consuming a future automatic slot (because
+	// today's schedule boundary already passed), the user's intent is "this
+	// post represents today's QOTD". Suppress today's scheduled publish so
+	// the runtime loop doesn't double-post on top of this manual record once
+	// it correctly publishes today's missed slot. The suppression is
+	// auto-cleared when today rolls over.
+	todayDate := NormalizePublishDateUTC(now)
+	if consumeAutomaticSlot && slotState.ScheduleConfigured && !todayDate.Equal(publishDate) {
+		if err := s.suppressScheduledPublishForDate(guildID, todayDate); err != nil {
+			log.ApplicationLogger().Warn(
+				"QOTD manual publish failed to suppress today's scheduled slot",
+				"guildID", guildID,
+				"todayDateUTC", todayDate,
+				"err", err,
+			)
+		}
+	}
+
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)
 	if err != nil {
 		return nil, err
@@ -719,6 +737,13 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	}
 
 	lifecycle := EvaluateManualOfficialPost(now, now)
+	nonce, err := generatePublishNonce()
+	if err != nil {
+		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+		}
+		return nil, fmt.Errorf("generate qotd publish nonce: %w", err)
+	}
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
 		GuildID:              guildID,
 		DeckID:               deck.ID,
@@ -730,6 +755,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		State:                string(OfficialPostStateProvisioning),
 		ChannelID:            strings.TrimSpace(deck.ChannelID),
 		QuestionTextSnapshot: question.Body,
+		Nonce:                nonce,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
 	})

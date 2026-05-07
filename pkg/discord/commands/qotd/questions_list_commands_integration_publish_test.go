@@ -35,10 +35,10 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me next automatically", applicationqotd.QuestionStatusReady)
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	publishResp := rec.lastResponse(t)
-	requirePublicResponse(t, publishResp)
-	if !strings.Contains(publishResp.Data.Content, "Published QOTD question ID 1 manually.") {
-		t.Fatalf("expected manual publish confirmation before queue inspection, got %q", publishResp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	publishMessage := rec.lastEdit(t)
+	if !strings.Contains(publishMessage, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected manual publish confirmation before queue inspection, got %q", publishMessage)
 	}
 
 	router.HandleInteraction(session, newQOTDSlashInteraction(guildID, ownerID, questionsQueueSubCommand, nil))
@@ -83,13 +83,13 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me", applicationqotd.QuestionStatusReady)
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	resp := rec.lastResponse(t)
-	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "Published QOTD question ID 1 manually.") {
-		t.Fatalf("expected publish confirmation, got %q", resp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	publishMessage := rec.lastEdit(t)
+	if !strings.Contains(publishMessage, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected publish confirmation, got %q", publishMessage)
 	}
-	if !strings.Contains(resp.Data.Content, "https://discord.com/channels/") {
-		t.Fatalf("expected publish response to include jump url, got %q", resp.Data.Content)
+	if !strings.Contains(publishMessage, "https://discord.com/channels/") {
+		t.Fatalf("expected publish response to include jump url, got %q", publishMessage)
 	}
 	if len(fake.publishedParams) != 1 {
 		t.Fatalf("expected fake publisher to be invoked once, got %d", len(fake.publishedParams))
@@ -137,20 +137,20 @@ func TestQOTDPublishCommandBlocksSecondPublishForCurrentSlot(t *testing.T) {
 	mustCreateQuestion(t, service, guildID, ownerID, files.LegacyQOTDDefaultDeckID, "Publish me today too", applicationqotd.QuestionStatusReady)
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	firstResp := rec.lastResponse(t)
-	requirePublicResponse(t, firstResp)
-	if !strings.Contains(firstResp.Data.Content, "Published QOTD question ID 1 manually.") {
-		t.Fatalf("expected first manual publish confirmation, got %q", firstResp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	firstMessage := rec.lastEdit(t)
+	if !strings.Contains(firstMessage, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected first manual publish confirmation, got %q", firstMessage)
 	}
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	secondResp := rec.lastResponse(t)
-	requirePublicResponse(t, secondResp)
-	if !strings.Contains(secondResp.Data.Content, "already been published for the current slot") {
-		t.Fatalf("expected second manual publish to be blocked for the current slot, got %q", secondResp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	secondMessage := rec.lastEdit(t)
+	if !strings.Contains(secondMessage, "already been published for the current slot") {
+		t.Fatalf("expected second manual publish to be blocked for the current slot, got %q", secondMessage)
 	}
-	if strings.Contains(secondResp.Data.Content, "An error occurred while executing the command") {
-		t.Fatalf("expected command-specific publish response, got generic fallback %q", secondResp.Data.Content)
+	if strings.Contains(secondMessage, "An error occurred while executing the command") {
+		t.Fatalf("expected command-specific publish response, got generic fallback %q", secondMessage)
 	}
 	if len(fake.publishedParams) != 1 {
 		t.Fatalf("expected only one real publish attempt for the current slot, got %d", len(fake.publishedParams))
@@ -195,10 +195,10 @@ func TestQOTDPublishCommandCanSkipAutomaticSlotConsumptionIntegration(t *testing
 		Type:  discordgo.ApplicationCommandOptionBoolean,
 		Value: false,
 	}}))
-	resp := rec.lastResponse(t)
-	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "without consuming the automatic slot") {
-		t.Fatalf("expected non-consuming publish confirmation, got %q", resp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	publishMessage := rec.lastEdit(t)
+	if !strings.Contains(publishMessage, "without consuming the automatic slot") {
+		t.Fatalf("expected non-consuming publish confirmation, got %q", publishMessage)
 	}
 
 	queue, err := service.GetAutomaticQueueState(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)

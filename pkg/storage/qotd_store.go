@@ -854,6 +854,68 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	return record, nil
 }
 
+// ReclaimOrphanReservedQOTDQuestions releases reservations whose
+// CreateQOTDOfficialPostProvisioning never landed (process crashed between
+// ReserveNextQOTDQuestion and the official-post insert) so they re-enter the
+// publish queue. We restrict to scheduled_for_date_utc < todayUTC: today's
+// reservations may belong to an in-flight publish that another goroutine is
+// currently running. Returns the freed question IDs in queue order so callers
+// can log or test the cleanup deterministically.
+func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) ([]int64, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("store not initialized")
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return nil, nil
+	}
+	todayUTC = normalizeQOTDDateUTC(todayUTC)
+	if todayUTC.IsZero() {
+		return nil, fmt.Errorf("reclaim orphan qotd reservations: today_utc is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	rows, err := s.queryContext(ctx,
+		`UPDATE qotd_questions q
+		 SET
+			status = 'ready',
+			scheduled_for_date_utc = NULL,
+			updated_at = NOW()
+		 WHERE q.guild_id = ?
+		   AND q.status = 'reserved'
+		   AND q.scheduled_for_date_utc IS NOT NULL
+		   AND q.scheduled_for_date_utc < ?
+		   AND NOT EXISTS (
+		     SELECT 1
+		     FROM qotd_official_posts p
+		     WHERE p.guild_id = q.guild_id
+		       AND p.question_id = q.id
+		   )
+		 RETURNING q.id`,
+		guildID,
+		todayUTC,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0, 4)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+	}
+	return ids, nil
+}
+
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -886,6 +948,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -893,7 +956,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			archived_at,
 			last_reconciled_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING
 			id,
 			guild_id,
@@ -911,6 +974,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -934,6 +998,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 		zeroEmptyString(normalized.DiscordStarterMessageID),
 		normalized.AnswerChannelID,
 		normalized.QuestionTextSnapshot,
+		zeroEmptyString(normalized.Nonce),
 		nullableTime(normalized.PublishedAt),
 		normalized.GraceUntil.UTC(),
 		normalized.ArchiveAt.UTC(),
@@ -1001,6 +1066,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1052,6 +1118,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1104,6 +1171,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1171,6 +1239,7 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1241,6 +1310,7 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1313,6 +1383,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1381,6 +1452,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1456,6 +1528,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 			discord_starter_message_id,
 			answer_channel_id,
 			question_text_snapshot,
+			nonce,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1724,6 +1797,7 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 	rec.DiscordStarterMessageID = strings.TrimSpace(rec.DiscordStarterMessageID)
 	rec.AnswerChannelID = strings.TrimSpace(rec.AnswerChannelID)
 	rec.QuestionTextSnapshot = strings.TrimSpace(rec.QuestionTextSnapshot)
+	rec.Nonce = strings.TrimSpace(rec.Nonce)
 	rec.PublishDateUTC = normalizeQOTDDateUTC(rec.PublishDateUTC)
 	rec.PublishedAt = normalizeQOTDTimePtr(rec.PublishedAt)
 	rec.ClosedAt = normalizeQOTDTimePtr(rec.ClosedAt)
@@ -2050,6 +2124,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	var starterMessageID sql.NullString
 	var answerChannelID sql.NullString
 	var consumeAutomaticSlot bool
+	var nonce sql.NullString
 	var publishedAt sql.NullTime
 	var closedAt sql.NullTime
 	var archivedAt sql.NullTime
@@ -2071,6 +2146,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 		&starterMessageID,
 		&answerChannelID,
 		&record.QuestionTextSnapshot,
+		&nonce,
 		&publishedAt,
 		&record.GraceUntil,
 		&record.ArchiveAt,
@@ -2088,6 +2164,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	record.DiscordThreadID = threadID.String
 	record.DiscordStarterMessageID = starterMessageID.String
 	record.AnswerChannelID = strings.TrimSpace(answerChannelID.String)
+	record.Nonce = strings.TrimSpace(nonce.String)
 	record.PublishedAt = timePtrFromNull(publishedAt)
 	record.ClosedAt = timePtrFromNull(closedAt)
 	record.ArchivedAt = timePtrFromNull(archivedAt)

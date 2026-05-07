@@ -2,12 +2,15 @@ package qotd
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -19,6 +22,27 @@ func isOfficialPostProvisioningComplete(post storage.QOTDOfficialPostRecord) boo
 
 func isOfficialPostPublished(post storage.QOTDOfficialPostRecord) bool {
 	return post.PublishedAt != nil && isOfficialPostProvisioningComplete(post)
+}
+
+// isOfficialPostAbandoned reports whether a publish attempt was permanently
+// abandoned because of an unrecoverable Discord error (channel deleted, bot
+// kicked, missing permission). The reconcile and publish loops MUST treat
+// these as terminal — retrying spams Discord and never succeeds without
+// admin intervention.
+func isOfficialPostAbandoned(post storage.QOTDOfficialPostRecord) bool {
+	return OfficialPostState(strings.TrimSpace(post.State)) == OfficialPostStateAbandoned
+}
+
+// generatePublishNonce returns a fresh idempotency token for a QOTD publish.
+// The Discord nonce field accepts up to 25 characters; we use 16 hex chars
+// (8 random bytes) which leaves margin and provides ~10^19 entropy — more
+// than enough to be globally unique across all our publish attempts.
+func generatePublishNonce() (string, error) {
+	var raw [8]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw[:]), nil
 }
 
 func (s *Service) completeOfficialPostProvisioning(
@@ -59,6 +83,7 @@ func (s *Service) completeOfficialPostProvisioning(
 		QuestionText:               post.QuestionTextSnapshot,
 		PublishDateUTC:             post.PublishDateUTC,
 		ThreadName:                 threadName,
+		Nonce:                      post.Nonce,
 	})
 	if published != nil {
 		progress, err := s.store.UpdateQOTDOfficialPostProgress(ctx, post.ID, storage.QOTDOfficialPostRecord{
@@ -84,8 +109,21 @@ func (s *Service) completeOfficialPostProvisioning(
 		}
 	}
 	if publishErr != nil {
-		if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateFailed), nil, nil); err != nil {
-			return nil, nil, "", fmt.Errorf("publish official qotd post: %w (mark failed: %v)", publishErr, err)
+		failureState := OfficialPostStateFailed
+		if isUnrecoverableDiscordPublishError(publishErr) {
+			failureState = OfficialPostStateAbandoned
+		}
+		if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(failureState), nil, nil); err != nil {
+			return nil, nil, "", fmt.Errorf("publish official qotd post: %w (mark %s: %v)", publishErr, failureState, err)
+		}
+		if failureState == OfficialPostStateAbandoned {
+			log.ApplicationLogger().Warn(
+				"QOTD publish abandoned (unrecoverable Discord error)",
+				"officialPostID", post.ID,
+				"guildID", post.GuildID,
+				"channelID", strings.TrimSpace(post.ChannelID),
+				"err", publishErr,
+			)
 		}
 		return nil, nil, "", publishErr
 	}
@@ -172,6 +210,12 @@ func (s *Service) completeOfficialPostProvisioning(
 }
 
 func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, now time.Time) (*PublishResult, error) {
+	if isOfficialPostAbandoned(post) {
+		// Defensive guard: callers should already filter abandoned posts out.
+		// If we got here, return the post as-is so the caller can keep the
+		// window state coherent without retrying the failing publish.
+		return &PublishResult{OfficialPost: post}, nil
+	}
 	question, err := s.store.GetQOTDQuestion(ctx, post.GuildID, post.QuestionID)
 	if err != nil {
 		return nil, err

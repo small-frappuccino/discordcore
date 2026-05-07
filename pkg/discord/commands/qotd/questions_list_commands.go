@@ -558,6 +558,14 @@ func (c *qotdPublishCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *qotdPublishCommand) RequiresGuild() bool       { return true }
 func (c *qotdPublishCommand) RequiresPermissions() bool { return true }
 
+// InteractionAckPolicy defers the slash response so the publish flow has the
+// 15-minute follow-up window. Without this, the synchronous Discord/DB calls
+// inside PublishNowWithParams routinely exceed the 3-second interaction
+// timeout, producing 10062 ("Unknown interaction") on success.
+func (c *qotdPublishCommand) InteractionAckPolicy() core.InteractionAckPolicy {
+	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+}
+
 func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return err
@@ -598,6 +606,7 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		message = fmt.Sprintf("%s %s", message, postURL)
 	}
 	return core.NewResponseBuilder(ctx.Session).
+		WithContext(ctx).
 		Success(ctx.Interaction, message)
 }
 

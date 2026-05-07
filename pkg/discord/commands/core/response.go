@@ -34,6 +34,7 @@ type ResponseConfig struct {
 type ResponseManager struct {
 	session *discordgo.Session
 	config  ResponseConfig
+	ctx     *Context
 }
 
 // NewResponseManager creates a new response manager
@@ -49,6 +50,19 @@ func (rm *ResponseManager) WithConfig(config ResponseConfig) *ResponseManager {
 	return &ResponseManager{
 		session: rm.session,
 		config:  config,
+		ctx:     rm.ctx,
+	}
+}
+
+// WithContext binds a command Context so that ack-aware paths (Custom and the
+// helpers built on top of it) edit the deferred response instead of trying to
+// open a fresh InteractionRespond, which would fail with 40060 once the router
+// has already deferred. Passing a nil ctx clears any previous binding.
+func (rm *ResponseManager) WithContext(ctx *Context) *ResponseManager {
+	return &ResponseManager{
+		session: rm.session,
+		config:  rm.config,
+		ctx:     ctx,
 	}
 }
 
@@ -86,11 +100,35 @@ func (rm *ResponseManager) Ephemeral(i *discordgo.InteractionCreate, message str
 
 // Custom sends a custom response using a centralized builder
 func (rm *ResponseManager) Custom(i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed) error {
+	if rm.ctx != nil && rm.ctx.Acknowledged {
+		return rm.editAckedResponse(i, content, embeds)
+	}
 	data := rm.buildResponseData(content, embeds)
 	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: data,
 	})
+}
+
+// editAckedResponse edits the original deferred response. Used when the
+// router has already acked the interaction (Acknowledged=true on the bound
+// Context). Discord refuses to accept InteractionRespond after a defer; this
+// path uses InteractionResponseEdit instead and preserves the visibility set
+// at defer time (ephemeral flag is fixed by the defer and cannot change here).
+func (rm *ResponseManager) editAckedResponse(i *discordgo.InteractionCreate, content string, embeds []*discordgo.MessageEmbed) error {
+	edit := &discordgo.WebhookEdit{Content: &content}
+	if len(embeds) > 0 {
+		edit.Embeds = &embeds
+	}
+	if len(rm.config.Components) > 0 {
+		components := rm.config.Components
+		edit.Components = &components
+	}
+	if len(rm.config.Attachments) > 0 {
+		edit.Files = rm.config.Attachments
+	}
+	_, err := rm.session.InteractionResponseEdit(i.Interaction, edit)
+	return err
 }
 
 // buildResponseData builds InteractionResponseData honoring ResponseConfig
@@ -284,6 +322,7 @@ func (rm *ResponseManager) DeleteResponse(i *discordgo.InteractionCreate) error 
 type ResponseBuilder struct {
 	manager *ResponseManager
 	config  ResponseConfig
+	ctx     *Context
 }
 
 // NewResponseBuilder creates a new response builder
@@ -292,6 +331,14 @@ func NewResponseBuilder(session *discordgo.Session) *ResponseBuilder {
 		manager: NewResponseManager(session),
 		config:  ResponseConfig{},
 	}
+}
+
+// WithContext binds a command Context so the resulting ResponseManager edits
+// the deferred response when the router has already acked. See
+// ResponseManager.WithContext for details.
+func (rb *ResponseBuilder) WithContext(ctx *Context) *ResponseBuilder {
+	rb.ctx = ctx
+	return rb
 }
 
 // Ephemeral makes the response ephemeral
@@ -344,7 +391,11 @@ func (rb *ResponseBuilder) WithAttachments(files ...*discordgo.File) *ResponseBu
 
 // Build constructs the ResponseManager with the configuration
 func (rb *ResponseBuilder) Build() *ResponseManager {
-	return rb.manager.WithConfig(rb.config)
+	rm := rb.manager.WithConfig(rb.config)
+	if rb.ctx != nil {
+		rm = rm.WithContext(rb.ctx)
+	}
+	return rm
 }
 
 // Success sends a success response (convenience method)

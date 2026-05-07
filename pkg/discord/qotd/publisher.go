@@ -2,7 +2,10 @@ package qotd
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -31,6 +34,11 @@ type PublishOfficialPostParams struct {
 	QuestionText               string
 	PublishDateUTC             time.Time
 	ThreadName                 string
+	// Nonce, when set, is forwarded to Discord with enforce_nonce=true so that
+	// a retry after a crash that already accepted the message at Discord
+	// returns the existing message ID instead of creating a duplicate. Empty
+	// string falls back to the legacy non-idempotent send.
+	Nonce string
 }
 
 type PublishedOfficialPost struct {
@@ -77,10 +85,7 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 	}
 
 	if result.StarterMessageID == "" {
-		message, err := session.ChannelMessageSendComplex(
-			normalized.ChannelID,
-			buildOfficialPostStarterMessage(questionEmbed),
-		)
+		message, err := sendOfficialStarterMessage(session, normalized.ChannelID, questionEmbed, normalized.Nonce)
 		if err != nil {
 			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd starter message: %w", err)
 		}
@@ -94,20 +99,11 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 	}
 
 	if result.ThreadID == "" {
-		thread, err := session.MessageThreadStartComplex(
-			normalized.ChannelID,
-			result.StarterMessageID,
-			&discordgo.ThreadStart{
-				Name:                buildOfficialPostName(normalized.PublishDateUTC, normalized.DisplayID, normalized.ThreadName),
-				AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
-			},
-		)
+		threadID, err := startOrAdoptOfficialThread(session, normalized, result.StarterMessageID)
 		if err != nil {
 			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd daily thread: %w", err)
 		}
-		if thread != nil {
-			result.ThreadID = strings.TrimSpace(thread.ID)
-		}
+		result.ThreadID = strings.TrimSpace(threadID)
 		if result.ThreadID == "" {
 			return result.withPostURL(normalized.GuildID, normalized.ChannelID), fmt.Errorf("create qotd daily thread: missing thread id")
 		}
@@ -121,6 +117,92 @@ func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.
 	}
 
 	return result.withPostURL(normalized.GuildID, normalized.ChannelID), nil
+}
+
+// sendOfficialStarterMessage is ChannelMessageSendComplex augmented with
+// nonce + enforce_nonce server-side dedup. discordgo's MessageSend does not
+// expose those fields yet, so when a nonce is supplied we drop down to the
+// generic RequestWithBucketID path and post a JSON payload that includes the
+// idempotency hint. Discord returns the SAME message ID across retries with
+// the same nonce, so a crash between Discord acknowledging the send and our
+// DB saving the message ID cannot duplicate the QOTD post on resume.
+//
+// When nonce is empty the legacy ChannelMessageSendComplex path is used so
+// records created before the nonce column existed keep working.
+func sendOfficialStarterMessage(session *discordgo.Session, channelID string, embed *discordgo.MessageEmbed, nonce string) (*discordgo.Message, error) {
+	send := buildOfficialPostStarterMessage(embed)
+	nonce = strings.TrimSpace(nonce)
+	if nonce == "" {
+		return session.ChannelMessageSendComplex(channelID, send)
+	}
+
+	for _, embed := range send.Embeds {
+		if embed.Type == "" {
+			embed.Type = "rich"
+		}
+	}
+
+	payload := struct {
+		*discordgo.MessageSend
+		Nonce        string `json:"nonce,omitempty"`
+		EnforceNonce bool   `json:"enforce_nonce,omitempty"`
+	}{
+		MessageSend:  send,
+		Nonce:        nonce,
+		EnforceNonce: true,
+	}
+	endpoint := discordgo.EndpointChannelMessages(channelID)
+	body, err := session.RequestWithBucketID(http.MethodPost, endpoint, payload, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	var message discordgo.Message
+	if err := json.Unmarshal(body, &message); err != nil {
+		return nil, fmt.Errorf("decode qotd starter message: %w", err)
+	}
+	return &message, nil
+}
+
+// startOrAdoptOfficialThread creates the daily thread or adopts the existing
+// one when Discord reports ALREADY_HAS_A_THREAD on the starter message.
+// That second branch is the recovery path after a crash: the message already
+// has a thread on the Discord side from a prior attempt, but our DB never
+// recorded its ID, so we read the message back to get the thread reference
+// instead of creating a duplicate (which Discord would refuse anyway).
+func startOrAdoptOfficialThread(session *discordgo.Session, params PublishOfficialPostParams, starterMessageID string) (string, error) {
+	thread, err := session.MessageThreadStartComplex(
+		params.ChannelID,
+		starterMessageID,
+		&discordgo.ThreadStart{
+			Name:                buildOfficialPostName(params.PublishDateUTC, params.DisplayID, params.ThreadName),
+			AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
+		},
+	)
+	if err == nil {
+		if thread == nil {
+			return "", nil
+		}
+		return strings.TrimSpace(thread.ID), nil
+	}
+	if !isThreadAlreadyCreatedError(err) {
+		return "", err
+	}
+	existing, lookupErr := session.ChannelMessage(params.ChannelID, starterMessageID)
+	if lookupErr != nil {
+		return "", fmt.Errorf("lookup existing qotd thread after retry: %w", lookupErr)
+	}
+	if existing == nil || existing.Thread == nil || strings.TrimSpace(existing.Thread.ID) == "" {
+		return "", err
+	}
+	return strings.TrimSpace(existing.Thread.ID), nil
+}
+
+func isThreadAlreadyCreatedError(err error) bool {
+	var restErr *discordgo.RESTError
+	if !errors.As(err, &restErr) || restErr == nil {
+		return false
+	}
+	return restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeThreadAlreadyCreatedForThisMessage
 }
 
 func (post *PublishedOfficialPost) withPostURL(guildID, channelID string) *PublishedOfficialPost {

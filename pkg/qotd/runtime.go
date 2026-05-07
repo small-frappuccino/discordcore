@@ -39,7 +39,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if err != nil {
 		return false, err
 	}
-	slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
+	slotState, err := s.loadDueSlotState(ctx, guildID, cfg, now)
 	if err != nil {
 		return false, err
 	}
@@ -73,6 +73,14 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if isScheduledPublishSuppressed(cfg, slotState.PublishDateUTC) {
 		return false, nil
 	}
+	// Also honor suppressions whose target is the forward-looking projection
+	// (tomorrow once today's boundary has passed). ResetDeckState writes the
+	// suppression in the projection's date because that matches the manual
+	// post being cleared; without this check, today's late publish would
+	// re-fire even though the user just paused autopublishing.
+	if projected := CurrentPublishDateUTC(slotState.Schedule, now); !projected.Equal(slotState.PublishDateUTC) && isScheduledPublishSuppressed(cfg, projected) {
+		return false, nil
+	}
 
 	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC)
 	if err != nil {
@@ -90,6 +98,13 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	}
 
 	lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, now)
+	nonce, err := generatePublishNonce()
+	if err != nil {
+		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+		}
+		return false, fmt.Errorf("generate qotd publish nonce: %w", err)
+	}
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
 		GuildID:              guildID,
 		DeckID:               deck.ID,
@@ -100,6 +115,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		State:                string(OfficialPostStateProvisioning),
 		ChannelID:            strings.TrimSpace(deck.ChannelID),
 		QuestionTextSnapshot: question.Body,
+		Nonce:                nonce,
 		GraceUntil:           lifecycle.BecomesPreviousAt,
 		ArchiveAt:            lifecycle.ArchiveAt,
 	})
@@ -110,6 +126,12 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, slotState.PublishDateUTC, err)
 		if conflictErr != nil {
 			return false, conflictErr
+		}
+		if isOfficialPostAbandoned(*existing) {
+			// Existing record was permanently abandoned by a previous
+			// attempt (unrecoverable Discord error). Don't resume it —
+			// admin must intervene. Just keep the window state coherent.
+			return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
 		}
 		if !isOfficialPostPublished(*existing) {
 			recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
@@ -165,7 +187,36 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	if err := s.reconcilePendingOfficialPosts(ctx, guildID, session, now); err != nil {
 		return err
 	}
+	if err := s.reclaimOrphanReservedQuestions(ctx, guildID, now); err != nil {
+		return err
+	}
 	return s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+}
+
+// reclaimOrphanReservedQuestions returns "reserved" questions to "ready" when
+// the publish flow crashed between ReserveNextQOTDQuestion and the
+// CreateQOTDOfficialPostProvisioning insert: no qotd_official_posts row
+// references the question and the reservation date is now in the past, so the
+// in-process release path (releaseReservedQuestion) is no longer reachable.
+// Without this sweep the deck silently leaks one ready question per crash.
+func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID string, now time.Time) error {
+	todayUTC := NormalizePublishDateUTC(now)
+	if todayUTC.IsZero() {
+		return nil
+	}
+	ids, err := s.store.ReclaimOrphanReservedQOTDQuestions(ctx, guildID, todayUTC)
+	if err != nil {
+		return err
+	}
+	if len(ids) > 0 {
+		log.ApplicationLogger().Info(
+			"QOTD reclaimed orphan question reservations",
+			"guildID", guildID,
+			"questionIDs", ids,
+			"todayUTC", todayUTC,
+		)
+	}
+	return nil
 }
 
 func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
@@ -364,4 +415,38 @@ func isMissingDiscordThreadError(err error) bool {
 		return true
 	}
 	return restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeUnknownChannel
+}
+
+// isUnrecoverableDiscordPublishError reports whether the Discord error returned
+// by the publish flow indicates a permanent condition: the channel was
+// deleted, the bot is no longer in the guild, or it lost write permissions.
+// These cases cannot be fixed by retrying — the reconcile loop must abandon
+// the post and surface it to operators instead of hammering Discord every 15
+// minutes. Transient failures (5xx, DNS, rate limits) intentionally do NOT
+// match here so they keep retrying through the existing failed→retry loop.
+func isUnrecoverableDiscordPublishError(err error) bool {
+	var restErr *discordgo.RESTError
+	if !errors.As(err, &restErr) || restErr == nil {
+		return false
+	}
+	if restErr.Response != nil {
+		switch restErr.Response.StatusCode {
+		case http.StatusNotFound, http.StatusForbidden, http.StatusUnauthorized:
+			return true
+		}
+	}
+	if restErr.Message != nil {
+		switch restErr.Message.Code {
+		case discordgo.ErrCodeUnknownChannel,
+			discordgo.ErrCodeUnknownGuild,
+			discordgo.ErrCodeUnknownMessage,
+			discordgo.ErrCodeMissingAccess,
+			discordgo.ErrCodeMissingPermissions,
+			discordgo.ErrCodeCannotSendMessagesInVoiceChannel,
+			discordgo.ErrCodeCannotSendMessagesToThisUser,
+			discordgo.ErrCodeUnauthorized:
+			return true
+		}
+	}
+	return false
 }

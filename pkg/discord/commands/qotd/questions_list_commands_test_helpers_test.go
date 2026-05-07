@@ -376,6 +376,20 @@ func requirePublicResponse(t *testing.T, resp discordgo.InteractionResponse) {
 	}
 }
 
+// requirePublicDeferredAck asserts that the response is the public deferred
+// channel message ack the router sends before a long-running slash handler
+// runs. The actual user-visible content arrives through a follow-up edit and
+// should be inspected via interactionRecorder.lastEdit instead.
+func requirePublicDeferredAck(t *testing.T, resp discordgo.InteractionResponse) {
+	t.Helper()
+	if resp.Type != discordgo.InteractionResponseDeferredChannelMessageWithSource {
+		t.Fatalf("expected deferred channel message ack, got type=%v content=%q", resp.Type, resp.Data.Content)
+	}
+	if resp.Data.Flags&discordgo.MessageFlagsEphemeral != 0 {
+		t.Fatalf("expected public deferred ack, got ephemeral flag set")
+	}
+}
+
 func dueQOTDCommandSchedule() files.QOTDPublishScheduleConfig {
 	now := time.Now().UTC()
 	hourUTC := now.Hour()

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -1187,6 +1188,225 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 				}
 			}
 		}
+
+// TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash simulates a
+// process that crashed between ReserveNextQOTDQuestion and the official-post
+// insert: the question stays "reserved" with scheduled_for_date_utc=yesterday
+// even though no qotd_official_posts row references it. Without the reclaim
+// sweep this question would never come back to the queue, draining the deck
+// silently. ReconcileGuild must restore it to "ready" so the next publish
+// picks it up.
+func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	orphan, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Stranded after a crash",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion(orphan) failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+		Body:   "Healthy fallback",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion(fallback) failed: %v", err)
+	}
+
+	yesterday := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
+	if _, err := store.ReserveNextQOTDQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, yesterday); err != nil {
+		t.Fatalf("ReserveNextQOTDQuestion(simulated crash) failed: %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	}
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() failed: %v", err)
+	}
+
+	restored, err := store.GetQOTDQuestion(context.Background(), "g1", orphan.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if restored == nil || restored.Status != string(QuestionStatusReady) {
+		t.Fatalf("expected reconcile to release the orphan reservation, got %+v", restored)
+	}
+	if restored.ScheduledForDateUTC != nil {
+		t.Fatalf("expected scheduled date to be cleared on the orphan, got %+v", restored.ScheduledForDateUTC)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected scheduler to publish today's slot after orphan reservation reclaimed")
+	}
+	if len(fake.publishedParams) != 1 || fake.publishedParams[0].QuestionText != orphan.Body {
+		t.Fatalf("expected reclaimed orphan to be the next published question, got %+v", fake.publishedParams)
+	}
+}
+
+// TestServicePublishScheduledIfDuePublishesWhenTickArrivesAfterBoundary covers
+// the regression where a 1-minute wall-clock-misaligned ticker would silently
+// skip the daily QOTD: CurrentPublishDateUTC rolls forward to tomorrow as soon
+// as today's publish time elapses by even one nanosecond, leaving
+// BoundaryPassed false on every realistic tick after the boundary. The fix
+// anchors the runtime publish path to today's date, so any tick after today's
+// schedule (and before tomorrow's) still publishes today's slot.
+func TestServicePublishScheduledIfDuePublishesWhenTickArrivesAfterBoundary(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Late tick question",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	// Tick 30 seconds past the 12:43 UTC boundary. Pre-fix this returned
+	// false because CurrentPublishDateUTC immediately rolled to tomorrow.
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 30, 0, time.UTC)
+	}
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected scheduler to publish today's slot 30 seconds after the boundary")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected one publish attempt, got %d", len(fake.publishedParams))
+	}
+
+	today := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	scheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", today)
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if scheduled == nil || scheduled.PublishMode != string(PublishModeScheduled) {
+		t.Fatalf("expected today's slot to hold the scheduled record, got %+v", scheduled)
+	}
+}
+
+// TestServicePublishScheduledIfDueBackfillsAfterBootPostBoundary covers the
+// "bot restarted after the daily schedule" scenario. Pre-fix the runtime
+// would treat today's slot as already passed and wait until tomorrow's
+// schedule. Post-fix it backfills today's missing publish on the next tick.
+func TestServicePublishScheduledIfDueBackfillsAfterBootPostBoundary(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Boot-late question",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	// Boot at 14:00 UTC, well past the 12:43 boundary. Realistic restart
+	// scenario after a crash or deploy.
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 14, 0, 0, 0, time.UTC)
+	}
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected scheduler to backfill today's slot when boot lands after the boundary")
+	}
+
+	today := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	scheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", today)
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if scheduled == nil {
+		t.Fatal("expected today's slot to be filled after a post-boundary boot")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected exactly one publish attempt, got %d", len(fake.publishedParams))
+	}
+}
+
+// TestServicePublishScheduledIfDueIdleBeforeBoundary confirms the inverse:
+// when the scheduler ticks before today's publish time, it stays idle so we
+// don't accidentally publish twice in one day on a clock-skewed system.
+func TestServicePublishScheduledIfDueIdleBeforeBoundary(t *testing.T) {
+	service, _, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Pre-boundary question",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 42, 30, 0, time.UTC)
+	}
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected scheduler to stay idle 30 seconds before the boundary")
+	}
+	if len(fake.publishedParams) != 0 {
+		t.Fatalf("expected no publish attempts before the boundary, got %d", len(fake.publishedParams))
+	}
+}
+
+// TestServicePublishScheduledIfDueDoesNotRepublishLateTicks confirms that
+// repeated late ticks across the same day are idempotent — the slot record
+// blocks the second attempt even though both ticks satisfy BoundaryPassed.
+func TestServicePublishScheduledIfDueDoesNotRepublishLateTicks(t *testing.T) {
+	service, _, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Idempotent question",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 44, 0, 0, time.UTC)
+	}
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishScheduledIfDue(first) failed: %v", err)
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected first late tick to publish once, got %d", len(fake.publishedParams))
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(second) failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected second late tick to stay idle once today's slot is filled")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected no additional publish attempts on the second late tick, got %d", len(fake.publishedParams))
+	}
+}
 
 func TestServiceGetAutomaticQueueStateSkipsPublishedCurrentSlotAfterBoundary(t *testing.T) {
 	service, _, _ := newIntegrationTestQOTDService(t)
@@ -2634,6 +2854,242 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	}
 	if len(fake.fetchCalls) != 1 {
 		t.Fatalf("expected archived posts to be skipped on repeat reconcile, got fetches=%v", fake.fetchCalls)
+	}
+}
+
+// TestServicePublishScheduledIfDueGeneratesIdempotencyNonce verifies that
+// every publish flows an idempotency nonce all the way from the service
+// (where it's generated and persisted to the DB record) into the publisher
+// params (which forward it to Discord with enforce_nonce=true). Without the
+// nonce a crash between the Discord send and our DB write of the message ID
+// would produce a duplicate post on resume; the nonce lets Discord
+// deduplicate server-side.
+func TestServicePublishScheduledIfDueGeneratesIdempotencyNonce(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question with nonce",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	}
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected one publish attempt, got %d", len(fake.publishedParams))
+	}
+	if strings.TrimSpace(fake.publishedParams[0].Nonce) == "" {
+		t.Fatal("expected publisher params to carry an idempotency nonce")
+	}
+
+	post, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if post == nil {
+		t.Fatal("expected published record to be persisted")
+	}
+	if strings.TrimSpace(post.Nonce) == "" {
+		t.Fatal("expected idempotency nonce to be persisted on the record")
+	}
+	if post.Nonce != fake.publishedParams[0].Nonce {
+		t.Fatalf("expected DB nonce to match the one forwarded to publisher, db=%q forwarded=%q", post.Nonce, fake.publishedParams[0].Nonce)
+	}
+}
+
+// TestServicePublishScheduledIfDueResumeReusesPersistedNonce simulates the
+// crash window: the DB record exists with a nonce but no Discord IDs (the
+// publish was never finalized). The reconcile path resumes via
+// resumeOfficialPostProvisioning, which must forward the SAME nonce back to
+// Discord so server-side dedup returns the original message instead of
+// creating a duplicate.
+func TestServicePublishScheduledIfDueResumeReusesPersistedNonce(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Resumed publish",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	// Synthesize the post-crash state: provisioning record with a nonce but
+	// no Discord IDs persisted.
+	persistedNonce := "deadbeefcafebabe"
+	if _, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeScheduled),
+		ConsumeAutomaticSlot: true,
+		PublishDateUTC:       time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		State:                string(OfficialPostStateProvisioning),
+		ChannelID:            integrationQuestionChannelID,
+		QuestionTextSnapshot: question.Body,
+		Nonce:                persistedNonce,
+		GraceUntil:           time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	}
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected resume to call publisher exactly once, got %d", len(fake.publishedParams))
+	}
+	if fake.publishedParams[0].Nonce != persistedNonce {
+		t.Fatalf("expected resume to reuse persisted nonce, got %q want %q", fake.publishedParams[0].Nonce, persistedNonce)
+	}
+}
+
+// TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError checks
+// the regression where reconcile would retry forever after the channel was
+// deleted or the bot lost permission to post. We force the fake publisher to
+// return a 404 (Unknown Channel), expect the post to land in 'abandoned',
+// then verify that subsequent ReconcileGuild and PublishScheduledIfDue calls
+// do NOT call Discord again.
+func TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question for a deleted channel",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	unknownChannelErr := &discordgo.RESTError{
+		Response: &http.Response{StatusCode: http.StatusNotFound},
+		Message:  &discordgo.APIErrorMessage{Code: discordgo.ErrCodeUnknownChannel, Message: "Unknown Channel"},
+	}
+	fake.publishResponses = []fakePublishResponse{{err: unknownChannelErr}}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err == nil {
+		t.Fatal("expected publish to surface the unrecoverable error")
+	}
+	if published {
+		t.Fatal("expected publish to NOT report success when Discord returned an unrecoverable error")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected exactly one publish attempt before abandonment, got %d", len(fake.publishedParams))
+	}
+
+	today := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	abandonedPost, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", today)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if abandonedPost == nil {
+		t.Fatal("expected the failed post record to remain in storage")
+	}
+	if abandonedPost.State != string(OfficialPostStateAbandoned) {
+		t.Fatalf("expected state=abandoned for unrecoverable Discord error, got %q", abandonedPost.State)
+	}
+
+	// Subsequent reconcile must NOT retry the abandoned post.
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() after abandonment failed: %v", err)
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected ReconcileGuild to skip abandoned post, got %d publish attempts", len(fake.publishedParams))
+	}
+
+	// Subsequent scheduled tick on the same day must also stay idle: the
+	// abandoned record occupies today's slot and needs admin action.
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() after abandonment failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected scheduler to leave abandoned slot alone")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected scheduler not to re-call Discord on abandoned slot, got %d publish attempts", len(fake.publishedParams))
+	}
+}
+
+// TestServicePublishScheduledIfDueRetriesTransientFailures confirms the
+// inverse: a transient (5xx) error keeps the record retryable so the next
+// reconcile cycle picks it up and publishes successfully.
+func TestServicePublishScheduledIfDueRetriesTransientFailures(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question through transient failure",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	transientErr := &discordgo.RESTError{
+		Response: &http.Response{StatusCode: http.StatusInternalServerError},
+		Message:  &discordgo.APIErrorMessage{Message: "internal server error"},
+	}
+	fake.publishResponses = []fakePublishResponse{{err: transientErr}}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	}
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err == nil {
+		t.Fatal("expected first publish attempt to surface the transient error")
+	}
+
+	today := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	post, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", today)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if post == nil {
+		t.Fatal("expected failed post record to remain in storage for retry")
+	}
+	if post.State != string(OfficialPostStateFailed) {
+		t.Fatalf("expected state=failed for transient error, got %q", post.State)
+	}
+
+	// Next reconcile cycle resumes; fake publisher now returns success.
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() after transient error failed: %v", err)
+	}
+	if len(fake.publishedParams) != 2 {
+		t.Fatalf("expected reconcile to retry transient failure, got %d publish attempts", len(fake.publishedParams))
+	}
+
+	recovered, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", today)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() after retry failed: %v", err)
+	}
+	if recovered == nil || recovered.PublishedAt == nil {
+		t.Fatalf("expected transient retry to mark the post published, got %+v", recovered)
 	}
 }
 

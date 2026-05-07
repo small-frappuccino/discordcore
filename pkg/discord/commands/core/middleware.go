@@ -132,11 +132,21 @@ func applyInteractionAckPolicy(ctx *Context, routeKey InteractionRouteKey, polic
 
 	switch routeKey.Kind {
 	case InteractionKindSlash:
-		return NewResponseManager(ctx.Session).DeferResponse(ctx.Interaction, policy.Ephemeral)
+		if err := NewResponseManager(ctx.Session).DeferResponse(ctx.Interaction, policy.Ephemeral); err != nil {
+			return err
+		}
+		ctx.Acknowledged = true
+		ctx.AckEphemeral = policy.Ephemeral
+		return nil
 	case InteractionKindComponent, InteractionKindModal:
-		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+		if err := ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
+		}); err != nil {
+			return err
+		}
+		ctx.Acknowledged = true
+		ctx.AckEphemeral = policy.Ephemeral
+		return nil
 	default:
 		return nil
 	}
@@ -148,7 +158,7 @@ func respondToSlashError(ctx *Context, err error) {
 	}
 
 	if cmdErr, ok := err.(*CommandError); ok {
-		builder := NewResponseBuilder(ctx.Session)
+		builder := NewResponseBuilder(ctx.Session).WithContext(ctx)
 		if cmdErr.Ephemeral {
 			builder = builder.Ephemeral()
 		}
@@ -156,7 +166,7 @@ func respondToSlashError(ctx *Context, err error) {
 		return
 	}
 
-	NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "An error occurred while executing the command. This reply stays private because the result is mainly for the person who ran the command.")
+	NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Error(ctx.Interaction, "An error occurred while executing the command. This reply stays private because the result is mainly for the person who ran the command.")
 }
 
 func chainInteractionMiddleware(routeKey InteractionRouteKey, final InteractionHandlerFunc, middlewares []InteractionMiddleware) InteractionHandlerFunc {

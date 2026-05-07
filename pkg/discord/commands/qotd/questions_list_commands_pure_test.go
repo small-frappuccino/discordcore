@@ -378,16 +378,16 @@ func TestQOTDPublishCommandTreatsRecoveredPublishedResultAsSuccess(t *testing.T)
 	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	resp := rec.lastResponse(t)
-	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "Published QOTD question ID 17 manually.") {
-		t.Fatalf("expected recovered publish to surface as success, got %q", resp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	publishMessage := rec.lastEdit(t)
+	if !strings.Contains(publishMessage, "Published QOTD question ID 17 manually.") {
+		t.Fatalf("expected recovered publish to surface as success, got %q", publishMessage)
 	}
-	if !strings.Contains(resp.Data.Content, "https://discord.com/channels/guild-1/channel-123/message-99") {
-		t.Fatalf("expected recovered publish to include the existing jump url, got %q", resp.Data.Content)
+	if !strings.Contains(publishMessage, "https://discord.com/channels/guild-1/channel-123/message-99") {
+		t.Fatalf("expected recovered publish to include the existing jump url, got %q", publishMessage)
 	}
-	if strings.Contains(resp.Data.Content, "An error occurred while executing the command") {
-		t.Fatalf("expected recovered publish to avoid generic fallback errors, got %q", resp.Data.Content)
+	if strings.Contains(publishMessage, "An error occurred while executing the command") {
+		t.Fatalf("expected recovered publish to avoid generic fallback errors, got %q", publishMessage)
 	}
 	if service.publishCalls != 1 {
 		t.Fatalf("expected publish command to call PublishNow once, got %d", service.publishCalls)
@@ -452,10 +452,10 @@ func TestQOTDPublishCommandCanSkipAutomaticSlotConsumption(t *testing.T) {
 		Type:  discordgo.ApplicationCommandOptionBoolean,
 		Value: false,
 	}}))
-	resp := rec.lastResponse(t)
-	requirePublicResponse(t, resp)
-	if !strings.Contains(resp.Data.Content, "without consuming the automatic slot") {
-		t.Fatalf("expected publish response to mention non-consuming mode, got %q", resp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	publishMessage := rec.lastEdit(t)
+	if !strings.Contains(publishMessage, "without consuming the automatic slot") {
+		t.Fatalf("expected publish response to mention non-consuming mode, got %q", publishMessage)
 	}
 	if service.lastPublishParams.ConsumeAutomaticSlot == nil || *service.lastPublishParams.ConsumeAutomaticSlot {
 		t.Fatalf("expected publish command to forward consume_automatic_slot=false, got %+v", service.lastPublishParams)

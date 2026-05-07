@@ -521,6 +521,138 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	}
 }
 
+func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	pastDate := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
+	todayUTC := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+
+	orphan, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Stuck after crash",
+		Status:        "ready",
+		QueuePosition: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(orphan) failed: %v", err)
+	}
+	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate); err != nil {
+		t.Fatalf("ReserveNextQOTDQuestion(orphan) failed: %v", err)
+	}
+
+	freed, err := store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC)
+	if err != nil {
+		t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+	}
+	if len(freed) != 1 || freed[0] != orphan.ID {
+		t.Fatalf("expected orphan reservation to be released, got %+v", freed)
+	}
+
+	restored, err := store.GetQOTDQuestion(ctx, "g1", orphan.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(orphan) failed: %v", err)
+	}
+	if restored == nil || restored.Status != "ready" {
+		t.Fatalf("expected orphan to be restored to ready, got %+v", restored)
+	}
+	if restored.ScheduledForDateUTC != nil {
+		t.Fatalf("expected scheduled_for_date_utc to be cleared on the orphan, got %+v", restored.ScheduledForDateUTC)
+	}
+}
+
+func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	todayUTC := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+
+	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Active reservation",
+		Status:        "ready",
+		QueuePosition: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
+	}
+	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", todayUTC); err != nil {
+		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
+	}
+
+	freed, err := store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC)
+	if err != nil {
+		t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+	}
+	if len(freed) != 0 {
+		t.Fatalf("expected today's reservation to stay in place (publish may be in flight), got freed=%+v", freed)
+	}
+
+	stored, err := store.GetQOTDQuestion(ctx, "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if stored == nil || stored.Status != "reserved" {
+		t.Fatalf("expected today's reservation to remain reserved, got %+v", stored)
+	}
+}
+
+func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	pastDate := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
+	todayUTC := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+
+	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Linked to a real post",
+		Status:        "ready",
+		QueuePosition: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
+	}
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate)
+	if err != nil || reserved == nil {
+		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
+	}
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       pastDate,
+		State:                "provisioning",
+		ChannelID:            "channel-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           pastDate.Add(24 * time.Hour),
+		ArchiveAt:            pastDate.Add(48 * time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	freed, err := store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC)
+	if err != nil {
+		t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+	}
+	if len(freed) != 0 {
+		t.Fatalf("expected reservations linked to a publish record to be left alone, got %+v", freed)
+	}
+
+	stored, err := store.GetQOTDQuestion(ctx, "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if stored == nil || stored.Status != "reserved" {
+		t.Fatalf("expected reservation linked to a post to stay reserved, got %+v", stored)
+	}
+}
+
 func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()

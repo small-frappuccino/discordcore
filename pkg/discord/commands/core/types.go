@@ -105,7 +105,16 @@ type Context struct {
 	IsOwner     bool
 	GuildConfig *files.GuildConfig
 	RouteKey    InteractionRouteKey
-	router      *CommandRouter
+	// Acknowledged is true once the router has sent an ack response for this
+	// interaction (e.g. a deferred channel message). Follow-up writes must use
+	// InteractionResponseEdit / FollowupMessageCreate instead of a fresh
+	// InteractionRespond, otherwise Discord returns 40060 ("already
+	// acknowledged"). Response helpers honor this flag when given the Context.
+	Acknowledged bool
+	// AckEphemeral records whether the deferred ack was ephemeral so that
+	// follow-up writes can preserve the visibility chosen at defer time.
+	AckEphemeral bool
+	router       *CommandRouter
 }
 
 // SetRouter sets the router in the context

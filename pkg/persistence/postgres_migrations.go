@@ -549,4 +549,24 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS consume_automatic_slot`,
 		},
 	},
+	{
+		// Adds an idempotency nonce to QOTD official posts so that a crash
+		// between Discord's "message accepted" response and the DB write of
+		// its message ID does not produce a duplicate post on resume. The
+		// nonce is sent to Discord with enforce_nonce=true; if a publish was
+		// already accepted with the same nonce, Discord returns the existing
+		// message instead of creating a new one.
+		Version: 18,
+		UpSQL: []string{
+			`ALTER TABLE qotd_official_posts
+			 ADD COLUMN IF NOT EXISTS nonce TEXT`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_official_posts_nonce
+			 ON qotd_official_posts(nonce)
+			 WHERE nonce IS NOT NULL`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_official_posts_nonce`,
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS nonce`,
+		},
+	},
 }

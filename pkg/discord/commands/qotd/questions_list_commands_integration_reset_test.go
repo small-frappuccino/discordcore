@@ -164,10 +164,10 @@ func TestQuestionsResetAfterManualPublishKeepsCurrentSlotPausedAndListPagination
 	}
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	firstPublishResp := rec.lastResponse(t)
-	requirePublicResponse(t, firstPublishResp)
-	if !strings.Contains(firstPublishResp.Data.Content, "Published QOTD question ID 1 manually.") {
-		t.Fatalf("expected first manual publish confirmation, got %q", firstPublishResp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	firstPublishMessage := rec.lastEdit(t)
+	if !strings.Contains(firstPublishMessage, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected first manual publish confirmation, got %q", firstPublishMessage)
 	}
 	if len(fake.publishedParams) != 1 {
 		t.Fatalf("expected first manual publish to invoke the publisher once, got %d", len(fake.publishedParams))
@@ -194,10 +194,10 @@ func TestQuestionsResetAfterManualPublishKeepsCurrentSlotPausedAndListPagination
 	}
 
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
-	secondPublishResp := rec.lastResponse(t)
-	requirePublicResponse(t, secondPublishResp)
-	if !strings.Contains(secondPublishResp.Data.Content, "Published QOTD question ID 1 manually.") {
-		t.Fatalf("expected second manual publish to republish question 1 explicitly, got %q", secondPublishResp.Data.Content)
+	requirePublicDeferredAck(t, rec.lastResponse(t))
+	secondPublishMessage := rec.lastEdit(t)
+	if !strings.Contains(secondPublishMessage, "Published QOTD question ID 1 manually.") {
+		t.Fatalf("expected second manual publish to republish question 1 explicitly, got %q", secondPublishMessage)
 	}
 	if len(fake.publishedParams) != 2 {
 		t.Fatalf("expected two manual publish attempts before the second reset, got %d", len(fake.publishedParams))
