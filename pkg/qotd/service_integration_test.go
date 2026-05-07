@@ -1015,179 +1015,179 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	for idx := 1; idx <= 4; idx++ {
 		question, err := service.CreateQuestion(context.Background(), "g1", fmt.Sprintf("user-%d", idx), QuestionMutation{
 			Body:   fmt.Sprintf("Question %d", idx),
-					Status: QuestionStatusReady,
-				})
-				if err != nil {
-					t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
-				}
-				created = append(created, question)
-			}
-
-			dayOne := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
-			dayTwo := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
-			dayThree := time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC)
-			dayFour := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)
-			dayFive := time.Date(2026, 4, 7, 0, 0, 0, 0, time.UTC)
-
-			service.now = func() time.Time {
-				return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
-			}
-			published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day one) failed: %v", err)
-			}
-			if !published {
-				t.Fatal("expected the first day's scheduled publish to run at the boundary")
-			}
-			published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day one repeat) failed: %v", err)
-			}
-			if published {
-				t.Fatal("expected the scheduler to publish at most once for the same day-one slot")
-			}
-			dayOneScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayOne)
-			if err != nil {
-				t.Fatalf("GetScheduledQOTDOfficialPostByDate(day one) failed: %v", err)
-			}
-			if dayOneScheduled == nil || dayOneScheduled.QuestionID != created[0].ID || dayOneScheduled.ChannelID != integrationQuestionChannelID {
-				t.Fatalf("expected one scheduled day-one publish in the configured channel, got %+v", dayOneScheduled)
-			}
-
-			service.now = func() time.Time {
-				return time.Date(2026, 4, 4, 13, 0, 0, 0, time.UTC)
-			}
-			manualDayTwo, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishNow(day two) failed: %v", err)
-			}
-			if manualDayTwo.Question.ID != created[1].ID {
-				t.Fatalf("expected day-two manual publish to consume the second ready question, got %+v", manualDayTwo)
-			}
-			if !manualDayTwo.OfficialPost.PublishDateUTC.Equal(dayThree) {
-				t.Fatalf("expected day-two manual publish after the boundary to occupy day three, got %+v", manualDayTwo)
-			}
-			published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day two) failed: %v", err)
-			}
-			if published {
-				t.Fatal("expected day-two scheduler run to stay idle after the active slot moved to day three")
-			}
-			dayTwoScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayTwo)
-			if err != nil {
-				t.Fatalf("GetScheduledQOTDOfficialPostByDate(day two) failed: %v", err)
-			}
-			if dayTwoScheduled != nil {
-				t.Fatalf("expected no scheduled day-two post after the boundary was missed, got %+v", dayTwoScheduled)
-			}
-			dayThreeOfficial, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", dayThree)
-			if err != nil {
-				t.Fatalf("GetQOTDOfficialPostByDate(day three) failed: %v", err)
-			}
-			if dayThreeOfficial == nil || dayThreeOfficial.PublishMode != string(PublishModeManual) || dayThreeOfficial.QuestionID != created[1].ID || dayThreeOfficial.ChannelID != integrationQuestionChannelID {
-				t.Fatalf("expected the day-three slot to remain occupied by the day-two manual publish, got %+v", dayThreeOfficial)
-			}
-
-			service.now = func() time.Time {
-				return time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
-			}
-			published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day three) failed: %v", err)
-			}
-			if published {
-				t.Fatal("expected day-three scheduled publish to stay idle while the manual publish occupies that slot")
-			}
-			dayThreeScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayThree)
-			if err != nil {
-				t.Fatalf("GetScheduledQOTDOfficialPostByDate(day three) failed: %v", err)
-			}
-			if dayThreeScheduled != nil {
-				t.Fatalf("expected no scheduled day-three publish while the manual publish occupies that slot, got %+v", dayThreeScheduled)
-			}
-
-			service.now = func() time.Time {
-				return time.Date(2026, 4, 6, 13, 0, 0, 0, time.UTC)
-			}
-			consumeAutomaticSlot := false
-			manualDayFour, err := service.PublishNowWithParams(context.Background(), "g1", &discordgo.Session{}, PublishNowParams{
-				ConsumeAutomaticSlot: &consumeAutomaticSlot,
-			})
-			if err != nil {
-				t.Fatalf("PublishNowWithParams(day four) failed: %v", err)
-			}
-			if manualDayFour.Question.ID != created[2].ID {
-				t.Fatalf("expected day-four non-consuming manual publish to use the third ready question, got %+v", manualDayFour)
-			}
-			if !manualDayFour.OfficialPost.PublishDateUTC.Equal(dayFour) {
-				t.Fatalf("expected day-four delayed manual publish to stay on day four, got %+v", manualDayFour)
-			}
-			dayFourQueue, err := service.GetAutomaticQueueState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
-			if err != nil {
-				t.Fatalf("GetAutomaticQueueState(day four before scheduler) failed: %v", err)
-			}
-			if dayFourQueue.SlotStatus != AutomaticQueueSlotStatusWaiting || dayFourQueue.SlotOfficialPost != nil {
-				t.Fatalf("expected non-consuming day-four manual publish to move the queue to day five, got %+v", dayFourQueue)
-			}
-			if dayFourQueue.NextReadyQuestion == nil || dayFourQueue.NextReadyQuestion.ID != created[3].ID {
-				t.Fatalf("expected the next automatic question to remain available for day-five scheduling, got %+v", dayFourQueue)
-			}
-			published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day four) failed: %v", err)
-			}
-			if published {
-				t.Fatal("expected day-four scheduler run to stay idle after the active slot moved to day five")
-			}
-
-			service.now = func() time.Time {
-				return time.Date(2026, 4, 7, 12, 43, 0, 0, time.UTC)
-			}
-			published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day five) failed: %v", err)
-			}
-			if !published {
-				t.Fatal("expected day-five scheduled publish to still run after a delayed non-consuming manual publish")
-			}
-			published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
-			if err != nil {
-				t.Fatalf("PublishScheduledIfDue(day five repeat) failed: %v", err)
-			}
-			if published {
-				t.Fatal("expected the scheduler to publish at most once for the day-five slot")
-			}
-			dayFiveScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayFive)
-			if err != nil {
-				t.Fatalf("GetScheduledQOTDOfficialPostByDate(day five) failed: %v", err)
-			}
-			if dayFiveScheduled == nil || dayFiveScheduled.QuestionID != created[3].ID || dayFiveScheduled.ChannelID != integrationQuestionChannelID {
-				t.Fatalf("expected one scheduled day-five publish in the configured channel after the delayed non-consuming manual publish, got %+v", dayFiveScheduled)
-			}
-
-			scheduledCount := 0
-			for _, record := range []*storage.QOTDOfficialPostRecord{dayOneScheduled, dayTwoScheduled, dayThreeScheduled, dayFiveScheduled} {
-				if record != nil {
-					scheduledCount++
-				}
-			}
-			if scheduledCount != 2 {
-				t.Fatalf("expected exactly two scheduled publishes across the scenario, got %d", scheduledCount)
-			}
-			if len(fake.publishedParams) != 4 {
-				t.Fatalf("expected two manual and two scheduled publish attempts across the scenario, got %d", len(fake.publishedParams))
-			}
-			wantDates := []time.Time{dayOne, dayThree, dayFour, dayFive}
-			for idx, wantDate := range wantDates {
-				if !fake.publishedParams[idx].PublishDateUTC.Equal(wantDate) {
-					t.Fatalf("publish attempt %d used slot %s, want %s: %+v", idx, fake.publishedParams[idx].PublishDateUTC.Format(time.RFC3339), wantDate.Format(time.RFC3339), fake.publishedParams[idx])
-				}
-				if fake.publishedParams[idx].ChannelID != integrationQuestionChannelID {
-					t.Fatalf("publish attempt %d used channel %q, want %q: %+v", idx, fake.publishedParams[idx].ChannelID, integrationQuestionChannelID, fake.publishedParams[idx])
-				}
-			}
+			Status: QuestionStatusReady,
+		})
+		if err != nil {
+			t.Fatalf("CreateQuestion(%d) failed: %v", idx, err)
 		}
+		created = append(created, question)
+	}
+
+	dayOne := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	dayTwo := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
+	dayThree := time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC)
+	dayFour := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)
+	dayFive := time.Date(2026, 4, 7, 0, 0, 0, 0, time.UTC)
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
+	}
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day one) failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected the first day's scheduled publish to run at the boundary")
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day one repeat) failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected the scheduler to publish at most once for the same day-one slot")
+	}
+	dayOneScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayOne)
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate(day one) failed: %v", err)
+	}
+	if dayOneScheduled == nil || dayOneScheduled.QuestionID != created[0].ID || dayOneScheduled.ChannelID != integrationQuestionChannelID {
+		t.Fatalf("expected one scheduled day-one publish in the configured channel, got %+v", dayOneScheduled)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 4, 13, 0, 0, 0, time.UTC)
+	}
+	manualDayTwo, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishNow(day two) failed: %v", err)
+	}
+	if manualDayTwo.Question.ID != created[1].ID {
+		t.Fatalf("expected day-two manual publish to consume the second ready question, got %+v", manualDayTwo)
+	}
+	if !manualDayTwo.OfficialPost.PublishDateUTC.Equal(dayThree) {
+		t.Fatalf("expected day-two manual publish after the boundary to occupy day three, got %+v", manualDayTwo)
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day two) failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected day-two scheduler run to stay idle after the active slot moved to day three")
+	}
+	dayTwoScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayTwo)
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate(day two) failed: %v", err)
+	}
+	if dayTwoScheduled != nil {
+		t.Fatalf("expected no scheduled day-two post after the boundary was missed, got %+v", dayTwoScheduled)
+	}
+	dayThreeOfficial, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", dayThree)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(day three) failed: %v", err)
+	}
+	if dayThreeOfficial == nil || dayThreeOfficial.PublishMode != string(PublishModeManual) || dayThreeOfficial.QuestionID != created[1].ID || dayThreeOfficial.ChannelID != integrationQuestionChannelID {
+		t.Fatalf("expected the day-three slot to remain occupied by the day-two manual publish, got %+v", dayThreeOfficial)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day three) failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected day-three scheduled publish to stay idle while the manual publish occupies that slot")
+	}
+	dayThreeScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayThree)
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate(day three) failed: %v", err)
+	}
+	if dayThreeScheduled != nil {
+		t.Fatalf("expected no scheduled day-three publish while the manual publish occupies that slot, got %+v", dayThreeScheduled)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 6, 13, 0, 0, 0, time.UTC)
+	}
+	consumeAutomaticSlot := false
+	manualDayFour, err := service.PublishNowWithParams(context.Background(), "g1", &discordgo.Session{}, PublishNowParams{
+		ConsumeAutomaticSlot: &consumeAutomaticSlot,
+	})
+	if err != nil {
+		t.Fatalf("PublishNowWithParams(day four) failed: %v", err)
+	}
+	if manualDayFour.Question.ID != created[2].ID {
+		t.Fatalf("expected day-four non-consuming manual publish to use the third ready question, got %+v", manualDayFour)
+	}
+	if !manualDayFour.OfficialPost.PublishDateUTC.Equal(dayFour) {
+		t.Fatalf("expected day-four delayed manual publish to stay on day four, got %+v", manualDayFour)
+	}
+	dayFourQueue, err := service.GetAutomaticQueueState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
+	if err != nil {
+		t.Fatalf("GetAutomaticQueueState(day four before scheduler) failed: %v", err)
+	}
+	if dayFourQueue.SlotStatus != AutomaticQueueSlotStatusWaiting || dayFourQueue.SlotOfficialPost != nil {
+		t.Fatalf("expected non-consuming day-four manual publish to move the queue to day five, got %+v", dayFourQueue)
+	}
+	if dayFourQueue.NextReadyQuestion == nil || dayFourQueue.NextReadyQuestion.ID != created[3].ID {
+		t.Fatalf("expected the next automatic question to remain available for day-five scheduling, got %+v", dayFourQueue)
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day four) failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected day-four scheduler run to stay idle after the active slot moved to day five")
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 7, 12, 43, 0, 0, time.UTC)
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day five) failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected day-five scheduled publish to still run after a delayed non-consuming manual publish")
+	}
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue(day five repeat) failed: %v", err)
+	}
+	if published {
+		t.Fatal("expected the scheduler to publish at most once for the day-five slot")
+	}
+	dayFiveScheduled, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", dayFive)
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate(day five) failed: %v", err)
+	}
+	if dayFiveScheduled == nil || dayFiveScheduled.QuestionID != created[3].ID || dayFiveScheduled.ChannelID != integrationQuestionChannelID {
+		t.Fatalf("expected one scheduled day-five publish in the configured channel after the delayed non-consuming manual publish, got %+v", dayFiveScheduled)
+	}
+
+	scheduledCount := 0
+	for _, record := range []*storage.QOTDOfficialPostRecord{dayOneScheduled, dayTwoScheduled, dayThreeScheduled, dayFiveScheduled} {
+		if record != nil {
+			scheduledCount++
+		}
+	}
+	if scheduledCount != 2 {
+		t.Fatalf("expected exactly two scheduled publishes across the scenario, got %d", scheduledCount)
+	}
+	if len(fake.publishedParams) != 4 {
+		t.Fatalf("expected two manual and two scheduled publish attempts across the scenario, got %d", len(fake.publishedParams))
+	}
+	wantDates := []time.Time{dayOne, dayThree, dayFour, dayFive}
+	for idx, wantDate := range wantDates {
+		if !fake.publishedParams[idx].PublishDateUTC.Equal(wantDate) {
+			t.Fatalf("publish attempt %d used slot %s, want %s: %+v", idx, fake.publishedParams[idx].PublishDateUTC.Format(time.RFC3339), wantDate.Format(time.RFC3339), fake.publishedParams[idx])
+		}
+		if fake.publishedParams[idx].ChannelID != integrationQuestionChannelID {
+			t.Fatalf("publish attempt %d used channel %q, want %q: %+v", idx, fake.publishedParams[idx].ChannelID, integrationQuestionChannelID, fake.publishedParams[idx])
+		}
+	}
+}
 
 // TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash simulates a
 // process that crashed between ReserveNextQOTDQuestion and the official-post
@@ -3090,6 +3090,178 @@ func TestServicePublishScheduledIfDueRetriesTransientFailures(t *testing.T) {
 	}
 	if recovered == nil || recovered.PublishedAt == nil {
 		t.Fatalf("expected transient retry to mark the post published, got %+v", recovered)
+	}
+}
+
+func TestServiceReanimateSlotClearsSingleAbandonedRecordAndReleasesQuestion(t *testing.T) {
+	service, store, _ := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+	publishedAt := time.Date(2026, 5, 7, 12, 43, 0, 0, time.UTC)
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question to reanimate",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+	question.Status = string(QuestionStatusReserved)
+	question.ScheduledForDateUTC = &publishDate
+	question.PublishedOnceAt = &publishedAt
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *question); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(reserved) failed: %v", err)
+	}
+
+	if _, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:                 "g1",
+		DeckID:                  files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:        files.LegacyQOTDDefaultDeckName,
+		QuestionID:              question.ID,
+		PublishMode:             string(PublishModeScheduled),
+		ConsumeAutomaticSlot:    true,
+		PublishDateUTC:          publishDate,
+		State:                   string(OfficialPostStateAbandoned),
+		ChannelID:               integrationQuestionChannelID,
+		DiscordThreadID:         "thread-abandoned",
+		DiscordStarterMessageID: "starter-abandoned",
+		QuestionTextSnapshot:    question.Body,
+		GraceUntil:              time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:               time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(abandoned) failed: %v", err)
+	}
+
+	cfg, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID).WithSuppressedScheduledPublishDate(publishDate))
+	if err != nil {
+		t.Fatalf("UpdateSettings(with suppression) failed: %v", err)
+	}
+	if !cfg.SuppressesScheduledPublishDate(publishDate) {
+		t.Fatalf("expected suppression before reanimate, got %+v", cfg)
+	}
+
+	result, err := service.ReanimateSlot(context.Background(), "g1", nil, SlotMaintenanceParams{DateUTC: &publishDate})
+	if err != nil {
+		t.Fatalf("ReanimateSlot() failed: %v", err)
+	}
+	if result.OfficialPostsCleared != 1 || result.QuestionsReleased != 1 {
+		t.Fatalf("expected one post cleared and one question released, got %+v", result)
+	}
+	if !result.ClearedSuppression {
+		t.Fatalf("expected suppression clear to be reported, got %+v", result)
+	}
+
+	record, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", publishDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if record != nil {
+		t.Fatalf("expected abandoned post to be deleted, got %+v", record)
+	}
+
+	releasedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if releasedQuestion == nil {
+		t.Fatal("expected reserved question to remain")
+	}
+	if releasedQuestion.Status != string(QuestionStatusReady) {
+		t.Fatalf("expected released question status=ready, got %+v", releasedQuestion)
+	}
+	if releasedQuestion.ScheduledForDateUTC != nil || releasedQuestion.UsedAt != nil || releasedQuestion.PublishedOnceAt != nil {
+		t.Fatalf("expected release to clear reservation/publish markers, got %+v", releasedQuestion)
+	}
+
+	settings, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() after reanimate failed: %v", err)
+	}
+	if settings.SuppressesScheduledPublishDate(publishDate) {
+		t.Fatalf("expected suppression to be cleared after reanimate, got %+v", settings)
+	}
+}
+
+func TestServiceClearPublishedDayStateRemovesAllRecordsForDate(t *testing.T) {
+	service, store, _ := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+	questionA, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{Body: "Question A", Status: QuestionStatusReady})
+	if err != nil {
+		t.Fatalf("CreateQuestion(questionA) failed: %v", err)
+	}
+	questionB, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{Body: "Question B", Status: QuestionStatusReady})
+	if err != nil {
+		t.Fatalf("CreateQuestion(questionB) failed: %v", err)
+	}
+
+	questionA.Status = string(QuestionStatusUsed)
+	questionA.ScheduledForDateUTC = &publishDate
+	questionA.PublishedOnceAt = timePtr(time.Date(2026, 5, 7, 12, 43, 0, 0, time.UTC))
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *questionA); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(questionA) failed: %v", err)
+	}
+	questionB.Status = string(QuestionStatusReserved)
+	questionB.ScheduledForDateUTC = &publishDate
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *questionB); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(questionB) failed: %v", err)
+	}
+
+	for _, question := range []*storage.QOTDQuestionRecord{questionA, questionB} {
+		if _, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+			GuildID:              "g1",
+			DeckID:               files.LegacyQOTDDefaultDeckID,
+			DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+			QuestionID:           question.ID,
+			PublishMode:          string(PublishModeManual),
+			PublishDateUTC:       publishDate,
+			State:                string(OfficialPostStateCurrent),
+			ChannelID:            integrationQuestionChannelID,
+			QuestionTextSnapshot: question.Body,
+			GraceUntil:           time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC),
+			ArchiveAt:            time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+		}
+	}
+
+	_, err = service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID).WithSuppressedScheduledPublishDate(publishDate))
+	if err != nil {
+		t.Fatalf("UpdateSettings(with suppression) failed: %v", err)
+	}
+
+	result, err := service.ClearPublishedDayState(context.Background(), "g1", nil, SlotMaintenanceParams{DateUTC: &publishDate})
+	if err != nil {
+		t.Fatalf("ClearPublishedDayState() failed: %v", err)
+	}
+	if result.OfficialPostsCleared != 2 {
+		t.Fatalf("expected two posts deleted for the day, got %+v", result)
+	}
+	if result.QuestionsReleased != 2 {
+		t.Fatalf("expected two linked questions released, got %+v", result)
+	}
+
+	posts, err := store.ListQOTDOfficialPostsByDate(context.Background(), "g1", publishDate)
+	if err != nil {
+		t.Fatalf("ListQOTDOfficialPostsByDate() failed: %v", err)
+	}
+	if len(posts) != 0 {
+		t.Fatalf("expected all posts for date to be removed, got %+v", posts)
+	}
+
+	for _, id := range []int64{questionA.ID, questionB.ID} {
+		released, err := store.GetQOTDQuestion(context.Background(), "g1", id)
+		if err != nil {
+			t.Fatalf("GetQOTDQuestion(%d) failed: %v", id, err)
+		}
+		if released == nil || released.Status != string(QuestionStatusReady) || released.ScheduledForDateUTC != nil || released.PublishedOnceAt != nil {
+			t.Fatalf("expected question %d to be reset to ready for re-test publish, got %+v", id, released)
+		}
 	}
 }
 

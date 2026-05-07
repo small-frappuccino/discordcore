@@ -28,6 +28,8 @@ var (
 	ErrQuestionNotReady     = errors.New("qotd question is not ready")
 	ErrDeckNotFound         = errors.New("qotd deck not found")
 	ErrDiscordUnavailable   = errors.New("discord session unavailable")
+	ErrOfficialPostNotFound = errors.New("qotd official post not found for the requested slot")
+	ErrOfficialPostState    = errors.New("qotd official post state does not allow this maintenance operation")
 )
 
 type Publisher interface {
@@ -881,6 +883,7 @@ func (s *Service) releaseReservedQuestion(ctx context.Context, question storage.
 	question.Status = string(QuestionStatusReady)
 	question.ScheduledForDateUTC = nil
 	question.UsedAt = nil
+	question.PublishedOnceAt = nil
 	_, err := s.store.UpdateQOTDQuestion(ctx, question)
 	return err
 }

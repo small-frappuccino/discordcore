@@ -23,6 +23,12 @@ func TestQOTDCommandsRegisterRoutesUnderQOTDDomain(t *testing.T) {
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd publish slash route domain, got %q", got)
 	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd reanimate"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd reanimate slash route domain, got %q", got)
+	}
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd clear_day"}); got != files.BotDomainQOTD {
+		t.Fatalf("expected qotd clear_day slash route domain, got %q", got)
+	}
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions list"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd questions list slash route domain, got %q", got)
 	}
@@ -235,6 +241,101 @@ func TestDescribeResetDeckResultMentionsCurrentSlotPause(t *testing.T) {
 	}
 }
 
+func TestQOTDReanimateCommandParsesDateAndReportsSummary(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &publishCommandStubService{
+		reanimateResult: applicationqotd.SlotMaintenanceResult{
+			PublishDateUTC:       time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC),
+			OfficialPostsCleared: 1,
+			QuestionsReleased:    1,
+			ClearedSuppression:   true,
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, reanimateSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{{
+		Name:  slotDateOptionName,
+		Type:  discordgo.ApplicationCommandOptionString,
+		Value: "2026-05-07",
+	}}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "Reanimated QOTD slot 2026-05-07") {
+		t.Fatalf("expected reanimate response to mention target slot date, got %q", resp.Data.Content)
+	}
+	if service.reanimateCalls != 1 {
+		t.Fatalf("expected reanimate command to call ReanimateSlot once, got %d", service.reanimateCalls)
+	}
+	if service.lastReanimateParams.DateUTC == nil || !service.lastReanimateParams.DateUTC.Equal(time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected reanimate command to parse date option, got %+v", service.lastReanimateParams)
+	}
+}
+
+func TestQOTDClearDayCommandDefaultsToDueSlotDateWhenOptionMissing(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &publishCommandStubService{
+		clearDayResult: applicationqotd.SlotMaintenanceResult{
+			PublishDateUTC:       time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC),
+			OfficialPostsCleared: 0,
+			QuestionsReleased:    0,
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, clearDaySubCommandName, nil))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "No QOTD publish state was found") {
+		t.Fatalf("expected clear-day response to surface empty-state summary, got %q", resp.Data.Content)
+	}
+	if service.clearDayCalls != 1 {
+		t.Fatalf("expected clear-day command to call ClearPublishedDayState once, got %d", service.clearDayCalls)
+	}
+	if service.lastClearDayParams.DateUTC != nil {
+		t.Fatalf("expected clear-day command to omit date when option is missing, got %+v", service.lastClearDayParams)
+	}
+}
+
+func TestQOTDReanimateCommandRejectsInvalidDateFormat(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &publishCommandStubService{}
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, reanimateSubCommandName, []*discordgo.ApplicationCommandInteractionDataOption{{
+		Name:  slotDateOptionName,
+		Type:  discordgo.ApplicationCommandOptionString,
+		Value: "07-05-2026",
+	}}))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "YYYY-MM-DD") {
+		t.Fatalf("expected invalid date error message, got %q", resp.Data.Content)
+	}
+	if service.reanimateCalls != 0 {
+		t.Fatalf("expected invalid date to short-circuit before service call, got %d calls", service.reanimateCalls)
+	}
+}
+
 func TestQuestionsImportCommandParsesIDsAndReportsSummary(t *testing.T) {
 	const (
 		guildID = "guild-1"
@@ -428,17 +529,17 @@ func TestQOTDPublishCommandCanSkipAutomaticSlotConsumption(t *testing.T) {
 				UsedAt:    &publishedAt,
 			},
 			OfficialPost: storage.QOTDOfficialPostRecord{
-				ID:                    100,
-				GuildID:               guildID,
-				DeckID:                files.LegacyQOTDDefaultDeckID,
-				DeckNameSnapshot:      files.LegacyQOTDDefaultDeckName,
-				QuestionID:            18,
-				PublishMode:           string(applicationqotd.PublishModeManual),
-				ConsumeAutomaticSlot:  false,
-				PublishDateUTC:        time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
-				ChannelID:             "channel-123",
+				ID:                      100,
+				GuildID:                 guildID,
+				DeckID:                  files.LegacyQOTDDefaultDeckID,
+				DeckNameSnapshot:        files.LegacyQOTDDefaultDeckName,
+				QuestionID:              18,
+				PublishMode:             string(applicationqotd.PublishModeManual),
+				ConsumeAutomaticSlot:    false,
+				PublishDateUTC:          time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+				ChannelID:               "channel-123",
 				DiscordStarterMessageID: "message-100",
-				PublishedAt:           &publishedAt,
+				PublishedAt:             &publishedAt,
 			},
 			PostURL: discordqotd.BuildMessageJumpURL(guildID, "channel-123", "message-100"),
 		},

@@ -878,6 +878,164 @@ func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
 	}
 }
 
+func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	questionA, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Question A",
+		Status:  "used",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(questionA) failed: %v", err)
+	}
+	questionB, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Question B",
+		Status:  "reserved",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(questionB) failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+	graceUntil := time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC)
+	archiveAt := time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC)
+
+	first, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           questionA.ID,
+		PublishMode:          "manual",
+		PublishDateUTC:       publishDate,
+		State:                "current",
+		ChannelID:            "question-channel",
+		QuestionTextSnapshot: questionA.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(first) failed: %v", err)
+	}
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           questionB.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDate,
+		State:                "failed",
+		ChannelID:            "question-channel",
+		QuestionTextSnapshot: questionB.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(second) failed: %v", err)
+	}
+
+	posts, err := store.ListQOTDOfficialPostsByDate(ctx, "g1", publishDate)
+	if err != nil {
+		t.Fatalf("ListQOTDOfficialPostsByDate() failed: %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("expected two official posts for the same date, got %+v", posts)
+	}
+	if posts[0].ID == 0 || posts[1].ID == 0 {
+		t.Fatalf("expected persisted official post ids, got %+v", posts)
+	}
+	if posts[0].ID == posts[1].ID {
+		t.Fatalf("expected distinct official post records, got %+v", posts)
+	}
+	if posts[0].ID != first.ID && posts[1].ID != first.ID {
+		t.Fatalf("expected first post to be present in list, got %+v", posts)
+	}
+}
+
+func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	questionA, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Question A",
+		Status:  "used",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(questionA) failed: %v", err)
+	}
+	questionB, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Question B",
+		Status:  "used",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion(questionB) failed: %v", err)
+	}
+
+	publishDateA := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+	publishDateB := time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC)
+	graceUntil := time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC)
+	archiveAt := time.Date(2026, 5, 10, 12, 43, 0, 0, time.UTC)
+
+	target, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           questionA.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDateA,
+		State:                "abandoned",
+		ChannelID:            "question-channel",
+		QuestionTextSnapshot: questionA.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(target) failed: %v", err)
+	}
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           questionB.ID,
+		PublishMode:          "manual",
+		PublishDateUTC:       publishDateB,
+		State:                "current",
+		ChannelID:            "question-channel",
+		QuestionTextSnapshot: questionB.Body,
+		GraceUntil:           graceUntil,
+		ArchiveAt:            archiveAt,
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(other) failed: %v", err)
+	}
+
+	if err := store.DeleteQOTDOfficialPostByID(ctx, target.ID); err != nil {
+		t.Fatalf("DeleteQOTDOfficialPostByID() failed: %v", err)
+	}
+
+	deleted, err := store.GetQOTDOfficialPostByID(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByID(target) failed: %v", err)
+	}
+	if deleted != nil {
+		t.Fatalf("expected target official post to be deleted, got %+v", deleted)
+	}
+
+	preserved, err := store.GetQOTDOfficialPostByDate(ctx, "g1", publishDateB)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(other) failed: %v", err)
+	}
+	if preserved == nil || preserved.QuestionID != questionB.ID {
+		t.Fatalf("expected non-target official post to remain, got %+v", preserved)
+	}
+}
+
 func TestCreateQOTDCollectedQuestionsDeduplicatesBySourceMessage(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()

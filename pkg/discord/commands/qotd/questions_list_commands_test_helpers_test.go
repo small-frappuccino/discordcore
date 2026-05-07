@@ -18,13 +18,21 @@ import (
 )
 
 type publishCommandStubService struct {
-	settings           files.QOTDConfig
-	publishResult      *applicationqotd.PublishResult
-	publishErr         error
-	publishCalls       int
-	lastPublishGuild   string
-	lastPublishSession *discordgo.Session
-	lastPublishParams  applicationqotd.PublishNowParams
+	settings            files.QOTDConfig
+	publishResult       *applicationqotd.PublishResult
+	publishErr          error
+	reanimateResult     applicationqotd.SlotMaintenanceResult
+	reanimateErr        error
+	reanimateCalls      int
+	lastReanimateParams applicationqotd.SlotMaintenanceParams
+	clearDayResult      applicationqotd.SlotMaintenanceResult
+	clearDayErr         error
+	clearDayCalls       int
+	lastClearDayParams  applicationqotd.SlotMaintenanceParams
+	publishCalls        int
+	lastPublishGuild    string
+	lastPublishSession  *discordgo.Session
+	lastPublishParams   applicationqotd.PublishNowParams
 }
 
 type listCommandStubService struct {
@@ -88,6 +96,18 @@ func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guil
 	return s.publishResult, s.publishErr
 }
 
+func (s *publishCommandStubService) ReanimateSlot(_ context.Context, _ string, _ *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
+	s.reanimateCalls++
+	s.lastReanimateParams = params
+	return s.reanimateResult, s.reanimateErr
+}
+
+func (s *publishCommandStubService) ClearPublishedDayState(_ context.Context, _ string, _ *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
+	s.clearDayCalls++
+	s.lastClearDayParams = params
+	return s.clearDayResult, s.clearDayErr
+}
+
 func (s *listCommandStubService) Settings(string) (files.QOTDConfig, error) {
 	return s.settings, nil
 }
@@ -136,6 +156,14 @@ func (s *listCommandStubService) PublishNowWithParams(context.Context, string, *
 	panic("unexpected PublishNowWithParams call")
 }
 
+func (s *listCommandStubService) ReanimateSlot(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
+	panic("unexpected ReanimateSlot call")
+}
+
+func (s *listCommandStubService) ClearPublishedDayState(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
+	panic("unexpected ClearPublishedDayState call")
+}
+
 func (s *importCommandStubService) Settings(string) (files.QOTDConfig, error) {
 	return s.settings, nil
 }
@@ -179,6 +207,14 @@ func (s *importCommandStubService) ImportArchivedQuestions(_ context.Context, gu
 
 func (s *importCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	panic("unexpected PublishNowWithParams call")
+}
+
+func (s *importCommandStubService) ReanimateSlot(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
+	panic("unexpected ReanimateSlot call")
+}
+
+func (s *importCommandStubService) ClearPublishedDayState(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
+	panic("unexpected ClearPublishedDayState call")
 }
 
 type interactionRecorder struct {

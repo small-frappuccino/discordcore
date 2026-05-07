@@ -27,6 +27,17 @@ type PublishNowParams struct {
 	ConsumeAutomaticSlot *bool `json:"consume_automatic_slot,omitempty"`
 }
 
+type SlotMaintenanceParams struct {
+	DateUTC *time.Time `json:"date_utc,omitempty"`
+}
+
+type SlotMaintenanceResult struct {
+	PublishDateUTC       time.Time `json:"publish_date_utc"`
+	OfficialPostsCleared int       `json:"official_posts_cleared"`
+	QuestionsReleased    int       `json:"questions_released"`
+	ClearedSuppression   bool      `json:"cleared_suppression"`
+}
+
 func (p PublishNowParams) ShouldConsumeAutomaticSlot() bool {
 	return p.ConsumeAutomaticSlot == nil || *p.ConsumeAutomaticSlot
 }

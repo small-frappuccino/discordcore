@@ -20,34 +20,37 @@ import (
 )
 
 const (
-	groupName                 = "qotd"
-	publishSubCommandName     = "publish"
-	questionsGroupName        = "questions"
-	questionsAddSubCommand    = "add"
-	questionsListSubCommand   = "list"
-	questionsQueueSubCommand  = "queue"
-	questionsNextSubCommand   = "next"
+	groupName                             = "qotd"
+	publishSubCommandName                 = "publish"
+	reanimateSubCommandName               = "reanimate"
+	clearDaySubCommandName                = "clear_day"
+	questionsGroupName                    = "questions"
+	questionsAddSubCommand                = "add"
+	questionsListSubCommand               = "list"
+	questionsQueueSubCommand              = "queue"
+	questionsNextSubCommand               = "next"
 	publishConsumeAutomaticSlotOptionName = "consume_automatic_slot"
-	questionsResetSubCommand  = "reset"
-	questionsRecoverSubCommand = "recover"
-	questionsRemoveSubCommand = "remove"
-	questionsImportSubCommand = "import"
-	questionsBodyOptionName   = "question"
-	questionsDeckOptionName   = "deck"
-	questionsIDOptionName     = "id"
-	questionsImportUsersName  = "user_ids"
-	questionsImportChannel    = "channel"
-	questionsImportStartDate  = "start_date"
-	questionsPageSize         = 10
-	questionsListRouteFirst   = "qotd:questions:list:first"
-	questionsListRoutePrev    = "qotd:questions:list:prev"
-	questionsListRouteNext    = "qotd:questions:list:next"
-	questionsListRouteLast    = "qotd:questions:list:last"
-	questionsListDeniedText   = "Only the user who opened this list can change pages."
-	questionsListUnknownDeck  = "QOTD deck not found"
-	questionsListMissingGuild = "This command can only be used in a server"
-	questionsListIdleTimeout  = 60 * time.Second
-	questionsListPageJumpSize = 10
+	slotDateOptionName                    = "date"
+	questionsResetSubCommand              = "reset"
+	questionsRecoverSubCommand            = "recover"
+	questionsRemoveSubCommand             = "remove"
+	questionsImportSubCommand             = "import"
+	questionsBodyOptionName               = "question"
+	questionsDeckOptionName               = "deck"
+	questionsIDOptionName                 = "id"
+	questionsImportUsersName              = "user_ids"
+	questionsImportChannel                = "channel"
+	questionsImportStartDate              = "start_date"
+	questionsPageSize                     = 10
+	questionsListRouteFirst               = "qotd:questions:list:first"
+	questionsListRoutePrev                = "qotd:questions:list:prev"
+	questionsListRouteNext                = "qotd:questions:list:next"
+	questionsListRouteLast                = "qotd:questions:list:last"
+	questionsListDeniedText               = "Only the user who opened this list can change pages."
+	questionsListUnknownDeck              = "QOTD deck not found"
+	questionsListMissingGuild             = "This command can only be used in a server"
+	questionsListIdleTimeout              = 60 * time.Second
+	questionsListPageJumpSize             = 10
 )
 
 type QuestionCatalogService interface {
@@ -61,6 +64,8 @@ type QuestionCatalogService interface {
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
 	ImportArchivedQuestions(ctx context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error)
 	PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error)
+	ReanimateSlot(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error)
+	ClearPublishedDayState(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error)
 }
 
 type Commands struct {
@@ -83,6 +88,8 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	nextCommand := &questionsNextCommand{service: c.service}
 	importCommand := &questionsImportCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
+	reanimateCommand := &qotdReanimateCommand{service: c.service}
+	clearDayCommand := &qotdClearDayStateCommand{service: c.service}
 	resetCommand := &questionsResetCommand{service: c.service}
 	recoverCommand := &questionsRecoverCommand{service: c.service}
 	removeCommand := &questionsRemoveCommand{service: c.service}
@@ -106,6 +113,8 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 		group = core.NewGroupCommand(groupName, "Manage QOTD decks and questions", checker)
 	}
 	group.AddSubCommand(publishCommand)
+	group.AddSubCommand(reanimateCommand)
+	group.AddSubCommand(clearDayCommand)
 	group.AddSubCommand(questionsGroup)
 	router.RegisterSlashCommandForDomain(files.BotDomainQOTD, group)
 
@@ -158,6 +167,14 @@ type questionsResetCommand struct {
 }
 
 type qotdPublishCommand struct {
+	service QuestionCatalogService
+}
+
+type qotdReanimateCommand struct {
+	service QuestionCatalogService
+}
+
+type qotdClearDayStateCommand struct {
 	service QuestionCatalogService
 }
 
@@ -541,6 +558,92 @@ func (c *questionsNextCommand) Handle(ctx *core.Context) error {
 }
 
 func (c *qotdPublishCommand) Name() string { return publishSubCommandName }
+
+func (c *qotdReanimateCommand) Name() string { return reanimateSubCommandName }
+
+func (c *qotdReanimateCommand) Description() string {
+	return "Reanimate one abandoned/failed QOTD slot so publish can retry cleanly"
+}
+
+func (c *qotdReanimateCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        slotDateOptionName,
+		Description: "UTC date to reanimate (YYYY-MM-DD). Defaults to today's scheduled slot",
+		Required:    false,
+	}}
+}
+
+func (c *qotdReanimateCommand) RequiresGuild() bool       { return true }
+func (c *qotdReanimateCommand) RequiresPermissions() bool { return true }
+
+func (c *qotdReanimateCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	slotDate, hasDate, err := parseSlotMaintenanceDateOption(extractor.String(slotDateOptionName))
+	if err != nil {
+		return err
+	}
+
+	params := applicationqotd.SlotMaintenanceParams{}
+	if hasDate {
+		params.DateUTC = &slotDate
+	}
+
+	result, err := c.service.ReanimateSlot(context.Background(), ctx.GuildID, ctx.Session, params)
+	if err != nil {
+		return translateSlotMaintenanceError(err, "reanimate")
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Success(ctx.Interaction, describeReanimateSlotResult(result))
+}
+
+func (c *qotdClearDayStateCommand) Name() string { return clearDaySubCommandName }
+
+func (c *qotdClearDayStateCommand) Description() string {
+	return "Clear all QOTD published state for one UTC day"
+}
+
+func (c *qotdClearDayStateCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{{
+		Type:        discordgo.ApplicationCommandOptionString,
+		Name:        slotDateOptionName,
+		Description: "UTC date to clear (YYYY-MM-DD). Defaults to today's scheduled slot",
+		Required:    false,
+	}}
+}
+
+func (c *qotdClearDayStateCommand) RequiresGuild() bool       { return true }
+func (c *qotdClearDayStateCommand) RequiresPermissions() bool { return true }
+
+func (c *qotdClearDayStateCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	slotDate, hasDate, err := parseSlotMaintenanceDateOption(extractor.String(slotDateOptionName))
+	if err != nil {
+		return err
+	}
+
+	params := applicationqotd.SlotMaintenanceParams{}
+	if hasDate {
+		params.DateUTC = &slotDate
+	}
+
+	result, err := c.service.ClearPublishedDayState(context.Background(), ctx.GuildID, ctx.Session, params)
+	if err != nil {
+		return translateSlotMaintenanceError(err, "clear")
+	}
+
+	return core.NewResponseBuilder(ctx.Session).
+		Success(ctx.Interaction, describeClearDayStateResult(result))
+}
 
 func (c *qotdPublishCommand) Description() string {
 	return "Publish the next ready QOTD question immediately"
@@ -1215,6 +1318,46 @@ func describeResetDeckResult(result applicationqotd.ResetDeckResult, deckName st
 	return message
 }
 
+func parseSlotMaintenanceDateOption(raw string) (time.Time, bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, false, nil
+	}
+	parsed, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return time.Time{}, false, core.NewCommandError("Date must use YYYY-MM-DD (UTC).", false)
+	}
+	return parsed.UTC(), true, nil
+}
+
+func describeReanimateSlotResult(result applicationqotd.SlotMaintenanceResult) string {
+	parts := []string{fmt.Sprintf("Reanimated QOTD slot %s.", result.PublishDateUTC.Format("2006-01-02"))}
+	parts = append(parts, fmt.Sprintf("Cleared %s.", formatCountNoun(result.OfficialPostsCleared, "publish record", "publish records")))
+	parts = append(parts, fmt.Sprintf("Released %s back to ready.", formatCountNoun(result.QuestionsReleased, "question", "questions")))
+	if result.ClearedSuppression {
+		parts = append(parts, "Removed scheduled-publish suppression for that date.")
+	}
+	return strings.Join(parts, " ")
+}
+
+func describeClearDayStateResult(result applicationqotd.SlotMaintenanceResult) string {
+	if result.OfficialPostsCleared == 0 && result.QuestionsReleased == 0 {
+		message := fmt.Sprintf("No QOTD publish state was found for %s.", result.PublishDateUTC.Format("2006-01-02"))
+		if result.ClearedSuppression {
+			message += " Removed scheduled-publish suppression for that date."
+		}
+		return message
+	}
+
+	parts := []string{fmt.Sprintf("Cleared QOTD day state for %s.", result.PublishDateUTC.Format("2006-01-02"))}
+	parts = append(parts, fmt.Sprintf("Deleted %s.", formatCountNoun(result.OfficialPostsCleared, "publish record", "publish records")))
+	parts = append(parts, fmt.Sprintf("Returned %s to ready.", formatCountNoun(result.QuestionsReleased, "question", "questions")))
+	if result.ClearedSuppression {
+		parts = append(parts, "Removed scheduled-publish suppression for that date.")
+	}
+	return strings.Join(parts, " ")
+}
+
 func formatCountNoun(count int, singular, plural string) string {
 	if count == 1 {
 		return fmt.Sprintf("1 %s", singular)
@@ -1319,6 +1462,28 @@ func translatePublishNowError(err error) error {
 	return err
 }
 
+func translateSlotMaintenanceError(err error, action string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, applicationqotd.ErrOfficialPostNotFound) {
+		if action == "reanimate" {
+			return core.NewCommandError("No QOTD abandoned/failed record exists for that date.", false)
+		}
+		return core.NewCommandError("No QOTD publish records exist for that date.", false)
+	}
+	if errors.Is(err, applicationqotd.ErrOfficialPostState) {
+		return core.NewCommandError("Reanimate only works for abandoned or failed records.", false)
+	}
+	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
+		return core.NewCommandError("Set a publish schedule first or provide an explicit date (YYYY-MM-DD).", false)
+	}
+	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
+		return core.NewCommandError("Discord session unavailable for slot maintenance.", false)
+	}
+	return err
+}
+
 var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
 var _ core.SubCommand = (*questionsQueueCommand)(nil)
@@ -1328,5 +1493,7 @@ var _ core.SubCommand = (*questionsResetCommand)(nil)
 var _ core.SubCommand = (*questionsRecoverCommand)(nil)
 var _ core.SubCommand = (*questionsRemoveCommand)(nil)
 var _ core.SubCommand = (*qotdPublishCommand)(nil)
+var _ core.SubCommand = (*qotdReanimateCommand)(nil)
+var _ core.SubCommand = (*qotdClearDayStateCommand)(nil)
 
 var _ QuestionCatalogService = (*applicationqotd.Service)(nil)
