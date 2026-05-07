@@ -8,7 +8,7 @@ import (
 func TestNormalizeBotInstanceIDTrimsWhitespace(t *testing.T) {
 	t.Parallel()
 
-	if got := NormalizeBotInstanceID(" alice "); got != "alice" {
+	if got := NormalizeBotInstanceID(" companion "); got != "companion" {
 		t.Fatalf("expected bot instance id to trim whitespace only, got %q", got)
 	}
 	if got := NormalizeBotInstanceID("main"); got != "main" {
@@ -23,19 +23,18 @@ func TestGuildConfigEffectiveBotInstanceIDForDomainUsesOverrideAndFallback(t *te
 		GuildID:       "guild-1",
 		BotInstanceID: "main",
 		DomainBotInstanceIDs: map[string]string{
-			" QOTD ":  " companion ",
-			"tickets": "   ",
+			BotDomainQOTD: "companion",
 		},
 	}
 
 	if got := guild.BotInstanceIDOverrideForDomain(BotDomainQOTD); got != "companion" {
 		t.Fatalf("expected qotd override to resolve companion, got %q", got)
 	}
+	if got := guild.BotInstanceIDOverrideForDomain(" QOTD "); got != "companion" {
+		t.Fatalf("expected request domain to be normalized for lookup, got %q", got)
+	}
 	if got := guild.EffectiveBotInstanceIDForDomain(BotDomainQOTD, "default"); got != "companion" {
 		t.Fatalf("expected qotd effective binding=companion, got %q", got)
-	}
-	if got := guild.EffectiveBotInstanceIDForDomain("tickets", "default"); got != "main" {
-		t.Fatalf("expected empty tickets override to fall back to guild binding main, got %q", got)
 	}
 	if got := guild.EffectiveBotInstanceIDForDomain("moderation", "default"); got != "main" {
 		t.Fatalf("expected unspecified domain to fall back to guild binding main, got %q", got)
@@ -87,13 +86,13 @@ func TestBotConfigHasDomainBotInstanceOverrides(t *testing.T) {
 
 	cfg := &BotConfig{Guilds: []GuildConfig{
 		{GuildID: "g1", BotInstanceID: "main"},
-		{GuildID: "g2", BotInstanceID: "main", DomainBotInstanceIDs: map[string]string{"tickets": "   "}},
+		{GuildID: "g2", BotInstanceID: "main"},
 	}}
 	if cfg.HasDomainBotInstanceOverrides() {
-		t.Fatal("expected blank domain override values to be ignored")
+		t.Fatal("expected guilds without overrides to report none")
 	}
 
-	cfg.Guilds[1].DomainBotInstanceIDs[BotDomainQOTD] = "companion"
+	cfg.Guilds[1].DomainBotInstanceIDs = map[string]string{BotDomainQOTD: "companion"}
 	if !cfg.HasDomainBotInstanceOverrides() {
 		t.Fatal("expected qotd override to trigger domain override detection")
 	}

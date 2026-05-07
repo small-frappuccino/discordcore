@@ -227,7 +227,7 @@ func TestDescribeResetDeckResultMentionsCurrentSlotPause(t *testing.T) {
 		SuppressedCurrentSlotAutomaticPublish: true,
 	}, "Default")
 
-	if !strings.Contains(message, "Automatic publishing for the current slot is paused until you publish manually.") {
+	if !strings.Contains(message, "Automatic publishing for this slot remains paused while it is suppressed.") {
 		t.Fatalf("expected reset description to mention the temporary publish pause, got %q", message)
 	}
 	if !strings.Contains(message, "cleared 1 QOTD publish record") {

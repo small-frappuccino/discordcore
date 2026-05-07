@@ -1,6 +1,6 @@
-# discordcore GPT-5.4 Guide
+# discordcore Claude Guide
 
-Operational instructions for GPT-5.4 Xhigh working in `discordcore`.
+Operational instructions for Claude working in `discordcore`.
 
 ## Mission
 
@@ -26,15 +26,6 @@ Prefer narrow, source-backed changes over broad rewrites. Do not treat this repo
 - Postgres-backed persistence and migrations
 - the embedded React dashboard under `ui/`
 - the `//go:embed` payload served by the control plane
-
-Sibling repo:
-
-- `../alicebot` owns host bootstrap, machine-specific wiring, and final runtime packaging
-
-Boundary rule:
-
-- reusable product logic, state rules, contracts, and shared workflows belong in `discordcore`
-- host-specific setup belongs in `alicebot`
 
 ## Product Interaction Model
 
@@ -79,9 +70,9 @@ Respect package ownership:
 - use the dashboard for setup, review, bulk edits, diagnostics, and cross-feature visibility rather than as a duplicate command console
 - keep router and provider entrypoints thin when a focused sibling file or service already exists
 
-## How To Work Well In This Repo With GPT-5.4 Xhigh
+## How To Work Well In This Repo With Claude
 
-GPT-5.4 Xhigh is most useful here when the task is explicit, bounded, and validated against live source.
+Claude is most useful here when the task is explicit, bounded, and validated against live source.
 
 Work in this order:
 
@@ -121,17 +112,67 @@ Inspect broadly when:
 
 Do not start by reading all of `pkg/control/`, `pkg/discord/logging/`, or `ui/src/pages/`.
 
+## Context-Mode MCP Discipline
+
+`context-mode` is registered as an MCP plugin in this environment (`.claude/settings.local.json`, `~/.claude/plugins/cache/context-mode/context-mode/<version>/cli.bundle.mjs`). It is complementary to `smallfrappuccino-mcp` (`.vscode/mcp.json`), not a replacement: `smallfrappuccino-mcp` answers graph-level orientation questions (`repo_overview`, `find_nodes`, `get_subgraph`, `task_context`, `list_observations`); `context-mode` runs commands, analyses, and external fetches inside a sandbox so raw output never floods the context window.
+
+Always route discovery, analysis, validation, and large-output work through `context-mode` before and during code edits. Treat raw `Bash`/`PowerShell` output as a cost the policy is paying to avoid.
+
+Required tools when editing code in this repo:
+
+- discovery and command runs: `mcp__plugin_context-mode_context-mode__ctx_batch_execute(commands, queries)`; pass labeled commands plus follow-up queries in one call so the indexed chunk titles are descriptive
+- follow-up lookups across indexed chunks: `mcp__plugin_context-mode_context-mode__ctx_search(queries)`; many queries per call, and after a resume lead with `sort: "timeline"` to recover prior session context
+- analysis or processing of large files: `mcp__plugin_context-mode_context-mode__ctx_execute_file(path, language, code)`; ad-hoc computation: `mcp__plugin_context-mode_context-mode__ctx_execute(language, code)`
+- fetching external docs, references, or pages: `mcp__plugin_context-mode_context-mode__ctx_fetch_and_index`
+- explicit indexing of an artifact already on disk: `mcp__plugin_context-mode_context-mode__ctx_index`
+- session telemetry, diagnostics, reset: `ctx_stats`, `ctx_doctor`, `ctx_purge`
+
+Forbidden when editing code:
+
+- `Bash` or `PowerShell` for any command whose output may exceed 20 lines; reserve raw shell tools for `git`, `mkdir`, `rm`, `mv`, and navigation
+- `Read` for exploratory analysis; `Read` is correct only when the file's contents must enter context to drive a follow-up `Edit` or `Write`
+- `Grep` or `Glob` runs whose hit set is large enough to risk flooding context; route those searches through `ctx_execute(language: "shell", code: "...")` so only the summary enters context
+- `WebFetch` for documentation or external references; use `ctx_fetch_and_index`
+- using `ctx_execute`, `ctx_execute_file`, or any shell tool to create or modify files; file edits always go through native `Write` and `Edit`
+- bypassing `context-mode` "to save a step"; the discipline is load-bearing across long sessions
+
+Editing flow when changing code in `pkg/`, `cmd/`, or `ui/`:
+
+1. orient with `ctx_batch_execute` (combine `git log`, `git status`, focused greps, and `smallfrappuccino-mcp` orientation calls) and follow-up `ctx_search` queries
+2. read only the exact files you will `Edit` or `Write` with `Read`; analyse everything else through `ctx_execute_file`
+3. apply edits with `Edit` or `Write`
+4. run validation (`go test ./...`, `go vet ./...`, `bun run test`, `bun run lint`, `bun run build`) through `ctx_batch_execute` so the output stays sandboxed; surface only the printed summary in the work report
+5. if a `context-mode`-backed step was skipped or failed, say so explicitly; do not pretend full validation ran
+
+After `/clear` or `/compact`, the `context-mode` knowledge base is preserved; resume with `ctx_search(sort: "timeline")` before asking the user to restate prior context.
+
 ## Preferred Strengths For This Repo
 
-Use GPT-5.4 Xhigh preferentially for:
+Use Claude preferentially for:
 
 - multi-file implementation when the contract and ownership boundaries are already known
+- structured workflows where this document and the live source already specify the constraints
 - writing or tightening tests near the changed package
 - iterative debugging with a read-change-validate loop
 - contract-guided refactors that stay inside existing seams
 - disciplined execution of well-defined tasks with explicit validation
 
-This model should add value by connecting existing local patterns across files, not by inventing a new architecture.
+This model should add value by connecting existing local patterns across files, not by inventing a new architecture. Treat the ownership map, hotspots, and validation expectations in this document as load-bearing constraints, not suggestions; do not ask clarifying questions when the answer is already specified here or in the live source.
+
+## Scope Fidelity
+
+Do exactly what the user requested. Nothing more, nothing less. "More thorough" is not a goal; matching the request is the goal.
+
+- treat the user's message as the contract; the deliverable is the smallest change that satisfies it
+- do not bundle adjacent improvements, cleanup, renames, or reformatting with the requested change
+- do not refactor surrounding code unless the requested change cannot land safely without it
+- do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for
+- do not anticipate future requirements; if a hypothetical extension would require restructuring now, surface it as a question before doing it
+- if you notice an unrelated issue while working, mention it in the report after completing the task; do not silently fold it into the change
+- when the request is ambiguous, pick the smallest defensible interpretation and state the assumption in one line; do not pick the broader interpretation because it seems more useful
+- when the user says "fix X", fix X; do not also fix Y, Z, and the surrounding style nearby
+- when the user says "remove X", remove X completely; do not leave a stub, alias, or comment in its place
+- when the user says "rename X to Y", rename X to Y; do not also restructure the file or update unrelated callers' formatting
 
 ## Risks And Countermeasures
 
@@ -143,6 +184,11 @@ Common failure modes for this model in `discordcore`:
 - making speculative changes outside the stated bug or contract
 - growing public surface area when internal changes would suffice
 - mixing cleanup into a behavior fix when the cleanup is not required for safety
+- adding doc comments, docstrings, or inline comments to code that was not changed, or comments that restate what well-named identifiers already convey
+- adding defensive error handling, validation, or fallbacks for cases that cannot occur given current call sites and framework guarantees
+- preserving removed code as commented-out blocks, `// removed` markers, deprecated aliases, or unused renamed identifiers instead of deleting outright
+- creating a new file or package when an existing sibling seam is the natural home
+- losing scope discipline across long agentic sessions and drifting from the original task as context grows
 
 Countermeasures:
 
@@ -153,6 +199,18 @@ Countermeasures:
 - do not combine unrelated refactors with a bug fix unless the refactor is required to make the change safe
 - if a hotspot file must change, confirm the surrounding live source before patching and keep the edit tightly scoped
 - if the repo already has a local primitive, hook, service, or builder for the job, extend it instead of creating a parallel path
+- default to extending the closest existing sibling file rather than creating a new one; create a new file only when the new behavior is a distinct responsibility that breaks the existing file's cohesion, the existing file is a documented hotspot whose explicit countermeasure is a sibling-file split, or the directory's naming pattern mandates separation (`monitoring_*.go`, `postgres_store_*.go`, `discord_oauth_*.go`, `features_*.go`)
+- name new files after the new responsibility, never after the task or feature; never introduce a new package without contract justification
+- write comments only where the WHY is non-obvious; do not annotate code that was not changed and do not restate what the identifier already says
+- validate only at true system boundaries: HTTP request bodies and query params, OAuth callbacks, Discord interaction payloads, and rows read from sources outside the package's trust scope
+- inside the package, treat arguments from internal callers as already validated; do not nil-check pointers, slices, or maps that the type system or immediate construction proves non-nil; do not bounds-check indexes derived from a length just measured; do not re-validate values already validated upstream
+- do not add error handling for calls that cannot fail in the current code path (e.g., `regexp.MustCompile` of a constant pattern, `time.ParseDuration` of a constant string); do not wrap errors in `fmt.Errorf` when the wrap adds no operation context beyond what the underlying error already carries
+- for invariants that must hold but are not type-enforced, prefer `panic` with a clear message over a silent fallback that papers over a bug
+- when removing a symbol, delete it cleanly; do not retain a stub, deprecated alias, `// removed` marker, commented-out block, renamed `_unused` placeholder, or re-export
+- git history is the record of prior versions; the working tree is not a museum
+- the only exception to clean removal is staged removal or a backwards-compatibility shim explicitly requested in the conversation; do not assume the request was implied
+- if a removed public symbol has external callers, name the breaking change and stop before editing
+- in long sessions, re-anchor on the original task before each new edit; if scope has grown beyond what the user requested, stop and confirm before continuing
 
 ## Recommended Strategy By Task Type
 
@@ -327,6 +385,20 @@ Additional caution:
 - avoid regrowing a hotspot root file when an existing sibling seam can absorb the change
 - do not widen already large pages unless the task is truly local to that page
 
+## Conversation Discipline
+
+Output prose must be load-bearing. The diff carries the work; prose carries only what the diff cannot.
+
+- do not open with task restatements ("Looking at this...", "You want me to..."), intent narrations ("I will now read...", "Let me start by..."), or acknowledgments ("Got it", "Sure", "Of course")
+- do not close with summaries that the diff already shows; do not list touched files in prose when the diff or git output already lists them
+- do not append optimistic next steps, suggested follow-ups, or "you may also want to consider..." paragraphs unless the user asked for recommendations
+- do not use filler transitions ("Now let me...", "Next, I will...", "Great, moving on to...", "With that done...")
+- do not narrate what tools you are about to call; call them
+- when reporting work, lead with what changed and why; trust the user to read the diff
+- when asking a question, ask the question without context preface the user already has
+- when stating uncertainty, name the uncertainty and the smallest verification step in one line; do not hedge with adverbs ("perhaps", "possibly", "it might be the case that")
+- match length to the task: short questions get short answers, terse confirmations get one line, completed work gets the structured report below
+
 ## How To Report Work
 
 Substantial work reports should include:
@@ -337,5 +409,7 @@ Substantial work reports should include:
 - new behavior
 - validation run
 - remaining risks or follow-up drift
+
+Skip preamble that restates the task and postamble that summarizes what the diff already shows. If a validation step was skipped, say so directly; do not pad the gap with prose.
 
 Keep this document durable. Do not fill it with task-local plans, prompt boilerplate, vendor rituals, or one-off implementation notes.

@@ -115,8 +115,7 @@ func TestInitializeBotRuntimeStartsCommandHandlerForDormantQOTDCommandCatalog(t 
 	runtime := &botRuntime{
 		instanceID: "companion",
 		capabilities: botRuntimeCapabilities{
-			commands:           true,
-			commandsQOTDDomain: true,
+			commandDomains: commandDomainSet{files.BotDomainQOTD: {}},
 		},
 		session: session,
 	}

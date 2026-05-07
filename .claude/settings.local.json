@@ -1,17 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "mcp__plugin_context-mode_context-mode__ctx_upgrade",
-      "Bash(D:/Scoop/apps/nodejs/current/node.exe *)",
-      "Read(//c/Users/enzok/.claude/plugins/cache/context-mode/context-mode/1.0.111/**)",
-      "Bash(npm rebuild *)",
-      "Bash(npm view *)",
-      "Bash(scoop list *)",
-      "Bash(scoop bucket *)",
-      "Bash(scoop search *)",
-      "Bash(scoop install *)",
-      "Bash(scoop reset *)",
-      "Bash(scoop uninstall *)"
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\" -Force | Where-Object { $_.PSIsContainer } | Select-Object Name)",
+      "PowerShell(npm *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Set-Location *)",
+      "PowerShell(Join-Path *)",
+      "PowerShell(node \"C:\\\\Users\\\\enzok\\\\.claude\\\\plugins\\\\cache\\\\context-mode\\\\context-mode\\\\1.0.111\\\\cli.bundle.mjs\" doctor 2>&1)",
+      "PowerShell(Remove-Item *)",
+      "mcp__plugin_context-mode_context-mode__ctx_doctor",
+      "Bash(release *)",
+      "Bash(git reset *)",
+      "Bash(git restore *)",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "Bash(go build *)"
     ]
-  }
+  },
+  "spinnerTipsEnabled": false,
+  "prefersReducedMotion": false,
+  "outputStyle": "default"
 }

@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.488.1"
+const DiscordCoreVersion = "v0.1.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string
@@ -65,7 +65,7 @@ func getCurrentGitBranch() string {
 // Token selection by branch and automatic environment lookups were intentionally removed
 // from this package to avoid implicit behavior shared across projects. Use
 // `LoadEnvWithLocalBinFallback(tokenEnvName)` from this package to load a token from
-// environment with the fallback to `D:\Users\smallfrappuccino\.local\bin\.env` when needed.
+// environment with the fallback to `$HOME/.local/bin/.env` when needed.
 
 // SetBotName sets the bot name (from Discord API) and recomputes base paths.
 // It also attempts a one-time migration of legacy cache files to the new caches location.

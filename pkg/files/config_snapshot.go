@@ -342,6 +342,12 @@ func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 	}
 }
 
+// CloneQOTDConfig deep-copies a QOTDConfig so callers can mutate the result
+// without aliasing the source's slices or pointer-valued schedule fields.
+func CloneQOTDConfig(in QOTDConfig) QOTDConfig {
+	return cloneQOTDConfig(in)
+}
+
 func cloneQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) QOTDPublishScheduleConfig {
 	return QOTDPublishScheduleConfig{
 		HourUTC:   cloneOptionalInt(in.HourUTC),

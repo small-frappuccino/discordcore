@@ -1195,13 +1195,13 @@ func describeResetDeckResult(result applicationqotd.ResetDeckResult, deckName st
 	if len(parts) == 0 {
 		message := fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deckName)
 		if result.SuppressedCurrentSlotAutomaticPublish {
-			message += " Automatic publishing for the current slot is paused until you publish manually."
+			message += " Automatic publishing for this slot remains paused while it is suppressed."
 		}
 		return message
 	}
 	message := fmt.Sprintf("%s in deck `%s`. Question order was preserved.", strings.Join(parts, " and "), deckName)
 	if result.SuppressedCurrentSlotAutomaticPublish {
-		message += " Automatic publishing for the current slot is paused until you publish manually."
+		message += " Automatic publishing for this slot remains paused while it is suppressed."
 	}
 	return message
 }

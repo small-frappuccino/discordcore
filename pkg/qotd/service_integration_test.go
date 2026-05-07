@@ -1588,6 +1588,14 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 	if usedQuestion == nil || usedQuestion.PublishedOnceAt == nil || usedQuestion.PublishedOnceAt.IsZero() {
 		t.Fatalf("expected published question to carry the published-once marker before reset cleanup, got %+v", usedQuestion)
 	}
+	activeSlotDate := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
+	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", activeSlotDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(before reset) failed: %v", err)
+	}
+	if official == nil {
+		t.Fatalf("expected manual publish to occupy the active slot %s before reset, got nil", activeSlotDate.Format("2006-01-02"))
+	}
 
 	resetResult, err := service.ResetDeckState(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
 	if err != nil {
@@ -1600,12 +1608,12 @@ func TestServiceResetDeckStateSuppressesAutomaticRepublishForCurrentSlot(t *test
 		t.Fatalf("expected reset to suppress automatic republish for the current slot, got %+v", resetResult)
 	}
 
-	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	official, err = store.GetQOTDOfficialPostByDate(context.Background(), "g1", activeSlotDate)
 	if err != nil {
 		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
 	}
 	if official != nil {
-		t.Fatalf("expected reset to clear the published current-slot record, got %+v", official)
+		t.Fatalf("expected reset to clear the active-slot record for %s, got %+v", activeSlotDate.Format("2006-01-02"), official)
 	}
 
 	secondQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", 2)
