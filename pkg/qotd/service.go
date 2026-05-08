@@ -747,6 +747,14 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	}
 	consumeAutomaticSlot := params.ShouldConsumeAutomaticSlot()
 	publishDate := NormalizePublishDateUTC(now)
+	rollbackSuppressionDate := time.Time{}
+	keepSuppression := false
+	defer func() {
+		if keepSuppression || rollbackSuppressionDate.IsZero() {
+			return
+		}
+		s.clearScheduledPublishSuppressionForDate(guildID, rollbackSuppressionDate)
+	}()
 	var existing *storage.QOTDOfficialPostRecord
 	if slotState.ScheduleConfigured {
 		if consumeAutomaticSlot {
@@ -785,6 +793,8 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 				"todayDateUTC", todayDate,
 				"err", err,
 			)
+		} else {
+			rollbackSuppressionDate = todayDate
 		}
 	}
 
@@ -855,6 +865,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	if consumeAutomaticSlot {
 		s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
 	}
+	keepSuppression = true
 
 	return &PublishResult{
 		Question:     *question,

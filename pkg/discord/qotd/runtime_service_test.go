@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +36,33 @@ func (f *fakeGuildLifecycleService) ReconcileGuild(_ context.Context, guildID st
 		default:
 		}
 	}
+	return nil
+}
+
+type blockingContextLifecycleService struct {
+	started chan struct{}
+	done    chan struct{}
+	errCh   chan error
+	once    sync.Once
+}
+
+func (f *blockingContextLifecycleService) PublishScheduledIfDue(ctx context.Context, _ string, _ *discordgo.Session) (bool, error) {
+	f.once.Do(func() {
+		if f.started != nil {
+			close(f.started)
+		}
+	})
+	<-ctx.Done()
+	if f.errCh != nil {
+		f.errCh <- ctx.Err()
+	}
+	if f.done != nil {
+		close(f.done)
+	}
+	return false, ctx.Err()
+}
+
+func (f *blockingContextLifecycleService) ReconcileGuild(context.Context, string, *discordgo.Session) error {
 	return nil
 }
 
@@ -266,5 +294,127 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	}
 	if fake.reconcileCalls[0] != "g-qotd-enabled" || fake.reconcileCalls[1] != "g-qotd-configured-disabled" {
 		t.Fatalf("unexpected reconcile target order: %v", fake.reconcileCalls)
+	}
+}
+
+func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{
+		GuildID:       "g-enabled",
+		BotInstanceID: "main",
+		QOTD: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "question-enabled",
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig() failed: %v", err)
+	}
+
+	fake := &fakeGuildLifecycleService{publishCh: make(chan string, 16)}
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main", "main")
+	service.publishInterval = time.Hour
+	service.reconcileEvery = time.Hour
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	service.Start()
+	select {
+	case guildID := <-fake.publishCh:
+		if guildID != "g-enabled" {
+			t.Fatalf("unexpected first start publish guild %q", guildID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first start publish cycle")
+	}
+	service.Stop()
+
+	service.publishInterval = 10 * time.Millisecond
+	service.Start()
+	t.Cleanup(service.Stop)
+
+	select {
+	case guildID := <-fake.publishCh:
+		if guildID != "g-enabled" {
+			t.Fatalf("unexpected restart startup publish guild %q", guildID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for restart startup publish cycle")
+	}
+
+	select {
+	case guildID := <-fake.publishCh:
+		if guildID != "g-enabled" {
+			t.Fatalf("unexpected restart interval publish guild %q", guildID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for restart interval publish cycle")
+	}
+}
+
+func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{
+		GuildID:       "g-enabled",
+		BotInstanceID: "main",
+		QOTD: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "question-enabled",
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig() failed: %v", err)
+	}
+
+	fake := &blockingContextLifecycleService{
+		started: make(chan struct{}),
+		done:    make(chan struct{}),
+		errCh:   make(chan error, 1),
+	}
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main", "main")
+	service.publishInterval = time.Hour
+	service.reconcileEvery = time.Hour
+
+	service.Start()
+	select {
+	case <-fake.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for publish operation to start")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		service.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Stop() to cancel in-flight publish")
+	}
+
+	select {
+	case <-fake.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for publish operation to observe cancellation")
+	}
+
+	select {
+	case err := <-fake.errCh:
+		if err == nil {
+			t.Fatal("expected in-flight publish to receive context cancellation")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for cancellation error")
 	}
 }

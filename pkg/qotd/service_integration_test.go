@@ -887,6 +887,55 @@ func TestServicePublishNowRejectsAdditionalManualPublishesForCurrentSlot(t *test
 	}
 }
 
+func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return afterBoundary }
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); !errors.Is(err, ErrNoQuestionsAvailable) {
+		t.Fatalf("expected late manual publish with empty queue to fail with ErrNoQuestionsAvailable, got %v", err)
+	}
+
+	settings, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() after failed manual publish failed: %v", err)
+	}
+	if settings.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected failed late manual publish not to leave same-day suppression behind, got %+v", settings)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Recovered same-day automatic question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected scheduler to keep today's slot publishable after failed late manual publish")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected one automatic publish attempt after recovery, got %d", len(fake.publishedParams))
+	}
+
+	official, err := store.GetScheduledQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("GetScheduledQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if official == nil || official.QuestionID != question.ID {
+		t.Fatalf("expected same-day automatic slot to publish the newly added question, got %+v", official)
+	}
+}
+
 func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {

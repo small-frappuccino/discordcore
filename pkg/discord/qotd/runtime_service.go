@@ -72,6 +72,12 @@ func (s *RuntimeService) Start() {
 		s.mu.Unlock()
 		return
 	}
+	select {
+	case <-s.stopCh:
+		s.stopCh = make(chan struct{})
+		s.stopOnce = sync.Once{}
+	default:
+	}
 	s.running = true
 	s.mu.Unlock()
 
@@ -120,7 +126,12 @@ func (s *RuntimeService) loop() {
 
 func (s *RuntimeService) runPublishCycle(now time.Time) {
 	for _, guildID := range s.configuredGuildIDs(true) {
-		ctx, cancel := context.WithTimeout(context.Background(), runtimeOperationTimeout)
+		select {
+		case <-s.stopCh:
+			return
+		default:
+		}
+		ctx, cancel := s.operationContext()
 		published, err := s.lifecycleService.PublishScheduledIfDue(ctx, guildID, s.session)
 		cancel()
 		if err != nil {
@@ -146,7 +157,12 @@ func (s *RuntimeService) runPublishCycle(now time.Time) {
 
 func (s *RuntimeService) runReconcileCycle(now time.Time) {
 	for _, guildID := range s.configuredGuildIDs(false) {
-		ctx, cancel := context.WithTimeout(context.Background(), runtimeOperationTimeout)
+		select {
+		case <-s.stopCh:
+			return
+		default:
+		}
+		ctx, cancel := s.operationContext()
 		err := s.lifecycleService.ReconcileGuild(ctx, guildID, s.session)
 		cancel()
 		if err != nil {
@@ -204,4 +220,19 @@ func (s *RuntimeService) clock() time.Time {
 		return s.now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func (s *RuntimeService) operationContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), runtimeOperationTimeout)
+	if s == nil {
+		return ctx, cancel
+	}
+	go func() {
+		select {
+		case <-s.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
 }
