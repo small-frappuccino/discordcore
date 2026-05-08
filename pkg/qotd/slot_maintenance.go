@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -99,14 +100,23 @@ func (s *Service) ClearPublishedDayState(ctx context.Context, guildID string, se
 		s.clearScheduledPublishSuppressionForDate(guildID, publishDateUTC)
 		return result, nil
 	}
+	sort.Slice(posts, func(i, j int) bool {
+		return posts[i].ID < posts[j].ID
+	})
 
 	releasedQuestionIDs := make(map[int64]struct{}, len(posts))
+	failedPostIDs := make([]int64, 0)
+	failures := make([]error, 0)
 	for _, post := range posts {
 		if err := deleteOfficialPostDiscordArtifacts(session, post); err != nil {
-			return result, err
+			failedPostIDs = append(failedPostIDs, post.ID)
+			failures = append(failures, fmt.Errorf("post %d discord cleanup: %w", post.ID, err))
+			continue
 		}
 		if err := s.store.DeleteQOTDOfficialPostByID(ctx, post.ID); err != nil {
-			return result, err
+			failedPostIDs = append(failedPostIDs, post.ID)
+			failures = append(failures, fmt.Errorf("post %d storage delete: %w", post.ID, err))
+			continue
 		}
 		result.OfficialPostsCleared++
 		if _, seen := releasedQuestionIDs[post.QuestionID]; seen {
@@ -114,11 +124,22 @@ func (s *Service) ClearPublishedDayState(ctx context.Context, guildID string, se
 		}
 		released, err := s.releaseOfficialPostQuestion(ctx, post)
 		if err != nil {
-			return result, err
+			failedPostIDs = append(failedPostIDs, post.ID)
+			failures = append(failures, fmt.Errorf("post %d question release: %w", post.ID, err))
+			continue
 		}
 		if released {
 			releasedQuestionIDs[post.QuestionID] = struct{}{}
 			result.QuestionsReleased++
+		}
+	}
+
+	if len(failures) > 0 {
+		return result, &SlotMaintenancePartialError{
+			Action:                "clear_day",
+			Result:                result,
+			FailedOfficialPostIDs: failedPostIDs,
+			Cause:                 errors.Join(failures...),
 		}
 	}
 
@@ -157,10 +178,30 @@ func (s *Service) releaseOfficialPostQuestion(ctx context.Context, post storage.
 	if question == nil {
 		return false, nil
 	}
+	if !questionStillLinkedToOfficialPost(*question, post) {
+		return false, nil
+	}
 	if err := s.releaseReservedQuestion(ctx, *question); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func questionStillLinkedToOfficialPost(question storage.QOTDQuestionRecord, post storage.QOTDOfficialPostRecord) bool {
+	if question.ID <= 0 || question.ID != post.QuestionID {
+		return false
+	}
+	postDate := NormalizePublishDateUTC(post.PublishDateUTC)
+	if postDate.IsZero() {
+		return false
+	}
+	if question.ScheduledForDateUTC != nil && !question.ScheduledForDateUTC.IsZero() {
+		return NormalizePublishDateUTC(*question.ScheduledForDateUTC).Equal(postDate)
+	}
+	if question.PublishedOnceAt != nil && !question.PublishedOnceAt.IsZero() {
+		return NormalizePublishDateUTC(*question.PublishedOnceAt).Equal(postDate)
+	}
+	return false
 }
 
 func deleteOfficialPostDiscordArtifacts(session *discordgo.Session, post storage.QOTDOfficialPostRecord) error {
@@ -171,10 +212,7 @@ func deleteOfficialPostDiscordArtifacts(session *discordgo.Session, post storage
 	threadID := strings.TrimSpace(post.DiscordThreadID)
 	starterMessageID := strings.TrimSpace(post.DiscordStarterMessageID)
 	if starterMessageID != "" {
-		channelID := threadID
-		if channelID == "" {
-			channelID = strings.TrimSpace(post.ChannelID)
-		}
+		channelID := starterMessageDeleteChannelID(post)
 		if channelID != "" {
 			if err := session.ChannelMessageDelete(channelID, starterMessageID); err != nil && !isIgnorableDiscordDeleteError(err) {
 				return fmt.Errorf("delete qotd starter message: %w", err)
@@ -187,6 +225,14 @@ func deleteOfficialPostDiscordArtifacts(session *discordgo.Session, post storage
 		}
 	}
 	return nil
+}
+
+func starterMessageDeleteChannelID(post storage.QOTDOfficialPostRecord) string {
+	channelID := strings.TrimSpace(post.ChannelID)
+	if channelID != "" {
+		return channelID
+	}
+	return strings.TrimSpace(post.DiscordThreadID)
 }
 
 func isIgnorableDiscordDeleteError(err error) bool {

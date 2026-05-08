@@ -2660,6 +2660,76 @@ func TestServiceEnableAfterCurrentSlotDueSuppressesImmediatePublish(t *testing.T
 	}
 }
 
+func TestServicePublishScheduledIfDueClearsExpiredSuppression(t *testing.T) {
+	service, _, fake := newIntegrationTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 5, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID).WithSuppressedScheduledPublishDate(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))); err != nil {
+		t.Fatalf("UpdateSettings(with stale suppression) failed: %v", err)
+	}
+	if _, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question after stale suppression",
+		Status: QuestionStatusReady,
+	}); err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	if err != nil {
+		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
+	}
+	if !published {
+		t.Fatal("expected stale suppression not to block the current scheduled slot")
+	}
+	if len(fake.publishedParams) != 1 {
+		t.Fatalf("expected one publish attempt after stale suppression cleanup, got %d", len(fake.publishedParams))
+	}
+
+	settings, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() failed: %v", err)
+	}
+	if settings.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected stale suppression to be cleared after scheduler run, got %+v", settings)
+	}
+}
+
+func TestServiceReconcileGuildClearsExpiredSuppressionForSuppressionOnlyConfig(t *testing.T) {
+	service, _, _ := newIntegrationTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 5, 13, 0, 0, 0, time.UTC)
+	}
+
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"}); err != nil {
+		t.Fatalf("UpdateSettings(suppression-only) failed: %v", err)
+	}
+
+	before, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings(before reconcile) failed: %v", err)
+	}
+	if before.SuppressScheduledPublishDateUTC != "2026-04-03" {
+		t.Fatalf("expected stale suppression before reconcile, got %+v", before)
+	}
+
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() failed: %v", err)
+	}
+
+	after, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings(after reconcile) failed: %v", err)
+	}
+	if after.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected reconcile to clear stale suppression-only config, got %+v", after)
+	}
+	if !after.IsZero() {
+		t.Fatalf("expected suppression-only config to collapse to zero after cleanup, got %+v", after)
+	}
+}
+
 func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	beforeBoundary := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
@@ -2848,6 +2918,62 @@ func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing
 	}
 	if usedQuestion == nil || usedQuestion.Status != string(QuestionStatusUsed) || usedQuestion.UsedAt == nil {
 		t.Fatalf("expected reconcile to mark the recovered question used, got %+v", usedQuestion)
+	}
+}
+
+func TestServiceResumeProvisioningSkipsDiscordWhenPostDeletedConcurrently(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	now := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Provisioning race question",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, integrationQuestionChannelID))
+	if err != nil {
+		t.Fatalf("resolvePublishSchedule() failed: %v", err)
+	}
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	lifecycle := EvaluateOfficialPost(schedule, publishDate, now)
+	provisioning, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:                    "g1",
+		DeckID:                     files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:           files.LegacyQOTDDefaultDeckName,
+		QuestionID:                 question.ID,
+		PublishMode:                string(PublishModeScheduled),
+		PublishDateUTC:             publishDate,
+		State:                      string(OfficialPostStateProvisioning),
+		ChannelID:                  integrationQuestionChannelID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "list-entry-1",
+		DiscordThreadID:            "thread-race",
+		DiscordStarterMessageID:    "starter-race",
+		AnswerChannelID:            "thread-race",
+		QuestionTextSnapshot:       question.Body,
+		GraceUntil:                 lifecycle.BecomesPreviousAt,
+		ArchiveAt:                  lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	if err := store.DeleteQOTDOfficialPostByID(context.Background(), provisioning.ID); err != nil {
+		t.Fatalf("DeleteQOTDOfficialPostByID() failed: %v", err)
+	}
+
+	if _, err := service.resumeOfficialPostProvisioning(context.Background(), &discordgo.Session{}, *provisioning, now); err == nil {
+		t.Fatal("expected resumeOfficialPostProvisioning() to fail when the post row is gone")
+	}
+	if len(fake.publishedParams) != 0 {
+		t.Fatalf("expected no Discord publish attempt when provisioning row is deleted, got %d", len(fake.publishedParams))
 	}
 }
 
@@ -3383,6 +3509,197 @@ func TestServiceClearPublishedDayStateRemovesAllRecordsForDate(t *testing.T) {
 			t.Fatalf("expected question %d to be reset to ready for re-test publish, got %+v", id, released)
 		}
 	}
+}
+
+func TestServiceClearPublishedDayStateDoesNotReleaseQuestionReusedForAnotherDay(t *testing.T) {
+	service, store, _ := newIntegrationTestQOTDService(t)
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+	reusedPublish := time.Date(2026, 5, 8, 13, 0, 0, 0, time.UTC)
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{Body: "Reused question", Status: QuestionStatusReady})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	question.Status = string(QuestionStatusUsed)
+	question.PublishedOnceAt = &reusedPublish
+	question.ScheduledForDateUTC = nil
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *question); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(reused) failed: %v", err)
+	}
+
+	if _, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeManual),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStateCurrent),
+		ChannelID:            integrationQuestionChannelID,
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	result, err := service.ClearPublishedDayState(context.Background(), "g1", nil, SlotMaintenanceParams{DateUTC: &publishDate})
+	if err != nil {
+		t.Fatalf("ClearPublishedDayState() failed: %v", err)
+	}
+	if result.QuestionsReleased != 0 {
+		t.Fatalf("expected no question release when linked question was reused on another day, got %+v", result)
+	}
+
+	stored, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if stored == nil || stored.Status != string(QuestionStatusUsed) || stored.PublishedOnceAt == nil {
+		t.Fatalf("expected reused question to stay used after clearing older day state, got %+v", stored)
+	}
+	if !NormalizePublishDateUTC(*stored.PublishedOnceAt).Equal(time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected reused question publish date to remain day two, got %+v", stored)
+	}
+}
+
+func TestServiceClearPublishedDayStateContinuesAfterMixedDiscordFailure(t *testing.T) {
+	service, store, _ := newIntegrationTestQOTDService(t)
+	publishDate := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID).WithSuppressedScheduledPublishDate(publishDate)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	questionFail, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{Body: "Question with Discord cleanup failure", Status: QuestionStatusReady})
+	if err != nil {
+		t.Fatalf("CreateQuestion(questionFail) failed: %v", err)
+	}
+	questionOK, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{Body: "Question that should still clear", Status: QuestionStatusReady})
+	if err != nil {
+		t.Fatalf("CreateQuestion(questionOK) failed: %v", err)
+	}
+
+	questionFail.Status = string(QuestionStatusUsed)
+	questionFail.ScheduledForDateUTC = nil
+	questionFail.PublishedOnceAt = timePtr(time.Date(2026, 5, 7, 12, 43, 0, 0, time.UTC))
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *questionFail); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(used %d) failed: %v", questionFail.ID, err)
+	}
+
+	questionOK.Status = string(QuestionStatusReserved)
+	questionOK.ScheduledForDateUTC = &publishDate
+	if _, err := store.UpdateQOTDQuestion(context.Background(), *questionOK); err != nil {
+		t.Fatalf("UpdateQOTDQuestion(reserved %d) failed: %v", questionOK.ID, err)
+	}
+
+	failingPost, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+		QuestionID:           questionFail.ID,
+		PublishMode:          string(PublishModeManual),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStateCurrent),
+		ChannelID:            integrationQuestionChannelID,
+		DiscordThreadID:      "thread-fail",
+		QuestionTextSnapshot: questionFail.Body,
+		GraceUntil:           time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(failingPost) failed: %v", err)
+	}
+
+	if _, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+		QuestionID:           questionOK.ID,
+		PublishMode:          string(PublishModeManual),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStateCurrent),
+		ChannelID:            integrationQuestionChannelID,
+		QuestionTextSnapshot: questionOK.Body,
+		GraceUntil:           time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning(successPost) failed: %v", err)
+	}
+
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("discordgo.New() failed: %v", err)
+	}
+	session.Client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req != nil && strings.Contains(req.URL.Path, "/channels/thread-fail") {
+			return nil, errors.New("discord transport unavailable")
+		}
+		return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header), Request: req}, nil
+	})}
+
+	result, err := service.ClearPublishedDayState(context.Background(), "g1", session, SlotMaintenanceParams{DateUTC: &publishDate})
+	if err == nil {
+		t.Fatal("expected mixed clear-day run to return partial error")
+	}
+	if !errors.Is(err, ErrSlotMaintenancePartial) {
+		t.Fatalf("expected partial maintenance sentinel, got %v", err)
+	}
+	var partialErr *SlotMaintenancePartialError
+	if !errors.As(err, &partialErr) {
+		t.Fatalf("expected SlotMaintenancePartialError, got %T", err)
+	}
+	if result.OfficialPostsCleared != 1 || result.QuestionsReleased != 1 {
+		t.Fatalf("expected one post cleared and one question released despite mixed failure, got %+v", result)
+	}
+	if result.ClearedSuppression {
+		t.Fatalf("expected suppression to remain when clear_day has partial failures, got %+v", result)
+	}
+	if len(partialErr.FailedOfficialPostIDs) != 1 || partialErr.FailedOfficialPostIDs[0] != failingPost.ID {
+		t.Fatalf("expected failed post telemetry to include only failing post %d, got %+v", failingPost.ID, partialErr.FailedOfficialPostIDs)
+	}
+
+	remainingPosts, err := store.ListQOTDOfficialPostsByDate(context.Background(), "g1", publishDate)
+	if err != nil {
+		t.Fatalf("ListQOTDOfficialPostsByDate() failed: %v", err)
+	}
+	if len(remainingPosts) != 1 || remainingPosts[0].ID != failingPost.ID {
+		t.Fatalf("expected only failing post to remain after mixed clear-day, got %+v", remainingPosts)
+	}
+
+	failedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", questionFail.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(questionFail) failed: %v", err)
+	}
+	if failedQuestion == nil || failedQuestion.Status != string(QuestionStatusUsed) {
+		t.Fatalf("expected failed question to remain used, got %+v", failedQuestion)
+	}
+
+	releasedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", questionOK.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(questionOK) failed: %v", err)
+	}
+	if releasedQuestion == nil || releasedQuestion.Status != string(QuestionStatusReady) || releasedQuestion.ScheduledForDateUTC != nil || releasedQuestion.PublishedOnceAt != nil {
+		t.Fatalf("expected successful question to be released to ready, got %+v", releasedQuestion)
+	}
+
+	settings, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() failed: %v", err)
+	}
+	if !settings.SuppressesScheduledPublishDate(publishDate) {
+		t.Fatalf("expected suppression to remain after partial clear-day failure, got %+v", settings)
+	}
+}
+
+type roundTripFunc func(req *http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func timePtr(value time.Time) *time.Time {

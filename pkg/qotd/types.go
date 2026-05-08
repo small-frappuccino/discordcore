@@ -1,6 +1,10 @@
 package qotd
 
 import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -36,6 +40,60 @@ type SlotMaintenanceResult struct {
 	OfficialPostsCleared int       `json:"official_posts_cleared"`
 	QuestionsReleased    int       `json:"questions_released"`
 	ClearedSuppression   bool      `json:"cleared_suppression"`
+}
+
+type SlotMaintenancePartialError struct {
+	Action                string
+	Result                SlotMaintenanceResult
+	FailedOfficialPostIDs []int64
+	Cause                 error
+}
+
+func (e *SlotMaintenancePartialError) Error() string {
+	if e == nil {
+		return ""
+	}
+	action := strings.TrimSpace(e.Action)
+	if action == "" {
+		action = "maintenance"
+	}
+	dateLabel := "unknown-date"
+	if !e.Result.PublishDateUTC.IsZero() {
+		dateLabel = e.Result.PublishDateUTC.Format("2006-01-02")
+	}
+	failed := len(e.FailedOfficialPostIDs)
+	if failed == 0 {
+		return fmt.Sprintf("%s partial for %s: cleared=%d released=%d", action, dateLabel, e.Result.OfficialPostsCleared, e.Result.QuestionsReleased)
+	}
+	return fmt.Sprintf("%s partial for %s: cleared=%d released=%d failed=%d (post_ids=%s)",
+		action,
+		dateLabel,
+		e.Result.OfficialPostsCleared,
+		e.Result.QuestionsReleased,
+		failed,
+		joinInt64CSV(e.FailedOfficialPostIDs),
+	)
+}
+
+func (e *SlotMaintenancePartialError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	if e.Cause == nil {
+		return ErrSlotMaintenancePartial
+	}
+	return errors.Join(ErrSlotMaintenancePartial, e.Cause)
+}
+
+func joinInt64CSV(values []int64) string {
+	if len(values) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, strconv.FormatInt(value, 10))
+	}
+	return strings.Join(parts, ",")
 }
 
 func (p PublishNowParams) ShouldConsumeAutomaticSlot() bool {

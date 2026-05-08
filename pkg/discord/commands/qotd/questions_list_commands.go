@@ -1550,6 +1550,30 @@ func translateSlotMaintenanceError(err error, action string) error {
 	if err == nil {
 		return nil
 	}
+	if action == "clear" {
+		var partialErr *applicationqotd.SlotMaintenancePartialError
+		if errors.As(err, &partialErr) && partialErr != nil {
+			dateLabel := "requested date"
+			if !partialErr.Result.PublishDateUTC.IsZero() {
+				dateLabel = partialErr.Result.PublishDateUTC.Format("2006-01-02")
+			}
+			message := fmt.Sprintf(
+				"QOTD clear-day for %s was partially applied: deleted %s, returned %s to ready, failed %s.",
+				dateLabel,
+				formatCountNoun(partialErr.Result.OfficialPostsCleared, "publish record", "publish records"),
+				formatCountNoun(partialErr.Result.QuestionsReleased, "question", "questions"),
+				formatCountNoun(len(partialErr.FailedOfficialPostIDs), "publish record", "publish records"),
+			)
+			if len(partialErr.FailedOfficialPostIDs) > 0 {
+				ids := make([]string, 0, len(partialErr.FailedOfficialPostIDs))
+				for _, id := range partialErr.FailedOfficialPostIDs {
+					ids = append(ids, strconv.FormatInt(id, 10))
+				}
+				message = fmt.Sprintf("%s Failed post IDs: %s.", message, strings.Join(ids, ", "))
+			}
+			return core.NewCommandError(message, false)
+		}
+	}
 	if errors.Is(err, applicationqotd.ErrOfficialPostNotFound) {
 		if action == "reanimate" {
 			return core.NewCommandError("No QOTD abandoned/failed record exists for that date.", false)

@@ -168,6 +168,18 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 			},
 		},
 		{
+			GuildID:       "g-enabled-missing-channel",
+			BotInstanceID: "main",
+			QOTD: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Decks: []files.QOTDDeckConfig{{
+					ID:      files.LegacyQOTDDefaultDeckID,
+					Name:    files.LegacyQOTDDefaultDeckName,
+					Enabled: true,
+				}},
+			},
+		},
+		{
 			GuildID:       "g-configured-disabled",
 			BotInstanceID: "main",
 			QOTD: files.QOTDConfig{
@@ -212,12 +224,12 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	service.runReconcileCycle(service.clock())
 
 	if len(fake.publishCalls) != 1 || fake.publishCalls[0] != "g-enabled" {
-		t.Fatalf("expected publish cycle to include only enabled guilds on the runtime, got %v", fake.publishCalls)
+		t.Fatalf("expected publish cycle to include only enabled guilds with channel targets on the runtime, got %v", fake.publishCalls)
 	}
-	if len(fake.reconcileCalls) != 2 {
+	if len(fake.reconcileCalls) != 3 {
 		t.Fatalf("expected reconcile cycle to include configured guilds on the runtime, got %v", fake.reconcileCalls)
 	}
-	if fake.reconcileCalls[0] != "g-enabled" || fake.reconcileCalls[1] != "g-configured-disabled" {
+	if fake.reconcileCalls[0] != "g-enabled" || fake.reconcileCalls[1] != "g-enabled-missing-channel" || fake.reconcileCalls[2] != "g-configured-disabled" {
 		t.Fatalf("unexpected reconcile target order: %v", fake.reconcileCalls)
 	}
 }

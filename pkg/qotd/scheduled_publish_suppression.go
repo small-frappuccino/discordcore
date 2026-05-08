@@ -51,6 +51,36 @@ func (s *Service) clearScheduledPublishSuppressionForDate(guildID string, publis
 	}
 }
 
+func parseSuppressedScheduledPublishDate(cfg files.QOTDConfig) (time.Time, bool) {
+	raw := strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return NormalizePublishDateUTC(parsed), true
+}
+
+func (s *Service) clearExpiredScheduledPublishSuppression(guildID string, cfg files.QOTDConfig, now time.Time) {
+	raw := strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC)
+	if raw == "" {
+		return
+	}
+	suppressedDate, ok := parseSuppressedScheduledPublishDate(cfg)
+	if !ok {
+		log.ApplicationLogger().Warn("QOTD suppression date is invalid; clearing stale token", "guildID", guildID, "value", raw)
+		s.clearScheduledPublishSuppressionForDate(guildID, time.Time{})
+		return
+	}
+	todayUTC := NormalizePublishDateUTC(now)
+	if todayUTC.IsZero() || !suppressedDate.Before(todayUTC) {
+		return
+	}
+	s.clearScheduledPublishSuppressionForDate(guildID, suppressedDate)
+}
+
 func (s *Service) updateScheduledPublishSuppression(guildID string, mutate func(files.QOTDConfig) (files.QOTDConfig, bool)) error {
 	if s == nil || s.configManager == nil || mutate == nil {
 		return nil

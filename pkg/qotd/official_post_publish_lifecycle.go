@@ -54,13 +54,14 @@ func (s *Service) completeOfficialPostProvisioning(
 	threadName string,
 	now time.Time,
 ) (*storage.QOTDOfficialPostRecord, *storage.QOTDQuestionRecord, string, error) {
-	if strings.TrimSpace(post.State) != string(OfficialPostStateProvisioning) {
-		updated, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateProvisioning), nil, nil)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		post = *updated
+	// Always reassert provisioning in storage before touching Discord. This
+	// guards cross-instance races where maintenance deleted the row after we
+	// loaded it but before publish starts.
+	updated, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateProvisioning), nil, nil)
+	if err != nil {
+		return nil, nil, "", err
 	}
+	post = *updated
 
 	displayID := int64(0)
 	if question != nil {

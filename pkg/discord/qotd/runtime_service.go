@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -135,6 +136,9 @@ func (s *RuntimeService) runPublishCycle(now time.Time) {
 		published, err := s.lifecycleService.PublishScheduledIfDue(ctx, guildID, s.session)
 		cancel()
 		if err != nil {
+			if errors.Is(err, context.Canceled) && s.stopping() {
+				continue
+			}
 			log.ApplicationLogger().Warn(
 				"QOTD scheduled publish failed",
 				"guildID", guildID,
@@ -166,6 +170,9 @@ func (s *RuntimeService) runReconcileCycle(now time.Time) {
 		err := s.lifecycleService.ReconcileGuild(ctx, guildID, s.session)
 		cancel()
 		if err != nil {
+			if errors.Is(err, context.Canceled) && s.stopping() {
+				continue
+			}
 			log.ApplicationLogger().Warn(
 				"QOTD reconcile failed",
 				"guildID", guildID,
@@ -200,7 +207,7 @@ func (s *RuntimeService) configuredGuildIDs(requireEnabled bool) []string {
 		}
 		if requireEnabled {
 			deck, ok := guild.QOTD.ActiveDeck()
-			if !ok || !deck.Enabled {
+			if !ok || !deck.Enabled || strings.TrimSpace(deck.ChannelID) == "" {
 				continue
 			}
 		} else if guild.QOTD.IsZero() {
@@ -235,4 +242,16 @@ func (s *RuntimeService) operationContext() (context.Context, context.CancelFunc
 		}
 	}()
 	return ctx, cancel
+}
+
+func (s *RuntimeService) stopping() bool {
+	if s == nil {
+		return false
+	}
+	select {
+	case <-s.stopCh:
+		return true
+	default:
+		return false
+	}
 }

@@ -39,6 +39,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if err != nil {
 		return false, err
 	}
+	s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
 	slotState, err := s.loadDueSlotState(ctx, guildID, cfg, now)
 	if err != nil {
 		return false, err
@@ -184,6 +185,11 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	defer lifecycleLock.Unlock()
 
 	now := s.clock()
+	cfg, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return err
+	}
+	s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
 	if err := s.reconcilePendingOfficialPosts(ctx, guildID, session, now); err != nil {
 		return err
 	}

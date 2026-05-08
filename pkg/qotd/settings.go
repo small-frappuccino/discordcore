@@ -13,6 +13,9 @@ func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
+	if !qotdAutomaticPublishConfigured(normalized) {
+		return clearSuppressedScheduledPublishDate(normalized, time.Time{}), nil
+	}
 	if publishDate, suppress := suppressedPublishDateOnEnable(current, normalized, now); suppress {
 		normalized = suppressScheduledPublishDate(normalized, publishDate)
 	}
