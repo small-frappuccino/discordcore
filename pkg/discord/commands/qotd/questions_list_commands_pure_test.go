@@ -404,6 +404,37 @@ func TestQOTDClearDayCommandReportsPartialFailureTelemetry(t *testing.T) {
 	}
 }
 
+func TestQOTDClearDayCommandReportsPartialFailureWithoutFailedIDsList(t *testing.T) {
+	const (
+		guildID = "guild-1"
+		ownerID = "owner-1"
+	)
+
+	service := &publishCommandStubService{
+		clearDayErr: &applicationqotd.SlotMaintenancePartialError{
+			Action: "clear_day",
+			Result: applicationqotd.SlotMaintenanceResult{
+				OfficialPostsCleared: 2,
+				QuestionsReleased:    2,
+			},
+		},
+	}
+
+	session, rec := newQOTDCommandTestSession(t)
+	router, _ := newQOTDCommandTestRouterWithService(t, session, guildID, ownerID, service)
+
+	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, clearDaySubCommandName, nil))
+
+	resp := rec.lastResponse(t)
+	requirePublicResponse(t, resp)
+	if !strings.Contains(resp.Data.Content, "requested date") {
+		t.Fatalf("expected fallback date label in partial maintenance warning, got %q", resp.Data.Content)
+	}
+	if strings.Contains(resp.Data.Content, "Failed post IDs:") {
+		t.Fatalf("expected no failed post IDs section when telemetry is empty, got %q", resp.Data.Content)
+	}
+}
+
 func TestQOTDReanimateCommandRejectsInvalidDateFormat(t *testing.T) {
 	const (
 		guildID = "guild-1"
