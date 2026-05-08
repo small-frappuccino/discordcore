@@ -43,3 +43,24 @@ func TestClearSuppressedScheduledPublishDateClearsOnlyMatchingSlots(t *testing.T
 		t.Fatalf("expected zero-date clear to remove suppression unconditionally, got %+v", fullyCleared)
 	}
 }
+
+func TestParseSuppressedScheduledPublishDateParsesValidDate(t *testing.T) {
+	t.Parallel()
+
+	parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"})
+	if !ok {
+		t.Fatal("expected valid suppression token to parse")
+	}
+	want := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	if !parsed.Equal(want) {
+		t.Fatalf("expected parsed suppression date %s, got %s", want.Format(time.RFC3339), parsed.Format(time.RFC3339))
+	}
+}
+
+func TestParseSuppressedScheduledPublishDateRejectsInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	if parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: "not-a-date"}); ok || !parsed.IsZero() {
+		t.Fatalf("expected invalid suppression token to fail parse, got parsed=%s ok=%v", parsed.Format(time.RFC3339), ok)
+	}
+}
