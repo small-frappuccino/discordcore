@@ -19,12 +19,34 @@ const (
 	qotdPublishDateLayout     = "2006-01-02"
 )
 
+// QOTDSelectionStrategy enumerates the supported question-selection strategies
+// for automatic publish. The string values are persisted in the deck config
+// and mirror the QOTDQuestionSelector vocabulary used by the storage layer.
+type QOTDSelectionStrategy string
+
+const (
+	QOTDSelectionStrategyQueue  QOTDSelectionStrategy = "queue"
+	QOTDSelectionStrategyRandom QOTDSelectionStrategy = "random"
+)
+
 // IsZero reports whether all QOTD deck fields are unset.
 func (cfg QOTDDeckConfig) IsZero() bool {
 	return strings.TrimSpace(cfg.ID) == "" &&
 		strings.TrimSpace(cfg.Name) == "" &&
 		!cfg.Enabled &&
-		strings.TrimSpace(cfg.ChannelID) == ""
+		strings.TrimSpace(cfg.ChannelID) == "" &&
+		strings.TrimSpace(cfg.SelectionStrategy) == ""
+}
+
+// EffectiveSelectionStrategy returns the deck's configured strategy, falling
+// back to "queue" when unset or unrecognized.
+func (cfg QOTDDeckConfig) EffectiveSelectionStrategy() QOTDSelectionStrategy {
+	switch strings.ToLower(strings.TrimSpace(cfg.SelectionStrategy)) {
+	case string(QOTDSelectionStrategyRandom):
+		return QOTDSelectionStrategyRandom
+	default:
+		return QOTDSelectionStrategyQueue
+	}
 }
 
 // IsZero reports whether all QOTD collector fields are unset.
@@ -180,6 +202,7 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 		ForumChannelID    string `json:"forum_channel_id,omitempty"`
 		QuestionChannelID string `json:"question_channel_id,omitempty"`
 		ResponseChannelID string `json:"response_channel_id,omitempty"`
+		SelectionStrategy string `json:"selection_strategy,omitempty"`
 	}
 
 	var raw rawQOTDDeckConfig
@@ -199,10 +222,11 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	*cfg = QOTDDeckConfig{
-		ID:        raw.ID,
-		Name:      raw.Name,
-		Enabled:   raw.Enabled,
-		ChannelID: channelID,
+		ID:                raw.ID,
+		Name:              raw.Name,
+		Enabled:           raw.Enabled,
+		ChannelID:         channelID,
+		SelectionStrategy: strings.TrimSpace(raw.SelectionStrategy),
 	}
 	return nil
 }

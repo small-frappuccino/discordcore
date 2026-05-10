@@ -113,11 +113,26 @@ func TestQuestionSelectionHelpersIgnorePublishedAndScheduledQuestions(t *testing
 	}
 }
 
-func TestBuildOfficialThreadNameMatchesForumTitleFormat(t *testing.T) {
+func TestBuildOfficialThreadNameUsesZeroPaddedOrdinal(t *testing.T) {
 	t.Parallel()
 
-	got := buildOfficialThreadName(1)
-	if got != "Question of the Day" {
-		t.Fatalf("unexpected official thread title: %q", got)
+	cases := []struct {
+		name    string
+		ordinal int64
+		want    string
+	}{
+		{name: "first publish", ordinal: 1, want: "Pergunta #001"},
+		{name: "two-digit", ordinal: 42, want: "Pergunta #042"},
+		{name: "padding overflows past 999", ordinal: 1234, want: "Pergunta #1234"},
+		{name: "non-positive ordinal degrades gracefully", ordinal: 0, want: "Pergunta"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := buildOfficialThreadName(tc.ordinal); got != tc.want {
+				t.Fatalf("buildOfficialThreadName(%d) = %q, want %q", tc.ordinal, got, tc.want)
+			}
+		})
 	}
 }

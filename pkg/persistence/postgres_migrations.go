@@ -569,4 +569,37 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS nonce`,
 		},
 	},
+	{
+		// publish_ordinal is the monotonically-increasing publication sequence
+		// number per (guild_id, deck_id), assigned on provisioning. It is what
+		// the Discord thread title displays ("Pergunta #001"), decoupled from
+		// the question's queue position so that random question selection does
+		// not perturb the visible numbering. Backfill chronologically by
+		// published_at (falling back to created_at) so existing rows get a
+		// stable ordering and the next allocation continues from MAX+1.
+		Version: 19,
+		UpSQL: []string{
+			`ALTER TABLE qotd_official_posts ADD COLUMN IF NOT EXISTS publish_ordinal BIGINT`,
+			`WITH ordered AS (
+				SELECT id,
+				       ROW_NUMBER() OVER (
+				         PARTITION BY guild_id, deck_id
+				         ORDER BY COALESCE(published_at, created_at) ASC, id ASC
+				       )::BIGINT AS next_ordinal
+				FROM qotd_official_posts
+				WHERE publish_ordinal IS NULL
+			)
+			UPDATE qotd_official_posts AS posts
+			SET publish_ordinal = ordered.next_ordinal
+			FROM ordered
+			WHERE posts.id = ordered.id`,
+			`ALTER TABLE qotd_official_posts ALTER COLUMN publish_ordinal SET NOT NULL`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_official_posts_publish_ordinal
+			 ON qotd_official_posts(guild_id, deck_id, publish_ordinal)`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_official_posts_publish_ordinal`,
+			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS publish_ordinal`,
+		},
+	},
 }

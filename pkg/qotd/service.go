@@ -799,7 +799,10 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		}
 	}
 
-	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID)
+	// Manual publishes always honor the queue order: the user explicitly
+	// asked for the next-up question. Random selection is reserved for
+	// automatic publishes via the deck's SelectionStrategy.
+	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID, storage.QOTDQuestionSelectorQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -850,7 +853,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		*provisioned,
 		question,
 		availableQuestions,
-		buildOfficialThreadName(question.DisplayID),
+		buildOfficialThreadName(provisioned.PublishOrdinal),
 		now,
 	)
 	if err != nil {
@@ -1016,8 +1019,28 @@ func derefTime(value *time.Time) time.Time {
 	return value.UTC()
 }
 
-func buildOfficialThreadName(displayID int64) string {
-	return "Question of the Day"
+// buildOfficialThreadName renders the Discord thread title shown in the QOTD
+// channel sidebar. The visible number is the per-deck publish ordinal, NOT
+// the question's display_id, so the sidebar stays monotonically numbered
+// regardless of which question selection strategy chose the underlying
+// question. A non-positive ordinal degrades to a bare "Pergunta" so resume
+// flows that predate this column do not crash on render.
+func buildOfficialThreadName(publishOrdinal int64) string {
+	if publishOrdinal <= 0 {
+		return "Pergunta"
+	}
+	return fmt.Sprintf("Pergunta #%03d", publishOrdinal)
+}
+
+// deckQuestionSelector translates the deck's user-facing strategy setting
+// into the storage-layer selector consumed by ReserveNextQOTDQuestion. It
+// lives next to the publish wiring so callers do not need to reach across
+// the files / storage package boundary themselves.
+func deckQuestionSelector(deck files.QOTDDeckConfig) storage.QOTDQuestionSelector {
+	if deck.EffectiveSelectionStrategy() == files.QOTDSelectionStrategyRandom {
+		return storage.QOTDQuestionSelectorRandom
+	}
+	return storage.QOTDQuestionSelectorQueue
 }
 
 func normalizeQuestionMutation(mutation QuestionMutation) (string, QuestionStatus, error) {

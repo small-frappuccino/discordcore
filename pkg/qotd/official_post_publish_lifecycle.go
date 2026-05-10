@@ -230,10 +230,11 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 		}
 	}
 
-	threadName := buildOfficialThreadName(0)
-	if question != nil {
-		threadName = buildOfficialThreadName(question.QueuePosition)
-	}
+	// On resume, the post already owns its publish ordinal. We deliberately
+	// do not re-derive the title from the question's queue_position here:
+	// the ordinal is the source of truth for the visible thread name and is
+	// stable across the question being shifted, deleted, or republished.
+	threadName := buildOfficialThreadName(post.PublishOrdinal)
 
 	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, post, question, availableQuestions, threadName, now)
 	if err != nil {

@@ -83,7 +83,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 
-	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC)
+	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
 	if err != nil {
 		return false, err
 	}
@@ -153,7 +153,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		*provisioned,
 		question,
 		availableQuestions,
-		buildOfficialThreadName(question.DisplayID),
+		buildOfficialThreadName(provisioned.PublishOrdinal),
 		now,
 	)
 	if err != nil {

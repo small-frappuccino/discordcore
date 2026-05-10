@@ -5,6 +5,39 @@ import (
 	"time"
 )
 
+// QOTDQuestionSelector controls how the next question is picked when
+// reserving for a publish. It is decoupled from QOTDOfficialPostRecord's
+// PublishOrdinal so the visible thread numbering stays monotonic regardless
+// of which strategy ran.
+type QOTDQuestionSelector string
+
+const (
+	// QOTDQuestionSelectorQueue picks the head of the queue (queue_position
+	// ASC, id ASC). This is the historical default.
+	QOTDQuestionSelectorQueue QOTDQuestionSelector = "queue"
+	// QOTDQuestionSelectorRandom picks a uniformly-random eligible question.
+	QOTDQuestionSelectorRandom QOTDQuestionSelector = "random"
+)
+
+func (s QOTDQuestionSelector) normalized() QOTDQuestionSelector {
+	switch s {
+	case QOTDQuestionSelectorRandom:
+		return QOTDQuestionSelectorRandom
+	default:
+		return QOTDQuestionSelectorQueue
+	}
+}
+
+// orderByClause returns the SQL ORDER BY fragment that implements the
+// strategy. It is composed into the reserve queries and is intentionally
+// bind-parameter-free so it can be inlined safely.
+func (s QOTDQuestionSelector) orderByClause() string {
+	if s.normalized() == QOTDQuestionSelectorRandom {
+		return "ORDER BY RANDOM()"
+	}
+	return "ORDER BY queue_position ASC, id ASC"
+}
+
 type QOTDQuestionRecord struct {
 	ID                  int64
 	DisplayID           int64
@@ -27,6 +60,12 @@ type QOTDOfficialPostRecord struct {
 	DeckID                     string
 	DeckNameSnapshot           string
 	QuestionID                 int64
+	// PublishOrdinal is the per-(guild,deck) publication sequence number
+	// assigned at provisioning. The Discord thread title renders this
+	// ("Pergunta #001") so the visible numbering is decoupled from the
+	// question's queue position and remains monotonic regardless of which
+	// selection strategy (queue order vs random) chose the question.
+	PublishOrdinal             int64
 	PublishMode                string
 	ConsumeAutomaticSlot       bool
 	PublishDateUTC             time.Time

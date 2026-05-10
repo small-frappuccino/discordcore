@@ -13,8 +13,18 @@ func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files
 	if err != nil {
 		return files.QOTDConfig{}, err
 	}
-	if !qotdAutomaticPublishConfigured(normalized) {
+	// Clear suppression only on the ON -> OFF transition: disabling auto
+	// publish means the slot the suppression was guarding no longer exists
+	// under the new config, so carrying it forward would silently re-suppress
+	// once the deck is re-enabled. For OFF -> OFF (operator seeding a guild
+	// without auto-publish) and fresh writes we preserve whatever the caller
+	// sent — clearExpiredScheduledPublishSuppression on the runtime path is
+	// the cleanup hook for stale dates.
+	if qotdAutomaticPublishConfigured(current) && !qotdAutomaticPublishConfigured(normalized) {
 		return clearSuppressedScheduledPublishDate(normalized, time.Time{}), nil
+	}
+	if !qotdAutomaticPublishConfigured(normalized) {
+		return normalized, nil
 	}
 	if publishDate, suppress := suppressedPublishDateOnEnable(current, normalized, now); suppress {
 		normalized = suppressScheduledPublishDate(normalized, publishDate)

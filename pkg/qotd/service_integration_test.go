@@ -754,8 +754,13 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	if fake.publishedParams[0].AvailableQuestions != 0 {
 		t.Fatalf("expected manual publish to consume the next queue question, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Question of the Day" {
-		t.Fatalf("expected manual publish to use the daily thread title format, got %+v", fake.publishedParams[0])
+	// Ordinal 2 because the yesterday post seeded above already consumed
+	// ordinal 1 in the (guild_id, deck_id) sequence.
+	if fake.publishedParams[0].ThreadName != "Pergunta #002" {
+		t.Fatalf("expected manual publish to continue the publish-ordinal sequence, got %+v", fake.publishedParams[0])
+	}
+	if result.OfficialPost.PublishOrdinal != 2 {
+		t.Fatalf("expected manual publish to receive ordinal 2 after seeded yesterday post, got %d", result.OfficialPost.PublishOrdinal)
 	}
 	if result.Question.Status != string(QuestionStatusUsed) || result.Question.UsedAt == nil {
 		t.Fatalf("expected manual publish to mark the queue question used, got %+v", result.Question)
@@ -933,6 +938,138 @@ func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *t
 	}
 	if official == nil || official.QuestionID != question.ID {
 		t.Fatalf("expected same-day automatic slot to publish the newly added question, got %+v", official)
+	}
+}
+
+// TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideRecovery
+// extends the late-failure coverage to the harder case: the manual publish
+// reaches completeOfficialPostProvisioning and fails THERE (publisher
+// returned an error). Two invariants must hold simultaneously:
+//
+//   1. The deferred suppression rollback runs even when the failure is
+//      raised by the publisher (not the reservation), so the same-day
+//      scheduled publish is not blocked by a stale suppression.
+//   2. The provisioning row that was created before the failure is left in
+//      a state that ReconcileGuild can resume into a published post —
+//      without the recovery and the separate scheduled publish racing each
+//      other on the same date.
+func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideRecovery(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return afterBoundary }
+
+	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
+		t.Fatalf("UpdateSettings() failed: %v", err)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Question for tomorrow's manual slot",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	// Inject a publisher response that exercises the partial-progress
+	// failure surface: Discord IDs come back populated but err is set, so
+	// completeOfficialPostProvisioning persists the IDs and then transitions
+	// the post into the failed state. The second response will recover the
+	// same row on the reconcile pass below.
+	fake.publishResponses = []fakePublishResponse{
+		{
+			result: &discordqotd.PublishedOfficialPost{
+				QuestionListThreadID: "questions-list-thread",
+				ThreadID:             "thread-mid-failure",
+				StarterMessageID:     "starter-mid-failure",
+				AnswerChannelID:      "thread-mid-failure",
+				PostURL:              discordqotd.BuildThreadJumpURL("g1", "thread-mid-failure"),
+			},
+			err: errFakePublishFailed,
+		},
+		{
+			result: &discordqotd.PublishedOfficialPost{
+				QuestionListThreadID:       "questions-list-thread",
+				QuestionListEntryMessageID: "list-entry-recovered",
+				ThreadID:                   "thread-mid-failure",
+				StarterMessageID:           "starter-mid-failure",
+				AnswerChannelID:            "thread-mid-failure",
+				PublishedAt:                afterBoundary,
+				PostURL:                    discordqotd.BuildThreadJumpURL("g1", "thread-mid-failure"),
+			},
+		},
+	}
+
+	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err == nil || !strings.Contains(err.Error(), errFakePublishFailed.Error()) {
+		t.Fatalf("expected manual publish to surface the publisher error, got %v", err)
+	}
+
+	settings, err := service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() after mid-publish failure failed: %v", err)
+	}
+	if settings.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected mid-publish failure to roll back the same-day suppression, got %+v", settings)
+	}
+
+	// publishDate of the manual post is TOMORROW (consumeAutomaticSlot path
+	// rolls forward once today's boundary has passed). The provisioning
+	// row must remain so reconcile can recover it.
+	tomorrow := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
+	stuck, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", tomorrow)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(tomorrow) failed: %v", err)
+	}
+	if stuck == nil || stuck.State != string(OfficialPostStateFailed) {
+		t.Fatalf("expected failed manual provisioning row to persist for tomorrow, got %+v", stuck)
+	}
+	if stuck.PublishMode != string(PublishModeManual) {
+		t.Fatalf("expected provisioning row to retain manual publish mode, got %+v", stuck)
+	}
+
+	storedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion() failed: %v", err)
+	}
+	if storedQuestion == nil || storedQuestion.Status != string(QuestionStatusReserved) {
+		t.Fatalf("expected reserved question to stay reserved while provisioning row awaits recovery, got %+v", storedQuestion)
+	}
+
+	// Resume path: ReconcileGuild must pick up the failed row and finish
+	// publishing it. Today's scheduled slot is independent: it has no
+	// official post yet, so the scheduler is free to schedule one against
+	// today without colliding with the failed manual row scoped to tomorrow.
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild() recovery failed: %v", err)
+	}
+
+	recovered, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", tomorrow)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(recovered) failed: %v", err)
+	}
+	if recovered == nil || recovered.ID != stuck.ID {
+		t.Fatalf("expected the original failed row to be resumed in place, got %+v", recovered)
+	}
+	if recovered.PublishedAt == nil || recovered.PublishedAt.IsZero() {
+		t.Fatalf("expected reconcile to mark the recovered row published, got %+v", recovered)
+	}
+	if recovered.DiscordThreadID != "thread-mid-failure" {
+		t.Fatalf("expected reconcile to reuse the discord artifacts persisted on the failed attempt, got %+v", recovered)
+	}
+
+	settings, err = service.Settings("g1")
+	if err != nil {
+		t.Fatalf("Settings() after recovery failed: %v", err)
+	}
+	if settings.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected suppression to remain cleared after recovery, got %+v", settings)
+	}
+
+	postRecovery, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDQuestion(after recovery) failed: %v", err)
+	}
+	if postRecovery == nil || postRecovery.Status != string(QuestionStatusUsed) || postRecovery.UsedAt == nil {
+		t.Fatalf("expected recovery to mark the question used, got %+v", postRecovery)
 	}
 }
 
@@ -1337,7 +1474,7 @@ func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T
 	}
 
 	yesterday := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
-	if _, err := store.ReserveNextQOTDQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, yesterday); err != nil {
+	if _, err := store.ReserveNextQOTDQuestion(context.Background(), "g1", files.LegacyQOTDDefaultDeckID, yesterday, storage.QOTDQuestionSelectorQueue); err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion(simulated crash) failed: %v", err)
 	}
 
@@ -2572,8 +2709,8 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Question of the Day" {
-		t.Fatalf("expected scheduled publish to use the daily thread title format, got %+v", fake.publishedParams[0])
+	if fake.publishedParams[0].ThreadName != "Pergunta #001" {
+		t.Fatalf("expected scheduled publish to use the publish-ordinal thread title format, got %+v", fake.publishedParams[0])
 	}
 
 	official, err := store.GetQOTDOfficialPostByDate(context.Background(), "g1", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))

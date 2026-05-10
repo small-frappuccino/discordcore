@@ -95,7 +95,11 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	}
 
 	if len(decks) == 0 {
-		if collector.IsZero() && verifiedRoleID == "" && schedule.IsZero() {
+		// suppressedPublishDateUTC must keep the config non-zero on the
+		// no-deck path: a suppression-only config still carries meaningful
+		// state (the scheduler reads it back to skip the suppressed slot).
+		// QOTDConfig.IsZero handles the symmetric case on the read side.
+		if collector.IsZero() && verifiedRoleID == "" && schedule.IsZero() && suppressedPublishDateUTC == "" {
 			return QOTDConfig{}, nil
 		}
 		return QOTDConfig{
@@ -193,10 +197,11 @@ func normalizeQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) (QOTDPubli
 
 func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 	out := QOTDDeckConfig{
-		ID:        strings.TrimSpace(in.ID),
-		Name:      strings.TrimSpace(in.Name),
-		Enabled:   in.Enabled,
-		ChannelID: strings.TrimSpace(in.ChannelID),
+		ID:                strings.TrimSpace(in.ID),
+		Name:              strings.TrimSpace(in.Name),
+		Enabled:           in.Enabled,
+		ChannelID:         strings.TrimSpace(in.ChannelID),
+		SelectionStrategy: normalizeQOTDSelectionStrategy(in.SelectionStrategy),
 	}
 
 	if out.ID == "" {
@@ -214,6 +219,21 @@ func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 		}
 	}
 	return out, nil
+}
+
+// normalizeQOTDSelectionStrategy coerces persisted values into the supported
+// vocabulary. Empty / unknown values fall back to "" so the consumer can
+// apply its own default; only "random" is propagated as a non-default
+// selection.
+func normalizeQOTDSelectionStrategy(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(QOTDSelectionStrategyRandom):
+		return string(QOTDSelectionStrategyRandom)
+	case string(QOTDSelectionStrategyQueue):
+		return string(QOTDSelectionStrategyQueue)
+	default:
+		return ""
+	}
 }
 
 func firstEnabledQOTDDeckID(decks []QOTDDeckConfig) string {

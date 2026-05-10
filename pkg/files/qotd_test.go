@@ -14,6 +14,76 @@ func testQOTDSchedule(hour, minute int) QOTDPublishScheduleConfig {
 	}
 }
 
+func TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		raw  string
+		want QOTDSelectionStrategy
+	}{
+		{name: "empty falls back to queue", raw: "", want: QOTDSelectionStrategyQueue},
+		{name: "explicit queue stays queue", raw: "queue", want: QOTDSelectionStrategyQueue},
+		{name: "random is honored", raw: "random", want: QOTDSelectionStrategyRandom},
+		{name: "case-insensitive random", raw: "RANDOM", want: QOTDSelectionStrategyRandom},
+		{name: "whitespace tolerated", raw: "  random  ", want: QOTDSelectionStrategyRandom},
+		{name: "unknown values fall back to queue", raw: "shuffle", want: QOTDSelectionStrategyQueue},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := QOTDDeckConfig{SelectionStrategy: tc.raw}.EffectiveSelectionStrategy()
+			if got != tc.want {
+				t.Fatalf("EffectiveSelectionStrategy(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeQOTDConfigPreservesSelectionStrategy(t *testing.T) {
+	t.Parallel()
+
+	hourUTC, minuteUTC := 12, 0
+	normalized, err := NormalizeQOTDConfig(QOTDConfig{
+		Schedule: QOTDPublishScheduleConfig{HourUTC: &hourUTC, MinuteUTC: &minuteUTC},
+		Decks: []QOTDDeckConfig{{
+			ID:                LegacyQOTDDefaultDeckID,
+			Name:              LegacyQOTDDefaultDeckName,
+			Enabled:           true,
+			ChannelID:         "123456789012345678",
+			SelectionStrategy: "random",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
+	}
+	if len(normalized.Decks) != 1 || normalized.Decks[0].SelectionStrategy != string(QOTDSelectionStrategyRandom) {
+		t.Fatalf("expected normalized deck to keep selection_strategy=random, got %+v", normalized.Decks)
+	}
+}
+
+func TestNormalizeQOTDConfigDropsUnknownSelectionStrategy(t *testing.T) {
+	t.Parallel()
+
+	hourUTC, minuteUTC := 12, 0
+	normalized, err := NormalizeQOTDConfig(QOTDConfig{
+		Schedule: QOTDPublishScheduleConfig{HourUTC: &hourUTC, MinuteUTC: &minuteUTC},
+		Decks: []QOTDDeckConfig{{
+			ID:                LegacyQOTDDefaultDeckID,
+			Name:              LegacyQOTDDefaultDeckName,
+			Enabled:           true,
+			ChannelID:         "123456789012345678",
+			SelectionStrategy: "shuffle",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
+	}
+	if len(normalized.Decks) != 1 || normalized.Decks[0].SelectionStrategy != "" {
+		t.Fatalf("expected unknown selection_strategy to be dropped to empty, got %+v", normalized.Decks)
+	}
+}
+
 func TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled(t *testing.T) {
 	t.Parallel()
 

@@ -94,8 +94,8 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	if len(fake.publishedParams) != 1 {
 		t.Fatalf("expected fake publisher to be invoked once, got %d", len(fake.publishedParams))
 	}
-	if fake.publishedParams[0].ThreadName != "Question of the Day" {
-		t.Fatalf("expected manual publish to use the fixed thread title, got %+v", fake.publishedParams[0])
+	if fake.publishedParams[0].ThreadName != "Pergunta #001" {
+		t.Fatalf("expected manual publish to use the publish-ordinal thread title format, got %+v", fake.publishedParams[0])
 	}
 
 	questions, err := service.ListQuestions(context.Background(), guildID, files.LegacyQOTDDefaultDeckID)

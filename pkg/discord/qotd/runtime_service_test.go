@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -366,6 +367,79 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for restart interval publish cycle")
+	}
+}
+
+// TestRuntimeServiceMultipleRestartsResumeIntervalCycles guards the
+// stopCh/stopOnce reset path under more than one restart. The 2-cycle test
+// above only proves the FIRST restart works; if a regression in Start()'s
+// reset logic only manifests on the second-or-later restart (e.g. failing to
+// reseat stopOnce after a previous reset), this test catches it.
+func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
+	configManager := files.NewMemoryConfigManager()
+	if err := configManager.AddGuildConfig(files.GuildConfig{
+		GuildID:       "g-enabled",
+		BotInstanceID: "main",
+		QOTD: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "question-enabled",
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig() failed: %v", err)
+	}
+
+	fake := &fakeGuildLifecycleService{publishCh: make(chan string, 32)}
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main", "main")
+	service.publishInterval = time.Hour
+	service.reconcileEvery = time.Hour
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	expectStartupPublish := func(t *testing.T, label string) {
+		t.Helper()
+		select {
+		case guildID := <-fake.publishCh:
+			if guildID != "g-enabled" {
+				t.Fatalf("%s: unexpected publish guild %q", label, guildID)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: timed out waiting for startup publish cycle", label)
+		}
+	}
+
+	for cycle := 1; cycle <= 3; cycle++ {
+		service.Start()
+		if !service.IsRunning() {
+			t.Fatalf("cycle %d: expected runtime service to report running after Start()", cycle)
+		}
+		expectStartupPublish(t, fmt.Sprintf("cycle %d", cycle))
+		service.Stop()
+		if service.IsRunning() {
+			t.Fatalf("cycle %d: expected runtime service to stop running after Stop()", cycle)
+		}
+	}
+
+	// After the third Stop, draining any leftover publishes triggered by
+	// the startup cycle should yield none beyond what we already consumed.
+	// More importantly, a final restart must still spin up a fresh interval
+	// loop — proving the reset path remains effective without bound.
+	service.publishInterval = 10 * time.Millisecond
+	service.Start()
+	t.Cleanup(service.Stop)
+	expectStartupPublish(t, "final restart startup")
+	select {
+	case guildID := <-fake.publishCh:
+		if guildID != "g-enabled" {
+			t.Fatalf("unexpected interval publish guild after multiple restarts: %q", guildID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for interval publish after multiple restarts")
 	}
 }
 

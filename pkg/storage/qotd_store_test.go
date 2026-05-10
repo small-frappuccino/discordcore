@@ -4,6 +4,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -223,7 +224,7 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	}
 
 	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
-	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate, QOTDQuestionSelectorQueue)
 	if err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
@@ -273,7 +274,7 @@ func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 	}
 
 	publishDate := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
-	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate, QOTDQuestionSelectorQueue)
 	if err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
@@ -313,12 +314,280 @@ func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
 	}
 
-	reserved, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default")
+	reserved, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", QOTDQuestionSelectorQueue)
 	if err != nil {
 		t.Fatalf("ReserveNextReadyQOTDQuestion() failed: %v", err)
 	}
 	if reserved == nil || reserved.ID != second.ID {
 		t.Fatalf("expected manual reservation to skip already-published question, got %+v", reserved)
+	}
+}
+
+// TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions exercises
+// random selection by reserving repeatedly until the pool is exhausted. Any
+// eligible question must eventually be picked, otherwise the random selector
+// is silently degenerating to a deterministic order.
+func TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	const totalQuestions = 5
+	createdIDs := make(map[int64]struct{}, totalQuestions)
+	for i := 0; i < totalQuestions; i++ {
+		question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+			GuildID:       "g1",
+			DeckID:        "default",
+			Body:          fmt.Sprintf("Question %d", i+1),
+			Status:        "ready",
+			QueuePosition: int64(i + 1),
+		})
+		if err != nil {
+			t.Fatalf("CreateQOTDQuestion(%d) failed: %v", i+1, err)
+		}
+		createdIDs[question.ID] = struct{}{}
+	}
+
+	pickedIDs := make(map[int64]struct{}, totalQuestions)
+	for i := 0; i < totalQuestions; i++ {
+		picked, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", QOTDQuestionSelectorRandom)
+		if err != nil {
+			t.Fatalf("ReserveNextReadyQOTDQuestion(random, iteration %d) failed: %v", i, err)
+		}
+		if picked == nil {
+			t.Fatalf("expected random reservation to find a ready question on iteration %d", i)
+		}
+		if _, known := createdIDs[picked.ID]; !known {
+			t.Fatalf("random reservation returned a question id not in the created set: %d", picked.ID)
+		}
+		if _, dup := pickedIDs[picked.ID]; dup {
+			t.Fatalf("random reservation returned the same question id twice: %d", picked.ID)
+		}
+		pickedIDs[picked.ID] = struct{}{}
+	}
+
+	if len(pickedIDs) != totalQuestions {
+		t.Fatalf("expected random reservation to eventually cover every ready question, got %d/%d", len(pickedIDs), totalQuestions)
+	}
+
+	// With every ready question now reserved, the random selector must
+	// degrade to nil (no eligible rows left) rather than ignore the WHERE
+	// clause.
+	exhausted, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", QOTDQuestionSelectorRandom)
+	if err != nil {
+		t.Fatalf("ReserveNextReadyQOTDQuestion(random, exhausted) failed: %v", err)
+	}
+	if exhausted != nil {
+		t.Fatalf("expected no question available after pool was exhausted, got %+v", exhausted)
+	}
+}
+
+// TestCreateQOTDOfficialPostProvisioningAssignsMonotonicPublishOrdinal is the
+// load-bearing invariant for the visible thread numbering: each provisioning
+// insert must increment publish_ordinal per (guild_id, deck_id), never
+// recycling a value, even across decks within the same guild.
+func TestCreateQOTDOfficialPostProvisioningAssignsMonotonicPublishOrdinal(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	// The scheduled publish date unique index is per (guild_id,
+	// publish_date_utc), so tests that exercise both decks within one
+	// guild must hand out distinct days. We allocate from a monotonically
+	// increasing counter and let each deck take whatever slot comes next.
+	dayCounter := 0
+	makePost := func(deckID string) *QOTDOfficialPostRecord {
+		dayCounter++
+		question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+			GuildID:       "g1",
+			DeckID:        deckID,
+			Body:          fmt.Sprintf("Question %s/%d", deckID, dayCounter),
+			Status:        "ready",
+			QueuePosition: int64(dayCounter),
+		})
+		if err != nil {
+			t.Fatalf("CreateQOTDQuestion(%s/%d) failed: %v", deckID, dayCounter, err)
+		}
+		publishDate := time.Date(2026, 5, dayCounter, 0, 0, 0, 0, time.UTC)
+		post, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+			GuildID:              "g1",
+			DeckID:               deckID,
+			DeckNameSnapshot:     deckID,
+			QuestionID:           question.ID,
+			PublishMode:          "scheduled",
+			ConsumeAutomaticSlot: true,
+			PublishDateUTC:       publishDate,
+			State:                "provisioning",
+			ChannelID:            "123456789012345678",
+			QuestionTextSnapshot: question.Body,
+			GraceUntil:           publishDate.Add(24 * time.Hour),
+			ArchiveAt:            publishDate.Add(48 * time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("CreateQOTDOfficialPostProvisioning(%s/%d) failed: %v", deckID, dayCounter, err)
+		}
+		return post
+	}
+
+	deckADay1 := makePost("deck-a")
+	deckADay2 := makePost("deck-a")
+	deckBDay1 := makePost("deck-b")
+	deckADay3 := makePost("deck-a")
+	deckBDay2 := makePost("deck-b")
+
+	if deckADay1.PublishOrdinal != 1 {
+		t.Fatalf("expected deck-a first publish ordinal=1, got %d", deckADay1.PublishOrdinal)
+	}
+	if deckADay2.PublishOrdinal != 2 {
+		t.Fatalf("expected deck-a second publish ordinal=2, got %d", deckADay2.PublishOrdinal)
+	}
+	if deckADay3.PublishOrdinal != 3 {
+		t.Fatalf("expected deck-a third publish ordinal=3, got %d", deckADay3.PublishOrdinal)
+	}
+	if deckBDay1.PublishOrdinal != 1 {
+		t.Fatalf("expected deck-b first publish ordinal=1 (sequence is per-deck), got %d", deckBDay1.PublishOrdinal)
+	}
+	if deckBDay2.PublishOrdinal != 2 {
+		t.Fatalf("expected deck-b second publish ordinal=2, got %d", deckBDay2.PublishOrdinal)
+	}
+}
+
+// TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates locks down
+// the contract that the publish ordinal is assigned exactly once at
+// provisioning and is not mutated by subsequent state transitions
+// (FinalizeQOTDOfficialPost, UpdateQOTDOfficialPostState,
+// UpdateQOTDOfficialPostProgress). Resume flows depend on this stability
+// because they re-derive the visible thread name from the persisted ordinal.
+func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	publishDate := time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
+
+	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID:       "g1",
+		DeckID:        "default",
+		Body:          "Stable ordinal question",
+		Status:        "ready",
+		QueuePosition: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
+	}
+
+	post, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		ConsumeAutomaticSlot: true,
+		PublishDateUTC:       publishDate,
+		State:                "provisioning",
+		ChannelID:            "123456789012345678",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           publishDate.Add(24 * time.Hour),
+		ArchiveAt:            publishDate.Add(48 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+	originalOrdinal := post.PublishOrdinal
+	if originalOrdinal != 1 {
+		t.Fatalf("expected first provisioning to receive ordinal=1, got %d", originalOrdinal)
+	}
+
+	// Each lifecycle write below has historically refreshed every
+	// returnable column. We assert ordinal stays put through all of them.
+	progressed, err := store.UpdateQOTDOfficialPostProgress(ctx, post.ID, QOTDOfficialPostRecord{
+		QuestionListThreadID:       "qlist-thread",
+		QuestionListEntryMessageID: "qlist-entry",
+		DiscordThreadID:            "thread-1",
+		DiscordStarterMessageID:    "starter-1",
+		AnswerChannelID:            "thread-1",
+	})
+	if err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostProgress() failed: %v", err)
+	}
+	if progressed.PublishOrdinal != originalOrdinal {
+		t.Fatalf("UpdateQOTDOfficialPostProgress mutated publish_ordinal: %d -> %d", originalOrdinal, progressed.PublishOrdinal)
+	}
+
+	finalized, err := store.FinalizeQOTDOfficialPost(ctx, post.ID, "qlist-thread", "qlist-entry", "thread-1", "starter-1", "thread-1", publishDate.Add(13*time.Hour))
+	if err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if finalized.PublishOrdinal != originalOrdinal {
+		t.Fatalf("FinalizeQOTDOfficialPost mutated publish_ordinal: %d -> %d", originalOrdinal, finalized.PublishOrdinal)
+	}
+
+	stateUpdated, err := store.UpdateQOTDOfficialPostState(ctx, post.ID, "current", nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState() failed: %v", err)
+	}
+	if stateUpdated.PublishOrdinal != originalOrdinal {
+		t.Fatalf("UpdateQOTDOfficialPostState mutated publish_ordinal: %d -> %d", originalOrdinal, stateUpdated.PublishOrdinal)
+	}
+
+	reread, err := store.GetQOTDOfficialPostByID(ctx, post.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByID() failed: %v", err)
+	}
+	if reread == nil || reread.PublishOrdinal != originalOrdinal {
+		t.Fatalf("GetQOTDOfficialPostByID returned different ordinal: want %d, got %+v", originalOrdinal, reread)
+	}
+}
+
+// TestCreateQOTDOfficialPostProvisioningOrdinalSharedAcrossPublishModes
+// guards the invariant that scheduled and manual publishes draw from the
+// same per-deck sequence. Otherwise the visible thread numbering would
+// reset whenever an admin used /qotd-publish (manual) instead of the
+// scheduler.
+func TestCreateQOTDOfficialPostProvisioningOrdinalSharedAcrossPublishModes(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	makePost := func(mode string, day int) *QOTDOfficialPostRecord {
+		question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+			GuildID:       "g1",
+			DeckID:        "default",
+			Body:          fmt.Sprintf("Question %s/%d", mode, day),
+			Status:        "ready",
+			QueuePosition: int64(day),
+		})
+		if err != nil {
+			t.Fatalf("CreateQOTDQuestion(%s/%d) failed: %v", mode, day, err)
+		}
+		publishDate := time.Date(2026, 7, day, 0, 0, 0, 0, time.UTC)
+		post, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+			GuildID:              "g1",
+			DeckID:               "default",
+			DeckNameSnapshot:     "Default",
+			QuestionID:           question.ID,
+			PublishMode:          mode,
+			ConsumeAutomaticSlot: mode == "scheduled",
+			PublishDateUTC:       publishDate,
+			State:                "provisioning",
+			ChannelID:            "123456789012345678",
+			QuestionTextSnapshot: question.Body,
+			GraceUntil:           publishDate.Add(24 * time.Hour),
+			ArchiveAt:            publishDate.Add(48 * time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("CreateQOTDOfficialPostProvisioning(%s/%d) failed: %v", mode, day, err)
+		}
+		return post
+	}
+
+	scheduled := makePost("scheduled", 1)
+	manual := makePost("manual", 2)
+	scheduledNext := makePost("scheduled", 3)
+
+	if scheduled.PublishOrdinal != 1 {
+		t.Fatalf("expected first scheduled publish ordinal=1, got %d", scheduled.PublishOrdinal)
+	}
+	if manual.PublishOrdinal != 2 {
+		t.Fatalf("expected manual publish to take the next ordinal=2 (shared sequence), got %d", manual.PublishOrdinal)
+	}
+	if scheduledNext.PublishOrdinal != 3 {
+		t.Fatalf("expected scheduled publish after manual to take ordinal=3, got %d", scheduledNext.PublishOrdinal)
 	}
 }
 
@@ -538,7 +807,7 @@ func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(orphan) failed: %v", err)
 	}
-	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate); err != nil {
+	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate, QOTDQuestionSelectorQueue); err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion(orphan) failed: %v", err)
 	}
 
@@ -578,7 +847,7 @@ func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
-	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", todayUTC); err != nil {
+	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", todayUTC, QOTDQuestionSelectorQueue); err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
 
@@ -616,7 +885,7 @@ func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *tes
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
-	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate, QOTDQuestionSelectorQueue)
 	if err != nil || reserved == nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}

@@ -670,7 +670,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	return nil
 }
 
-func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time) (*QOTDQuestionRecord, error) {
+func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time, selector QOTDQuestionSelector) (*QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
@@ -717,7 +717,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
 		  AND published_once_at IS NULL
-		ORDER BY queue_position ASC, id ASC
+		`+selector.orderByClause()+`
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
 		guildID,
@@ -765,7 +765,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	return record, nil
 }
 
-func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string) (*QOTDQuestionRecord, error) {
+func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string, selector QOTDQuestionSelector) (*QOTDQuestionRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
@@ -808,7 +808,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
 		  AND published_once_at IS NULL
-		ORDER BY queue_position ASC, id ASC
+		`+selector.orderByClause()+`
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1`,
 		guildID,
@@ -916,6 +916,16 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 	return ids, nil
 }
 
+// CreateQOTDOfficialPostProvisioning inserts a fresh provisioning row and
+// allocates a publish ordinal in the same statement. Within a single bot
+// process the qotd Service serializes calls per-guild via its lifecycle
+// lock, so the SELECT MAX subquery is race-free in practice. Across replicas
+// a concurrent provisioning could observe the same MAX and both attempt the
+// same ordinal; the unique index idx_qotd_official_posts_publish_ordinal
+// then forces one of them to fail with a duplicate-key violation. Callers
+// see this as a generic error (not a scheduled-publish conflict, since the
+// semantics differ) and a subsequent attempt will succeed against the
+// updated MAX.
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
 	if s.db == nil {
 		return nil, fmt.Errorf("store not initialized")
@@ -949,6 +959,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -956,7 +967,11 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			archived_at,
 			last_reconciled_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			COALESCE((SELECT MAX(publish_ordinal) FROM qotd_official_posts WHERE guild_id = ? AND deck_id = ?), 0) + 1,
+			?, ?, ?, ?, ?, ?
+		)
 		RETURNING
 			id,
 			guild_id,
@@ -975,6 +990,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -999,6 +1015,9 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 		normalized.AnswerChannelID,
 		normalized.QuestionTextSnapshot,
 		zeroEmptyString(normalized.Nonce),
+		// publish_ordinal subquery binds:
+		normalized.GuildID,
+		normalized.DeckID,
 		nullableTime(normalized.PublishedAt),
 		normalized.GraceUntil.UTC(),
 		normalized.ArchiveAt.UTC(),
@@ -1067,6 +1086,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1119,6 +1139,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1172,6 +1193,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1241,6 +1263,7 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1318,6 +1341,7 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1389,6 +1413,7 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1462,6 +1487,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1531,6 +1557,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -1607,6 +1634,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 			answer_channel_id,
 			question_text_snapshot,
 			nonce,
+			publish_ordinal,
 			published_at,
 			grace_until,
 			archive_at,
@@ -2242,6 +2270,7 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 		&answerChannelID,
 		&record.QuestionTextSnapshot,
 		&nonce,
+		&record.PublishOrdinal,
 		&publishedAt,
 		&record.GraceUntil,
 		&record.ArchiveAt,
