@@ -285,9 +285,19 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	if missingOfficial {
 		state = string(OfficialPostStateMissingDiscord)
 	} else if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
+		// At ArchiveAt (publish + 48h) we close+lock the Discord thread so
+		// the past QOTD is read-only for verified members and only mods
+		// (MANAGE_THREADS) can reopen it. Members with channel access
+		// continue to see the conversation; the lock simply prevents new
+		// answers on a slot that has already aged out of the answer window.
+		// Locked=true is required alongside Archived=true: without it,
+		// posting in the archived thread would auto-unarchive it. The post
+		// transitions to OfficialPostStateArchived in storage immediately
+		// after this call, so syncLiveOfficialPost no longer touches the
+		// thread — a moderator's later unlock is preserved.
 		Pinned:   false,
-		Locked:   false,
-		Archived: false,
+		Locked:   true,
+		Archived: true,
 	}); err != nil {
 		return err
 	} else if missing {

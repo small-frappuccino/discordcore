@@ -3228,8 +3228,11 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	if len(fake.fetchCalls) != 1 {
 		t.Fatalf("expected reconcile to fetch the official thread archive only, got %v", fake.fetchCalls)
 	}
-	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}) {
-		t.Fatalf("expected archived official thread to remain available, got %+v", fake.threadStates["official-thread-archive"])
+	// At ArchiveAt the bot closes+locks the Discord thread so members can
+	// still read the retroactive QOTD but new replies are blocked; only
+	// moderators (MANAGE_THREADS) can reopen it.
+	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
+		t.Fatalf("expected archived official thread to be closed and locked for retroactive read-only access, got %+v", fake.threadStates["official-thread-archive"])
 	}
 
 	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
@@ -3237,6 +3240,88 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	}
 	if len(fake.fetchCalls) != 1 {
 		t.Fatalf("expected archived posts to be skipped on repeat reconcile, got fetches=%v", fake.fetchCalls)
+	}
+}
+
+// TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen pins
+// down two invariants that together make the retroactive-read-only contract
+// safe to ship: (1) when a QOTD ages past ArchiveAt the bot closes+locks the
+// Discord thread so verified members can still read the conversation but
+// not post; (2) once the post is in the archived state, a subsequent
+// ReconcileGuild does NOT re-issue SetThreadState — meaning a moderator who
+// later unlocks the thread (using MANAGE_THREADS) is not fought by the bot.
+func TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen(t *testing.T) {
+	service, store, fake := newIntegrationTestQOTDService(t)
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
+		Body:   "Lock me on archive",
+		Status: QuestionStatusReady,
+	})
+	if err != nil {
+		t.Fatalf("CreateQuestion() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	publishedAt := time.Date(2026, 4, 1, 12, 43, 0, 0, time.UTC)
+	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, integrationForumChannelID))
+	if err != nil {
+		t.Fatalf("resolvePublishSchedule() failed: %v", err)
+	}
+	lifecycle := EvaluateOfficialPost(schedule, publishDate, service.clock())
+	const threadID = "thread-archive-lock"
+	post, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               files.LegacyQOTDDefaultDeckID,
+		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeScheduled),
+		PublishDateUTC:       publishDate,
+		State:                string(OfficialPostStatePrevious),
+		ChannelID:            integrationForumChannelID,
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+	if _, err := store.FinalizeQOTDOfficialPost(context.Background(), post.ID, "questions-list-thread", "questions-list-entry-lock", threadID, "starter-lock", threadID, publishedAt); err != nil {
+		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
+	}
+	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), post.ID, string(OfficialPostStatePrevious), nil, nil); err != nil {
+		t.Fatalf("UpdateQOTDOfficialPostState(seed previous) failed: %v", err)
+	}
+
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild(initial archive) failed: %v", err)
+	}
+
+	if got := fake.threadStates[threadID]; got != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
+		t.Fatalf("expected archive transition to close+lock the thread, got %+v", got)
+	}
+
+	archived, err := store.GetQOTDOfficialPostByID(context.Background(), post.ID)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByID(archived) failed: %v", err)
+	}
+	if archived == nil || archived.State != string(OfficialPostStateArchived) || archived.ArchivedAt == nil {
+		t.Fatalf("expected post to be marked archived in storage, got %+v", archived)
+	}
+
+	// Simulate a moderator manually unlocking the thread via the Discord
+	// UI (MANAGE_THREADS). The next reconcile must not re-impose the lock,
+	// otherwise the bot would fight moderator decisions in a loop.
+	fake.threadStates[threadID] = discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}
+
+	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+		t.Fatalf("ReconcileGuild(after moderator reopen) failed: %v", err)
+	}
+
+	if got := fake.threadStates[threadID]; got != (discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}) {
+		t.Fatalf("expected reconcile to leave a moderator-unlocked archived thread alone, got %+v", got)
 	}
 }
 
