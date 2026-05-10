@@ -38,7 +38,6 @@ func TestIsUnrecoverableDiscordPublishErrorTreatsClientErrorsAsTerminal(t *testi
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if !isUnrecoverableDiscordPublishError(tt.err) {
@@ -63,7 +62,6 @@ func TestIsUnrecoverableDiscordPublishErrorLeavesTransientFailuresRetryable(t *t
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if isUnrecoverableDiscordPublishError(tt.err) {

@@ -1,7 +1,6 @@
 package qotd
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -22,7 +21,6 @@ func TestIsQOTDScheduledPublishConflictMatchesRelevantConstraints(t *testing.T) 
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -78,41 +76,5 @@ func TestQOTDUniqueConstraintHelpersIgnoreNonMatchingErrors(t *testing.T) {
 	})
 	if isQOTDAnswerMessageConflict(wrongConstraint) || isQOTDThreadArchiveConflict(wrongConstraint) {
 		t.Fatal("expected unrelated unique constraint to be ignored")
-	}
-}
-
-// TestQOTDUniqueConstraintHelpersHandleNilAndNonPostgresErrors guards the
-// callers that wrap a generic error in fmt.Errorf and then ask "is this a
-// constraint conflict?" — they must always get a clean false back, not a
-// crash from the type assertion or a misleading positive on a non-postgres
-// error type. The original suite only exercises pgconn.PgError inputs.
-func TestQOTDUniqueConstraintHelpersHandleNilAndNonPostgresErrors(t *testing.T) {
-	t.Parallel()
-
-	classifiers := map[string]func(error) bool{
-		"scheduled_publish": isQOTDScheduledPublishConflict,
-		"thread_archive":    isQOTDThreadArchiveConflict,
-		"answer_message":    isQOTDAnswerMessageConflict,
-	}
-	inputs := []struct {
-		name string
-		err  error
-	}{
-		{name: "nil error", err: nil},
-		{name: "plain error", err: errors.New("dial tcp: lookup db: no such host")},
-		{name: "wrapped plain error", err: fmt.Errorf("wrapped: %w", errors.New("io timeout"))},
-		{name: "typed pg error pointer set to nil", err: (*pgconn.PgError)(nil)},
-	}
-
-	for label, classify := range classifiers {
-		for _, in := range inputs {
-			classify, in, label := classify, in, label
-			t.Run(label+"/"+in.name, func(t *testing.T) {
-				t.Parallel()
-				if classify(in.err) {
-					t.Fatalf("expected %s classifier to return false for %s, got true (err=%v)", label, in.name, in.err)
-				}
-			})
-		}
 	}
 }

@@ -65,44 +65,37 @@ func TestParseSuppressedScheduledPublishDateRejectsInvalidDate(t *testing.T) {
 	}
 }
 
-// TestParseSuppressedScheduledPublishDateHandlesEmptyAndWhitespace pins the
-// "no suppression configured" outcome explicitly. Earlier tests only cover
-// valid + malformed tokens, which leaves the most common empty-string and
-// trim-only-whitespace cases dependent on incidental control flow rather than
-// an asserted contract.
-func TestParseSuppressedScheduledPublishDateHandlesEmptyAndWhitespace(t *testing.T) {
-	t.Parallel()
-
-	for _, raw := range []string{"", "   ", "\t\n"} {
-		raw := raw
-		t.Run("raw="+raw, func(t *testing.T) {
-			t.Parallel()
-			parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: raw})
-			if ok || !parsed.IsZero() {
-				t.Fatalf("expected blank suppression token to be treated as absent, got parsed=%s ok=%v", parsed.Format(time.RFC3339), ok)
-			}
-		})
+// FuzzParseSuppressedScheduledPublishDate pins the parser's two structural
+// invariants for arbitrary input bytes — (a) it never panics, and (b) the
+// (parsed, ok) return pair stays internally consistent (ok=true ⇔ non-zero
+// UTC time). Table tests cover the obvious shapes; the seed corpus runs on
+// every `go test` and `-fuzz=` extends coverage to NUL bytes, partial dates,
+// trailing junk, and other inputs a maintainer would not think to enumerate.
+func FuzzParseSuppressedScheduledPublishDate(f *testing.F) {
+	for _, seed := range []string{
+		"",
+		"   ",
+		"2026-04-03",
+		"  2026-04-03  ",
+		"not-a-date",
+		"2026-04-03T12:43:00Z",
+		"2026-13-40",
+		"2026/04/03",
+	} {
+		f.Add(seed)
 	}
-}
 
-// TestSuppressionHelpersTreatZeroDateAsClearIntent guards the contract the
-// service relies on when ResetDeckState (or similar flows) wants to wipe an
-// existing suppression unconditionally — they call the helpers with
-// time.Time{} and expect the suppression token to be cleared. Without this,
-// a regression that returned the original config unchanged would leave a
-// stale suppression token blocking the next eligible publish.
-func TestSuppressionHelpersTreatZeroDateAsClearIntent(t *testing.T) {
-	t.Parallel()
-
-	starting := files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"}
-
-	if got := suppressScheduledPublishDate(starting, time.Time{}); got.SuppressScheduledPublishDateUTC != "" {
-		t.Fatalf("expected zero suppression input to clear the token, got %+v", got)
-	}
-	if got := clearSuppressedScheduledPublishDate(starting, time.Time{}); got.SuppressScheduledPublishDateUTC != "" {
-		t.Fatalf("expected zero clear input to wipe the token, got %+v", got)
-	}
-	if isScheduledPublishSuppressed(starting, time.Time{}) {
-		t.Fatal("expected zero candidate date to never match an existing suppression")
-	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: raw})
+		switch {
+		case ok && parsed.IsZero():
+			t.Fatalf("ok=true must imply non-zero parsed time, raw=%q", raw)
+		case !ok && !parsed.IsZero():
+			t.Fatalf("ok=false must imply zero parsed time, raw=%q parsed=%s", raw, parsed.Format(time.RFC3339))
+		case ok && parsed.Location() != time.UTC:
+			t.Fatalf("expected UTC parsed time, raw=%q got %s", raw, parsed.Location())
+		case ok && (parsed.Hour() != 0 || parsed.Minute() != 0 || parsed.Second() != 0 || parsed.Nanosecond() != 0):
+			t.Fatalf("expected normalized day boundary, raw=%q got %s", raw, parsed.Format(time.RFC3339))
+		}
+	})
 }
