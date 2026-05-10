@@ -11,6 +11,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
@@ -178,6 +179,9 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 // authoritative "is this guild due" check still happens inside
 // PublishScheduledIfDue via slotState.BoundaryPassed, so this projection is
 // safe to use as a wake-up hint even when the wall clock is skewed.
+//
+// The pure projection logic lives in nextScheduledPublishTimeFromConfig so
+// tests can exercise it without building a Service + ConfigManager.
 func (s *Service) NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool) {
 	if s == nil || s.configManager == nil {
 		return time.Time{}, false
@@ -190,6 +194,16 @@ func (s *Service) NextScheduledPublishTime(guildID string, now time.Time) (time.
 	if err != nil {
 		return time.Time{}, false
 	}
+	return nextScheduledPublishTimeFromConfig(cfg, now)
+}
+
+// nextScheduledPublishTimeFromConfig is the pure projection used by
+// NextScheduledPublishTime once the guild's config has been loaded. Keeping
+// it separate from the Service method lets tests pin every branch
+// (incomplete schedule, disabled deck, missing channel, suppression
+// advance, zero projection) by passing a config struct directly, which is
+// both faster and avoids depending on the in-memory ConfigManager wiring.
+func nextScheduledPublishTimeFromConfig(cfg files.QOTDConfig, now time.Time) (time.Time, bool) {
 	schedule, err := resolvePublishSchedule(cfg)
 	if err != nil {
 		return time.Time{}, false

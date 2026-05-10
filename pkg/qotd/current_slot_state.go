@@ -22,7 +22,7 @@ func (st currentSlotState) BoundaryPassed(now time.Time) bool {
 		return false
 	}
 	now = normalizeClockInput(now)
-	publishAt := normalizeClockInput(st.PublishAtUTC)
+	publishAt := st.PublishAtUTC.UTC()
 	return !now.Before(publishAt)
 }
 

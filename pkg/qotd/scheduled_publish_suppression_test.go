@@ -64,3 +64,45 @@ func TestParseSuppressedScheduledPublishDateRejectsInvalidDate(t *testing.T) {
 		t.Fatalf("expected invalid suppression token to fail parse, got parsed=%s ok=%v", parsed.Format(time.RFC3339), ok)
 	}
 }
+
+// TestParseSuppressedScheduledPublishDateHandlesEmptyAndWhitespace pins the
+// "no suppression configured" outcome explicitly. Earlier tests only cover
+// valid + malformed tokens, which leaves the most common empty-string and
+// trim-only-whitespace cases dependent on incidental control flow rather than
+// an asserted contract.
+func TestParseSuppressedScheduledPublishDateHandlesEmptyAndWhitespace(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{"", "   ", "\t\n"} {
+		raw := raw
+		t.Run("raw="+raw, func(t *testing.T) {
+			t.Parallel()
+			parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: raw})
+			if ok || !parsed.IsZero() {
+				t.Fatalf("expected blank suppression token to be treated as absent, got parsed=%s ok=%v", parsed.Format(time.RFC3339), ok)
+			}
+		})
+	}
+}
+
+// TestSuppressionHelpersTreatZeroDateAsClearIntent guards the contract the
+// service relies on when ResetDeckState (or similar flows) wants to wipe an
+// existing suppression unconditionally — they call the helpers with
+// time.Time{} and expect the suppression token to be cleared. Without this,
+// a regression that returned the original config unchanged would leave a
+// stale suppression token blocking the next eligible publish.
+func TestSuppressionHelpersTreatZeroDateAsClearIntent(t *testing.T) {
+	t.Parallel()
+
+	starting := files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"}
+
+	if got := suppressScheduledPublishDate(starting, time.Time{}); got.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected zero suppression input to clear the token, got %+v", got)
+	}
+	if got := clearSuppressedScheduledPublishDate(starting, time.Time{}); got.SuppressScheduledPublishDateUTC != "" {
+		t.Fatalf("expected zero clear input to wipe the token, got %+v", got)
+	}
+	if isScheduledPublishSuppressed(starting, time.Time{}) {
+		t.Fatal("expected zero candidate date to never match an existing suppression")
+	}
+}

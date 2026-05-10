@@ -23,21 +23,19 @@ func ArchiveAt(schedule PublishSchedule, publishDate time.Time) time.Time {
 // ManualBecomesPreviousAt returns when an independently published manual QOTD
 // leaves its first 24-hour answer window.
 func ManualBecomesPreviousAt(publishedAt time.Time) time.Time {
-	publishedAt = normalizeClockInput(publishedAt)
 	if publishedAt.IsZero() {
 		return time.Time{}
 	}
-	return publishedAt.Add(24 * time.Hour)
+	return publishedAt.UTC().Add(24 * time.Hour)
 }
 
 // ManualArchiveAt returns when an independently published manual QOTD ages out
 // of its two-day answer window.
 func ManualArchiveAt(publishedAt time.Time) time.Time {
-	publishedAt = normalizeClockInput(publishedAt)
 	if publishedAt.IsZero() {
 		return time.Time{}
 	}
-	return publishedAt.Add(48 * time.Hour)
+	return publishedAt.UTC().Add(48 * time.Hour)
 }
 
 // StateWithinWindow returns the lifecycle state for any official post whose
@@ -47,8 +45,8 @@ func StateWithinWindow(graceUntil, archiveAt, now time.Time) OfficialPostState {
 		return OfficialPostStateArchived
 	}
 	now = normalizeClockInput(now)
-	graceUntil = normalizeClockInput(graceUntil)
-	archiveAt = normalizeClockInput(archiveAt)
+	graceUntil = graceUntil.UTC()
+	archiveAt = archiveAt.UTC()
 
 	switch {
 	case now.Before(graceUntil):
@@ -80,8 +78,6 @@ func EvaluateOfficialPostWindow(publishDate, publishAt, graceUntil, archiveAt, n
 		return OfficialPostLifecycle{}
 	}
 	now = normalizeClockInput(now)
-	if publishAt.IsZero() {
-	}
 	publishAt = publishAt.UTC()
 	graceUntil = graceUntil.UTC()
 	archiveAt = archiveAt.UTC()
@@ -115,10 +111,10 @@ func EvaluateOfficialPost(schedule PublishSchedule, publishDate, now time.Time) 
 // EvaluateManualOfficialPost returns the lifecycle view for a manually
 // published official post whose window is anchored to its publish timestamp.
 func EvaluateManualOfficialPost(publishedAt, now time.Time) OfficialPostLifecycle {
-	publishedAt = normalizeClockInput(publishedAt)
 	if publishedAt.IsZero() {
 		return OfficialPostLifecycle{}
 	}
+	publishedAt = publishedAt.UTC()
 	return EvaluateOfficialPostWindow(
 		NormalizePublishDateUTC(publishedAt),
 		publishedAt,
