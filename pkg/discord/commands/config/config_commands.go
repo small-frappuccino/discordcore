@@ -340,7 +340,7 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	}
 	b.WriteString(fmt.Sprintf("QOTD Enabled: %t\n", qotdEnabled))
 	b.WriteString(fmt.Sprintf("QOTD Channel: %s\n", emptyToDash(qotdChannel)))
-	b.WriteString(fmt.Sprintf("QOTD Schedule (UTC): %s\n", formatQOTDSchedule(qotdSettings.Schedule)))
+	b.WriteString(fmt.Sprintf("QOTD Schedule: %s\n", formatQOTDScheduleWithLocalPreview(qotdSettings.Schedule, time.Now().UTC())))
 	b.WriteString(fmt.Sprintf("Allowed Roles: %d configured\n", len(ctx.GuildConfig.Roles.Allowed)))
 
 	builder := configCommandCurrentStateResponseBuilder(ctx.Session).
@@ -438,4 +438,33 @@ func formatQOTDSchedule(schedule files.QOTDPublishScheduleConfig) string {
 		return "—"
 	}
 	return hour + ":" + minute
+}
+
+// formatQOTDScheduleWithLocalPreview renders the schedule as a UTC clock
+// reading plus a Discord timestamp anchor that Discord re-renders in each
+// viewer's local timezone. End users very rarely think in UTC — surfacing the
+// next-fire time in their own timezone removes the mental conversion step.
+func formatQOTDScheduleWithLocalPreview(schedule files.QOTDPublishScheduleConfig, now time.Time) string {
+	base := formatQOTDSchedule(schedule)
+	hourUTC, minuteUTC, ok := schedule.Values()
+	if !ok {
+		return base
+	}
+	next := nextScheduleFireUTC(hourUTC, minuteUTC, now)
+	if next.IsZero() {
+		return fmt.Sprintf("%s UTC", base)
+	}
+	return fmt.Sprintf("%s UTC (next fires at <t:%d:t> in your timezone, <t:%d:R>)", base, next.Unix(), next.Unix())
+}
+
+// nextScheduleFireUTC returns the next time-of-day instant, in UTC, that
+// matches the schedule. If today's instant has not yet passed, today is the
+// next fire; otherwise tomorrow is.
+func nextScheduleFireUTC(hourUTC, minuteUTC int, now time.Time) time.Time {
+	now = now.UTC()
+	candidate := time.Date(now.Year(), now.Month(), now.Day(), hourUTC, minuteUTC, 0, 0, time.UTC)
+	if !candidate.After(now) {
+		candidate = candidate.Add(24 * time.Hour)
+	}
+	return candidate
 }

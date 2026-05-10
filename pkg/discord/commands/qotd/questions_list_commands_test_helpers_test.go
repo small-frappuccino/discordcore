@@ -18,21 +18,13 @@ import (
 )
 
 type publishCommandStubService struct {
-	settings            files.QOTDConfig
-	publishResult       *applicationqotd.PublishResult
-	publishErr          error
-	reanimateResult     applicationqotd.SlotMaintenanceResult
-	reanimateErr        error
-	reanimateCalls      int
-	lastReanimateParams applicationqotd.SlotMaintenanceParams
-	clearDayResult      applicationqotd.SlotMaintenanceResult
-	clearDayErr         error
-	clearDayCalls       int
-	lastClearDayParams  applicationqotd.SlotMaintenanceParams
-	publishCalls        int
-	lastPublishGuild    string
-	lastPublishSession  *discordgo.Session
-	lastPublishParams   applicationqotd.PublishNowParams
+	settings           files.QOTDConfig
+	publishResult      *applicationqotd.PublishResult
+	publishErr         error
+	publishCalls       int
+	lastPublishGuild   string
+	lastPublishSession *discordgo.Session
+	lastPublishParams  applicationqotd.PublishNowParams
 }
 
 type listCommandStubService struct {
@@ -45,17 +37,6 @@ type listCommandStubService struct {
 	lastMarkPublishedGuild  string
 	lastMarkPublishedDeckID string
 	lastMarkPublishedID     int64
-}
-
-type importCommandStubService struct {
-	settings          files.QOTDConfig
-	importResult      applicationqotd.ImportArchivedQuestionsResult
-	importErr         error
-	importCalls       int
-	lastImportGuild   string
-	lastImportActor   string
-	lastImportSession *discordgo.Session
-	lastImportParams  applicationqotd.ImportArchivedQuestionsParams
 }
 
 func (s *publishCommandStubService) Settings(string) (files.QOTDConfig, error) {
@@ -74,10 +55,6 @@ func (s *publishCommandStubService) DeleteQuestion(context.Context, string, int6
 	panic("unexpected DeleteQuestion call")
 }
 
-func (s *publishCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected SetNextQuestion call")
-}
-
 func (s *publishCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	panic("unexpected RestoreUsedQuestion call")
 }
@@ -86,16 +63,8 @@ func (s *publishCommandStubService) MarkQuestionPublished(context.Context, strin
 	panic("unexpected MarkQuestionPublished call")
 }
 
-func (s *publishCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
-	panic("unexpected ResetDeckState call")
-}
-
 func (s *publishCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
 	panic("unexpected GetAutomaticQueueState call")
-}
-
-func (s *publishCommandStubService) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
-	panic("unexpected ImportArchivedQuestions call")
 }
 
 func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
@@ -104,18 +73,6 @@ func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guil
 	s.lastPublishSession = session
 	s.lastPublishParams = params
 	return s.publishResult, s.publishErr
-}
-
-func (s *publishCommandStubService) ReanimateSlot(_ context.Context, _ string, _ *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	s.reanimateCalls++
-	s.lastReanimateParams = params
-	return s.reanimateResult, s.reanimateErr
-}
-
-func (s *publishCommandStubService) ClearPublishedDayState(_ context.Context, _ string, _ *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	s.clearDayCalls++
-	s.lastClearDayParams = params
-	return s.clearDayResult, s.clearDayErr
 }
 
 func (s *listCommandStubService) Settings(string) (files.QOTDConfig, error) {
@@ -142,10 +99,6 @@ func (s *listCommandStubService) DeleteQuestion(context.Context, string, int64) 
 	panic("unexpected DeleteQuestion call")
 }
 
-func (s *listCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected SetNextQuestion call")
-}
-
 func (s *listCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	panic("unexpected RestoreUsedQuestion call")
 }
@@ -158,85 +111,12 @@ func (s *listCommandStubService) MarkQuestionPublished(_ context.Context, guildI
 	return s.markPublishedResult, s.markPublishedErr
 }
 
-func (s *listCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
-	panic("unexpected ResetDeckState call")
-}
-
 func (s *listCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
 	panic("unexpected GetAutomaticQueueState call")
 }
 
-func (s *listCommandStubService) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
-	panic("unexpected ImportArchivedQuestions call")
-}
-
 func (s *listCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	panic("unexpected PublishNowWithParams call")
-}
-
-func (s *listCommandStubService) ReanimateSlot(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	panic("unexpected ReanimateSlot call")
-}
-
-func (s *listCommandStubService) ClearPublishedDayState(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	panic("unexpected ClearPublishedDayState call")
-}
-
-func (s *importCommandStubService) Settings(string) (files.QOTDConfig, error) {
-	return s.settings, nil
-}
-
-func (s *importCommandStubService) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
-	panic("unexpected ListQuestions call")
-}
-
-func (s *importCommandStubService) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected CreateQuestion call")
-}
-
-func (s *importCommandStubService) DeleteQuestion(context.Context, string, int64) error {
-	panic("unexpected DeleteQuestion call")
-}
-
-func (s *importCommandStubService) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected SetNextQuestion call")
-}
-
-func (s *importCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected RestoreUsedQuestion call")
-}
-
-func (s *importCommandStubService) MarkQuestionPublished(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected MarkQuestionPublished call")
-}
-
-func (s *importCommandStubService) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
-	panic("unexpected ResetDeckState call")
-}
-
-func (s *importCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
-	panic("unexpected GetAutomaticQueueState call")
-}
-
-func (s *importCommandStubService) ImportArchivedQuestions(_ context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
-	s.importCalls++
-	s.lastImportGuild = guildID
-	s.lastImportActor = actorID
-	s.lastImportSession = session
-	s.lastImportParams = params
-	return s.importResult, s.importErr
-}
-
-func (s *importCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
-	panic("unexpected PublishNowWithParams call")
-}
-
-func (s *importCommandStubService) ReanimateSlot(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	panic("unexpected ReanimateSlot call")
-}
-
-func (s *importCommandStubService) ClearPublishedDayState(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	panic("unexpected ClearPublishedDayState call")
 }
 
 type interactionRecorder struct {

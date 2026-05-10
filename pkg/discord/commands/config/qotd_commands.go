@@ -25,10 +25,15 @@ const (
 
 type QOTDGetSubCommand struct {
 	configManager *files.ConfigManager
+	now           func() time.Time
 }
 
 func NewQOTDGetSubCommand(configManager *files.ConfigManager) *QOTDGetSubCommand {
-	return &QOTDGetSubCommand{configManager: configManager}
+	return &QOTDGetSubCommand{configManager: configManager, now: qotdConfigClock(nil)}
+}
+
+func NewQOTDGetSubCommandWithClock(configManager *files.ConfigManager, now func() time.Time) *QOTDGetSubCommand {
+	return &QOTDGetSubCommand{configManager: configManager, now: qotdConfigClock(now)}
 }
 
 func (c *QOTDGetSubCommand) Name() string { return qotdGetSubCommandName }
@@ -53,14 +58,19 @@ func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 	if deckLabel == "" {
 		deckLabel = strings.TrimSpace(deck.ID)
 	}
+	deckCount := len(settings.Decks)
 
 	lines := []string{"**QOTD Configuration:**"}
 	if deckLabel != "" {
-		lines = append(lines, fmt.Sprintf("Active Deck: %s", deckLabel))
+		if deckCount > 1 {
+			lines = append(lines, fmt.Sprintf("Active Deck: %s (these settings apply to this deck only — %d decks total)", deckLabel, deckCount))
+		} else {
+			lines = append(lines, fmt.Sprintf("Active Deck: %s", deckLabel))
+		}
 	}
 	lines = append(lines, fmt.Sprintf("QOTD Enabled: %t", deck.Enabled))
 	lines = append(lines, fmt.Sprintf("QOTD Channel: %s", emptyToDash(deck.ChannelID)))
-	lines = append(lines, fmt.Sprintf("QOTD Schedule (UTC): %s", formatQOTDSchedule(settings.Schedule)))
+	lines = append(lines, fmt.Sprintf("QOTD Schedule: %s", formatQOTDScheduleWithLocalPreview(settings.Schedule, c.now())))
 
 	builder := configCommandCurrentStateResponseBuilder(ctx.Session).
 		WithEmbed().
@@ -218,8 +228,9 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
+	deckLabel := activeDeckDisplayLabel(updatedConfig)
 	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, fmt.Sprintf("QOTD for the active deck will now post at %s UTC.", formatQOTDSchedule(updatedConfig.Schedule)))
+		Success(ctx.Interaction, fmt.Sprintf("QOTD for deck `%s` will now post at %s.", deckLabel, formatQOTDScheduleWithLocalPreview(updatedConfig.Schedule, c.now())))
 }
 
 func updateQOTDConfig(
@@ -293,6 +304,21 @@ func qotdConfigClock(now func() time.Time) func() time.Time {
 	return func() time.Time {
 		return now().UTC()
 	}
+}
+
+// activeDeckDisplayLabel picks the most user-friendly identifier for the
+// active deck — the human-readable name when set, otherwise the deck ID,
+// finally a sentinel so messages never trail with empty backticks.
+func activeDeckDisplayLabel(cfg files.QOTDConfig) string {
+	deck, _ := cfg.ActiveDeck()
+	label := strings.TrimSpace(deck.Name)
+	if label == "" {
+		label = strings.TrimSpace(deck.ID)
+	}
+	if label == "" {
+		return "default"
+	}
+	return label
 }
 
 func activeQOTDDeckIndex(cfg files.QOTDConfig) int {

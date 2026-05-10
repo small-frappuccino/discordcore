@@ -27,32 +27,17 @@ func (handlerQOTDServiceStub) CreateQuestion(context.Context, string, string, ap
 	return nil, nil
 }
 func (handlerQOTDServiceStub) DeleteQuestion(context.Context, string, int64) error { return nil }
-func (handlerQOTDServiceStub) SetNextQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	return nil, nil
-}
 func (handlerQOTDServiceStub) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	return nil, nil
 }
 func (handlerQOTDServiceStub) MarkQuestionPublished(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
 	return nil, nil
 }
-func (handlerQOTDServiceStub) ResetDeckState(context.Context, string, string) (applicationqotd.ResetDeckResult, error) {
-	return applicationqotd.ResetDeckResult{}, nil
-}
 func (handlerQOTDServiceStub) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
 	return applicationqotd.AutomaticQueueState{}, nil
 }
-func (handlerQOTDServiceStub) ImportArchivedQuestions(context.Context, string, string, *discordgo.Session, applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error) {
-	return applicationqotd.ImportArchivedQuestionsResult{}, nil
-}
 func (handlerQOTDServiceStub) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	return nil, nil
-}
-func (handlerQOTDServiceStub) ReanimateSlot(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	return applicationqotd.SlotMaintenanceResult{}, nil
-}
-func (handlerQOTDServiceStub) ClearPublishedDayState(context.Context, string, *discordgo.Session, applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error) {
-	return applicationqotd.SlotMaintenanceResult{}, nil
 }
 
 func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {

@@ -37,7 +37,7 @@ func TestQuestionsQueueCommandShowsRealAutomaticStateAfterManualPublish(t *testi
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
 	requirePublicDeferredAck(t, rec.lastResponse(t))
 	publishMessage := rec.lastEdit(t)
-	if !strings.Contains(publishMessage, "Published QOTD question ID 1 manually.") {
+	if !strings.Contains(publishMessage, "Published QOTD question ID 1 manually from deck") {
 		t.Fatalf("expected manual publish confirmation before queue inspection, got %q", publishMessage)
 	}
 
@@ -85,7 +85,7 @@ func TestQOTDPublishCommandPublishesManually(t *testing.T) {
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
 	requirePublicDeferredAck(t, rec.lastResponse(t))
 	publishMessage := rec.lastEdit(t)
-	if !strings.Contains(publishMessage, "Published QOTD question ID 1 manually.") {
+	if !strings.Contains(publishMessage, "Published QOTD question ID 1 manually from deck") {
 		t.Fatalf("expected publish confirmation, got %q", publishMessage)
 	}
 	if !strings.Contains(publishMessage, "https://discord.com/channels/") {
@@ -139,7 +139,7 @@ func TestQOTDPublishCommandBlocksSecondPublishForCurrentSlot(t *testing.T) {
 	router.HandleInteraction(session, newQOTDRootSlashInteraction(guildID, ownerID, publishSubCommandName, nil))
 	requirePublicDeferredAck(t, rec.lastResponse(t))
 	firstMessage := rec.lastEdit(t)
-	if !strings.Contains(firstMessage, "Published QOTD question ID 1 manually.") {
+	if !strings.Contains(firstMessage, "Published QOTD question ID 1 manually from deck") {
 		t.Fatalf("expected first manual publish confirmation, got %q", firstMessage)
 	}
 

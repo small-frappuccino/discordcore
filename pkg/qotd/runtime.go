@@ -76,10 +76,10 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 	// Also honor suppressions whose target is the forward-looking projection
-	// (tomorrow once today's boundary has passed). ResetDeckState writes the
-	// suppression in the projection's date because that matches the manual
-	// post being cleared; without this check, today's late publish would
-	// re-fire even though the user just paused autopublishing.
+	// (tomorrow once today's boundary has passed). Manual publish suppression
+	// records the projection's date because that matches the manual post being
+	// claimed; without this check, today's late publish would re-fire even
+	// though the user just paused autopublishing.
 	if projected := CurrentPublishDateUTC(slotState.Schedule, now); !projected.Equal(slotState.PublishDateUTC) && isScheduledPublishSuppressed(cfg, projected) {
 		return false, nil
 	}

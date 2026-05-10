@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,26 +20,17 @@ import (
 const (
 	groupName                             = "qotd"
 	publishSubCommandName                 = "publish"
-	reanimateSubCommandName               = "reanimate"
-	clearDaySubCommandName                = "clear_day"
 	questionsGroupName                    = "questions"
 	questionsAddSubCommand                = "add"
 	questionsListSubCommand               = "list"
 	questionsQueueSubCommand              = "queue"
-	questionsNextSubCommand               = "next"
 	questionsMarkPublishedSubCommand      = "mark_published"
 	publishConsumeAutomaticSlotOptionName = "consume_automatic_slot"
-	slotDateOptionName                    = "date"
-	questionsResetSubCommand              = "reset"
 	questionsRecoverSubCommand            = "recover"
 	questionsRemoveSubCommand             = "remove"
-	questionsImportSubCommand             = "import"
 	questionsBodyOptionName               = "question"
 	questionsDeckOptionName               = "deck"
 	questionsIDOptionName                 = "id"
-	questionsImportUsersName              = "user_ids"
-	questionsImportChannel                = "channel"
-	questionsImportStartDate              = "start_date"
 	questionsPageSize                     = 10
 	questionsListRouteFirst               = "qotd:questions:list:first"
 	questionsListRoutePrev                = "qotd:questions:list:prev"
@@ -59,15 +48,10 @@ type QuestionCatalogService interface {
 	ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error)
 	CreateQuestion(ctx context.Context, guildID, actorID string, mutation applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error)
 	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
-	SetNextQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
 	MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
-	ResetDeckState(ctx context.Context, guildID, deckID string) (applicationqotd.ResetDeckResult, error)
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
-	ImportArchivedQuestions(ctx context.Context, guildID, actorID string, session *discordgo.Session, params applicationqotd.ImportArchivedQuestionsParams) (applicationqotd.ImportArchivedQuestionsResult, error)
 	PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error)
-	ReanimateSlot(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error)
-	ClearPublishedDayState(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.SlotMaintenanceParams) (applicationqotd.SlotMaintenanceResult, error)
 }
 
 type Commands struct {
@@ -87,23 +71,15 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	addCommand := &questionsAddCommand{service: c.service}
 	listCommand := &questionsListCommand{service: c.service}
 	queueCommand := &questionsQueueCommand{service: c.service}
-	nextCommand := &questionsNextCommand{service: c.service}
 	markPublishedCommand := &questionsMarkPublishedCommand{service: c.service}
-	importCommand := &questionsImportCommand{service: c.service}
 	publishCommand := &qotdPublishCommand{service: c.service}
-	reanimateCommand := &qotdReanimateCommand{service: c.service}
-	clearDayCommand := &qotdClearDayStateCommand{service: c.service}
-	resetCommand := &questionsResetCommand{service: c.service}
 	recoverCommand := &questionsRecoverCommand{service: c.service}
 	removeCommand := &questionsRemoveCommand{service: c.service}
 	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
 	questionsGroup.AddSubCommand(addCommand)
 	questionsGroup.AddSubCommand(listCommand)
 	questionsGroup.AddSubCommand(queueCommand)
-	questionsGroup.AddSubCommand(nextCommand)
 	questionsGroup.AddSubCommand(markPublishedCommand)
-	questionsGroup.AddSubCommand(importCommand)
-	questionsGroup.AddSubCommand(resetCommand)
 	questionsGroup.AddSubCommand(recoverCommand)
 	questionsGroup.AddSubCommand(removeCommand)
 
@@ -117,8 +93,6 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 		group = core.NewGroupCommand(groupName, "Manage QOTD decks and questions", checker)
 	}
 	group.AddSubCommand(publishCommand)
-	group.AddSubCommand(reanimateCommand)
-	group.AddSubCommand(clearDayCommand)
 	group.AddSubCommand(questionsGroup)
 	router.RegisterSlashCommandForDomain(files.BotDomainQOTD, group)
 
@@ -146,10 +120,6 @@ type questionsAddCommand struct {
 	service QuestionCatalogService
 }
 
-type questionsNextCommand struct {
-	service QuestionCatalogService
-}
-
 type questionsMarkPublishedCommand struct {
 	service QuestionCatalogService
 }
@@ -166,23 +136,7 @@ type questionsRemoveCommand struct {
 	service QuestionCatalogService
 }
 
-type questionsImportCommand struct {
-	service QuestionCatalogService
-}
-
-type questionsResetCommand struct {
-	service QuestionCatalogService
-}
-
 type qotdPublishCommand struct {
-	service QuestionCatalogService
-}
-
-type qotdReanimateCommand struct {
-	service QuestionCatalogService
-}
-
-type qotdClearDayStateCommand struct {
 	service QuestionCatalogService
 }
 
@@ -297,36 +251,13 @@ func (c *questionsRemoveCommand) Description() string {
 func (c *questionsRecoverCommand) Name() string { return questionsRecoverSubCommand }
 
 func (c *questionsRecoverCommand) Description() string {
-	return "Exceptionally move a used QOTD question back to ready by visible ID"
+	return "Move a used QOTD question back to ready so it can be published again"
 }
-
-func (c *questionsNextCommand) Name() string { return questionsNextSubCommand }
 
 func (c *questionsMarkPublishedCommand) Name() string { return questionsMarkPublishedSubCommand }
 
 func (c *questionsMarkPublishedCommand) Description() string {
 	return "Mark a ready QOTD question as already published"
-}
-
-func (c *questionsNextCommand) Description() string {
-	return "Set which ready QOTD question publishes next"
-}
-
-func (c *questionsNextCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionInteger,
-			Name:        questionsIDOptionName,
-			Description: "Question ID from the questions list embed",
-			Required:    true,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        questionsDeckOptionName,
-			Description: "Deck ID or exact deck name. Defaults to the active deck.",
-			Required:    false,
-		},
-	}
 }
 
 func (c *questionsMarkPublishedCommand) Options() []*discordgo.ApplicationCommandOption {
@@ -346,8 +277,6 @@ func (c *questionsMarkPublishedCommand) Options() []*discordgo.ApplicationComman
 	}
 }
 
-func (c *questionsNextCommand) RequiresGuild() bool                { return true }
-func (c *questionsNextCommand) RequiresPermissions() bool          { return true }
 func (c *questionsMarkPublishedCommand) RequiresGuild() bool       { return true }
 func (c *questionsMarkPublishedCommand) RequiresPermissions() bool { return true }
 
@@ -391,147 +320,6 @@ func (c *questionsRecoverCommand) Options() []*discordgo.ApplicationCommandOptio
 func (c *questionsRecoverCommand) RequiresGuild() bool       { return true }
 func (c *questionsRecoverCommand) RequiresPermissions() bool { return true }
 
-func (c *questionsResetCommand) Name() string { return questionsResetSubCommand }
-
-func (c *questionsImportCommand) Name() string { return questionsImportSubCommand }
-
-func (c *questionsImportCommand) Description() string {
-	return "Import historical QOTD posts from another bot into the current deck as used questions"
-}
-
-func (c *questionsImportCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        questionsImportUsersName,
-			Description: "One user ID or a comma/space-separated list of bot user IDs to import from",
-			Required:    true,
-		},
-		{
-			Type:         discordgo.ApplicationCommandOptionChannel,
-			Name:         questionsImportChannel,
-			Description:  "Text channel to backread for historical QOTD posts",
-			Required:     true,
-			ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        questionsImportStartDate,
-			Description: "Import only messages sent on or after this UTC date (YYYY-MM-DD)",
-			Required:    true,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        questionsDeckOptionName,
-			Description: "Deck ID or exact deck name. Defaults to the active deck.",
-			Required:    false,
-		},
-	}
-}
-
-func (c *questionsImportCommand) RequiresGuild() bool       { return true }
-func (c *questionsImportCommand) RequiresPermissions() bool { return true }
-
-func (c *questionsResetCommand) Description() string {
-	return "Reset question states and clear automatic/manual QOTD publish state"
-}
-
-func (c *questionsResetCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{{
-		Type:        discordgo.ApplicationCommandOptionString,
-		Name:        questionsDeckOptionName,
-		Description: "Deck ID or exact deck name. Defaults to the active deck.",
-		Required:    false,
-	}}
-}
-
-func (c *questionsResetCommand) RequiresGuild() bool       { return true }
-func (c *questionsResetCommand) RequiresPermissions() bool { return true }
-
-func (c *questionsResetCommand) Handle(ctx *core.Context) error {
-	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
-	}
-
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
-	if err != nil {
-		return err
-	}
-
-	result, err := c.service.ResetDeckState(context.Background(), ctx.GuildID, deck.ID)
-	if err != nil {
-		return translateQuestionsMutationError(err)
-	}
-	if result.QuestionsReset == 0 && result.OfficialPostsCleared == 0 {
-		return core.NewResponseBuilder(ctx.Session).
-			Info(ctx.Interaction, fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deck.Name))
-	}
-
-	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, describeResetDeckResult(result, deck.Name))
-}
-
-func (c *questionsImportCommand) Handle(ctx *core.Context) error {
-	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
-	}
-
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	rawUserIDs, err := extractor.StringRequired(questionsImportUsersName)
-	if err != nil {
-		return err
-	}
-	authorIDs, err := parseQuestionsImportAuthorIDs(rawUserIDs)
-	if err != nil {
-		return err
-	}
-	channelID := questionsChannelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), questionsImportChannel)
-	if channelID == "" {
-		return core.NewCommandError("Channel is required.", false)
-	}
-	startDate, err := extractor.StringRequired(questionsImportStartDate)
-	if err != nil {
-		return err
-	}
-	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
-	if err != nil {
-		return err
-	}
-
-	rm := core.NewResponseManager(ctx.Session)
-	if err := rm.DeferResponse(ctx.Interaction, false); err != nil {
-		return err
-	}
-
-	result, err := c.service.ImportArchivedQuestions(context.Background(), ctx.GuildID, ctx.UserID, ctx.Session, applicationqotd.ImportArchivedQuestionsParams{
-		DeckID:          deck.ID,
-		SourceChannelID: channelID,
-		AuthorIDs:       authorIDs,
-		StartDate:       startDate,
-		BackupDir:       defaultQuestionsImportBackupDir(),
-	})
-	if err != nil {
-		return rm.EditResponse(ctx.Interaction, describeQuestionsImportError(translateQuestionsImportError(err)))
-	}
-	if result.MatchedMessages == 0 {
-		return rm.EditResponse(ctx.Interaction, fmt.Sprintf("No historical QOTD questions matched in <#%s> since %s for deck `%s`.", channelID, startDate, deck.Name))
-	}
-
-	return rm.EditResponse(ctx.Interaction, describeQuestionsImportResult(deck.Name, channelID, result))
-}
-
-func describeQuestionsImportError(err error) string {
-	if err == nil {
-		return "An error occurred while importing historical QOTD questions."
-	}
-	var cmdErr *core.CommandError
-	if errors.As(err, &cmdErr) && cmdErr != nil && strings.TrimSpace(cmdErr.Message) != "" {
-		return cmdErr.Message
-	}
-	return err.Error()
-}
-
 func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return err
@@ -551,132 +339,7 @@ func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 		Info(ctx.Interaction, formatAutomaticQueueState(state))
 }
 
-func (c *questionsNextCommand) Handle(ctx *core.Context) error {
-	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
-	}
-
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	displayID := extractor.Int(questionsIDOptionName)
-	if displayID <= 0 {
-		return core.NewCommandError("Question ID must be greater than zero.", false)
-	}
-	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
-	if err != nil {
-		return err
-	}
-	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
-	if err != nil {
-		return err
-	}
-	question := findQuestionByDisplayID(questions, displayID)
-	if question == nil {
-		return translateQuestionsSetNextError(displayID, applicationqotd.ErrQuestionNotFound)
-	}
-
-	updated, err := c.service.SetNextQuestion(context.Background(), ctx.GuildID, deck.ID, question.ID)
-	if err != nil {
-		return translateQuestionsSetNextError(displayID, err)
-	}
-	if updated == nil {
-		return translateQuestionsSetNextError(displayID, applicationqotd.ErrQuestionNotFound)
-	}
-	if visibleQuestionID(*updated) == displayID {
-		return core.NewResponseBuilder(ctx.Session).
-			Info(ctx.Interaction, fmt.Sprintf("QOTD question ID %d is already the next ready question in deck `%s`.", displayID, deck.Name))
-	}
-
-	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, fmt.Sprintf("QOTD question ID %d is now the next ready question in deck `%s` and is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
-}
-
 func (c *qotdPublishCommand) Name() string { return publishSubCommandName }
-
-func (c *qotdReanimateCommand) Name() string { return reanimateSubCommandName }
-
-func (c *qotdReanimateCommand) Description() string {
-	return "Reanimate one abandoned/failed QOTD slot so publish can retry cleanly"
-}
-
-func (c *qotdReanimateCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{{
-		Type:        discordgo.ApplicationCommandOptionString,
-		Name:        slotDateOptionName,
-		Description: "UTC date to reanimate (YYYY-MM-DD). Defaults to today's scheduled slot",
-		Required:    false,
-	}}
-}
-
-func (c *qotdReanimateCommand) RequiresGuild() bool       { return true }
-func (c *qotdReanimateCommand) RequiresPermissions() bool { return true }
-
-func (c *qotdReanimateCommand) Handle(ctx *core.Context) error {
-	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
-	}
-
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	slotDate, hasDate, err := parseSlotMaintenanceDateOption(extractor.String(slotDateOptionName))
-	if err != nil {
-		return err
-	}
-
-	params := applicationqotd.SlotMaintenanceParams{}
-	if hasDate {
-		params.DateUTC = &slotDate
-	}
-
-	result, err := c.service.ReanimateSlot(context.Background(), ctx.GuildID, ctx.Session, params)
-	if err != nil {
-		return translateSlotMaintenanceError(err, "reanimate")
-	}
-
-	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, describeReanimateSlotResult(result))
-}
-
-func (c *qotdClearDayStateCommand) Name() string { return clearDaySubCommandName }
-
-func (c *qotdClearDayStateCommand) Description() string {
-	return "Clear all QOTD published state for one UTC day"
-}
-
-func (c *qotdClearDayStateCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{{
-		Type:        discordgo.ApplicationCommandOptionString,
-		Name:        slotDateOptionName,
-		Description: "UTC date to clear (YYYY-MM-DD). Defaults to today's scheduled slot",
-		Required:    false,
-	}}
-}
-
-func (c *qotdClearDayStateCommand) RequiresGuild() bool       { return true }
-func (c *qotdClearDayStateCommand) RequiresPermissions() bool { return true }
-
-func (c *qotdClearDayStateCommand) Handle(ctx *core.Context) error {
-	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
-	}
-
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
-	slotDate, hasDate, err := parseSlotMaintenanceDateOption(extractor.String(slotDateOptionName))
-	if err != nil {
-		return err
-	}
-
-	params := applicationqotd.SlotMaintenanceParams{}
-	if hasDate {
-		params.DateUTC = &slotDate
-	}
-
-	result, err := c.service.ClearPublishedDayState(context.Background(), ctx.GuildID, ctx.Session, params)
-	if err != nil {
-		return translateSlotMaintenanceError(err, "clear")
-	}
-
-	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, describeClearDayStateResult(result))
-}
 
 func (c *qotdPublishCommand) Description() string {
 	return "Publish the next ready QOTD question immediately"
@@ -734,9 +397,9 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		return translatePublishNowError(err)
 	}
 
-	message := fmt.Sprintf("Published QOTD question ID %d manually.", visibleQuestionID(result.Question))
+	message := fmt.Sprintf("Published QOTD question ID %d manually from deck `%s`.", visibleQuestionID(result.Question), deck.Name)
 	if !consumeAutomaticSlot {
-		message = fmt.Sprintf("Published QOTD question ID %d manually without consuming the automatic slot.", visibleQuestionID(result.Question))
+		message = fmt.Sprintf("Published QOTD question ID %d manually from deck `%s` without consuming the automatic slot.", visibleQuestionID(result.Question), deck.Name)
 	}
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
@@ -1186,105 +849,6 @@ func visibleQuestionID(question storage.QOTDQuestionRecord) int64 {
 	return question.ID
 }
 
-func questionsChannelOptionID(session *discordgo.Session, options []*discordgo.ApplicationCommandInteractionDataOption, name string) string {
-	for _, option := range options {
-		if option == nil || option.Name != name {
-			continue
-		}
-		if channel := option.ChannelValue(session); channel != nil {
-			return strings.TrimSpace(channel.ID)
-		}
-		if value, ok := option.Value.(string); ok {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
-func parseQuestionsImportAuthorIDs(value string) ([]string, error) {
-	parts := strings.FieldsFunc(strings.TrimSpace(value), func(r rune) bool {
-		switch r {
-		case ',', ';', '\n', '\r', '\t', ' ':
-			return true
-		default:
-			return false
-		}
-	})
-	if len(parts) == 0 {
-		return nil, core.NewCommandError("Provide one user ID or a comma/space-separated list of user IDs.", false)
-	}
-
-	ids := make([]string, 0, len(parts))
-	seen := make(map[string]struct{}, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		part = strings.TrimPrefix(part, "<@!")
-		part = strings.TrimPrefix(part, "<@")
-		part = strings.TrimSuffix(part, ">")
-		if part == "" {
-			continue
-		}
-		if !isCommandNumericID(part) {
-			return nil, core.NewCommandError("User IDs must be numeric Discord IDs.", false)
-		}
-		if _, exists := seen[part]; exists {
-			continue
-		}
-		seen[part] = struct{}{}
-		ids = append(ids, part)
-	}
-	if len(ids) == 0 {
-		return nil, core.NewCommandError("Provide at least one numeric Discord user ID.", false)
-	}
-	return ids, nil
-}
-
-func isCommandNumericID(value string) bool {
-	if strings.TrimSpace(value) == "" {
-		return false
-	}
-	for _, r := range value {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func defaultQuestionsImportBackupDir() string {
-	return filepath.Join("D:", "backups", "qotd-imports")
-}
-
-func displayQuestionsImportBackupPath(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ""
-	}
-	if wd, err := os.Getwd(); err == nil && strings.TrimSpace(wd) != "" {
-		if rel, err := filepath.Rel(wd, path); err == nil && rel != "" && rel != "." && !strings.HasPrefix(rel, "..") {
-			return rel
-		}
-	}
-	return path
-}
-
-func describeQuestionsImportResult(deckName, channelID string, result applicationqotd.ImportArchivedQuestionsResult) string {
-	parts := []string{fmt.Sprintf("Scanned %d messages in <#%s> and matched %d historical QOTD prompts for deck `%s`.", result.ScannedMessages, channelID, result.MatchedMessages, deckName)}
-	parts = append(parts, fmt.Sprintf("Imported %s as used history.", formatCountNoun(result.ImportedQuestions, "historical QOTD question", "historical QOTD questions")))
-	if result.DeletedQuestions > 0 {
-		parts = append(parts, fmt.Sprintf("Removed %s duplicate questions from the current queue.", formatCountNoun(result.DeletedQuestions, "duplicate question", "duplicate questions")))
-	} else if result.DuplicateQuestions > 0 {
-		parts = append(parts, fmt.Sprintf("Found %s already locked in history.", formatCountNoun(result.DuplicateQuestions, "duplicate question", "duplicate questions")))
-	}
-	if result.StoredQuestions > 0 {
-		parts = append(parts, fmt.Sprintf("Stored %s in local collector history.", formatCountNoun(result.StoredQuestions, "historical message", "historical messages")))
-	}
-	if backupPath := displayQuestionsImportBackupPath(result.BackupPath); backupPath != "" {
-		parts = append(parts, fmt.Sprintf("Local backup: `%s`.", backupPath))
-	}
-	return strings.Join(parts, " ")
-}
-
 func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string {
 	deckName := strings.TrimSpace(state.Deck.Name)
 	if deckName == "" {
@@ -1296,7 +860,7 @@ func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string
 		lines = append(lines, "Automatic publish schedule is not configured.")
 	} else {
 		lines = append(lines, fmt.Sprintf("Automatic schedule: %s UTC.", formatAutomaticQueueSchedule(state.Schedule)))
-		lines = append(lines, fmt.Sprintf("Next automatic slot: %s (%s).", formatAutomaticQueueTimestamp(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
+		lines = append(lines, fmt.Sprintf("Next automatic slot: %s (%s).", formatAutomaticQueueSlotInstant(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
 	}
 
 	if !state.Deck.Enabled {
@@ -1330,11 +894,16 @@ func formatAutomaticQueueSchedule(schedule applicationqotd.PublishSchedule) stri
 	return fmt.Sprintf("%02d:%02d", hourUTC, minuteUTC)
 }
 
-func formatAutomaticQueueTimestamp(value time.Time) string {
+// formatAutomaticQueueSlotInstant renders the next slot as an absolute UTC
+// stamp plus a Discord timestamp anchor that Discord renders in the viewer's
+// local timezone, so a moderator does not have to do the UTC arithmetic
+// themselves.
+func formatAutomaticQueueSlotInstant(value time.Time) string {
 	if value.IsZero() {
 		return "unavailable"
 	}
-	return value.UTC().Format("2006-01-02 15:04 UTC")
+	utc := value.UTC()
+	return fmt.Sprintf("%s — <t:%d:F> in your timezone (<t:%d:R>)", utc.Format("2006-01-02 15:04 UTC"), utc.Unix(), utc.Unix())
 }
 
 func formatAutomaticQueueSlotStatus(status applicationqotd.AutomaticQueueSlotStatus) string {
@@ -1362,68 +931,6 @@ func formatAutomaticQueueQuestion(question storage.QOTDQuestionRecord) string {
 		body = body[:69] + "..."
 	}
 	return fmt.Sprintf("QOTD question ID %d (%s)", visibleQuestionID(question), body)
-}
-
-func describeResetDeckResult(result applicationqotd.ResetDeckResult, deckName string) string {
-	parts := make([]string, 0, 2)
-	if result.QuestionsReset > 0 {
-		parts = append(parts, fmt.Sprintf("reset %s", formatCountNoun(result.QuestionsReset, "QOTD question state", "QOTD question states")))
-	}
-	if result.OfficialPostsCleared > 0 {
-		parts = append(parts, fmt.Sprintf("cleared %s", formatCountNoun(result.OfficialPostsCleared, "QOTD publish record", "QOTD publish records")))
-	}
-	if len(parts) == 0 {
-		message := fmt.Sprintf("No QOTD question states or publish history needed reset in deck `%s`. Question order was unchanged.", deckName)
-		if result.SuppressedCurrentSlotAutomaticPublish {
-			message += " Automatic publishing for this slot remains paused while it is suppressed."
-		}
-		return message
-	}
-	message := fmt.Sprintf("%s in deck `%s`. Question order was preserved.", strings.Join(parts, " and "), deckName)
-	if result.SuppressedCurrentSlotAutomaticPublish {
-		message += " Automatic publishing for this slot remains paused while it is suppressed."
-	}
-	return message
-}
-
-func parseSlotMaintenanceDateOption(raw string) (time.Time, bool, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return time.Time{}, false, nil
-	}
-	parsed, err := time.Parse("2006-01-02", raw)
-	if err != nil {
-		return time.Time{}, false, core.NewCommandError("Date must use YYYY-MM-DD (UTC).", false)
-	}
-	return parsed.UTC(), true, nil
-}
-
-func describeReanimateSlotResult(result applicationqotd.SlotMaintenanceResult) string {
-	parts := []string{fmt.Sprintf("Reanimated QOTD slot %s.", result.PublishDateUTC.Format("2006-01-02"))}
-	parts = append(parts, fmt.Sprintf("Cleared %s.", formatCountNoun(result.OfficialPostsCleared, "publish record", "publish records")))
-	parts = append(parts, fmt.Sprintf("Released %s back to ready.", formatCountNoun(result.QuestionsReleased, "question", "questions")))
-	if result.ClearedSuppression {
-		parts = append(parts, "Removed scheduled-publish suppression for that date.")
-	}
-	return strings.Join(parts, " ")
-}
-
-func describeClearDayStateResult(result applicationqotd.SlotMaintenanceResult) string {
-	if result.OfficialPostsCleared == 0 && result.QuestionsReleased == 0 {
-		message := fmt.Sprintf("No QOTD publish state was found for %s.", result.PublishDateUTC.Format("2006-01-02"))
-		if result.ClearedSuppression {
-			message += " Removed scheduled-publish suppression for that date."
-		}
-		return message
-	}
-
-	parts := []string{fmt.Sprintf("Cleared QOTD day state for %s.", result.PublishDateUTC.Format("2006-01-02"))}
-	parts = append(parts, fmt.Sprintf("Deleted %s.", formatCountNoun(result.OfficialPostsCleared, "publish record", "publish records")))
-	parts = append(parts, fmt.Sprintf("Returned %s to ready.", formatCountNoun(result.QuestionsReleased, "question", "questions")))
-	if result.ClearedSuppression {
-		parts = append(parts, "Removed scheduled-publish suppression for that date.")
-	}
-	return strings.Join(parts, " ")
 }
 
 func formatCountNoun(count int, singular, plural string) string {
@@ -1469,22 +976,6 @@ func translateQuestionsDeleteError(questionID int64, err error) error {
 	return translateQuestionsMutationError(err)
 }
 
-func translateQuestionsSetNextError(questionID int64, err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
-	}
-	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be set as next.", questionID), false)
-	}
-	if errors.Is(err, applicationqotd.ErrQuestionNotReady) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d must be ready before it can be set as next.", questionID), false)
-	}
-	return translateQuestionsMutationError(err)
-}
-
 func translateQuestionsRecoverError(questionID int64, err error) error {
 	if err == nil {
 		return nil
@@ -1514,16 +1005,6 @@ func translateQuestionsMarkPublishedError(questionID int64, err error) error {
 	return translateQuestionsMutationError(err)
 }
 
-func translateQuestionsImportError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
-		return core.NewCommandError("Discord session unavailable for QOTD history import.", false)
-	}
-	return translateQuestionsMutationError(err)
-}
-
 func translatePublishNowError(err error) error {
 	if err == nil {
 		return nil
@@ -1546,63 +1027,12 @@ func translatePublishNowError(err error) error {
 	return err
 }
 
-func translateSlotMaintenanceError(err error, action string) error {
-	if err == nil {
-		return nil
-	}
-	if action == "clear" {
-		var partialErr *applicationqotd.SlotMaintenancePartialError
-		if errors.As(err, &partialErr) && partialErr != nil {
-			dateLabel := "requested date"
-			if !partialErr.Result.PublishDateUTC.IsZero() {
-				dateLabel = partialErr.Result.PublishDateUTC.Format("2006-01-02")
-			}
-			message := fmt.Sprintf(
-				"QOTD clear-day for %s was partially applied: deleted %s, returned %s to ready, failed %s.",
-				dateLabel,
-				formatCountNoun(partialErr.Result.OfficialPostsCleared, "publish record", "publish records"),
-				formatCountNoun(partialErr.Result.QuestionsReleased, "question", "questions"),
-				formatCountNoun(len(partialErr.FailedOfficialPostIDs), "publish record", "publish records"),
-			)
-			if len(partialErr.FailedOfficialPostIDs) > 0 {
-				ids := make([]string, 0, len(partialErr.FailedOfficialPostIDs))
-				for _, id := range partialErr.FailedOfficialPostIDs {
-					ids = append(ids, strconv.FormatInt(id, 10))
-				}
-				message = fmt.Sprintf("%s Failed post IDs: %s.", message, strings.Join(ids, ", "))
-			}
-			return core.NewCommandError(message, false)
-		}
-	}
-	if errors.Is(err, applicationqotd.ErrOfficialPostNotFound) {
-		if action == "reanimate" {
-			return core.NewCommandError("No QOTD abandoned/failed record exists for that date.", false)
-		}
-		return core.NewCommandError("No QOTD publish records exist for that date.", false)
-	}
-	if errors.Is(err, applicationqotd.ErrOfficialPostState) {
-		return core.NewCommandError("Reanimate only works for abandoned or failed records.", false)
-	}
-	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
-		return core.NewCommandError("Set a publish schedule first or provide an explicit date (YYYY-MM-DD).", false)
-	}
-	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
-		return core.NewCommandError("Discord session unavailable for slot maintenance.", false)
-	}
-	return err
-}
-
 var _ core.SubCommand = (*questionsAddCommand)(nil)
 var _ core.SubCommand = (*questionsListCommand)(nil)
 var _ core.SubCommand = (*questionsQueueCommand)(nil)
-var _ core.SubCommand = (*questionsNextCommand)(nil)
 var _ core.SubCommand = (*questionsMarkPublishedCommand)(nil)
-var _ core.SubCommand = (*questionsImportCommand)(nil)
-var _ core.SubCommand = (*questionsResetCommand)(nil)
 var _ core.SubCommand = (*questionsRecoverCommand)(nil)
 var _ core.SubCommand = (*questionsRemoveCommand)(nil)
 var _ core.SubCommand = (*qotdPublishCommand)(nil)
-var _ core.SubCommand = (*qotdReanimateCommand)(nil)
-var _ core.SubCommand = (*qotdClearDayStateCommand)(nil)
 
 var _ QuestionCatalogService = (*applicationqotd.Service)(nil)
