@@ -14,8 +14,15 @@ import (
 )
 
 const (
-	defaultThreadAutoArchiveMinutes  = 10080
-	officialQuestionEmbedColor       = 0xF48FB1
+	// defaultThreadAutoArchiveMinutes mirrors the QOTD answer window (48h).
+	// Discord auto-archives the thread at this point — equivalent to a mod
+	// hitting "Close" in the UI — so we don't need to call SetThreadState
+	// with Archived=true at ArchiveAt anymore. The grooming reconcile still
+	// keeps the thread unlocked during the active window; the explicit
+	// archive transition only flips Locked=true to prevent reply-driven
+	// unarchive after the window closes.
+	defaultThreadAutoArchiveMinutes = 2880
+	officialQuestionEmbedColor      = 0xF48FB1
 )
 
 type PublishOfficialPostParams struct {

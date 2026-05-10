@@ -47,6 +47,51 @@ func TestIsUnrecoverableDiscordPublishErrorTreatsClientErrorsAsTerminal(t *testi
 	}
 }
 
+func TestIsUnmanageableDiscordThreadErrorMatchesPermissionRejections(t *testing.T) {
+	t.Parallel()
+
+	matchTests := []struct {
+		name string
+		err  error
+	}{
+		{name: "403 from response", err: makeRESTError(http.StatusForbidden, 0, "forbidden")},
+		{name: "missing access code", err: makeRESTError(0, discordgo.ErrCodeMissingAccess, "missing access")},
+		{name: "missing permissions code", err: makeRESTError(0, discordgo.ErrCodeMissingPermissions, "missing permissions")},
+		{name: "wrapped 403", err: fmt.Errorf("set qotd thread state: %w", makeRESTError(http.StatusForbidden, 0, "forbidden"))},
+	}
+	for _, tt := range matchTests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if !isUnmanageableDiscordThreadError(tt.err) {
+				t.Fatalf("expected error to classify as unmanageable thread: %v", tt.err)
+			}
+		})
+	}
+
+	// Unrelated errors must NOT degrade silently — those should still bubble
+	// up so the publish/reconcile path retries or surfaces them. In
+	// particular, 404/Unknown Channel is "thread missing", a separate branch
+	// that flips the post to OfficialPostStateMissingDiscord.
+	skipTests := []struct {
+		name string
+		err  error
+	}{
+		{name: "nil", err: nil},
+		{name: "plain network error", err: errors.New("dial tcp: timeout")},
+		{name: "404 missing thread", err: makeRESTError(http.StatusNotFound, 0, "not found")},
+		{name: "unknown channel code", err: makeRESTError(0, discordgo.ErrCodeUnknownChannel, "unknown channel")},
+		{name: "5xx response", err: makeRESTError(http.StatusInternalServerError, 0, "boom")},
+	}
+	for _, tt := range skipTests {
+		t.Run("not_"+tt.name, func(t *testing.T) {
+			t.Parallel()
+			if isUnmanageableDiscordThreadError(tt.err) {
+				t.Fatalf("expected error to NOT classify as unmanageable thread: %v", tt.err)
+			}
+		})
+	}
+}
+
 func TestIsUnrecoverableDiscordPublishErrorLeavesTransientFailuresRetryable(t *testing.T) {
 	t.Parallel()
 

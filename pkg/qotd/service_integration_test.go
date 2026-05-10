@@ -2761,11 +2761,12 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	if len(fake.fetchCalls) != 1 {
 		t.Fatalf("expected reconcile to fetch the official thread archive only, got %v", fake.fetchCalls)
 	}
-	// At ArchiveAt the bot closes+locks the Discord thread so members can
-	// still read the retroactive QOTD but new replies are blocked; only
-	// moderators (MANAGE_THREADS) can reopen it.
-	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
-		t.Fatalf("expected archived official thread to be closed and locked for retroactive read-only access, got %+v", fake.threadStates["official-thread-archive"])
+	// At ArchiveAt the bot only locks the Discord thread; Discord's
+	// auto_archive_duration (set to the QOTD answer window at creation)
+	// handles the actual "Close" transition. Setting Archived=true ourselves
+	// would race the platform-driven archive.
+	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false}) {
+		t.Fatalf("expected archived official thread to be locked while Discord auto-archives, got %+v", fake.threadStates["official-thread-archive"])
 	}
 
 	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
@@ -2832,8 +2833,8 @@ func TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen(t *testin
 		t.Fatalf("ReconcileGuild(initial archive) failed: %v", err)
 	}
 
-	if got := fake.threadStates[threadID]; got != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: true}) {
-		t.Fatalf("expected archive transition to close+lock the thread, got %+v", got)
+	if got := fake.threadStates[threadID]; got != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false}) {
+		t.Fatalf("expected archive transition to lock the thread while Discord auto-archives, got %+v", got)
 	}
 
 	archived, err := store.GetQOTDOfficialPostByID(context.Background(), post.ID)

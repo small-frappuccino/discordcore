@@ -98,6 +98,12 @@ type Service struct {
 	publisher           Publisher
 	now                 func() time.Time
 	guildLifecycleLocks sync.Map
+	// unmanageableThreadLogs deduplicates the WARN log emitted when Discord
+	// rejects a thread state edit with 403/Missing Access despite the bot
+	// otherwise being able to publish. Without dedup the reconcile loop floods
+	// the log every minute for as long as the post stays in current/previous.
+	// Keyed by "guildID|threadID|targetState".
+	unmanageableThreadLogs sync.Map
 }
 
 func NewService(configManager *files.ConfigManager, store *storage.Store, publisher Publisher) *Service {

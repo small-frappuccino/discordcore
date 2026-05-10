@@ -342,19 +342,17 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	if missingOfficial {
 		state = string(OfficialPostStateMissingDiscord)
 	} else if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
-		// At ArchiveAt (publish + 48h) we close+lock the Discord thread so
-		// the past QOTD is read-only for verified members and only mods
-		// (MANAGE_THREADS) can reopen it. Members with channel access
-		// continue to see the conversation; the lock simply prevents new
-		// answers on a slot that has already aged out of the answer window.
-		// Locked=true is required alongside Archived=true: without it,
-		// posting in the archived thread would auto-unarchive it. The post
-		// transitions to OfficialPostStateArchived in storage immediately
-		// after this call, so syncLiveOfficialPost no longer touches the
-		// thread — a moderator's later unlock is preserved.
+		// At ArchiveAt (publish + 48h) we only lock the Discord thread.
+		// Discord auto-archives it independently because the thread was
+		// created with auto_archive_duration = 48h (equivalent to a mod
+		// hitting "Close" in the UI). Setting Archived=true ourselves used
+		// to be required, but now it would race the Discord auto-archive
+		// and risk unarchiving a thread the platform just closed. The lock
+		// stays so reply traffic on the past QOTD cannot reopen the thread
+		// from the archived state.
 		Pinned:   false,
 		Locked:   true,
-		Archived: true,
+		Archived: false,
 	}); err != nil {
 		return err
 	} else if missing {
@@ -438,9 +436,41 @@ func (s *Service) setThreadState(ctx context.Context, session *discordgo.Session
 		if isMissingDiscordThreadError(err) {
 			return true, nil
 		}
+		// 403/Missing Access on a thread the bot CAN otherwise post in is
+		// usually a per-thread overwrite or a forum tag/lock that prevents
+		// MANAGE_THREADS even when the role grants it server-wide. Failing the
+		// reconcile cycle here would re-emit the same WARN every minute for
+		// the post's whole 48h lifecycle, drowning real publish failures.
+		// Treat as a no-op (state already unmanageable from our side), log
+		// once per (guild, thread, target state), and let the DB lifecycle
+		// state advance.
+		if isUnmanageableDiscordThreadError(err) {
+			s.logUnmanageableThreadOnce(threadID, state, err)
+			return false, nil
+		}
 		return false, err
 	}
 	return false, nil
+}
+
+// logUnmanageableThreadOnce emits a single WARN per (thread, target state)
+// pair so operators see the issue without the reconcile loop flooding logs.
+func (s *Service) logUnmanageableThreadOnce(threadID string, state discordqotd.ThreadState, cause error) {
+	if s == nil {
+		return
+	}
+	key := fmt.Sprintf("%s|%t|%t|%t", threadID, state.Pinned, state.Locked, state.Archived)
+	if _, loaded := s.unmanageableThreadLogs.LoadOrStore(key, struct{}{}); loaded {
+		return
+	}
+	log.ApplicationLogger().Warn(
+		"QOTD thread state edit rejected by Discord; continuing without grooming the thread",
+		"threadID", threadID,
+		"targetPinned", state.Pinned,
+		"targetLocked", state.Locked,
+		"targetArchived", state.Archived,
+		"err", cause,
+	)
 }
 
 func buildArchivedMessageRecords(messages []discordqotd.ArchivedMessage) []storage.QOTDMessageArchiveRecord {
@@ -488,6 +518,31 @@ func isMissingDiscordThreadError(err error) bool {
 		return true
 	}
 	return restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeUnknownChannel
+}
+
+// isUnmanageableDiscordThreadError reports whether Discord rejected a thread
+// state edit because the bot lacks the specific permissions required to
+// manage *this* thread, even if it can post there. Distinct from
+// isMissingDiscordThreadError (404 / Unknown Channel): the thread exists,
+// the bot just cannot edit its lock/archive/pin flags. Distinct from
+// isUnrecoverableDiscordPublishError: that one is for the publish path,
+// where 403 means "give up and abandon"; here 403 means "skip grooming and
+// move on with the lifecycle".
+func isUnmanageableDiscordThreadError(err error) bool {
+	var restErr *discordgo.RESTError
+	if !errors.As(err, &restErr) || restErr == nil {
+		return false
+	}
+	if restErr.Response != nil && restErr.Response.StatusCode == http.StatusForbidden {
+		return true
+	}
+	if restErr.Message != nil {
+		switch restErr.Message.Code {
+		case discordgo.ErrCodeMissingAccess, discordgo.ErrCodeMissingPermissions:
+			return true
+		}
+	}
+	return false
 }
 
 // isUnrecoverableDiscordPublishError reports whether the Discord error returned
