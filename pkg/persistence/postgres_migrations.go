@@ -572,7 +572,7 @@ var postgresMigrations = []migration{
 	{
 		// publish_ordinal is the monotonically-increasing publication sequence
 		// number per (guild_id, deck_id), assigned on provisioning. It is what
-		// the Discord thread title displays ("Pergunta #001"), decoupled from
+		// the Discord thread title displays ("Question #001"), decoupled from
 		// the question's queue position so that random question selection does
 		// not perturb the visible numbering. Backfill chronologically by
 		// published_at (falling back to created_at) so existing rows get a

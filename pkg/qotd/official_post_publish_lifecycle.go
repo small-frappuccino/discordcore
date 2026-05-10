@@ -223,18 +223,23 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 	}
 
 	availableQuestions := 0
+	displayNumber := int64(0)
 	if question != nil {
-		availableQuestions, err = s.availableQuestionCount(ctx, post.GuildID, post.DeckID)
-		if err != nil {
-			return nil, err
+		counts, countsErr := s.deckQuestionCounts(ctx, post.GuildID, post.DeckID)
+		if countsErr != nil {
+			return nil, countsErr
 		}
+		availableQuestions = counts.Ready + counts.Draft
+		displayNumber = threadDisplayNumberFromUsedCount(counts.Used, question)
 	}
 
-	// On resume, the post already owns its publish ordinal. We deliberately
-	// do not re-derive the title from the question's queue_position here:
-	// the ordinal is the source of truth for the visible thread name and is
-	// stable across the question being shifted, deleted, or republished.
-	threadName := buildOfficialThreadName(post.PublishOrdinal)
+	// On resume the displayed thread number is re-derived from the deck's
+	// current used-question count. If the prior attempt already flipped this
+	// question to Used, the count includes it (display matches what would
+	// have been rendered). If the prior attempt crashed before that flip,
+	// the question is still Reserved and we add 1 to anticipate the flip
+	// that finalize will perform momentarily.
+	threadName := buildOfficialThreadName(displayNumber)
 
 	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, post, question, availableQuestions, threadName, now)
 	if err != nil {

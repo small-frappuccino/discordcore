@@ -91,13 +91,14 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if question == nil {
 		return false, ErrNoQuestionsAvailable
 	}
-	availableQuestions, err := s.availableQuestionCount(ctx, guildID, deck.ID)
+	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
 	if err != nil {
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
 		return false, err
 	}
+	availableQuestions := counts.Ready + counts.Draft
 
 	lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, now)
 	nonce, err := generatePublishNonce()
@@ -154,7 +155,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		*provisioned,
 		question,
 		availableQuestions,
-		buildOfficialThreadName(provisioned.PublishOrdinal),
+		buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
 		now,
 	)
 	if err != nil {

@@ -291,7 +291,7 @@ type QOTDDeckConfig struct {
 	// SelectionStrategy controls how the next ready question is picked at
 	// automatic publish time: "queue" (default — head of the queue, the
 	// historical behavior) or "random" (uniformly random eligible question).
-	// The visible thread numbering ("Pergunta #001"...) is independent of
+	// The visible thread numbering ("Question #001"...) is independent of
 	// this strategy because each post carries its own publish ordinal.
 	SelectionStrategy string `json:"selection_strategy,omitempty"`
 }

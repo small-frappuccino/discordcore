@@ -171,10 +171,10 @@ func TestBuildOfficialThreadNameUsesZeroPaddedOrdinal(t *testing.T) {
 		ordinal int64
 		want    string
 	}{
-		{name: "first publish", ordinal: 1, want: "Pergunta #001"},
-		{name: "two-digit", ordinal: 42, want: "Pergunta #042"},
-		{name: "padding overflows past 999", ordinal: 1234, want: "Pergunta #1234"},
-		{name: "non-positive ordinal degrades gracefully", ordinal: 0, want: "Pergunta"},
+		{name: "first publish", ordinal: 1, want: "Question #001"},
+		{name: "two-digit", ordinal: 42, want: "Question #042"},
+		{name: "padding overflows past 999", ordinal: 1234, want: "Question #1234"},
+		{name: "non-positive ordinal degrades gracefully", ordinal: 0, want: "Question"},
 	}
 
 	for _, tc := range cases {

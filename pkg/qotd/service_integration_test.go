@@ -756,7 +756,7 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	}
 	// Ordinal 2 because the yesterday post seeded above already consumed
 	// ordinal 1 in the (guild_id, deck_id) sequence.
-	if fake.publishedParams[0].ThreadName != "Pergunta #002" {
+	if fake.publishedParams[0].ThreadName != "Question #002" {
 		t.Fatalf("expected manual publish to continue the publish-ordinal sequence, got %+v", fake.publishedParams[0])
 	}
 	if result.OfficialPost.PublishOrdinal != 2 {
@@ -2709,7 +2709,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if fake.publishedParams[0].AvailableQuestions != 1 {
 		t.Fatalf("expected one remaining available question after scheduled publish, got %+v", fake.publishedParams[0])
 	}
-	if fake.publishedParams[0].ThreadName != "Pergunta #001" {
+	if fake.publishedParams[0].ThreadName != "Question #001" {
 		t.Fatalf("expected scheduled publish to use the publish-ordinal thread title format, got %+v", fake.publishedParams[0])
 	}
 

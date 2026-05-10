@@ -62,7 +62,7 @@ type QOTDOfficialPostRecord struct {
 	QuestionID                 int64
 	// PublishOrdinal is the per-(guild,deck) publication sequence number
 	// assigned at provisioning. The Discord thread title renders this
-	// ("Pergunta #001") so the visible numbering is decoupled from the
+	// ("Question #001") so the visible numbering is decoupled from the
 	// question's queue position and remains monotonic regardless of which
 	// selection strategy (queue order vs random) chose the question.
 	PublishOrdinal             int64

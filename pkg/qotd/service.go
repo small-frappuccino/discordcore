@@ -809,13 +809,14 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	if question == nil {
 		return nil, ErrNoQuestionsAvailable
 	}
-	availableQuestions, err := s.availableQuestionCount(ctx, guildID, deck.ID)
+	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
 	if err != nil {
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
 		return nil, err
 	}
+	availableQuestions := counts.Ready + counts.Draft
 
 	lifecycle := EvaluateManualOfficialPost(now, now)
 	nonce, err := generatePublishNonce()
@@ -853,7 +854,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		*provisioned,
 		question,
 		availableQuestions,
-		buildOfficialThreadName(provisioned.PublishOrdinal),
+		buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
 		now,
 	)
 	if err != nil {
@@ -1020,16 +1021,15 @@ func derefTime(value *time.Time) time.Time {
 }
 
 // buildOfficialThreadName renders the Discord thread title shown in the QOTD
-// channel sidebar. The visible number is the per-deck publish ordinal, NOT
-// the question's display_id, so the sidebar stays monotonically numbered
-// regardless of which question selection strategy chose the underlying
-// question. A non-positive ordinal degrades to a bare "Pergunta" so resume
-// flows that predate this column do not crash on render.
-func buildOfficialThreadName(publishOrdinal int64) string {
-	if publishOrdinal <= 0 {
-		return "Pergunta"
+// channel sidebar. The visible number is the deck's count of used questions
+// (including ones imported as already-used by the archive collector), so the
+// sidebar reflects "this is the Nth question this deck has ever used". A
+// non-positive number degrades to a bare "Question".
+func buildOfficialThreadName(displayNumber int64) string {
+	if displayNumber <= 0 {
+		return "Question"
 	}
-	return fmt.Sprintf("Pergunta #%03d", publishOrdinal)
+	return fmt.Sprintf("Question #%03d", displayNumber)
 }
 
 // deckQuestionSelector translates the deck's user-facing strategy setting
@@ -1188,12 +1188,38 @@ func reorderQuestionIDsToIndex(current []storage.QOTDQuestionRecord, movedIndex,
 }
 
 func (s *Service) availableQuestionCount(ctx context.Context, guildID, deckID string) (int, error) {
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
+	counts, err := s.deckQuestionCounts(ctx, guildID, deckID)
 	if err != nil {
 		return 0, err
 	}
-	counts := countQuestions(questions)
 	return counts.Ready + counts.Draft, nil
+}
+
+// deckQuestionCounts returns the per-status count breakdown for a deck. Used
+// by the publish path to derive both the available-question count surfaced
+// to the publisher and the visible thread display number (count of used
+// questions, including legacy/imported ones marked Used outside the
+// official_posts pipeline).
+func (s *Service) deckQuestionCounts(ctx context.Context, guildID, deckID string) (QuestionCounts, error) {
+	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
+	if err != nil {
+		return QuestionCounts{}, err
+	}
+	return countQuestions(questions), nil
+}
+
+// threadDisplayNumberFromUsedCount renders the thread title number from the
+// deck's used-question count. The publishing question is in Reserved state
+// at title-render time and will transition to Used as part of finalization,
+// so we add 1 to anticipate that transition. On resume after a crash where
+// the question was already flipped to Used, the count already includes it
+// and we pass through unchanged.
+func threadDisplayNumberFromUsedCount(usedCount int, question *storage.QOTDQuestionRecord) int64 {
+	display := int64(usedCount)
+	if question == nil || QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusUsed {
+		display++
+	}
+	return display
 }
 
 func summarizeActiveDeckQuestions(settings files.QOTDConfig, questions []storage.QOTDQuestionRecord) QuestionCounts {
