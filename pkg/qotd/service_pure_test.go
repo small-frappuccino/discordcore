@@ -136,3 +136,126 @@ func TestBuildOfficialThreadNameUsesZeroPaddedOrdinal(t *testing.T) {
 		})
 	}
 }
+
+// TestNextScheduledPublishTimeProjectsTodayOrTomorrow exercises the wake-up
+// projection used by the runtime loop. It's table-driven because each branch
+// (before/after the slot, suppressed today, deck disabled, no schedule, no
+// channel) is a distinct correctness condition: a regression in any single
+// branch could either silently delay a publish (returning false when a slot
+// is actually due soon) or wake the loop on a slot that PublishScheduledIfDue
+// would refuse (suppression).
+func TestNextScheduledPublishTimeProjectsTodayOrTomorrow(t *testing.T) {
+	t.Parallel()
+
+	hour, minute := 12, 43
+	mkSchedule := files.QOTDPublishScheduleConfig{HourUTC: &hour, MinuteUTC: &minute}
+	enabledDeck := files.QOTDDeckConfig{
+		ID:        files.LegacyQOTDDefaultDeckID,
+		Name:      files.LegacyQOTDDefaultDeckName,
+		Enabled:   true,
+		ChannelID: "100000000000000001",
+	}
+	disabledDeck := files.QOTDDeckConfig{
+		ID:        files.LegacyQOTDDefaultDeckID,
+		Name:      files.LegacyQOTDDefaultDeckName,
+		Enabled:   false,
+		ChannelID: "100000000000000001",
+	}
+	enabledNoChannel := files.QOTDDeckConfig{
+		ID:      files.LegacyQOTDDefaultDeckID,
+		Name:    files.LegacyQOTDDefaultDeckName,
+		Enabled: true,
+	}
+
+	cases := []struct {
+		name      string
+		cfg       files.QOTDConfig
+		now       time.Time
+		wantOK    bool
+		wantNext  time.Time
+	}{
+		{
+			name: "before today's slot returns today",
+			cfg: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Schedule:     mkSchedule,
+				Decks:        []files.QOTDDeckConfig{enabledDeck},
+			},
+			now:      time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC),
+			wantOK:   true,
+			wantNext: time.Date(2026, 5, 10, 12, 43, 0, 0, time.UTC),
+		},
+		{
+			name: "after today's slot rolls to tomorrow",
+			cfg: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Schedule:     mkSchedule,
+				Decks:        []files.QOTDDeckConfig{enabledDeck},
+			},
+			now:      time.Date(2026, 5, 10, 13, 0, 0, 0, time.UTC),
+			wantOK:   true,
+			wantNext: time.Date(2026, 5, 11, 12, 43, 0, 0, time.UTC),
+		},
+		{
+			name: "today's slot suppressed advances one day",
+			cfg: files.QOTDConfig{
+				ActiveDeckID:                   files.LegacyQOTDDefaultDeckID,
+				Schedule:                        mkSchedule,
+				Decks:                           []files.QOTDDeckConfig{enabledDeck},
+				SuppressScheduledPublishDateUTC: "2026-05-10",
+			},
+			now:      time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC),
+			wantOK:   true,
+			wantNext: time.Date(2026, 5, 11, 12, 43, 0, 0, time.UTC),
+		},
+		{
+			name: "incomplete schedule reports no eligible moment",
+			cfg: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Schedule:     files.QOTDPublishScheduleConfig{},
+				Decks:        []files.QOTDDeckConfig{enabledDeck},
+			},
+			now:    time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC),
+			wantOK: false,
+		},
+		{
+			name: "disabled deck reports no eligible moment",
+			cfg: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Schedule:     mkSchedule,
+				Decks:        []files.QOTDDeckConfig{disabledDeck},
+			},
+			now:    time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC),
+			wantOK: false,
+		},
+		{
+			name: "missing channel reports no eligible moment",
+			cfg: files.QOTDConfig{
+				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+				Schedule:     mkSchedule,
+				Decks:        []files.QOTDDeckConfig{enabledNoChannel},
+			},
+			now:    time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC),
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cm := files.NewMemoryConfigManager()
+			if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1", QOTD: tc.cfg}); err != nil {
+				t.Fatalf("AddGuildConfig: %v", err)
+			}
+			service := NewService(cm, &storage.Store{}, nil)
+			got, ok := service.NextScheduledPublishTime("g1", tc.now)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v (got=%s)", ok, tc.wantOK, got.Format(time.RFC3339))
+			}
+			if ok && !got.Equal(tc.wantNext) {
+				t.Fatalf("next = %s, want %s", got.Format(time.RFC3339), tc.wantNext.Format(time.RFC3339))
+			}
+		})
+	}
+}

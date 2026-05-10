@@ -12,14 +12,22 @@ import (
 )
 
 type fakeGuildLifecycleService struct {
+	mu             sync.Mutex
 	publishCalls   []string
 	reconcileCalls []string
 	publishCh      chan string
 	reconcileCh    chan string
+	// nextPublish overrides NextScheduledPublishTime per guild. When a guild
+	// is absent we report ok=false, which makes the runtime fall back to the
+	// publishInterval cap — the legacy fixed-interval cadence preserved for
+	// tests that don't care about scheduling precision.
+	nextPublish map[string]time.Time
 }
 
 func (f *fakeGuildLifecycleService) PublishScheduledIfDue(_ context.Context, guildID string, _ *discordgo.Session) (bool, error) {
+	f.mu.Lock()
 	f.publishCalls = append(f.publishCalls, guildID)
+	f.mu.Unlock()
 	if f.publishCh != nil {
 		select {
 		case f.publishCh <- guildID:
@@ -30,7 +38,9 @@ func (f *fakeGuildLifecycleService) PublishScheduledIfDue(_ context.Context, gui
 }
 
 func (f *fakeGuildLifecycleService) ReconcileGuild(_ context.Context, guildID string, _ *discordgo.Session) error {
+	f.mu.Lock()
 	f.reconcileCalls = append(f.reconcileCalls, guildID)
+	f.mu.Unlock()
 	if f.reconcileCh != nil {
 		select {
 		case f.reconcileCh <- guildID:
@@ -38,6 +48,35 @@ func (f *fakeGuildLifecycleService) ReconcileGuild(_ context.Context, guildID st
 		}
 	}
 	return nil
+}
+
+func (f *fakeGuildLifecycleService) NextScheduledPublishTime(guildID string, _ time.Time) (time.Time, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.nextPublish == nil {
+		return time.Time{}, false
+	}
+	t, ok := f.nextPublish[guildID]
+	if !ok || t.IsZero() {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func (f *fakeGuildLifecycleService) snapshotPublishCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, len(f.publishCalls))
+	copy(out, f.publishCalls)
+	return out
+}
+
+func (f *fakeGuildLifecycleService) snapshotReconcileCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, len(f.reconcileCalls))
+	copy(out, f.reconcileCalls)
+	return out
 }
 
 type blockingContextLifecycleService struct {
@@ -65,6 +104,10 @@ func (f *blockingContextLifecycleService) PublishScheduledIfDue(ctx context.Cont
 
 func (f *blockingContextLifecycleService) ReconcileGuild(context.Context, string, *discordgo.Session) error {
 	return nil
+}
+
+func (f *blockingContextLifecycleService) NextScheduledPublishTime(string, time.Time) (time.Time, bool) {
+	return time.Time{}, false
 }
 
 func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
@@ -502,5 +545,205 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for cancellation error")
+	}
+}
+
+// nextPublishDelay is a unit-level guard for the timer-arm math: the production
+// loop dynamically sleeps based on this calculation, so a regression here
+// could either cause a busy-loop (returning 0) or miss slots (returning a
+// duration past the configured cap). Each branch is explicitly named.
+func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	const cap = 30 * time.Second
+
+	cases := []struct {
+		name     string
+		next     time.Time
+		hasNext  bool
+		expected time.Duration
+	}{
+		{
+			name:     "no schedule falls back to cap",
+			hasNext:  false,
+			expected: cap,
+		},
+		{
+			name:     "near-future slot returns exact remainder",
+			next:     now.Add(2 * time.Second),
+			hasNext:  true,
+			expected: 2 * time.Second,
+		},
+		{
+			name:     "far-future slot is clamped to cap",
+			next:     now.Add(6 * time.Hour),
+			hasNext:  true,
+			expected: cap,
+		},
+		{
+			name:     "past-due slot returns the minimum sleep",
+			next:     now.Add(-5 * time.Minute),
+			hasNext:  true,
+			expected: runtimePublishMinSleep,
+		},
+		{
+			name:     "exact-now slot returns the minimum sleep",
+			next:     now,
+			hasNext:  true,
+			expected: runtimePublishMinSleep,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cm := files.NewMemoryConfigManager()
+			if err := cm.AddGuildConfig(files.GuildConfig{
+				GuildID:       "g",
+				BotInstanceID: "main",
+				QOTD: files.QOTDConfig{
+					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+					Decks: []files.QOTDDeckConfig{{
+						ID:        files.LegacyQOTDDefaultDeckID,
+						Name:      files.LegacyQOTDDefaultDeckName,
+						Enabled:   true,
+						ChannelID: "c",
+					}},
+				},
+			}); err != nil {
+				t.Fatalf("AddGuildConfig: %v", err)
+			}
+
+			fake := &fakeGuildLifecycleService{}
+			if tc.hasNext {
+				fake.nextPublish = map[string]time.Time{"g": tc.next}
+			}
+
+			service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "main", "main")
+			service.publishInterval = cap
+			service.now = func() time.Time { return now }
+
+			got := service.nextPublishDelay(now)
+			if got != tc.expected {
+				t.Fatalf("nextPublishDelay = %v, want %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+// Confirms that when a guild reports a near-future scheduled publish moment,
+// the loop wakes up at that moment instead of polling at the
+// publishInterval cap. This is the core precision claim of the timer-driven
+// loop and is the regression most likely to surface in production (publishes
+// firing late by up to one cap interval).
+func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
+	cm := files.NewMemoryConfigManager()
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID:       "g-enabled",
+		BotInstanceID: "main",
+		QOTD: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "c",
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	startWall := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
+	// Slot is well below the configured cap so the precision path is the
+	// one being exercised. If the loop ever falls back to the cap (a
+	// regression), the test would still pass via the cap branch — to
+	// catch that case, the cap is set far higher than the slot delay.
+	scheduled := startWall.Add(40 * time.Millisecond)
+
+	fake := &fakeGuildLifecycleService{
+		publishCh:   make(chan string, 8),
+		nextPublish: map[string]time.Time{"g-enabled": scheduled},
+	}
+
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "main", "main")
+	service.publishInterval = 5 * time.Second
+	service.reconcileEvery = time.Hour
+
+	// Drive the fake clock from real wall time minus the offset so the
+	// computed delay maps to real elapsed wall time the timer will observe.
+	clockOffset := time.Since(startWall)
+	service.now = func() time.Time { return time.Now().UTC().Add(-clockOffset) }
+
+	service.Start()
+	t.Cleanup(service.Stop)
+
+	// Drain the startup publish that runs before the timer loop.
+	select {
+	case <-fake.publishCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for startup publish")
+	}
+
+	// Second publish should fire close to the scheduled moment, not after
+	// the 5-second cap.
+	select {
+	case <-fake.publishCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for scheduled publish wakeup")
+	}
+
+	// Sanity check: at least two publish calls observed (startup + slot).
+	if got := len(fake.snapshotPublishCalls()); got < 2 {
+		t.Fatalf("expected at least 2 publish calls, got %d", got)
+	}
+}
+
+// When no guild reports a next publish moment (e.g. nothing configured with a
+// schedule), the loop must keep firing at the publishInterval cap so that
+// configuration changes are still discovered. Regression guard for a future
+// "if no schedule, sleep forever" mistake.
+func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
+	cm := files.NewMemoryConfigManager()
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID:       "g-enabled",
+		BotInstanceID: "main",
+		QOTD: files.QOTDConfig{
+			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
+			Decks: []files.QOTDDeckConfig{{
+				ID:        files.LegacyQOTDDefaultDeckID,
+				Name:      files.LegacyQOTDDefaultDeckName,
+				Enabled:   true,
+				ChannelID: "c",
+			}},
+		},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	fake := &fakeGuildLifecycleService{
+		publishCh: make(chan string, 8),
+		// nextPublish nil -> NextScheduledPublishTime returns false, forcing
+		// the cap-based fallback.
+	}
+
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "main", "main")
+	service.publishInterval = 10 * time.Millisecond
+	service.reconcileEvery = time.Hour
+	service.now = func() time.Time {
+		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
+	}
+
+	service.Start()
+	t.Cleanup(service.Stop)
+
+	for idx := 0; idx < 3; idx++ {
+		select {
+		case <-fake.publishCh:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for cap-fallback publish %d", idx)
+		}
 	}
 }

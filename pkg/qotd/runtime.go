@@ -170,6 +170,48 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	return true, nil
 }
 
+// NextScheduledPublishTime returns the next eligible scheduled publish moment
+// for a guild, derived purely from configuration (schedule, deck enablement,
+// channel target, suppression). Returns ok=false when the guild is not
+// currently a candidate for autopublish. The runtime loop uses this to sleep
+// directly until a slot is due instead of polling on a fixed interval; the
+// authoritative "is this guild due" check still happens inside
+// PublishScheduledIfDue via slotState.BoundaryPassed, so this projection is
+// safe to use as a wake-up hint even when the wall clock is skewed.
+func (s *Service) NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool) {
+	if s == nil || s.configManager == nil {
+		return time.Time{}, false
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return time.Time{}, false
+	}
+	cfg, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return time.Time{}, false
+	}
+	schedule, err := resolvePublishSchedule(cfg)
+	if err != nil {
+		return time.Time{}, false
+	}
+	deck, ok := cfg.ActiveDeck()
+	if !ok || !deck.Enabled || strings.TrimSpace(deck.ChannelID) == "" {
+		return time.Time{}, false
+	}
+	candidate := CurrentPublishDateUTC(schedule, now)
+	// Suppression is a single-date token, so at most one date may be skipped.
+	// We advance past it so the loop wakes for the next real slot rather than
+	// burning a wakeup at a slot that PublishScheduledIfDue would refuse.
+	if isScheduledPublishSuppressed(cfg, candidate) {
+		candidate = candidate.AddDate(0, 0, 1)
+	}
+	next := PublishTimeUTC(schedule, candidate)
+	if next.IsZero() {
+		return time.Time{}, false
+	}
+	return next, true
+}
+
 // ReconcileGuild realigns QOTD thread state and snapshots/archive records for a guild.
 func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) error {
 	if err := s.validate(); err != nil {

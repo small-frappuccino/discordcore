@@ -13,14 +13,38 @@ import (
 )
 
 const (
-	runtimePublishInterval   = time.Minute
+	// runtimePublishInterval bounds how long the loop is allowed to sleep
+	// between publish-cycle wakeups. The loop normally sleeps until the
+	// nearest scheduled publish moment reported by the lifecycle service,
+	// which gives sub-second precision at the slot boundary; this cap
+	// guarantees we still re-evaluate at least once per minute so that
+	// configuration changes (new guilds, edited schedules, suppressions
+	// applied/cleared) and clock anomalies are picked up promptly even
+	// while sleeping. Lowering this value increases responsiveness at the
+	// cost of more wakeups; raising it is safe but trades discovery
+	// latency for cheaper idle behavior.
+	runtimePublishInterval = time.Minute
+
 	runtimeReconcileInterval = 15 * time.Minute
 	runtimeOperationTimeout  = 45 * time.Second
+
+	// runtimePublishMinSleep keeps the timer from busy-spinning when the
+	// computed next-publish moment is already in the past (e.g. a slot was
+	// missed during a stop-the-world pause). PublishScheduledIfDue is
+	// idempotent, so we just wake quickly, let it process, and re-arm.
+	runtimePublishMinSleep = time.Millisecond
 )
 
 type GuildLifecycleService interface {
 	PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (bool, error)
 	ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) error
+	// NextScheduledPublishTime returns the next eligible scheduled publish
+	// moment for a guild based on its current configuration. It is consulted
+	// only as a wake-up hint: the authoritative "is this slot due" decision
+	// still lives inside PublishScheduledIfDue. Implementations must return
+	// ok=false when the guild has no schedule, no enabled deck, no channel,
+	// or any other reason it would not autopublish.
+	NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool)
 }
 
 type RuntimeService struct {
@@ -104,25 +128,85 @@ func (s *RuntimeService) IsRunning() bool {
 func (s *RuntimeService) loop() {
 	defer s.wg.Done()
 
-	now := s.clock()
-	s.runPublishCycle(now)
-	s.runReconcileCycle(now)
+	// Startup catch-up: handle any slot that became due while the bot was
+	// down, and reconcile state once before entering the timer loop.
+	s.runPublishCycle(s.clock())
+	s.runReconcileCycle(s.clock())
 
-	publishTicker := time.NewTicker(s.publishInterval)
 	reconcileTicker := time.NewTicker(s.reconcileEvery)
-	defer publishTicker.Stop()
 	defer reconcileTicker.Stop()
 
 	for {
+		// Compute the wake-up delay each iteration so newly-added guilds,
+		// edited schedules, applied/cleared suppressions, and just-published
+		// slots (whose next moment is now tomorrow) are all reflected on the
+		// very next sleep. The cap (publishInterval) is the worst-case
+		// discovery latency for any of those changes.
+		publishTimer := time.NewTimer(s.nextPublishDelay(s.clock()))
+
 		select {
-		case tick := <-publishTicker.C:
-			s.runPublishCycle(tick.UTC())
-		case tick := <-reconcileTicker.C:
-			s.runReconcileCycle(tick.UTC())
+		case <-publishTimer.C:
+			s.runPublishCycle(s.clock())
+		case <-reconcileTicker.C:
+			// Reconcile interrupts an in-flight publish sleep. Stopping
+			// the timer is best-effort; if it already fired we ignore the
+			// pending tick rather than running the publish cycle eagerly,
+			// because reconcile already implies a fresh evaluation pass
+			// that the next loop iteration will re-arm against.
+			publishTimer.Stop()
+			s.runReconcileCycle(s.clock())
 		case <-s.stopCh:
+			publishTimer.Stop()
 			return
 		}
 	}
+}
+
+// nextPublishDelay computes how long the loop should sleep before the next
+// publish-cycle wakeup. It returns the time-to-next-slot across all
+// configured guilds, clamped into [runtimePublishMinSleep, publishInterval].
+// When no guild has a schedulable next moment the delay is the full cap,
+// preserving the legacy fixed-interval cadence as a fallback.
+func (s *RuntimeService) nextPublishDelay(now time.Time) time.Duration {
+	maxSleep := s.publishInterval
+	if maxSleep <= 0 {
+		maxSleep = runtimePublishInterval
+	}
+	next, ok := s.computeNextPublish(now)
+	if !ok {
+		return maxSleep
+	}
+	delay := next.Sub(now)
+	if delay <= 0 {
+		return runtimePublishMinSleep
+	}
+	if delay > maxSleep {
+		return maxSleep
+	}
+	return delay
+}
+
+// computeNextPublish returns the earliest scheduled publish moment across all
+// configured-and-enabled guilds on this runtime. Guilds that the lifecycle
+// service reports as ineligible (no schedule, deck off, etc.) are skipped.
+func (s *RuntimeService) computeNextPublish(now time.Time) (time.Time, bool) {
+	if s == nil || s.lifecycleService == nil {
+		return time.Time{}, false
+	}
+	var earliest time.Time
+	for _, guildID := range s.configuredGuildIDs(true) {
+		candidate, ok := s.lifecycleService.NextScheduledPublishTime(guildID, now)
+		if !ok || candidate.IsZero() {
+			continue
+		}
+		if earliest.IsZero() || candidate.Before(earliest) {
+			earliest = candidate
+		}
+	}
+	if earliest.IsZero() {
+		return time.Time{}, false
+	}
+	return earliest, true
 }
 
 func (s *RuntimeService) runPublishCycle(now time.Time) {
