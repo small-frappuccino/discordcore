@@ -1,6 +1,5 @@
 # Editor and repository tooling
 .github/*
-.idea/
 .vscode/*
 !.vscode/mcp.json
 !.vscode/settings.json
