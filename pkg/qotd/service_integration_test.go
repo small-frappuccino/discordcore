@@ -3583,14 +3583,22 @@ func TestServiceClearPublishedDayStateRemovesAllRecordsForDate(t *testing.T) {
 		t.Fatalf("CreateQuestion(questionB) failed: %v", err)
 	}
 
+	// idx_qotd_questions_schedule is unique per (guild_id,
+	// scheduled_for_date_utc), so only ONE question can hold the schedule
+	// reservation for publishDate at a time. The realistic shape this test
+	// exercises is "two posts published for the same day": questionA owns
+	// the schedule reservation (used after a scheduled publish), questionB
+	// is a second post for the same day published manually — it never
+	// claimed scheduled_for_date_utc, only published_once_at links it back
+	// to the slot, which is enough for questionStillLinkedToOfficialPost.
 	questionA.Status = string(QuestionStatusUsed)
 	questionA.ScheduledForDateUTC = &publishDate
 	questionA.PublishedOnceAt = timePtr(time.Date(2026, 5, 7, 12, 43, 0, 0, time.UTC))
 	if _, err := store.UpdateQOTDQuestion(context.Background(), *questionA); err != nil {
 		t.Fatalf("UpdateQOTDQuestion(questionA) failed: %v", err)
 	}
-	questionB.Status = string(QuestionStatusReserved)
-	questionB.ScheduledForDateUTC = &publishDate
+	questionB.Status = string(QuestionStatusUsed)
+	questionB.PublishedOnceAt = timePtr(time.Date(2026, 5, 7, 13, 30, 0, 0, time.UTC))
 	if _, err := store.UpdateQOTDQuestion(context.Background(), *questionB); err != nil {
 		t.Fatalf("UpdateQOTDQuestion(questionB) failed: %v", err)
 	}

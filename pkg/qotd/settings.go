@@ -3,6 +3,7 @@ package qotd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -24,6 +25,14 @@ func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files
 		return clearSuppressedScheduledPublishDate(normalized, time.Time{}), nil
 	}
 	if !qotdAutomaticPublishConfigured(normalized) {
+		return normalized, nil
+	}
+	// Auto-suppression on OFF -> ON transitions only kicks in when the
+	// caller has not already provided their own suppression date. Otherwise
+	// we'd silently overwrite an explicit operator decision (for example a
+	// legacy stale value the operator wants the runtime to clean up later)
+	// with today's slot.
+	if strings.TrimSpace(normalized.SuppressScheduledPublishDateUTC) != "" {
 		return normalized, nil
 	}
 	if publishDate, suppress := suppressedPublishDateOnEnable(current, normalized, now); suppress {
