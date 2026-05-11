@@ -294,6 +294,104 @@ func TestStartOrAdoptOfficialThreadAdoptsExistingOnAlreadyCreatedError(t *testin
 	}
 }
 
+// TestStartOrAdoptOfficialThreadFallsBackWhenAutoArchiveDurationRejected
+// pins the contract that Discord's strict-mode rejection of the 48h auto
+// archive value does NOT fail the publish — we retry once with the
+// canonical 3-day value so the QOTD still goes out. Captures both POST
+// bodies and asserts the second carries the fallback duration.
+func TestStartOrAdoptOfficialThreadFallsBackWhenAutoArchiveDurationRejected(t *testing.T) {
+	var bodies [][]byte
+	var mu sync.Mutex
+
+	session := newDiscordTestSession(t, []discordTestRoute{{
+		method: http.MethodPost,
+		path:   "/channels/channel-1/messages/message-1/threads",
+		handle: func(_ *testing.T, r *http.Request, w http.ResponseWriter) {
+			body, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			attempt := len(bodies) + 1
+			bodies = append(bodies, body)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			if attempt == 1 {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"code":50035,"message":"Invalid Form Body","errors":{"auto_archive_duration":{"_errors":[{"code":"NUMBER_TYPE_COERCE","message":"Value is not one of (60, 1440, 4320, 10080)"}]}}}`))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"thread-fallback"}`))
+		},
+	}})
+
+	threadID, err := startOrAdoptOfficialThread(session, PublishOfficialPostParams{
+		ChannelID:      "channel-1",
+		PublishDateUTC: time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		ThreadName:     "Question of the Day",
+	}, "message-1")
+	if err != nil {
+		t.Fatalf("startOrAdoptOfficialThread() failed: %v", err)
+	}
+	if threadID != "thread-fallback" {
+		t.Fatalf("expected fallback thread id to be returned, got %q", threadID)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 2 {
+		t.Fatalf("expected exactly two POSTs (primary + fallback), got %d", len(bodies))
+	}
+
+	var primary, fallback map[string]any
+	if err := json.Unmarshal(bodies[0], &primary); err != nil {
+		t.Fatalf("decode primary body: %v", err)
+	}
+	if err := json.Unmarshal(bodies[1], &fallback); err != nil {
+		t.Fatalf("decode fallback body: %v", err)
+	}
+	if got, _ := primary["auto_archive_duration"].(float64); int(got) != defaultThreadAutoArchiveMinutes {
+		t.Fatalf("expected primary request to use the preferred duration, got %v", got)
+	}
+	if got, _ := fallback["auto_archive_duration"].(float64); int(got) != fallbackThreadAutoArchiveMinutes {
+		t.Fatalf("expected fallback request to use the canonical duration, got %v", got)
+	}
+}
+
+// TestStartOrAdoptOfficialThreadDoesNotRetryOnUnrelated400 pins that the
+// fallback only fires for an auto_archive_duration rejection. Other 400s
+// (bad name, permission-as-validation, etc.) keep their original error so
+// the surrounding lifecycle code can treat them appropriately.
+func TestStartOrAdoptOfficialThreadDoesNotRetryOnUnrelated400(t *testing.T) {
+	var attempts int
+	var mu sync.Mutex
+
+	session := newDiscordTestSession(t, []discordTestRoute{{
+		method: http.MethodPost,
+		path:   "/channels/channel-1/messages/message-1/threads",
+		handle: func(_ *testing.T, _ *http.Request, w http.ResponseWriter) {
+			mu.Lock()
+			attempts++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"code":50035,"message":"Invalid Form Body","errors":{"name":{"_errors":[{"code":"BASE_TYPE_BAD_LENGTH","message":"Must be between 1 and 100 in length."}]}}}`))
+		},
+	}})
+
+	threadID, err := startOrAdoptOfficialThread(session, PublishOfficialPostParams{
+		ChannelID:      "channel-1",
+		PublishDateUTC: time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC),
+		ThreadName:     "",
+	}, "message-1")
+	if err == nil {
+		t.Fatalf("expected non-validation 400 to bubble up, got threadID=%q", threadID)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if attempts != 1 {
+		t.Fatalf("expected exactly one POST (no fallback), got %d", attempts)
+	}
+}
+
 func TestBuildThreadStateChannelEditIncludesPinnedFlagsWhenRequested(t *testing.T) {
 	t.Parallel()
 

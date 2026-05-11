@@ -22,7 +22,15 @@ const (
 	// archive transition only flips Locked=true to prevent reply-driven
 	// unarchive after the window closes.
 	defaultThreadAutoArchiveMinutes = 2880
-	officialQuestionEmbedColor      = 0xF48FB1
+	// fallbackThreadAutoArchiveMinutes is the closest officially-documented
+	// auto_archive_duration value above 48h. Discord's API historically
+	// validated this field against the discrete set {60, 1440, 4320, 10080};
+	// 2880 works on most guilds but a strict-mode rejection (HTTP 400) has
+	// been observed. When the primary value is refused we retry once with
+	// this fallback so the QOTD still publishes — a 24h tail past the
+	// answer window is acceptable; failing the publish entirely is not.
+	fallbackThreadAutoArchiveMinutes = 4320
+	officialQuestionEmbedColor       = 0xF48FB1
 )
 
 type PublishOfficialPostParams struct {
@@ -177,14 +185,8 @@ func sendOfficialStarterMessage(session *discordgo.Session, channelID string, em
 // recorded its ID, so we read the message back to get the thread reference
 // instead of creating a duplicate (which Discord would refuse anyway).
 func startOrAdoptOfficialThread(session *discordgo.Session, params PublishOfficialPostParams, starterMessageID string) (string, error) {
-	thread, err := session.MessageThreadStartComplex(
-		params.ChannelID,
-		starterMessageID,
-		&discordgo.ThreadStart{
-			Name:                buildOfficialPostName(params.PublishDateUTC, params.DisplayID, params.ThreadName),
-			AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
-		},
-	)
+	threadName := buildOfficialPostName(params.PublishDateUTC, params.DisplayID, params.ThreadName)
+	thread, err := startOfficialThreadWithFallback(session, params.ChannelID, starterMessageID, threadName)
 	if err == nil {
 		if thread == nil {
 			return "", nil
@@ -202,6 +204,62 @@ func startOrAdoptOfficialThread(session *discordgo.Session, params PublishOffici
 		return "", err
 	}
 	return strings.TrimSpace(existing.Thread.ID), nil
+}
+
+// startOfficialThreadWithFallback attempts thread creation with the preferred
+// auto-archive duration (matching the QOTD answer window) and retries once
+// with the canonical 3-day value if Discord rejects the request as a
+// validation error. The fallback only fires on a clean validation rejection
+// — ALREADY_HAS_A_THREAD, permission errors, network failures, and other
+// non-validation 400s all bubble up unchanged so they keep their existing
+// recovery paths (adopt-existing-thread, abandon-on-permission, retry-later).
+func startOfficialThreadWithFallback(session *discordgo.Session, channelID, starterMessageID, threadName string) (*discordgo.Channel, error) {
+	thread, err := session.MessageThreadStartComplex(
+		channelID,
+		starterMessageID,
+		&discordgo.ThreadStart{
+			Name:                threadName,
+			AutoArchiveDuration: defaultThreadAutoArchiveMinutes,
+		},
+	)
+	if err == nil || !isAutoArchiveDurationRejection(err) {
+		return thread, err
+	}
+	return session.MessageThreadStartComplex(
+		channelID,
+		starterMessageID,
+		&discordgo.ThreadStart{
+			Name:                threadName,
+			AutoArchiveDuration: fallbackThreadAutoArchiveMinutes,
+		},
+	)
+}
+
+// isAutoArchiveDurationRejection narrows a Discord error down to "the
+// auto_archive_duration value I just sent is not accepted on this guild". We
+// require both a 400 status and an indication that the offending field is
+// auto_archive_duration: matching on a bare 400 would swallow unrelated
+// validation issues (bad thread name, missing permissions surfaced as 400,
+// rate-limit edge cases) and silently change the auto-archive contract.
+func isAutoArchiveDurationRejection(err error) bool {
+	var restErr *discordgo.RESTError
+	if !errors.As(err, &restErr) || restErr == nil {
+		return false
+	}
+	if restErr.Response == nil || restErr.Response.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	payload := strings.ToLower(string(restErr.ResponseBody))
+	if strings.Contains(payload, "auto_archive_duration") {
+		return true
+	}
+	if restErr.Message != nil {
+		msg := strings.ToLower(restErr.Message.Message)
+		if strings.Contains(msg, "auto_archive_duration") || strings.Contains(msg, "auto archive duration") {
+			return true
+		}
+	}
+	return false
 }
 
 func isThreadAlreadyCreatedError(err error) bool {
