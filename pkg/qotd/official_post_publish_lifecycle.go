@@ -118,6 +118,7 @@ func (s *Service) completeOfficialPostProvisioning(
 			return nil, nil, "", fmt.Errorf("publish official qotd post: %w (mark %s: %v)", publishErr, failureState, err)
 		}
 		if failureState == OfficialPostStateAbandoned {
+			s.observability().RecordOfficialPostAbandoned()
 			log.ApplicationLogger().Warn(
 				"QOTD publish abandoned (unrecoverable Discord error)",
 				"officialPostID", post.ID,

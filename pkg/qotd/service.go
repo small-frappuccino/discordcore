@@ -96,6 +96,7 @@ type Service struct {
 	configManager       *files.ConfigManager
 	store               *storage.Store
 	publisher           Publisher
+	metrics             Metrics
 	now                 func() time.Time
 	guildLifecycleLocks sync.Map
 	// unmanageableThreadLogs deduplicates the WARN log emitted when Discord
@@ -106,14 +107,29 @@ type Service struct {
 	unmanageableThreadLogs sync.Map
 }
 
+// NewService constructs the QOTD service with no metrics wired (defaults
+// to NopMetrics). Use NewServiceWithMetrics when an operational metrics
+// sink should be threaded through.
 func NewService(configManager *files.ConfigManager, store *storage.Store, publisher Publisher) *Service {
+	return NewServiceWithMetrics(configManager, store, publisher, nil)
+}
+
+// NewServiceWithMetrics is the canonical constructor when the bot is
+// running with /v1/health/qotd exposed. Passing a nil metrics value
+// falls back to NopMetrics so library tests that don't care about
+// observability stay clean.
+func NewServiceWithMetrics(configManager *files.ConfigManager, store *storage.Store, publisher Publisher, metrics Metrics) *Service {
 	if publisher == nil {
 		publisher = discordqotd.NewPublisher()
+	}
+	if metrics == nil {
+		metrics = NopMetrics{}
 	}
 	return &Service{
 		configManager: configManager,
 		store:         store,
 		publisher:     publisher,
+		metrics:       metrics,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -558,12 +574,29 @@ func (s *Service) PublishNow(ctx context.Context, guildID string, session *disco
 	return s.PublishNowWithParams(ctx, guildID, session, PublishNowParams{})
 }
 
-func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params PublishNowParams) (*PublishResult, error) {
-	if err := s.validate(); err != nil {
+func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params PublishNowParams) (result *PublishResult, err error) {
+	// Named returns + defer is the smallest seam to record the publish
+	// attempt and its outcome without rewriting the full function body.
+	// Duration covers everything from the publish path entry; the
+	// lifecycle lock acquisition is included on purpose so operators
+	// can see contention spikes.
+	publishStart := time.Now()
+	s.observability().RecordPublishAttempt(PublishModeManual)
+	defer func() {
+		duration := time.Since(publishStart)
+		if err != nil {
+			s.observability().RecordPublishFailure(PublishModeManual, ClassifyPublishFailure(err), duration)
+			return
+		}
+		s.observability().RecordPublishSuccess(PublishModeManual, duration)
+	}()
+
+	if err = s.validate(); err != nil {
 		return nil, err
 	}
 	if session == nil {
-		return nil, ErrDiscordUnavailable
+		err = ErrDiscordUnavailable
+		return nil, err
 	}
 
 	guildID = strings.TrimSpace(guildID)
@@ -818,6 +851,26 @@ func (s *Service) clock() time.Time {
 		return s.now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+// observability returns the Metrics sink to write to. Falls back to
+// NopMetrics so the publish and reconcile paths can call
+// s.observability().RecordX without nil-checking, including in unit
+// tests that build &Service{} directly without going through a
+// constructor.
+func (s *Service) observability() Metrics {
+	if s == nil || s.metrics == nil {
+		return NopMetrics{}
+	}
+	return s.metrics
+}
+
+// Metrics returns the Metrics implementation currently attached to the
+// service. Exported so external readers (the /v1/health/qotd route
+// handler) can pull a snapshot via the SnapshotProvider type assertion
+// without granting write access to the same surface.
+func (s *Service) Metrics() Metrics {
+	return s.observability()
 }
 
 func countQuestions(questions []storage.QOTDQuestionRecord) QuestionCounts {

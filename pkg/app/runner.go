@@ -324,7 +324,12 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	}()
 
 	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerSyncDispatcher)
-	qotdService := qotd.NewService(configManager, store, nil)
+	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
+	// expose. NopMetrics is a valid fallback (the service still works) but
+	// without a SnapshotProvider the route returns 503; production startup
+	// always uses the in-memory implementation.
+	qotdMetrics := qotd.NewInMemoryMetrics()
+	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
 
 	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,

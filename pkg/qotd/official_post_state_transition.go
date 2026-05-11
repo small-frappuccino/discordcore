@@ -156,6 +156,7 @@ func (s *Service) applyOfficialPostThreadTransition(
 
 	updated, dbErr := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(finalState), closedAt, archivedAt)
 	if dbErr != nil {
+		s.observability().RecordStateDivergence()
 		log.ApplicationLogger().Warn(
 			"qotd_official_post_state_divergence",
 			"officialPostID", post.ID,

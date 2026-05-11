@@ -76,12 +76,15 @@ func parseSuppressedScheduledPublishDates(cfg files.QOTDConfig) (dates []time.Ti
 // whose date is before today (UTC). Each removal is a separate write so the
 // audit trail stays granular and a partial config-manager failure on one
 // date does not leak into the others. Malformed entries are purged on
-// sight so the slice cannot grow unbounded from typos.
+// sight so the slice cannot grow unbounded from typos. Each successful
+// removal records a SuppressionCleared metric so operators can see the
+// cleanup volume in /v1/health/qotd.
 func (s *Service) clearExpiredScheduledPublishSuppression(guildID string, cfg files.QOTDConfig, now time.Time) {
 	dates, invalid := parseSuppressedScheduledPublishDates(cfg)
 	for _, raw := range invalid {
 		log.ApplicationLogger().Warn("QOTD suppression date is invalid; clearing stale token", "guildID", guildID, "value", raw)
 		s.clearInvalidSuppressionEntry(guildID, raw)
+		s.observability().RecordSuppressionCleared()
 	}
 	todayUTC := NormalizePublishDateUTC(now)
 	if todayUTC.IsZero() {
@@ -92,6 +95,7 @@ func (s *Service) clearExpiredScheduledPublishSuppression(guildID string, cfg fi
 			continue
 		}
 		s.clearScheduledPublishSuppressionForDate(guildID, date)
+		s.observability().RecordSuppressionCleared()
 	}
 }
 

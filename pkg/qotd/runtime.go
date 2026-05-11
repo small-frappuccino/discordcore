@@ -22,12 +22,35 @@ const (
 
 // PublishScheduledIfDue publishes the scheduled QOTD for the active slot when
 // the publish boundary has passed and no official post exists yet.
-func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (bool, error) {
-	if err := s.validate(); err != nil {
+func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (published bool, err error) {
+	// publishAttempted flips to true once we have passed the "is anything
+	// due / are we configured" gates and have actually committed to a
+	// publish path (fresh provision OR resume of a pending provision).
+	// Early returns from gate failures are NOT publish attempts and do
+	// not contribute to the publish success/failure ratio; they only
+	// surface via structured logs and reconcile-cycle metrics elsewhere.
+	publishStart := time.Now()
+	publishAttempted := false
+	defer func() {
+		if !publishAttempted {
+			return
+		}
+		duration := time.Since(publishStart)
+		if err != nil {
+			s.observability().RecordPublishFailure(PublishModeScheduled, ClassifyPublishFailure(err), duration)
+			return
+		}
+		if published {
+			s.observability().RecordPublishSuccess(PublishModeScheduled, duration)
+		}
+	}()
+
+	if err = s.validate(); err != nil {
 		return false, err
 	}
 	if session == nil {
-		return false, ErrDiscordUnavailable
+		err = ErrDiscordUnavailable
+		return false, err
 	}
 
 	guildID = strings.TrimSpace(guildID)
@@ -54,11 +77,17 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 
 	if slotState.HasOfficialPostRecord() {
 		if slotState.HasProvisioningOfficialPost() {
-			recovered, err := s.resumeOfficialPostProvisioning(ctx, session, *slotState.OfficialPost, now)
-			if err != nil {
+			// Resuming a half-provisioned record IS a publish attempt
+			// from the metrics perspective: we are about to talk to
+			// Discord and may transition the post to current.
+			publishAttempted = true
+			s.observability().RecordPublishAttempt(PublishModeScheduled)
+			recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, session, *slotState.OfficialPost, now)
+			if resumeErr != nil {
+				err = resumeErr
 				return false, err
 			}
-			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+			if err = s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
 				return false, err
 			}
 			return true, nil
@@ -84,12 +113,20 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		return false, nil
 	}
 
+	// Past every gate — this cycle is committing to a publish attempt.
+	// publishAttempted flips here so the defer accounting captures the
+	// reservation/provisioning/Discord path even when an early DB error
+	// short-circuits before completeOfficialPostProvisioning runs.
+	publishAttempted = true
+	s.observability().RecordPublishAttempt(PublishModeScheduled)
+
 	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
 	if err != nil {
 		return false, err
 	}
 	if question == nil {
-		return false, ErrNoQuestionsAvailable
+		err = ErrNoQuestionsAvailable
+		return false, err
 	}
 	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
 	if err != nil {
@@ -228,12 +265,23 @@ func nextScheduledPublishTimeFromConfig(cfg files.QOTDConfig, now time.Time) (ti
 }
 
 // ReconcileGuild realigns QOTD thread state and snapshots/archive records for a guild.
-func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) error {
-	if err := s.validate(); err != nil {
+func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) (err error) {
+	// Named return + defer captures every exit path uniformly so the
+	// reconcile cycle counter is exact regardless of which gate trips
+	// first. Duration includes the lock acquisition; spikes there are
+	// operationally interesting (they mean publish or another reconcile
+	// is holding the guild lock).
+	reconcileStart := time.Now()
+	defer func() {
+		s.observability().RecordReconcileCycle(time.Since(reconcileStart), err)
+	}()
+
+	if err = s.validate(); err != nil {
 		return err
 	}
 	if session == nil {
-		return ErrDiscordUnavailable
+		err = ErrDiscordUnavailable
+		return err
 	}
 
 	guildID = strings.TrimSpace(guildID)
@@ -272,6 +320,7 @@ func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID st
 		return err
 	}
 	if len(ids) > 0 {
+		s.observability().RecordOrphanReclaim(len(ids))
 		log.ApplicationLogger().Info(
 			"QOTD reclaimed orphan question reservations",
 			"guildID", guildID,
@@ -468,6 +517,9 @@ func (s *Service) setThreadState(ctx context.Context, session *discordgo.Session
 
 // logUnmanageableThreadOnce emits a single WARN per (thread, target state)
 // pair so operators see the issue without the reconcile loop flooding logs.
+// The metrics counter increments once per unique pair, matching the log
+// dedup — operators reading /v1/health/qotd see the same "distinct
+// rejection" cardinality as the WARN stream.
 func (s *Service) logUnmanageableThreadOnce(threadID string, state discordqotd.ThreadState, cause error) {
 	if s == nil {
 		return
@@ -476,6 +528,7 @@ func (s *Service) logUnmanageableThreadOnce(threadID string, state discordqotd.T
 	if _, loaded := s.unmanageableThreadLogs.LoadOrStore(key, struct{}{}); loaded {
 		return
 	}
+	s.observability().RecordUnmanageableThread()
 	log.ApplicationLogger().Warn(
 		"QOTD thread state edit rejected by Discord; continuing without grooming the thread",
 		"threadID", threadID,
