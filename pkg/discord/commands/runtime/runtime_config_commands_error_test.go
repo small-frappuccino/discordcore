@@ -283,7 +283,7 @@ func TestEditInteractionMessageWithLog_LogsFailure(t *testing.T) {
 	}.encode())
 	logBuf := withCapturedDefaultLogger(t)
 
-	editInteractionMessageWithLog(session, interaction, errorEmbed("forced"), nil, "test.edit")
+	editInteractionMessageWithLog(session, interaction, errorEmbed(discordgo.EnglishUS, "forced"), nil, "test.edit")
 
 	if rec.webhookPatchCount() == 0 {
 		t.Fatalf("expected at least one webhook patch call")
@@ -421,7 +421,7 @@ func TestRegisterCommands_RuntimeComponentRejectsDifferentUser(t *testing.T) {
 	if rec.followupCount() != 1 {
 		t.Fatalf("expected one ephemeral follow-up denial, got %d", rec.followupCount())
 	}
-	if !strings.Contains(rec.followupBody(), runtimeConfigInteractionDeniedText) {
+	if !strings.Contains(rec.followupBody(), runtimeMsg(discordgo.EnglishUS, runtimeMsgDeniedPanel)) {
 		t.Fatalf("expected denial follow-up body to mention authorization, got %q", rec.followupBody())
 	}
 	if !strings.Contains(rec.followupBody(), `"flags":64`) {
@@ -490,7 +490,7 @@ func TestRegisterCommands_RuntimeModalRejectsDifferentUser(t *testing.T) {
 	if rec.followupCount() != 1 {
 		t.Fatalf("expected one modal denial follow-up, got %d", rec.followupCount())
 	}
-	if !strings.Contains(rec.followupBody(), runtimeConfigInteractionDeniedText) {
+	if !strings.Contains(rec.followupBody(), runtimeMsg(discordgo.EnglishUS, runtimeMsgDeniedPanel)) {
 		t.Fatalf("expected modal denial follow-up body to mention authorization, got %q", rec.followupBody())
 	}
 	if !strings.Contains(rec.followupBody(), `"flags":64`) {

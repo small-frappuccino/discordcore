@@ -9,11 +9,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 )
 
-const (
-	runtimeConfigInteractionDeniedText  = "Only the person who opened this runtime config panel can use it. This reply stays private because it belongs to that admin session."
-	runtimeConfigInteractionExpiredText = "This runtime config panel is no longer valid. Reopen /config runtime to continue."
-)
-
 type runtimeVisibilityClass string
 
 const (
@@ -45,10 +40,12 @@ func runtimeVisibilityIsEphemeral(class runtimeVisibilityClass) bool {
 func authorizeRuntimeComponentInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy) (bool, error) {
 	ownerUserID, ok := runtimeOriginalPanelUserID(ctx.Interaction)
 	if !ok {
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionExpiredText)
+		locale := ctx.Locale()
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgExpiredPanel))
 	}
 	if strings.TrimSpace(ctx.UserID) != ownerUserID {
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionDeniedText)
+		locale := ctx.Locale()
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgDeniedPanel))
 	}
 	return false, nil
 }
@@ -56,10 +53,12 @@ func authorizeRuntimeComponentInteraction(ctx *core.Context, ackPolicy core.Inte
 func authorizeRuntimeModalInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy) (bool, error) {
 	_, authToken, ok := decodeRuntimeModalState(ctx.RouteKey.CustomID)
 	if !ok {
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionExpiredText)
+		locale := ctx.Locale()
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgExpiredPanel))
 	}
 	if authToken == "" || authToken != runtimeInteractionAuthToken(runtimeInteractionUserID(ctx.Interaction)) {
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionDeniedText)
+		locale := ctx.Locale()
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgDeniedPanel))
 	}
 	return false, nil
 }
