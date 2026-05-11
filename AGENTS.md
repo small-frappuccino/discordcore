@@ -210,6 +210,7 @@ Countermeasures:
 - git history is the record of prior versions; the working tree is not a museum
 - the only exception to clean removal is staged removal or a backwards-compatibility shim explicitly requested in the conversation; do not assume the request was implied
 - if a removed public symbol has external callers, name the breaking change and stop before editing
+- when a persisted config field changes shape (string → slice, scalar → struct, etc.), keep the legacy JSON key alive inside the local `raw*` unmarshal struct only and migrate it into the canonical field at decode time; do not leave the legacy key on the public `*Config` type, and do not emit it on the write path
 - in long sessions, re-anchor on the original task before each new edit; if scope has grown beyond what the user requested, stop and confirm before continuing
 
 ## Recommended Strategy By Task Type
@@ -237,6 +238,7 @@ For refactors:
 2. preserve behavior first, then tighten tests
 3. prefer extracting within an existing sibling-file pattern over creating new architectural layers
 4. stop if the change starts widening beyond the original contract or workflow
+5. when a "god object" or wide service needs splitting, prefer role-segregation interfaces over a concrete implementation split; let one concrete type keep satisfying multiple narrow consumer-side interfaces (see `pkg/qotd.QuestionCatalog` and `PublishCoordinator`) before fragmenting the storage and lifecycle wiring
 
 For debugging:
 
@@ -339,6 +341,8 @@ Testing style:
 - prefer deterministic seams already present in the repo
 - do not require live Discord access
 - only use isolated Postgres helpers where the package already follows that pattern
+- when a package exposes role-segregated interfaces (e.g. `pkg/qotd.QuestionCatalog`, `PublishCoordinator`), mock the narrowest role the unit under test exercises; do not paste a union stub when the function only needs `Settings` and `ListQuestions`
+- prefer pure unit tests for state-machine math, lifecycle window calculations, and error classification; integration tests that round-trip through Postgres or a fake Discord publisher should pin behavior that genuinely crosses those boundaries, not arithmetic that lives in pure helpers
 - keep failures in the `Test` or subtest when possible; shared validators should return `error`, diffs, or `cmp.Option` rather than failing the test themselves
 - mark setup and cleanup helpers with `t.Helper()` and use `t.Fatal` there only for unrecoverable test-environment failures
 - prefer `t.Error` plus `continue` to keep table tests going; use `t.Fatal` when setup failure prevents the current test or subtest from continuing
@@ -354,7 +358,14 @@ Validation expectations:
 - route or embed contract changes: verify `ui/vite.config.ts`, `ui/src/app/routes.ts`, `pkg/control/http_routes.go`, `pkg/control/dashboard_handler.go`, and that `ui/dist/index.html` still exists
 - feature or settings contract changes: verify Go route and workspace builders, `ui/src/api/control.ts`, and the adapters or pages consuming the changed fields
 - exported Go API, doc, or error-contract changes: update nearby tests and doc comments that pin the new behavior
+- integration tests in `pkg/qotd/` and `pkg/discord/commands/qotd/` are heavy (~60s and ~25s respectively); when iterating, run targeted `-run` filters first and the full integration suite once before reporting completion
 - if a relevant validation step was not run, say so explicitly
+
+Releases:
+
+- the canonical way to land a change is the local `release` CLI: `release -m "<conventional commit subject>" -y --promote`; it stages changes, bumps `pkg/util/application.go`, runs the build hook, fast-forwards `development` into `main`, and tags the release
+- do not push to `main` directly, do not call `git tag` by hand, and do not bundle multiple unrelated changes into one release commit — split into separate `release` invocations so each version is a coherent unit
+- the conventional-commit subject becomes the release message; treat it as the changelog entry, not a throwaway commit line
 
 ## Hotspots And Cautions
 
@@ -377,6 +388,16 @@ These seams are intentional. Keep them decomposed:
 - `pkg/control/discord_oauth.go`: shared OAuth types, constants, provider construction, and permission parsing only; flow logic belongs in `discord_oauth_*.go` siblings or the dedicated service
 - `pkg/storage/postgres_store.go`: `Store` type, bootstrap, schema init entrypoint, and shared SQL helpers only; domain behavior belongs in focused `postgres_store_*.go` files
 - `pkg/discord/logging/monitoring.go`: lifecycle and orchestration only; gateway handlers, reactions, cache loops, permission mirroring, and similar specifics belong in focused `monitoring_*.go` files
+
+QOTD subsystem — load-bearing patterns that new edits must preserve:
+
+- idempotency triad on the publish path: a 16-hex `Nonce` on `QOTDOfficialPostRecord` propagated to Discord via `enforce_nonce`, a partial unique index on `(guild_id, deck_id, publish_date_utc, publish_mode='scheduled')`, and the `resolvePublishNowConflict` / adopt-existing-thread recovery branches; new publish-side edits must keep all three intact or document the new safety story
+- `OfficialPostState` distinguishes `failed` (transient, retried every reconcile cycle) from `abandoned` (terminal, requires admin action); `isUnrecoverableDiscordPublishError` is the gate between them, and new Discord error codes belong in one classifier rather than ad-hoc branches in the publish flow
+- thread-state errors are classified by `isMissingDiscordThreadError` (404 → flip to `missing_discord`), `isUnmanageableDiscordThreadError` (403 / 50001 / 50013 → degrade silently with log-once dedup via `Service.unmanageableThreadLogs`), and the unclassified default (retry next cycle); new failure modes slot into one of those three buckets
+- `syncLiveOfficialPost` short-circuits when `post.State == lifecycle.State`; reconcile-style code added later must follow the same "skip API call when DB already reflects target" pattern to avoid rate-limit pressure and to respect manual mod actions on the thread
+- Discord thread auto-archive is set to `defaultThreadAutoArchiveMinutes` (48h, matching the answer window) with a fallback to `fallbackThreadAutoArchiveMinutes` (4320) on validation rejection; the `archiveOfficialPost` transition only flips `Locked=true` — re-introducing `Archived=true` would race the platform-driven archive
+- suppression is a set, not a single date: `QOTDConfig.SuppressScheduledPublishDatesUTC []string` is the canonical field; the unmarshal path migrates the legacy `suppress_scheduled_publish_date_utc` string in `rawQOTDConfig` only, and the runtime trims expired entries on each cycle via `clearExpiredScheduledPublishSuppression`
+- the `pkg/qotd` package exposes role-segregated interfaces (`QuestionCatalog`, `PublishCoordinator`, `ReconcileCoordinator`) that the monolithic `*Service` satisfies; consumers (commands, runtime, future HTTP routes) should depend on the narrow role they exercise so test mocks stay small — do not re-widen a consumer's dependency to the union without a contract-level reason
 
 Additional caution:
 
