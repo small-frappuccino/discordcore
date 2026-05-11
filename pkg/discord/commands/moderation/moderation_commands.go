@@ -190,11 +190,12 @@ var (
 
 func ensureModerationCommandEnabled(ctx *core.Context, featureID, disabledMessage string) error {
 	if ctx == nil || ctx.Config == nil {
-		return core.NewCommandError("Configuration is not available right now.", true)
+		return core.NewCommandError(modMsg(discordgo.EnglishUS, modMsgConfigNA), true)
 	}
+	locale := ctx.Locale()
 	cfg := ctx.Config.Config()
 	if cfg == nil {
-		return core.NewCommandError("Configuration is not available right now.", true)
+		return core.NewCommandError(modMsg(locale, modMsgConfigNA), true)
 	}
 	if !moderationCommandFeatureEnabled(cfg.ResolveFeatures(ctx.GuildID), featureID) {
 		return core.NewCommandError(disabledMessage, true)
@@ -270,7 +271,8 @@ func (c *banCommand) RequiresGuild() bool { return true }
 func (c *banCommand) RequiresPermissions() bool { return true }
 
 func (c *banCommand) Handle(ctx *core.Context) error {
-	if err := ensureModerationCommandEnabled(ctx, "moderation.ban", "Ban command is disabled for this server."); err != nil {
+	locale := ctx.Locale()
+	if err := ensureModerationCommandEnabled(ctx, "moderation.ban", modMsg(locale, modMsgBanDisabled)); err != nil {
 		return err
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -282,10 +284,10 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidUser), true)
 	}
 
-	reason, truncated := sanitizeReason(extractor.String("reason"))
+	reason, truncated := sanitizeReason(locale, extractor.String("reason"))
 
 	banCtx, err := prepareBanContext(ctx)
 	if err != nil {
@@ -293,7 +295,7 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canBanTarget(ctx, banCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotBan, userID, reasonText), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
@@ -314,7 +316,7 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 		RequestedBy: ctx.UserID,
 		Extra:       details,
 	})
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildBanCommandMessage(targetUsername, reason, truncated))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildBanCommandMessage(locale, targetUsername, reason, truncated))
 }
 
 type massBanCommand struct{}
@@ -347,7 +349,8 @@ func (c *massBanCommand) RequiresGuild() bool { return true }
 func (c *massBanCommand) RequiresPermissions() bool { return true }
 
 func (c *massBanCommand) Handle(ctx *core.Context) error {
-	if err := ensureModerationCommandEnabled(ctx, "moderation.massban", "Mass ban command is disabled for this server."); err != nil {
+	locale := ctx.Locale()
+	if err := ensureModerationCommandEnabled(ctx, "moderation.massban", modMsg(locale, modMsgMassBanDisabled)); err != nil {
 		return err
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -359,13 +362,13 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 
 	memberIDs, invalidTokens := parseMemberIDs(membersInput)
 	if len(memberIDs) == 0 {
-		return core.NewCommandError("No valid member IDs provided", true)
+		return core.NewCommandError(modMsg(locale, modMsgNoValidMembers), true)
 	}
 	if len(invalidTokens) > 0 {
 		log.ApplicationLogger().Info("Massban ignored invalid member tokens", "guildID", ctx.GuildID, "invalid_count", len(invalidTokens))
 	}
 
-	reason, truncated := sanitizeReason(extractor.String("reason"))
+	reason, truncated := sanitizeReason(locale, extractor.String("reason"))
 
 	banCtx, err := prepareBanContext(ctx)
 	if err != nil {
@@ -416,7 +419,7 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 			"failed", len(failed),
 		)
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMassBanCommandMessage(bannedCount))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMassBanCommandMessage(locale, bannedCount))
 }
 
 type kickCommand struct{}
@@ -449,7 +452,8 @@ func (c *kickCommand) RequiresGuild() bool { return true }
 func (c *kickCommand) RequiresPermissions() bool { return true }
 
 func (c *kickCommand) Handle(ctx *core.Context) error {
-	if err := ensureModerationCommandEnabled(ctx, "moderation.kick", "Kick command is disabled for this server."); err != nil {
+	locale := ctx.Locale()
+	if err := ensureModerationCommandEnabled(ctx, "moderation.kick", modMsg(locale, modMsgKickDisabled)); err != nil {
 		return err
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -461,10 +465,10 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidUser), true)
 	}
 
-	reason, truncated := sanitizeReason(extractor.String("reason"))
+	reason, truncated := sanitizeReason(locale, extractor.String("reason"))
 
 	kickCtx, err := prepareKickContext(ctx)
 	if err != nil {
@@ -472,7 +476,7 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canKickTarget(ctx, kickCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot kick `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotKick, userID, reasonText), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
@@ -493,7 +497,7 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 		Extra:       details,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildKickCommandMessage(targetUsername, reason, truncated))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildKickCommandMessage(locale, targetUsername, reason, truncated))
 }
 
 type timeoutCommand struct{}
@@ -534,7 +538,8 @@ func (c *timeoutCommand) RequiresGuild() bool { return true }
 func (c *timeoutCommand) RequiresPermissions() bool { return true }
 
 func (c *timeoutCommand) Handle(ctx *core.Context) error {
-	if err := ensureModerationCommandEnabled(ctx, "moderation.timeout", "Timeout command is disabled for this server."); err != nil {
+	locale := ctx.Locale()
+	if err := ensureModerationCommandEnabled(ctx, "moderation.timeout", modMsg(locale, modMsgTimeoutDisabled)); err != nil {
 		return err
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -546,18 +551,18 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidUser), true)
 	}
 
 	minutes := extractor.Int("minutes")
 	if minutes <= 0 {
-		return core.NewCommandError("Please provide a valid timeout duration in minutes.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidTimeoutDuration), true)
 	}
 	if minutes > timeoutMaxMinutes {
-		return core.NewCommandError("Timeout duration cannot exceed 40320 minutes (28 days).", true)
+		return core.NewCommandError(modMsg(locale, modMsgTimeoutTooLong), true)
 	}
 
-	reason, truncated := sanitizeReason(extractor.String("reason"))
+	reason, truncated := sanitizeReason(locale, extractor.String("reason"))
 
 	timeoutCtx, err := prepareTimeoutContext(ctx)
 	if err != nil {
@@ -565,7 +570,7 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canTimeoutTarget(ctx, timeoutCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot timeout `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotTimeout, userID, reasonText), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
@@ -587,7 +592,7 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 		Extra:       details,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildTimeoutCommandMessage(targetUsername, minutes, reason, truncated))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildTimeoutCommandMessage(locale, targetUsername, minutes, reason, truncated))
 }
 
 type muteCommand struct{}
@@ -620,6 +625,7 @@ func (c *muteCommand) RequiresGuild() bool { return true }
 func (c *muteCommand) RequiresPermissions() bool { return true }
 
 func (c *muteCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
@@ -629,10 +635,10 @@ func (c *muteCommand) Handle(ctx *core.Context) error {
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidUser), true)
 	}
 
-	reason, truncated := sanitizeReason(extractor.String("reason"))
+	reason, truncated := sanitizeReason(locale, extractor.String("reason"))
 
 	muteCtx, err := prepareMuteContext(ctx)
 	if err != nil {
@@ -645,15 +651,15 @@ func (c *muteCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canMuteTarget(ctx, muteCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotMute, userID, reasonText), true)
 	}
 
 	targetMember, ok, reasonText := resolveRoleTargetMember(ctx, userID)
 	if !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotMute, userID, reasonText), true)
 	}
 	if memberHasRole(targetMember, roleID) {
-		return core.NewCommandError(fmt.Sprintf("Cannot mute `%s`: target already has the configured mute role.", userID), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotMute, userID, modMsg(locale, modMsgTargetHasMuteRole)), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
@@ -674,7 +680,7 @@ func (c *muteCommand) Handle(ctx *core.Context) error {
 		Extra:       details,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMuteCommandMessage(targetUsername, muteRole, reason, truncated))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMuteCommandMessage(locale, targetUsername, muteRole, reason, truncated))
 }
 
 type warnCommand struct{}
@@ -707,7 +713,8 @@ func (c *warnCommand) RequiresGuild() bool { return true }
 func (c *warnCommand) RequiresPermissions() bool { return true }
 
 func (c *warnCommand) Handle(ctx *core.Context) error {
-	if err := ensureModerationCommandEnabled(ctx, "moderation.warn", "Warn command is disabled for this server."); err != nil {
+	locale := ctx.Locale()
+	if err := ensureModerationCommandEnabled(ctx, "moderation.warn", modMsg(locale, modMsgWarnDisabled)); err != nil {
 		return err
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -719,10 +726,10 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidUser), true)
 	}
 
-	reason, truncated := sanitizeReason(extractor.String("reason"))
+	reason, truncated := sanitizeReason(locale, extractor.String("reason"))
 
 	warnCtx, err := prepareWarnContext(ctx)
 	if err != nil {
@@ -730,18 +737,18 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot warn `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotWarn, userID, reasonText), true)
 	}
 
 	store := moderationStoreFromContext(ctx)
 	if store == nil {
-		return core.NewCommandError("Warnings storage is not available for this bot instance.", true)
+		return core.NewCommandError(modMsg(locale, modMsgWarnStorageNA), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	warning, err := store.CreateModerationWarning(ctx.GuildID, userID, ctx.UserID, reason, time.Now().UTC())
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to create warning for %s: %v", userID, err), true)
+		return core.NewCommandError(modMsg(locale, modMsgWarnStoreFailed, userID, err), true)
 	}
 
 	details := "Warning recorded"
@@ -759,7 +766,7 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 		HasCaseNumber: true,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildWarnCommandMessage(targetUsername, warning.CaseNumber, reason, truncated))
+	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildWarnCommandMessage(locale, targetUsername, warning.CaseNumber, reason, truncated))
 }
 
 type warningsCommand struct{}
@@ -794,7 +801,8 @@ func (c *warningsCommand) RequiresGuild() bool { return true }
 func (c *warningsCommand) RequiresPermissions() bool { return true }
 
 func (c *warningsCommand) Handle(ctx *core.Context) error {
-	if err := ensureModerationCommandEnabled(ctx, "moderation.warnings", "Warnings command is disabled for this server."); err != nil {
+	locale := ctx.Locale()
+	if err := ensureModerationCommandEnabled(ctx, "moderation.warnings", modMsg(locale, modMsgWarningsDisabled)); err != nil {
 		return err
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -806,7 +814,7 @@ func (c *warningsCommand) Handle(ctx *core.Context) error {
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return core.NewCommandError(modMsg(locale, modMsgInvalidUser), true)
 	}
 
 	limit := int(extractor.Int("limit"))
@@ -820,21 +828,21 @@ func (c *warningsCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot inspect warnings for `%s`: %s.", userID, reasonText), true)
+		return core.NewCommandError(modMsg(locale, modMsgCannotInspect, userID, reasonText), true)
 	}
 
 	store := moderationStoreFromContext(ctx)
 	if store == nil {
-		return core.NewCommandError("Warnings storage is not available for this bot instance.", true)
+		return core.NewCommandError(modMsg(locale, modMsgWarnStorageNA), true)
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	warnings, err := store.ListModerationWarnings(ctx.GuildID, userID, limit)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to load warnings for %s: %v", userID, err), true)
+		return core.NewCommandError(modMsg(locale, modMsgWarnLoadFailed, userID, err), true)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, buildWarningsCommandMessage(targetUsername, warnings))
+	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, buildWarningsCommandMessage(locale, targetUsername, warnings))
 }
 
 func parseMemberIDs(input string) ([]string, []string) {
@@ -871,87 +879,87 @@ func parseMemberIDs(input string) ([]string, []string) {
 	return ids, invalid
 }
 
-func buildBanCommandMessage(targetUsername, reason string, truncated bool) string {
+func buildBanCommandMessage(locale discordgo.Locale, targetUsername, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
-		targetLabel = "unknown user"
+		targetLabel = modMsg(locale, modMsgUnknownUser)
 	}
-	message := fmt.Sprintf("%s was banned. Reason: %s.", targetLabel, reason)
+	message := modMsg(locale, modMsgBanned, targetLabel, reason)
 	if truncated {
-		message += " Reason was truncated to fit this reply."
+		message += modMsg(locale, modMsgReasonTruncated)
 	}
 	return message
 }
 
-func buildMassBanCommandMessage(banned int) string {
+func buildMassBanCommandMessage(locale discordgo.Locale, banned int) string {
 	if banned == 1 {
-		return "1 user was banned."
+		return modMsg(locale, modMsgMassBanned1)
 	}
-	return fmt.Sprintf("%d users were banned.", banned)
+	return modMsg(locale, modMsgMassBannedN, banned)
 }
 
-func buildKickCommandMessage(targetUsername, reason string, truncated bool) string {
+func buildKickCommandMessage(locale discordgo.Locale, targetUsername, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
-		targetLabel = "unknown user"
+		targetLabel = modMsg(locale, modMsgUnknownUser)
 	}
-	message := fmt.Sprintf("%s was kicked. Reason: %s.", targetLabel, reason)
+	message := modMsg(locale, modMsgKicked, targetLabel, reason)
 	if truncated {
-		message += " Reason was truncated to fit this reply."
+		message += modMsg(locale, modMsgReasonTruncated)
 	}
 	return message
 }
 
-func buildMuteCommandMessage(targetUsername string, muteRole *discordgo.Role, reason string, truncated bool) string {
+func buildMuteCommandMessage(locale discordgo.Locale, targetUsername string, muteRole *discordgo.Role, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
-		targetLabel = "unknown user"
+		targetLabel = modMsg(locale, modMsgUnknownUser)
 	}
-	message := fmt.Sprintf("%s was muted with role %s. Reason: %s.", targetLabel, formatRoleDisplayName(muteRole), reason)
+	message := modMsg(locale, modMsgMuted, targetLabel, formatRoleDisplayName(muteRole), reason)
 	if truncated {
-		message += " Reason was truncated to fit this reply."
+		message += modMsg(locale, modMsgReasonTruncated)
 	}
 	return message
 }
 
-func buildTimeoutCommandMessage(targetUsername string, minutes int64, reason string, truncated bool) string {
+func buildTimeoutCommandMessage(locale discordgo.Locale, targetUsername string, minutes int64, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
-		targetLabel = "unknown user"
+		targetLabel = modMsg(locale, modMsgUnknownUser)
 	}
-	message := fmt.Sprintf("%s was timed out for %s. Reason: %s.", targetLabel, formatTimeoutDuration(minutes), reason)
+	message := modMsg(locale, modMsgTimedOut, targetLabel, formatTimeoutDuration(minutes), reason)
 	if truncated {
-		message += " Reason was truncated to fit this reply."
+		message += modMsg(locale, modMsgReasonTruncated)
 	}
 	return message
 }
 
-func buildWarnCommandMessage(targetUsername string, caseNumber int64, reason string, truncated bool) string {
+func buildWarnCommandMessage(locale discordgo.Locale, targetUsername string, caseNumber int64, reason string, truncated bool) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
-		targetLabel = "unknown user"
+		targetLabel = modMsg(locale, modMsgUnknownUser)
 	}
-	message := fmt.Sprintf("%s was warned. Case #%d. Reason: %s.", targetLabel, caseNumber, reason)
+	message := modMsg(locale, modMsgWarned, targetLabel, caseNumber, reason)
 	if truncated {
-		message += " Reason was truncated to fit this reply."
+		message += modMsg(locale, modMsgReasonTruncated)
 	}
 	return message
 }
 
-func buildWarningsCommandMessage(targetUsername string, warnings []storage.ModerationWarning) string {
+func buildWarningsCommandMessage(locale discordgo.Locale, targetUsername string, warnings []storage.ModerationWarning) string {
 	targetLabel := strings.TrimSpace(targetUsername)
 	if targetLabel == "" {
-		targetLabel = "unknown user"
+		targetLabel = modMsg(locale, modMsgUnknownUser)
 	}
 	if len(warnings) == 0 {
-		return fmt.Sprintf("No warnings are recorded for %s. This reply stays private because moderation history should stay private.", targetLabel)
+		return modMsg(locale, modMsgWarningsNone, targetLabel)
 	}
 
-	lines := []string{fmt.Sprintf("Here is the recent warning history for %s. This reply stays private because moderation history should stay private:", targetLabel)}
+	lines := []string{modMsg(locale, modMsgWarningsHeader, targetLabel)}
 	for _, warning := range warnings {
 		reason := strings.TrimSpace(warning.Reason)
 		if reason == "" {
-			reason = "No reason provided"
+			reason = modMsg(locale, modMsgNoReason)
 		}
 		createdAt := warning.CreatedAt
 		if createdAt.IsZero() {
@@ -1007,10 +1015,10 @@ type banContext struct {
 	botRolePos   int
 }
 
-func sanitizeReason(input string) (string, bool) {
+func sanitizeReason(locale discordgo.Locale, input string) (string, bool) {
 	reason := strings.TrimSpace(input)
 	if reason == "" {
-		return "No reason provided", false
+		return modMsg(locale, modMsgNoReason), false
 	}
 	reason = strings.ReplaceAll(reason, "\r", " ")
 	reason = strings.ReplaceAll(reason, "\n", " ")
@@ -1048,58 +1056,64 @@ func isLikelySnowflake(value string) bool {
 }
 
 func prepareBanContext(ctx *core.Context) (*banContext, error) {
+	locale := ctx.Locale()
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionBanMembers,
-		"You need the Ban Members permission to use this command.",
-		"The bot needs the Ban Members permission to ban members.",
+		modMsg(locale, modMsgNeedBanPerm),
+		modMsg(locale, modMsgBotNeedBanPerm),
 	)
 }
 
 func prepareKickContext(ctx *core.Context) (*banContext, error) {
+	locale := ctx.Locale()
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionKickMembers,
-		"You need the Kick Members permission to use this command.",
-		"The bot needs the Kick Members permission to kick members.",
+		modMsg(locale, modMsgNeedKickPerm),
+		modMsg(locale, modMsgBotNeedKickPerm),
 	)
 }
 
 func prepareTimeoutContext(ctx *core.Context) (*banContext, error) {
+	locale := ctx.Locale()
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionModerateMembers,
-		"You need the Moderate Members permission to use this command.",
-		"The bot needs the Moderate Members permission to timeout members.",
+		modMsg(locale, modMsgNeedModeratePerm),
+		modMsg(locale, modMsgBotNeedTimeoutPerm),
 	)
 }
 
 func prepareMuteContext(ctx *core.Context) (*banContext, error) {
+	locale := ctx.Locale()
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionManageRoles,
-		"You need the Manage Roles permission to use this command.",
-		"The bot needs the Manage Roles permission to mute members with the configured mute role.",
+		modMsg(locale, modMsgNeedRolesPerm),
+		modMsg(locale, modMsgBotNeedRolesPerm),
 	)
 }
 
 func prepareWarnContext(ctx *core.Context) (*banContext, error) {
+	locale := ctx.Locale()
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionModerateMembers,
-		"You need the Moderate Members permission to use this command.",
-		"The bot needs the Moderate Members permission to manage warnings.",
+		modMsg(locale, modMsgNeedModeratePerm),
+		modMsg(locale, modMsgBotNeedWarnPerm),
 	)
 }
 
 func prepareModerationContext(ctx *core.Context, requiredPermission int64, actorPermissionError, botPermissionError string) (*banContext, error) {
 	if ctx == nil || ctx.Session == nil {
-		return nil, core.NewCommandError("Session not ready. Try again shortly.", true)
+		return nil, core.NewCommandError(modMsg(discordgo.EnglishUS, modMsgSessionNotReady), true)
 	}
+	locale := ctx.Locale()
 
 	checker := permissionCheckerForContext(ctx)
 	if checker == nil {
-		return nil, core.NewCommandError("Permission resolver not available.", true)
+		return nil, core.NewCommandError(modMsg(locale, modMsgPermResolverNA), true)
 	}
 
 	roles, err := checker.ResolveRoles(ctx.GuildID)
@@ -1111,7 +1125,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"userID", ctx.UserID,
 			"err", err,
 		)
-		return nil, core.NewCommandError("Failed to resolve server roles.", true)
+		return nil, core.NewCommandError(modMsg(locale, modMsgRolesResolveFailed), true)
 	}
 	rolesByID := buildRoleIndex(roles)
 
@@ -1124,7 +1138,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"userID", ctx.UserID,
 			"err", err,
 		)
-		return nil, core.NewCommandError("Failed to resolve server owner.", true)
+		return nil, core.NewCommandError(modMsg(locale, modMsgOwnerResolveFailed), true)
 	}
 	if !ownerFound {
 		ownerID = ""
@@ -1135,7 +1149,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 		botID = ctx.Session.State.User.ID
 	}
 	if botID == "" {
-		return nil, core.NewCommandError("Bot identity not available.", true)
+		return nil, core.NewCommandError(modMsg(locale, modMsgBotIdentityNA), true)
 	}
 
 	var actorMember *discordgo.Member
@@ -1153,10 +1167,10 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 				"userID", ctx.UserID,
 				"err", err,
 			)
-			return nil, core.NewCommandError("Unable to resolve your member record.", true)
+			return nil, core.NewCommandError(modMsg(locale, modMsgActorResolveFailed), true)
 		}
 		if !ok || actorMember == nil {
-			return nil, core.NewCommandError("Unable to resolve your member record.", true)
+			return nil, core.NewCommandError(modMsg(locale, modMsgActorResolveFailed), true)
 		}
 	}
 
@@ -1169,10 +1183,10 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"botID", botID,
 			"err", err,
 		)
-		return nil, core.NewCommandError("Unable to resolve the bot member record.", true)
+		return nil, core.NewCommandError(modMsg(locale, modMsgBotMemberResolveFailed), true)
 	}
 	if !ok || botMember == nil {
-		return nil, core.NewCommandError("Unable to resolve the bot member record.", true)
+		return nil, core.NewCommandError(modMsg(locale, modMsgBotMemberResolveFailed), true)
 	}
 
 	actorIsOwner := ctx.IsOwner || (ownerID != "" && ctx.UserID == ownerID)
@@ -1219,20 +1233,22 @@ func canWarnTarget(ctx *core.Context, actionCtx *banContext, targetID string) (b
 }
 
 func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actionVerb string, requireMember bool) (bool, string) {
+	locale := ctx.Locale()
+	localVerb := localizeModVerb(locale, actionVerb)
 	if targetID == ctx.UserID {
-		return false, "cannot " + actionVerb + " yourself"
+		return false, modMsg(locale, modMsgRejectSelf, localVerb)
 	}
 	if targetID == actionCtx.botID {
-		return false, "cannot " + actionVerb + " the bot"
+		return false, modMsg(locale, modMsgRejectBot, localVerb)
 	}
 	if actionCtx.ownerID != "" && targetID == actionCtx.ownerID {
-		return false, "cannot " + actionVerb + " the server owner"
+		return false, modMsg(locale, modMsgRejectOwner, localVerb)
 	}
 
 	checker := permissionCheckerForContext(ctx)
 	if checker == nil {
 		if requireMember {
-			return false, "target member could not be resolved right now"
+			return false, modMsg(locale, modMsgRejectTargetResolveErr)
 		}
 		return true, ""
 	}
@@ -1248,37 +1264,38 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 			"err", err,
 		)
 		if requireMember {
-			return false, "target member could not be resolved right now"
+			return false, modMsg(locale, modMsgRejectTargetResolveErr)
 		}
 		return true, ""
 	}
 	if !ok || targetMember == nil {
 		if requireMember {
-			return false, "target is not a member of this server"
+			return false, modMsg(locale, modMsgRejectTargetNotMember)
 		}
 		return true, ""
 	}
 
 	targetPos := highestRolePosition(targetMember, actionCtx.rolesByID, ctx.GuildID)
 	if !actionCtx.actorIsOwner && actionCtx.actorRolePos <= targetPos {
-		return false, "target has an equal or higher role than you"
+		return false, modMsg(locale, modMsgRejectActorRankLow)
 	}
 	if !actionCtx.botIsOwner && actionCtx.botRolePos <= targetPos {
-		return false, "target has an equal or higher role than the bot"
+		return false, modMsg(locale, modMsgRejectBotRankLow)
 	}
 	return true, ""
 }
 
 func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*discordgo.Role, string, error) {
 	if ctx == nil || ctx.Config == nil {
-		return nil, "", core.NewCommandError("Configuration is not available right now.", true)
+		return nil, "", core.NewCommandError(modMsg(discordgo.EnglishUS, modMsgConfigNA), true)
 	}
+	locale := ctx.Locale()
 	cfg := ctx.Config.Config()
 	if cfg == nil {
-		return nil, "", core.NewCommandError("Configuration is not available right now.", true)
+		return nil, "", core.NewCommandError(modMsg(locale, modMsgConfigNA), true)
 	}
 	if !cfg.ResolveFeatures(ctx.GuildID).MuteRole {
-		return nil, "", core.NewCommandError("Mute role moderation is disabled for this server.", true)
+		return nil, "", core.NewCommandError(modMsg(locale, modMsgMuteRoleFeatureOff), true)
 	}
 
 	roleID := ""
@@ -1294,32 +1311,33 @@ func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*disco
 		}
 	}
 	if roleID == "" {
-		return nil, "", core.NewCommandError("Mute role is not configured for this server.", true)
+		return nil, "", core.NewCommandError(modMsg(locale, modMsgMuteRoleNotConfigured), true)
 	}
 	if actionCtx == nil {
-		return nil, roleID, core.NewCommandError("Mute role context is not available right now.", true)
+		return nil, roleID, core.NewCommandError(modMsg(locale, modMsgMuteRoleContextNA), true)
 	}
 
 	role, ok := actionCtx.rolesByID[roleID]
 	if !ok || role == nil {
-		return nil, roleID, core.NewCommandError("Configured mute role is no longer available in this server.", true)
+		return nil, roleID, core.NewCommandError(modMsg(locale, modMsgMuteRoleGone), true)
 	}
 	if role.Managed {
-		return nil, roleID, core.NewCommandError("Configured mute role is managed by an integration and cannot be assigned manually.", true)
+		return nil, roleID, core.NewCommandError(modMsg(locale, modMsgMuteRoleManaged), true)
 	}
 	if !actionCtx.actorIsOwner && actionCtx.actorRolePos <= role.Position {
-		return nil, roleID, core.NewCommandError("Your highest role must stay above the configured mute role.", true)
+		return nil, roleID, core.NewCommandError(modMsg(locale, modMsgMuteRoleActorPosition), true)
 	}
 	if !actionCtx.botIsOwner && actionCtx.botRolePos <= role.Position {
-		return nil, roleID, core.NewCommandError("My highest role must stay above the configured mute role.", true)
+		return nil, roleID, core.NewCommandError(modMsg(locale, modMsgMuteRoleBotPosition), true)
 	}
 	return role, roleID, nil
 }
 
 func resolveRoleTargetMember(ctx *core.Context, targetID string) (*discordgo.Member, bool, string) {
+	locale := ctx.Locale()
 	checker := permissionCheckerForContext(ctx)
 	if checker == nil {
-		return nil, false, "target member could not be resolved right now"
+		return nil, false, modMsg(locale, modMsgRejectTargetResolveErr)
 	}
 	targetMember, ok, err := checker.ResolveMember(ctx.GuildID, targetID)
 	if err != nil {
@@ -1330,10 +1348,10 @@ func resolveRoleTargetMember(ctx *core.Context, targetID string) (*discordgo.Mem
 			"targetID", targetID,
 			"err", err,
 		)
-		return nil, false, "target member could not be resolved right now"
+		return nil, false, modMsg(locale, modMsgRejectTargetResolveErr)
 	}
 	if !ok || targetMember == nil {
-		return nil, false, "target is not a member of this server"
+		return nil, false, modMsg(locale, modMsgRejectTargetNotMember)
 	}
 	return targetMember, true, ""
 }

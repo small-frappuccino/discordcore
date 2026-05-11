@@ -129,15 +129,16 @@ func (cmd *MetricsCommand) RequiresPermissions() bool {
 }
 
 func (cmd *MetricsCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	summary := cmd.formatMetrics(ctx)
 	if strings.TrimSpace(summary) == "" {
-		summary = "No service metrics are available right now. This reply stays private because these details are only useful for admin review."
+		summary = adminMsg(locale, adminMsgNoMetrics)
 	}
 
 	builder := core.NewResponseBuilder(ctx.Session).
 		Ephemeral().
 		WithEmbed().
-		WithTitle("Service Metrics").
+		WithTitle(adminMsg(locale, adminMsgMetricsTitle)).
 		WithColor(theme.Info()).
 		WithTimestamp()
 
@@ -199,7 +200,7 @@ func (cmd *MetricsCommand) formatMetrics(ctx *core.Context) string {
 		if name == "monitoring" && ctx != nil && ctx.GuildConfig != nil {
 			ttl := strings.TrimSpace(ctx.GuildConfig.RolesCacheTTL)
 			if ttl == "" {
-				ttl = "default (5m)"
+				ttl = adminMsg(ctx.Locale(), adminMsgDefaultRoleCacheTTL)
 			}
 			ms = append(ms, fmt.Sprintf("• roles_cache_ttl: %s", ttl))
 		}
@@ -253,6 +254,7 @@ func (cmd *MetricsWatchCommand) RequiresPermissions() bool {
 }
 
 func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	intervalSec := extractor.Int("interval_seconds")
 	if intervalSec <= 0 {
@@ -264,7 +266,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 	}
 
 	// Acknowledge start
-	if err := core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Starting a live metrics watch for this channel. Updates will run every %ds for %ds.", intervalSec, durationSec)); err != nil {
+	if err := core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, adminMsg(locale, adminMsgMetricsWatchStart, intervalSec, durationSec)); err != nil {
 		return err
 	}
 
@@ -274,7 +276,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 	format := func() string { return mc.formatMetrics(ctx) }
 	send := func() (*discordgo.Message, error) {
 		embed := &discordgo.MessageEmbed{
-			Title:       "Live Service Metrics",
+			Title:       adminMsg(locale, adminMsgMetricsWatchTitle),
 			Description: format(),
 			Color:       theme.Info(),
 			Timestamp:   time.Now().Format(time.RFC3339),
@@ -300,7 +302,7 @@ func (cmd *MetricsWatchCommand) Handle(ctx *core.Context) error {
 			select {
 			case <-ticker.C:
 				embed := &discordgo.MessageEmbed{
-					Title:       "Live Service Metrics",
+					Title:       adminMsg(locale, adminMsgMetricsWatchTitle),
 					Description: format(),
 					Color:       theme.Info(),
 					Timestamp:   time.Now().Format(time.RFC3339),
@@ -349,14 +351,15 @@ func (cmd *ServiceStatusCommand) RequiresPermissions() bool {
 }
 
 func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("This command needs a service name before it can continue, so this reply stays private.", true)
+		return core.NewCommandError(adminMsg(locale, adminMsgNeedServiceName), true)
 	}
 
 	info, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), true)
+		return core.NewCommandError(adminMsg(locale, adminMsgServiceNotFound, serviceName), true)
 	}
 
 	// Perform health check
@@ -367,36 +370,36 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	stats := info.Service.Stats()
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("Service Status: %s", serviceName),
+		Title: adminMsg(locale, adminMsgStatusTitle, serviceName),
 		Color: cmd.adminCommands.getStatusColor(info.State, health.Healthy),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "State",
+				Name:   adminMsg(locale, adminMsgFieldState),
 				Value:  string(info.State),
 				Inline: true,
 			},
 			{
-				Name:   "Type",
+				Name:   adminMsg(locale, adminMsgFieldType),
 				Value:  string(info.Service.Type()),
 				Inline: true,
 			},
 			{
-				Name:   "Priority",
+				Name:   adminMsg(locale, adminMsgFieldPriority),
 				Value:  fmt.Sprintf("%d", info.Service.Priority()),
 				Inline: true,
 			},
 			{
-				Name:   "Health",
-				Value:  cmd.adminCommands.getHealthString(health.Healthy),
+				Name:   adminMsg(locale, adminMsgFieldHealth),
+				Value:  cmd.adminCommands.getHealthString(locale, health.Healthy),
 				Inline: true,
 			},
 			{
-				Name:   "Uptime",
-				Value:  cmd.adminCommands.formatDuration(stats.Uptime),
+				Name:   adminMsg(locale, adminMsgFieldUptime),
+				Value:  cmd.adminCommands.formatDuration(locale, stats.Uptime),
 				Inline: true,
 			},
 			{
-				Name:   "Restarts",
+				Name:   adminMsg(locale, adminMsgFieldRestarts),
 				Value:  fmt.Sprintf("%d", stats.RestartCount),
 				Inline: true,
 			},
@@ -408,7 +411,7 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	deps := info.Service.Dependencies()
 	if len(deps) > 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Dependencies",
+			Name:   adminMsg(locale, adminMsgFieldDependencies),
 			Value:  strings.Join(deps, ", "),
 			Inline: false,
 		})
@@ -417,7 +420,7 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	// Add health message if unhealthy
 	if !health.Healthy {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Health Issue",
+			Name:   adminMsg(locale, adminMsgFieldHealthIssue),
 			Value:  health.Message,
 			Inline: false,
 		})
@@ -430,7 +433,7 @@ func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 			metrics = append(metrics, fmt.Sprintf("%s: %v", k, v))
 		}
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Metrics",
+			Name:   adminMsg(locale, adminMsgFieldMetrics),
 			Value:  strings.Join(metrics, "\n"),
 			Inline: false,
 		})
@@ -467,12 +470,13 @@ func (cmd *ServiceListCommand) RequiresPermissions() bool {
 }
 
 func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Registered Services",
+		Title:       adminMsg(locale, adminMsgServicesTitle),
 		Color:       theme.ServiceList(),
-		Description: fmt.Sprintf("Here is the current service registry. This reply stays private because it is operational state. Total services: %d", len(services)),
+		Description: adminMsg(locale, adminMsgServicesDesc, len(services)),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
@@ -487,7 +491,7 @@ func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 	for _, name := range names {
 		info := services[name]
 		sType := info.Service.Type()
-		status := cmd.adminCommands.getServiceStatusIcon(info.State)
+		status := cmd.adminCommands.getServiceStatusIcon(locale, info.State)
 		servicesByType[sType] = append(servicesByType[sType], fmt.Sprintf("%s: %s", status, name))
 		if !seenType[sType] {
 			seenType[sType] = true
@@ -545,20 +549,21 @@ func (cmd *ServiceRestartCommand) RequiresPermissions() bool {
 }
 
 func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("This command needs a service name before it can continue, so this reply stays private.", true)
+		return core.NewCommandError(adminMsg(locale, adminMsgNeedServiceName), true)
 	}
 
 	// Check if service exists
 	_, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), true)
+		return core.NewCommandError(adminMsg(locale, adminMsgServiceNotFound, serviceName), true)
 	}
 
 	// Send initial response
 	rm := core.NewResponseManager(ctx.Session).WithConfig(core.ResponseConfig{Ephemeral: true})
-	if err := rm.Info(ctx.Interaction, fmt.Sprintf("Restarting service %s now. This reply stays private while the restart runs.", serviceName)); err != nil {
+	if err := rm.Info(ctx.Interaction, adminMsg(locale, adminMsgRestartStarted, serviceName)); err != nil {
 		return err
 	}
 
@@ -567,10 +572,10 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 		if err := cmd.adminCommands.serviceManager.RestartService(serviceName); err != nil {
 			ctx.Logger.Error().Errorf("Failed to restart service: %v", err)
 			// Try to follow up with error message
-			rm.EditResponse(ctx.Interaction, fmt.Sprintf("Service %s couldn't be restarted. This reply stays private because it includes internal service details: %v", serviceName, err))
+			rm.EditResponse(ctx.Interaction, adminMsg(locale, adminMsgRestartFailed, serviceName, err))
 		} else {
 			// Follow up with success message
-			rm.EditResponse(ctx.Interaction, fmt.Sprintf("Service %s was restarted.", serviceName))
+			rm.EditResponse(ctx.Interaction, adminMsg(locale, adminMsgRestartDone, serviceName))
 		}
 	}()
 
@@ -603,6 +608,7 @@ func (cmd *HealthCheckCommand) RequiresPermissions() bool {
 }
 
 func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 
 	healthyCount := 0
@@ -632,18 +638,18 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "System Health Check",
-		Color: color,
-		Description: "Here is the current system health snapshot. This reply stays private because it reflects internal service status.",
+		Title:       adminMsg(locale, adminMsgHealthTitle),
+		Color:       color,
+		Description: adminMsg(locale, adminMsgHealthDesc),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Overall Status",
-				Value:  cmd.adminCommands.getOverallHealthString(overallHealthy),
+				Name:   adminMsg(locale, adminMsgFieldOverallStatus),
+				Value:  cmd.adminCommands.getOverallHealthString(locale, overallHealthy),
 				Inline: true,
 			},
 			{
-				Name:   "Services",
-				Value:  fmt.Sprintf("%d/%d healthy", healthyCount, totalServices),
+				Name:   adminMsg(locale, adminMsgFieldServices),
+				Value:  adminMsg(locale, adminMsgServicesCount, healthyCount, totalServices),
 				Inline: true,
 			},
 		},
@@ -652,7 +658,7 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 
 	if len(unhealthyServices) > 0 {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Unhealthy Services",
+			Name:   adminMsg(locale, adminMsgFieldUnhealthyServices),
 			Value:  strings.Join(unhealthyServices, "\n"),
 			Inline: false,
 		})
@@ -689,6 +695,7 @@ func (cmd *SystemInfoCommand) RequiresPermissions() bool {
 }
 
 func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
+	locale := ctx.Locale()
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 	runningServices := cmd.adminCommands.serviceManager.GetRunningServices()
 
@@ -698,27 +705,27 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "System Information",
-		Color: theme.SystemInfo(),
-		Description: "Here is the current runtime and service summary. This reply stays private because it is operational data.",
+		Title:       adminMsg(locale, adminMsgSysInfoTitle),
+		Color:       theme.SystemInfo(),
+		Description: adminMsg(locale, adminMsgSysInfoDesc),
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "Bot",
+				Name:   adminMsg(locale, adminMsgFieldBot),
 				Value:  botName,
 				Inline: true,
 			},
 			{
-				Name:   "Core",
+				Name:   adminMsg(locale, adminMsgFieldCore),
 				Value:  fmt.Sprintf("discordcore %s", util.DiscordCoreVersion),
 				Inline: true,
 			},
 			{
-				Name:   "Total Services",
+				Name:   adminMsg(locale, adminMsgFieldTotalServices),
 				Value:  fmt.Sprintf("%d", len(services)),
 				Inline: true,
 			},
 			{
-				Name:   "Running Services",
+				Name:   adminMsg(locale, adminMsgFieldRunningServices),
 				Value:  fmt.Sprintf("%d", len(runningServices)),
 				Inline: true,
 			},
@@ -744,40 +751,40 @@ func (ac *AdminCommands) getStatusColor(state service.ServiceState, healthy bool
 	return theme.StatusDefault()
 }
 
-func (ac *AdminCommands) getHealthString(healthy bool) string {
+func (ac *AdminCommands) getHealthString(locale discordgo.Locale, healthy bool) string {
 	if healthy {
-		return "Healthy"
+		return adminMsg(locale, adminMsgHealthy)
 	}
-	return "Unhealthy"
+	return adminMsg(locale, adminMsgUnhealthy)
 }
 
-func (ac *AdminCommands) getOverallHealthString(healthy bool) string {
+func (ac *AdminCommands) getOverallHealthString(locale discordgo.Locale, healthy bool) string {
 	if healthy {
-		return "All systems operational"
+		return adminMsg(locale, adminMsgAllSysOp)
 	}
-	return "Issues detected"
+	return adminMsg(locale, adminMsgIssuesDetected)
 }
 
-func (ac *AdminCommands) getServiceStatusIcon(state service.ServiceState) string {
+func (ac *AdminCommands) getServiceStatusIcon(locale discordgo.Locale, state service.ServiceState) string {
 	switch state {
 	case service.StateRunning:
-		return "Running"
+		return adminMsg(locale, adminMsgStateRunning)
 	case service.StateError:
-		return "Error"
+		return adminMsg(locale, adminMsgStateError)
 	case service.StateStopped:
-		return "Stopped"
+		return adminMsg(locale, adminMsgStateStopped)
 	case service.StateInitializing:
-		return "Initializing"
+		return adminMsg(locale, adminMsgStateInitializing)
 	case service.StateStopping:
-		return "Stopping"
+		return adminMsg(locale, adminMsgStateStopping)
 	default:
-		return "Unknown"
+		return adminMsg(locale, adminMsgStateUnknown)
 	}
 }
 
-func (ac *AdminCommands) formatDuration(d time.Duration) string {
+func (ac *AdminCommands) formatDuration(locale discordgo.Locale, d time.Duration) string {
 	if d == 0 {
-		return "Not running"
+		return adminMsg(locale, adminMsgNotRunning)
 	}
 
 	days := int(d.Hours()) / 24
