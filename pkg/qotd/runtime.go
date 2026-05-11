@@ -296,23 +296,19 @@ func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.S
 		return nil
 	}
 
-	if strings.TrimSpace(post.DiscordThreadID) == "" {
-		_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), nil, nil)
-		return err
-	}
-
-	if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
-		Pinned:   false,
-		Locked:   false,
-		Archived: false,
-	}); err != nil {
-		return err
-	} else if missing {
-		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateMissingDiscord), nil, nil)
-		return err
-	}
-
-	_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), nil, nil)
+	// Discord-then-DB transition is funnelled through
+	// applyOfficialPostThreadTransition. That helper documents the
+	// divergence-window contract; the reconcile loop is the recovery path
+	// if the DB write fails after Discord succeeded.
+	_, err := s.applyOfficialPostThreadTransition(
+		ctx,
+		session,
+		post,
+		discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false},
+		lifecycle.State,
+		nil,
+		nil,
+	)
 	return err
 }
 
@@ -347,32 +343,36 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 		}
 	}
 
-	state := string(OfficialPostStateArchived)
+	// Message-mode posts skip Discord entirely; commit the archived state
+	// directly. The Discord-thread path below routes through
+	// applyOfficialPostThreadTransition so the divergence semantics stay
+	// in one place.
 	if messageMode {
-		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, &archivedAt, &archivedAt)
+		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchived), &archivedAt, &archivedAt)
 		return err
 	}
 	if missingOfficial {
-		state = string(OfficialPostStateMissingDiscord)
-	} else if missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, discordqotd.ThreadState{
-		// At ArchiveAt (publish + 48h) we only lock the Discord thread.
-		// Discord auto-archives it independently because the thread was
-		// created with auto_archive_duration = 48h (equivalent to a mod
-		// hitting "Close" in the UI). Setting Archived=true ourselves used
-		// to be required, but now it would race the Discord auto-archive
-		// and risk unarchiving a thread the platform just closed. The lock
-		// stays so reply traffic on the past QOTD cannot reopen the thread
-		// from the archived state.
-		Pinned:   false,
-		Locked:   true,
-		Archived: false,
-	}); err != nil {
+		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateMissingDiscord), &archivedAt, &archivedAt)
 		return err
-	} else if missing {
-		state = string(OfficialPostStateMissingDiscord)
 	}
 
-	_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, state, &archivedAt, &archivedAt)
+	// At ArchiveAt (publish + 48h) we only lock the Discord thread.
+	// Discord auto-archives it independently because the thread was
+	// created with auto_archive_duration = 48h (equivalent to a mod
+	// hitting "Close" in the UI). Setting Archived=true ourselves used to
+	// be required, but now it would race the Discord auto-archive and
+	// risk unarchiving a thread the platform just closed. The lock stays
+	// so reply traffic on the past QOTD cannot reopen the thread from
+	// the archived state.
+	_, err = s.applyOfficialPostThreadTransition(
+		ctx,
+		session,
+		post,
+		discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false},
+		OfficialPostStateArchived,
+		&archivedAt,
+		&archivedAt,
+	)
 	return err
 }
 
