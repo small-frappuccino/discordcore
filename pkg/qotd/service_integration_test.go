@@ -829,7 +829,7 @@ func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *t
 	if err != nil {
 		t.Fatalf("Settings() after failed manual publish failed: %v", err)
 	}
-	if settings.SuppressScheduledPublishDateUTC != "" {
+	if len(settings.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected failed late manual publish not to leave same-day suppression behind, got %+v", settings)
 	}
 
@@ -927,7 +927,7 @@ func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideReco
 	if err != nil {
 		t.Fatalf("Settings() after mid-publish failure failed: %v", err)
 	}
-	if settings.SuppressScheduledPublishDateUTC != "" {
+	if len(settings.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected mid-publish failure to roll back the same-day suppression, got %+v", settings)
 	}
 
@@ -980,7 +980,7 @@ func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideReco
 	if err != nil {
 		t.Fatalf("Settings() after recovery failed: %v", err)
 	}
-	if settings.SuppressScheduledPublishDateUTC != "" {
+	if len(settings.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected suppression to remain cleared after recovery, got %+v", settings)
 	}
 
@@ -2290,7 +2290,7 @@ func TestServiceEnableAfterCurrentSlotDueSuppressesImmediatePublish(t *testing.T
 	if err != nil {
 		t.Fatalf("UpdateSettings(enabled) failed: %v", err)
 	}
-	if updated.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	if len(updated.SuppressScheduledPublishDatesUTC) != 1 || updated.SuppressScheduledPublishDatesUTC[0] != "2026-04-03" {
 		t.Fatalf("expected enabling after the boundary to suppress the current slot, got %+v", updated)
 	}
 
@@ -2325,7 +2325,7 @@ func TestServiceEnableAfterCurrentSlotDueSuppressesImmediatePublish(t *testing.T
 	if err != nil {
 		t.Fatalf("Settings() failed: %v", err)
 	}
-	if settings.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	if len(settings.SuppressScheduledPublishDatesUTC) != 1 || settings.SuppressScheduledPublishDatesUTC[0] != "2026-04-03" {
 		t.Fatalf("expected persisted suppression for the current slot after enabling, got %+v", settings)
 	}
 }
@@ -2361,7 +2361,7 @@ func TestServicePublishScheduledIfDueClearsExpiredSuppression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Settings() failed: %v", err)
 	}
-	if settings.SuppressScheduledPublishDateUTC != "" {
+	if len(settings.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected stale suppression to be cleared after scheduler run, got %+v", settings)
 	}
 }
@@ -2372,7 +2372,7 @@ func TestServiceReconcileGuildClearsExpiredSuppressionForSuppressionOnlyConfig(t
 		return time.Date(2026, 4, 5, 13, 0, 0, 0, time.UTC)
 	}
 
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"}); err != nil {
+	if _, err := service.UpdateSettings("g1", files.QOTDConfig{SuppressScheduledPublishDatesUTC: []string{"2026-04-03"}}); err != nil {
 		t.Fatalf("UpdateSettings(suppression-only) failed: %v", err)
 	}
 
@@ -2380,7 +2380,7 @@ func TestServiceReconcileGuildClearsExpiredSuppressionForSuppressionOnlyConfig(t
 	if err != nil {
 		t.Fatalf("Settings(before reconcile) failed: %v", err)
 	}
-	if before.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	if len(before.SuppressScheduledPublishDatesUTC) != 1 || before.SuppressScheduledPublishDatesUTC[0] != "2026-04-03" {
 		t.Fatalf("expected stale suppression before reconcile, got %+v", before)
 	}
 
@@ -2392,7 +2392,7 @@ func TestServiceReconcileGuildClearsExpiredSuppressionForSuppressionOnlyConfig(t
 	if err != nil {
 		t.Fatalf("Settings(after reconcile) failed: %v", err)
 	}
-	if after.SuppressScheduledPublishDateUTC != "" {
+	if len(after.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected reconcile to clear stale suppression-only config, got %+v", after)
 	}
 	if !after.IsZero() {

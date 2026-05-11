@@ -116,8 +116,15 @@ func assertQOTDSuppressionDate(t *testing.T, cm *files.ConfigManager, guildID, w
 	if err != nil {
 		t.Fatalf("QOTDConfig() failed: %v", err)
 	}
-	if qotdConfig.SuppressScheduledPublishDateUTC != want {
-		t.Fatalf("unexpected qotd suppression date: got %q want %q", qotdConfig.SuppressScheduledPublishDateUTC, want)
+	got := qotdConfig.SuppressScheduledPublishDatesUTC
+	if want == "" {
+		if len(got) != 0 {
+			t.Fatalf("unexpected qotd suppression dates: got %+v want empty", got)
+		}
+		return
+	}
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("unexpected qotd suppression dates: got %+v want [%q]", got, want)
 	}
 }
 

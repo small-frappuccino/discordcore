@@ -3,7 +3,6 @@ package qotd
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -22,7 +21,8 @@ func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files
 	// sent — clearExpiredScheduledPublishSuppression on the runtime path is
 	// the cleanup hook for stale dates.
 	if qotdAutomaticPublishConfigured(current) && !qotdAutomaticPublishConfigured(normalized) {
-		return clearSuppressedScheduledPublishDate(normalized, time.Time{}), nil
+		normalized.SuppressScheduledPublishDatesUTC = nil
+		return normalized, nil
 	}
 	if !qotdAutomaticPublishConfigured(normalized) {
 		return normalized, nil
@@ -32,7 +32,7 @@ func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files
 	// we'd silently overwrite an explicit operator decision (for example a
 	// legacy stale value the operator wants the runtime to clean up later)
 	// with today's slot.
-	if strings.TrimSpace(normalized.SuppressScheduledPublishDateUTC) != "" {
+	if len(normalized.SuppressScheduledPublishDatesUTC) > 0 {
 		return normalized, nil
 	}
 	if publishDate, suppress := suppressedPublishDateOnEnable(current, normalized, now); suppress {

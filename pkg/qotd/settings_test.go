@@ -92,7 +92,7 @@ func TestPrepareSettingsUpdateClearsSuppressionWhenAutomaticPublishDisabled(t *t
 			Enabled:   true,
 			ChannelID: "123456789012345678",
 		}},
-		SuppressScheduledPublishDateUTC: "2026-05-03",
+		SuppressScheduledPublishDatesUTC: []string{"2026-05-03"},
 	}
 	next := files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
@@ -103,14 +103,14 @@ func TestPrepareSettingsUpdateClearsSuppressionWhenAutomaticPublishDisabled(t *t
 			Enabled:   false,
 			ChannelID: "123456789012345678",
 		}},
-		SuppressScheduledPublishDateUTC: "2026-05-03",
+		SuppressScheduledPublishDatesUTC: []string{"2026-05-03"},
 	}
 
 	updated, err := PrepareSettingsUpdate(current, next, now)
 	if err != nil {
 		t.Fatalf("PrepareSettingsUpdate() failed: %v", err)
 	}
-	if updated.SuppressScheduledPublishDateUTC != "" {
+	if len(updated.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected suppression to be cleared when automatic publish is disabled, got %+v", updated)
 	}
 }

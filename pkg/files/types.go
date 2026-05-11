@@ -313,12 +313,20 @@ type QOTDPublishScheduleConfig struct {
 
 // QOTDConfig stores per-guild question-of-the-day deck settings.
 type QOTDConfig struct {
-	VerifiedRoleID                  string                    `json:"verified_role_id,omitempty"`
-	ActiveDeckID                    string                    `json:"active_deck_id,omitempty"`
-	Decks                           []QOTDDeckConfig          `json:"decks,omitempty"`
-	Collector                       QOTDCollectorConfig       `json:"collector,omitempty"`
-	Schedule                        QOTDPublishScheduleConfig `json:"schedule,omitempty"`
-	SuppressScheduledPublishDateUTC string                    `json:"suppress_scheduled_publish_date_utc,omitempty"`
+	VerifiedRoleID string                    `json:"verified_role_id,omitempty"`
+	ActiveDeckID   string                    `json:"active_deck_id,omitempty"`
+	Decks          []QOTDDeckConfig          `json:"decks,omitempty"`
+	Collector      QOTDCollectorConfig       `json:"collector,omitempty"`
+	Schedule       QOTDPublishScheduleConfig `json:"schedule,omitempty"`
+	// SuppressScheduledPublishDatesUTC is the canonical set of UTC publish
+	// dates (YYYY-MM-DD) for which the scheduler must skip its automatic
+	// publish. Manual publishes that consume a slot, or maintenance flows
+	// that pause one specific day, add entries here; the runtime trims
+	// expired dates on each cycle. Replaces the legacy single-string field
+	// "suppress_scheduled_publish_date_utc" — JSON unmarshal still accepts
+	// the legacy form and migrates it into this slice so old persisted
+	// configs continue to load.
+	SuppressScheduledPublishDatesUTC []string `json:"suppress_scheduled_publish_dates_utc,omitempty"`
 }
 
 // UserPruneConfig controls periodic user pruning per guild.

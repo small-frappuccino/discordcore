@@ -19,7 +19,6 @@ func isScheduledPublishSuppressed(cfg files.QOTDConfig, publishDate time.Time) b
 func suppressScheduledPublishDate(cfg files.QOTDConfig, publishDate time.Time) files.QOTDConfig {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
-		cfg.SuppressScheduledPublishDateUTC = ""
 		return cfg
 	}
 	return cfg.WithSuppressedScheduledPublishDate(date)
@@ -28,7 +27,6 @@ func suppressScheduledPublishDate(cfg files.QOTDConfig, publishDate time.Time) f
 func clearSuppressedScheduledPublishDate(cfg files.QOTDConfig, publishDate time.Time) files.QOTDConfig {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
-		cfg.SuppressScheduledPublishDateUTC = ""
 		return cfg
 	}
 	return cfg.ClearSuppressedScheduledPublishDate(date)
@@ -37,48 +35,92 @@ func clearSuppressedScheduledPublishDate(cfg files.QOTDConfig, publishDate time.
 func (s *Service) suppressScheduledPublishForDate(guildID string, publishDate time.Time) error {
 	return s.updateScheduledPublishSuppression(guildID, func(cfg files.QOTDConfig) (files.QOTDConfig, bool) {
 		updated := suppressScheduledPublishDate(cfg, publishDate)
-		return updated, strings.TrimSpace(updated.SuppressScheduledPublishDateUTC) != strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC)
+		return updated, !sameSuppressionSet(cfg.SuppressScheduledPublishDatesUTC, updated.SuppressScheduledPublishDatesUTC)
 	})
 }
 
 func (s *Service) clearScheduledPublishSuppressionForDate(guildID string, publishDate time.Time) {
 	err := s.updateScheduledPublishSuppression(guildID, func(cfg files.QOTDConfig) (files.QOTDConfig, bool) {
 		updated := clearSuppressedScheduledPublishDate(cfg, publishDate)
-		return updated, strings.TrimSpace(updated.SuppressScheduledPublishDateUTC) != strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC)
+		return updated, !sameSuppressionSet(cfg.SuppressScheduledPublishDatesUTC, updated.SuppressScheduledPublishDatesUTC)
 	})
 	if err != nil {
 		log.ApplicationLogger().Warn("QOTD scheduled publish suppression update failed", "guildID", guildID, "publishDateUTC", NormalizePublishDateUTC(publishDate), "err", err)
 	}
 }
 
-func parseSuppressedScheduledPublishDate(cfg files.QOTDConfig) (time.Time, bool) {
-	raw := strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC)
-	if raw == "" {
-		return time.Time{}, false
+// parseSuppressedScheduledPublishDates returns every suppression entry as a
+// normalized UTC date. Malformed entries are dropped silently and reported
+// via the returned hasInvalid flag so the cleanup pass can purge them.
+func parseSuppressedScheduledPublishDates(cfg files.QOTDConfig) (dates []time.Time, invalid []string) {
+	if len(cfg.SuppressScheduledPublishDatesUTC) == 0 {
+		return nil, nil
 	}
-	parsed, err := time.Parse("2006-01-02", raw)
-	if err != nil {
-		return time.Time{}, false
+	for _, raw := range cfg.SuppressScheduledPublishDatesUTC {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			invalid = append(invalid, raw)
+			continue
+		}
+		parsed, err := time.Parse("2006-01-02", trimmed)
+		if err != nil {
+			invalid = append(invalid, raw)
+			continue
+		}
+		dates = append(dates, NormalizePublishDateUTC(parsed))
 	}
-	return NormalizePublishDateUTC(parsed), true
+	return dates, invalid
 }
 
+// clearExpiredScheduledPublishSuppression removes every suppression entry
+// whose date is before today (UTC). Each removal is a separate write so the
+// audit trail stays granular and a partial config-manager failure on one
+// date does not leak into the others. Malformed entries are purged on
+// sight so the slice cannot grow unbounded from typos.
 func (s *Service) clearExpiredScheduledPublishSuppression(guildID string, cfg files.QOTDConfig, now time.Time) {
-	raw := strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC)
-	if raw == "" {
-		return
-	}
-	suppressedDate, ok := parseSuppressedScheduledPublishDate(cfg)
-	if !ok {
+	dates, invalid := parseSuppressedScheduledPublishDates(cfg)
+	for _, raw := range invalid {
 		log.ApplicationLogger().Warn("QOTD suppression date is invalid; clearing stale token", "guildID", guildID, "value", raw)
-		s.clearScheduledPublishSuppressionForDate(guildID, time.Time{})
-		return
+		s.clearInvalidSuppressionEntry(guildID, raw)
 	}
 	todayUTC := NormalizePublishDateUTC(now)
-	if todayUTC.IsZero() || !suppressedDate.Before(todayUTC) {
+	if todayUTC.IsZero() {
 		return
 	}
-	s.clearScheduledPublishSuppressionForDate(guildID, suppressedDate)
+	for _, date := range dates {
+		if !date.Before(todayUTC) {
+			continue
+		}
+		s.clearScheduledPublishSuppressionForDate(guildID, date)
+	}
+}
+
+// clearInvalidSuppressionEntry removes one literal stale token from the
+// suppression slice without trying to parse it as a date.
+func (s *Service) clearInvalidSuppressionEntry(guildID, value string) {
+	err := s.updateScheduledPublishSuppression(guildID, func(cfg files.QOTDConfig) (files.QOTDConfig, bool) {
+		next := make([]string, 0, len(cfg.SuppressScheduledPublishDatesUTC))
+		removed := false
+		for _, entry := range cfg.SuppressScheduledPublishDatesUTC {
+			if !removed && entry == value {
+				removed = true
+				continue
+			}
+			next = append(next, entry)
+		}
+		if !removed {
+			return cfg, false
+		}
+		if len(next) == 0 {
+			cfg.SuppressScheduledPublishDatesUTC = nil
+		} else {
+			cfg.SuppressScheduledPublishDatesUTC = next
+		}
+		return cfg, true
+	})
+	if err != nil {
+		log.ApplicationLogger().Warn("QOTD scheduled publish suppression cleanup failed", "guildID", guildID, "value", value, "err", err)
+	}
 }
 
 func (s *Service) updateScheduledPublishSuppression(guildID string, mutate func(files.QOTDConfig) (files.QOTDConfig, bool)) error {
@@ -94,4 +136,20 @@ func (s *Service) updateScheduledPublishSuppression(guildID string, mutate func(
 		return nil
 	}
 	return s.configManager.SetQOTDConfig(guildID, updated)
+}
+
+// sameSuppressionSet compares two suppression slices for set equality. The
+// slices are stored sorted (normalizeQOTDSuppressedPublishDates and
+// WithSuppressedScheduledPublishDate both sort) so a straight pairwise
+// compare suffices.
+func sameSuppressionSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if strings.TrimSpace(a[i]) != strings.TrimSpace(b[i]) {
+			return false
+		}
+	}
+	return true
 }

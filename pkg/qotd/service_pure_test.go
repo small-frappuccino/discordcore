@@ -249,10 +249,10 @@ func TestNextScheduledPublishTimeProjectsTodayOrTomorrow(t *testing.T) {
 		{
 			name: "today's slot suppressed advances one day",
 			cfg: files.QOTDConfig{
-				ActiveDeckID:                   files.LegacyQOTDDefaultDeckID,
-				Schedule:                        mkSchedule,
-				Decks:                           []files.QOTDDeckConfig{enabledDeck},
-				SuppressScheduledPublishDateUTC: "2026-05-10",
+				ActiveDeckID:                     files.LegacyQOTDDefaultDeckID,
+				Schedule:                         mkSchedule,
+				Decks:                            []files.QOTDDeckConfig{enabledDeck},
+				SuppressScheduledPublishDatesUTC: []string{"2026-05-10"},
 			},
 			now:      time.Date(2026, 5, 10, 9, 0, 0, 0, time.UTC),
 			wantOK:   true,

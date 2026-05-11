@@ -148,28 +148,96 @@ func TestNormalizeQOTDConfigNormalizesSuppressedScheduledPublishDate(t *testing.
 			Enabled:   true,
 			ChannelID: "123456789012345678",
 		}},
-		SuppressScheduledPublishDateUTC: " 2026-04-03 ",
+		SuppressScheduledPublishDatesUTC: []string{" 2026-04-03 "},
 	})
 	if err != nil {
 		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
 	}
-	if normalized.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	if got := normalized.SuppressScheduledPublishDatesUTC; len(got) != 1 || got[0] != "2026-04-03" {
 		t.Fatalf("expected canonical suppressed publish date, got %+v", normalized)
 	}
 	if !normalized.SuppressesScheduledPublishDate(time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)) {
 		t.Fatalf("expected normalized config to suppress the matching slot date, got %+v", normalized)
 	}
 	cleared := normalized.ClearSuppressedScheduledPublishDate(time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
-	if cleared.SuppressScheduledPublishDateUTC != "" {
+	if len(cleared.SuppressScheduledPublishDatesUTC) != 0 {
 		t.Fatalf("expected matching clear to remove suppressed slot date, got %+v", cleared)
 	}
 	unchanged := normalized.ClearSuppressedScheduledPublishDate(time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC))
-	if unchanged.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	if got := unchanged.SuppressScheduledPublishDatesUTC; len(got) != 1 || got[0] != "2026-04-03" {
 		t.Fatalf("expected non-matching clear to preserve suppressed slot date, got %+v", unchanged)
 	}
 	shifted := normalized.WithSuppressedScheduledPublishDate(time.Date(2026, 4, 5, 13, 15, 0, 0, time.UTC))
-	if shifted.SuppressScheduledPublishDateUTC != "2026-04-05" {
-		t.Fatalf("expected slot suppression helper to normalize to date only, got %+v", shifted)
+	if got := shifted.SuppressScheduledPublishDatesUTC; len(got) != 2 || got[0] != "2026-04-03" || got[1] != "2026-04-05" {
+		t.Fatalf("expected suppression helper to add a second canonical date, got %+v", shifted)
+	}
+}
+
+func TestNormalizeQOTDConfigDedupesAndSortsSuppressionList(t *testing.T) {
+	t.Parallel()
+
+	normalized, err := NormalizeQOTDConfig(QOTDConfig{
+		ActiveDeckID: LegacyQOTDDefaultDeckID,
+		Schedule:     testQOTDSchedule(12, 43),
+		Decks: []QOTDDeckConfig{{
+			ID:        LegacyQOTDDefaultDeckID,
+			Name:      LegacyQOTDDefaultDeckName,
+			Enabled:   true,
+			ChannelID: "123456789012345678",
+		}},
+		SuppressScheduledPublishDatesUTC: []string{
+			"2026-04-05",
+			" 2026-04-03 ",
+			"2026-04-03",
+			"",
+			"2026-04-05",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeQOTDConfig() failed: %v", err)
+	}
+	got := normalized.SuppressScheduledPublishDatesUTC
+	want := []string{"2026-04-03", "2026-04-05"}
+	if len(got) != len(want) {
+		t.Fatalf("expected canonical sorted dedupe, got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected dates[%d]=%q, got %q (full=%+v)", i, want[i], got[i], got)
+		}
+	}
+}
+
+func TestQOTDConfigUnmarshalMigratesLegacySingleSuppressionField(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte(`{"suppress_scheduled_publish_date_utc":"2026-04-04"}`)
+	var cfg QOTDConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Unmarshal(legacy field) failed: %v", err)
+	}
+	if got := cfg.SuppressScheduledPublishDatesUTC; len(got) != 1 || got[0] != "2026-04-04" {
+		t.Fatalf("expected legacy single-string suppression to migrate into the list form, got %+v", got)
+	}
+}
+
+func TestQOTDConfigUnmarshalPrefersNewListWhenBothFieldsPresent(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte(`{"suppress_scheduled_publish_date_utc":"2026-04-04","suppress_scheduled_publish_dates_utc":["2026-05-01","2026-05-02"]}`)
+	var cfg QOTDConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("Unmarshal(both fields) failed: %v", err)
+	}
+	got := cfg.SuppressScheduledPublishDatesUTC
+	want := []string{"2026-05-01", "2026-05-02"}
+	if len(got) != len(want) {
+		t.Fatalf("expected the new list to take precedence over the legacy single value, got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected dates[%d]=%q, got %q", i, want[i], got[i])
+		}
 	}
 }
 
@@ -185,7 +253,7 @@ func TestNormalizeQOTDConfigRejectsInvalidSuppressedScheduledPublishDate(t *test
 			Enabled:   true,
 			ChannelID: "123456789012345678",
 		}},
-		SuppressScheduledPublishDateUTC: "04/03/2026",
+		SuppressScheduledPublishDatesUTC: []string{"04/03/2026"},
 	})
 	if err == nil {
 		t.Fatal("expected invalid suppressed scheduled publish date to fail normalization")

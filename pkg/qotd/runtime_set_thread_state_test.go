@@ -8,6 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 type stubSetThreadStatePublisher struct {
@@ -80,6 +81,61 @@ func TestSetThreadStateStillPropagatesGenuineMissingThread(t *testing.T) {
 	}
 	if !missing {
 		t.Fatalf("expected missing thread to flip the missing flag so callers can mark MissingDiscord, got missing=false")
+	}
+}
+
+// TestSyncLiveOfficialPostShortCircuitsWhenStateMatchesTarget pins the
+// reconcile-loop optimization that skips the SetThreadState API call (and
+// the redundant DB update) when the stored post state already matches the
+// lifecycle target. Constructing the Service with a nil store proves the
+// short-circuit never reaches the store; the publisher stub returns an
+// error on any invocation, so an accidental API call would fail the test.
+func TestSyncLiveOfficialPostShortCircuitsWhenStateMatchesTarget(t *testing.T) {
+	t.Parallel()
+
+	pub := &stubSetThreadStatePublisher{
+		err: errors.New("publisher must not be called when DB state already matches lifecycle target"),
+	}
+	service := &Service{publisher: pub}
+
+	post := storage.QOTDOfficialPostRecord{
+		ID:              1,
+		DiscordThreadID: "thread-1",
+		State:           string(OfficialPostStateCurrent),
+	}
+	lifecycle := OfficialPostLifecycle{State: OfficialPostStateCurrent}
+
+	if err := service.syncLiveOfficialPost(context.Background(), nil, post, lifecycle); err != nil {
+		t.Fatalf("expected short-circuit to succeed without invoking publisher or store, got %v", err)
+	}
+	if len(pub.calls) != 0 {
+		t.Fatalf("expected zero publisher calls during short-circuit, got %d", len(pub.calls))
+	}
+}
+
+// TestSyncLiveOfficialPostShortCircuitIgnoresStateWhitespace pins that
+// whitespace around the persisted state (which postgres can return for
+// historical rows) does not defeat the short-circuit comparison.
+func TestSyncLiveOfficialPostShortCircuitIgnoresStateWhitespace(t *testing.T) {
+	t.Parallel()
+
+	pub := &stubSetThreadStatePublisher{
+		err: errors.New("publisher must not be called when DB state already matches lifecycle target"),
+	}
+	service := &Service{publisher: pub}
+
+	post := storage.QOTDOfficialPostRecord{
+		ID:              1,
+		DiscordThreadID: "thread-1",
+		State:           "  " + string(OfficialPostStatePrevious) + "  ",
+	}
+	lifecycle := OfficialPostLifecycle{State: OfficialPostStatePrevious}
+
+	if err := service.syncLiveOfficialPost(context.Background(), nil, post, lifecycle); err != nil {
+		t.Fatalf("expected short-circuit to tolerate padded state values, got %v", err)
+	}
+	if len(pub.calls) != 0 {
+		t.Fatalf("expected zero publisher calls during short-circuit, got %d", len(pub.calls))
 	}
 }
 

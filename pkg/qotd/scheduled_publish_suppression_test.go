@@ -12,7 +12,7 @@ func TestScheduledPublishSuppressionHelpersMatchNormalizedSlotDates(t *testing.T
 
 	base := files.QOTDConfig{}
 	suppressed := suppressScheduledPublishDate(base, time.Date(2026, 4, 3, 13, 5, 0, 0, time.UTC))
-	if suppressed.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	if got := suppressed.SuppressScheduledPublishDatesUTC; len(got) != 1 || got[0] != "2026-04-03" {
 		t.Fatalf("expected helper to persist a date-only suppression token, got %+v", suppressed)
 	}
 	if !isScheduledPublishSuppressed(suppressed, time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)) {
@@ -26,52 +26,90 @@ func TestScheduledPublishSuppressionHelpersMatchNormalizedSlotDates(t *testing.T
 	}
 }
 
+func TestSuppressScheduledPublishDateAccumulatesMultipleDates(t *testing.T) {
+	t.Parallel()
+
+	base := files.QOTDConfig{}
+	one := suppressScheduledPublishDate(base, time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC))
+	two := suppressScheduledPublishDate(one, time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC))
+
+	if got := two.SuppressScheduledPublishDatesUTC; len(got) != 2 || got[0] != "2026-04-03" || got[1] != "2026-04-04" {
+		t.Fatalf("expected the helper to accumulate both dates in sorted order, got %+v", got)
+	}
+	if !isScheduledPublishSuppressed(two, time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected first suppression to remain after adding a second, got %+v", two)
+	}
+	if !isScheduledPublishSuppressed(two, time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("expected second suppression to be active, got %+v", two)
+	}
+
+	// Re-suppressing the same date is idempotent and does not duplicate the
+	// entry; this matters because manual publishes and reconcile may both
+	// try to suppress the same day in quick succession.
+	idempotent := suppressScheduledPublishDate(two, time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC))
+	if got := idempotent.SuppressScheduledPublishDatesUTC; len(got) != 2 {
+		t.Fatalf("expected duplicate suppression to be idempotent, got %+v", got)
+	}
+}
+
 func TestClearSuppressedScheduledPublishDateClearsOnlyMatchingSlots(t *testing.T) {
 	t.Parallel()
 
-	current := files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"}
+	current := files.QOTDConfig{SuppressScheduledPublishDatesUTC: []string{"2026-04-03", "2026-04-04"}}
 	cleared := clearSuppressedScheduledPublishDate(current, time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC))
-	if cleared.SuppressScheduledPublishDateUTC != "" {
-		t.Fatalf("expected matching slot clear to remove suppression, got %+v", cleared)
+	if got := cleared.SuppressScheduledPublishDatesUTC; len(got) != 1 || got[0] != "2026-04-04" {
+		t.Fatalf("expected matching slot clear to remove only that suppression, got %+v", cleared)
 	}
-	unchanged := clearSuppressedScheduledPublishDate(current, time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC))
-	if unchanged.SuppressScheduledPublishDateUTC != "2026-04-03" {
+	unchanged := clearSuppressedScheduledPublishDate(current, time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC))
+	if got := unchanged.SuppressScheduledPublishDatesUTC; len(got) != 2 {
 		t.Fatalf("expected non-matching slot clear to preserve suppression, got %+v", unchanged)
 	}
-	fullyCleared := clearSuppressedScheduledPublishDate(current, time.Time{})
-	if fullyCleared.SuppressScheduledPublishDateUTC != "" {
-		t.Fatalf("expected zero-date clear to remove suppression unconditionally, got %+v", fullyCleared)
+	// Zero-time clear is a defensive no-op now that the multi-date model
+	// makes "clear everything" expressible via direct slice assignment
+	// (used in PrepareSettingsUpdate's ON→OFF branch).
+	noop := clearSuppressedScheduledPublishDate(current, time.Time{})
+	if got := noop.SuppressScheduledPublishDatesUTC; len(got) != 2 {
+		t.Fatalf("expected zero-date clear to be a no-op under the multi-date model, got %+v", noop)
 	}
 }
 
-func TestParseSuppressedScheduledPublishDateParsesValidDate(t *testing.T) {
+func TestParseSuppressedScheduledPublishDatesParsesValidEntries(t *testing.T) {
 	t.Parallel()
 
-	parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: "2026-04-03"})
-	if !ok {
-		t.Fatal("expected valid suppression token to parse")
+	dates, invalid := parseSuppressedScheduledPublishDates(files.QOTDConfig{
+		SuppressScheduledPublishDatesUTC: []string{"2026-04-03", "2026-04-04"},
+	})
+	if len(invalid) != 0 {
+		t.Fatalf("expected no invalid entries, got %+v", invalid)
 	}
-	want := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
-	if !parsed.Equal(want) {
-		t.Fatalf("expected parsed suppression date %s, got %s", want.Format(time.RFC3339), parsed.Format(time.RFC3339))
+	wantA := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	wantB := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
+	if len(dates) != 2 || !dates[0].Equal(wantA) || !dates[1].Equal(wantB) {
+		t.Fatalf("expected parsed dates %s and %s, got %+v", wantA, wantB, dates)
 	}
 }
 
-func TestParseSuppressedScheduledPublishDateRejectsInvalidDate(t *testing.T) {
+func TestParseSuppressedScheduledPublishDatesReportsInvalidEntries(t *testing.T) {
 	t.Parallel()
 
-	if parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: "not-a-date"}); ok || !parsed.IsZero() {
-		t.Fatalf("expected invalid suppression token to fail parse, got parsed=%s ok=%v", parsed.Format(time.RFC3339), ok)
+	dates, invalid := parseSuppressedScheduledPublishDates(files.QOTDConfig{
+		SuppressScheduledPublishDatesUTC: []string{"2026-04-03", "not-a-date", ""},
+	})
+	wantValid := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	if len(dates) != 1 || !dates[0].Equal(wantValid) {
+		t.Fatalf("expected valid entry to survive, got %+v", dates)
+	}
+	if len(invalid) != 2 {
+		t.Fatalf("expected both malformed entries to be reported, got %+v", invalid)
 	}
 }
 
-// FuzzParseSuppressedScheduledPublishDate pins the parser's two structural
-// invariants for arbitrary input bytes — (a) it never panics, and (b) the
-// (parsed, ok) return pair stays internally consistent (ok=true ⇔ non-zero
-// UTC time). Table tests cover the obvious shapes; the seed corpus runs on
-// every `go test` and `-fuzz=` extends coverage to NUL bytes, partial dates,
-// trailing junk, and other inputs a maintainer would not think to enumerate.
-func FuzzParseSuppressedScheduledPublishDate(f *testing.F) {
+// FuzzParseSuppressedScheduledPublishDates pins the parser's structural
+// invariants on arbitrary bytes wrapped in a single-element slice — same
+// guarantees the legacy single-string parser made: never panics, never
+// returns a non-UTC time, never returns a non-day-boundary time, never
+// returns both a valid date AND that date in the invalid slice.
+func FuzzParseSuppressedScheduledPublishDates(f *testing.F) {
 	for _, seed := range []string{
 		"",
 		"   ",
@@ -86,16 +124,22 @@ func FuzzParseSuppressedScheduledPublishDate(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, raw string) {
-		parsed, ok := parseSuppressedScheduledPublishDate(files.QOTDConfig{SuppressScheduledPublishDateUTC: raw})
-		switch {
-		case ok && parsed.IsZero():
-			t.Fatalf("ok=true must imply non-zero parsed time, raw=%q", raw)
-		case !ok && !parsed.IsZero():
-			t.Fatalf("ok=false must imply zero parsed time, raw=%q parsed=%s", raw, parsed.Format(time.RFC3339))
-		case ok && parsed.Location() != time.UTC:
-			t.Fatalf("expected UTC parsed time, raw=%q got %s", raw, parsed.Location())
-		case ok && (parsed.Hour() != 0 || parsed.Minute() != 0 || parsed.Second() != 0 || parsed.Nanosecond() != 0):
-			t.Fatalf("expected normalized day boundary, raw=%q got %s", raw, parsed.Format(time.RFC3339))
+		dates, invalid := parseSuppressedScheduledPublishDates(files.QOTDConfig{
+			SuppressScheduledPublishDatesUTC: []string{raw},
+		})
+		if len(dates)+len(invalid) > 1 {
+			t.Fatalf("expected single-element input to map to one output bucket, got dates=%d invalid=%d (raw=%q)", len(dates), len(invalid), raw)
+		}
+		for _, parsed := range dates {
+			if parsed.IsZero() {
+				t.Fatalf("valid bucket must not contain zero time, raw=%q", raw)
+			}
+			if parsed.Location() != time.UTC {
+				t.Fatalf("expected UTC parsed time, raw=%q got %s", raw, parsed.Location())
+			}
+			if parsed.Hour() != 0 || parsed.Minute() != 0 || parsed.Second() != 0 || parsed.Nanosecond() != 0 {
+				t.Fatalf("expected normalized day boundary, raw=%q got %s", raw, parsed.Format(time.RFC3339))
+			}
 		}
 	})
 }

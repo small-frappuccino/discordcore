@@ -283,6 +283,19 @@ func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID st
 }
 
 func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
+	// Short-circuit when the DB already reflects the lifecycle target. For
+	// the current→previous transition the *thread* target is unchanged
+	// (both states want unlocked+unarchived+unpinned), so once we've reached
+	// the target state once we don't need to repeatedly poke Discord. Saves
+	// rate-limit budget and eliminates the recurring 403 churn on guilds
+	// where the bot can publish but lacks per-thread MANAGE_THREADS. The
+	// transition to OfficialPostStateArchived is handled by
+	// archiveOfficialPost (separate code path with its own thread edit), so
+	// short-circuiting here does not block the archive flow.
+	if string(lifecycle.State) == strings.TrimSpace(post.State) {
+		return nil
+	}
+
 	if strings.TrimSpace(post.DiscordThreadID) == "" {
 		_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), nil, nil)
 		return err

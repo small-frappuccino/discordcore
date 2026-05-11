@@ -332,13 +332,17 @@ func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 }
 
 func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
+	var suppressed []string
+	if len(in.SuppressScheduledPublishDatesUTC) > 0 {
+		suppressed = append([]string(nil), in.SuppressScheduledPublishDatesUTC...)
+	}
 	return QOTDConfig{
-		VerifiedRoleID:                  in.VerifiedRoleID,
-		ActiveDeckID:                    in.ActiveDeckID,
-		Decks:                           cloneQOTDDeckConfigs(in.Decks),
-		Collector:                       cloneQOTDCollectorConfig(in.Collector),
-		Schedule:                        cloneQOTDPublishScheduleConfig(in.Schedule),
-		SuppressScheduledPublishDateUTC: in.SuppressScheduledPublishDateUTC,
+		VerifiedRoleID:                   in.VerifiedRoleID,
+		ActiveDeckID:                     in.ActiveDeckID,
+		Decks:                            cloneQOTDDeckConfigs(in.Decks),
+		Collector:                        cloneQOTDCollectorConfig(in.Collector),
+		Schedule:                         cloneQOTDPublishScheduleConfig(in.Schedule),
+		SuppressScheduledPublishDatesUTC: suppressed,
 	}
 }
 

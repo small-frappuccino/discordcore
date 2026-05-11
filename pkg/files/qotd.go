@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -82,41 +83,103 @@ func (cfg QOTDConfig) IsZero() bool {
 			isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) &&
 			cfg.Collector.IsZero() &&
 			cfg.Schedule.IsZero() &&
-			strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC) == "" {
+			len(cfg.SuppressScheduledPublishDatesUTC) == 0 {
 			return true
 		}
 		return false
 	}
-	if !cfg.Collector.IsZero() || !cfg.Schedule.IsZero() || strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC) != "" {
+	if !cfg.Collector.IsZero() || !cfg.Schedule.IsZero() || len(cfg.SuppressScheduledPublishDatesUTC) != 0 {
 		return false
 	}
 	return true
 }
 
+// SuppressesScheduledPublishDate reports whether the given UTC publish date
+// is in the suppression set. The set membership semantic replaces the old
+// single-string field, so callers can suppress today AND tomorrow at the
+// same time (e.g. a manual publish that occupies tomorrow's slot while a
+// maintenance flow pauses today's automatic publish).
 func (cfg QOTDConfig) SuppressesScheduledPublishDate(publishDate time.Time) bool {
 	publishDate = publishDate.UTC()
 	if publishDate.IsZero() {
 		return false
 	}
-	return strings.TrimSpace(cfg.SuppressScheduledPublishDateUTC) == publishDate.Format(qotdPublishDateLayout)
+	target := publishDate.Format(qotdPublishDateLayout)
+	for _, raw := range cfg.SuppressScheduledPublishDatesUTC {
+		if strings.TrimSpace(raw) == target {
+			return true
+		}
+	}
+	return false
 }
 
+// WithSuppressedScheduledPublishDate returns a config with the publish date
+// added to the suppression set. Idempotent: passing a date that is already
+// suppressed returns the config unchanged.
 func (cfg QOTDConfig) WithSuppressedScheduledPublishDate(publishDate time.Time) QOTDConfig {
 	publishDate = publishDate.UTC()
 	if publishDate.IsZero() {
-		cfg.SuppressScheduledPublishDateUTC = ""
 		return cfg
 	}
-	cfg.SuppressScheduledPublishDateUTC = publishDate.Format(qotdPublishDateLayout)
+	if cfg.SuppressesScheduledPublishDate(publishDate) {
+		return cfg
+	}
+	formatted := publishDate.Format(qotdPublishDateLayout)
+	cfg.SuppressScheduledPublishDatesUTC = append(append([]string(nil), cfg.SuppressScheduledPublishDatesUTC...), formatted)
+	sortSuppressedPublishDates(cfg.SuppressScheduledPublishDatesUTC)
 	return cfg
 }
 
+// ClearSuppressedScheduledPublishDate returns a config with the publish
+// date removed from the suppression set. Idempotent: passing a date that
+// is not in the set returns the config unchanged.
 func (cfg QOTDConfig) ClearSuppressedScheduledPublishDate(publishDate time.Time) QOTDConfig {
-	if !cfg.SuppressesScheduledPublishDate(publishDate) {
+	publishDate = publishDate.UTC()
+	if publishDate.IsZero() || !cfg.SuppressesScheduledPublishDate(publishDate) {
 		return cfg
 	}
-	cfg.SuppressScheduledPublishDateUTC = ""
+	target := publishDate.Format(qotdPublishDateLayout)
+	next := make([]string, 0, len(cfg.SuppressScheduledPublishDatesUTC))
+	for _, raw := range cfg.SuppressScheduledPublishDatesUTC {
+		if strings.TrimSpace(raw) == target {
+			continue
+		}
+		next = append(next, raw)
+	}
+	if len(next) == 0 {
+		cfg.SuppressScheduledPublishDatesUTC = nil
+	} else {
+		cfg.SuppressScheduledPublishDatesUTC = next
+	}
 	return cfg
+}
+
+// SuppressedScheduledPublishDates returns the canonical sorted set of
+// suppressed UTC publish dates as time.Time values. Convenience for
+// callers that want to iterate the set without re-parsing the strings.
+func (cfg QOTDConfig) SuppressedScheduledPublishDates() []time.Time {
+	if len(cfg.SuppressScheduledPublishDatesUTC) == 0 {
+		return nil
+	}
+	out := make([]time.Time, 0, len(cfg.SuppressScheduledPublishDatesUTC))
+	for _, raw := range cfg.SuppressScheduledPublishDatesUTC {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		parsed, err := time.Parse(qotdPublishDateLayout, raw)
+		if err != nil {
+			continue
+		}
+		out = append(out, parsed.UTC())
+	}
+	return out
+}
+
+func sortSuppressedPublishDates(dates []string) {
+	sort.SliceStable(dates, func(i, j int) bool {
+		return strings.TrimSpace(dates[i]) < strings.TrimSpace(dates[j])
+	})
 }
 
 // DashboardQOTDConfig returns a stable deck-aware settings payload for the
@@ -242,21 +305,25 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	type rawQOTDConfig struct {
-		VerifiedRoleID                  string                       `json:"verified_role_id,omitempty"`
-		ActiveDeckID                    string                       `json:"active_deck_id,omitempty"`
-		Decks                           []QOTDDeckConfig             `json:"decks,omitempty"`
-		Collector                       QOTDCollectorConfig          `json:"collector,omitempty"`
-		Schedule                        rawQOTDPublishScheduleConfig `json:"schedule,omitempty"`
-		SuppressScheduledPublishDateUTC string                       `json:"suppress_scheduled_publish_date_utc,omitempty"`
-		Enabled                         bool                         `json:"enabled,omitempty"`
-		ChannelID                       string                       `json:"channel_id,omitempty"`
-		ForumChannelID                  string                       `json:"forum_channel_id,omitempty"`
-		QuestionChannelID               string                       `json:"question_channel_id,omitempty"`
-		ResponseChannelID               string                       `json:"response_channel_id,omitempty"`
-		PublishHourUTC                  *int                         `json:"publish_hour_utc,omitempty"`
-		PublishMinuteUTC                *int                         `json:"publish_minute_utc,omitempty"`
-		LegacyHourUTC                   *int                         `json:"qotd_time_hour_utc,omitempty"`
-		LegacyMinuteUTC                 *int                         `json:"qotd_time_minute_utc,omitempty"`
+		VerifiedRoleID string                       `json:"verified_role_id,omitempty"`
+		ActiveDeckID   string                       `json:"active_deck_id,omitempty"`
+		Decks          []QOTDDeckConfig             `json:"decks,omitempty"`
+		Collector      QOTDCollectorConfig          `json:"collector,omitempty"`
+		Schedule       rawQOTDPublishScheduleConfig `json:"schedule,omitempty"`
+		// SuppressScheduledPublishDatesUTC is the new list form. Older configs
+		// persisted only LegacySuppressDateUTC; the unmarshal migrates the
+		// legacy value into the list when the new field is absent.
+		SuppressScheduledPublishDatesUTC []string `json:"suppress_scheduled_publish_dates_utc,omitempty"`
+		LegacySuppressDateUTC            string   `json:"suppress_scheduled_publish_date_utc,omitempty"`
+		Enabled                          bool     `json:"enabled,omitempty"`
+		ChannelID                        string   `json:"channel_id,omitempty"`
+		ForumChannelID                   string   `json:"forum_channel_id,omitempty"`
+		QuestionChannelID                string   `json:"question_channel_id,omitempty"`
+		ResponseChannelID                string   `json:"response_channel_id,omitempty"`
+		PublishHourUTC                   *int     `json:"publish_hour_utc,omitempty"`
+		PublishMinuteUTC                 *int     `json:"publish_minute_utc,omitempty"`
+		LegacyHourUTC                    *int     `json:"qotd_time_hour_utc,omitempty"`
+		LegacyMinuteUTC                  *int     `json:"qotd_time_minute_utc,omitempty"`
 	}
 
 	var raw rawQOTDConfig
@@ -293,13 +360,21 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	suppressedDates := raw.SuppressScheduledPublishDatesUTC
+	if len(suppressedDates) == 0 && strings.TrimSpace(raw.LegacySuppressDateUTC) != "" {
+		// Legacy single-string field migration: keep old persisted configs
+		// loading until the next write replaces the legacy key with the
+		// canonical list form.
+		suppressedDates = []string{raw.LegacySuppressDateUTC}
+	}
+
 	*cfg = QOTDConfig{
-		VerifiedRoleID:                  raw.VerifiedRoleID,
-		ActiveDeckID:                    raw.ActiveDeckID,
-		Decks:                           raw.Decks,
-		Collector:                       raw.Collector,
-		Schedule:                        schedule,
-		SuppressScheduledPublishDateUTC: raw.SuppressScheduledPublishDateUTC,
+		VerifiedRoleID:                   raw.VerifiedRoleID,
+		ActiveDeckID:                     raw.ActiveDeckID,
+		Decks:                            raw.Decks,
+		Collector:                        raw.Collector,
+		Schedule:                         schedule,
+		SuppressScheduledPublishDatesUTC: suppressedDates,
 	}
 	if len(raw.Decks) > 0 {
 		return nil

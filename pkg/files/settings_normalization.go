@@ -2,6 +2,7 @@ package files
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -78,9 +79,9 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	verifiedRoleID := strings.TrimSpace(in.VerifiedRoleID)
 	activeDeckID := strings.TrimSpace(in.ActiveDeckID)
 	decks := cloneQOTDDeckConfigs(in.Decks)
-	suppressedPublishDateUTC, err := normalizeQOTDSuppressedPublishDate(in.SuppressScheduledPublishDateUTC)
+	suppressedPublishDatesUTC, err := normalizeQOTDSuppressedPublishDates(in.SuppressScheduledPublishDatesUTC)
 	if err != nil {
-		return QOTDConfig{}, invalidQOTDInput("suppress_scheduled_publish_date_utc: %v", err)
+		return QOTDConfig{}, invalidQOTDInput("suppress_scheduled_publish_dates_utc: %v", err)
 	}
 	schedule, err := normalizeQOTDPublishScheduleConfig(in.Schedule)
 	if err != nil {
@@ -99,14 +100,14 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		// no-deck path: a suppression-only config still carries meaningful
 		// state (the scheduler reads it back to skip the suppressed slot).
 		// QOTDConfig.IsZero handles the symmetric case on the read side.
-		if collector.IsZero() && verifiedRoleID == "" && schedule.IsZero() && suppressedPublishDateUTC == "" {
+		if collector.IsZero() && verifiedRoleID == "" && schedule.IsZero() && len(suppressedPublishDatesUTC) == 0 {
 			return QOTDConfig{}, nil
 		}
 		return QOTDConfig{
-			VerifiedRoleID:                  verifiedRoleID,
-			Collector:                       collector,
-			Schedule:                        schedule,
-			SuppressScheduledPublishDateUTC: suppressedPublishDateUTC,
+			VerifiedRoleID:                   verifiedRoleID,
+			Collector:                        collector,
+			Schedule:                         schedule,
+			SuppressScheduledPublishDatesUTC: suppressedPublishDatesUTC,
 		}, nil
 	}
 
@@ -151,30 +152,52 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		collector.IsZero() &&
 		verifiedRoleID == "" &&
 		schedule.IsZero() &&
-		suppressedPublishDateUTC == "" {
+		len(suppressedPublishDatesUTC) == 0 {
 		return QOTDConfig{}, nil
 	}
 
 	return QOTDConfig{
-		VerifiedRoleID:                  verifiedRoleID,
-		ActiveDeckID:                    activeDeckID,
-		Decks:                           normalizedDecks,
-		Collector:                       collector,
-		Schedule:                        schedule,
-		SuppressScheduledPublishDateUTC: suppressedPublishDateUTC,
+		VerifiedRoleID:                   verifiedRoleID,
+		ActiveDeckID:                     activeDeckID,
+		Decks:                            normalizedDecks,
+		Collector:                        collector,
+		Schedule:                         schedule,
+		SuppressScheduledPublishDatesUTC: suppressedPublishDatesUTC,
 	}, nil
 }
 
-func normalizeQOTDSuppressedPublishDate(in string) (string, error) {
-	in = strings.TrimSpace(in)
-	if in == "" {
-		return "", nil
+// normalizeQOTDSuppressedPublishDates validates each entry, dedupes (case
+// insensitive whitespace), and returns the canonical sorted list. Empty
+// entries are silently dropped; a malformed entry fails the whole config so
+// callers learn about the typo at write time instead of at runtime when the
+// scheduler tries to compare against a corrupt date.
+func normalizeQOTDSuppressedPublishDates(in []string) ([]string, error) {
+	if len(in) == 0 {
+		return nil, nil
 	}
-	parsed, err := time.Parse(qotdPublishDateLayout, in)
-	if err != nil {
-		return "", fmt.Errorf("must be a UTC publish date in YYYY-MM-DD format")
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, raw := range in {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		parsed, err := time.Parse(qotdPublishDateLayout, raw)
+		if err != nil {
+			return nil, fmt.Errorf("must be UTC publish dates in YYYY-MM-DD format")
+		}
+		canonical := parsed.UTC().Format(qotdPublishDateLayout)
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		out = append(out, canonical)
 	}
-	return parsed.UTC().Format(qotdPublishDateLayout), nil
+	if len(out) == 0 {
+		return nil, nil
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func normalizeQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) (QOTDPublishScheduleConfig, error) {
