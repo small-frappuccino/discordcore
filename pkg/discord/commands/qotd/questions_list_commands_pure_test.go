@@ -280,7 +280,7 @@ func TestQuestionsListIdleTimeoutResetsOnActivity(t *testing.T) {
 }
 
 func TestFormatAutomaticQueueStateUsesNextSlotLabel(t *testing.T) {
-	message := formatAutomaticQueueState(applicationqotd.AutomaticQueueState{
+	message := formatAutomaticQueueState(discordgo.EnglishUS, applicationqotd.AutomaticQueueState{
 		Deck: files.QOTDDeckConfig{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -95,7 +96,7 @@ func TestTranslateQOTDConfigError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := translateQOTDConfigError(tt.input)
+			got := translateQOTDConfigError(discordgo.EnglishUS, tt.input)
 
 			if tt.wantErr != nil {
 				if got != tt.wantErr {
