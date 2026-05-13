@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
@@ -76,7 +75,7 @@ func TestServerStatsAggregationsUsePostgresStore(t *testing.T) {
 }
 
 func TestRenderTopWithMetricsTotals(t *testing.T) {
-	got := renderTop(discordgo.EnglishUS, []storage.MetricTotal{
+	got := renderTop([]storage.MetricTotal{
 		{Key: "c1", Total: 10},
 		{Key: "c2", Total: 3},
 	}, 2, func(id string) string { return "#" + id })

@@ -119,7 +119,6 @@ func (c *PartnerAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *PartnerAddSubCommand) RequiresGuild() bool       { return true }
 func (c *PartnerAddSubCommand) RequiresPermissions() bool { return true }
 func (c *PartnerAddSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(optionName)
@@ -138,17 +137,17 @@ func (c *PartnerAddSubCommand) Handle(ctx *core.Context) error {
 	}
 	if err := c.boardService.CreatePartner(ctx.GuildID, entry); err != nil {
 		if errors.Is(err, files.ErrPartnerAlreadyExists) {
-			return partnerDetailedCommandError(ptnMsg(locale, ptnMsgAlreadyExists))
+			return partnerDetailedCommandError("That partner couldn't be added because another entry already uses the same name or invite. This reply stays private.")
 		}
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgCreateFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to create partner: %v", err))
 	}
 
 	saved, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgCreateLookupFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Partner created but lookup failed: %v", err))
 	}
 
-	content := formatPartnerEntry(locale, ptnMsg(locale, ptnMsgAddedPrefix), saved)
+	content := formatPartnerEntry("The partner entry was added and this reply stays private because it changes the partner board setup for this server.", saved)
 	return partnerEntryMutationResponseBuilder(ctx.Session).Success(ctx.Interaction, content)
 }
 
@@ -177,7 +176,6 @@ func (c *PartnerReadSubCommand) Options() []*discordgo.ApplicationCommandOption 
 func (c *PartnerReadSubCommand) RequiresGuild() bool       { return true }
 func (c *PartnerReadSubCommand) RequiresPermissions() bool { return true }
 func (c *PartnerReadSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(optionName)
@@ -188,12 +186,12 @@ func (c *PartnerReadSubCommand) Handle(ctx *core.Context) error {
 	entry, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
-			return partnerDetailedCommandError(ptnMsg(locale, ptnMsgNotFound))
+			return partnerDetailedCommandError("That partner entry couldn't be found, so this reply stays private because it concerns the partner board setup.")
 		}
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgReadFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to read partner: %v", err))
 	}
 
-	content := formatPartnerEntry(locale, ptnMsg(locale, ptnMsgReadPrefix), entry)
+	content := formatPartnerEntry("Here are the saved details for that partner entry. This reply stays private because it shows the current partner board setup.", entry)
 	return partnerEntryReadResponseBuilder(ctx.Session).Info(ctx.Interaction, content)
 }
 
@@ -240,7 +238,6 @@ func (c *PartnerUpdateSubCommand) Options() []*discordgo.ApplicationCommandOptio
 func (c *PartnerUpdateSubCommand) RequiresGuild() bool       { return true }
 func (c *PartnerUpdateSubCommand) RequiresPermissions() bool { return true }
 func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	currentName, err := extractor.StringRequired(optionCurrentName)
@@ -259,9 +256,9 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 	existing, err := c.boardService.Partner(ctx.GuildID, currentName)
 	if err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
-			return partnerDetailedCommandError(ptnMsg(locale, ptnMsgNotFound))
+			return partnerDetailedCommandError("That partner entry couldn't be found, so this reply stays private because it concerns the partner board setup.")
 		}
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgLoadFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to load current partner: %v", err))
 	}
 
 	fandom := extractor.String(optionFandom)
@@ -276,17 +273,17 @@ func (c *PartnerUpdateSubCommand) Handle(ctx *core.Context) error {
 	}
 	if err := c.boardService.UpdatePartner(ctx.GuildID, currentName, entry); err != nil {
 		if errors.Is(err, files.ErrPartnerAlreadyExists) {
-			return partnerDetailedCommandError(ptnMsg(locale, ptnMsgDuplicateUpdate))
+			return partnerDetailedCommandError("That partner couldn't be updated because another entry already uses the same name or invite. This reply stays private.")
 		}
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgUpdateFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner: %v", err))
 	}
 
 	saved, err := c.boardService.Partner(ctx.GuildID, name)
 	if err != nil {
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgUpdateLookupFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Partner updated but lookup failed: %v", err))
 	}
 
-	content := formatPartnerEntry(locale, ptnMsg(locale, ptnMsgUpdatedPrefix), saved)
+	content := formatPartnerEntry("The partner entry was updated and this reply stays private because it changes the partner board setup for this server.", saved)
 	return partnerEntryMutationResponseBuilder(ctx.Session).Success(ctx.Interaction, content)
 }
 
@@ -315,7 +312,6 @@ func (c *PartnerDeleteSubCommand) Options() []*discordgo.ApplicationCommandOptio
 func (c *PartnerDeleteSubCommand) RequiresGuild() bool       { return true }
 func (c *PartnerDeleteSubCommand) RequiresPermissions() bool { return true }
 func (c *PartnerDeleteSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(optionName)
@@ -325,14 +321,14 @@ func (c *PartnerDeleteSubCommand) Handle(ctx *core.Context) error {
 
 	if err := c.boardService.DeletePartner(ctx.GuildID, name); err != nil {
 		if errors.Is(err, files.ErrPartnerNotFound) {
-			return partnerDetailedCommandError(ptnMsg(locale, ptnMsgNotFound))
+			return partnerDetailedCommandError("That partner entry couldn't be found, so this reply stays private because it concerns the partner board setup.")
 		}
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgDeleteFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to delete partner: %v", err))
 	}
 
 	return partnerAdministrativeActionResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
-		ptnMsg(locale, ptnMsgDeleted, strings.TrimSpace(name)),
+		fmt.Sprintf("Partner `%s` was removed and this reply stays private because it changes the partner board setup for this server.", strings.TrimSpace(name)),
 	)
 }
 
@@ -354,21 +350,20 @@ func (c *PartnerListSubCommand) Options() []*discordgo.ApplicationCommandOption 
 func (c *PartnerListSubCommand) RequiresGuild() bool       { return true }
 func (c *PartnerListSubCommand) RequiresPermissions() bool { return true }
 func (c *PartnerListSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	partners, err := c.boardService.ListPartners(ctx.GuildID)
 	if err != nil {
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgListFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to list partners: %v", err))
 	}
 	if len(partners) == 0 {
-		return partnerBoardStateResponseBuilder(ctx.Session).Info(ctx.Interaction, ptnMsg(locale, ptnMsgListEmpty))
+		return partnerBoardStateResponseBuilder(ctx.Session).Info(ctx.Interaction, "No partners are configured yet. This reply stays private because it reflects the current partner board setup.")
 	}
 
 	var b strings.Builder
-	b.WriteString(ptnMsg(locale, ptnMsgListHeader))
+	b.WriteString("These are the configured partner entries. This reply stays private because it reflects the current partner board setup:\n")
 	for i, p := range partners {
 		fandom := strings.TrimSpace(p.Fandom)
 		if fandom == "" {
-			fandom = ptnMsg(locale, ptnMsgFandomDefault)
+			fandom = "Other"
 		}
 		b.WriteString(fmt.Sprintf(
 			"%d. `%s` | `%s` | %s\n",
@@ -381,21 +376,21 @@ func (c *PartnerListSubCommand) Handle(ctx *core.Context) error {
 
 	builder := partnerBoardStateResponseBuilder(ctx.Session).
 		WithEmbed().
-		WithTitle(ptnMsg(locale, ptnMsgListTitle)).
+		WithTitle("Partner List").
 		WithColor(theme.Info())
 	return builder.Info(ctx.Interaction, strings.TrimSpace(b.String()))
 }
 
-func formatPartnerEntry(locale discordgo.Locale, prefix string, entry files.PartnerEntryConfig) string {
+func formatPartnerEntry(prefix string, entry files.PartnerEntryConfig) string {
 	fandom := strings.TrimSpace(entry.Fandom)
 	if fandom == "" {
-		fandom = ptnMsg(locale, ptnMsgFandomDefault)
+		fandom = "Other"
 	}
 	return strings.Join([]string{
 		prefix,
-		ptnMsg(locale, ptnMsgEntryName, strings.TrimSpace(entry.Name)),
-		ptnMsg(locale, ptnMsgEntryFandom, fandom),
-		ptnMsg(locale, ptnMsgEntryInvite, strings.TrimSpace(entry.Link)),
+		fmt.Sprintf("Name: `%s`", strings.TrimSpace(entry.Name)),
+		fmt.Sprintf("Fandom: `%s`", fandom),
+		fmt.Sprintf("Invite: %s", strings.TrimSpace(entry.Link)),
 	}, "\n")
 }
 
@@ -417,20 +412,19 @@ func (c *PartnerSyncSubCommand) Options() []*discordgo.ApplicationCommandOption 
 func (c *PartnerSyncSubCommand) RequiresGuild() bool       { return true }
 func (c *PartnerSyncSubCommand) RequiresPermissions() bool { return true }
 func (c *PartnerSyncSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	if c.syncExecutor == nil {
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgSyncNotConfigured))
+		return partnerDetailedCommandError("Partner sync is not configured")
 	}
 
 	syncCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	if err := c.syncExecutor.SyncGuild(syncCtx, ctx.GuildID); err != nil {
-		return partnerDetailedCommandError(ptnMsg(locale, ptnMsgSyncFailed, err))
+		return partnerDetailedCommandError(fmt.Sprintf("Failed to sync partner board: %v", err))
 	}
 
 	return partnerAdministrativeActionResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
-		ptnMsg(locale, ptnMsgSynced),
+		"The partner board was synced and this reply stays private because it is an internal admin action.",
 	)
 }

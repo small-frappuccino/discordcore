@@ -8,8 +8,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
+const questionsListEmbedTitle = "☆ questions list! ☆"
+
 type QuestionsListEmbedParams struct {
-	Locale         discordgo.Locale
 	DeckName       string
 	Questions      []storage.QOTDQuestionRecord
 	Page           int
@@ -18,10 +19,6 @@ type QuestionsListEmbedParams struct {
 }
 
 func BuildQuestionsListEmbed(params QuestionsListEmbedParams) *discordgo.MessageEmbed {
-	locale := params.Locale
-	if locale == discordgo.Unknown {
-		locale = discordgo.EnglishUS
-	}
 	pageSize := params.PageSize
 	if pageSize <= 0 {
 		pageSize = 10
@@ -34,22 +31,21 @@ func BuildQuestionsListEmbed(params QuestionsListEmbedParams) *discordgo.Message
 	page := normalizeQuestionListPage(params.Page, totalPages)
 	deckName := strings.TrimSpace(params.DeckName)
 	if deckName == "" {
-		deckName = te(locale, embedMsgDeckDefault)
+		deckName = "Default"
 	}
 
-	description := buildQuestionsListDescription(locale, params.Questions, page, pageSize, totalQuestions, totalPages)
+	description := buildQuestionsListDescription(params.Questions, page, pageSize, totalQuestions, totalPages)
 	return &discordgo.MessageEmbed{
-		Title:       te(locale, embedMsgTitle),
+		Title:       questionsListEmbedTitle,
 		Description: description,
 		Color:       officialQuestionEmbedColor,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: te(locale, embedMsgFooter, deckName, page+1, totalPages, totalQuestions),
+			Text: fmt.Sprintf("%s -- Page %d/%d -- %d questions", deckName, page+1, totalPages, totalQuestions),
 		},
 	}
 }
 
 func buildQuestionsListDescription(
-	locale discordgo.Locale,
 	questions []storage.QOTDQuestionRecord,
 	page int,
 	pageSize int,
@@ -57,10 +53,10 @@ func buildQuestionsListDescription(
 	totalPages int,
 ) string {
 	if totalQuestions == 0 {
-		return te(locale, embedMsgEmpty)
+		return "This deck does not have any questions yet.\n\nPage 1 of 1 • 0 questions"
 	}
 
-	nextReadyID := nextReadyQuestionID(questions)
+	nextReadyQuestionID := nextReadyQuestionID(questions)
 
 	start := page * pageSize
 	if start > len(questions) {
@@ -73,14 +69,14 @@ func buildQuestionsListDescription(
 
 	lines := make([]string, 0, end-start+2)
 	for _, question := range questions[start:end] {
-		lines = append(lines, formatQuestionsListEntry(locale, question, nextReadyID))
+		lines = append(lines, formatQuestionsListEntry(question, nextReadyQuestionID))
 	}
 	lines = append(lines, "")
-	lines = append(lines, te(locale, embedMsgPageInfo, page+1, totalPages, totalQuestions))
+	lines = append(lines, fmt.Sprintf("Page %d of %d • %d questions", page+1, totalPages, totalQuestions))
 	return strings.Join(lines, "\n")
 }
 
-func formatQuestionsListEntry(locale discordgo.Locale, question storage.QOTDQuestionRecord, nextReadyID int64) string {
+func formatQuestionsListEntry(question storage.QOTDQuestionRecord, nextReadyQuestionID int64) string {
 	text := strings.Join(strings.Fields(strings.TrimSpace(question.Body)), " ")
 	text = truncateEmbedText(text, 96)
 	meta := make([]string, 0, 3)
@@ -89,9 +85,9 @@ func formatQuestionsListEntry(locale discordgo.Locale, question storage.QOTDQues
 		displayID = question.ID
 	}
 	meta = append(meta, fmt.Sprintf("ID:%d", displayID))
-	meta = append(meta, questionStatusLabel(locale, question.Status))
-	if question.ID == nextReadyID {
-		meta = append(meta, te(locale, embedMsgPublishNext))
+	meta = append(meta, questionStatusLabel(question.Status))
+	if question.ID == nextReadyQuestionID {
+		meta = append(meta, "publishes next")
 	}
 	return fmt.Sprintf("%s \"%s\" (%s)", questionStatusIcon(question.Status), text, strings.Join(meta, " • "))
 }
@@ -135,20 +131,20 @@ func questionStatusIcon(status string) string {
 	}
 }
 
-func questionStatusLabel(locale discordgo.Locale, status string) string {
+func questionStatusLabel(status string) string {
 	switch strings.TrimSpace(status) {
 	case "ready":
-		return te(locale, embedMsgStatusReady)
+		return "ready"
 	case "draft":
-		return te(locale, embedMsgStatusDraft)
+		return "draft"
 	case "reserved":
-		return te(locale, embedMsgStatusReserved)
+		return "reserved"
 	case "used":
-		return te(locale, embedMsgStatusUsed)
+		return "used"
 	case "disabled":
-		return te(locale, embedMsgStatusDisabled)
+		return "disabled"
 	default:
-		return te(locale, embedMsgStatusUnknown)
+		return "unknown"
 	}
 }
 

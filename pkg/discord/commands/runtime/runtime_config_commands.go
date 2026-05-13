@@ -443,10 +443,9 @@ func (c *runtimeSubCommand) RequiresGuild() bool       { return false }
 func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
 
 func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, runtimeMsg(locale, runtimeMsgLoadFailed, err))
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err))
 	}
 
 	st := panelState{
@@ -463,8 +462,8 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 		}
 	}
 
-	embed := renderMainEmbed(locale, rc, st)
-	components := renderMainComponents(locale, rc, st)
+	embed := renderMainEmbed(rc, st)
+	components := renderMainComponents(rc, st)
 
 	rm := core.NewResponseBuilder(ctx.Session).Build()
 	cfg := core.ResponseConfig{
@@ -785,32 +784,32 @@ func toggleBool(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, erro
 
 // --- Rendering (embed + components) ---
 
-func renderMainEmbed(locale discordgo.Locale, rc files.RuntimeConfig, st panelState) *discordgo.MessageEmbed {
+func renderMainEmbed(rc files.RuntimeConfig, st panelState) *discordgo.MessageEmbed {
 	sp, _ := specByKey(st.Key)
 
-	scopeDesc := runtimeMsg(locale, runtimeMsgScopeGlobal)
+	scopeDesc := "Global"
 	if st.Scope != "global" {
-		scopeDesc = runtimeMsg(locale, runtimeMsgScopeGuild, st.Scope)
+		scopeDesc = fmt.Sprintf("Guild (`%s`)", st.Scope)
 	}
 
 	desc := strings.Join([]string{
-		runtimeMsg(locale, runtimeMsgPanelDesc1),
+		"This panel lets you edit the persisted runtime configuration that replaced the old operational environment variables.",
 		"",
-		runtimeMsg(locale, runtimeMsgPanelScopeLabel, scopeDesc),
-		runtimeMsg(locale, runtimeMsgPanelSelectedLine, sp.Key, sp.Type, sp.DefaultHint, localizeRestartHint(locale, sp.RestartHint)),
-		runtimeMsg(locale, runtimeMsgPanelNavHint),
+		fmt.Sprintf("Scope: **%s**", scopeDesc),
+		fmt.Sprintf("Selected: `%s` | Type: **%s** | Default: **%s** | %s", sp.Key, sp.Type, sp.DefaultHint, sp.RestartHint),
+		"Use the menus to filter and navigate, then use the buttons to edit the selected setting.",
 	}, "\n")
 
 	fields := []*discordgo.MessageEmbedField{}
 	fields = append(fields, groupFieldsForMain(rc, st)...)
 
 	return &discordgo.MessageEmbed{
-		Title:       runtimeMsg(locale, runtimeMsgPanelTitle),
+		Title:       "Runtime Configuration",
 		Description: desc,
 		Color:       theme.Info(),
 		Fields:      fields,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: runtimeMsg(locale, runtimeMsgPanelFooter),
+			Text: "Some changes can be applied immediately, especially THEME and selected ALICE_DISABLE_* settings.",
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -909,94 +908,109 @@ func fieldsForLines(name string, lines []string) []*discordgo.MessageEmbedField 
 	return out
 }
 
-func renderDetailsEmbed(locale discordgo.Locale, rc files.RuntimeConfig, st panelState) *discordgo.MessageEmbed {
+func renderDetailsEmbed(rc files.RuntimeConfig, st panelState) *discordgo.MessageEmbed {
 	sp, ok := specByKey(st.Key)
 	if !ok {
-		return errorEmbed(locale, runtimeMsg(locale, runtimeMsgUnknownKey))
+		return errorEmbed("Unknown key")
 	}
 	raw, _ := getValue(rc, sp.Key)
 	cur := formatForDetails(raw, sp)
 
-	scopeDesc := runtimeMsg(locale, runtimeMsgScopeGlobal)
+	scopeDesc := "Global"
 	if st.Scope != "global" {
-		scopeDesc = runtimeMsg(locale, runtimeMsgScopeGuild, st.Scope)
+		scopeDesc = fmt.Sprintf("Guild (`%s`)", st.Scope)
 	}
 
 	lines := []string{
 		fmt.Sprintf("`%s`", sp.Key),
 		"",
-		runtimeMsg(locale, runtimeMsgDetailScope, scopeDesc),
-		runtimeMsg(locale, runtimeMsgDetailGroup, sp.Group),
-		runtimeMsg(locale, runtimeMsgDetailType, sp.Type),
-		runtimeMsg(locale, runtimeMsgDetailDefault, sp.DefaultHint),
-		runtimeMsg(locale, runtimeMsgDetailCurrent, cur),
+		fmt.Sprintf("**Scope:** %s", scopeDesc),
+		fmt.Sprintf("**Group:** %s", sp.Group),
+		fmt.Sprintf("**Type:** %s", sp.Type),
+		fmt.Sprintf("**Default:** %s", sp.DefaultHint),
+		fmt.Sprintf("**Current:** %s", cur),
 		"",
-		runtimeMsg(locale, runtimeMsgDetailDescription, sp.ShortHelp),
-		runtimeMsg(locale, runtimeMsgDetailEffect, localizeRestartHint(locale, sp.RestartHint)),
+		fmt.Sprintf("**Description:** %s", sp.ShortHelp),
+		fmt.Sprintf("**Effect:** %s", sp.RestartHint),
 	}
 
 	if sp.GuildOnly {
-		lines = append(lines, "", runtimeMsg(locale, runtimeMsgDetailGuildOnly))
+		lines = append(lines, "", "**Note:** This setting can only be configured per guild.")
 	}
 
 	return &discordgo.MessageEmbed{
-		Title:       runtimeMsg(locale, runtimeMsgDetailTitle),
+		Title:       "Runtime Configuration - Details",
 		Description: strings.Join(lines, "\n"),
 		Color:       theme.Muted(),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: runtimeMsg(locale, runtimeMsgDetailFooter),
+			Text: "Use BACK to return to the panel.",
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 }
 
-func renderHelpEmbed(locale discordgo.Locale) *discordgo.MessageEmbed {
+func renderHelpEmbed() *discordgo.MessageEmbed {
+	desc := strings.Join([]string{
+		"This panel edits the persisted `runtime_config`.",
+		"",
+		"**Notes:**",
+		"- Names stay in ALL CAPS so they still map cleanly to the old env var mental model.",
+		"- The bot no longer reads these options from the environment, except for the token.",
+		"- Some changes can be hot-applied, especially THEME and selected ALICE_DISABLE_* settings.",
+		"",
+		"**How to edit:**",
+		"1) Filter by group if needed and select a key.",
+		"2) For boolean values, use TOGGLE.",
+		"3) For other values, use EDIT and fill in the modal.",
+		"4) RESET clears the saved value and restores the code default.",
+	}, "\n")
+
 	return &discordgo.MessageEmbed{
-		Title:       runtimeMsg(locale, runtimeMsgHelpTitle),
-		Description: runtimeMsg(locale, runtimeMsgHelpDesc),
+		Title:       "Runtime Configuration - Help",
+		Description: desc,
 		Color:       theme.Info(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
 
-func renderMainComponents(locale discordgo.Locale, rc files.RuntimeConfig, st panelState) []discordgo.MessageComponent {
+func renderMainComponents(rc files.RuntimeConfig, st panelState) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
-		renderGroupSelectRow(locale, st),
-		renderKeySelectRow(locale, st),
-		renderActionRow(locale, st),
-		renderNavRow(locale, st),
+		renderGroupSelectRow(st),
+		renderKeySelectRow(st),
+		renderActionRow(st),
+		renderNavRow(st),
 	}
 }
 
-func renderDetailComponents(locale discordgo.Locale, st panelState) []discordgo.MessageComponent {
+func renderDetailComponents(st panelState) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
-				discordgo.Button{CustomID: cidButtonBack + stateSep + st.withMode(pageMain).encode(), Label: runtimeMsg(locale, runtimeMsgBtnBack), Style: discordgo.SecondaryButton},
-				discordgo.Button{CustomID: cidButtonReload + stateSep + st.withMode(pageDetail).encode(), Label: runtimeMsg(locale, runtimeMsgBtnReload), Style: discordgo.SecondaryButton},
+				discordgo.Button{CustomID: cidButtonBack + stateSep + st.withMode(pageMain).encode(), Label: "BACK", Style: discordgo.SecondaryButton},
+				discordgo.Button{CustomID: cidButtonReload + stateSep + st.withMode(pageDetail).encode(), Label: "RELOAD", Style: discordgo.SecondaryButton},
 			},
 		},
 	}
 }
 
-func renderHelpComponents(locale discordgo.Locale, st panelState) []discordgo.MessageComponent {
+func renderHelpComponents(st panelState) []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
-				discordgo.Button{CustomID: cidButtonBack + stateSep + st.withMode(pageMain).encode(), Label: runtimeMsg(locale, runtimeMsgBtnBack), Style: discordgo.SecondaryButton},
+				discordgo.Button{CustomID: cidButtonBack + stateSep + st.withMode(pageMain).encode(), Label: "BACK", Style: discordgo.SecondaryButton},
 			},
 		},
 	}
 }
 
-func renderGroupSelectRow(locale discordgo.Locale, st panelState) discordgo.ActionsRow {
+func renderGroupSelectRow(st panelState) discordgo.ActionsRow {
 	groups := allGroups()
 	opts := make([]discordgo.SelectMenuOption, 0, len(groups))
 	for _, g := range groups {
 		opts = append(opts, discordgo.SelectMenuOption{
 			Label:       g,
 			Value:       st.withGroup(g).withMode(pageMain).encode(),
-			Description: runtimeMsg(locale, runtimeMsgFilterGroupDesc),
+			Description: "Filter keys by group",
 			Default:     g == st.Group,
 		})
 	}
@@ -1005,7 +1019,7 @@ func renderGroupSelectRow(locale discordgo.Locale, st panelState) discordgo.Acti
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
 				CustomID:    cidSelectGroup,
-				Placeholder: runtimeMsg(locale, runtimeMsgFilterPlaceholder),
+				Placeholder: "Filter by group…",
 				Options:     opts,
 				MinValues:   ptrInt(1),
 				MaxValues:   1,
@@ -1014,7 +1028,7 @@ func renderGroupSelectRow(locale discordgo.Locale, st panelState) discordgo.Acti
 	}
 }
 
-func renderKeySelectRow(locale discordgo.Locale, st panelState) discordgo.ActionsRow {
+func renderKeySelectRow(st panelState) discordgo.ActionsRow {
 	specs := specsForGroup(st.Group)
 
 	// Filter out GuildOnly specs when in global scope
@@ -1046,15 +1060,15 @@ func renderKeySelectRow(locale discordgo.Locale, st panelState) discordgo.Action
 		})
 	}
 
-	placeholder := runtimeMsg(locale, runtimeMsgSelectKeyPlaceholder)
+	placeholder := "Select key…"
 	if st.Group != "" && st.Group != "ALL" {
-		placeholder = runtimeMsg(locale, runtimeMsgSelectKeyInGroup, st.Group)
+		placeholder = "Select key in " + st.Group + "…"
 	}
 	if tooMany {
 		if st.Group == "ALL" {
-			placeholder = runtimeMsg(locale, runtimeMsgSelectTooMany)
+			placeholder = "Too many keys — select a group first…"
 		} else {
-			placeholder = runtimeMsg(locale, runtimeMsgSelectFirst25, st.Group)
+			placeholder = "Showing first 25 keys in " + st.Group + "…"
 		}
 	}
 
@@ -1071,7 +1085,7 @@ func renderKeySelectRow(locale discordgo.Locale, st panelState) discordgo.Action
 	}
 }
 
-func renderActionRow(locale discordgo.Locale, st panelState) discordgo.ActionsRow {
+func renderActionRow(st panelState) discordgo.ActionsRow {
 	sp, _ := specByKey(st.Key)
 	isBool := sp.Type == vtBool
 
@@ -1079,45 +1093,45 @@ func renderActionRow(locale discordgo.Locale, st panelState) discordgo.ActionsRo
 		Components: []discordgo.MessageComponent{
 			discordgo.Button{
 				CustomID: cidButtonDetail + stateSep + st.withMode(pageDetail).encode(),
-				Label:    runtimeMsg(locale, runtimeMsgBtnDetails),
+				Label:    "DETAILS",
 				Style:    discordgo.PrimaryButton,
 			},
 			discordgo.Button{
 				CustomID: cidButtonToggle + stateSep + st.withMode(pageMain).encode(),
-				Label:    runtimeMsg(locale, runtimeMsgBtnToggle),
+				Label:    "TOGGLE",
 				Style:    discordgo.SecondaryButton,
 				Disabled: !isBool,
 			},
 			discordgo.Button{
 				CustomID: cidButtonEdit + stateSep + st.withMode(pageMain).encode(),
-				Label:    runtimeMsg(locale, runtimeMsgBtnEdit),
+				Label:    "EDIT",
 				Style:    discordgo.SuccessButton,
 				Disabled: isBool,
 			},
 			discordgo.Button{
 				CustomID: cidButtonReset + stateSep + st.withMode(pageMain).encode(),
-				Label:    runtimeMsg(locale, runtimeMsgBtnReset),
+				Label:    "RESET",
 				Style:    discordgo.DangerButton,
 			},
 			discordgo.Button{
 				CustomID: cidButtonReload + stateSep + st.withMode(pageMain).encode(),
-				Label:    runtimeMsg(locale, runtimeMsgBtnReload),
+				Label:    "RELOAD",
 				Style:    discordgo.SecondaryButton,
 			},
 		},
 	}
 }
 
-func renderNavRow(locale discordgo.Locale, st panelState) discordgo.ActionsRow {
+func renderNavRow(st panelState) discordgo.ActionsRow {
 	components := []discordgo.MessageComponent{
-		discordgo.Button{CustomID: cidButtonHelp + stateSep + st.withMode(pageHelp).encode(), Label: runtimeMsg(locale, runtimeMsgBtnHelp), Style: discordgo.SecondaryButton},
-		discordgo.Button{CustomID: cidButtonMain + stateSep + st.withMode(pageMain).encode(), Label: runtimeMsg(locale, runtimeMsgBtnMain), Style: discordgo.SecondaryButton},
+		discordgo.Button{CustomID: cidButtonHelp + stateSep + st.withMode(pageHelp).encode(), Label: "HELP", Style: discordgo.SecondaryButton},
+		discordgo.Button{CustomID: cidButtonMain + stateSep + st.withMode(pageMain).encode(), Label: "MAIN", Style: discordgo.SecondaryButton},
 	}
 
 	if st.Scope != "" && st.Scope != "global" {
 		components = append(components, discordgo.Button{
 			CustomID: cidButtonReload + stateSep + st.withScope("global").encode(),
-			Label:    runtimeMsg(locale, runtimeMsgBtnSwitchGlobal),
+			Label:    "SWITCH TO GLOBAL",
 			Style:    discordgo.SecondaryButton,
 		})
 	}
@@ -1183,7 +1197,6 @@ func startRuntimeConfigInteractionTrace(i *discordgo.InteractionCreate) func() {
 }
 
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
-	locale := localeFromInteraction(i)
 	cc := i.MessageComponentData()
 	routeID, _, _ := strings.Cut(cc.CustomID, stateSep)
 	ackPolicy := runtimeComponentAckPolicy(routeID)
@@ -1195,13 +1208,13 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Flags: discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{errorEmbed(locale, runtimeMsg(locale, runtimeMsgInvalidState))},
+					Embeds: []*discordgo.MessageEmbed{errorEmbed("Invalid interaction state")},
 				},
 			}, routeID+".invalid_state.respond_error")
 			return
 		}
 
-		editInteractionMessageWithLog(s, i, errorEmbed(locale, runtimeMsg(locale, runtimeMsgInvalidState)), nil, routeID+".invalid_state.render_error")
+		editInteractionMessageWithLog(s, i, errorEmbed("Invalid interaction state"), nil, routeID+".invalid_state.render_error")
 		return
 	}
 
@@ -1220,13 +1233,13 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 				Data: &discordgo.InteractionResponseData{
 					Flags: discordgo.MessageFlagsEphemeral,
 					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed(locale, runtimeMsg(locale, runtimeMsgLoadFailed, err)),
+						errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)),
 					},
 				},
 			}, "load_runtime_config_error")
 			return
 		}
-		edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgLoadFailed, err)), nil, "load_runtime_config_error")
+		edit(errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)), nil, "load_runtime_config_error")
 		return
 	}
 
@@ -1235,7 +1248,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		if sp.GuildOnly && st.Scope == "global" {
 			// Skip editing if global
 			if action == cidButtonEdit || action == cidButtonToggle || action == cidButtonReset {
-				edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgGuildOnlyRestriction)), renderMainComponents(locale, rc, st), "guild_only_restriction")
+				edit(errorEmbed("This setting can only be configured per-guild."), renderMainComponents(rc, st), "guild_only_restriction")
 				return
 			}
 		}
@@ -1244,8 +1257,8 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 	switch action {
 	case cidSelectGroup, cidSelectKey:
 		if len(cc.Values) == 0 {
-			embed := renderMainEmbed(locale, rc, st.withMode(pageMain))
-			edit(embed, renderMainComponents(locale, rc, st.withMode(pageMain)), "select.empty_values")
+			embed := renderMainEmbed(rc, st.withMode(pageMain))
+			edit(embed, renderMainComponents(rc, st.withMode(pageMain)), "select.empty_values")
 			return
 		}
 		// The value in the select menu options is the full encoded state.
@@ -1261,27 +1274,27 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 			)
 		}
 		st = ensureKeyInGroup(st.withMode(pageMain))
-		embed := renderMainEmbed(locale, rc, st)
-		edit(embed, renderMainComponents(locale, rc, st), "select.apply_state")
+		embed := renderMainEmbed(rc, st)
+		edit(embed, renderMainComponents(rc, st), "select.apply_state")
 		return
 
 	case cidButtonMain, cidButtonBack:
 		st = st.withMode(pageMain)
 		st = ensureKeyInGroup(st)
-		embed := renderMainEmbed(locale, rc, st)
-		edit(embed, renderMainComponents(locale, rc, st), "nav.main")
+		embed := renderMainEmbed(rc, st)
+		edit(embed, renderMainComponents(rc, st), "nav.main")
 		return
 
 	case cidButtonHelp:
 		st = st.withMode(pageHelp)
-		embed := renderHelpEmbed(locale)
-		edit(embed, renderHelpComponents(locale, st), "nav.help")
+		embed := renderHelpEmbed()
+		edit(embed, renderHelpComponents(st), "nav.help")
 		return
 
 	case cidButtonDetail:
 		st = st.withMode(pageDetail)
-		embed := renderDetailsEmbed(locale, rc, st)
-		edit(embed, renderDetailComponents(locale, st), "nav.detail")
+		embed := renderDetailsEmbed(rc, st)
+		edit(embed, renderDetailComponents(st), "nav.detail")
 		return
 
 	case cidButtonReload:
@@ -1298,14 +1311,14 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		st = ensureKeyInGroup(st)
 		switch st.Mode {
 		case pageHelp:
-			embed := renderHelpEmbed(locale)
-			edit(embed, renderHelpComponents(locale, st), "reload.help")
+			embed := renderHelpEmbed()
+			edit(embed, renderHelpComponents(st), "reload.help")
 		case pageDetail:
-			embed := renderDetailsEmbed(locale, rc, st)
-			edit(embed, renderDetailComponents(locale, st), "reload.detail")
+			embed := renderDetailsEmbed(rc, st)
+			edit(embed, renderDetailComponents(st), "reload.detail")
 		default:
-			embed := renderMainEmbed(locale, rc, st.withMode(pageMain))
-			edit(embed, renderMainComponents(locale, rc, st.withMode(pageMain)), "reload.main")
+			embed := renderMainEmbed(rc, st.withMode(pageMain))
+			edit(embed, renderMainComponents(rc, st.withMode(pageMain)), "reload.main")
 		}
 		return
 
@@ -1313,43 +1326,43 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		st = st.withMode(pageMain)
 		rc2, ok := resetValue(rc, st.Key)
 		if !ok {
-			edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgUnknownKey)), nil, "reset.unknown_key")
+			edit(errorEmbed("Unknown key"), nil, "reset.unknown_key")
 			return
 		}
 		if err := saveRuntimeConfig(configManager, rc2, st.Scope); err != nil {
-			edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgSaveFailed, err)), nil, "reset.save_error")
+			edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "reset.save_error")
 			return
 		}
 		applyErr := applyRuntimeConfigWithLog(applier, rc2, i, action+".reset.hot_apply", st)
-		embed := renderMainEmbed(locale, rc2, st)
-		embed = withHotApplyWarning(locale, embed, applyErr)
-		edit(embed, renderMainComponents(locale, rc2, st), "reset.render")
+		embed := renderMainEmbed(rc2, st)
+		embed = withHotApplyWarning(embed, applyErr)
+		edit(embed, renderMainComponents(rc2, st), "reset.render")
 		return
 
 	case cidButtonToggle:
 		st = st.withMode(pageMain)
 		sp, ok := specByKey(st.Key)
 		if !ok {
-			edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgUnknownKey)), nil, "toggle.unknown_key")
+			edit(errorEmbed("Unknown key"), nil, "toggle.unknown_key")
 			return
 		}
 		if sp.Type != vtBool {
-			edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgToggleOnlyBool)), renderMainComponents(locale, rc, st), "toggle.invalid_type")
+			edit(errorEmbed("TOGGLE is only valid for boolean keys"), renderMainComponents(rc, st), "toggle.invalid_type")
 			return
 		}
 		rc2, err := toggleBool(rc, st.Key)
 		if err != nil {
-			edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgToggleFailed, err)), renderMainComponents(locale, rc, st), "toggle.failed")
+			edit(errorEmbed(fmt.Sprintf("Toggle failed: %v", err)), renderMainComponents(rc, st), "toggle.failed")
 			return
 		}
 		if err := saveRuntimeConfig(configManager, rc2, st.Scope); err != nil {
-			edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgSaveFailed, err)), nil, "toggle.save_error")
+			edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "toggle.save_error")
 			return
 		}
 		applyErr := applyRuntimeConfigWithLog(applier, rc2, i, action+".toggle.hot_apply", st)
-		embed := renderMainEmbed(locale, rc2, st)
-		embed = withHotApplyWarning(locale, embed, applyErr)
-		edit(embed, renderMainComponents(locale, rc2, st), "toggle.render")
+		embed := renderMainEmbed(rc2, st)
+		embed = withHotApplyWarning(embed, applyErr)
+		edit(embed, renderMainComponents(rc2, st), "toggle.render")
 		return
 
 	case cidButtonEdit:
@@ -1363,7 +1376,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 				Data: &discordgo.InteractionResponseData{
 					Flags: discordgo.MessageFlagsEphemeral,
 					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed(locale, runtimeMsg(locale, runtimeMsgUnknownKey)),
+						errorEmbed("Unknown key"),
 					},
 				},
 			}, "edit.unknown_key")
@@ -1375,7 +1388,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 				Data: &discordgo.InteractionResponseData{
 					Flags: discordgo.MessageFlagsEphemeral,
 					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed(locale, runtimeMsg(locale, runtimeMsgEditOnlyNonBool)),
+						errorEmbed("EDIT is not valid for boolean keys (use TOGGLE)"),
 					},
 				},
 			}, "edit.invalid_type")
@@ -1422,13 +1435,12 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		return
 
 	default:
-		edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgUnknownAction)), nil, "unknown_action")
+		edit(errorEmbed("Unknown action"), nil, "unknown_action")
 		return
 	}
 }
 
 func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
-	locale := localeFromInteraction(i)
 	m := i.ModalSubmitData()
 	st, _, ok := decodeRuntimeModalState(m.CustomID)
 	if !ok {
@@ -1441,13 +1453,13 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 
 	sp, ok := specByKey(st.Key)
 	if !ok {
-		embed := errorEmbed(locale, runtimeMsg(locale, runtimeMsgUnknownKey))
-		edit(embed, renderMainComponents(locale, files.RuntimeConfig{}, st.withMode(pageMain)), "unknown_key")
+		embed := errorEmbed("Unknown key")
+		edit(embed, renderMainComponents(files.RuntimeConfig{}, st.withMode(pageMain)), "unknown_key")
 		return
 	}
 	if sp.Type == vtBool {
-		embed := errorEmbed(locale, runtimeMsg(locale, runtimeMsgInvalidModalBool))
-		edit(embed, renderMainComponents(locale, files.RuntimeConfig{}, st.withMode(pageMain)), "invalid_bool_key")
+		embed := errorEmbed("Invalid modal for bool key")
+		edit(embed, renderMainComponents(files.RuntimeConfig{}, st.withMode(pageMain)), "invalid_bool_key")
 		return
 	}
 
@@ -1455,19 +1467,19 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 
 	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
-		edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgLoadFailed, err)), nil, "load_runtime_config_error")
+		edit(errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)), nil, "load_runtime_config_error")
 		return
 	}
 
 	next, err := setValue(rc, sp, val)
 	if err != nil {
-		embed := errorEmbed(locale, runtimeMsg(locale, runtimeMsgInvalidValue, err))
+		embed := errorEmbed(fmt.Sprintf("Invalid value: %v", err))
 		st = ensureKeyInGroup(st.withMode(pageMain))
-		edit(embed, renderMainComponents(locale, rc, st), "invalid_value")
+		edit(embed, renderMainComponents(rc, st), "invalid_value")
 		return
 	}
 	if err := saveRuntimeConfig(configManager, next, st.Scope); err != nil {
-		edit(errorEmbed(locale, runtimeMsg(locale, runtimeMsgSaveFailed, err)), nil, "save_error")
+		edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "save_error")
 		return
 	}
 
@@ -1475,9 +1487,9 @@ func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, con
 
 	// After saving, return to MAIN with refreshed values so the user can keep navigating.
 	st = ensureKeyInGroup(st.withMode(pageMain))
-	embed := renderMainEmbed(locale, next, st)
-	embed = withHotApplyWarning(locale, embed, applyErr)
-	edit(embed, renderMainComponents(locale, next, st), "render")
+	embed := renderMainEmbed(next, st)
+	embed = withHotApplyWarning(embed, applyErr)
+	edit(embed, renderMainComponents(next, st), "render")
 }
 
 func interactionUserID(i *discordgo.InteractionCreate) string {
@@ -1565,13 +1577,16 @@ func applyRuntimeConfigWithLog(
 	return nil
 }
 
-func withHotApplyWarning(locale discordgo.Locale, embed *discordgo.MessageEmbed, applyErr error) *discordgo.MessageEmbed {
+func withHotApplyWarning(embed *discordgo.MessageEmbed, applyErr error) *discordgo.MessageEmbed {
 	if embed == nil || applyErr == nil {
 		return embed
 	}
 
 	clone := *embed
-	msg := runtimeMsg(locale, runtimeMsgHotApplyWarning, applyErr)
+	msg := fmt.Sprintf(
+		"The runtime configuration was saved, but the change couldn't be applied immediately. A restart may be required.\nError: %v",
+		applyErr,
+	)
 	if strings.TrimSpace(clone.Description) == "" {
 		clone.Description = msg
 	} else {
@@ -1666,9 +1681,9 @@ func editInteractionMessage(s *discordgo.Session, i *discordgo.InteractionCreate
 	return err
 }
 
-func errorEmbed(locale discordgo.Locale, msg string) *discordgo.MessageEmbed {
+func errorEmbed(msg string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
-		Title:       runtimeMsg(locale, runtimeMsgErrorTitle),
+		Title:       "Runtime Configuration - Error",
 		Description: msg,
 		Color:       theme.Error(),
 		Timestamp:   time.Now().Format(time.RFC3339),

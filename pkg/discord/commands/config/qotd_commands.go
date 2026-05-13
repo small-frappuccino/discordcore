@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -51,7 +52,6 @@ func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	locale := ctx.Locale()
 	settings := files.DashboardQOTDConfig(ctx.GuildConfig.QOTD)
 	deck, _ := settings.ActiveDeck()
 	deckLabel := strings.TrimSpace(deck.Name)
@@ -60,21 +60,21 @@ func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 	}
 	deckCount := len(settings.Decks)
 
-	lines := []string{tc(locale, cfgMsgHeader)}
+	lines := []string{"**QOTD Configuration:**"}
 	if deckLabel != "" {
 		if deckCount > 1 {
-			lines = append(lines, tc(locale, cfgMsgActiveDeckMulti, deckLabel, deckCount))
+			lines = append(lines, fmt.Sprintf("Active Deck: %s (these settings apply to this deck only — %d decks total)", deckLabel, deckCount))
 		} else {
-			lines = append(lines, tc(locale, cfgMsgActiveDeckSingle, deckLabel))
+			lines = append(lines, fmt.Sprintf("Active Deck: %s", deckLabel))
 		}
 	}
-	lines = append(lines, tc(locale, cfgMsgEnabledLine, deck.Enabled))
-	lines = append(lines, tc(locale, cfgMsgChannelLine, emptyToDash(deck.ChannelID)))
-	lines = append(lines, tc(locale, cfgMsgScheduleLine, formatQOTDScheduleWithLocalPreview(settings.Schedule, c.now())))
+	lines = append(lines, fmt.Sprintf("QOTD Enabled: %t", deck.Enabled))
+	lines = append(lines, fmt.Sprintf("QOTD Channel: %s", emptyToDash(deck.ChannelID)))
+	lines = append(lines, fmt.Sprintf("QOTD Schedule: %s", formatQOTDScheduleWithLocalPreview(settings.Schedule, c.now())))
 
 	builder := configCommandCurrentStateResponseBuilder(ctx.Session).
 		WithEmbed().
-		WithTitle(tc(locale, cfgMsgEmbedTitle))
+		WithTitle("QOTD Configuration")
 
 	return builder.Info(ctx.Interaction, strings.Join(lines, "\n"))
 }
@@ -107,13 +107,12 @@ func (c *QOTDEnabledSubCommand) RequiresGuild() bool       { return true }
 func (c *QOTDEnabledSubCommand) RequiresPermissions() bool { return true }
 
 func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	enabled := extractor.Bool(qotdEnabledOptionName)
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, c.now, func(deck *files.QOTDDeckConfig) error {
 		if enabled && strings.TrimSpace(deck.ChannelID) == "" {
-			return qotdConfigDetailedCommandError(tc(locale, cfgMsgErrNoChannel))
+			return qotdConfigDetailedCommandError("QOTD publishing couldn't be turned on yet because this deck still has no channel. This reply stays private so that can be fixed first.")
 		}
 		deck.Enabled = enabled
 		return nil
@@ -122,13 +121,13 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	state := tc(locale, cfgMsgStateDisabled)
+	state := "disabled"
 	if updatedDeck.Enabled {
-		state = tc(locale, cfgMsgStateEnabled)
+		state = "enabled"
 	}
 
 	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, tc(locale, cfgMsgPublishingState, state, updatedDeck.Name))
+		Success(ctx.Interaction, fmt.Sprintf("QOTD publishing is now %s for deck `%s`.", state, updatedDeck.Name))
 }
 
 type QOTDChannelSubCommand struct {
@@ -160,10 +159,9 @@ func (c *QOTDChannelSubCommand) RequiresGuild() bool       { return true }
 func (c *QOTDChannelSubCommand) RequiresPermissions() bool { return true }
 
 func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	channelID := channelOptionID(ctx.Session, core.GetSubCommandOptions(ctx.Interaction), qotdChannelOptionName)
 	if channelID == "" {
-		return qotdConfigDetailedCommandError(tc(locale, cfgMsgErrSetChannelFirst))
+		return qotdConfigDetailedCommandError("This change needs a channel before it can be applied, so this reply stays private.")
 	}
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, c.now, func(deck *files.QOTDDeckConfig) error {
@@ -174,13 +172,13 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	state := tc(locale, cfgMsgStateDisabled)
+	state := "disabled"
 	if updatedDeck.Enabled {
-		state = tc(locale, cfgMsgStateEnabled)
+		state = "enabled"
 	}
 
 	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, tc(locale, cfgMsgChannelSet, updatedDeck.Name, channelID, state))
+		Success(ctx.Interaction, fmt.Sprintf("QOTD posts for deck `%s` will now go to <#%s>. Publishing stays %s.", updatedDeck.Name, channelID, state))
 }
 
 type QOTDScheduleSubCommand struct {
@@ -215,7 +213,6 @@ func (c *QOTDScheduleSubCommand) Options() []*discordgo.ApplicationCommandOption
 func (c *QOTDScheduleSubCommand) RequiresGuild() bool       { return true }
 func (c *QOTDScheduleSubCommand) RequiresPermissions() bool { return true }
 func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
-	locale := ctx.Locale()
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	hourUTC := int(extractor.Int(qotdScheduleHourOptionName))
 	minuteUTC := int(extractor.Int(qotdScheduleMinuteOptionName))
@@ -231,9 +228,9 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
-	deckLabel := activeDeckDisplayLabel(locale, updatedConfig)
+	deckLabel := activeDeckDisplayLabel(updatedConfig)
 	return qotdConfigShortConfirmationResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, tc(locale, cfgMsgScheduleSet, deckLabel, formatQOTDScheduleWithLocalPreview(updatedConfig.Schedule, c.now())))
+		Success(ctx.Interaction, fmt.Sprintf("QOTD for deck `%s` will now post at %s.", deckLabel, formatQOTDScheduleWithLocalPreview(updatedConfig.Schedule, c.now())))
 }
 
 func updateQOTDConfig(
@@ -246,7 +243,6 @@ func updateQOTDConfig(
 		return files.QOTDConfig{}, err
 	}
 
-	locale := ctx.Locale()
 	var updatedConfig files.QOTDConfig
 	err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		current := files.DashboardQOTDConfig(guildConfig.QOTD)
@@ -257,7 +253,7 @@ func updateQOTDConfig(
 
 		normalized, err := qotdservice.PrepareSettingsUpdate(current, next, now())
 		if err != nil {
-			return translateQOTDConfigError(locale, err)
+			return translateQOTDConfigError(err)
 		}
 		guildConfig.QOTD = normalized
 		updatedConfig = files.DashboardQOTDConfig(normalized)
@@ -270,7 +266,7 @@ func updateQOTDConfig(
 	persister := core.NewConfigPersister(configManager)
 	if err := persister.Save(ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save QOTD config: %v", err)
-		return files.QOTDConfig{}, qotdConfigDetailedCommandError(tc(locale, cfgMsgErrSaveFailed))
+		return files.QOTDConfig{}, qotdConfigDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}
 
 	return updatedConfig, nil
@@ -282,11 +278,10 @@ func updateActiveQOTDDeck(
 	now func() time.Time,
 	mutate func(*files.QOTDDeckConfig) error,
 ) (files.QOTDDeckConfig, error) {
-	locale := ctx.Locale()
 	updatedConfig, err := updateQOTDConfig(ctx, configManager, now, func(cfg *files.QOTDConfig) error {
 		deckIndex := activeQOTDDeckIndex(*cfg)
 		if deckIndex < 0 {
-			return qotdConfigDetailedCommandError(tc(locale, cfgMsgErrSetupNotLoaded))
+			return qotdConfigDetailedCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.")
 		}
 		return mutate(&cfg.Decks[deckIndex])
 	})
@@ -295,7 +290,7 @@ func updateActiveQOTDDeck(
 	}
 	deckIndex := activeQOTDDeckIndex(updatedConfig)
 	if deckIndex < 0 {
-		return files.QOTDDeckConfig{}, qotdConfigDetailedCommandError(tc(locale, cfgMsgErrSetupNotLoaded))
+		return files.QOTDDeckConfig{}, qotdConfigDetailedCommandError("The QOTD setup for this server couldn't be loaded, so this reply stays private.")
 	}
 	return updatedConfig.Decks[deckIndex], nil
 }
@@ -314,14 +309,14 @@ func qotdConfigClock(now func() time.Time) func() time.Time {
 // activeDeckDisplayLabel picks the most user-friendly identifier for the
 // active deck — the human-readable name when set, otherwise the deck ID,
 // finally a sentinel so messages never trail with empty backticks.
-func activeDeckDisplayLabel(locale discordgo.Locale, cfg files.QOTDConfig) string {
+func activeDeckDisplayLabel(cfg files.QOTDConfig) string {
 	deck, _ := cfg.ActiveDeck()
 	label := strings.TrimSpace(deck.Name)
 	if label == "" {
 		label = strings.TrimSpace(deck.ID)
 	}
 	if label == "" {
-		return tc(locale, cfgMsgDeckDefault)
+		return "default"
 	}
 	return label
 }
@@ -354,17 +349,17 @@ func channelOptionID(session *discordgo.Session, options []*discordgo.Applicatio
 	return ""
 }
 
-func translateQOTDConfigError(locale discordgo.Locale, err error) error {
+func translateQOTDConfigError(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, files.ErrInvalidQOTDInput) {
 		message := strings.TrimSpace(strings.TrimPrefix(err.Error(), files.ErrInvalidQOTDInput.Error()+":"))
 		if message == "" {
-			message = tc(locale, cfgMsgErrInvalidInput)
+			message = "That QOTD setup couldn't be applied because part of the configuration is invalid. This reply stays private."
 		}
 		if message == "schedule.hour_utc and schedule.minute_utc are required when enabled" {
-			message = tc(locale, cfgMsgErrIncompleteSchedule)
+			message = "QOTD publishing couldn't be turned on yet because the schedule is incomplete. This reply stays private so the setup can be finished first."
 		}
 		return qotdConfigDetailedCommandError(message)
 	}

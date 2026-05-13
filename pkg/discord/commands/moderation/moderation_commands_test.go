@@ -25,7 +25,7 @@ func TestBuildMassBanLogDetails(t *testing.T) {
 func TestBuildBanCommandMessageUsesUsername(t *testing.T) {
 	t.Parallel()
 
-	got := buildBanCommandMessage(discordgo.EnglishUS, "alice", "rule violation", false)
+	got := buildBanCommandMessage("alice", "rule violation", false)
 	if !containsAll(got, []string{"alice", "rule violation"}) {
 		t.Fatalf("unexpected message: %q", got)
 	}
@@ -34,7 +34,7 @@ func TestBuildBanCommandMessageUsesUsername(t *testing.T) {
 func TestBuildMassBanCommandMessageOnlyCount(t *testing.T) {
 	t.Parallel()
 
-	got := buildMassBanCommandMessage(discordgo.EnglishUS, 4)
+	got := buildMassBanCommandMessage(4)
 	if got != "4 users were banned." {
 		t.Fatalf("unexpected message: %q", got)
 	}
@@ -330,7 +330,7 @@ func TestResolveConfiguredMuteRole(t *testing.T) {
 func TestBuildWarningsCommandMessage(t *testing.T) {
 	t.Parallel()
 
-	message := buildWarningsCommandMessage(discordgo.EnglishUS, "alice", []storage.ModerationWarning{
+	message := buildWarningsCommandMessage("alice", []storage.ModerationWarning{
 		{
 			CaseNumber:  3,
 			ModeratorID: "mod-1",

@@ -65,7 +65,7 @@ func TestRegisterCommands_RuntimeComponentRejectsExpiredPanel(t *testing.T) {
 	if rec.followupCount() != 1 {
 		t.Fatalf("expected one ephemeral follow-up denial, got %d", rec.followupCount())
 	}
-	if !strings.Contains(rec.followupBody(), runtimeMsg(discordgo.EnglishUS, runtimeMsgExpiredPanel)) {
+	if !strings.Contains(rec.followupBody(), runtimeConfigInteractionExpiredText) {
 		t.Fatalf("expected expired follow-up body to mention expiration, got %q", rec.followupBody())
 	}
 	if !strings.Contains(rec.followupBody(), `"flags":64`) {
@@ -107,7 +107,7 @@ func TestRegisterCommands_RuntimeModalRejectsExpiredState(t *testing.T) {
 	if rec.followupCount() != 1 {
 		t.Fatalf("expected one ephemeral modal denial, got %d", rec.followupCount())
 	}
-	if !strings.Contains(rec.followupBody(), runtimeMsg(discordgo.EnglishUS, runtimeMsgExpiredPanel)) {
+	if !strings.Contains(rec.followupBody(), runtimeConfigInteractionExpiredText) {
 		t.Fatalf("expected expired modal follow-up body to mention expiration, got %q", rec.followupBody())
 	}
 	if !strings.Contains(rec.followupBody(), `"flags":64`) {

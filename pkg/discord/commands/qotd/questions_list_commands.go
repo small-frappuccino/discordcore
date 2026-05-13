@@ -17,7 +17,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
-
 const (
 	groupName                             = "qotd"
 	publishSubCommandName                 = "publish"
@@ -37,7 +36,10 @@ const (
 	questionsListRoutePrev                = "qotd:questions:list:prev"
 	questionsListRouteNext                = "qotd:questions:list:next"
 	questionsListRouteLast                = "qotd:questions:list:last"
-	questionsListIdleTimeout = 60 * time.Second
+	questionsListDeniedText               = "Only the user who opened this list can change pages."
+	questionsListUnknownDeck              = "QOTD deck not found"
+	questionsListMissingGuild             = "This command can only be used in a server"
+	questionsListIdleTimeout              = 60 * time.Second
 	questionsListPageJumpSize             = 10
 )
 
@@ -255,11 +257,11 @@ func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 		Body:   body,
 	})
 	if err != nil {
-		return translateQuestionsMutationError(ctx.Locale(), err)
+		return translateQuestionsMutationError(err)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, msg(ctx.Locale(), msgAddedQuestion, visibleQuestionID(*created), deck.Name))
+		Success(ctx.Interaction, fmt.Sprintf("Added QOTD question ID %d to deck `%s`.", visibleQuestionID(*created), deck.Name))
 }
 
 func (c *questionsRemoveCommand) Name() string { return questionsRemoveSubCommand }
@@ -352,11 +354,11 @@ func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 	}
 	state, err := c.publish.GetAutomaticQueueState(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
-		return translateQuestionsMutationError(ctx.Locale(), err)
+		return translateQuestionsMutationError(err)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Info(ctx.Interaction, formatAutomaticQueueState(ctx.Locale(), state))
+		Info(ctx.Interaction, formatAutomaticQueueState(state))
 }
 
 func (c *qotdPublishCommand) Name() string { return publishSubCommandName }
@@ -395,10 +397,10 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if !deck.Enabled {
-		return core.NewCommandError(msg(ctx.Locale(), msgPublishEnableFirst), false)
+		return core.NewCommandError("Enable QOTD publishing for the active deck before publishing manually.", false)
 	}
 	if strings.TrimSpace(deck.ChannelID) == "" {
-		return core.NewCommandError(msg(ctx.Locale(), msgPublishSetChannelFirst), false)
+		return core.NewCommandError("Set a QOTD channel for the active deck before publishing manually.", false)
 	}
 	consumeAutomaticSlot := true
 	options := core.GetSubCommandOptions(ctx.Interaction)
@@ -414,13 +416,12 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		ConsumeAutomaticSlot: &consumeAutomaticSlot,
 	})
 	if err != nil {
-		return translatePublishNowError(ctx.Locale(), err)
+		return translatePublishNowError(err)
 	}
 
-	locale := ctx.Locale()
-	message := msg(locale, msgPublishedManually, visibleQuestionID(result.Question), deck.Name)
+	message := fmt.Sprintf("Published QOTD question ID %d manually from deck `%s`.", visibleQuestionID(result.Question), deck.Name)
 	if !consumeAutomaticSlot {
-		message = msg(locale, msgPublishedManuallyNoSlot, visibleQuestionID(result.Question), deck.Name)
+		message = fmt.Sprintf("Published QOTD question ID %d manually from deck `%s` without consuming the automatic slot.", visibleQuestionID(result.Question), deck.Name)
 	}
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
@@ -438,7 +439,7 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return core.NewCommandError(msg(ctx.Locale(), msgQuestionIDMustBePositive), false)
+		return core.NewCommandError("Question ID must be greater than zero.", false)
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -450,15 +451,15 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	}
 	question := findQuestionByDisplayID(questions, displayID)
 	if question == nil {
-		return translateQuestionsDeleteError(ctx.Locale(), displayID, applicationqotd.ErrQuestionNotFound)
+		return translateQuestionsDeleteError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
 	if err := c.service.DeleteQuestion(context.Background(), ctx.GuildID, question.ID); err != nil {
-		return translateQuestionsDeleteError(ctx.Locale(), displayID, err)
+		return translateQuestionsDeleteError(displayID, err)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, msg(ctx.Locale(), msgRemovedQuestion, displayID, deck.Name))
+		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d from deck `%s`.", displayID, deck.Name))
 }
 
 func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
@@ -469,7 +470,7 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return core.NewCommandError(msg(ctx.Locale(), msgQuestionIDMustBePositive), false)
+		return core.NewCommandError("Question ID must be greater than zero.", false)
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -481,23 +482,23 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 	}
 	question := findQuestionByDisplayID(questions, displayID)
 	if question == nil {
-		return translateQuestionsRecoverError(ctx.Locale(), displayID, applicationqotd.ErrQuestionNotFound)
+		return translateQuestionsRecoverError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
 	updated, err := c.service.RestoreUsedQuestion(context.Background(), ctx.GuildID, deck.ID, question.ID)
 	if err != nil {
-		return translateQuestionsRecoverError(ctx.Locale(), displayID, err)
+		return translateQuestionsRecoverError(displayID, err)
 	}
 	if updated == nil {
-		return translateQuestionsRecoverError(ctx.Locale(), displayID, applicationqotd.ErrQuestionNotFound)
+		return translateQuestionsRecoverError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 	if visibleQuestionID(*updated) == displayID {
 		return core.NewResponseBuilder(ctx.Session).
-			Success(ctx.Interaction, msg(ctx.Locale(), msgRecoveredQuestion, displayID, deck.Name))
+			Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s`.", displayID, deck.Name))
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, msg(ctx.Locale(), msgRecoveredQuestionRenumbered, displayID, deck.Name, visibleQuestionID(*updated)))
+		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s` and it is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
 }
 
 func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
@@ -508,7 +509,7 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return core.NewCommandError(msg(ctx.Locale(), msgQuestionIDMustBePositive), false)
+		return core.NewCommandError("Question ID must be greater than zero.", false)
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -520,19 +521,19 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 	}
 	question := findQuestionByDisplayID(questions, displayID)
 	if question == nil {
-		return translateQuestionsMarkPublishedError(ctx.Locale(), displayID, applicationqotd.ErrQuestionNotFound)
+		return translateQuestionsMarkPublishedError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
 	updated, err := c.service.MarkQuestionPublished(context.Background(), ctx.GuildID, deck.ID, question.ID)
 	if err != nil {
-		return translateQuestionsMarkPublishedError(ctx.Locale(), displayID, err)
+		return translateQuestionsMarkPublishedError(displayID, err)
 	}
 	if updated == nil {
-		return translateQuestionsMarkPublishedError(ctx.Locale(), displayID, applicationqotd.ErrQuestionNotFound)
+		return translateQuestionsMarkPublishedError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
-		Success(ctx.Interaction, msg(ctx.Locale(), msgMarkedPublished, displayID, deck.Name))
+		Success(ctx.Interaction, fmt.Sprintf("Marked QOTD question ID %d as already published in deck `%s` without changing the day state.", displayID, deck.Name))
 }
 
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
@@ -568,7 +569,7 @@ func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
 		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "Invalid questions list action.")
 	}
 	if strings.TrimSpace(ctx.UserID) != state.UserID {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, msg(ctx.Locale(), msgListDenied))
+		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, questionsListDeniedText)
 	}
 
 	view, err := c.loadView(ctx, state.DeckID)
@@ -607,7 +608,7 @@ func requireQuestionsGuild(ctx *core.Context) error {
 		return nil
 	}
 	if strings.TrimSpace(ctx.GuildID) == "" {
-		return core.NewCommandError(msg(ctx.Locale(), msgMissingGuild), false)
+		return core.NewCommandError(questionsListMissingGuild, false)
 	}
 	return nil
 }
@@ -620,17 +621,17 @@ func loadCommandDeck(ctx *core.Context, catalog applicationqotd.QuestionCatalog,
 	if err != nil {
 		return files.QOTDDeckConfig{}, err
 	}
-	return resolveDeck(ctx.Locale(), settings, requestedDeck)
+	return resolveDeck(settings, requestedDeck)
 }
 
-func resolveDeck(locale discordgo.Locale, settings files.QOTDConfig, requestedDeck string) (files.QOTDDeckConfig, error) {
+func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDeckConfig, error) {
 	settings = files.DashboardQOTDConfig(settings)
 	requestedDeck = strings.TrimSpace(requestedDeck)
 	if requestedDeck == "" {
 		if deck, ok := settings.ActiveDeck(); ok {
 			return deck, nil
 		}
-		return files.QOTDDeckConfig{}, core.NewCommandError(msg(locale, msgDeckNotFound), false)
+		return files.QOTDDeckConfig{}, core.NewCommandError(questionsListUnknownDeck, false)
 	}
 
 	if deck, ok := settings.DeckByID(requestedDeck); ok {
@@ -641,7 +642,7 @@ func resolveDeck(locale discordgo.Locale, settings files.QOTDConfig, requestedDe
 			return deck, nil
 		}
 	}
-	return files.QOTDDeckConfig{}, core.NewCommandError(fmt.Sprintf("%s: %s", msg(locale, msgDeckNotFound), requestedDeck), false)
+	return files.QOTDDeckConfig{}, core.NewCommandError(fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), false)
 }
 
 func respondQuestionsList(
@@ -655,7 +656,6 @@ func respondQuestionsList(
 	totalPages := discordqotdBuildPageCount(totalQuestions)
 	state.Page = normalizeQuestionsListPage(state.Page, totalPages)
 	embed := discordqotd.BuildQuestionsListEmbed(discordqotd.QuestionsListEmbedParams{
-		Locale:         ctx.Locale(),
 		DeckName:       view.deck.Name,
 		Questions:      view.questions,
 		Page:           state.Page,
@@ -874,47 +874,47 @@ func visibleQuestionID(question storage.QOTDQuestionRecord) int64 {
 	return question.ID
 }
 
-func formatAutomaticQueueState(locale discordgo.Locale, state applicationqotd.AutomaticQueueState) string {
+func formatAutomaticQueueState(state applicationqotd.AutomaticQueueState) string {
 	deckName := strings.TrimSpace(state.Deck.Name)
 	if deckName == "" {
-		deckName = msg(locale, msgQueueDeckNameDefault)
+		deckName = "Default"
 	}
-	lines := []string{msg(locale, msgQueueHeader, deckName)}
+	lines := []string{fmt.Sprintf("Automatic QOTD queue for deck `%s`.", deckName)}
 
 	if !state.ScheduleConfigured {
-		lines = append(lines, msg(locale, msgQueueNoSchedule))
+		lines = append(lines, "Automatic publish schedule is not configured.")
 	} else {
-		lines = append(lines, msg(locale, msgQueueSchedule, formatAutomaticQueueSchedule(locale, state.Schedule)))
-		lines = append(lines, msg(locale, msgQueueNextSlot, formatAutomaticQueueSlotInstant(locale, state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(locale, state.SlotStatus)))
+		lines = append(lines, fmt.Sprintf("Automatic schedule: %s UTC.", formatAutomaticQueueSchedule(state.Schedule)))
+		lines = append(lines, fmt.Sprintf("Next automatic slot: %s (%s).", formatAutomaticQueueSlotInstant(state.SlotPublishAtUTC), formatAutomaticQueueSlotStatus(state.SlotStatus)))
 	}
 
 	if !state.Deck.Enabled {
-		lines = append(lines, msg(locale, msgQueuePublishingDisabled))
+		lines = append(lines, "Publishing is disabled for this deck.")
 	} else if strings.TrimSpace(state.Deck.ChannelID) == "" {
-		lines = append(lines, msg(locale, msgQueueNoChannel))
+		lines = append(lines, "Set a QOTD channel before automatic publishing can run.")
 	}
 
 	if state.SlotQuestion != nil {
-		lines = append(lines, msg(locale, msgQueueNextSlotQuestion, formatAutomaticQueueQuestion(locale, *state.SlotQuestion)))
+		lines = append(lines, fmt.Sprintf("Next automatic slot question: %s.", formatAutomaticQueueQuestion(*state.SlotQuestion)))
 	}
 
 	if state.NextReadyQuestion != nil {
-		key := msgQueueNextAutoQuestion
+		label := "Next automatic question"
 		if state.SlotQuestion != nil || state.SlotStatus == applicationqotd.AutomaticQueueSlotStatusPublished {
-			key = msgQueueAfterThat
+			label = "After that"
 		}
-		lines = append(lines, msg(locale, key, formatAutomaticQueueQuestion(locale, *state.NextReadyQuestion)))
+		lines = append(lines, fmt.Sprintf("%s: %s.", label, formatAutomaticQueueQuestion(*state.NextReadyQuestion)))
 	} else if state.SlotQuestion == nil {
-		lines = append(lines, msg(locale, msgQueueNoReadyQuestions))
+		lines = append(lines, "No ready QOTD questions are available for the automatic queue.")
 	}
 
 	return strings.Join(lines, "\n")
 }
 
-func formatAutomaticQueueSchedule(locale discordgo.Locale, schedule applicationqotd.PublishSchedule) string {
+func formatAutomaticQueueSchedule(schedule applicationqotd.PublishSchedule) string {
 	hourUTC, minuteUTC, ok := schedule.Values()
 	if !ok {
-		return msg(locale, msgQueueSlotUnavailable)
+		return "unavailable"
 	}
 	return fmt.Sprintf("%02d:%02d", hourUTC, minuteUTC)
 }
@@ -923,39 +923,39 @@ func formatAutomaticQueueSchedule(locale discordgo.Locale, schedule applicationq
 // stamp plus a Discord timestamp anchor that Discord renders in the viewer's
 // local timezone, so a moderator does not have to do the UTC arithmetic
 // themselves.
-func formatAutomaticQueueSlotInstant(locale discordgo.Locale, value time.Time) string {
+func formatAutomaticQueueSlotInstant(value time.Time) string {
 	if value.IsZero() {
-		return msg(locale, msgQueueSlotUnavailable)
+		return "unavailable"
 	}
 	utc := value.UTC()
 	return fmt.Sprintf("%s — <t:%d:F> in your timezone (<t:%d:R>)", utc.Format("2006-01-02 15:04 UTC"), utc.Unix(), utc.Unix())
 }
 
-func formatAutomaticQueueSlotStatus(locale discordgo.Locale, status applicationqotd.AutomaticQueueSlotStatus) string {
+func formatAutomaticQueueSlotStatus(status applicationqotd.AutomaticQueueSlotStatus) string {
 	switch status {
 	case applicationqotd.AutomaticQueueSlotStatusWaiting:
-		return msg(locale, msgSlotStatusWaiting)
+		return "waiting for the scheduled publish"
 	case applicationqotd.AutomaticQueueSlotStatusDue:
-		return msg(locale, msgSlotStatusDue)
+		return "ready to publish now"
 	case applicationqotd.AutomaticQueueSlotStatusReserved:
-		return msg(locale, msgSlotStatusReserved)
+		return "question reserved for the slot"
 	case applicationqotd.AutomaticQueueSlotStatusRecovering:
-		return msg(locale, msgSlotStatusRecovering)
+		return "slot publish recovery pending"
 	case applicationqotd.AutomaticQueueSlotStatusPublished:
-		return msg(locale, msgSlotStatusPublished)
+		return "slot already published"
 	case applicationqotd.AutomaticQueueSlotStatusDisabled:
 		fallthrough
 	default:
-		return msg(locale, msgSlotStatusDisabled)
+		return "automatic publishing unavailable"
 	}
 }
 
-func formatAutomaticQueueQuestion(locale discordgo.Locale, question storage.QOTDQuestionRecord) string {
+func formatAutomaticQueueQuestion(question storage.QOTDQuestionRecord) string {
 	body := strings.Join(strings.Fields(strings.TrimSpace(question.Body)), " ")
 	if len(body) > 72 {
 		body = body[:69] + "..."
 	}
-	return msg(locale, msgQueueQuestionRef, visibleQuestionID(question), body)
+	return fmt.Sprintf("QOTD question ID %d (%s)", visibleQuestionID(question), body)
 }
 
 func formatCountNoun(count int, singular, plural string) string {
@@ -974,80 +974,80 @@ func findQuestionByDisplayID(questions []storage.QOTDQuestionRecord, displayID i
 	return nil
 }
 
-func translateQuestionsMutationError(locale discordgo.Locale, err error) error {
+func translateQuestionsMutationError(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, files.ErrInvalidQOTDInput) {
 		message := strings.TrimSpace(strings.TrimPrefix(err.Error(), files.ErrInvalidQOTDInput.Error()+":"))
 		if message == "" {
-			message = msg(locale, msgInvalidQuestionInput)
+			message = "Invalid QOTD question input"
 		}
 		return core.NewCommandError(message, false)
 	}
 	return err
 }
 
-func translateQuestionsDeleteError(locale discordgo.Locale, questionID int64, err error) error {
+func translateQuestionsDeleteError(questionID int64, err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(msg(locale, msgQuestionNotFound, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return core.NewCommandError(msg(locale, msgQuestionImmutableDelete, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), false)
 	}
-	return translateQuestionsMutationError(locale, err)
+	return translateQuestionsMutationError(err)
 }
 
-func translateQuestionsRecoverError(locale discordgo.Locale, questionID int64, err error) error {
+func translateQuestionsRecoverError(questionID int64, err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(msg(locale, msgQuestionNotFound, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotUsed) {
-		return core.NewCommandError(msg(locale, msgQuestionNotUsed, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", questionID), false)
 	}
-	return translateQuestionsMutationError(locale, err)
+	return translateQuestionsMutationError(err)
 }
 
-func translateQuestionsMarkPublishedError(locale discordgo.Locale, questionID int64, err error) error {
+func translateQuestionsMarkPublishedError(questionID int64, err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(msg(locale, msgQuestionNotFound, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return core.NewCommandError(msg(locale, msgQuestionImmutableMarkPublished, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or published and cannot be marked manually.", questionID), false)
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotReady) {
-		return core.NewCommandError(msg(locale, msgQuestionMustBeReadyToMarkPublished, questionID), false)
+		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d must be ready before it can be marked as published.", questionID), false)
 	}
-	return translateQuestionsMutationError(locale, err)
+	return translateQuestionsMutationError(err)
 }
 
-func translatePublishNowError(locale discordgo.Locale, err error) error {
+func translatePublishNowError(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrAlreadyPublished) {
-		return core.NewCommandError(msg(locale, msgAlreadyPublished), false)
+		return core.NewCommandError("A QOTD question has already been published for the current slot.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrPublishInProgress) {
-		return core.NewCommandError(msg(locale, msgPublishInProgress), false)
+		return core.NewCommandError("A QOTD publish is already in progress for the current slot.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
-		return core.NewCommandError(msg(locale, msgNoQuestionsAvailable), false)
+		return core.NewCommandError("No ready QOTD questions are available in the active deck.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
-		return core.NewCommandError(msg(locale, msgQOTDDisabledPublish), false)
+		return core.NewCommandError("Enable QOTD publishing and set a channel before publishing manually.", false)
 	}
 	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
-		return core.NewCommandError(msg(locale, msgDiscordUnavailable), false)
+		return core.NewCommandError("Discord session unavailable for manual publish.", false)
 	}
 	return err
 }

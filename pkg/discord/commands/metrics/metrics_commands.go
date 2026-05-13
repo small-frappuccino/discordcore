@@ -107,11 +107,10 @@ func newActivityCommand() core.SubCommand {
 }
 
 func handleActivity(ctx *core.Context) error {
-	locale := ctx.Locale()
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
-		return respondError(s, i, metricsMsg(locale, metricsMsgRequiresServer))
+		return respondError(s, i, "This command only works inside a server, so this reply stays private.")
 	}
 
 	// Parse options
@@ -125,11 +124,11 @@ func handleActivity(ctx *core.Context) error {
 		topN = clampInt(topN, 1, 3)
 	}
 
-	cutoff, label := cutoffForRange(locale, rangeOpt)
+	cutoff, label := cutoffForRange(rangeOpt)
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, metricsMsg(locale, metricsMsgStoreUnavailable))
+		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -146,7 +145,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, metricsMsg(locale, metricsMsgActivityLoadFailed))
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	msgTotalsByUser, err := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
@@ -159,7 +158,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, metricsMsg(locale, metricsMsgActivityLoadFailed))
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	reactTotalsByChannel, err := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
@@ -172,7 +171,7 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, metricsMsg(locale, metricsMsgActivityLoadFailed))
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	reactTotalsByUser, err := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
@@ -185,15 +184,15 @@ func handleActivity(ctx *core.Context) error {
 			"cutoffDay", cutoff,
 			"err", err,
 		)
-		return respondError(s, i, metricsMsg(locale, metricsMsgActivityLoadFailed))
+		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
 	}
 
 	// Build embed
 	chFilterStr := ""
 	if channelID != "" {
-		chFilterStr = metricsMsg(locale, metricsMsgChannelFilter, channelID)
+		chFilterStr = fmt.Sprintf(" in <#%s>", channelID)
 	}
-	title := metricsMsg(locale, metricsMsgActivityTitle, label, chFilterStr)
+	title := fmt.Sprintf("Activity: %s%s", label, chFilterStr)
 
 	fields := []*discordgo.MessageEmbedField{}
 	includeMessages := section == "both" || section == "messages"
@@ -203,29 +202,29 @@ func handleActivity(ctx *core.Context) error {
 
 	if includeMessages && includeChannels {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   metricsMsg(locale, metricsMsgFieldMsgChannels),
-			Value:  renderTop(locale, msgTotalsByChannel, topN, func(id string) string { return channelMention(id) }),
+			Name:   "Messages - Top Channels",
+			Value:  renderTop(msgTotalsByChannel, topN, func(id string) string { return channelMention(id) }),
 			Inline: true,
 		})
 	}
 	if includeMessages && includeUsers {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   metricsMsg(locale, metricsMsgFieldMsgUsers),
-			Value:  renderTop(locale, msgTotalsByUser, topN, func(id string) string { return userMention(id) }),
+			Name:   "Messages - Top Users",
+			Value:  renderTop(msgTotalsByUser, topN, func(id string) string { return userMention(id) }),
 			Inline: true,
 		})
 	}
 	if includeReactions && includeChannels {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   metricsMsg(locale, metricsMsgFieldReactChannels),
-			Value:  renderTop(locale, reactTotalsByChannel, topN, func(id string) string { return channelMention(id) }),
+			Name:   "Reactions - Top Channels",
+			Value:  renderTop(reactTotalsByChannel, topN, func(id string) string { return channelMention(id) }),
 			Inline: true,
 		})
 	}
 	if includeReactions && includeUsers {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   metricsMsg(locale, metricsMsgFieldReactUsers),
-			Value:  renderTop(locale, reactTotalsByUser, topN, func(id string) string { return userMention(id) }),
+			Name:   "Reactions - Top Users",
+			Value:  renderTop(reactTotalsByUser, topN, func(id string) string { return userMention(id) }),
 			Inline: true,
 		})
 	}
@@ -233,7 +232,7 @@ func handleActivity(ctx *core.Context) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Color:       theme.Primary(),
-		Description: metricsMsg(locale, metricsMsgActivityDesc),
+		Description: "Here is the recent message and reaction activity. This reply stays private because it is operational data.",
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields:      fields,
 	}
@@ -268,16 +267,15 @@ func newServerStatsPeriodicCommand(name, desc, rangeVal string) core.SubCommand 
 }
 
 func handleServerStatsHealth(ctx *core.Context) error {
-	locale := ctx.Locale()
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
-		return respondError(s, i, metricsMsg(locale, metricsMsgRequiresServer))
+		return respondError(s, i, "This command only works inside a server, so this reply stays private.")
 	}
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, metricsMsg(locale, metricsMsgStoreUnavailable))
+		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -324,18 +322,18 @@ func handleServerStatsHealth(ctx *core.Context) error {
 
 	fields := []*discordgo.MessageEmbedField{
 		{
-			Name:   metricsMsg(locale, metricsMsgFieldCurrentMembers),
-			Value:  metricsMsg(locale, metricsMsgFieldCurrentMembersValue, currentMemberCount),
+			Name:   "Current Members",
+			Value:  fmt.Sprintf("`%d` members currently in the server.", currentMemberCount),
 			Inline: false,
 		},
 		{
-			Name:   metricsMsg(locale, metricsMsgFieldJoinHistory),
-			Value:  metricsMsg(locale, metricsMsgFieldJoinHistoryValue, formatMaybe(totalHistoricJoins, hasHistoricJoins)),
+			Name:   "Join History",
+			Value:  fmt.Sprintf("`%s` unique users recorded in the database since tracking began.", formatMaybe(totalHistoricJoins, hasHistoricJoins)),
 			Inline: false,
 		},
 		{
-			Name:   metricsMsg(locale, metricsMsgFieldRetention),
-			Value:  metricsMsg(locale, metricsMsgFieldRetentionValue, formatMaybe(stillPresentCount, hasStillPresent)),
+			Name:   "Retention",
+			Value:  fmt.Sprintf("`%s` of historically recorded users are still in the server.", formatMaybe(stillPresentCount, hasStillPresent)),
 			Inline: false,
 		},
 	}
@@ -347,13 +345,13 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       metricsMsg(locale, metricsMsgHealthTitle),
+		Title:       "Server Health Stats",
 		Color:       theme.Info(),
-		Description: metricsMsg(locale, metricsMsgHealthDesc, dbSizeLabel),
+		Description: fmt.Sprintf("Here is the current server health snapshot. This reply stays private because it combines database and cache data.\nDatabase size: `%s`", dbSizeLabel),
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: metricsMsg(locale, metricsMsgHealthFooter),
+			Text: "Note: retention accuracy depends on the bot's member cache.",
 		},
 	}
 
@@ -361,22 +359,21 @@ func handleServerStatsHealth(ctx *core.Context) error {
 }
 
 func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
-	locale := ctx.Locale()
 	s := ctx.Session
 	i := ctx.Interaction
 	if ctx.GuildID == "" {
-		return respondError(s, i, metricsMsg(locale, metricsMsgRequiresServer))
+		return respondError(s, i, "This command only works inside a server, so this reply stays private.")
 	}
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, metricsMsg(locale, metricsMsgStoreUnavailable))
+		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cutoff, label := cutoffForRange(locale, rangeVal)
+	cutoff, label := cutoffForRange(rangeVal)
 
 	joins, joinsErr := store.SumDailyMemberJoinsSince(ctxTimeout, ctx.GuildID, cutoff)
 	leaves, leavesErr := store.SumDailyMemberLeavesSince(ctxTimeout, ctx.GuildID, cutoff)
@@ -385,26 +382,26 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 
 	fields := []*discordgo.MessageEmbedField{
 		{
-			Name:   metricsMsg(locale, metricsMsgFieldJoined),
-			Value:  metricsMsg(locale, metricsMsgFieldJoinedValue, formatMaybe(joins, hasJoins), label),
+			Name:   "Members Joined",
+			Value:  fmt.Sprintf("`%s` joins in the last %s.", formatMaybe(joins, hasJoins), label),
 			Inline: true,
 		},
 		{
-			Name:   metricsMsg(locale, metricsMsgFieldLeft),
-			Value:  metricsMsg(locale, metricsMsgFieldLeftValue, formatMaybe(leaves, hasLeaves), label),
+			Name:   "Members Left",
+			Value:  fmt.Sprintf("`%s` leaves in the last %s.", formatMaybe(leaves, hasLeaves), label),
 			Inline: true,
 		},
 		{
-			Name:   metricsMsg(locale, metricsMsgFieldNet),
-			Value:  metricsMsg(locale, metricsMsgFieldNetValue, formatMaybeNet(joins, hasJoins, leaves, hasLeaves)),
+			Name:   "Net Growth",
+			Value:  fmt.Sprintf("`%s` members.", formatMaybeNet(joins, hasJoins, leaves, hasLeaves)),
 			Inline: true,
 		},
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       metricsMsg(locale, metricsMsgStatsTitle, label),
-		Color:       theme.Success(),
-		Description: metricsMsg(locale, metricsMsgStatsDesc),
+		Title:     fmt.Sprintf("Server Stats (%s)", label),
+		Color:     theme.Success(),
+		Description: "Here is the recent member movement snapshot. This reply stays private because it is operational data.",
 		Fields:    fields,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -505,17 +502,17 @@ func getChannelOpt(s *discordgo.Session, i *discordgo.InteractionCreate, name, d
 
 func snowflakeZero() string { return "" }
 
-func cutoffForRange(locale discordgo.Locale, rangeOpt string) (cutoffDay string, label string) {
+func cutoffForRange(rangeOpt string) (cutoffDay string, label string) {
 	now := time.Now().UTC()
 	switch strings.ToLower(rangeOpt) {
 	case "24h":
-		return dayString(now.Add(-24 * time.Hour)), metricsMsg(locale, metricsMsgRange24h)
+		return dayString(now.Add(-24 * time.Hour)), "Last 24h"
 	case "30d":
-		return dayString(now.AddDate(0, 0, -29)), metricsMsg(locale, metricsMsgRange30d)
+		return dayString(now.AddDate(0, 0, -29)), "Last 30d"
 	case "90d":
-		return dayString(now.AddDate(0, 0, -89)), metricsMsg(locale, metricsMsgRange90d)
+		return dayString(now.AddDate(0, 0, -89)), "Last 90d"
 	default:
-		return dayString(now.AddDate(0, 0, -6)), metricsMsg(locale, metricsMsgRange7d)
+		return dayString(now.AddDate(0, 0, -6)), "Last 7d"
 	}
 }
 
@@ -535,9 +532,9 @@ func clampInt(v, min, max int) int {
 	return v
 }
 
-func renderTop(locale discordgo.Locale, items []storage.MetricTotal, n int, display func(id string) string) string {
+func renderTop(items []storage.MetricTotal, n int, display func(id string) string) string {
 	if len(items) == 0 {
-		return metricsMsg(locale, metricsMsgNoData)
+		return "_no data_"
 	}
 	if n > len(items) {
 		n = len(items)
@@ -609,17 +606,16 @@ func newBackfillRunCommand() core.SubCommand {
 }
 
 func handleBackfillRun(ctx *core.Context) error {
-	locale := ctx.Locale()
 	s := ctx.Session
 	i := ctx.Interaction
 
 	router := ctx.Router()
 	if router == nil {
-		return respondError(s, i, metricsMsg(locale, metricsMsgBackfillNoRouter))
+		return respondError(s, i, "The backfill couldn't start because the command router is unavailable. This reply stays private.")
 	}
 	taskRouter := router.GetTaskRouter()
 	if taskRouter == nil {
-		return respondError(s, i, metricsMsg(locale, metricsMsgBackfillNoTaskRouter))
+		return respondError(s, i, "The backfill couldn't start because the task router is unavailable. This reply stays private.")
 	}
 
 	channelID := getChannelOpt(s, i, "channel", "")
@@ -630,7 +626,7 @@ func handleBackfillRun(ctx *core.Context) error {
 	}
 
 	if channelID == "" {
-		return respondError(s, i, metricsMsg(locale, metricsMsgBackfillNoChannel))
+		return respondError(s, i, "The backfill couldn't start because there is no channel selected or configured by default. This reply stays private.")
 	}
 
 	days := getIntOpt(i, "days", 7)
@@ -644,11 +640,11 @@ func handleBackfillRun(ctx *core.Context) error {
 		// Day mode
 		_, err := time.Parse("2006-01-02", startDateRaw)
 		if err != nil {
-			return respondError(s, i, metricsMsg(locale, metricsMsgBackfillInvalidDate))
+			return respondError(s, i, "The backfill couldn't start because start_date must use YYYY-MM-DD. This reply stays private.")
 		}
 		taskType = "monitor.backfill_entry_exit_day"
 		payload = struct{ ChannelID, Day string }{ChannelID: channelID, Day: startDateRaw}
-		desc = metricsMsg(locale, metricsMsgBackfillDescDay, channelID, startDateRaw)
+		desc = fmt.Sprintf("Scanning channel <#%s> for day `%s`.", channelID, startDateRaw)
 	} else {
 		// Range mode
 		now := time.Now().UTC()
@@ -656,7 +652,7 @@ func handleBackfillRun(ctx *core.Context) error {
 		end := now.Format(time.RFC3339)
 		taskType = "monitor.backfill_entry_exit_range"
 		payload = struct{ ChannelID, Start, End string }{ChannelID: channelID, Start: start, End: end}
-		desc = metricsMsg(locale, metricsMsgBackfillDescRange, channelID, days)
+		desc = fmt.Sprintf("Scanning channel <#%s> for the last `%d` days.", channelID, days)
 	}
 
 	err := taskRouter.Dispatch(context.Background(), task.Task{
@@ -666,15 +662,15 @@ func handleBackfillRun(ctx *core.Context) error {
 	})
 
 	if err != nil {
-		return respondError(s, i, metricsMsg(locale, metricsMsgBackfillDispatchFailed, err))
+		return respondError(s, i, fmt.Sprintf("The backfill task couldn't be dispatched right now, so this reply stays private: %v", err))
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       metricsMsg(locale, metricsMsgBackfillTitle),
-		Description: metricsMsg(locale, metricsMsgBackfillDesc, desc),
+		Title:       "Backfill Started",
+		Description: "The backfill request started. This reply stays private because it is an admin operation.\n" + desc,
 		Color:       theme.Info(),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: metricsMsg(locale, metricsMsgBackfillFooter),
+			Text: "This process runs in the background. Use /metrics backfill-status to check progress.",
 		},
 	}
 

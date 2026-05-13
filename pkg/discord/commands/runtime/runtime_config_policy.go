@@ -9,6 +9,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 )
 
+const (
+	runtimeConfigInteractionDeniedText  = "Only the person who opened this runtime config panel can use it. This reply stays private because it belongs to that admin session."
+	runtimeConfigInteractionExpiredText = "This runtime config panel is no longer valid. Reopen /config runtime to continue."
+)
+
 type runtimeVisibilityClass string
 
 const (
@@ -40,12 +45,10 @@ func runtimeVisibilityIsEphemeral(class runtimeVisibilityClass) bool {
 func authorizeRuntimeComponentInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy) (bool, error) {
 	ownerUserID, ok := runtimeOriginalPanelUserID(ctx.Interaction)
 	if !ok {
-		locale := ctx.Locale()
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgExpiredPanel))
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionExpiredText)
 	}
 	if strings.TrimSpace(ctx.UserID) != ownerUserID {
-		locale := ctx.Locale()
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgDeniedPanel))
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionDeniedText)
 	}
 	return false, nil
 }
@@ -53,12 +56,10 @@ func authorizeRuntimeComponentInteraction(ctx *core.Context, ackPolicy core.Inte
 func authorizeRuntimeModalInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy) (bool, error) {
 	_, authToken, ok := decodeRuntimeModalState(ctx.RouteKey.CustomID)
 	if !ok {
-		locale := ctx.Locale()
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgExpiredPanel))
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionExpiredText)
 	}
 	if authToken == "" || authToken != runtimeInteractionAuthToken(runtimeInteractionUserID(ctx.Interaction)) {
-		locale := ctx.Locale()
-		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeMsg(locale, runtimeMsgDeniedPanel))
+		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionDeniedText)
 	}
 	return false, nil
 }
