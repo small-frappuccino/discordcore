@@ -62,7 +62,7 @@ func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
 	for _, option := range options {
 		got = append(got, option.Name)
 	}
-	expected := []string{"ban", "kick", "massban", "mute", "timeout", "warn", "warnings"}
+	expected := []string{"ban", "kick", "massban", "mute", "reaction_block_add", "reaction_block_clear", "reaction_block_list", "reaction_block_remove", "reaction_block_set", "timeout", "warn", "warnings"}
 	if !sameStringSet(got, expected) {
 		t.Fatalf("unexpected moderation subcommands: got=%v want=%v", got, expected)
 	}

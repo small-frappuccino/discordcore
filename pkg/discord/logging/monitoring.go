@@ -204,7 +204,7 @@ type MonitoringService struct {
 	userWatcher          *UserWatcher
 	memberEventService   *MemberEventService   // Service for member events
 	messageEventService  *MessageEventService  // Service for message events
-	reactionEventService *ReactionEventService // Service for reaction metrics
+	reactionEventService *ReactionEventService // Service for reaction event handling
 	isRunning            bool
 	startTime            *time.Time
 	stopTime             *time.Time
@@ -635,9 +635,9 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		}
 	}
 
-	// Gate reaction logging behind runtime config
+	// Gate reaction event handling behind runtime config and guild needs.
 	if !workload.reactionEventService {
-		log.ApplicationLogger().Info("🛑 Reaction logging disabled by runtime config/features; ReactionEventService will not start")
+		log.ApplicationLogger().Info("🛑 Reaction event handling disabled by runtime config/features; ReactionEventService will not start")
 	} else {
 		// Lazily initialize service if not yet created
 		if ms.reactionEventService == nil {
@@ -1479,7 +1479,8 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 // Scope:
 // - ALICE_DISABLE_ENTRY_EXIT_LOGS: start/stop MemberEventService
 // - ALICE_DISABLE_MESSAGE_LOGS: start/stop MessageEventService
-// - ALICE_DISABLE_REACTION_LOGS: start/stop ReactionEventService
+// - ALICE_DISABLE_REACTION_LOGS: enable/disable reaction metrics; the service
+//   still stays up when guild reaction blocks require reaction handling
 // - ALICE_DISABLE_USER_LOGS: re-register user-related handlers (presence/member/user updates)
 // - ALICE_DISABLE_BOT_ROLE_PERM_MIRROR / ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID: no-op here (checked at event time)
 //
@@ -1541,7 +1542,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		}
 	}
 
-	// Reaction logs -> ReactionEventService
+	// Reaction event handling -> ReactionEventService
 	if !workload.reactionEventService {
 		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
 			if err := stopMonitoringSubService(

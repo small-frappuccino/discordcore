@@ -144,6 +144,29 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	}
 }
 
+func TestResolveMonitoringWorkloadStateKeepsReactionServiceForReactionBlocks(t *testing.T) {
+	cfgMgr := newMonitoringTestConfigManager(t)
+	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds[0].RuntimeConfig.DisableReactionLogs = true
+		cfg.Guilds[0].ReactionBlocks = files.ReactionBlockConfig{Rules: []files.ReactionBlockRuleConfig{{
+			ReactorUserID: "reactor",
+			TargetUserID:  "target",
+			Emojis: []files.ReactionBlockEmojiConfig{{
+				Kind:  files.ReactionBlockEmojiKindUnicode,
+				Value: "❌",
+			}},
+		}}}
+		return nil
+	}); err != nil {
+		t.Fatalf("update config: %v", err)
+	}
+
+	state := resolveMonitoringWorkloadState(cfgMgr.Config())
+	if !state.reactionEventService {
+		t.Fatalf("reaction event service should stay enabled when reaction blocks are configured")
+	}
+}
+
 func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T) {
 	session := newLoggingLifecycleSession(t)
 	cfgMgr := newMonitoringTestConfigManager(t)

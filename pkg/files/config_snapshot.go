@@ -174,9 +174,31 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		ChannelCacheTTL:      in.ChannelCacheTTL,
 		UserPrune:            cloneUserPruneConfig(in.UserPrune),
 		PartnerBoard:         clonePartnerBoardConfig(in.PartnerBoard),
+		ReactionBlocks:       cloneReactionBlockConfig(in.ReactionBlocks),
 		QOTD:                 cloneQOTDConfig(in.QOTD),
 		RuntimeConfig:        cloneRuntimeConfig(in.RuntimeConfig),
 	}
+}
+
+func cloneReactionBlockConfig(in ReactionBlockConfig) ReactionBlockConfig {
+	if len(in.Rules) == 0 {
+		return ReactionBlockConfig{}
+	}
+	out := ReactionBlockConfig{Rules: make([]ReactionBlockRuleConfig, 0, len(in.Rules))}
+	for _, rule := range in.Rules {
+		next := ReactionBlockRuleConfig{
+			ReactorUserID: rule.ReactorUserID,
+			TargetUserID:  rule.TargetUserID,
+		}
+		if len(rule.Emojis) > 0 {
+			next.Emojis = make([]ReactionBlockEmojiConfig, 0, len(rule.Emojis))
+			for _, emoji := range rule.Emojis {
+				next.Emojis = append(next.Emojis, emoji)
+			}
+		}
+		out.Rules = append(out.Rules, next)
+	}
+	return out
 }
 
 func cloneStringMap(in map[string]string) map[string]string {

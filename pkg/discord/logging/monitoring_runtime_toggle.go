@@ -57,7 +57,7 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 		if !rc.DisableMessageLogs && (features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete) {
 			state.messageEventService = true
 		}
-		if !rc.DisableReactionLogs && features.Logging.ReactionMetric {
+		if (!rc.DisableReactionLogs && features.Logging.ReactionMetric) || !guildCfg.ReactionBlocks.IsZero() {
 			state.reactionEventService = true
 		}
 		if statsEnabledForGuild {

@@ -352,6 +352,31 @@ type UserPruneConfig struct {
 	DryRun bool `json:"dry_run,omitempty"`
 }
 
+// ReactionBlockEmojiConfig stores one blocked emoji selector.
+//
+// Kind is one of:
+// - "custom": Value is the custom emoji ID, Name is the display name
+// - "unicode": Value is the Unicode emoji, Alias is an optional :shortcode:
+type ReactionBlockEmojiConfig struct {
+	Kind     string `json:"kind,omitempty"`
+	Value    string `json:"value,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Alias    string `json:"alias,omitempty"`
+	Animated bool   `json:"animated,omitempty"`
+}
+
+// ReactionBlockRuleConfig stores the blocked emoji list for one reactor/target pair.
+type ReactionBlockRuleConfig struct {
+	ReactorUserID string                    `json:"reactor_user_id,omitempty"`
+	TargetUserID  string                    `json:"target_user_id,omitempty"`
+	Emojis        []ReactionBlockEmojiConfig `json:"emojis,omitempty"`
+}
+
+// ReactionBlockConfig stores per-guild emoji reaction restrictions.
+type ReactionBlockConfig struct {
+	Rules []ReactionBlockRuleConfig `json:"rules,omitempty"`
+}
+
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
 	GuildID       string            `json:"guild_id"`
@@ -374,6 +399,7 @@ type GuildConfig struct {
 	UserPrune UserPruneConfig `json:"user_prune,omitempty"`
 
 	PartnerBoard PartnerBoardConfig `json:"partner_board,omitempty"`
+	ReactionBlocks ReactionBlockConfig `json:"reaction_blocks,omitempty"`
 	QOTD         QOTDConfig         `json:"qotd,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.

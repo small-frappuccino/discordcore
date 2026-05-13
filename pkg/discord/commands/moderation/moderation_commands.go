@@ -227,12 +227,18 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 	if checker == nil {
 		checker = core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	}
+	configManager := router.GetConfigManager()
 	moderationGroup := core.NewGroupCommand("moderation", "Moderation commands", checker)
 
 	moderationGroup.AddSubCommand(newBanCommand())
 	moderationGroup.AddSubCommand(newMassBanCommand())
 	moderationGroup.AddSubCommand(newKickCommand())
 	moderationGroup.AddSubCommand(newMuteCommand())
+	moderationGroup.AddSubCommand(newReactionBlockSetCommand(configManager))
+	moderationGroup.AddSubCommand(newReactionBlockAddCommand(configManager))
+	moderationGroup.AddSubCommand(newReactionBlockRemoveCommand(configManager))
+	moderationGroup.AddSubCommand(newReactionBlockListCommand(configManager))
+	moderationGroup.AddSubCommand(newReactionBlockClearCommand(configManager))
 	moderationGroup.AddSubCommand(newTimeoutCommand())
 	moderationGroup.AddSubCommand(newWarnCommand())
 	moderationGroup.AddSubCommand(newWarningsCommand())
