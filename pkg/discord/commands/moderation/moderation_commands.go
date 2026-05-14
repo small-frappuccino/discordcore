@@ -230,6 +230,8 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 	configManager := router.GetConfigManager()
 	moderationGroup := core.NewGroupCommand("moderation", "Moderation commands", checker)
 
+	router.RegisterSlashCommand(newCleanCommand())
+
 	moderationGroup.AddSubCommand(newBanCommand())
 	moderationGroup.AddSubCommand(newMassBanCommand())
 	moderationGroup.AddSubCommand(newKickCommand())

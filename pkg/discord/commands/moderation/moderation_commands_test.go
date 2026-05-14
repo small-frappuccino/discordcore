@@ -48,8 +48,8 @@ func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
 
 	RegisterModerationCommands(router)
 
-	if _, ok := router.GetRegistry().GetCommand("clean"); ok {
-		t.Fatal("did not expect /clean to remain registered")
+	if _, ok := router.GetRegistry().GetCommand("clean"); !ok {
+		t.Fatal("expected /clean to be registered")
 	}
 
 	cmd, ok := router.GetRegistry().GetCommand("moderation")
