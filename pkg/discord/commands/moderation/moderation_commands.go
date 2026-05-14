@@ -203,24 +203,8 @@ func ensureModerationCommandEnabled(ctx *core.Context, featureID, disabledMessag
 }
 
 func moderationCommandFeatureEnabled(features files.ResolvedFeatureToggles, featureID string) bool {
-	switch featureID {
-	case "moderation.ban":
-		return features.Moderation.Ban
-	case "moderation.massban":
-		return features.Moderation.MassBan
-	case "moderation.kick":
-		return features.Moderation.Kick
-	case "moderation.timeout":
-		return features.Moderation.Timeout
-	case "moderation.warn":
-		return features.Moderation.Warn
-	case "moderation.warnings":
-		return features.Moderation.Warnings
-	case "moderation.clean":
-		return features.Moderation.Clean
-	default:
-		return false
-	}
+	enabled, _ := features.Lookup(featureID)
+	return enabled
 }
 
 // RegisterModerationCommands registers slash commands under the /moderation group.

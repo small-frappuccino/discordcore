@@ -136,14 +136,6 @@ func normalizeStringList(values []string) []string {
 	return out
 }
 
-func cloneBool(in *bool) *bool {
-	if in == nil {
-		return nil
-	}
-	value := *in
-	return &value
-}
-
 func logFeatureChannelID(guild *files.GuildConfig, eventType discordlogging.LogEventType) string {
 	if guild == nil {
 		return ""

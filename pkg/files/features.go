@@ -166,45 +166,11 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	}
 
 	var out ResolvedFeatureToggles
-	out.Services.Monitoring = resolveFeatureBool(guild.Services.Monitoring, global.Services.Monitoring, true)
-	out.Services.Automod = resolveFeatureBool(guild.Services.Automod, global.Services.Automod, true)
-	out.Services.Commands = resolveFeatureBool(guild.Services.Commands, global.Services.Commands, true)
-	out.Services.AdminCommands = resolveFeatureBool(guild.Services.AdminCommands, global.Services.AdminCommands, true)
-
-	out.Logging.AvatarLogging = resolveFeatureBool(guild.Logging.AvatarLogging, global.Logging.AvatarLogging, true)
-	out.Logging.RoleUpdate = resolveFeatureBool(guild.Logging.RoleUpdate, global.Logging.RoleUpdate, true)
-	out.Logging.MemberJoin = resolveFeatureBool(guild.Logging.MemberJoin, global.Logging.MemberJoin, true)
-	out.Logging.MemberLeave = resolveFeatureBool(guild.Logging.MemberLeave, global.Logging.MemberLeave, true)
-	out.Logging.MessageProcess = resolveFeatureBool(guild.Logging.MessageProcess, global.Logging.MessageProcess, true)
-	out.Logging.MessageEdit = resolveFeatureBool(guild.Logging.MessageEdit, global.Logging.MessageEdit, true)
-	out.Logging.MessageDelete = resolveFeatureBool(guild.Logging.MessageDelete, global.Logging.MessageDelete, true)
-	out.Logging.ReactionMetric = resolveFeatureBool(guild.Logging.ReactionMetric, global.Logging.ReactionMetric, true)
-	out.Logging.AutomodAction = resolveFeatureBool(guild.Logging.AutomodAction, global.Logging.AutomodAction, true)
-	out.Logging.ModerationCase = resolveFeatureBool(guild.Logging.ModerationCase, global.Logging.ModerationCase, true)
-	out.Logging.CleanAction = resolveFeatureBool(guild.Logging.CleanAction, global.Logging.CleanAction, true)
-
-	out.Moderation.Ban = resolveFeatureBool(guild.Moderation.Ban, global.Moderation.Ban, true)
-	out.Moderation.MassBan = resolveFeatureBool(guild.Moderation.MassBan, global.Moderation.MassBan, true)
-	out.Moderation.Kick = resolveFeatureBool(guild.Moderation.Kick, global.Moderation.Kick, true)
-	out.Moderation.Timeout = resolveFeatureBool(guild.Moderation.Timeout, global.Moderation.Timeout, true)
-	out.Moderation.Warn = resolveFeatureBool(guild.Moderation.Warn, global.Moderation.Warn, true)
-	out.Moderation.Warnings = resolveFeatureBool(guild.Moderation.Warnings, global.Moderation.Warnings, true)
-	out.Moderation.Clean = resolveFeatureBool(guild.Moderation.Clean, global.Moderation.Clean, true)
-
-	out.MessageCache.CleanupOnStartup = resolveFeatureBool(guild.MessageCache.CleanupOnStartup, global.MessageCache.CleanupOnStartup, false)
-	out.MessageCache.DeleteOnLog = resolveFeatureBool(guild.MessageCache.DeleteOnLog, global.MessageCache.DeleteOnLog, false)
-
-	out.PresenceWatch.Bot = resolveFeatureBool(guild.PresenceWatch.Bot, global.PresenceWatch.Bot, false)
-	out.PresenceWatch.User = resolveFeatureBool(guild.PresenceWatch.User, global.PresenceWatch.User, false)
-
-	out.Maintenance.DBCleanup = resolveFeatureBool(guild.Maintenance.DBCleanup, global.Maintenance.DBCleanup, true)
-	out.Safety.BotRolePermMirror = resolveFeatureBool(guild.Safety.BotRolePermMirror, global.Safety.BotRolePermMirror, true)
-	out.Backfill.Enabled = resolveFeatureBool(guild.Backfill.Enabled, global.Backfill.Enabled, true)
-
-	out.MuteRole = resolveFeatureBool(guild.MuteRole, global.MuteRole, true)
-	out.StatsChannels = resolveFeatureBool(guild.StatsChannels, global.StatsChannels, true)
-	out.AutoRoleAssign = resolveFeatureBool(guild.AutoRoleAssign, global.AutoRoleAssign, true)
-	out.UserPrune = resolveFeatureBool(guild.UserPrune, global.UserPrune, true)
-
+	for _, spec := range featureRegistry {
+		guildPtr := guild.LookupToggle(spec.ID)
+		globalPtr := global.LookupToggle(spec.ID)
+		resolved := resolveFeatureBool(guildPtr, globalPtr, spec.Default)
+		resolvedToggleValue(&out, spec.Path).SetBool(resolved)
+	}
 	return out
 }

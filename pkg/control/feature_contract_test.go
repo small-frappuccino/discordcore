@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 type sharedFeatureContract struct {
@@ -77,6 +79,31 @@ func TestFeatureDefinitionContractMatchesSharedUIMetadata(t *testing.T) {
 
 	if len(sharedByID) > 0 {
 		t.Fatalf("shared ui contract has extra feature ids: %+v", mapsKeys(sharedByID))
+	}
+}
+
+func TestFeatureRegistryMatchesCatalog(t *testing.T) {
+	t.Parallel()
+
+	registryIDs := make(map[string]struct{}, len(files.FeatureToggleIDs()))
+	for _, id := range files.FeatureToggleIDs() {
+		registryIDs[id] = struct{}{}
+	}
+
+	catalogIDs := make(map[string]struct{}, len(featureDefinitions))
+	for _, def := range featureDefinitions {
+		catalogIDs[def.ID] = struct{}{}
+	}
+
+	for id := range registryIDs {
+		if _, ok := catalogIDs[id]; !ok {
+			t.Errorf("featureDefinitions missing registry id %q", id)
+		}
+	}
+	for id := range catalogIDs {
+		if _, ok := registryIDs[id]; !ok {
+			t.Errorf("feature registry missing catalog id %q", id)
+		}
 	}
 }
 

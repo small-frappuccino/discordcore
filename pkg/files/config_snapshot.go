@@ -243,57 +243,11 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 }
 
 func cloneFeatureToggles(in FeatureToggles) FeatureToggles {
-	return FeatureToggles{
-		Services: FeatureServiceToggles{
-			Monitoring:    cloneBoolPtr(in.Services.Monitoring),
-			Automod:       cloneBoolPtr(in.Services.Automod),
-			Commands:      cloneBoolPtr(in.Services.Commands),
-			AdminCommands: cloneBoolPtr(in.Services.AdminCommands),
-		},
-		Logging: FeatureLoggingToggles{
-			AvatarLogging:  cloneBoolPtr(in.Logging.AvatarLogging),
-			RoleUpdate:     cloneBoolPtr(in.Logging.RoleUpdate),
-			MemberJoin:     cloneBoolPtr(in.Logging.MemberJoin),
-			MemberLeave:    cloneBoolPtr(in.Logging.MemberLeave),
-			MessageProcess: cloneBoolPtr(in.Logging.MessageProcess),
-			MessageEdit:    cloneBoolPtr(in.Logging.MessageEdit),
-			MessageDelete:  cloneBoolPtr(in.Logging.MessageDelete),
-			ReactionMetric: cloneBoolPtr(in.Logging.ReactionMetric),
-			AutomodAction:  cloneBoolPtr(in.Logging.AutomodAction),
-			ModerationCase: cloneBoolPtr(in.Logging.ModerationCase),
-			CleanAction:    cloneBoolPtr(in.Logging.CleanAction),
-		},
-		Moderation: FeatureModerationToggles{
-			Ban:      cloneBoolPtr(in.Moderation.Ban),
-			MassBan:  cloneBoolPtr(in.Moderation.MassBan),
-			Kick:     cloneBoolPtr(in.Moderation.Kick),
-			Timeout:  cloneBoolPtr(in.Moderation.Timeout),
-			Warn:     cloneBoolPtr(in.Moderation.Warn),
-			Warnings: cloneBoolPtr(in.Moderation.Warnings),
-			Clean:    cloneBoolPtr(in.Moderation.Clean),
-		},
-		MessageCache: FeatureMessageCacheToggles{
-			CleanupOnStartup: cloneBoolPtr(in.MessageCache.CleanupOnStartup),
-			DeleteOnLog:      cloneBoolPtr(in.MessageCache.DeleteOnLog),
-		},
-		PresenceWatch: FeaturePresenceWatchToggles{
-			Bot:  cloneBoolPtr(in.PresenceWatch.Bot),
-			User: cloneBoolPtr(in.PresenceWatch.User),
-		},
-		Maintenance: FeatureMaintenanceToggles{
-			DBCleanup: cloneBoolPtr(in.Maintenance.DBCleanup),
-		},
-		Safety: FeatureSafetyToggles{
-			BotRolePermMirror: cloneBoolPtr(in.Safety.BotRolePermMirror),
-		},
-		Backfill: FeatureBackfillToggles{
-			Enabled: cloneBoolPtr(in.Backfill.Enabled),
-		},
-		MuteRole:       cloneBoolPtr(in.MuteRole),
-		StatsChannels:  cloneBoolPtr(in.StatsChannels),
-		AutoRoleAssign: cloneBoolPtr(in.AutoRoleAssign),
-		UserPrune:      cloneBoolPtr(in.UserPrune),
+	var out FeatureToggles
+	for _, spec := range featureRegistry {
+		out.SetToggle(spec.ID, cloneBoolPtr(in.LookupToggle(spec.ID)))
 	}
+	return out
 }
 
 func cloneRolesConfig(in RolesConfig) RolesConfig {

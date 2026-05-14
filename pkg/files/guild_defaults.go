@@ -11,61 +11,16 @@ import (
 func NewMinimalGuildConfig(guildID, botInstanceID string) GuildConfig {
 	disabled := false
 
+	features := FeatureToggles{}
+	for _, spec := range featureRegistry {
+		features.SetToggle(spec.ID, boolPtr(disabled))
+	}
+
 	return GuildConfig{
 		GuildID:              strings.TrimSpace(guildID),
 		BotInstanceID:        NormalizeBotInstanceID(botInstanceID),
 		DomainBotInstanceIDs: nil,
-		Features: FeatureToggles{
-			Services: FeatureServiceToggles{
-				Monitoring:    boolPtr(disabled),
-				Automod:       boolPtr(disabled),
-				Commands:      boolPtr(disabled),
-				AdminCommands: boolPtr(disabled),
-			},
-			Logging: FeatureLoggingToggles{
-				AvatarLogging:  boolPtr(disabled),
-				RoleUpdate:     boolPtr(disabled),
-				MemberJoin:     boolPtr(disabled),
-				MemberLeave:    boolPtr(disabled),
-				MessageProcess: boolPtr(disabled),
-				MessageEdit:    boolPtr(disabled),
-				MessageDelete:  boolPtr(disabled),
-				ReactionMetric: boolPtr(disabled),
-				AutomodAction:  boolPtr(disabled),
-				ModerationCase: boolPtr(disabled),
-				CleanAction:    boolPtr(disabled),
-			},
-			Moderation: FeatureModerationToggles{
-				Ban:      boolPtr(disabled),
-				MassBan:  boolPtr(disabled),
-				Kick:     boolPtr(disabled),
-				Timeout:  boolPtr(disabled),
-				Warn:     boolPtr(disabled),
-				Warnings: boolPtr(disabled),
-				Clean:    boolPtr(disabled),
-			},
-			MessageCache: FeatureMessageCacheToggles{
-				CleanupOnStartup: boolPtr(disabled),
-				DeleteOnLog:      boolPtr(disabled),
-			},
-			PresenceWatch: FeaturePresenceWatchToggles{
-				Bot:  boolPtr(disabled),
-				User: boolPtr(disabled),
-			},
-			Maintenance: FeatureMaintenanceToggles{
-				DBCleanup: boolPtr(disabled),
-			},
-			Safety: FeatureSafetyToggles{
-				BotRolePermMirror: boolPtr(disabled),
-			},
-			Backfill: FeatureBackfillToggles{
-				Enabled: boolPtr(disabled),
-			},
-			MuteRole:       boolPtr(disabled),
-			StatsChannels:  boolPtr(disabled),
-			AutoRoleAssign: boolPtr(disabled),
-			UserPrune:      boolPtr(disabled),
-		},
+		Features:             features,
 	}
 }
 

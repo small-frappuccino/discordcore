@@ -662,40 +662,7 @@ func countConfiguredChannels(ch files.ChannelsConfig) int {
 }
 
 func hasFeatureOverrides(ft files.FeatureToggles) bool {
-	ptrs := []*bool{
-		ft.Services.Monitoring,
-		ft.Services.Automod,
-		ft.Services.Commands,
-		ft.Services.AdminCommands,
-		ft.Logging.AvatarLogging,
-		ft.Logging.RoleUpdate,
-		ft.Logging.MemberJoin,
-		ft.Logging.MemberLeave,
-		ft.Logging.MessageProcess,
-		ft.Logging.MessageEdit,
-		ft.Logging.MessageDelete,
-		ft.Logging.ReactionMetric,
-		ft.Logging.AutomodAction,
-		ft.Logging.ModerationCase,
-		ft.Logging.CleanAction,
-		ft.MessageCache.CleanupOnStartup,
-		ft.MessageCache.DeleteOnLog,
-		ft.PresenceWatch.Bot,
-		ft.PresenceWatch.User,
-		ft.Maintenance.DBCleanup,
-		ft.Safety.BotRolePermMirror,
-		ft.Backfill.Enabled,
-		ft.MuteRole,
-		ft.StatsChannels,
-		ft.AutoRoleAssign,
-		ft.UserPrune,
-	}
-	for _, item := range ptrs {
-		if item != nil {
-			return true
-		}
-	}
-	return false
+	return ft.HasAnyOverride()
 }
 
 func hasRuntimeOverrides(rc files.RuntimeConfig) bool {
