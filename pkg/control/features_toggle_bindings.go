@@ -72,6 +72,8 @@ func resolvedFeatureValue(cfg *files.BotConfig, guildID, featureID string) bool 
 		return resolved.Moderation.Warn
 	case "moderation.warnings":
 		return resolved.Moderation.Warnings
+	case "moderation.clean":
+		return resolved.Moderation.Clean
 	case "services.commands":
 		return resolved.Services.Commands
 	case "services.admin_commands":
@@ -143,6 +145,8 @@ func getGlobalFeatureToggle(ft files.FeatureToggles, featureID string) *bool {
 		return ft.Moderation.Warn
 	case "moderation.warnings":
 		return ft.Moderation.Warnings
+	case "moderation.clean":
+		return ft.Moderation.Clean
 	case "services.commands":
 		return ft.Services.Commands
 	case "services.admin_commands":
@@ -214,6 +218,8 @@ func setGlobalFeatureToggle(ft *files.FeatureToggles, featureID string, value *b
 		ft.Moderation.Warn = cloneBool(value)
 	case "moderation.warnings":
 		ft.Moderation.Warnings = cloneBool(value)
+	case "moderation.clean":
+		ft.Moderation.Clean = cloneBool(value)
 	case "services.commands":
 		ft.Services.Commands = cloneBool(value)
 	case "services.admin_commands":

@@ -76,13 +76,6 @@ export interface QOTDDeck {
   channel_id?: string;
 }
 
-export interface QOTDCollectorConfig {
-  source_channel_id?: string;
-  author_ids?: string[];
-  title_patterns?: string[];
-  start_date?: string;
-}
-
 export interface QOTDPublishScheduleConfig {
   hour_utc?: number;
   minute_utc?: number;
@@ -92,7 +85,6 @@ export interface QOTDConfig {
   verified_role_id?: string;
   active_deck_id?: string;
   decks?: QOTDDeck[];
-  collector?: QOTDCollectorConfig;
   schedule?: QOTDPublishScheduleConfig;
 }
 

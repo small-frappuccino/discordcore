@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type {
-  QOTDCollectorConfig,
   QOTDConfig,
   QOTDDeck,
   QOTDDeckSummary,
@@ -26,7 +25,6 @@ import { useQOTD } from "./QOTDContext";
 interface SettingsDraft {
   active_deck_id: string;
   decks: QOTDDeck[];
-  collector?: QOTDCollectorConfig;
 }
 
 const qotdChannelDomain = "qotd";
@@ -79,7 +77,6 @@ export function QOTDSettingsPage() {
         ...settings,
         active_deck_id: draft.active_deck_id,
         decks: draft.decks,
-        collector: draft.collector,
       });
       if (updatedSettings != null) {
         const nextDraft = createSettingsDraft(updatedSettings);
@@ -359,7 +356,6 @@ export function QOTDSettingsPage() {
                       const newDeck = createDeckDraft(current.decks);
                       return {
                         active_deck_id: current.active_deck_id || newDeck.id,
-                        collector: current.collector,
                         decks: [...current.decks, newDeck],
                       };
                     })
@@ -407,7 +403,6 @@ function createSettingsDraft(settings: QOTDConfig): SettingsDraft {
   return {
     active_deck_id: activeDeckID,
     decks,
-    collector: normalizeCollectorConfig(settings.collector),
   };
 }
 
@@ -429,44 +424,6 @@ function createDeckDraft(existingDecks: QOTDDeck[]): QOTDDeck {
     enabled: false,
     channel_id: "",
   };
-}
-
-function normalizeCollectorConfig(
-  collector?: QOTDCollectorConfig,
-): QOTDCollectorConfig {
-  return {
-    source_channel_id: String(collector?.source_channel_id ?? "").trim(),
-    author_ids: normalizeCollectorEntries(collector?.author_ids),
-    title_patterns: normalizeCollectorEntries(collector?.title_patterns, {
-      caseInsensitive: true,
-    }),
-    start_date: String(collector?.start_date ?? "").trim(),
-  };
-}
-
-function normalizeCollectorEntries(
-  values: readonly unknown[] | undefined,
-  options: { caseInsensitive?: boolean } = {},
-) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const value of values) {
-    const trimmed = String(value ?? "").trim();
-    if (trimmed === "") {
-      continue;
-    }
-    const key = options.caseInsensitive ? trimmed.toLowerCase() : trimmed;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    normalized.push(trimmed);
-  }
-  return normalized;
 }
 
 function findDeckSummary(

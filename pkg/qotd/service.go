@@ -907,10 +907,9 @@ func derefTime(value *time.Time) time.Time {
 }
 
 // buildOfficialThreadName renders the Discord thread title shown in the QOTD
-// channel sidebar. The visible number is the deck's count of used questions
-// (including ones imported as already-used by the archive collector), so the
-// sidebar reflects "this is the Nth question this deck has ever used". A
-// non-positive number degrades to a bare "Question".
+// channel sidebar. The visible number is the deck's count of used questions,
+// so the sidebar reflects "this is the Nth question this deck has ever used".
+// A non-positive number degrades to a bare "Question".
 func buildOfficialThreadName(displayNumber int64) string {
 	if displayNumber <= 0 {
 		return "Question"

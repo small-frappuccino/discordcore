@@ -46,6 +46,12 @@ type cleanResult struct {
 	deletedBulk   int
 	deletedSingle int
 	skippedPinned int
+
+	failedForbidden      int
+	failedMissingChannel int
+	failedRateLimited    int
+	failedTransient      int
+	failedUnknown        int
 }
 
 func newCleanCommand() *cleanCommand { return &cleanCommand{} }
@@ -100,6 +106,9 @@ func (c *cleanCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 }
 
 func (c *cleanCommand) Handle(ctx *core.Context) error {
+	if err := ensureModerationCommandEnabled(ctx, "moderation.clean", "Clean command is disabled for this server."); err != nil {
+		return err
+	}
 	request, err := parseCleanRequest(ctx)
 	if err != nil {
 		return err
@@ -258,12 +267,25 @@ func executeClean(ctx *core.Context, request cleanRequest) (cleanResult, error) 
 		bulkIDs = append(bulkIDs, message.ID)
 	}
 
-	onDeleteError := func(messageID string, err error) {
+	onDeleteError := func(messageID string, err error, class cleanup.FailureClass) {
+		recordCleanFailure(&result, class)
 		log.ErrorLoggerRaw().Error(
 			"Clean command failed to delete message",
 			"guildID", ctx.GuildID,
 			"channelID", request.channelID,
 			"messageID", messageID,
+			"failureClass", cleanFailureClassLabel(class),
+			"err", err,
+		)
+	}
+	onChunkError := func(messageIDs []string, err error, class cleanup.FailureClass) {
+		recordCleanChunkFailure(&result, class, len(messageIDs))
+		log.ErrorLoggerRaw().Error(
+			"Clean command failed to bulk-delete chunk",
+			"guildID", ctx.GuildID,
+			"channelID", request.channelID,
+			"chunkSize", len(messageIDs),
+			"failureClass", cleanFailureClassLabel(class),
 			"err", err,
 		)
 	}
@@ -271,6 +293,7 @@ func executeClean(ctx *core.Context, request cleanRequest) (cleanResult, error) 
 	result.deletedBulk, result.failed = cleanup.DeleteMessages(ctx.Session, request.channelID, bulkIDs, cleanup.DeleteOptions{
 		Mode:          cleanup.DeleteModeBulkPreferred,
 		OnDeleteError: onDeleteError,
+		OnChunkError:  onChunkError,
 	})
 	deletedSingle, failedSingle := cleanup.DeleteMessages(ctx.Session, request.channelID, singleIDs, cleanup.DeleteOptions{
 		Mode:          cleanup.DeleteModeSingleOnly,
@@ -280,6 +303,55 @@ func executeClean(ctx *core.Context, request cleanRequest) (cleanResult, error) 
 	result.deleted = result.deletedBulk + result.deletedSingle
 	result.failed += failedSingle
 	return result, nil
+}
+
+func recordCleanFailure(result *cleanResult, class cleanup.FailureClass) {
+	switch class {
+	case cleanup.FailureClassForbidden:
+		result.failedForbidden++
+	case cleanup.FailureClassMissingChannel:
+		result.failedMissingChannel++
+	case cleanup.FailureClassRateLimited:
+		result.failedRateLimited++
+	case cleanup.FailureClassTransient:
+		result.failedTransient++
+	default:
+		result.failedUnknown++
+	}
+}
+
+func recordCleanChunkFailure(result *cleanResult, class cleanup.FailureClass, count int) {
+	switch class {
+	case cleanup.FailureClassForbidden:
+		result.failedForbidden += count
+	case cleanup.FailureClassMissingChannel:
+		result.failedMissingChannel += count
+	case cleanup.FailureClassRateLimited:
+		result.failedRateLimited += count
+	case cleanup.FailureClassTransient:
+		result.failedTransient += count
+	default:
+		result.failedUnknown += count
+	}
+}
+
+func cleanFailureClassLabel(class cleanup.FailureClass) string {
+	switch class {
+	case cleanup.FailureClassMissingMessage:
+		return "missing_message"
+	case cleanup.FailureClassMissingChannel:
+		return "missing_channel"
+	case cleanup.FailureClassForbidden:
+		return "forbidden"
+	case cleanup.FailureClassBulkDeleteAge:
+		return "bulk_delete_age"
+	case cleanup.FailureClassRateLimited:
+		return "rate_limited"
+	case cleanup.FailureClassTransient:
+		return "transient"
+	default:
+		return "unknown"
+	}
 }
 
 func collectCleanTargets(ctx *core.Context, request cleanRequest) ([]*discordgo.Message, cleanResult, error) {
@@ -425,7 +497,9 @@ func buildCleanCommandMessage(request cleanRequest, result cleanResult) string {
 
 	if result.deleted == 0 {
 		message := fmt.Sprintf("I found %d matching message(s), but none could be removed.", result.matched)
-		if result.failed > 0 {
+		if breakdown := describeCleanFailures(result); breakdown != "" {
+			message += " " + breakdown
+		} else if result.failed > 0 {
 			message += fmt.Sprintf(" %d delete request(s) failed.", result.failed)
 		}
 		return message + filterSuffix
@@ -438,7 +512,9 @@ func buildCleanCommandMessage(request cleanRequest, result cleanResult) string {
 	if result.deletedSingle > 0 {
 		message += fmt.Sprintf(" %d older message(s) were removed one by one because Discord does not bulk-delete them.", result.deletedSingle)
 	}
-	if result.failed > 0 {
+	if breakdown := describeCleanFailures(result); breakdown != "" {
+		message += " " + breakdown
+	} else if result.failed > 0 {
 		message += fmt.Sprintf(" %d matching message(s) could not be removed.", result.failed)
 	}
 	if result.skippedPinned > 0 {
@@ -448,6 +524,29 @@ func buildCleanCommandMessage(request cleanRequest, result cleanResult) string {
 		message += fmt.Sprintf(" Search stopped after the last %d messages.", cleanSearchWindow)
 	}
 	return message + filterSuffix
+}
+
+func describeCleanFailures(result cleanResult) string {
+	parts := make([]string, 0, 5)
+	if result.failedForbidden > 0 {
+		parts = append(parts, fmt.Sprintf("%d blocked by Discord permissions", result.failedForbidden))
+	}
+	if result.failedMissingChannel > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped because the channel was not found", result.failedMissingChannel))
+	}
+	if result.failedRateLimited > 0 {
+		parts = append(parts, fmt.Sprintf("%d rate limited by Discord", result.failedRateLimited))
+	}
+	if result.failedTransient > 0 {
+		parts = append(parts, fmt.Sprintf("%d hit a transient Discord error", result.failedTransient))
+	}
+	if result.failedUnknown > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed for unknown reasons", result.failedUnknown))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Failures: " + strings.Join(parts, ", ") + "."
 }
 
 func describeCleanFilters(request cleanRequest) string {
@@ -506,6 +605,21 @@ func buildCleanLogDetails(request cleanRequest, result cleanResult) string {
 	}
 	if result.failed > 0 {
 		parts = append(parts, fmt.Sprintf("Failed: %d", result.failed))
+	}
+	if result.failedForbidden > 0 {
+		parts = append(parts, fmt.Sprintf("Forbidden: %d", result.failedForbidden))
+	}
+	if result.failedMissingChannel > 0 {
+		parts = append(parts, fmt.Sprintf("Missing channel: %d", result.failedMissingChannel))
+	}
+	if result.failedRateLimited > 0 {
+		parts = append(parts, fmt.Sprintf("Rate limited: %d", result.failedRateLimited))
+	}
+	if result.failedTransient > 0 {
+		parts = append(parts, fmt.Sprintf("Transient: %d", result.failedTransient))
+	}
+	if result.failedUnknown > 0 {
+		parts = append(parts, fmt.Sprintf("Unknown failure: %d", result.failedUnknown))
 	}
 	if result.skippedPinned > 0 {
 		parts = append(parts, fmt.Sprintf("Pinned kept: %d", result.skippedPinned))

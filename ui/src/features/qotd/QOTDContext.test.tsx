@@ -105,11 +105,6 @@ function QOTDContextHarness() {
 function createSettings(): QOTDConfig {
   return {
     active_deck_id: "default",
-    collector: {
-      source_channel_id: "collector-channel-1",
-      author_ids: ["bot-1"],
-      title_patterns: ["Question Of The Day"],
-    },
     decks: [
       {
         id: "default",

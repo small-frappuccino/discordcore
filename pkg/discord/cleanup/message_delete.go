@@ -14,8 +14,17 @@ const (
 
 // DeleteOptions configures deletion behavior.
 type DeleteOptions struct {
-	Mode          DeleteMode
-	OnDeleteError func(messageID string, err error)
+	Mode DeleteMode
+	// OnDeleteError fires once per message that single-delete cannot remove.
+	// The classified failure class is also passed so callers can branch
+	// without re-running ClassifyDeleteError.
+	OnDeleteError func(messageID string, err error, class FailureClass)
+	// OnChunkError fires once per bulk-delete chunk that Discord rejected
+	// at the chunk level (permission gone, channel gone, rate limited, etc.).
+	// Bulk-age rejections (FailureClassBulkDeleteAge) do NOT fire this
+	// callback — those are silently retried as single deletes so the count
+	// of "failed" messages stays accurate.
+	OnChunkError func(messageIDs []string, err error, class FailureClass)
 }
 
 // DeleteMessages removes messages from a channel, returning deleted and failed counts.
@@ -27,10 +36,10 @@ func DeleteMessages(session *discordgo.Session, channelID string, messageIDs []s
 	if opts.Mode == DeleteModeSingleOnly {
 		return deleteSingle(session, channelID, messageIDs, opts.OnDeleteError)
 	}
-	return deleteBulkPreferred(session, channelID, messageIDs, opts.OnDeleteError)
+	return deleteBulkPreferred(session, channelID, messageIDs, opts.OnDeleteError, opts.OnChunkError)
 }
 
-func deleteSingle(session *discordgo.Session, channelID string, messageIDs []string, onError func(string, error)) (int, int) {
+func deleteSingle(session *discordgo.Session, channelID string, messageIDs []string, onError func(string, error, FailureClass)) (int, int) {
 	deleted := 0
 	failed := 0
 	for _, id := range messageIDs {
@@ -38,9 +47,16 @@ func deleteSingle(session *discordgo.Session, channelID string, messageIDs []str
 			continue
 		}
 		if err := session.ChannelMessageDelete(channelID, id); err != nil {
+			class := ClassifyDeleteError(err)
+			// A 404 means the message was already gone — the cleanup goal
+			// is satisfied, so do not count it as a failure or report it.
+			if class == FailureClassMissingMessage {
+				deleted++
+				continue
+			}
 			failed++
 			if onError != nil {
-				onError(id, err)
+				onError(id, err, class)
 			}
 			continue
 		}
@@ -49,7 +65,7 @@ func deleteSingle(session *discordgo.Session, channelID string, messageIDs []str
 	return deleted, failed
 }
 
-func deleteBulkPreferred(session *discordgo.Session, channelID string, messageIDs []string, onError func(string, error)) (int, int) {
+func deleteBulkPreferred(session *discordgo.Session, channelID string, messageIDs []string, onError func(string, error, FailureClass), onChunkError func([]string, error, FailureClass)) (int, int) {
 	deleted := 0
 	failed := 0
 	for _, chunk := range chunkStrings(messageIDs, 100) {
@@ -57,22 +73,28 @@ func deleteBulkPreferred(session *discordgo.Session, channelID string, messageID
 			continue
 		}
 		if len(chunk) == 1 {
-			if err := session.ChannelMessageDelete(channelID, chunk[0]); err != nil {
-				failed++
-				if onError != nil {
-					onError(chunk[0], err)
-				}
-				continue
-			}
-			deleted++
+			d, f := deleteSingle(session, channelID, chunk, onError)
+			deleted += d
+			failed += f
 			continue
 		}
 		if err := session.ChannelMessagesBulkDelete(channelID, chunk); err != nil {
+			class := ClassifyDeleteError(err)
+			if class == FailureClassBulkDeleteAge {
+				// Discord refused the chunk because at least one message
+				// crossed the 14-day boundary mid-flight. Retry the chunk
+				// as per-message single deletes so we get accurate
+				// per-message classification (the rest of the chunk is
+				// usually still valid) instead of marking 100 messages
+				// failed for one borderline message.
+				d, f := deleteSingle(session, channelID, chunk, onError)
+				deleted += d
+				failed += f
+				continue
+			}
 			failed += len(chunk)
-			if onError != nil {
-				for _, id := range chunk {
-					onError(id, err)
-				}
+			if onChunkError != nil {
+				onChunkError(chunk, err, class)
 			}
 			continue
 		}

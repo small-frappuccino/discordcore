@@ -1152,7 +1152,7 @@ func (mes *MessageEventService) cleanupIdleVerificationChannel(guildID, channelI
 
 	removed, failed := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
 		Mode: cleanup.DeleteModeSingleOnly,
-		OnDeleteError: func(messageID string, err error) {
+		OnDeleteError: func(messageID string, err error, _ cleanup.FailureClass) {
 			slog.Warn("Verification cleanup: failed to delete stale message", "guildID", guildID, "channelID", channelID, "messageID", messageID, "error", err)
 		},
 	})
@@ -1192,7 +1192,7 @@ func (mes *MessageEventService) cleanupPreviousVerificationMessages(guildID, cha
 
 	removed, failed := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
 		Mode: cleanup.DeleteModeSingleOnly,
-		OnDeleteError: func(messageID string, err error) {
+		OnDeleteError: func(messageID string, err error, _ cleanup.FailureClass) {
 			slog.Warn("Verification cleanup: failed to delete previous message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", messageID, "error", err)
 		},
 	})
@@ -1232,7 +1232,7 @@ func (mes *MessageEventService) cleanupAllVerificationMessagesForUser(guildID, c
 
 	removed, failed := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
 		Mode: cleanup.DeleteModeSingleOnly,
-		OnDeleteError: func(messageID string, err error) {
+		OnDeleteError: func(messageID string, err error, _ cleanup.FailureClass) {
 			slog.Warn("Verification cleanup: failed to delete verified user message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", messageID, "error", err)
 		},
 	})

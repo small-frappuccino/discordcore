@@ -59,6 +59,7 @@
     { "id": "moderation.timeout", "area": "moderation", "tags": ["moderation.command"] },
     { "id": "moderation.warn", "area": "moderation", "tags": ["moderation.command"] },
     { "id": "moderation.warnings", "area": "moderation", "tags": ["moderation.command"] },
+    { "id": "moderation.clean", "area": "moderation", "tags": ["moderation.command"] },
     { "id": "services.commands", "area": "commands", "tags": ["commands.primary", "home.commands"] },
     { "id": "services.admin_commands", "area": "commands", "tags": ["commands.admin", "home.admin_commands"] },
     { "id": "logging.avatar_logging", "area": "logging", "tags": [] },

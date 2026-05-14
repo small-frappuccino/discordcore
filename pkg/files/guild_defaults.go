@@ -42,6 +42,7 @@ func NewMinimalGuildConfig(guildID, botInstanceID string) GuildConfig {
 				Timeout:  boolPtr(disabled),
 				Warn:     boolPtr(disabled),
 				Warnings: boolPtr(disabled),
+				Clean:    boolPtr(disabled),
 			},
 			MessageCache: FeatureMessageCacheToggles{
 				CleanupOnStartup: boolPtr(disabled),

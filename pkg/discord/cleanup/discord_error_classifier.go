@@ -1,0 +1,81 @@
+package cleanup
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/bwmarrin/discordgo"
+)
+
+// FailureClass labels a Discord delete failure so callers can branch on the
+// underlying cause (counters, log dedup, user-facing messages) instead of
+// lumping every failure into one bucket.
+//
+// The classes mirror the load-bearing distinctions documented in the QOTD
+// runtime classifiers: missing target, lost permission, age window, rate
+// limit, and transient. Anything that does not match a known class falls
+// back to FailureClassUnknown so the caller decides how to surface it.
+type FailureClass int
+
+const (
+	FailureClassUnknown FailureClass = iota
+	// FailureClassMissingMessage means the message no longer exists
+	// (404 / Unknown Message). The cleanup goal is effectively achieved.
+	FailureClassMissingMessage
+	// FailureClassMissingChannel means the channel no longer exists
+	// (404 / Unknown Channel). All subsequent deletes will fail the same way.
+	FailureClassMissingChannel
+	// FailureClassForbidden means the bot lost the permissions required
+	// to delete here (403 / Missing Access / Missing Permissions).
+	FailureClassForbidden
+	// FailureClassBulkDeleteAge means Discord rejected a bulk-delete
+	// chunk because at least one message is older than 14 days
+	// (code 50034). Caller should fall back to per-message single delete.
+	FailureClassBulkDeleteAge
+	// FailureClassRateLimited means Discord throttled the request (429).
+	FailureClassRateLimited
+	// FailureClassTransient covers 5xx responses and bare network errors
+	// where retrying later is the right move.
+	FailureClassTransient
+)
+
+// ClassifyDeleteError maps a Discord REST error returned by message-delete
+// flows to a FailureClass. Wrapped errors are unwrapped via errors.As.
+func ClassifyDeleteError(err error) FailureClass {
+	if err == nil {
+		return FailureClassUnknown
+	}
+	var restErr *discordgo.RESTError
+	if !errors.As(err, &restErr) || restErr == nil {
+		return FailureClassTransient
+	}
+
+	if restErr.Message != nil {
+		switch restErr.Message.Code {
+		case discordgo.ErrCodeUnknownMessage:
+			return FailureClassMissingMessage
+		case discordgo.ErrCodeUnknownChannel:
+			return FailureClassMissingChannel
+		case discordgo.ErrCodeMissingAccess, discordgo.ErrCodeMissingPermissions:
+			return FailureClassForbidden
+		case discordgo.ErrCodeMessageProvidedTooOldForBulkDelete:
+			return FailureClassBulkDeleteAge
+		}
+	}
+
+	if restErr.Response != nil {
+		switch restErr.Response.StatusCode {
+		case http.StatusNotFound:
+			return FailureClassMissingMessage
+		case http.StatusForbidden, http.StatusUnauthorized:
+			return FailureClassForbidden
+		case http.StatusTooManyRequests:
+			return FailureClassRateLimited
+		}
+		if restErr.Response.StatusCode >= 500 {
+			return FailureClassTransient
+		}
+	}
+
+	return FailureClassUnknown
+}

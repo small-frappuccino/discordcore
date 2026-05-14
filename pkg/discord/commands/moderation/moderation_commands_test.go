@@ -48,8 +48,8 @@ func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
 
 	RegisterModerationCommands(router)
 
-	if _, ok := router.GetRegistry().GetCommand("clean"); !ok {
-		t.Fatal("expected /clean to be registered")
+	if _, ok := router.GetRegistry().GetCommand("clean"); ok {
+		t.Fatal("clean command should be a /moderation subcommand, not a top-level slash command")
 	}
 
 	cmd, ok := router.GetRegistry().GetCommand("moderation")
@@ -62,7 +62,7 @@ func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
 	for _, option := range options {
 		got = append(got, option.Name)
 	}
-	expected := []string{"ban", "kick", "massban", "mute", "reaction_block_add", "reaction_block_clear", "reaction_block_list", "reaction_block_remove", "reaction_block_set", "timeout", "warn", "warnings"}
+	expected := []string{"ban", "clean", "kick", "massban", "mute", "reaction_block_add", "reaction_block_clear", "reaction_block_list", "reaction_block_remove", "reaction_block_set", "timeout", "warn", "warnings"}
 	if !sameStringSet(got, expected) {
 		t.Fatalf("unexpected moderation subcommands: got=%v want=%v", got, expected)
 	}
@@ -83,6 +83,7 @@ func TestEnsureModerationCommandEnabledRejectsDisabledCommands(t *testing.T) {
 				Timeout:  boolPtr(false),
 				Warn:     boolPtr(false),
 				Warnings: boolPtr(false),
+				Clean:    boolPtr(false),
 			},
 		},
 	}); err != nil {
@@ -102,6 +103,7 @@ func TestEnsureModerationCommandEnabledRejectsDisabledCommands(t *testing.T) {
 		{name: "timeout", featureID: "moderation.timeout", message: "Timeout command is disabled for this server."},
 		{name: "warn", featureID: "moderation.warn", message: "Warn command is disabled for this server."},
 		{name: "warnings", featureID: "moderation.warnings", message: "Warnings command is disabled for this server."},
+		{name: "clean", featureID: "moderation.clean", message: "Clean command is disabled for this server."},
 	}
 
 	for _, tt := range tests {

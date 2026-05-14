@@ -9,7 +9,6 @@ import {
 } from "react";
 import type {
   QOTDConfig,
-  QOTDCollectorConfig,
   QOTDDeck,
   QOTDDeckSummary,
   QOTDSummary,
@@ -254,49 +253,10 @@ function normalizeQOTDSettings(settings?: QOTDConfig | null): QOTDConfig {
     decks,
   });
   return {
-    collector: normalizeQOTDCollectorConfig(settings?.collector),
     verified_role_id: String(settings?.verified_role_id ?? "").trim(),
     active_deck_id: activeDeckID,
     decks,
   };
-}
-
-function normalizeQOTDCollectorConfig(
-  collector?: QOTDCollectorConfig | null,
-): QOTDCollectorConfig {
-  return {
-    source_channel_id: String(collector?.source_channel_id ?? "").trim(),
-    author_ids: normalizeCollectorEntries(collector?.author_ids),
-    title_patterns: normalizeCollectorEntries(collector?.title_patterns, {
-      caseInsensitive: true,
-    }),
-    start_date: String(collector?.start_date ?? "").trim(),
-  };
-}
-
-function normalizeCollectorEntries(
-  values: readonly unknown[] | undefined,
-  options: { caseInsensitive?: boolean } = {},
-) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const value of values) {
-    const trimmed = String(value ?? "").trim();
-    if (trimmed === "") {
-      continue;
-    }
-    const key = options.caseInsensitive ? trimmed.toLowerCase() : trimmed;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    normalized.push(trimmed);
-  }
-  return normalized;
 }
 
 function normalizeQOTDDeck(deck: QOTDDeck): QOTDDeck {

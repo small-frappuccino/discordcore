@@ -87,10 +87,6 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 	if err != nil {
 		return QOTDConfig{}, invalidQOTDInput("schedule: %v", err)
 	}
-	collector, err := normalizeQOTDCollectorConfig(in.Collector)
-	if err != nil {
-		return QOTDConfig{}, invalidQOTDInput("collector: %v", err)
-	}
 	if verifiedRoleID != "" && !isAllDigits(verifiedRoleID) {
 		return QOTDConfig{}, invalidQOTDInput("verified_role_id must be numeric")
 	}
@@ -100,12 +96,11 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		// no-deck path: a suppression-only config still carries meaningful
 		// state (the scheduler reads it back to skip the suppressed slot).
 		// QOTDConfig.IsZero handles the symmetric case on the read side.
-		if collector.IsZero() && verifiedRoleID == "" && schedule.IsZero() && len(suppressedPublishDatesUTC) == 0 {
+		if verifiedRoleID == "" && schedule.IsZero() && len(suppressedPublishDatesUTC) == 0 {
 			return QOTDConfig{}, nil
 		}
 		return QOTDConfig{
 			VerifiedRoleID:                   verifiedRoleID,
-			Collector:                        collector,
 			Schedule:                         schedule,
 			SuppressScheduledPublishDatesUTC: suppressedPublishDatesUTC,
 		}, nil
@@ -149,7 +144,6 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 
 	if len(normalizedDecks) == 1 &&
 		isImplicitDefaultQOTDDeck(normalizedDecks[0], activeDeckID) &&
-		collector.IsZero() &&
 		verifiedRoleID == "" &&
 		schedule.IsZero() &&
 		len(suppressedPublishDatesUTC) == 0 {
@@ -160,7 +154,6 @@ func NormalizeQOTDConfig(in QOTDConfig) (QOTDConfig, error) {
 		VerifiedRoleID:                   verifiedRoleID,
 		ActiveDeckID:                     activeDeckID,
 		Decks:                            normalizedDecks,
-		Collector:                        collector,
 		Schedule:                         schedule,
 		SuppressScheduledPublishDatesUTC: suppressedPublishDatesUTC,
 	}, nil
@@ -268,55 +261,6 @@ func firstEnabledQOTDDeckID(decks []QOTDDeckConfig) string {
 	return ""
 }
 
-func normalizeQOTDCollectorConfig(in QOTDCollectorConfig) (QOTDCollectorConfig, error) {
-	out := QOTDCollectorConfig{
-		SourceChannelID: strings.TrimSpace(in.SourceChannelID),
-		StartDate:       strings.TrimSpace(in.StartDate),
-	}
-
-	if out.SourceChannelID != "" && !isAllDigits(out.SourceChannelID) {
-		return QOTDCollectorConfig{}, fmt.Errorf("source_channel_id must be numeric")
-	}
-	if out.StartDate != "" {
-		parsed, err := time.Parse("2006-01-02", out.StartDate)
-		if err != nil {
-			return QOTDCollectorConfig{}, fmt.Errorf("start_date must be YYYY-MM-DD")
-		}
-		out.StartDate = parsed.UTC().Format("2006-01-02")
-	}
-
-	seenAuthorIDs := make(map[string]struct{}, len(in.AuthorIDs))
-	for idx, authorID := range in.AuthorIDs {
-		authorID = strings.TrimSpace(authorID)
-		if authorID == "" {
-			continue
-		}
-		if !isAllDigits(authorID) {
-			return QOTDCollectorConfig{}, fmt.Errorf("author_ids[%d] must be numeric", idx)
-		}
-		if _, exists := seenAuthorIDs[authorID]; exists {
-			continue
-		}
-		seenAuthorIDs[authorID] = struct{}{}
-		out.AuthorIDs = append(out.AuthorIDs, authorID)
-	}
-
-	seenTitlePatterns := make(map[string]struct{}, len(in.TitlePatterns))
-	for _, pattern := range in.TitlePatterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" {
-			continue
-		}
-		key := strings.ToLower(pattern)
-		if _, exists := seenTitlePatterns[key]; exists {
-			continue
-		}
-		seenTitlePatterns[key] = struct{}{}
-		out.TitlePatterns = append(out.TitlePatterns, pattern)
-	}
-
-	return out, nil
-}
 
 func normalizeRuntimeDatabaseConfig(in DatabaseRuntimeConfig) (DatabaseRuntimeConfig, bool, error) {
 	cfg := persistence.Config{

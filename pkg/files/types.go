@@ -296,15 +296,6 @@ type QOTDDeckConfig struct {
 	SelectionStrategy string `json:"selection_strategy,omitempty"`
 }
 
-// QOTDCollectorConfig stores channel-history collection settings used to
-// harvest already-posted QOTD prompts from other bots.
-type QOTDCollectorConfig struct {
-	SourceChannelID string   `json:"source_channel_id,omitempty"`
-	AuthorIDs       []string `json:"author_ids,omitempty"`
-	TitlePatterns   []string `json:"title_patterns,omitempty"`
-	StartDate       string   `json:"start_date,omitempty"`
-}
-
 // QOTDPublishScheduleConfig stores the UTC publish boundary for one guild.
 type QOTDPublishScheduleConfig struct {
 	HourUTC   *int `json:"hour_utc,omitempty"`
@@ -316,7 +307,6 @@ type QOTDConfig struct {
 	VerifiedRoleID string                    `json:"verified_role_id,omitempty"`
 	ActiveDeckID   string                    `json:"active_deck_id,omitempty"`
 	Decks          []QOTDDeckConfig          `json:"decks,omitempty"`
-	Collector      QOTDCollectorConfig       `json:"collector,omitempty"`
 	Schedule       QOTDPublishScheduleConfig `json:"schedule,omitempty"`
 	// SuppressScheduledPublishDatesUTC is the canonical set of UTC publish
 	// dates (YYYY-MM-DD) for which the scheduler must skip its automatic

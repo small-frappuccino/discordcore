@@ -32,6 +32,7 @@ type FeatureModerationToggles struct {
 	Timeout  *bool `json:"timeout,omitempty"`
 	Warn     *bool `json:"warn,omitempty"`
 	Warnings *bool `json:"warnings,omitempty"`
+	Clean    *bool `json:"clean,omitempty"`
 }
 
 type FeatureMessageCacheToggles struct {
@@ -108,6 +109,7 @@ type ResolvedFeatureToggles struct {
 		Timeout  bool
 		Warn     bool
 		Warnings bool
+		Clean    bool
 	}
 	MessageCache struct {
 		CleanupOnStartup bool
@@ -187,6 +189,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	out.Moderation.Timeout = resolveFeatureBool(guild.Moderation.Timeout, global.Moderation.Timeout, true)
 	out.Moderation.Warn = resolveFeatureBool(guild.Moderation.Warn, global.Moderation.Warn, true)
 	out.Moderation.Warnings = resolveFeatureBool(guild.Moderation.Warnings, global.Moderation.Warnings, true)
+	out.Moderation.Clean = resolveFeatureBool(guild.Moderation.Clean, global.Moderation.Clean, true)
 
 	out.MessageCache.CleanupOnStartup = resolveFeatureBool(guild.MessageCache.CleanupOnStartup, global.MessageCache.CleanupOnStartup, false)
 	out.MessageCache.DeleteOnLog = resolveFeatureBool(guild.MessageCache.DeleteOnLog, global.MessageCache.DeleteOnLog, false)

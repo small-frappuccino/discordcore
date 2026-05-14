@@ -216,6 +216,8 @@ func moderationCommandFeatureEnabled(features files.ResolvedFeatureToggles, feat
 		return features.Moderation.Warn
 	case "moderation.warnings":
 		return features.Moderation.Warnings
+	case "moderation.clean":
+		return features.Moderation.Clean
 	default:
 		return false
 	}
@@ -230,10 +232,9 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 	configManager := router.GetConfigManager()
 	moderationGroup := core.NewGroupCommand("moderation", "Moderation commands", checker)
 
-	router.RegisterSlashCommand(newCleanCommand())
-
 	moderationGroup.AddSubCommand(newBanCommand())
 	moderationGroup.AddSubCommand(newMassBanCommand())
+	moderationGroup.AddSubCommand(newCleanCommand())
 	moderationGroup.AddSubCommand(newKickCommand())
 	moderationGroup.AddSubCommand(newMuteCommand())
 	moderationGroup.AddSubCommand(newReactionBlockSetCommand(configManager))

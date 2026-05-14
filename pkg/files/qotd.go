@@ -50,14 +50,6 @@ func (cfg QOTDDeckConfig) EffectiveSelectionStrategy() QOTDSelectionStrategy {
 	}
 }
 
-// IsZero reports whether all QOTD collector fields are unset.
-func (cfg QOTDCollectorConfig) IsZero() bool {
-	return strings.TrimSpace(cfg.SourceChannelID) == "" &&
-		strings.TrimSpace(cfg.StartDate) == "" &&
-		len(cfg.AuthorIDs) == 0 &&
-		len(cfg.TitlePatterns) == 0
-}
-
 // IsZero reports whether both schedule components are unset.
 func (cfg QOTDPublishScheduleConfig) IsZero() bool {
 	return cfg.HourUTC == nil && cfg.MinuteUTC == nil
@@ -81,14 +73,13 @@ func (cfg QOTDConfig) IsZero() bool {
 	if len(cfg.deckConfigs()) > 0 {
 		if len(cfg.deckConfigs()) == 1 &&
 			isImplicitDefaultQOTDDeck(cfg.deckConfigs()[0], strings.TrimSpace(cfg.ActiveDeckID)) &&
-			cfg.Collector.IsZero() &&
 			cfg.Schedule.IsZero() &&
 			len(cfg.SuppressScheduledPublishDatesUTC) == 0 {
 			return true
 		}
 		return false
 	}
-	if !cfg.Collector.IsZero() || !cfg.Schedule.IsZero() || len(cfg.SuppressScheduledPublishDatesUTC) != 0 {
+	if !cfg.Schedule.IsZero() || len(cfg.SuppressScheduledPublishDatesUTC) != 0 {
 		return false
 	}
 	return true
@@ -308,7 +299,6 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 		VerifiedRoleID string                       `json:"verified_role_id,omitempty"`
 		ActiveDeckID   string                       `json:"active_deck_id,omitempty"`
 		Decks          []QOTDDeckConfig             `json:"decks,omitempty"`
-		Collector      QOTDCollectorConfig          `json:"collector,omitempty"`
 		Schedule       rawQOTDPublishScheduleConfig `json:"schedule,omitempty"`
 		// SuppressScheduledPublishDatesUTC is the new list form. Older configs
 		// persisted only LegacySuppressDateUTC; the unmarshal migrates the
@@ -372,7 +362,6 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 		VerifiedRoleID:                   raw.VerifiedRoleID,
 		ActiveDeckID:                     raw.ActiveDeckID,
 		Decks:                            raw.Decks,
-		Collector:                        raw.Collector,
 		Schedule:                         schedule,
 		SuppressScheduledPublishDatesUTC: suppressedDates,
 	}

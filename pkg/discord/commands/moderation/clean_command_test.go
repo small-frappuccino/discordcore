@@ -362,8 +362,14 @@ func (h *cleanHarness) run(t *testing.T, options ...*discordgo.ApplicationComman
 		ChannelID: h.channelID,
 		Member:    &discordgo.Member{User: &discordgo.User{ID: h.actorID}},
 		Data: discordgo.ApplicationCommandInteractionData{
-			Name:    cleanCommandName,
-			Options: options,
+			Name: "moderation",
+			Options: []*discordgo.ApplicationCommandInteractionDataOption{
+				{
+					Name:    cleanCommandName,
+					Type:    discordgo.ApplicationCommandOptionSubCommand,
+					Options: options,
+				},
+			},
 		},
 	}})
 }

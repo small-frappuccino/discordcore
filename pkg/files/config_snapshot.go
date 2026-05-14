@@ -270,6 +270,7 @@ func cloneFeatureToggles(in FeatureToggles) FeatureToggles {
 			Timeout:  cloneBoolPtr(in.Moderation.Timeout),
 			Warn:     cloneBoolPtr(in.Moderation.Warn),
 			Warnings: cloneBoolPtr(in.Moderation.Warnings),
+			Clean:    cloneBoolPtr(in.Moderation.Clean),
 		},
 		MessageCache: FeatureMessageCacheToggles{
 			CleanupOnStartup: cloneBoolPtr(in.MessageCache.CleanupOnStartup),
@@ -362,7 +363,6 @@ func cloneQOTDConfig(in QOTDConfig) QOTDConfig {
 		VerifiedRoleID:                   in.VerifiedRoleID,
 		ActiveDeckID:                     in.ActiveDeckID,
 		Decks:                            cloneQOTDDeckConfigs(in.Decks),
-		Collector:                        cloneQOTDCollectorConfig(in.Collector),
 		Schedule:                         cloneQOTDPublishScheduleConfig(in.Schedule),
 		SuppressScheduledPublishDatesUTC: suppressed,
 	}
@@ -378,15 +378,6 @@ func cloneQOTDPublishScheduleConfig(in QOTDPublishScheduleConfig) QOTDPublishSch
 	return QOTDPublishScheduleConfig{
 		HourUTC:   cloneOptionalInt(in.HourUTC),
 		MinuteUTC: cloneOptionalInt(in.MinuteUTC),
-	}
-}
-
-func cloneQOTDCollectorConfig(in QOTDCollectorConfig) QOTDCollectorConfig {
-	return QOTDCollectorConfig{
-		SourceChannelID: in.SourceChannelID,
-		AuthorIDs:       cloneStringSlice(in.AuthorIDs),
-		TitlePatterns:   cloneStringSlice(in.TitlePatterns),
-		StartDate:       in.StartDate,
 	}
 }
 

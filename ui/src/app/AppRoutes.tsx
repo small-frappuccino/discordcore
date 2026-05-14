@@ -88,7 +88,6 @@ export function AppRoutes() {
             <Route index element={<Navigate replace to="settings" />} />
             <Route path="settings" element={<QOTDSettingsPage />} />
             <Route path="questions" element={<Navigate replace to="../settings" />} />
-            <Route path="collector" element={<Navigate replace to="../settings" />} />
           </Route>
 
           <Route path="roles">
