@@ -73,6 +73,7 @@ describe("useGuildRolesSettings", () => {
     expect(firstHook.result.current.botRouting).toEqual({
       botInstanceID: "main",
       availableBotInstanceIDs: ["main", "companion"],
+      domainOverrideBotInstanceIDs: ["main", "companion"],
       domainBotInstanceIDs: {
         qotd: "companion",
       },
@@ -92,6 +93,7 @@ describe("useGuildRolesSettings", () => {
     expect(secondHook.result.current.botRouting).toEqual({
       botInstanceID: "main",
       availableBotInstanceIDs: ["main", "companion"],
+      domainOverrideBotInstanceIDs: ["main", "companion"],
       domainBotInstanceIDs: {
         qotd: "companion",
       },

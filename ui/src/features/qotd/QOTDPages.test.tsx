@@ -84,7 +84,7 @@ const channelOptionsMock = {
   refresh: vi.fn(),
 };
 
-const useGuildChannelOptionsMock = vi.fn(() => channelOptionsMock);
+const useGuildChannelOptionsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../context/DashboardSessionContext", () => ({
   useDashboardSession: () => dashboardSessionMock,

@@ -63,6 +63,7 @@ describe("moderation feature helpers", () => {
       "moderation.timeout",
       "moderation.warn",
       "moderation.warnings",
+      "moderation.clean",
     ]);
   });
 });
