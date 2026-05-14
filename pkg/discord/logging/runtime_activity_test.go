@@ -65,6 +65,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat.db")
 	base := time.Date(2026, time.January, 2, 5, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
+	ticks := make(chan error, 8)
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           runErrWithTimeoutContext,
@@ -72,6 +73,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Add(1)) * time.Second)
 		},
+		OnHeartbeatTick: func(err error) { ticks <- err },
 	})
 
 	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
@@ -81,28 +83,24 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		}
 	})
 
-	firstDeadline := time.Now().Add(100 * time.Millisecond)
-	var first time.Time
-	for time.Now().Before(firstDeadline) {
-		if ts, ok, err := store.Heartbeat(context.Background()); err == nil && ok {
-			first = ts
-			break
-		}
-		time.Sleep(2 * time.Millisecond)
+	if err := waitForHeartbeatTick(t, ticks); err != nil {
+		t.Fatalf("expected initial heartbeat to succeed: %v", err)
 	}
-	if first.IsZero() {
-		t.Fatalf("expected initial heartbeat timestamp to be persisted")
+	first, ok, err := store.Heartbeat(context.Background())
+	if err != nil || !ok || first.IsZero() {
+		t.Fatalf("expected initial heartbeat timestamp to be persisted: ok=%v err=%v", ok, err)
 	}
 
-	updatedDeadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(updatedDeadline) {
-		if ts, ok, err := store.Heartbeat(context.Background()); err == nil && ok && ts.After(first) {
-			return
-		}
-		time.Sleep(2 * time.Millisecond)
+	if err := waitForHeartbeatTick(t, ticks); err != nil {
+		t.Fatalf("expected periodic heartbeat to succeed: %v", err)
 	}
-
-	t.Fatalf("expected periodic heartbeat persistence update after initial write")
+	second, ok, err := store.Heartbeat(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("expected periodic heartbeat timestamp to be persisted: ok=%v err=%v", ok, err)
+	}
+	if !second.After(first) {
+		t.Fatalf("expected periodic heartbeat to advance the timestamp: first=%s second=%s", first.UTC(), second.UTC())
+	}
 }
 
 func TestRuntimeActivityStartHeartbeatNoopsWhenAlreadyRunning(t *testing.T) {
@@ -156,6 +154,7 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-retry.db")
 	base := time.Date(2026, time.January, 2, 6, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
+	ticks := make(chan error, 8)
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
@@ -168,6 +167,7 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Load()) * time.Second)
 		},
+		OnHeartbeatTick: func(err error) { ticks <- err },
 	})
 
 	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
@@ -177,13 +177,31 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 		}
 	})
 
-	deadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if ts, ok, err := store.Heartbeat(context.Background()); err == nil && ok && !ts.IsZero() {
-			return
-		}
-		time.Sleep(2 * time.Millisecond)
+	if err := waitForHeartbeatTick(t, ticks); err == nil {
+		t.Fatal("expected first heartbeat attempt to surface the injected failure")
+	}
+	if err := waitForHeartbeatTick(t, ticks); err != nil {
+		t.Fatalf("expected recovery heartbeat to succeed: %v", err)
 	}
 
-	t.Fatalf("expected heartbeat persistence to recover after initial failure")
+	ts, ok, err := store.Heartbeat(context.Background())
+	if err != nil || !ok || ts.IsZero() {
+		t.Fatalf("expected heartbeat persistence to recover after initial failure: ok=%v err=%v", ok, err)
+	}
+}
+
+// waitForHeartbeatTick blocks until the next OnHeartbeatTick fires or
+// the safety timeout expires. The timeout is intentionally generous —
+// it exists to fail loudly if the heartbeat goroutine is wedged, not
+// to gate fast-path scheduling. Each test still completes in a few
+// ticker intervals on a healthy machine.
+func waitForHeartbeatTick(t *testing.T, ticks <-chan error) error {
+	t.Helper()
+	select {
+	case err := <-ticks:
+		return err
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for heartbeat tick")
+		return nil
+	}
 }

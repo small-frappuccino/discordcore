@@ -19,6 +19,13 @@ type runtimeActivityOptions struct {
 	BotInstanceID    string
 	Warn             func(string, ...any)
 	Now              func() time.Time
+	// OnHeartbeatTick fires after every heartbeat persistence attempt
+	// (initial synchronous attempt and each ticker firing), with the
+	// error returned by RunErr. Test-only seam — production callers
+	// leave it nil so the heartbeat loop adds zero work per tick.
+	// Tests use it to wait deterministically for ticks instead of
+	// polling the store with sleeps.
+	OnHeartbeatTick func(err error)
 }
 
 type runtimeActivity struct {
@@ -29,6 +36,7 @@ type runtimeActivity struct {
 	botInstanceID    string
 	warn             func(string, ...any)
 	now              func() time.Time
+	onHeartbeatTick  func(err error)
 
 	mu       sync.Mutex
 	hbCancel context.CancelFunc
@@ -54,6 +62,7 @@ func newRuntimeActivity(store *storage.Store, opts runtimeActivityOptions) *runt
 		botInstanceID:    strings.TrimSpace(opts.BotInstanceID),
 		warn:             opts.Warn,
 		now:              now,
+		onHeartbeatTick:  opts.OnHeartbeatTick,
 	}
 }
 
@@ -106,11 +115,7 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 	ra.hbDone = done
 	ra.mu.Unlock()
 
-	if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
-		return ra.store.SetHeartbeatForBot(runCtx, ra.botInstanceID, ra.now())
-	}); err != nil && ra.warn != nil {
-		ra.warn("Failed to persist startup heartbeat", "error", err)
-	}
+	ra.attemptHeartbeat(hbCtx, "Failed to persist startup heartbeat")
 
 	go func() {
 		ticker := time.NewTicker(interval)
@@ -120,16 +125,24 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 		for {
 			select {
 			case <-ticker.C:
-				if err := ra.runErr(hbCtx, ra.heartbeatTimeout, func(runCtx context.Context) error {
-					return ra.store.SetHeartbeatForBot(runCtx, ra.botInstanceID, ra.now())
-				}); err != nil && ra.warn != nil {
-					ra.warn("Failed to persist heartbeat", "error", err)
-				}
+				ra.attemptHeartbeat(hbCtx, "Failed to persist heartbeat")
 			case <-hbCtx.Done():
 				return
 			}
 		}
 	}()
+}
+
+func (ra *runtimeActivity) attemptHeartbeat(ctx context.Context, failureMessage string) {
+	err := ra.runErr(ctx, ra.heartbeatTimeout, func(runCtx context.Context) error {
+		return ra.store.SetHeartbeatForBot(runCtx, ra.botInstanceID, ra.now())
+	})
+	if err != nil && ra.warn != nil {
+		ra.warn(failureMessage, "error", err)
+	}
+	if ra.onHeartbeatTick != nil {
+		ra.onHeartbeatTick(err)
+	}
 }
 
 func (ra *runtimeActivity) StopHeartbeat(ctx context.Context) error {

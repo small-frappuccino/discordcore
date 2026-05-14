@@ -12,6 +12,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 func recentAuditSnowflake(now time.Time) string {
@@ -214,10 +215,19 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testing.T) {
 	store, _ := newLoggingStore(t, "monitoring-heartbeat.db")
 
+	ticks := make(chan error, 8)
+	activity := newRuntimeActivity(store, runtimeActivityOptions{
+		RunErr:           monitoringRunErrWithTimeoutContext,
+		EventTimeout:     monitoringPersistenceTimeout,
+		HeartbeatTimeout: monitoringPersistenceTimeout,
+		Warn:             log.ApplicationLogger().Warn,
+		OnHeartbeatTick:  func(err error) { ticks <- err },
+	})
+
 	ms := &MonitoringService{
 		store:    store,
 		stopChan: make(chan struct{}),
-		activity: newMonitoringRuntimeActivity(store),
+		activity: activity,
 	}
 
 	origInterval := heartbeatTickInterval
@@ -225,7 +235,6 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	t.Cleanup(func() {
 		heartbeatTickInterval = origInterval
 		close(ms.stopChan)
-		time.Sleep(10 * time.Millisecond)
 		if err := ms.stopHeartbeat(context.Background()); err != nil {
 			t.Fatalf("stop heartbeat cleanup: %v", err)
 		}
@@ -233,29 +242,22 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 
 	ms.startHeartbeat(context.Background())
 
-	firstDeadline := time.Now().Add(100 * time.Millisecond)
-	var first time.Time
-	for time.Now().Before(firstDeadline) {
-		if ts, ok, err := store.Heartbeat(context.Background()); err == nil && ok {
-			first = ts
-			break
-		}
-		time.Sleep(2 * time.Millisecond)
+	if err := waitForHeartbeatTick(t, ticks); err != nil {
+		t.Fatalf("expected initial heartbeat to succeed: %v", err)
 	}
-	if first.IsZero() {
-		t.Fatalf("expected initial heartbeat timestamp to be persisted")
+	first, ok, err := store.Heartbeat(context.Background())
+	if err != nil || !ok || first.IsZero() {
+		t.Fatalf("expected initial heartbeat timestamp to be persisted: ok=%v err=%v", ok, err)
 	}
 
-	updated := false
-	updateDeadline := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(updateDeadline) {
-		if ts, ok, err := store.Heartbeat(context.Background()); err == nil && ok && ts.After(first) {
-			updated = true
-			break
-		}
-		time.Sleep(2 * time.Millisecond)
+	if err := waitForHeartbeatTick(t, ticks); err != nil {
+		t.Fatalf("expected periodic heartbeat to succeed: %v", err)
 	}
-	if !updated {
-		t.Fatalf("expected periodic heartbeat persistence update after ticker tick")
+	second, ok, err := store.Heartbeat(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("expected periodic heartbeat timestamp to be persisted: ok=%v err=%v", ok, err)
+	}
+	if !second.After(first) {
+		t.Fatalf("expected periodic heartbeat to advance the timestamp: first=%s second=%s", first.UTC(), second.UTC())
 	}
 }
