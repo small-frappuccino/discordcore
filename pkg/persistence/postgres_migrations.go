@@ -602,4 +602,39 @@ var postgresMigrations = []migration{
 			`ALTER TABLE qotd_official_posts DROP COLUMN IF EXISTS publish_ordinal`,
 		},
 	},
+	{
+		// The QOTD collector subsystem (Publisher.FetchChannelMessages plus the
+		// CollectArchivedQuestions / RemoveDeckDuplicatesFromCollector service
+		// methods and their REST routes) was removed once the dashboard stopped
+		// exercising it. The qotd_collected_questions table created in
+		// migration 12 had no remaining readers or writers, so drop it here.
+		// The DownSQL mirrors migration 12's UpSQL exactly so a rollback puts
+		// the schema back in its previous shape, even though no Go code reads
+		// from it anymore.
+		Version: 20,
+		UpSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_collected_questions_recent`,
+			`DROP INDEX IF EXISTS idx_qotd_collected_questions_message`,
+			`DROP TABLE IF EXISTS qotd_collected_questions`,
+		},
+		DownSQL: []string{
+			`CREATE TABLE IF NOT EXISTS qotd_collected_questions (
+				id                         BIGSERIAL PRIMARY KEY,
+				guild_id                   TEXT NOT NULL,
+				source_channel_id          TEXT NOT NULL,
+				source_message_id          TEXT NOT NULL,
+				source_author_id           TEXT,
+				source_author_name_snapshot TEXT,
+				source_created_at          TIMESTAMPTZ NOT NULL,
+				embed_title                TEXT NOT NULL DEFAULT '',
+				question_text              TEXT NOT NULL,
+				created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+				updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_collected_questions_message
+			 ON qotd_collected_questions(guild_id, source_message_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_collected_questions_recent
+			 ON qotd_collected_questions(guild_id, source_created_at DESC, id DESC)`,
+		},
+	},
 }

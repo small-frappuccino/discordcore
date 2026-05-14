@@ -18,7 +18,6 @@ func TestQOTDActionRoutesResolveDiscordSessionForQOTDDomain(t *testing.T) {
 		name string
 		path string
 	}{
-		{name: "collector collect", path: "/v1/guilds/g1/qotd/collector/collect"},
 		{name: "publish now", path: "/v1/guilds/g1/qotd/actions/publish-now"},
 		{name: "reconcile", path: "/v1/guilds/g1/qotd/actions/reconcile"},
 	}

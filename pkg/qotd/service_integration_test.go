@@ -26,7 +26,6 @@ var errFakePublishFailed = errors.New("fake publish failed")
 const (
 	integrationQuestionChannelID    = "123456789012345678"
 	integrationQuestionChannelIDAlt = "223456789012345678"
-	integrationCollectorChannelID   = "323456789012345678"
 	integrationForumChannelID       = "423456789012345678"
 )
 
@@ -54,7 +53,6 @@ type fakePublisher struct {
 	threadStates     map[string]discordqotd.ThreadState
 	fetchCalls       []string
 	threadMessages   map[string][]discordqotd.ArchivedMessage
-	channelMessages  map[string][]discordqotd.ArchivedMessage
 	fetchErrs        map[string]error
 }
 
@@ -151,36 +149,6 @@ func (p *fakePublisher) FetchThreadMessages(_ context.Context, _ *discordgo.Sess
 		return nil, nil
 	}
 	return append([]discordqotd.ArchivedMessage(nil), p.threadMessages[threadID]...), nil
-}
-
-func (p *fakePublisher) FetchChannelMessages(_ context.Context, _ *discordgo.Session, channelID, beforeMessageID string, limit int) ([]discordqotd.ArchivedMessage, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	messages := p.channelMessages[channelID]
-	if len(messages) == 0 {
-		return nil, nil
-	}
-
-	start := 0
-	if beforeMessageID = strings.TrimSpace(beforeMessageID); beforeMessageID != "" {
-		start = len(messages)
-		for idx, message := range messages {
-			if strings.TrimSpace(message.MessageID) == beforeMessageID {
-				start = idx + 1
-				break
-			}
-		}
-	}
-	if start >= len(messages) {
-		return nil, nil
-	}
-
-	end := start + limit
-	if end > len(messages) {
-		end = len(messages)
-	}
-	return append([]discordqotd.ArchivedMessage(nil), messages[start:end]...), nil
 }
 
 func newIntegrationTestQOTDService(t *testing.T) (*Service, *storage.Store, *fakePublisher) {
@@ -2008,195 +1976,6 @@ func TestServiceGetAutomaticQueueStateUsesUpcomingScheduledSlotBeforeBoundary(t 
 		t.Fatalf("GetSummary() failed: %v", err)
 	} else if !summary.CurrentPublishDateUTC.Equal(wantSlotDate) {
 		t.Fatalf("expected summary to follow the active upcoming slot before the boundary, got summary=%+v state=%+v", summary, state)
-	}
-}
-
-func TestServiceCollectArchivedQuestionsStoresMatchedEmbeds(t *testing.T) {
-	service, _, fake := newIntegrationTestQOTDService(t)
-	if _, err := service.UpdateSettings("g1", files.QOTDConfig{
-		Collector: files.QOTDCollectorConfig{
-			SourceChannelID: "123456789012345678",
-			AuthorIDs:       []string{"999999999999999999"},
-			TitlePatterns:   []string{"Question Of The Day", "question!!"},
-			StartDate:       "2026-01-01",
-		},
-	}); err != nil {
-		t.Fatalf("UpdateSettings() failed: %v", err)
-	}
-
-	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
-		"123456789012345678": {
-			{
-				MessageID:          "",
-				AuthorID:           "999999999999999999",
-				AuthorNameSnapshot: "QOTD Bot",
-				AuthorIsBot:        true,
-				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"This malformed message should be skipped"}]`),
-				CreatedAt:          time.Date(2026, 4, 13, 16, 0, 0, 0, time.UTC),
-			},
-			{
-				MessageID:          "message-3",
-				AuthorID:           "999999999999999999",
-				AuthorNameSnapshot: "QOTD Bot",
-				AuthorIsBot:        true,
-				EmbedsJSON:         []byte(`[{"title":"✰ question!! ✰","description":"What food have you never eaten but would really like to try?\nAuthor: QOTD Bot"}]`),
-				CreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
-			},
-			{
-				MessageID:          "message-2",
-				AuthorID:           "999999999999999999",
-				AuthorNameSnapshot: "QOTD Bot",
-				AuthorIsBot:        true,
-				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Tell us about a person you look up to!\n\nPreset Question"}]`),
-				CreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
-			},
-			{
-				MessageID:          "message-1",
-				AuthorID:           "555555555555555555",
-				AuthorNameSnapshot: "Ignored Bot",
-				AuthorIsBot:        true,
-				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Ignored question"}]`),
-				CreatedAt:          time.Date(2025, 12, 31, 15, 0, 0, 0, time.UTC),
-			},
-		},
-	}
-
-	result, err := service.CollectArchivedQuestions(context.Background(), "g1", &discordgo.Session{})
-	if err != nil {
-		t.Fatalf("CollectArchivedQuestions() failed: %v", err)
-	}
-	if result.ScannedMessages != 4 || result.MatchedMessages != 2 || result.NewQuestions != 2 || result.TotalQuestions != 2 {
-		t.Fatalf("unexpected collector result: %+v", result)
-	}
-
-	summary, err := service.GetCollectorSummary(context.Background(), "g1")
-	if err != nil {
-		t.Fatalf("GetCollectorSummary() failed: %v", err)
-	}
-	if summary.TotalQuestions != 2 || len(summary.RecentQuestions) != 2 {
-		t.Fatalf("unexpected collector summary: %+v", summary)
-	}
-	if summary.RecentQuestions[0].QuestionText != "What food have you never eaten but would really like to try?" {
-		t.Fatalf("expected most recent collected question first, got %+v", summary.RecentQuestions)
-	}
-
-	exported, err := service.ExportCollectedQuestionsTXT(context.Background(), "g1")
-	if err != nil {
-		t.Fatalf("ExportCollectedQuestionsTXT() failed: %v", err)
-	}
-	expected := "Tell us about a person you look up to!\nWhat food have you never eaten but would really like to try?\n"
-	if exported != expected {
-		t.Fatalf("unexpected exported collector text:\n%s", exported)
-	}
-}
-
-func TestServiceRemoveDeckDuplicatesFromCollectorUsesStoredHistory(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
-	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
-		t.Fatalf("UpdateSettings() failed: %v", err)
-	}
-
-	mutableDuplicate, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
-		DeckID: files.LegacyQOTDDefaultDeckID,
-		Body:   "  WHAT is one habit you want to keep this month?  ",
-		Status: QuestionStatusReady,
-	})
-	if err != nil {
-		t.Fatalf("CreateQuestion(mutable duplicate) failed: %v", err)
-	}
-	immutableDuplicate, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
-		DeckID: files.LegacyQOTDDefaultDeckID,
-		Body:   "What are you excited to try next?",
-		Status: QuestionStatusReady,
-	})
-	if err != nil {
-		t.Fatalf("CreateQuestion(immutable duplicate) failed: %v", err)
-	}
-	immutableDuplicate.Status = string(QuestionStatusUsed)
-	if _, err := store.UpdateQOTDQuestion(context.Background(), *immutableDuplicate); err != nil {
-		t.Fatalf("UpdateQOTDQuestion(immutable duplicate) failed: %v", err)
-	}
-	if _, err := service.CreateQuestion(context.Background(), "g1", "user-3", QuestionMutation{
-		DeckID: files.LegacyQOTDDefaultDeckID,
-		Body:   "What changed in the release process this week?",
-		Status: QuestionStatusReady,
-	}); err != nil {
-		t.Fatalf("CreateQuestion(unique) failed: %v", err)
-	}
-
-	created, err := store.CreateQOTDCollectedQuestions(context.Background(), []storage.QOTDCollectedQuestionRecord{
-		{
-			GuildID:                  "g1",
-			SourceChannelID:          integrationCollectorChannelID,
-			SourceMessageID:          "message-1",
-			SourceAuthorID:           "bot-1",
-			SourceAuthorNameSnapshot: "QOTD Bot",
-			SourceCreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
-			EmbedTitle:               "Question Of The Day",
-			QuestionText:             "What is one habit you want to keep this month?",
-		},
-		{
-			GuildID:                  "g1",
-			SourceChannelID:          integrationCollectorChannelID,
-			SourceMessageID:          "message-2",
-			SourceAuthorID:           "bot-1",
-			SourceAuthorNameSnapshot: "QOTD Bot",
-			SourceCreatedAt:          time.Date(2026, 4, 13, 15, 0, 0, 0, time.UTC),
-			EmbedTitle:               "question!!",
-			QuestionText:             "What are you excited to try next?",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CreateQOTDCollectedQuestions() failed: %v", err)
-	}
-	if created != 2 {
-		t.Fatalf("expected two stored collected questions, got %d", created)
-	}
-
-	fake.channelMessages = map[string][]discordqotd.ArchivedMessage{
-		integrationCollectorChannelID: {
-			{
-				MessageID:          "live-message-1",
-				AuthorID:           "bot-1",
-				AuthorNameSnapshot: "QOTD Bot",
-				AuthorIsBot:        true,
-				EmbedsJSON:         []byte(`[{"title":"Question Of The Day","description":"Live discord history should not be used here."}]`),
-				CreatedAt:          time.Date(2026, 4, 12, 15, 0, 0, 0, time.UTC),
-			},
-		},
-	}
-
-	result, err := service.RemoveDeckDuplicatesFromCollector(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
-	if err != nil {
-		t.Fatalf("RemoveDeckDuplicatesFromCollector() failed: %v", err)
-	}
-	if result.DeckID != files.LegacyQOTDDefaultDeckID {
-		t.Fatalf("expected default deck id, got %+v", result)
-	}
-	if result.ScannedMessages != 2 || result.MatchedMessages != 2 {
-		t.Fatalf("unexpected scan result: %+v", result)
-	}
-	if result.DuplicateQuestions != 2 || result.DeletedQuestions != 1 {
-		t.Fatalf("unexpected duplicate removal result: %+v", result)
-	}
-
-	deleted, err := store.GetQOTDQuestion(context.Background(), "g1", mutableDuplicate.ID)
-	if err != nil {
-		t.Fatalf("GetQOTDQuestion(deleted) failed: %v", err)
-	}
-	if deleted != nil {
-		t.Fatalf("expected mutable duplicate to be deleted, got %+v", deleted)
-	}
-
-	remaining, err := store.ListQOTDQuestions(context.Background(), "g1", files.LegacyQOTDDefaultDeckID)
-	if err != nil {
-		t.Fatalf("ListQOTDQuestions() failed: %v", err)
-	}
-	if len(remaining) != 2 {
-		t.Fatalf("expected two questions to remain after duplicate removal, got %+v", remaining)
-	}
-	if remaining[0].ID != immutableDuplicate.ID || remaining[0].Status != string(QuestionStatusUsed) {
-		t.Fatalf("expected immutable duplicate to remain, got %+v", remaining)
 	}
 }
 

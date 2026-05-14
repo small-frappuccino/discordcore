@@ -19,7 +19,6 @@ func TestQOTDTablesInitialized(t *testing.T) {
 		"qotd_answer_messages",
 		"qotd_thread_archives",
 		"qotd_message_archives",
-		"qotd_collected_questions",
 	}
 	for _, tableName := range required {
 		var exists bool
@@ -1305,71 +1304,3 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 	}
 }
 
-func TestCreateQOTDCollectedQuestionsDeduplicatesBySourceMessage(t *testing.T) {
-	store := newTempStore(t)
-	ctx := context.Background()
-	now := time.Date(2026, 4, 13, 16, 0, 0, 0, time.UTC)
-
-	created, err := store.CreateQOTDCollectedQuestions(ctx, []QOTDCollectedQuestionRecord{
-		{
-			GuildID:                  "g1",
-			SourceChannelID:          "channel-1",
-			SourceMessageID:          "message-1",
-			SourceAuthorID:           "bot-1",
-			SourceAuthorNameSnapshot: "QOTD Bot",
-			SourceCreatedAt:          now,
-			EmbedTitle:               "Question Of The Day",
-			QuestionText:             "What shipped this week?",
-		},
-		{
-			GuildID:                  "g1",
-			SourceChannelID:          "channel-1",
-			SourceMessageID:          "message-1",
-			SourceAuthorID:           "bot-1",
-			SourceAuthorNameSnapshot: "QOTD Bot",
-			SourceCreatedAt:          now,
-			EmbedTitle:               "Question Of The Day",
-			QuestionText:             "What shipped this week?",
-		},
-		{
-			GuildID:                  "g1",
-			SourceChannelID:          "channel-1",
-			SourceMessageID:          "message-2",
-			SourceAuthorID:           "bot-2",
-			SourceAuthorNameSnapshot: "Other QOTD Bot",
-			SourceCreatedAt:          now.Add(time.Minute),
-			EmbedTitle:               "question!!",
-			QuestionText:             "What are you trying next?",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CreateQOTDCollectedQuestions() failed: %v", err)
-	}
-	if created != 2 {
-		t.Fatalf("expected 2 unique collected questions, got %d", created)
-	}
-
-	total, err := store.CountQOTDCollectedQuestions(ctx, "g1")
-	if err != nil {
-		t.Fatalf("CountQOTDCollectedQuestions() failed: %v", err)
-	}
-	if total != 2 {
-		t.Fatalf("expected total collected questions to be 2, got %d", total)
-	}
-
-	recent, err := store.ListRecentQOTDCollectedQuestions(ctx, "g1", 10)
-	if err != nil {
-		t.Fatalf("ListRecentQOTDCollectedQuestions() failed: %v", err)
-	}
-	if len(recent) != 2 || recent[0].SourceMessageID != "message-2" {
-		t.Fatalf("expected most recent collected question first, got %+v", recent)
-	}
-
-	exported, err := store.ListAllQOTDCollectedQuestions(ctx, "g1")
-	if err != nil {
-		t.Fatalf("ListAllQOTDCollectedQuestions() failed: %v", err)
-	}
-	if len(exported) != 2 || exported[0].SourceMessageID != "message-1" || exported[1].SourceMessageID != "message-2" {
-		t.Fatalf("expected export ordering by source_created_at asc, got %+v", exported)
-	}
-}

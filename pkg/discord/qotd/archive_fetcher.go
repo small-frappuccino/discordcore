@@ -32,14 +32,6 @@ func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.
 	return archiveMessagesAscending(collected), nil
 }
 
-func (p *Publisher) FetchChannelMessages(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]ArchivedMessage, error) {
-	page, err := fetchChannelMessagesPageRaw(ctx, session, channelID, beforeMessageID, limit)
-	if err != nil {
-		return nil, err
-	}
-	return archiveMessagesDescending(page), nil
-}
-
 func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, threadID string) ([]*discordgo.Message, error) {
 	if session == nil {
 		return nil, fmt.Errorf("fetch qotd thread messages: discord session is required")
@@ -77,43 +69,10 @@ func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, thr
 	return collected, nil
 }
 
-func fetchChannelMessagesPageRaw(ctx context.Context, session *discordgo.Session, channelID, beforeMessageID string, limit int) ([]*discordgo.Message, error) {
-	if session == nil {
-		return nil, fmt.Errorf("fetch qotd channel messages: discord session is required")
-	}
-	channelID = strings.TrimSpace(channelID)
-	beforeMessageID = strings.TrimSpace(beforeMessageID)
-	if channelID == "" {
-		return nil, fmt.Errorf("fetch qotd channel messages: channel id is required")
-	}
-	if limit <= 0 || limit > 100 {
-		limit = 100
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	page, err := session.ChannelMessages(channelID, limit, beforeMessageID, "", "")
-	if err != nil {
-		return nil, fmt.Errorf("fetch qotd channel messages: %w", err)
-	}
-	return page, nil
-}
-
 func archiveMessagesAscending(collected []*discordgo.Message) []ArchivedMessage {
 	out := make([]ArchivedMessage, 0, len(collected))
 	for idx := len(collected) - 1; idx >= 0; idx-- {
 		if archived, ok := archiveMessage(collected[idx]); ok {
-			out = append(out, archived)
-		}
-	}
-	return out
-}
-
-func archiveMessagesDescending(collected []*discordgo.Message) []ArchivedMessage {
-	out := make([]ArchivedMessage, 0, len(collected))
-	for _, message := range collected {
-		if archived, ok := archiveMessage(message); ok {
 			out = append(out, archived)
 		}
 	}
