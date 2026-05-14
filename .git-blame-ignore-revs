@@ -1,0 +1,11 @@
+# Commits listed here are skipped by `git blame --ignore-revs-file`
+# (and by GitHub/GitLab blame views) because they touch a large number
+# of lines without changing behavior — pure mechanical normalizations,
+# repo-wide reformats, mass renames, etc. The work attribution stays
+# with the previous author of each line.
+#
+# Activate locally once with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# chore: introduce format gate and normalize repo-wide line endings
+17a42ad239e437f68899814dc3e76b0105b42837
