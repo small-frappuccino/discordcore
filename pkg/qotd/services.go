@@ -70,7 +70,7 @@ type ReconcileCoordinator interface {
 // narrow surfaces. Callers can keep wiring *Service directly while new code
 // and tests depend on the role they need.
 var (
-	_ QuestionCatalog     = (*Service)(nil)
-	_ PublishCoordinator  = (*Service)(nil)
+	_ QuestionCatalog      = (*Service)(nil)
+	_ PublishCoordinator   = (*Service)(nil)
 	_ ReconcileCoordinator = (*Service)(nil)
 )

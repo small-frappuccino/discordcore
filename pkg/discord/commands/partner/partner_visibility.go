@@ -8,11 +8,11 @@ import (
 type partnerVisibilityClass string
 
 const (
-	partnerVisibilityEntryMutation      partnerVisibilityClass = "entry_mutation"
-	partnerVisibilityEntryRead          partnerVisibilityClass = "entry_read"
-	partnerVisibilityBoardState         partnerVisibilityClass = "board_state"
+	partnerVisibilityEntryMutation        partnerVisibilityClass = "entry_mutation"
+	partnerVisibilityEntryRead            partnerVisibilityClass = "entry_read"
+	partnerVisibilityBoardState           partnerVisibilityClass = "board_state"
 	partnerVisibilityAdministrativeAction partnerVisibilityClass = "administrative_action"
-	partnerVisibilityDetailedError      partnerVisibilityClass = "detailed_error"
+	partnerVisibilityDetailedError        partnerVisibilityClass = "detailed_error"
 )
 
 func partnerVisibilityIsEphemeral(class partnerVisibilityClass) bool {

@@ -22,9 +22,9 @@ type CommandRouter struct {
 	contextBuilder *ContextBuilder
 	middlewares    []InteractionMiddleware
 
-	permChecker *PermissionChecker
-	store       *storage.Store
-	guildFilter func(string) bool
+	permChecker      *PermissionChecker
+	store            *storage.Store
+	guildFilter      func(string) bool
 	guildRouteFilter func(string, InteractionRouteKey) bool
 
 	// runtimeApplier is an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).

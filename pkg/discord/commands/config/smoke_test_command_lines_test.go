@@ -166,7 +166,7 @@ func TestGeneralSmokeTestLines(t *testing.T) {
 			ctx := newSmokeTestContext(t, files.GuildConfig{
 				GuildID: "guild-1",
 				Features: files.FeatureToggles{
-						Services: files.FeatureServiceToggles{Commands: testBoolPtr(tt.commandsEnabled)},
+					Services: files.FeatureServiceToggles{Commands: testBoolPtr(tt.commandsEnabled)},
 				},
 				Channels: files.ChannelsConfig{Commands: tt.commandChannel},
 				Roles:    files.RolesConfig{Allowed: append([]string(nil), tt.allowedRoles...)},

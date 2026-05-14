@@ -163,7 +163,7 @@ func TestSingleDeleteMissingMessageCountsAsDeleted(t *testing.T) {
 	ids := []string{"m1", "m2"}
 
 	var (
-		mu       sync.Mutex
+		mu        sync.Mutex
 		callOrder []string
 	)
 

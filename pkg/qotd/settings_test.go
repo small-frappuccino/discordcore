@@ -85,7 +85,7 @@ func TestPrepareSettingsUpdateClearsSuppressionWhenAutomaticPublishDisabled(t *t
 	minuteUTC := 43
 	current := files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Schedule: files.QOTDPublishScheduleConfig{HourUTC: &hourUTC, MinuteUTC: &minuteUTC},
+		Schedule:     files.QOTDPublishScheduleConfig{HourUTC: &hourUTC, MinuteUTC: &minuteUTC},
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,
@@ -96,7 +96,7 @@ func TestPrepareSettingsUpdateClearsSuppressionWhenAutomaticPublishDisabled(t *t
 	}
 	next := files.QOTDConfig{
 		ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-		Schedule: files.QOTDPublishScheduleConfig{HourUTC: &hourUTC, MinuteUTC: &minuteUTC},
+		Schedule:     files.QOTDPublishScheduleConfig{HourUTC: &hourUTC, MinuteUTC: &minuteUTC},
 		Decks: []files.QOTDDeckConfig{{
 			ID:        files.LegacyQOTDDefaultDeckID,
 			Name:      files.LegacyQOTDDefaultDeckName,

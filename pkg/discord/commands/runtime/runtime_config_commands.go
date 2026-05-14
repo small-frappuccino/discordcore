@@ -439,8 +439,8 @@ func (c *runtimeSubCommand) Description() string {
 	return "View and edit bot runtime configuration (replaces env vars)"
 }
 func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *runtimeSubCommand) RequiresGuild() bool       { return false }
-func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
+func (c *runtimeSubCommand) RequiresGuild() bool                            { return false }
+func (c *runtimeSubCommand) RequiresPermissions() bool                      { return true }
 
 func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
@@ -1207,7 +1207,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 			respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
-					Flags: discordgo.MessageFlagsEphemeral,
+					Flags:  discordgo.MessageFlagsEphemeral,
 					Embeds: []*discordgo.MessageEmbed{errorEmbed("Invalid interaction state")},
 				},
 			}, routeID+".invalid_state.respond_error")

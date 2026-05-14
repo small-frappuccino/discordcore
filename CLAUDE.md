@@ -357,6 +357,7 @@ Validation expectations:
 
 - backend changes: `go test ./...` and `go vet ./...`
 - UI changes: `bun run test`, `bun run lint`, and `bun run build`
+- formatting and line endings (any change touching tracked text files): `pwsh scripts/check-format.ps1` (or `bash scripts/check-format.sh`). The script gates `gofmt -l .` and CRLF residue against `.gitattributes`; both must be empty before reporting completion. New files you create must be LF — `.editorconfig` and `.gitattributes` are the contract
 - route or embed contract changes: verify `ui/vite.config.ts`, `ui/src/app/routes.ts`, `pkg/control/http_routes.go`, `pkg/control/dashboard_handler.go`, and that `ui/dist/index.html` still exists
 - feature or settings contract changes: verify Go route and workspace builders, `ui/src/api/control.ts`, and the adapters or pages consuming the changed fields
 - exported Go API, doc, or error-contract changes: update nearby tests and doc comments that pin the new behavior

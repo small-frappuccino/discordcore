@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	commandsEnabledSubCommandName = "commands_enabled"
-	commandChannelSubCommandName  = "command_channel"
+	commandsEnabledSubCommandName   = "commands_enabled"
+	commandChannelSubCommandName    = "command_channel"
 	allowedRoleAddSubCommandName    = "allowed_role_add"
 	allowedRoleRemoveSubCommandName = "allowed_role_remove"
 	allowedRoleListSubCommandName   = "allowed_role_list"
-	commandEnabledOptionName      = "enabled"
-	commandChannelOptionName      = "channel"
-	allowedRoleOptionName         = "role"
+	commandEnabledOptionName        = "enabled"
+	commandChannelOptionName        = "channel"
+	allowedRoleOptionName           = "role"
 )
 
 type CommandsEnabledSubCommand struct {
@@ -195,8 +195,8 @@ func (c *AllowedRoleListSubCommand) Description() string {
 	return "List the roles allowed to use admin-level slash commands"
 }
 func (c *AllowedRoleListSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *AllowedRoleListSubCommand) RequiresGuild() bool       { return true }
-func (c *AllowedRoleListSubCommand) RequiresPermissions() bool { return true }
+func (c *AllowedRoleListSubCommand) RequiresGuild() bool                            { return true }
+func (c *AllowedRoleListSubCommand) RequiresPermissions() bool                      { return true }
 func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
 		return err

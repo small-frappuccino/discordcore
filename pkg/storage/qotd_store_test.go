@@ -1303,4 +1303,3 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 		t.Fatalf("expected non-target official post to remain, got %+v", preserved)
 	}
 }
-

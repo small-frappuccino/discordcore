@@ -55,11 +55,11 @@ type QOTDQuestionRecord struct {
 }
 
 type QOTDOfficialPostRecord struct {
-	ID                         int64
-	GuildID                    string
-	DeckID                     string
-	DeckNameSnapshot           string
-	QuestionID                 int64
+	ID               int64
+	GuildID          string
+	DeckID           string
+	DeckNameSnapshot string
+	QuestionID       int64
 	// PublishOrdinal is the per-(guild,deck) publication sequence number
 	// assigned at provisioning. The Discord thread title renders this
 	// ("Question #001") so the visible numbering is decoupled from the
@@ -141,4 +141,3 @@ type QOTDMessageArchiveRecord struct {
 	AttachmentsJSON    json.RawMessage
 	CreatedAt          time.Time
 }
-

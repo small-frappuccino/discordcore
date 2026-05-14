@@ -13,13 +13,13 @@ import (
 )
 
 const (
-	qotdGetSubCommandName = "qotd_get"
-	qotdEnabledSubCommandName = "qotd_enabled"
-	qotdChannelSubCommandName = "qotd_channel"
-	qotdScheduleSubCommandName = "qotd_schedule"
-	qotdEnabledOptionName     = "enabled"
-	qotdChannelOptionName     = "channel"
-	qotdScheduleHourOptionName = "hour"
+	qotdGetSubCommandName        = "qotd_get"
+	qotdEnabledSubCommandName    = "qotd_enabled"
+	qotdChannelSubCommandName    = "qotd_channel"
+	qotdScheduleSubCommandName   = "qotd_schedule"
+	qotdEnabledOptionName        = "enabled"
+	qotdChannelOptionName        = "channel"
+	qotdScheduleHourOptionName   = "hour"
 	qotdScheduleMinuteOptionName = "minute"
 )
 

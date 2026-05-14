@@ -72,11 +72,11 @@ func newReactionBlockClearCommand(configManager *files.ConfigManager) *reactionB
 	return &reactionBlockClearCommand{configManager: configManager}
 }
 
-func (c *reactionBlockSetCommand) Name() string { return reactionBlockSetSubCommandName }
-func (c *reactionBlockAddCommand) Name() string { return reactionBlockAddSubCommandName }
+func (c *reactionBlockSetCommand) Name() string    { return reactionBlockSetSubCommandName }
+func (c *reactionBlockAddCommand) Name() string    { return reactionBlockAddSubCommandName }
 func (c *reactionBlockRemoveCommand) Name() string { return reactionBlockRemoveSubCommandName }
-func (c *reactionBlockListCommand) Name() string { return reactionBlockListSubCommandName }
-func (c *reactionBlockClearCommand) Name() string { return reactionBlockClearSubCommandName }
+func (c *reactionBlockListCommand) Name() string   { return reactionBlockListSubCommandName }
+func (c *reactionBlockClearCommand) Name() string  { return reactionBlockClearSubCommandName }
 
 func (c *reactionBlockSetCommand) Description() string {
 	return "Replace the blocked reaction list for one reactor and one message author"
@@ -118,17 +118,17 @@ func (c *reactionBlockClearCommand) Options() []*discordgo.ApplicationCommandOpt
 	return reactionBlockPairOptions()
 }
 
-func (c *reactionBlockSetCommand) RequiresGuild() bool { return true }
-func (c *reactionBlockAddCommand) RequiresGuild() bool { return true }
+func (c *reactionBlockSetCommand) RequiresGuild() bool    { return true }
+func (c *reactionBlockAddCommand) RequiresGuild() bool    { return true }
 func (c *reactionBlockRemoveCommand) RequiresGuild() bool { return true }
-func (c *reactionBlockListCommand) RequiresGuild() bool { return true }
-func (c *reactionBlockClearCommand) RequiresGuild() bool { return true }
+func (c *reactionBlockListCommand) RequiresGuild() bool   { return true }
+func (c *reactionBlockClearCommand) RequiresGuild() bool  { return true }
 
-func (c *reactionBlockSetCommand) RequiresPermissions() bool { return true }
-func (c *reactionBlockAddCommand) RequiresPermissions() bool { return true }
+func (c *reactionBlockSetCommand) RequiresPermissions() bool    { return true }
+func (c *reactionBlockAddCommand) RequiresPermissions() bool    { return true }
 func (c *reactionBlockRemoveCommand) RequiresPermissions() bool { return true }
-func (c *reactionBlockListCommand) RequiresPermissions() bool { return true }
-func (c *reactionBlockClearCommand) RequiresPermissions() bool { return true }
+func (c *reactionBlockListCommand) RequiresPermissions() bool   { return true }
+func (c *reactionBlockClearCommand) RequiresPermissions() bool  { return true }
 
 func (c *reactionBlockSetCommand) Handle(ctx *core.Context) error {
 	request, err := parseReactionBlockRequest(ctx, true)

@@ -1477,12 +1477,12 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 // ApplyRuntimeToggles hot-applies a subset of runtime_config toggles without restarting the process.
 //
 // Scope:
-// - ALICE_DISABLE_ENTRY_EXIT_LOGS: start/stop MemberEventService
-// - ALICE_DISABLE_MESSAGE_LOGS: start/stop MessageEventService
-// - ALICE_DISABLE_REACTION_LOGS: enable/disable reaction metrics; the service
-//   still stays up when guild reaction blocks require reaction handling
-// - ALICE_DISABLE_USER_LOGS: re-register user-related handlers (presence/member/user updates)
-// - ALICE_DISABLE_BOT_ROLE_PERM_MIRROR / ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID: no-op here (checked at event time)
+//   - ALICE_DISABLE_ENTRY_EXIT_LOGS: start/stop MemberEventService
+//   - ALICE_DISABLE_MESSAGE_LOGS: start/stop MessageEventService
+//   - ALICE_DISABLE_REACTION_LOGS: enable/disable reaction metrics; the service
+//     still stays up when guild reaction blocks require reaction handling
+//   - ALICE_DISABLE_USER_LOGS: re-register user-related handlers (presence/member/user updates)
+//   - ALICE_DISABLE_BOT_ROLE_PERM_MIRROR / ALICE_BOT_ROLE_PERM_MIRROR_ACTOR_ROLE_ID: no-op here (checked at event time)
 //
 // Notes:
 // - Backfill settings are intentionally not handled here.

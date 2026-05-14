@@ -261,7 +261,6 @@ func firstEnabledQOTDDeckID(decks []QOTDDeckConfig) string {
 	return ""
 }
 
-
 func normalizeRuntimeDatabaseConfig(in DatabaseRuntimeConfig) (DatabaseRuntimeConfig, bool, error) {
 	cfg := persistence.Config{
 		Driver:              in.Driver,

@@ -82,10 +82,10 @@ type SnapshotProvider interface {
 // summary for one publish mode (scheduled or manual). All fields are
 // JSON-serializable.
 type PublishModeSnapshot struct {
-	SuccessTotal  int64            `json:"success_total"`
-	FailureTotal  int64            `json:"failure_total"`
+	SuccessTotal   int64            `json:"success_total"`
+	FailureTotal   int64            `json:"failure_total"`
 	FailureByCause map[string]int64 `json:"failure_by_cause,omitempty"`
-	Duration      SummarySnapshot  `json:"duration_seconds"`
+	Duration       SummarySnapshot  `json:"duration_seconds"`
 }
 
 // ReconcileSnapshot is the reconcile loop's view.
@@ -130,8 +130,8 @@ type MetricsSnapshot struct {
 // library code call s.metrics.RecordX(...) without nil checks.
 type NopMetrics struct{}
 
-func (NopMetrics) RecordPublishAttempt(PublishMode)                  {}
-func (NopMetrics) RecordPublishSuccess(PublishMode, time.Duration)   {}
+func (NopMetrics) RecordPublishAttempt(PublishMode)                {}
+func (NopMetrics) RecordPublishSuccess(PublishMode, time.Duration) {}
 func (NopMetrics) RecordPublishFailure(PublishMode, string, time.Duration) {
 }
 func (NopMetrics) RecordReconcileCycle(time.Duration, error) {}
@@ -153,11 +153,11 @@ func (NopMetrics) RecordSuppressionCleared()                 {}
 type InMemoryMetrics struct {
 	mu sync.RWMutex
 
-	publishAttempts map[PublishMode]*atomic.Int64
-	publishSuccess  map[PublishMode]*atomic.Int64
-	publishFailure  map[PublishMode]*atomic.Int64
+	publishAttempts    map[PublishMode]*atomic.Int64
+	publishSuccess     map[PublishMode]*atomic.Int64
+	publishFailure     map[PublishMode]*atomic.Int64
 	publishFailByCause map[PublishMode]map[string]*atomic.Int64
-	publishDuration map[PublishMode]*summary
+	publishDuration    map[PublishMode]*summary
 
 	reconcileCycles   atomic.Int64
 	reconcileFailures atomic.Int64
@@ -206,9 +206,9 @@ func (m *InMemoryMetrics) RecordReconcileCycle(duration time.Duration, err error
 }
 
 func (m *InMemoryMetrics) RecordOfficialPostAbandoned() { m.abandoned.Add(1) }
-func (m *InMemoryMetrics) RecordStateDivergence()        { m.divergence.Add(1) }
-func (m *InMemoryMetrics) RecordUnmanageableThread()     { m.unmanageableThread.Add(1) }
-func (m *InMemoryMetrics) RecordSuppressionCleared()     { m.suppressionCleared.Add(1) }
+func (m *InMemoryMetrics) RecordStateDivergence()       { m.divergence.Add(1) }
+func (m *InMemoryMetrics) RecordUnmanageableThread()    { m.unmanageableThread.Add(1) }
+func (m *InMemoryMetrics) RecordSuppressionCleared()    { m.suppressionCleared.Add(1) }
 
 func (m *InMemoryMetrics) RecordOrphanReclaim(count int) {
 	if count <= 0 {

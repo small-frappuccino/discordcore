@@ -34,8 +34,8 @@ func (tc testCommand) Handle(ctx *Context) error {
 }
 func (tc testCommand) AutocompleteRouteHandler() AutocompleteHandler { return tc.autocomplete }
 func (tc testCommand) InteractionAckPolicy() InteractionAckPolicy    { return tc.ackPolicy }
-func (tc testCommand) RequiresGuild() bool       { return tc.requiresGuild }
-func (tc testCommand) RequiresPermissions() bool { return tc.requiresPermissions }
+func (tc testCommand) RequiresGuild() bool                           { return tc.requiresGuild }
+func (tc testCommand) RequiresPermissions() bool                     { return tc.requiresPermissions }
 
 type testSubCommand struct {
 	name string

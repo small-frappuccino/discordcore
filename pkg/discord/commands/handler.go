@@ -176,7 +176,6 @@ func (ch *CommandHandler) registerCommandCatalog() error {
 	return nil
 }
 
-
 func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogRegistrar {
 	if ch.supportedDomains == nil {
 		filtered := make([]CommandCatalogRegistrar, 0, len(ch.catalogRegistrars))

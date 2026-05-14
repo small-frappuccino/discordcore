@@ -26,7 +26,7 @@ const (
 // NewConfigCommands creates a new config commands registrar.
 func NewConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
 	return NewConfigCommandsWithClock(configManager, nil)
-	}
+}
 
 func NewConfigCommandsWithClock(configManager *files.ConfigManager, now func() time.Time) *ConfigCommands {
 	if now == nil {

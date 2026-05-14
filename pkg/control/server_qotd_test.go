@@ -36,9 +36,9 @@ type qotdPublishResultResponse struct {
 }
 
 type qotdPublishRouteResponse struct {
-	Status string                    `json:"status"`
-	GuildID string                   `json:"guild_id"`
-	Result qotdPublishResultResponse `json:"result"`
+	Status  string                    `json:"status"`
+	GuildID string                    `json:"guild_id"`
+	Result  qotdPublishResultResponse `json:"result"`
 }
 
 type routeFakePublisher struct{}
@@ -56,11 +56,11 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 	messageID := "message-" + params.PublishDateUTC.Format("20060102")
 	threadID := "thread-" + params.PublishDateUTC.Format("20060102")
 	return &discordqotd.PublishedOfficialPost{
-		ThreadID:                   threadID,
-		StarterMessageID:           messageID,
-		AnswerChannelID:            threadID,
-		PublishedAt:                qotd.PublishTimeUTC(routeQOTDSchedule(), params.PublishDateUTC),
-		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
+		ThreadID:         threadID,
+		StarterMessageID: messageID,
+		AnswerChannelID:  threadID,
+		PublishedAt:      qotd.PublishTimeUTC(routeQOTDSchedule(), params.PublishDateUTC),
+		PostURL:          discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}, nil
 }
 

@@ -8,8 +8,8 @@ import (
 type serviceConfigVisibilityClass string
 
 const (
-	serviceConfigVisibilitySetupState       serviceConfigVisibilityClass = "setup_state"
-	serviceConfigVisibilityDetailedError   serviceConfigVisibilityClass = "detailed_error"
+	serviceConfigVisibilitySetupState        serviceConfigVisibilityClass = "setup_state"
+	serviceConfigVisibilityDetailedError     serviceConfigVisibilityClass = "detailed_error"
 	serviceConfigVisibilityShortConfirmation serviceConfigVisibilityClass = "short_confirmation"
 )
 

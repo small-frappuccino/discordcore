@@ -19,27 +19,27 @@ type interactionRouteEntry struct {
 }
 
 type slashRouteEntry struct {
-	handler  SlashHandler
+	handler   SlashHandler
 	ackPolicy InteractionAckPolicy
-	explicit bool
+	explicit  bool
 }
 
 type autocompleteRouteEntry struct {
-	handler  AutocompleteHandler
+	handler   AutocompleteHandler
 	ackPolicy InteractionAckPolicy
-	explicit bool
+	explicit  bool
 }
 
 type componentRouteEntry struct {
-	handler  ComponentHandler
+	handler   ComponentHandler
 	ackPolicy InteractionAckPolicy
-	explicit bool
+	explicit  bool
 }
 
 type modalRouteEntry struct {
-	handler  ModalHandler
+	handler   ModalHandler
 	ackPolicy InteractionAckPolicy
-	explicit bool
+	explicit  bool
 }
 
 func newInteractionRouteRegistry() *interactionRouteRegistry {

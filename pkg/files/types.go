@@ -357,8 +357,8 @@ type ReactionBlockEmojiConfig struct {
 
 // ReactionBlockRuleConfig stores the blocked emoji list for one reactor/target pair.
 type ReactionBlockRuleConfig struct {
-	ReactorUserID string                    `json:"reactor_user_id,omitempty"`
-	TargetUserID  string                    `json:"target_user_id,omitempty"`
+	ReactorUserID string                     `json:"reactor_user_id,omitempty"`
+	TargetUserID  string                     `json:"target_user_id,omitempty"`
 	Emojis        []ReactionBlockEmojiConfig `json:"emojis,omitempty"`
 }
 
@@ -369,8 +369,8 @@ type ReactionBlockConfig struct {
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID       string            `json:"guild_id"`
-	BotInstanceID string            `json:"bot_instance_id,omitempty"`
+	GuildID       string `json:"guild_id"`
+	BotInstanceID string `json:"bot_instance_id,omitempty"`
 	// DomainBotInstanceIDs overrides the owning bot instance for specialized
 	// domains such as qotd. Domains not listed here fall back to BotInstanceID
 	// and then the runtime default bot instance.
@@ -388,9 +388,9 @@ type GuildConfig struct {
 
 	UserPrune UserPruneConfig `json:"user_prune,omitempty"`
 
-	PartnerBoard PartnerBoardConfig `json:"partner_board,omitempty"`
+	PartnerBoard   PartnerBoardConfig  `json:"partner_board,omitempty"`
 	ReactionBlocks ReactionBlockConfig `json:"reaction_blocks,omitempty"`
-	QOTD         QOTDConfig         `json:"qotd,omitempty"`
+	QOTD           QOTDConfig          `json:"qotd,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`

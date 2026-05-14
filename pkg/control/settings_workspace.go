@@ -101,15 +101,15 @@ type guildSettingsWorkspace struct {
 }
 
 type guildBotRoutingSection struct {
-	BotInstanceID           string            `json:"bot_instance_id,omitempty"`
-	AvailableBotInstanceIDs []string          `json:"available_bot_instance_ids,omitempty"`
-	DomainOverrideBotInstanceIDs []string     `json:"domain_override_bot_instance_ids,omitempty"`
-	DomainBotInstanceIDs    map[string]string `json:"domain_bot_instance_ids,omitempty"`
-	EditableDomains         []string          `json:"editable_domains,omitempty"`
+	BotInstanceID                string            `json:"bot_instance_id,omitempty"`
+	AvailableBotInstanceIDs      []string          `json:"available_bot_instance_ids,omitempty"`
+	DomainOverrideBotInstanceIDs []string          `json:"domain_override_bot_instance_ids,omitempty"`
+	DomainBotInstanceIDs         map[string]string `json:"domain_bot_instance_ids,omitempty"`
+	EditableDomains              []string          `json:"editable_domains,omitempty"`
 }
 
 type guildSettingsSections struct {
-	BotRouting   guildBotRoutingSection      `json:"bot_routing"`
+	BotRouting   guildBotRoutingSection    `json:"bot_routing"`
 	Features     files.FeatureToggles      `json:"features"`
 	Channels     files.ChannelsConfig      `json:"channels"`
 	Roles        files.RolesConfig         `json:"roles"`
@@ -343,10 +343,10 @@ func buildGuildSettingsWorkspaceWithBindings(
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
 			BotRouting: buildGuildBotRoutingSection(guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, defaultBotInstanceID),
-			Features: guild.Features,
-			Channels: guild.Channels,
-			Roles:    guild.Roles,
-			Stats:    guild.Stats,
+			Features:   guild.Features,
+			Channels:   guild.Channels,
+			Roles:      guild.Roles,
+			Stats:      guild.Stats,
 			Cache: guildCacheSettingsSection{
 				RolesCacheTTL:   guild.RolesCacheTTL,
 				MemberCacheTTL:  guild.MemberCacheTTL,
@@ -371,11 +371,11 @@ func buildGuildBotRoutingSection(
 	defaultBotInstanceID string,
 ) guildBotRoutingSection {
 	return guildBotRoutingSection{
-		BotInstanceID:                 guild.EffectiveBotInstanceID(defaultBotInstanceID),
-		AvailableBotInstanceIDs:       slices.Clone(availableBotInstanceIDs),
-		DomainOverrideBotInstanceIDs:  slices.Clone(domainOverrideBotInstanceIDs),
-		DomainBotInstanceIDs:          cloneEditableDomainBotInstanceIDs(guild.DomainBotInstanceIDs),
-		EditableDomains:               settingsEditableBotRoutingDomains(),
+		BotInstanceID:                guild.EffectiveBotInstanceID(defaultBotInstanceID),
+		AvailableBotInstanceIDs:      slices.Clone(availableBotInstanceIDs),
+		DomainOverrideBotInstanceIDs: slices.Clone(domainOverrideBotInstanceIDs),
+		DomainBotInstanceIDs:         cloneEditableDomainBotInstanceIDs(guild.DomainBotInstanceIDs),
+		EditableDomains:              settingsEditableBotRoutingDomains(),
 	}
 }
 

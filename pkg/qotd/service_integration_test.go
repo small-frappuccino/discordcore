@@ -834,13 +834,13 @@ func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *t
 // reaches completeOfficialPostProvisioning and fails THERE (publisher
 // returned an error). Two invariants must hold simultaneously:
 //
-//   1. The deferred suppression rollback runs even when the failure is
-//      raised by the publisher (not the reservation), so the same-day
-//      scheduled publish is not blocked by a stale suppression.
-//   2. The provisioning row that was created before the failure is left in
-//      a state that ReconcileGuild can resume into a published post —
-//      without the recovery and the separate scheduled publish racing each
-//      other on the same date.
+//  1. The deferred suppression rollback runs even when the failure is
+//     raised by the publisher (not the reservation), so the same-day
+//     scheduled publish is not blocked by a stale suppression.
+//  2. The provisioning row that was created before the failure is left in
+//     a state that ReconcileGuild can resume into a published post —
+//     without the recovery and the separate scheduled publish racing each
+//     other on the same date.
 func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideRecovery(t *testing.T) {
 	service, store, fake := newIntegrationTestQOTDService(t)
 	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)

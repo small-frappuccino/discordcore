@@ -399,11 +399,11 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:     fmt.Sprintf("Server Stats (%s)", label),
-		Color:     theme.Success(),
+		Title:       fmt.Sprintf("Server Stats (%s)", label),
+		Color:       theme.Success(),
 		Description: "Here is the recent member movement snapshot. This reply stays private because it is operational data.",
-		Fields:    fields,
-		Timestamp: time.Now().Format(time.RFC3339),
+		Fields:      fields,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	return respondEmbed(s, i, embed)

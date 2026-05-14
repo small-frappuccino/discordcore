@@ -332,7 +332,7 @@ func TestResolveBotInstancesAllowsRemoteDefaultWhenDefaultDomainIsUnsupported(t 
 
 	resolved, defaultOwnerBotInstanceID, err := resolveBotInstances("", RunOptions{
 		DefaultOwnerBotInstanceID: "main",
-		SupportedDomains:     []string{files.BotDomainQOTD},
+		SupportedDomains:          []string{files.BotDomainQOTD},
 		BotCatalog: []BotInstanceDefinition{{
 			ID:       "companion",
 			TokenEnv: "COMPANION_TOKEN",

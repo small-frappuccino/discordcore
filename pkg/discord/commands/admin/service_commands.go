@@ -632,8 +632,8 @@ func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "System Health Check",
-		Color: color,
+		Title:       "System Health Check",
+		Color:       color,
 		Description: "Here is the current system health snapshot. This reply stays private because it reflects internal service status.",
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -698,8 +698,8 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: "System Information",
-		Color: theme.SystemInfo(),
+		Title:       "System Information",
+		Color:       theme.SystemInfo(),
 		Description: "Here is the current runtime and service summary. This reply stays private because it is operational data.",
 		Fields: []*discordgo.MessageEmbedField{
 			{

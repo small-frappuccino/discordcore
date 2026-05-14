@@ -158,11 +158,11 @@ func (c *ConfigWebhookEmbedReadSubCommand) Description() string {
 func (c *ConfigWebhookEmbedReadSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        optionMessageID,
-			Description: "Message ID entry key",
+			Type:         discordgo.ApplicationCommandOptionString,
+			Name:         optionMessageID,
+			Description:  "Message ID entry key",
 			Autocomplete: true,
-			Required:    true,
+			Required:     true,
 		},
 		webhookScopeOption(),
 	}
@@ -221,11 +221,11 @@ func (c *ConfigWebhookEmbedUpdateSubCommand) Description() string {
 func (c *ConfigWebhookEmbedUpdateSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        optionMessageID,
-			Description: "Existing message ID entry key",
+			Type:         discordgo.ApplicationCommandOptionString,
+			Name:         optionMessageID,
+			Description:  "Existing message ID entry key",
 			Autocomplete: true,
-			Required:    true,
+			Required:     true,
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
@@ -380,11 +380,11 @@ func (c *ConfigWebhookEmbedDeleteSubCommand) Description() string {
 func (c *ConfigWebhookEmbedDeleteSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        optionMessageID,
-			Description: "Message ID entry key",
+			Type:         discordgo.ApplicationCommandOptionString,
+			Name:         optionMessageID,
+			Description:  "Message ID entry key",
 			Autocomplete: true,
-			Required:    true,
+			Required:     true,
 		},
 		webhookScopeOption(),
 		applyNowOption(),

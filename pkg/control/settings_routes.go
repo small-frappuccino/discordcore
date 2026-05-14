@@ -277,13 +277,13 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	var (
-		availableBotInstanceIDs []string
+		availableBotInstanceIDs      []string
 		domainOverrideBotInstanceIDs []string
-		nextBotInstanceID       string
-		nextDomainBotInstanceIDs map[string]string
-		updateBotInstanceID     bool
-		updateDomainBotRouting  bool
-		invalidateAccessCache   bool
+		nextBotInstanceID            string
+		nextDomainBotInstanceIDs     map[string]string
+		updateBotInstanceID          bool
+		updateDomainBotRouting       bool
+		invalidateAccessCache        bool
 	)
 	if payload.BotInstanceID != nil || payload.BotRouting != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)

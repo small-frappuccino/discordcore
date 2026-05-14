@@ -26,8 +26,8 @@ func (c *SmokeTestSubCommand) Description() string {
 }
 
 func (c *SmokeTestSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *SmokeTestSubCommand) RequiresGuild() bool       { return true }
-func (c *SmokeTestSubCommand) RequiresPermissions() bool { return true }
+func (c *SmokeTestSubCommand) RequiresGuild() bool                            { return true }
+func (c *SmokeTestSubCommand) RequiresPermissions() bool                      { return true }
 
 func (c *SmokeTestSubCommand) Handle(ctx *core.Context) error {
 	if err := core.RequiresGuildConfig(ctx); err != nil {

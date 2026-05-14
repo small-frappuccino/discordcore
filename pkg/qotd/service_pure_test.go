@@ -218,11 +218,11 @@ func TestNextScheduledPublishTimeProjectsTodayOrTomorrow(t *testing.T) {
 	}
 
 	cases := []struct {
-		name      string
-		cfg       files.QOTDConfig
-		now       time.Time
-		wantOK    bool
-		wantNext  time.Time
+		name     string
+		cfg      files.QOTDConfig
+		now      time.Time
+		wantOK   bool
+		wantNext time.Time
 	}{
 		{
 			name: "before today's slot returns today",

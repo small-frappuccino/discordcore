@@ -145,7 +145,7 @@ func buildQOTDRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.QOTDCommandCatalogRegistrar(),
 		},
-		DisableControl:            true,
+		DisableControl: true,
 	}
 }
 

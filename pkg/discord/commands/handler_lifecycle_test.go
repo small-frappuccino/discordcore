@@ -19,7 +19,9 @@ import (
 
 type handlerQOTDServiceStub struct{}
 
-func (handlerQOTDServiceStub) Settings(string) (files.QOTDConfig, error) { return files.QOTDConfig{}, nil }
+func (handlerQOTDServiceStub) Settings(string) (files.QOTDConfig, error) {
+	return files.QOTDConfig{}, nil
+}
 func (handlerQOTDServiceStub) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
 	return nil, nil
 }

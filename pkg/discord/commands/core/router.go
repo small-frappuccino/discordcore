@@ -100,7 +100,6 @@ func (cr *CommandRouter) handleAutocompleteRoute(i *discordgo.InteractionCreate,
 	NewResponseBuilder(ctx.Session).Build().Autocomplete(i, choices)
 }
 
-
 func (cr *CommandRouter) handleComponentRoute(i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
 	if routeKey.Path == "" {
 		routeKey.Path = interactionCustomRouteID(interactionCustomID(i))
