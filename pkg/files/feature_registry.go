@@ -1,3 +1,17 @@
+// Package files owns the canonical feature-toggle registry.
+//
+// This file intentionally carries only the schema-level data each
+// toggle needs (ID, struct Path, Default). Product-facing metadata —
+// human label, description, area, tags, editable fields, and the
+// associated discord/logging LogEvent — lives in
+// pkg/control/features_catalog.go (`featureDefinitions`). The split
+// is deliberate: pkg/files is the lowest layer in the dependency
+// graph and must not import pkg/control or pkg/discord/logging.
+// Pulling UI metadata down would invert layering; introducing a
+// third joining layer would just rebuild featureDefinitions under a
+// different name. featureDefinitions consumes registry IDs and the
+// bijection between the two is locked by a contract test in
+// pkg/control/feature_contract_test.go.
 package files
 
 import (
