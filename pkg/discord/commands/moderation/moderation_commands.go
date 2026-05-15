@@ -207,8 +207,23 @@ func moderationCommandFeatureEnabled(features files.ResolvedFeatureToggles, feat
 	return enabled
 }
 
-// RegisterModerationCommands registers slash commands under the /moderation group.
+// RegisterModerationCommands registers slash commands under the /moderation
+// group without observability wiring. Equivalent to passing nil to
+// RegisterModerationCommandsWithMetrics; the clean command will fall back to
+// NopMetrics.
 func RegisterModerationCommands(router *core.CommandRouter) {
+	RegisterModerationCommandsWithMetrics(router, nil)
+}
+
+// RegisterModerationCommandsWithMetrics is the canonical entry point when
+// the host runtime wires a moderation Metrics sink (production startup wires
+// the in-memory implementation so /v1/health/moderation has counters to
+// expose). Passing a nil metrics value falls back to NopMetrics so library
+// tests that don't care about observability stay clean.
+func RegisterModerationCommandsWithMetrics(router *core.CommandRouter, metrics Metrics) {
+	if metrics == nil {
+		metrics = NopMetrics{}
+	}
 	checker := router.GetPermissionChecker()
 	if checker == nil {
 		checker = core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
@@ -218,7 +233,7 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 
 	moderationGroup.AddSubCommand(newBanCommand())
 	moderationGroup.AddSubCommand(newMassBanCommand())
-	moderationGroup.AddSubCommand(newCleanCommand())
+	moderationGroup.AddSubCommand(newCleanCommand(metrics))
 	moderationGroup.AddSubCommand(newKickCommand())
 	moderationGroup.AddSubCommand(newMuteCommand())
 	moderationGroup.AddSubCommand(newReactionBlockSetCommand(configManager))

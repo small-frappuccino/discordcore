@@ -182,6 +182,253 @@ func TestCleanCommandRejectsInvalidMessageIDRange(t *testing.T) {
 	}
 }
 
+func TestCleanCommandSurfacesClassifiedFetchErrors(t *testing.T) {
+	// End-to-end coverage for the wiring between ClassifyFetchError and the
+	// command response. Only 403 and 404 are exercised here because
+	// discordgo handles 429 and 5xx through its bucket Ratelimiter, which
+	// is not gated by MaxRestRetries — those paths would deadlock the
+	// harness. The full FailureClass mapping (including 429/5xx) is
+	// covered by TestClassifyFetchError in the cleanup package.
+	cases := []struct {
+		name        string
+		fetchErr    cleanFetchErrorSpec
+		wantSubstr  string
+		mustNotHave string
+	}{
+		{
+			name: "forbidden message-history",
+			fetchErr: cleanFetchErrorSpec{
+				statusCode: http.StatusForbidden,
+				body:       `{"code":50001,"message":"Missing Access"}`,
+			},
+			wantSubstr:  "I lost permission to read message history in this channel.",
+			mustNotHave: "Make sure I can read message history",
+		},
+		{
+			name: "channel deleted mid-flight",
+			fetchErr: cleanFetchErrorSpec{
+				statusCode: http.StatusNotFound,
+				body:       `{"code":10003,"message":"Unknown Channel"}`,
+			},
+			wantSubstr:  "I couldn't reach this channel anymore",
+			mustNotHave: "Make sure I can read message history",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			h := newCleanCommandHarness(t, cleanHarnessConfig{
+				guildID:   "g-fetch-" + tc.name,
+				channelID: "c-main",
+				ownerID:   "owner",
+				actorID:   "owner",
+				botID:     "bot",
+				channelPerms: discordgo.PermissionViewChannel |
+					discordgo.PermissionReadMessageHistory |
+					discordgo.PermissionSendMessages |
+					discordgo.PermissionEmbedLinks |
+					discordgo.PermissionManageMessages,
+				messagesFetchError: &tc.fetchErr,
+			})
+
+			h.run(t, cleanIntOption(cleanCountOptionName, 5))
+
+			got := h.lastEditedContent(t)
+			if !strings.Contains(got, tc.wantSubstr) {
+				t.Fatalf("expected response to contain %q, got %q", tc.wantSubstr, got)
+			}
+			if tc.mustNotHave != "" && strings.Contains(got, tc.mustNotHave) {
+				t.Fatalf("response should not include the generic fallback %q (it leaked classification): %q", tc.mustNotHave, got)
+			}
+			if len(h.bulkDeletedIDs()) != 0 || len(h.singleDeletedIDs()) != 0 {
+				t.Fatalf("did not expect any deletions when fetch fails, bulk=%v single=%v", h.bulkDeletedIDs(), h.singleDeletedIDs())
+			}
+		})
+	}
+}
+
+// TestCleanCommandRecordsObservabilityMetrics pins the contract between the
+// /clean command and the moderation Metrics seam: a happy path increments
+// attempts + success + deleted_messages and records a duration; a fetch
+// failure increments the classified fetch_* failure cause; a permission
+// failure increments the permission_denied cause. Without this test the
+// metrics interface and its call sites can drift silently — operators
+// would still see counters on /v1/health/moderation, but the buckets
+// would no longer match reality.
+func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
+	// Subtests cannot run in parallel because newCleanCommandHarness
+	// mutates discordgo package-level endpoint globals (EndpointAPI etc.)
+	// to route through httptest. The existing clean tests follow the
+	// same constraint — see TestCleanCommandDeletesMatchingMessagesAndLogsAction.
+
+	t.Run("success path records attempt+success+deleted", func(t *testing.T) {
+		metrics := NewInMemoryMetrics()
+		h := newCleanCommandHarness(t, cleanHarnessConfig{
+			guildID:   "g-metrics-ok",
+			channelID: "c-main",
+			ownerID:   "owner",
+			actorID:   "owner",
+			botID:     "bot",
+			channelPerms: discordgo.PermissionViewChannel |
+				discordgo.PermissionReadMessageHistory |
+				discordgo.PermissionSendMessages |
+				discordgo.PermissionManageMessages,
+			messages: []*discordgo.Message{
+				newCleanTestMessage("m2", "c-main", "g-metrics-ok", "u-1", "hi", time.Now().Add(-2*time.Minute), false),
+				newCleanTestMessage("m1", "c-main", "g-metrics-ok", "u-1", "yo", time.Now().Add(-3*time.Minute), false),
+			},
+			metrics: metrics,
+		})
+
+		h.run(t, cleanIntOption(cleanCountOptionName, 2))
+
+		snap := metrics.Snapshot().Clean
+		if snap.AttemptsTotal != 1 {
+			t.Fatalf("AttemptsTotal=%d want 1", snap.AttemptsTotal)
+		}
+		if snap.SuccessTotal != 1 {
+			t.Fatalf("SuccessTotal=%d want 1 (%+v)", snap.SuccessTotal, snap)
+		}
+		if snap.FailureTotal != 0 {
+			t.Fatalf("FailureTotal=%d want 0", snap.FailureTotal)
+		}
+		if snap.DeletedMessagesTotal != 2 {
+			t.Fatalf("DeletedMessagesTotal=%d want 2", snap.DeletedMessagesTotal)
+		}
+		if snap.Duration.Count != 1 {
+			t.Fatalf("Duration.Count=%d want 1", snap.Duration.Count)
+		}
+	})
+
+	t.Run("permission failure records permission_denied cause", func(t *testing.T) {
+		metrics := NewInMemoryMetrics()
+		h := newCleanCommandHarness(t, cleanHarnessConfig{
+			guildID:   "g-metrics-perm",
+			channelID: "c-main",
+			ownerID:   "owner",
+			actorID:   "owner",
+			botID:     "bot",
+			// Bot is missing PermissionManageMessages so the perm gate trips.
+			channelPerms: discordgo.PermissionViewChannel |
+				discordgo.PermissionReadMessageHistory,
+			messages: []*discordgo.Message{},
+			metrics:  metrics,
+		})
+
+		h.run(t, cleanIntOption(cleanCountOptionName, 1))
+
+		snap := metrics.Snapshot().Clean
+		if snap.AttemptsTotal != 1 || snap.SuccessTotal != 0 || snap.FailureTotal != 1 {
+			t.Fatalf("expected one attempt + one failure, got %+v", snap)
+		}
+		if snap.FailureByCause[CleanFailureCausePermissionDenied] != 1 {
+			t.Fatalf("expected permission_denied=1, got %+v", snap.FailureByCause)
+		}
+	})
+
+	t.Run("fetch failure records classified fetch cause", func(t *testing.T) {
+		metrics := NewInMemoryMetrics()
+		h := newCleanCommandHarness(t, cleanHarnessConfig{
+			guildID:   "g-metrics-fetch",
+			channelID: "c-main",
+			ownerID:   "owner",
+			actorID:   "owner",
+			botID:     "bot",
+			channelPerms: discordgo.PermissionViewChannel |
+				discordgo.PermissionReadMessageHistory |
+				discordgo.PermissionSendMessages |
+				discordgo.PermissionManageMessages,
+			// 429 and 5xx are intentionally avoided here — discordgo's bucket
+			// rate limiter is not gated by MaxRestRetries and would deadlock
+			// the harness (same constraint as TestCleanCommandSurfacesClassifiedFetchErrors).
+			messagesFetchError: &cleanFetchErrorSpec{
+				statusCode: http.StatusForbidden,
+				body:       `{"code":50001,"message":"Missing Access"}`,
+			},
+			metrics: metrics,
+		})
+
+		h.run(t, cleanIntOption(cleanCountOptionName, 5))
+
+		snap := metrics.Snapshot().Clean
+		if snap.FailureByCause[CleanFailureCauseFetchForbidden] != 1 {
+			t.Fatalf("expected fetch_forbidden=1, got %+v", snap.FailureByCause)
+		}
+	})
+}
+
+// TestShouldSingleDeleteCleanMessageBoundary pins the safety margin used to
+// route messages near Discord's 14-day bulk-delete cutoff. The margin must
+// be wide enough that normal request latency between local classification
+// and Discord receiving the bulk-delete cannot push a borderline message
+// across the 14-day line. The cleanup package still has a fallback for the
+// race, but this margin keeps the race rare in the first place; if it ever
+// shrinks back near a minute, this test catches it.
+func TestShouldSingleDeleteCleanMessageBoundary(t *testing.T) {
+	t.Parallel()
+
+	if cleanBulkDeleteMaxAge > 14*24*time.Hour-30*time.Minute {
+		t.Fatalf("cleanBulkDeleteMaxAge must keep at least a 30-minute buffer under the 14-day limit, got %s", cleanBulkDeleteMaxAge)
+	}
+	if cleanBulkDeleteMaxAge >= 14*24*time.Hour {
+		t.Fatalf("cleanBulkDeleteMaxAge must stay below 14 days, got %s", cleanBulkDeleteMaxAge)
+	}
+
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		timestamp time.Time
+		want      bool
+	}{
+		{
+			name:      "fresh message stays on bulk path",
+			timestamp: now.Add(-time.Minute),
+			want:      false,
+		},
+		{
+			name:      "comfortably under the margin stays on bulk path",
+			timestamp: now.Add(-(13 * 24 * time.Hour)),
+			want:      false,
+		},
+		{
+			name:      "one minute inside the margin still routes to single delete",
+			timestamp: now.Add(-(cleanBulkDeleteMaxAge + time.Minute)),
+			want:      true,
+		},
+		{
+			name:      "well past the 14-day line routes to single delete",
+			timestamp: now.Add(-(15 * 24 * time.Hour)),
+			want:      true,
+		},
+		{
+			name:      "exactly at the margin routes to single delete",
+			timestamp: now.Add(-cleanBulkDeleteMaxAge),
+			want:      true,
+		},
+		{
+			name:      "nil timestamp stays on bulk path",
+			timestamp: time.Time{},
+			want:      false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			message := &discordgo.Message{ID: "m", Timestamp: tc.timestamp}
+			if got := shouldSingleDeleteCleanMessage(message, now); got != tc.want {
+				t.Fatalf("shouldSingleDeleteCleanMessage(age=%s) = %v, want %v", now.Sub(tc.timestamp), got, tc.want)
+			}
+		})
+	}
+
+	if shouldSingleDeleteCleanMessage(nil, now) {
+		t.Fatalf("shouldSingleDeleteCleanMessage(nil) must be false")
+	}
+}
+
 type cleanHarnessConfig struct {
 	guildID      string
 	channelID    string
@@ -191,6 +438,20 @@ type cleanHarnessConfig struct {
 	botID        string
 	channelPerms int64
 	messages     []*discordgo.Message
+	// messagesFetchError, when non-nil, makes the mock Discord server
+	// reject GET /channels/{id}/messages with the supplied status and
+	// JSON body. Used to drive ClassifyFetchError code paths from the
+	// command end-to-end.
+	messagesFetchError *cleanFetchErrorSpec
+	// metrics, when non-nil, is wired into RegisterModerationCommandsWithMetrics
+	// so tests can assert that /clean records attempts/outcomes through the
+	// Metrics interface end-to-end.
+	metrics Metrics
+}
+
+type cleanFetchErrorSpec struct {
+	statusCode int
+	body       string
 }
 
 type cleanRecordedPost struct {
@@ -257,6 +518,12 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"original"}`))
 		case req.Method == http.MethodGet && strings.HasSuffix(strings.TrimRight(req.URL.Path, "/"), "/messages"):
+			if cfg.messagesFetchError != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(cfg.messagesFetchError.statusCode)
+				_, _ = w.Write([]byte(cfg.messagesFetchError.body))
+				return
+			}
 			channelID := cleanChannelIDFromPath(req.URL.Path)
 			before := strings.TrimSpace(req.URL.Query().Get("before"))
 			limit := cleanParseLimit(req.URL.Query().Get("limit"))
@@ -307,6 +574,10 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 	if err != nil {
 		t.Fatalf("discordgo.New: %v", err)
 	}
+	// Disable REST retries so 5xx and rate-limit responses surface to the
+	// caller immediately. The harness only ever simulates one outcome per
+	// endpoint, so the production retry loop just hangs the test.
+	session.MaxRestRetries = 0
 	session.State.User = &discordgo.User{ID: cfg.botID}
 	if err := session.State.GuildAdd(&discordgo.Guild{
 		ID:      cfg.guildID,
@@ -343,7 +614,7 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 	}
 
 	router := core.NewCommandRouter(session, cm)
-	RegisterModerationCommands(router)
+	RegisterModerationCommandsWithMetrics(router, cfg.metrics)
 
 	h.session = session
 	h.router = router

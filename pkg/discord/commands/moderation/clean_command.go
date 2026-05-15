@@ -14,20 +14,32 @@ import (
 )
 
 const (
-	cleanCommandName           = "clean"
-	cleanCountOptionName       = "count"
-	cleanUserOptionName        = "user"
-	cleanContainsOptionName    = "contains"
-	cleanFromOptionName        = "from"
-	cleanToOptionName          = "to"
-	cleanMaxDeleteCount        = 100
-	cleanSearchWindow          = 1000
-	cleanFetchPageSize         = 100
-	cleanBulkDeleteMaxAge      = (14 * 24 * time.Hour) - time.Minute
+	cleanCommandName        = "clean"
+	cleanCountOptionName    = "count"
+	cleanUserOptionName     = "user"
+	cleanContainsOptionName = "contains"
+	cleanFromOptionName     = "from"
+	cleanToOptionName       = "to"
+	cleanMaxDeleteCount     = 100
+	cleanSearchWindow       = 1000
+	cleanFetchPageSize      = 100
+	// cleanBulkDeleteMaxAge sits one hour below Discord's 14-day bulk-delete
+	// window so messages near the boundary route to the single-delete path
+	// proactively. The earlier one-minute margin was tight enough that
+	// normal request latency between local classification and Discord
+	// receiving the bulk request could push a borderline message across
+	// the 14-day line, causing Discord to reject the whole chunk with
+	// 50034. The cleanup package still falls back to per-message deletes
+	// if the race fires anyway, so this margin is a "make the race rare"
+	// knob, not a hard guarantee.
+	cleanBulkDeleteMaxAge      = (14 * 24 * time.Hour) - time.Hour
 	cleanContainsDisplayMaxLen = 80
 )
 
-type cleanCommand struct{}
+type cleanCommand struct {
+	metrics Metrics
+	now     func() time.Time
+}
 
 type cleanRequest struct {
 	channelID string
@@ -54,7 +66,12 @@ type cleanResult struct {
 	failedUnknown        int
 }
 
-func newCleanCommand() *cleanCommand { return &cleanCommand{} }
+func newCleanCommand(metrics Metrics) *cleanCommand {
+	if metrics == nil {
+		metrics = NopMetrics{}
+	}
+	return &cleanCommand{metrics: metrics, now: time.Now}
+}
 
 func (c *cleanCommand) Name() string { return cleanCommandName }
 
@@ -106,21 +123,28 @@ func (c *cleanCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 }
 
 func (c *cleanCommand) Handle(ctx *core.Context) error {
+	start := c.now()
+	c.metrics.RecordCleanAttempt()
+
 	if err := ensureModerationCommandEnabled(ctx, "moderation.clean", "Clean command is disabled for this server."); err != nil {
+		c.metrics.RecordCleanFailure(CleanFailureCauseFeatureDisabled, c.now().Sub(start))
 		return err
 	}
 	request, err := parseCleanRequest(ctx)
 	if err != nil {
+		c.metrics.RecordCleanFailure(CleanFailureCauseInvalidRequest, c.now().Sub(start))
 		return err
 	}
 	if err := validateCleanPermissions(ctx, request.channelID); err != nil {
+		c.metrics.RecordCleanFailure(CleanFailureCausePermissionDenied, c.now().Sub(start))
 		return err
 	}
 
-	result, err := executeClean(ctx, request)
+	result, err := c.executeClean(ctx, request, start)
 	if err != nil {
 		return err
 	}
+	c.metrics.RecordCleanSuccess(c.now().Sub(start), result.deleted)
 	if result.deleted > 0 {
 		sendCleanActionLog(ctx, request, result)
 	}
@@ -239,12 +263,13 @@ func requireChannelPermissions(session *discordgo.Session, userID, channelID str
 	return nil
 }
 
-func executeClean(ctx *core.Context, request cleanRequest) (cleanResult, error) {
+func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, start time.Time) (cleanResult, error) {
 	if ctx == nil || ctx.Session == nil {
+		c.metrics.RecordCleanFailure(CleanFailureCauseSessionUnavailable, c.now().Sub(start))
 		return cleanResult{}, core.NewCommandError("Session not ready. Try again shortly.", true)
 	}
 
-	matched, result, err := collectCleanTargets(ctx, request)
+	matched, result, err := c.collectCleanTargets(ctx, request, start)
 	if err != nil {
 		return cleanResult{}, err
 	}
@@ -269,23 +294,27 @@ func executeClean(ctx *core.Context, request cleanRequest) (cleanResult, error) 
 
 	onDeleteError := func(messageID string, err error, class cleanup.FailureClass) {
 		recordCleanFailure(&result, class)
+		c.metrics.RecordCleanDeleteFailure(class)
 		log.ErrorLoggerRaw().Error(
 			"Clean command failed to delete message",
 			"guildID", ctx.GuildID,
 			"channelID", request.channelID,
 			"messageID", messageID,
-			"failureClass", cleanFailureClassLabel(class),
+			"failureClass", FailureClassToken(class),
 			"err", err,
 		)
 	}
 	onChunkError := func(messageIDs []string, err error, class cleanup.FailureClass) {
 		recordCleanChunkFailure(&result, class, len(messageIDs))
+		for i := 0; i < len(messageIDs); i++ {
+			c.metrics.RecordCleanDeleteFailure(class)
+		}
 		log.ErrorLoggerRaw().Error(
 			"Clean command failed to bulk-delete chunk",
 			"guildID", ctx.GuildID,
 			"channelID", request.channelID,
 			"chunkSize", len(messageIDs),
-			"failureClass", cleanFailureClassLabel(class),
+			"failureClass", FailureClassToken(class),
 			"err", err,
 		)
 	}
@@ -335,26 +364,22 @@ func recordCleanChunkFailure(result *cleanResult, class cleanup.FailureClass, co
 	}
 }
 
-func cleanFailureClassLabel(class cleanup.FailureClass) string {
+func cleanFetchErrorMessage(class cleanup.FailureClass) string {
 	switch class {
-	case cleanup.FailureClassMissingMessage:
-		return "missing_message"
-	case cleanup.FailureClassMissingChannel:
-		return "missing_channel"
 	case cleanup.FailureClassForbidden:
-		return "forbidden"
-	case cleanup.FailureClassBulkDeleteAge:
-		return "bulk_delete_age"
+		return "I lost permission to read message history in this channel. Re-check my channel overrides and try again."
+	case cleanup.FailureClassMissingChannel:
+		return "I couldn't reach this channel anymore — it may have been deleted or my access was removed."
 	case cleanup.FailureClassRateLimited:
-		return "rate_limited"
+		return "Discord is rate-limiting me right now. Try again in a moment."
 	case cleanup.FailureClassTransient:
-		return "transient"
+		return "Discord had a transient error while loading messages. Try again shortly."
 	default:
-		return "unknown"
+		return "I couldn't load recent messages from this channel. Make sure I can read message history here and try again."
 	}
 }
 
-func collectCleanTargets(ctx *core.Context, request cleanRequest) ([]*discordgo.Message, cleanResult, error) {
+func (c *cleanCommand) collectCleanTargets(ctx *core.Context, request cleanRequest, start time.Time) ([]*discordgo.Message, cleanResult, error) {
 	result := cleanResult{}
 	matched := make([]*discordgo.Message, 0, request.count)
 	before := request.toID
@@ -372,7 +397,16 @@ func collectCleanTargets(ctx *core.Context, request cleanRequest) ([]*discordgo.
 
 		page, err := ctx.Session.ChannelMessages(request.channelID, limit, before, "", "")
 		if err != nil {
-			return nil, cleanResult{}, core.NewCommandError("I couldn't load recent messages from this channel. Make sure I can read message history here and try again.", true)
+			class := cleanup.ClassifyFetchError(err)
+			log.ErrorLoggerRaw().Error(
+				"Clean command failed to load channel messages",
+				"guildID", ctx.GuildID,
+				"channelID", request.channelID,
+				"failureClass", FailureClassToken(class),
+				"err", err,
+			)
+			c.metrics.RecordCleanFailure(ClassifyCleanFetchFailure(class), c.now().Sub(start))
+			return nil, cleanResult{}, core.NewCommandError(cleanFetchErrorMessage(class), true)
 		}
 		if len(page) == 0 {
 			break

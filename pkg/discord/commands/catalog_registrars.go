@@ -55,7 +55,7 @@ func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 			} else {
 				partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
 			}
-			moderation.RegisterModerationCommands(router)
+			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
 		},
 	}
 }

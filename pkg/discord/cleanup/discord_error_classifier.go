@@ -79,3 +79,46 @@ func ClassifyDeleteError(err error) FailureClass {
 
 	return FailureClassUnknown
 }
+
+// ClassifyFetchError maps a Discord REST error returned by message-fetch
+// flows (ChannelMessages and similar listing endpoints) to a FailureClass.
+//
+// Diverges from ClassifyDeleteError on the 404 axis: a 404 on a fetch
+// targets the channel itself, not a single message, so it surfaces as
+// FailureClassMissingChannel rather than FailureClassMissingMessage.
+// Bulk-age (50034) and ErrCodeUnknownMessage do not occur on fetch and
+// are intentionally absent. Wrapped errors are unwrapped via errors.As.
+func ClassifyFetchError(err error) FailureClass {
+	if err == nil {
+		return FailureClassUnknown
+	}
+	var restErr *discordgo.RESTError
+	if !errors.As(err, &restErr) || restErr == nil {
+		return FailureClassTransient
+	}
+
+	if restErr.Message != nil {
+		switch restErr.Message.Code {
+		case discordgo.ErrCodeUnknownChannel:
+			return FailureClassMissingChannel
+		case discordgo.ErrCodeMissingAccess, discordgo.ErrCodeMissingPermissions:
+			return FailureClassForbidden
+		}
+	}
+
+	if restErr.Response != nil {
+		switch restErr.Response.StatusCode {
+		case http.StatusNotFound:
+			return FailureClassMissingChannel
+		case http.StatusForbidden, http.StatusUnauthorized:
+			return FailureClassForbidden
+		case http.StatusTooManyRequests:
+			return FailureClassRateLimited
+		}
+		if restErr.Response.StatusCode >= 500 {
+			return FailureClassTransient
+		}
+	}
+
+	return FailureClassUnknown
+}

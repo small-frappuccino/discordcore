@@ -7,6 +7,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
@@ -34,6 +35,7 @@ type botRuntimeOptions struct {
 	partnerSyncExecutor      partners.GuildSyncExecutor
 	qotdCommandService       *applicationqotd.Service
 	qotdLifecycleService     discordqotd.GuildLifecycleService
+	moderationMetrics        moderation.Metrics
 	startupTasks             *startupTaskOrchestrator
 }
 
@@ -211,6 +213,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 		commandHandler.SetQOTDService(opts.qotdCommandService)
+		commandHandler.SetModerationMetrics(opts.moderationMetrics)
 		commandHandler.SetAdminCommandServices(runtime.serviceManager, unifiedCache, opts.store)
 		if err := setupCommandHandler(commandHandler); err != nil {
 			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)

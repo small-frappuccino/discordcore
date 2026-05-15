@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/control"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -57,6 +58,7 @@ type controlStartupTaskOptions struct {
 	partnerBoardService   partners.BoardService
 	partnerSyncExecutor   partners.GuildSyncExecutor
 	qotdService           *qotd.Service
+	moderationMetrics     moderation.Metrics
 	controlServerRegistry *controlServerHolder
 }
 
@@ -208,6 +210,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	controlServer.SetPartnerBoardService(opts.partnerBoardService)
 	controlServer.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 	controlServer.SetQOTDService(opts.qotdService)
+	controlServer.SetModerationMetrics(opts.moderationMetrics)
 	controlServer.SetDiscordSessionResolverForDomain(func(guildID, domain string) (*discordgo.Session, error) {
 		return opts.runtimeResolver.sessionForGuildDomain(guildID, domain)
 	})

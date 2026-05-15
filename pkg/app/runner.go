@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
@@ -330,6 +331,10 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// always uses the in-memory implementation.
 	qotdMetrics := qotd.NewInMemoryMetrics()
 	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
+	// Mirror QOTD: wire the in-memory moderation metrics so /v1/health/moderation
+	// has counters to expose. NopMetrics is a valid fallback for tests, but
+	// production startup always uses the in-memory implementation.
+	moderationMetrics := moderation.NewInMemoryMetrics()
 
 	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,
@@ -344,6 +349,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		partnerSyncExecutor:      partnerSyncDispatcher,
 		qotdCommandService:       qotdService,
 		qotdLifecycleService:     qotdService,
+		moderationMetrics:        moderationMetrics,
 		startupTasks:             startupTasks,
 	}); err != nil {
 		return err
@@ -361,6 +367,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		partnerBoardService:   partnerBoardAppService,
 		partnerSyncExecutor:   partnerSyncDispatcher,
 		qotdService:           qotdService,
+		moderationMetrics:     moderationMetrics,
 		controlServerRegistry: controlServerRegistry,
 	})
 

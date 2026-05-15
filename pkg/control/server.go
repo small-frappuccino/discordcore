@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
@@ -64,6 +65,7 @@ type Server struct {
 	partnerBoardService  partners.BoardService
 	partnerBoardSyncer   partners.GuildSyncExecutor
 	qotdService          *qotd.Service
+	moderationMetrics    moderation.Metrics
 	guildRegistration    guildRegistrationFunc
 	discordSession       discordSessionDomainResolver
 	defaultBotInstanceID string
@@ -147,6 +149,17 @@ func (s *Server) SetQOTDService(service *qotd.Service) {
 		return
 	}
 	s.qotdService = service
+}
+
+// SetModerationMetrics injects the moderation observability sink so the
+// /v1/health/moderation route can snapshot it. Mirrors SetQOTDService: nil
+// is a no-op, so callers that pass an unwired metrics value leave the
+// route in its 503 "not enabled" state instead of panicking.
+func (s *Server) SetModerationMetrics(metrics moderation.Metrics) {
+	if s == nil || metrics == nil {
+		return
+	}
+	s.moderationMetrics = metrics
 }
 
 // SetBearerToken configures bearer token authentication for control routes.

@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -30,6 +31,7 @@ type CommandHandler struct {
 	partnerBoardService  partners.BoardService
 	partnerSyncExecutor  partners.GuildSyncExecutor
 	qotdService          qotdcmd.QuestionCatalogService
+	moderationMetrics    moderation.Metrics
 	adminServiceManager  *service.ServiceManager
 	adminUnifiedCache    *cache.UnifiedCache
 	adminStore           *storage.Store
@@ -115,6 +117,16 @@ func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyn
 // SetQOTDService injects the QOTD application service for interactive QOTD commands.
 func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService) {
 	ch.qotdService = service
+}
+
+// SetModerationMetrics injects the moderation observability sink so the
+// /clean command records attempts, outcomes, and per-message delete failures.
+// Nil falls back to NopMetrics inside the moderation registrar.
+func (ch *CommandHandler) SetModerationMetrics(metrics moderation.Metrics) {
+	if ch == nil {
+		return
+	}
+	ch.moderationMetrics = metrics
 }
 
 // SetAdminCommandServices injects runtime services consumed by the admin
