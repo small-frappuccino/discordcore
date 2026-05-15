@@ -170,9 +170,9 @@ func (c *cleanCommand) recordEarlyFailure(ctx *core.Context, channelID, cause st
 	log.ApplicationLogger().Warn(
 		"Clean command refused",
 		"operation", "moderation.clean.refused",
-		"guildID", guildIDFromContext(ctx),
+		"guildID", ctx.GuildID,
 		"channelID", channelID,
-		"userID", userIDFromContext(ctx),
+		"userID", ctx.UserID,
 		"cause", cause,
 		"durationMs", duration.Milliseconds(),
 		"err", err,
@@ -187,9 +187,9 @@ func (c *cleanCommand) logCleanCompleted(ctx *core.Context, request cleanRequest
 	log.ApplicationLogger().Info(
 		"Clean command completed",
 		"operation", "moderation.clean.completed",
-		"guildID", guildIDFromContext(ctx),
+		"guildID", ctx.GuildID,
 		"channelID", request.channelID,
-		"userID", userIDFromContext(ctx),
+		"userID", ctx.UserID,
 		"requested", request.count,
 		"scanned", result.scanned,
 		"matched", result.matched,
@@ -206,31 +206,13 @@ func (c *cleanCommand) logCleanCompleted(ctx *core.Context, request cleanRequest
 	)
 }
 
-func guildIDFromContext(ctx *core.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	return ctx.GuildID
-}
-
-func userIDFromContext(ctx *core.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	return ctx.UserID
-}
-
+// parseCleanRequest extracts and validates /clean's own options. The
+// framework already guarantees that ctx, ctx.Interaction, ctx.GuildID, and
+// ctx.UserID are populated by the time Handle runs (RequiresGuild=true is
+// gated in permissionGateMiddleware, and RequiresPermissions=true forces
+// UserID through the permission checker), so this function only validates
+// the inputs that are actually /clean-specific.
 func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
-	if err := core.ValidateGuildContext(ctx); err != nil {
-		return cleanRequest{}, err
-	}
-	if err := core.ValidateUserContext(ctx); err != nil {
-		return cleanRequest{}, err
-	}
-	if ctx == nil || ctx.Interaction == nil {
-		return cleanRequest{}, core.NewCommandError("Interaction context is not available right now.", true)
-	}
-
 	channelID := strings.TrimSpace(ctx.Interaction.ChannelID)
 	if channelID == "" {
 		return cleanRequest{}, core.NewCommandError("This command needs a channel context before it can clean messages.", true)
@@ -286,20 +268,13 @@ func sanitizeCleanContains(input string) string {
 	return strings.TrimSpace(value)
 }
 
+// validateCleanPermissions checks that the actor and the bot both hold
+// the channel-level permissions /clean needs. Framework guarantees apply:
+// ctx.Session, ctx.Session.State, and ctx.Session.State.User are populated
+// by the discordgo Ready handshake that precedes any interaction reception,
+// and channelID has already been validated as non-empty by parseCleanRequest.
 func validateCleanPermissions(ctx *core.Context, channelID string) error {
-	if ctx == nil || ctx.Session == nil {
-		return core.NewCommandError("Session not ready. Try again shortly.", true)
-	}
-	if strings.TrimSpace(channelID) == "" {
-		return core.NewCommandError("Channel context is missing for this clean request.", true)
-	}
-	botID := ""
-	if ctx.Session.State != nil && ctx.Session.State.User != nil {
-		botID = strings.TrimSpace(ctx.Session.State.User.ID)
-	}
-	if botID == "" {
-		return core.NewCommandError("Bot identity is not available right now.", true)
-	}
+	botID := ctx.Session.State.User.ID
 
 	if err := requireChannelPermissions(ctx.Session, ctx.UserID, channelID, discordgo.PermissionManageMessages, "You need the Manage Messages permission in this channel to use /clean."); err != nil {
 		return err
@@ -311,10 +286,12 @@ func validateCleanPermissions(ctx *core.Context, channelID string) error {
 	return nil
 }
 
+// requireChannelPermissions is the package-private permission lookup used
+// by validateCleanPermissions. All three identifying inputs are already
+// validated upstream (session by the framework, userID by the permission
+// gate or by the bot's own State.User, channelID by parseCleanRequest);
+// only the actual Discord API call needs an error path.
 func requireChannelPermissions(session *discordgo.Session, userID, channelID string, required int64, message string) error {
-	if session == nil || strings.TrimSpace(userID) == "" || strings.TrimSpace(channelID) == "" {
-		return core.NewCommandError("Channel permissions could not be checked right now.", true)
-	}
 	perms, err := session.UserChannelPermissions(userID, channelID)
 	if err != nil {
 		return core.NewCommandError("Channel permissions could not be checked right now.", true)
@@ -329,11 +306,6 @@ func requireChannelPermissions(session *discordgo.Session, userID, channelID str
 }
 
 func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, start time.Time) (cleanResult, error) {
-	if ctx == nil || ctx.Session == nil {
-		c.metrics.RecordCleanFailure(CleanFailureCauseSessionUnavailable, c.now().Sub(start))
-		return cleanResult{}, core.NewCommandError("Session not ready. Try again shortly.", true)
-	}
-
 	matched, result, err := c.collectCleanTargets(ctx, request, start)
 	if err != nil {
 		return cleanResult{}, err

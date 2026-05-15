@@ -103,15 +103,14 @@ type SummarySnapshot struct {
 // sync with the call sites in clean_command.go — operators build alerts
 // against these strings, so renames are a breaking change for them.
 const (
-	CleanFailureCauseFeatureDisabled    = "feature_disabled"
-	CleanFailureCauseInvalidRequest     = "invalid_request"
-	CleanFailureCausePermissionDenied   = "permission_denied"
-	CleanFailureCauseSessionUnavailable = "session_unavailable"
-	CleanFailureCauseFetchForbidden     = "fetch_forbidden"
-	CleanFailureCauseFetchMissing       = "fetch_missing_channel"
-	CleanFailureCauseFetchRateLimited   = "fetch_rate_limited"
-	CleanFailureCauseFetchTransient     = "fetch_transient"
-	CleanFailureCauseFetchUnknown       = "fetch_unknown"
+	CleanFailureCauseFeatureDisabled  = "feature_disabled"
+	CleanFailureCauseInvalidRequest   = "invalid_request"
+	CleanFailureCausePermissionDenied = "permission_denied"
+	CleanFailureCauseFetchForbidden   = "fetch_forbidden"
+	CleanFailureCauseFetchMissing     = "fetch_missing_channel"
+	CleanFailureCauseFetchRateLimited = "fetch_rate_limited"
+	CleanFailureCauseFetchTransient   = "fetch_transient"
+	CleanFailureCauseFetchUnknown     = "fetch_unknown"
 )
 
 // ClassifyCleanFetchFailure maps a fetch-side cleanup.FailureClass into
