@@ -21,6 +21,8 @@ func TestInMemoryMetricsSnapshotReflectsRecordings(t *testing.T) {
 	m.RecordCleanDeleteFailure(cleanup.FailureClassForbidden)
 	m.RecordCleanDeleteFailure(cleanup.FailureClassForbidden)
 	m.RecordCleanDeleteFailure(cleanup.FailureClassRateLimited)
+	m.RecordCleanAuditLogFailure()
+	m.RecordCleanAuditLogFailure()
 
 	snap := m.Snapshot().Clean
 
@@ -50,6 +52,9 @@ func TestInMemoryMetricsSnapshotReflectsRecordings(t *testing.T) {
 	}
 	if snap.Duration.Count != 4 {
 		t.Fatalf("Duration.Count=%d want 4 (1 success + 3 failures)", snap.Duration.Count)
+	}
+	if snap.AuditLogFailureTotal != 2 {
+		t.Fatalf("AuditLogFailureTotal=%d want 2", snap.AuditLogFailureTotal)
 	}
 	if snap.Duration.MaxSeconds < 1.199 || snap.Duration.MaxSeconds > 1.201 {
 		t.Fatalf("Duration.MaxSeconds=%f want ~1.2", snap.Duration.MaxSeconds)
@@ -121,6 +126,7 @@ func TestNopMetricsSatisfiesInterfaceWithoutSnapshotProvider(t *testing.T) {
 	m.RecordCleanSuccess(time.Second, 3)
 	m.RecordCleanFailure("anything", time.Millisecond)
 	m.RecordCleanDeleteFailure(cleanup.FailureClassUnknown)
+	m.RecordCleanAuditLogFailure()
 
 	if _, ok := m.(SnapshotProvider); ok {
 		t.Fatal("NopMetrics must NOT satisfy SnapshotProvider; the route uses the type assertion to detect missing observability")

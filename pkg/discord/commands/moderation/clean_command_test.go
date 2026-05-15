@@ -327,6 +327,49 @@ func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
 		}
 	})
 
+	t.Run("audit-log channel failure records RecordCleanAuditLogFailure", func(t *testing.T) {
+		metrics := NewInMemoryMetrics()
+		h := newCleanCommandHarness(t, cleanHarnessConfig{
+			guildID:      "g-metrics-audit",
+			channelID:    "c-main",
+			logChannelID: "c-clean-log",
+			ownerID:      "owner",
+			actorID:      "owner",
+			botID:        "bot",
+			// EmbedLinks is required for ShouldEmitLogEvent to pass the
+			// channel-permission gate on LogEventCleanAction; without it
+			// the audit-log POST never happens and the failure metric is
+			// not exercised.
+			channelPerms: discordgo.PermissionViewChannel |
+				discordgo.PermissionReadMessageHistory |
+				discordgo.PermissionSendMessages |
+				discordgo.PermissionEmbedLinks |
+				discordgo.PermissionManageMessages,
+			messages: []*discordgo.Message{
+				newCleanTestMessage("m2", "c-main", "g-metrics-audit", "u-1", "hi", time.Now().Add(-2*time.Minute), false),
+				newCleanTestMessage("m1", "c-main", "g-metrics-audit", "u-1", "yo", time.Now().Add(-3*time.Minute), false),
+			},
+			auditLogPostError: &cleanFetchErrorSpec{
+				statusCode: http.StatusForbidden,
+				body:       `{"code":50001,"message":"Missing Access"}`,
+			},
+			metrics: metrics,
+		})
+
+		h.run(t, cleanIntOption(cleanCountOptionName, 2))
+
+		snap := metrics.Snapshot().Clean
+		if snap.SuccessTotal != 1 {
+			t.Fatalf("clean itself should succeed; SuccessTotal=%d (%+v)", snap.SuccessTotal, snap)
+		}
+		if snap.DeletedMessagesTotal != 2 {
+			t.Fatalf("expected 2 deleted messages, got %+v", snap)
+		}
+		if snap.AuditLogFailureTotal != 1 {
+			t.Fatalf("expected AuditLogFailureTotal=1, got %+v", snap)
+		}
+	})
+
 	t.Run("fetch failure records classified fetch cause", func(t *testing.T) {
 		metrics := NewInMemoryMetrics()
 		h := newCleanCommandHarness(t, cleanHarnessConfig{
@@ -447,6 +490,12 @@ type cleanHarnessConfig struct {
 	// so tests can assert that /clean records attempts/outcomes through the
 	// Metrics interface end-to-end.
 	metrics Metrics
+	// auditLogPostError, when set, makes the mock Discord server reject
+	// POST /channels/{logChannelID}/messages with the supplied status and
+	// JSON body. Lets tests drive the audit-log POST failure path through
+	// the command end-to-end so RecordCleanAuditLogFailure is observable
+	// without rebuilding the harness state machine in each test.
+	auditLogPostError *cleanFetchErrorSpec
 }
 
 type cleanFetchErrorSpec struct {
@@ -543,6 +592,12 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 			w.WriteHeader(http.StatusNoContent)
 		case req.Method == http.MethodPost && strings.HasSuffix(strings.TrimRight(req.URL.Path, "/"), "/messages"):
 			channelID := cleanChannelIDFromPath(req.URL.Path)
+			if cfg.auditLogPostError != nil && cfg.logChannelID != "" && channelID == cfg.logChannelID {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(cfg.auditLogPostError.statusCode)
+				_, _ = w.Write([]byte(cfg.auditLogPostError.body))
+				return
+			}
 			body, _ := io.ReadAll(req.Body)
 			var payload struct {
 				Content string                    `json:"content"`

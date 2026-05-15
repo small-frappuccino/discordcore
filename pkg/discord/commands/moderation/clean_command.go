@@ -127,16 +127,16 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 	c.metrics.RecordCleanAttempt()
 
 	if err := ensureModerationCommandEnabled(ctx, "moderation.clean", "Clean command is disabled for this server."); err != nil {
-		c.metrics.RecordCleanFailure(CleanFailureCauseFeatureDisabled, c.now().Sub(start))
+		c.recordEarlyFailure(ctx, "", CleanFailureCauseFeatureDisabled, start, err)
 		return err
 	}
 	request, err := parseCleanRequest(ctx)
 	if err != nil {
-		c.metrics.RecordCleanFailure(CleanFailureCauseInvalidRequest, c.now().Sub(start))
+		c.recordEarlyFailure(ctx, "", CleanFailureCauseInvalidRequest, start, err)
 		return err
 	}
 	if err := validateCleanPermissions(ctx, request.channelID); err != nil {
-		c.metrics.RecordCleanFailure(CleanFailureCausePermissionDenied, c.now().Sub(start))
+		c.recordEarlyFailure(ctx, request.channelID, CleanFailureCausePermissionDenied, start, err)
 		return err
 	}
 
@@ -144,15 +144,80 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return err
 	}
-	c.metrics.RecordCleanSuccess(c.now().Sub(start), result.deleted)
+	duration := c.now().Sub(start)
+	c.metrics.RecordCleanSuccess(duration, result.deleted)
+	c.logCleanCompleted(ctx, request, result, duration)
 	if result.deleted > 0 {
-		sendCleanActionLog(ctx, request, result)
+		c.sendCleanActionLog(ctx, request, result)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).
 		WithContext(ctx).
 		Ephemeral().
 		Success(ctx.Interaction, buildCleanCommandMessage(request, result))
+}
+
+// recordEarlyFailure surfaces "/clean refused before the deletion pass"
+// through both the Metrics seam (so /v1/health/moderation reflects it)
+// and the application log (the primary audit trail per the QOTD pattern
+// — channel embeds are secondary consumers). The /clean command only
+// posts an audit-channel embed on successful deletion, so without this
+// log line the audit story would be the slash-command reply alone, which
+// disappears the moment the actor closes the ephemeral message.
+func (c *cleanCommand) recordEarlyFailure(ctx *core.Context, channelID, cause string, start time.Time, err error) {
+	duration := c.now().Sub(start)
+	c.metrics.RecordCleanFailure(cause, duration)
+	log.ApplicationLogger().Warn(
+		"Clean command refused",
+		"operation", "moderation.clean.refused",
+		"guildID", guildIDFromContext(ctx),
+		"channelID", channelID,
+		"userID", userIDFromContext(ctx),
+		"cause", cause,
+		"durationMs", duration.Milliseconds(),
+		"err", err,
+	)
+}
+
+// logCleanCompleted is the primary audit trail for a successful /clean
+// run. It contains every field the channel-embed audit consumer carries
+// (actor, channel, filters, deletion sub-totals) so the log stream is a
+// self-sufficient record even when the audit channel is unreachable.
+func (c *cleanCommand) logCleanCompleted(ctx *core.Context, request cleanRequest, result cleanResult, duration time.Duration) {
+	log.ApplicationLogger().Info(
+		"Clean command completed",
+		"operation", "moderation.clean.completed",
+		"guildID", guildIDFromContext(ctx),
+		"channelID", request.channelID,
+		"userID", userIDFromContext(ctx),
+		"requested", request.count,
+		"scanned", result.scanned,
+		"matched", result.matched,
+		"deleted", result.deleted,
+		"deletedBulk", result.deletedBulk,
+		"deletedSingle", result.deletedSingle,
+		"failed", result.failed,
+		"skippedPinned", result.skippedPinned,
+		"filterUser", request.userID,
+		"filterContainsLen", len(request.contains),
+		"filterFromID", request.fromID,
+		"filterToID", request.toID,
+		"durationMs", duration.Milliseconds(),
+	)
+}
+
+func guildIDFromContext(ctx *core.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	return ctx.GuildID
+}
+
+func userIDFromContext(ctx *core.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	return ctx.UserID
 }
 
 func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
@@ -295,8 +360,9 @@ func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, sta
 	onDeleteError := func(messageID string, err error, class cleanup.FailureClass) {
 		recordCleanFailure(&result, class)
 		c.metrics.RecordCleanDeleteFailure(class)
-		log.ErrorLoggerRaw().Error(
+		log.ApplicationLogger().Warn(
 			"Clean command failed to delete message",
+			"operation", "moderation.clean.delete_failed",
 			"guildID", ctx.GuildID,
 			"channelID", request.channelID,
 			"messageID", messageID,
@@ -309,8 +375,9 @@ func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, sta
 		for i := 0; i < len(messageIDs); i++ {
 			c.metrics.RecordCleanDeleteFailure(class)
 		}
-		log.ErrorLoggerRaw().Error(
+		log.ApplicationLogger().Warn(
 			"Clean command failed to bulk-delete chunk",
+			"operation", "moderation.clean.bulk_delete_failed",
 			"guildID", ctx.GuildID,
 			"channelID", request.channelID,
 			"chunkSize", len(messageIDs),
@@ -398,8 +465,9 @@ func (c *cleanCommand) collectCleanTargets(ctx *core.Context, request cleanReque
 		page, err := ctx.Session.ChannelMessages(request.channelID, limit, before, "", "")
 		if err != nil {
 			class := cleanup.ClassifyFetchError(err)
-			log.ErrorLoggerRaw().Error(
+			log.ApplicationLogger().Warn(
 				"Clean command failed to load channel messages",
+				"operation", "moderation.clean.fetch_failed",
 				"guildID", ctx.GuildID,
 				"channelID", request.channelID,
 				"failureClass", FailureClassToken(class),
@@ -612,7 +680,14 @@ func truncateCleanFilterDisplay(value string) string {
 	return value[:cleanContainsDisplayMaxLen-3] + "..."
 }
 
-func sendCleanActionLog(ctx *core.Context, request cleanRequest, result cleanResult) {
+// sendCleanActionLog posts the secondary audit-channel embed and surfaces
+// any post failure through both Metrics and the application log. Unlike
+// the void sendModerationLogForEvent path used by other mod commands, the
+// /clean command treats audit-log POST failures as a first-class signal:
+// the primary audit record is the application-log line written by
+// logCleanCompleted, so a broken channel must not look like "everything
+// worked" on /v1/health/moderation.
+func (c *cleanCommand) sendCleanActionLog(ctx *core.Context, request cleanRequest, result cleanResult) {
 	channelLabel := fmt.Sprintf("<#%s> (`%s`)", request.channelID, request.channelID)
 	payload := moderationLogPayload{
 		Action:      cleanCommandName,
@@ -621,7 +696,22 @@ func sendCleanActionLog(ctx *core.Context, request cleanRequest, result cleanRes
 		RequestedBy: ctx.UserID,
 		Extra:       buildCleanLogDetails(request, result),
 	}
-	sendModerationLogForEvent(ctx, payload, logging.LogEventCleanAction)
+	emit := postModerationEventEmbed(ctx, payload, logging.LogEventCleanAction)
+	if !emit.Enabled {
+		return
+	}
+	if emit.Err != nil {
+		c.metrics.RecordCleanAuditLogFailure()
+		log.ApplicationLogger().Warn(
+			"Clean command audit-log channel post failed",
+			"operation", "moderation.clean.audit_log_failed",
+			"guildID", ctx.GuildID,
+			"sourceChannelID", request.channelID,
+			"logChannelID", emit.ChannelID,
+			"deleted", result.deleted,
+			"err", emit.Err,
+		)
+	}
 }
 
 func buildCleanLogReason(request cleanRequest) string {

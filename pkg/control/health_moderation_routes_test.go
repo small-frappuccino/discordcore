@@ -76,6 +76,7 @@ func TestModerationHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	metrics.RecordCleanDeleteFailure(cleanup.FailureClassForbidden)
 	metrics.RecordCleanDeleteFailure(cleanup.FailureClassForbidden)
 	metrics.RecordCleanDeleteFailure(cleanup.FailureClassTransient)
+	metrics.RecordCleanAuditLogFailure()
 
 	srv.SetModerationMetrics(metrics)
 
@@ -109,6 +110,9 @@ func TestModerationHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	}
 	if snap.Clean.DeleteFailureByClass[moderation.FailureClassToken(cleanup.FailureClassForbidden)] != 2 {
 		t.Fatalf("DeleteFailureByClass=%+v want forbidden=2", snap.Clean.DeleteFailureByClass)
+	}
+	if snap.Clean.AuditLogFailureTotal != 1 {
+		t.Fatalf("AuditLogFailureTotal=%d want 1 (%+v)", snap.Clean.AuditLogFailureTotal, snap.Clean)
 	}
 }
 

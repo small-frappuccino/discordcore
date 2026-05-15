@@ -1602,9 +1602,35 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 	sendModerationLogForEvent(ctx, payload, logging.LogEventModerationCase)
 }
 
-func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) {
+// moderationEventEmit reports the outcome of an attempt to publish a
+// moderation event embed to the configured log channel.
+//
+// Callers that need to react to a failed audit-log post (the /clean
+// command records a metric so the silent-loss becomes visible on
+// /v1/health/moderation) invoke postModerationEventEmbed directly. The
+// older fire-and-forget callers continue to use sendModerationLogForEvent
+// which fans the failure into the application log via Warn.
+type moderationEventEmit struct {
+	// Enabled is false when the guild has the event type gated off; the
+	// embed was not built and Err is nil. Callers treat this as "audit
+	// surface intentionally disabled", not as a failure.
+	Enabled bool
+	// ChannelID is the resolved log-channel ID when Enabled is true.
+	// Empty otherwise.
+	ChannelID string
+	// Err is the error returned by ChannelMessageSendEmbed, or nil on
+	// success. Only meaningful when Enabled is true.
+	Err error
+}
+
+// postModerationEventEmbed renders and posts the moderation-event embed.
+// Returns an Enabled=false result without contacting Discord when the
+// guild has the event type disabled. When enabled, returns the resolved
+// channel ID and any send error so callers can decide whether to record
+// the failure as a metric.
+func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) moderationEventEmit {
 	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
-		return
+		return moderationEventEmit{}
 	}
 	botID := ""
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
@@ -1612,7 +1638,7 @@ func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, 
 	}
 	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, eventType, ctx.GuildID)
 	if !emit.Enabled {
-		return
+		return moderationEventEmit{}
 	}
 	channelID := emit.ChannelID
 
@@ -1676,8 +1702,30 @@ func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, 
 	}
 
 	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send moderation log", "guildID", ctx.GuildID, "channelID", channelID, "action", action, "err", err)
+		return moderationEventEmit{Enabled: true, ChannelID: channelID, Err: err}
 	}
+	return moderationEventEmit{Enabled: true, ChannelID: channelID}
+}
+
+// sendModerationLogForEvent is the fire-and-forget wrapper preserved for
+// moderation commands that do not have a Metrics seam wired. Failures are
+// surfaced via the application log (Warn — channel posts are operational
+// events, not bugs); callers that need a metric should invoke
+// postModerationEventEmbed directly and react to the returned error.
+func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) {
+	emit := postModerationEventEmbed(ctx, payload, eventType)
+	if !emit.Enabled || emit.Err == nil {
+		return
+	}
+	log.ApplicationLogger().Warn(
+		"Moderation log channel post failed",
+		"operation", "moderation.audit_log.send_failed",
+		"guildID", ctx.GuildID,
+		"channelID", emit.ChannelID,
+		"action", strings.TrimSpace(payload.Action),
+		"eventType", string(eventType),
+		"err", emit.Err,
+	)
 }
 
 func resolveModerationCaseEmbedMeta(action, actionType string) (string, string, string) {
@@ -1777,6 +1825,13 @@ func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload
 	}
 
 	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send moderation case action log", "guildID", ctx.GuildID, "channelID", channelID, "action", action, "err", err)
+		log.ApplicationLogger().Warn(
+			"Moderation case action log channel post failed",
+			"operation", "moderation.audit_log.case_send_failed",
+			"guildID", ctx.GuildID,
+			"channelID", channelID,
+			"action", action,
+			"err", err,
+		)
 	}
 }

@@ -45,6 +45,14 @@ type Metrics interface {
 	// unknown) so operators can distinguish "lost permission mid-flight"
 	// from "Discord 5xx spike" without grepping logs.
 	RecordCleanDeleteFailure(class cleanup.FailureClass)
+
+	// RecordCleanAuditLogFailure is called when the audit-log channel
+	// embed POST fails (the secondary audit consumer). The primary audit
+	// trail is the structured application log line emitted on every
+	// /clean run, so this metric exists purely to surface the silent
+	// loss: a steady non-zero rate means "audit channel is broken and
+	// nobody noticed because the slash command still replied success".
+	RecordCleanAuditLogFailure()
 }
 
 // SnapshotProvider is the optional capability the /v1/health/moderation
@@ -73,7 +81,12 @@ type CleanSnapshot struct {
 	FailureByCause       map[string]int64 `json:"failure_by_cause,omitempty"`
 	DeleteFailureByClass map[string]int64 `json:"delete_failure_by_class,omitempty"`
 	DeletedMessagesTotal int64            `json:"deleted_messages_total"`
-	Duration             SummarySnapshot  `json:"duration_seconds"`
+	// AuditLogFailureTotal counts how many /clean runs successfully
+	// deleted messages but failed to post the audit-log channel embed.
+	// Operators read a non-zero rate as "audit channel is broken" —
+	// the structured application log still has the primary record.
+	AuditLogFailureTotal int64           `json:"audit_log_failure_total"`
+	Duration             SummarySnapshot `json:"duration_seconds"`
 }
 
 // SummarySnapshot is the count/sum/max shape that mirrors a Prometheus
@@ -152,6 +165,7 @@ func (NopMetrics) RecordCleanAttempt()                           {}
 func (NopMetrics) RecordCleanSuccess(time.Duration, int)         {}
 func (NopMetrics) RecordCleanFailure(string, time.Duration)      {}
 func (NopMetrics) RecordCleanDeleteFailure(cleanup.FailureClass) {}
+func (NopMetrics) RecordCleanAuditLogFailure()                   {}
 
 // InMemoryMetrics is the lightweight implementation backing
 // /v1/health/moderation. Atomic int64 counters; the labeled maps
@@ -173,6 +187,7 @@ type InMemoryMetrics struct {
 	deleteFailureByClass map[string]*atomic.Int64
 
 	deletedMessages atomic.Int64
+	auditLogFailure atomic.Int64
 	duration        summary
 }
 
@@ -208,6 +223,10 @@ func (m *InMemoryMetrics) RecordCleanDeleteFailure(class cleanup.FailureClass) {
 	m.classCounter(FailureClassToken(class)).Add(1)
 }
 
+func (m *InMemoryMetrics) RecordCleanAuditLogFailure() {
+	m.auditLogFailure.Add(1)
+}
+
 // Snapshot returns a JSON-friendly view of the current counter state. The
 // returned MetricsSnapshot is a copy; callers can mutate it without
 // affecting the live counters.
@@ -232,6 +251,7 @@ func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
 			FailureByCause:       failureByCause,
 			DeleteFailureByClass: deleteFailureByClass,
 			DeletedMessagesTotal: m.deletedMessages.Load(),
+			AuditLogFailureTotal: m.auditLogFailure.Load(),
 			Duration:             m.duration.snapshot(),
 		},
 	}
