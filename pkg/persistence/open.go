@@ -4,10 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/stdlib"
 )
+
+// maxPostgresMessageBodyBytes is the hard ceiling enforced on every Postgres
+// protocol message received from the server. The wire protocol encodes the
+// upcoming message length in a 4-byte big-endian prefix; if that prefix is
+// corrupted (e.g. a load balancer cuts in with an HTML 503 page during
+// connect), pgx will otherwise allocate exactly that many bytes for the
+// receive buffer. We have seen this manifest in production as a 1.55 GiB
+// allocation request leading to `fatal error: runtime: cannot allocate
+// memory`, killing the process with no recoverable error.
+//
+// 64 MiB is roughly two orders of magnitude above any legitimate row
+// payload this codebase sends or receives — QOTD question rows, moderation
+// records, embeds — so it leaves abundant headroom while turning the
+// corrupted-stream scenario into a normal `error` that bubbles up through
+// database/sql and is logged like any other connection failure.
+const maxPostgresMessageBodyBytes = 64 * 1024 * 1024
 
 // Open creates a SQL handle configured for PostgreSQL.
 func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
@@ -16,7 +35,12 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("pgx", normalized.DatabaseURL)
+	connStr, err := registerSafeConnConfig(normalized.DatabaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres connection: %w", err)
 	}
@@ -39,4 +63,26 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping postgres connection: %w", err)
 	}
 	return db, nil
+}
+
+// registerSafeConnConfig parses the database URL through pgx so we can hook
+// BuildFrontend and cap the per-message body size. Returns the
+// stdlib-compatible connection string that `sql.Open("pgx", ...)` accepts.
+func registerSafeConnConfig(databaseURL string) (string, error) {
+	config, err := pgx.ParseConfig(databaseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse postgres connection config: %w", err)
+	}
+	previousBuildFrontend := config.BuildFrontend
+	config.BuildFrontend = func(r io.Reader, w io.Writer) *pgproto3.Frontend {
+		var frontend *pgproto3.Frontend
+		if previousBuildFrontend != nil {
+			frontend = previousBuildFrontend(r, w)
+		} else {
+			frontend = pgproto3.NewFrontend(r, w)
+		}
+		frontend.SetMaxBodyLen(maxPostgresMessageBodyBytes)
+		return frontend
+	}
+	return stdlib.RegisterConnConfig(config), nil
 }

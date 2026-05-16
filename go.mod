@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/hugolgst/rich-go v0.0.0-20240715122152-74618cc1ace2
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/joho/godotenv v1.5.1
 	github.com/kyokomi/emoji/v2 v2.2.13
 	golang.org/x/sync v0.17.0

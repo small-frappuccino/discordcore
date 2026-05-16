@@ -31,6 +31,7 @@ func (s *Server) registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/guilds/", s.handleGuildConfigRoutes)
 	mux.HandleFunc("/v1/health/qotd", s.handleQOTDHealthRoute)
 	mux.HandleFunc("/v1/health/moderation", s.handleModerationHealthRoute)
+	mux.HandleFunc("/v1/health/live", s.handleLiveHealthRoute)
 }
 
 func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {

@@ -77,6 +77,24 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// Ensure logs are flushed on exit
 	defer log.GlobalLogger.Sync()
 
+	// Best-effort startup notification on the configured lifecycle
+	// webhook. Fires once before any work happens so operators see a
+	// fresh "back online" chat message after every supervisor restart.
+	// notifyLifecycleEvent is a no-op when ALICE_LIFECYCLE_WEBHOOK_URL is unset.
+	notifyLifecycleEvent("starting", "")
+	// Paired with the startup notification: this defer emits a "stopping"
+	// (or "fatal") line right before the process exits, so the operator
+	// has a chat-channel record of every clean shutdown. Crashes via
+	// runtime.throw bypass deferred handlers — that gap is covered by
+	// the external /v1/health/live poller documented in OPS.md.
+	defer func() {
+		if r := recover(); r != nil {
+			notifyLifecycleEvent("fatal", fmt.Sprintf("%v", r))
+			panic(r)
+		}
+		notifyLifecycleEvent("stopping", "")
+	}()
+
 	// Theme configuration now comes from persisted runtime_config.
 	// IMPORTANT: configManager is created later (after the config store is ready).
 	// We cannot read runtime_config here without risking an undefined variable / nil config.

@@ -57,6 +57,7 @@ type requestAuthorization struct {
 // Server exposes operational controls for a running Discordcore instance.
 type Server struct {
 	addr                 string
+	startedAt            time.Time
 	authBearerToken      string
 	tlsCertFile          string
 	tlsKeyFile           string
@@ -94,6 +95,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	mux := http.NewServeMux()
 	s := &Server{
 		addr:                addr,
+		startedAt:           time.Now().UTC(),
 		configManager:       configManager,
 		partnerBoardService: partners.NewBoardApplicationService(configManager, nil),
 		runtimeApplier:      runtimeApplier,
