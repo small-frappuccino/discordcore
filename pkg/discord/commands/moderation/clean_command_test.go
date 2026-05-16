@@ -401,6 +401,63 @@ func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
 	})
 }
 
+// TestCleanCommandExecuteCleanUsesInjectedClock pins the wiring between
+// executeClean and the cleanCommand.now seam. Without it, a regression that
+// re-introduces a direct time.Now() call inside executeClean would silently
+// strand the bulk-vs-single routing on the wall clock, making the boundary
+// untestable. The check works by setting cleanCommand.now ~20 years ahead
+// of the message timestamps: with c.now() the messages look ancient and
+// must route to single-delete; with wall-clock time.Now() they would look
+// fresh and route to bulk-delete, flipping the assertions below.
+func TestCleanCommandExecuteCleanUsesInjectedClock(t *testing.T) {
+	referenceTime := time.Now().UTC()
+	injectedNow := referenceTime.Add(20 * 365 * 24 * time.Hour)
+
+	h := newCleanCommandHarness(t, cleanHarnessConfig{
+		guildID:   "g-clean-clock",
+		channelID: "c-main",
+		ownerID:   "owner",
+		actorID:   "owner",
+		botID:     "bot",
+		channelPerms: discordgo.PermissionViewChannel |
+			discordgo.PermissionReadMessageHistory |
+			discordgo.PermissionSendMessages |
+			discordgo.PermissionManageMessages,
+		messages: []*discordgo.Message{
+			newCleanTestMessage("m-newer", "c-main", "g-clean-clock", "u-target", "spam", referenceTime.Add(-time.Minute), false),
+			newCleanTestMessage("m-older", "c-main", "g-clean-clock", "u-target", "spam", referenceTime.Add(-2*time.Minute), false),
+		},
+	})
+
+	cmd := newCleanCommand(nil)
+	cmd.now = func() time.Time { return injectedNow }
+
+	ctx := &core.Context{
+		Session: h.session,
+		GuildID: h.guildID,
+	}
+	result, err := cmd.executeClean(ctx, cleanRequest{
+		channelID: h.channelID,
+		count:     5,
+	}, injectedNow)
+	if err != nil {
+		t.Fatalf("executeClean returned unexpected error: %v", err)
+	}
+
+	if result.deletedBulk != 0 {
+		t.Fatalf("expected zero bulk deletes when injected clock makes messages ancient, got %+v", result)
+	}
+	if result.deletedSingle != 2 {
+		t.Fatalf("expected both messages to route to single-delete, got %+v", result)
+	}
+	if got := h.bulkDeletedIDs(); len(got) != 0 {
+		t.Fatalf("did not expect any bulk-delete calls, got %v", got)
+	}
+	if got := h.singleDeletedIDs(); !slices.Equal(got, []string{"m-newer", "m-older"}) {
+		t.Fatalf("unexpected single-delete order or contents: %v", got)
+	}
+}
+
 // TestShouldSingleDeleteCleanMessageBoundary pins the safety margin used to
 // route messages near Discord's 14-day bulk-delete cutoff. The margin must
 // be wide enough that normal request latency between local classification

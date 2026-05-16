@@ -315,7 +315,7 @@ func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, sta
 		return result, nil
 	}
 
-	now := time.Now().UTC()
+	now := c.now().UTC()
 	bulkIDs := make([]string, 0, len(matched))
 	singleIDs := make([]string, 0, len(matched))
 	for _, message := range matched {

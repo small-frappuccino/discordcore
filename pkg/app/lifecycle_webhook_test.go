@@ -28,6 +28,14 @@ func TestNotifyLifecycleEventDoesNothingWithoutWebhookURL(t *testing.T) {
 // silently disable the entire notification path and only be caught when
 // a real outage went unannounced.
 func TestNotifyLifecycleEventPostsToConfiguredURL(t *testing.T) {
+	origAppName := util.ConfiguredAppName
+	origAppVersion := util.AppVersion
+	origBotName := util.DiscordBotName
+	t.Cleanup(func() {
+		util.ConfiguredAppName = origAppName
+		util.AppVersion = origAppVersion
+		util.DiscordBotName = origBotName
+	})
 	util.ConfiguredAppName = "discordmain"
 	util.AppVersion = "v0.test"
 	util.DiscordBotName = "TestBot"
@@ -83,6 +91,14 @@ func TestNotifyLifecycleEventPostsToConfiguredURL(t *testing.T) {
 // detail) because alert channels are skim-read; reshuffling the layout
 // is a real UX regression for the on-call human.
 func TestBuildLifecycleContentFormat(t *testing.T) {
+	origAppName := util.ConfiguredAppName
+	origAppVersion := util.AppVersion
+	origBotName := util.DiscordBotName
+	t.Cleanup(func() {
+		util.ConfiguredAppName = origAppName
+		util.AppVersion = origAppVersion
+		util.DiscordBotName = origBotName
+	})
 	util.ConfiguredAppName = "discordqotd"
 	util.AppVersion = "v0.42.0"
 	util.DiscordBotName = "QOTD"
@@ -108,6 +124,14 @@ func TestBuildLifecycleContentFormat(t *testing.T) {
 // would print as awkward empty parens / dangling backticks; the
 // fallbacks here mean an operator can still tell which deployment died.
 func TestBuildLifecycleContentFallsBackWhenIdentityUnset(t *testing.T) {
+	origAppName := util.ConfiguredAppName
+	origAppVersion := util.AppVersion
+	origBotName := util.DiscordBotName
+	t.Cleanup(func() {
+		util.ConfiguredAppName = origAppName
+		util.AppVersion = origAppVersion
+		util.DiscordBotName = origBotName
+	})
 	util.ConfiguredAppName = ""
 	util.AppVersion = ""
 	util.DiscordBotName = ""
