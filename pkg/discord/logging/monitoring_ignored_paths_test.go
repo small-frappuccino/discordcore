@@ -215,13 +215,13 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testing.T) {
 	store, _ := newLoggingStore(t, "monitoring-heartbeat.db")
 
-	ticks := make(chan error, 8)
+	ticks := newTickRecorder(t, 2)
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           monitoringRunErrWithTimeoutContext,
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
 		Warn:             log.ApplicationLogger().Warn,
-		OnHeartbeatTick:  func(err error) { ticks <- err },
+		OnHeartbeatTick:  ticks.Hook,
 	})
 
 	ms := &MonitoringService{
@@ -242,7 +242,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 
 	ms.startHeartbeat(context.Background())
 
-	if err := waitForHeartbeatTick(t, ticks); err != nil {
+	if err := ticks.Next(t); err != nil {
 		t.Fatalf("expected initial heartbeat to succeed: %v", err)
 	}
 	first, ok, err := store.Heartbeat(context.Background())
@@ -250,7 +250,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		t.Fatalf("expected initial heartbeat timestamp to be persisted: ok=%v err=%v", ok, err)
 	}
 
-	if err := waitForHeartbeatTick(t, ticks); err != nil {
+	if err := ticks.Next(t); err != nil {
 		t.Fatalf("expected periodic heartbeat to succeed: %v", err)
 	}
 	second, ok, err := store.Heartbeat(context.Background())

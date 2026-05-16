@@ -27,7 +27,7 @@ var (
 )
 
 // DiscordCoreVersion is the current version of the discordcore package.
-const DiscordCoreVersion = "v0.511.0-rc.12"
+const DiscordCoreVersion = "v0.511.0-rc.13"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string

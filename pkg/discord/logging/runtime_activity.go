@@ -23,8 +23,14 @@ type runtimeActivityOptions struct {
 	// (initial synchronous attempt and each ticker firing), with the
 	// error returned by RunErr. Test-only seam — production callers
 	// leave it nil so the heartbeat loop adds zero work per tick.
-	// Tests use it to wait deterministically for ticks instead of
-	// polling the store with sleeps.
+	//
+	// The callback runs synchronously inside the heartbeat goroutine
+	// (and inside the startup attempt invoked by StartHeartbeat
+	// itself), so it must not block indefinitely; an unread channel
+	// send wedges the goroutine and deadlocks StopHeartbeat. Tests
+	// that observe ticks should pass tickRecorder.Hook so the
+	// dedicated drainer absorbs ticks the test is not asserting on
+	// and releases in-flight sends via context cancel during cleanup.
 	OnHeartbeatTick func(err error)
 }
 

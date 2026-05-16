@@ -65,7 +65,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat.db")
 	base := time.Date(2026, time.January, 2, 5, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
-	ticks := make(chan error, 8)
+	ticks := newTickRecorder(t, 2)
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           runErrWithTimeoutContext,
@@ -73,7 +73,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Add(1)) * time.Second)
 		},
-		OnHeartbeatTick: func(err error) { ticks <- err },
+		OnHeartbeatTick: ticks.Hook,
 	})
 
 	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
@@ -83,7 +83,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		}
 	})
 
-	if err := waitForHeartbeatTick(t, ticks); err != nil {
+	if err := ticks.Next(t); err != nil {
 		t.Fatalf("expected initial heartbeat to succeed: %v", err)
 	}
 	first, ok, err := store.Heartbeat(context.Background())
@@ -91,7 +91,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		t.Fatalf("expected initial heartbeat timestamp to be persisted: ok=%v err=%v", ok, err)
 	}
 
-	if err := waitForHeartbeatTick(t, ticks); err != nil {
+	if err := ticks.Next(t); err != nil {
 		t.Fatalf("expected periodic heartbeat to succeed: %v", err)
 	}
 	second, ok, err := store.Heartbeat(context.Background())
@@ -154,11 +154,7 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-retry.db")
 	base := time.Date(2026, time.January, 2, 6, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
-	ticks := make(chan error)
-	const expectedTicks = 2
-	verifyTicks := make(chan error, expectedTicks)
-	drainCtx, drainCancel := context.WithCancel(context.Background())
-	drainDone := make(chan struct{})
+	ticks := newTickRecorder(t, 2)
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
@@ -171,53 +167,20 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Load()) * time.Second)
 		},
-		// Send via select so the heartbeat goroutine cannot wedge on an unread
-		// tick during teardown — StopHeartbeat waits on the goroutine's done
-		// channel and the send happens synchronously inside attemptHeartbeat.
-		OnHeartbeatTick: func(err error) {
-			select {
-			case ticks <- err:
-			case <-drainCtx.Done():
-			}
-		},
+		OnHeartbeatTick: ticks.Hook,
 	})
-
-	// Drain the unbuffered ticks channel from a dedicated goroutine so the
-	// heartbeat send never blocks indefinitely (the startup heartbeat runs
-	// synchronously inside StartHeartbeat, so a receiver must already be
-	// running before that call). The first expectedTicks values are forwarded
-	// into verifyTicks for the test's assertions; later ticks are discarded so
-	// a flood from a contended scheduler cannot wedge the heartbeat. drainCtx
-	// signals the drainer to exit during cleanup.
-	go func() {
-		defer close(drainDone)
-		forwarded := 0
-		for {
-			select {
-			case <-drainCtx.Done():
-				return
-			case err := <-ticks:
-				if forwarded < expectedTicks {
-					verifyTicks <- err
-					forwarded++
-				}
-			}
-		}
-	}()
 
 	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
 	t.Cleanup(func() {
-		drainCancel()
 		if err := activity.StopHeartbeat(context.Background()); err != nil {
 			t.Fatalf("stop heartbeat cleanup: %v", err)
 		}
-		<-drainDone
 	})
 
-	if err := waitForHeartbeatTick(t, verifyTicks); err == nil {
+	if err := ticks.Next(t); err == nil {
 		t.Fatal("expected first heartbeat attempt to surface the injected failure")
 	}
-	if err := waitForHeartbeatTick(t, verifyTicks); err != nil {
+	if err := ticks.Next(t); err != nil {
 		t.Fatalf("expected recovery heartbeat to succeed: %v", err)
 	}
 
@@ -227,18 +190,84 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 	}
 }
 
-// waitForHeartbeatTick blocks until the next OnHeartbeatTick fires or
-// the safety timeout expires. The timeout is intentionally generous —
-// it exists to fail loudly if the heartbeat goroutine is wedged, not
-// to gate fast-path scheduling. Each test still completes in a few
-// ticker intervals on a healthy machine.
-func waitForHeartbeatTick(t *testing.T, ticks <-chan error) error {
+// tickRecorder is the test-side companion for hooks like
+// OnHeartbeatTick that fire synchronously from a long-running producer
+// goroutine. The recorder runs a drainer goroutine that always receives
+// from an unbuffered channel so the hook's send never wedges. The first
+// wantTicks values are exposed to the test via Next; later ticks are
+// silently discarded so a flooding producer cannot back up the drainer.
+//
+// The recorder registers a t.Cleanup that cancels its context and waits
+// for the drainer to exit. Because Cleanup runs LIFO, callers should
+// construct the recorder before registering the producer's stop
+// cleanup — that way producer teardown runs first while the drainer
+// is still draining, and only then does the recorder release its
+// goroutine. An in-flight Hook send unblocks via the recorder's
+// context, so a producer that invokes the callback during its own
+// teardown cannot deadlock.
+type tickRecorder struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	ticks  chan error
+	verify chan error
+	done   chan struct{}
+}
+
+func newTickRecorder(t *testing.T, wantTicks int) *tickRecorder {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &tickRecorder{
+		ctx:    ctx,
+		cancel: cancel,
+		ticks:  make(chan error),
+		verify: make(chan error, wantTicks),
+		done:   make(chan struct{}),
+	}
+	go func() {
+		defer close(r.done)
+		forwarded := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err := <-r.ticks:
+				if forwarded < wantTicks {
+					r.verify <- err
+					forwarded++
+				}
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		r.cancel()
+		<-r.done
+	})
+	return r
+}
+
+// Hook is the callback to pass to a producer option (e.g.
+// runtimeActivityOptions.OnHeartbeatTick). It rendezvous with the
+// drainer and only blocks until the recorder's context is cancelled,
+// so it is safe to invoke synchronously from inside a producer
+// goroutine loop or from a synchronous startup attempt.
+func (r *tickRecorder) Hook(err error) {
+	select {
+	case r.ticks <- err:
+	case <-r.ctx.Done():
+	}
+}
+
+// Next pulls the next collected value. The test fails if no value
+// arrives within the safety timeout, which is intentionally generous
+// so it surfaces a wedged producer rather than gating fast-path
+// scheduling on healthy machines.
+func (r *tickRecorder) Next(t *testing.T) error {
 	t.Helper()
 	select {
-	case err := <-ticks:
+	case err := <-r.verify:
 		return err
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for heartbeat tick")
+		t.Fatal("timed out waiting for tick")
 		return nil
 	}
 }
