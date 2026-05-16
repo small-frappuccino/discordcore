@@ -154,7 +154,11 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-retry.db")
 	base := time.Date(2026, time.January, 2, 6, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
-	ticks := make(chan error, 8)
+	ticks := make(chan error)
+	const expectedTicks = 2
+	verifyTicks := make(chan error, expectedTicks)
+	drainCtx, drainCancel := context.WithCancel(context.Background())
+	drainDone := make(chan struct{})
 
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
@@ -167,20 +171,53 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Load()) * time.Second)
 		},
-		OnHeartbeatTick: func(err error) { ticks <- err },
+		// Send via select so the heartbeat goroutine cannot wedge on an unread
+		// tick during teardown — StopHeartbeat waits on the goroutine's done
+		// channel and the send happens synchronously inside attemptHeartbeat.
+		OnHeartbeatTick: func(err error) {
+			select {
+			case ticks <- err:
+			case <-drainCtx.Done():
+			}
+		},
 	})
+
+	// Drain the unbuffered ticks channel from a dedicated goroutine so the
+	// heartbeat send never blocks indefinitely (the startup heartbeat runs
+	// synchronously inside StartHeartbeat, so a receiver must already be
+	// running before that call). The first expectedTicks values are forwarded
+	// into verifyTicks for the test's assertions; later ticks are discarded so
+	// a flood from a contended scheduler cannot wedge the heartbeat. drainCtx
+	// signals the drainer to exit during cleanup.
+	go func() {
+		defer close(drainDone)
+		forwarded := 0
+		for {
+			select {
+			case <-drainCtx.Done():
+				return
+			case err := <-ticks:
+				if forwarded < expectedTicks {
+					verifyTicks <- err
+					forwarded++
+				}
+			}
+		}
+	}()
 
 	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
 	t.Cleanup(func() {
+		drainCancel()
 		if err := activity.StopHeartbeat(context.Background()); err != nil {
 			t.Fatalf("stop heartbeat cleanup: %v", err)
 		}
+		<-drainDone
 	})
 
-	if err := waitForHeartbeatTick(t, ticks); err == nil {
+	if err := waitForHeartbeatTick(t, verifyTicks); err == nil {
 		t.Fatal("expected first heartbeat attempt to surface the injected failure")
 	}
-	if err := waitForHeartbeatTick(t, ticks); err != nil {
+	if err := waitForHeartbeatTick(t, verifyTicks); err != nil {
 		t.Fatalf("expected recovery heartbeat to succeed: %v", err)
 	}
 
