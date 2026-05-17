@@ -60,12 +60,12 @@ func newModerationCommandTestHarness(t *testing.T, guildID, ownerID string) *mod
 
 func (h *moderationCommandTestHarness) runSlash(
 	t *testing.T,
-	subCommand string,
+	commandName string,
 	options ...*discordgo.ApplicationCommandInteractionDataOption,
 ) discordgo.InteractionResponse {
 	t.Helper()
 
-	h.router.HandleInteraction(h.session, newModerationSlashInteraction(h.guildID, h.ownerID, subCommand, options))
+	h.router.HandleInteraction(h.session, newModerationSlashInteraction(h.guildID, h.ownerID, commandName, options))
 	return h.rec.lastResponse(t)
 }
 
@@ -115,24 +115,20 @@ func newModerationCommandTestRouter(t *testing.T, session *discordgo.Session, gu
 }
 
 func newModerationSlashInteraction(
-	guildID, userID, subCommand string,
+	guildID, userID, commandName string,
 	options []*discordgo.ApplicationCommandInteractionDataOption,
 ) *discordgo.InteractionCreate {
 	return &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{
-			ID:      "interaction-" + subCommand,
+			ID:      "interaction-" + commandName,
 			AppID:   "app",
 			Token:   "token",
 			Type:    discordgo.InteractionApplicationCommand,
 			GuildID: guildID,
 			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
 			Data: discordgo.ApplicationCommandInteractionData{
-				Name: "moderation",
-				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
-					Name:    subCommand,
-					Type:    discordgo.ApplicationCommandOptionSubCommand,
-					Options: options,
-				}},
+				Name:    commandName,
+				Options: options,
 			},
 		},
 	}

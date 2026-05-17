@@ -207,45 +207,39 @@ func moderationCommandFeatureEnabled(features files.ResolvedFeatureToggles, feat
 	return enabled
 }
 
-// RegisterModerationCommands registers slash commands under the /moderation
-// group without observability wiring. Equivalent to passing nil to
-// RegisterModerationCommandsWithMetrics; the clean command will fall back to
-// NopMetrics.
+// RegisterModerationCommands registers the moderation slash commands as
+// top-level commands without observability wiring. Equivalent to passing nil
+// to RegisterModerationCommandsWithMetrics; the clean command will fall back
+// to NopMetrics.
 func RegisterModerationCommands(router *core.CommandRouter) {
 	RegisterModerationCommandsWithMetrics(router, nil)
 }
 
-// RegisterModerationCommandsWithMetrics is the canonical entry point when
-// the host runtime wires a moderation Metrics sink (production startup wires
-// the in-memory implementation so /v1/health/moderation has counters to
-// expose). Passing a nil metrics value falls back to NopMetrics so library
-// tests that don't care about observability stay clean.
+// RegisterModerationCommandsWithMetrics registers each moderation command as a
+// top-level slash command. It is the canonical entry point when the host
+// runtime wires a moderation Metrics sink (production startup wires the
+// in-memory implementation so /v1/health/moderation has counters to expose).
+// Passing a nil metrics value falls back to NopMetrics so library tests that
+// don't care about observability stay clean.
 func RegisterModerationCommandsWithMetrics(router *core.CommandRouter, metrics Metrics) {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
-	checker := router.GetPermissionChecker()
-	if checker == nil {
-		checker = core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-	}
 	configManager := router.GetConfigManager()
-	moderationGroup := core.NewGroupCommand("moderation", "Moderation commands", checker)
 
-	moderationGroup.AddSubCommand(newBanCommand())
-	moderationGroup.AddSubCommand(newMassBanCommand())
-	moderationGroup.AddSubCommand(newCleanCommand(metrics))
-	moderationGroup.AddSubCommand(newKickCommand())
-	moderationGroup.AddSubCommand(newMuteCommand())
-	moderationGroup.AddSubCommand(newReactionBlockSetCommand(configManager))
-	moderationGroup.AddSubCommand(newReactionBlockAddCommand(configManager))
-	moderationGroup.AddSubCommand(newReactionBlockRemoveCommand(configManager))
-	moderationGroup.AddSubCommand(newReactionBlockListCommand(configManager))
-	moderationGroup.AddSubCommand(newReactionBlockClearCommand(configManager))
-	moderationGroup.AddSubCommand(newTimeoutCommand())
-	moderationGroup.AddSubCommand(newWarnCommand())
-	moderationGroup.AddSubCommand(newWarningsCommand())
-
-	router.RegisterSlashCommand(moderationGroup)
+	router.RegisterSlashCommand(newBanCommand())
+	router.RegisterSlashCommand(newMassBanCommand())
+	router.RegisterSlashCommand(newCleanCommand(metrics))
+	router.RegisterSlashCommand(newKickCommand())
+	router.RegisterSlashCommand(newMuteCommand())
+	router.RegisterSlashCommand(newReactionBlockSetCommand(configManager))
+	router.RegisterSlashCommand(newReactionBlockAddCommand(configManager))
+	router.RegisterSlashCommand(newReactionBlockRemoveCommand(configManager))
+	router.RegisterSlashCommand(newReactionBlockListCommand(configManager))
+	router.RegisterSlashCommand(newReactionBlockClearCommand(configManager))
+	router.RegisterSlashCommand(newTimeoutCommand())
+	router.RegisterSlashCommand(newWarnCommand())
+	router.RegisterSlashCommand(newWarningsCommand())
 }
 
 type banCommand struct{}
@@ -1609,7 +1603,7 @@ func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
 // command records a metric so the silent-loss becomes visible on
 // /v1/health/moderation) invoke postModerationEventEmbed directly. The
 // older fire-and-forget callers continue to use sendModerationLogForEvent
-// which fans the failure into the application log via Warn.
+// which surfaces the failure on the error log so oncall picks it up.
 type moderationEventEmit struct {
 	// Enabled is false when the guild has the event type gated off; the
 	// embed was not built and Err is nil. Callers treat this as "audit
@@ -1708,17 +1702,19 @@ func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, e
 }
 
 // sendModerationLogForEvent is the fire-and-forget wrapper preserved for
-// moderation commands that do not have a Metrics seam wired. Failures are
-// surfaced via the application log (Warn — channel posts are operational
-// events, not bugs); callers that need a metric should invoke
+// moderation commands that do not have a Metrics seam wired. Without a
+// metric backing, the error log is the only oncall-visible surface for
+// audit-channel post failures, so we route through ErrorLoggerRaw().Error
+// to match the existing convention in user_prune, automod, and the
+// monitoring user-event paths. Callers that want a metric should invoke
 // postModerationEventEmbed directly and react to the returned error.
 func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) {
 	emit := postModerationEventEmbed(ctx, payload, eventType)
 	if !emit.Enabled || emit.Err == nil {
 		return
 	}
-	log.ApplicationLogger().Warn(
-		"Moderation log channel post failed",
+	log.ErrorLoggerRaw().Error(
+		"Failed to send moderation log",
 		"operation", "moderation.audit_log.send_failed",
 		"guildID", ctx.GuildID,
 		"channelID", emit.ChannelID,
@@ -1825,8 +1821,8 @@ func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload
 	}
 
 	if _, err := ctx.Session.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.ApplicationLogger().Warn(
-			"Moderation case action log channel post failed",
+		log.ErrorLoggerRaw().Error(
+			"Failed to send moderation case action log",
 			"operation", "moderation.audit_log.case_send_failed",
 			"guildID", ctx.GuildID,
 			"channelID", channelID,

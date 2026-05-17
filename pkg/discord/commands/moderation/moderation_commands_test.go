@@ -40,7 +40,7 @@ func TestBuildMassBanCommandMessageOnlyCount(t *testing.T) {
 	}
 }
 
-func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
+func TestRegisterModerationCommandsRegistersTopLevel(t *testing.T) {
 	t.Parallel()
 
 	session := &discordgo.Session{State: discordgo.NewState()}
@@ -48,23 +48,15 @@ func TestRegisterModerationCommandsLimitsScope(t *testing.T) {
 
 	RegisterModerationCommands(router)
 
-	if _, ok := router.GetRegistry().GetCommand("clean"); ok {
-		t.Fatal("clean command should be a /moderation subcommand, not a top-level slash command")
-	}
-
-	cmd, ok := router.GetRegistry().GetCommand("moderation")
-	if !ok {
-		t.Fatal("expected moderation group command to be registered")
-	}
-
-	options := cmd.Options()
-	got := make([]string, 0, len(options))
-	for _, option := range options {
-		got = append(got, option.Name)
-	}
 	expected := []string{"ban", "clean", "kick", "massban", "mute", "reaction_block_add", "reaction_block_clear", "reaction_block_list", "reaction_block_remove", "reaction_block_set", "timeout", "warn", "warnings"}
-	if !sameStringSet(got, expected) {
-		t.Fatalf("unexpected moderation subcommands: got=%v want=%v", got, expected)
+	for _, name := range expected {
+		if _, ok := router.GetRegistry().GetCommand(name); !ok {
+			t.Fatalf("expected %q to be registered as a top-level slash command", name)
+		}
+	}
+
+	if _, ok := router.GetRegistry().GetCommand("moderation"); ok {
+		t.Fatal("moderation group command should no longer be registered; commands are top-level")
 	}
 }
 
@@ -367,28 +359,6 @@ func TestFormatTimeoutDuration(t *testing.T) {
 func containsAll(value string, parts []string) bool {
 	for _, part := range parts {
 		if !strings.Contains(value, part) {
-			return false
-		}
-	}
-	return true
-}
-
-func sameStringSet(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	seen := make(map[string]int, len(left))
-	for _, item := range left {
-		seen[item]++
-	}
-	for _, item := range right {
-		seen[item]--
-		if seen[item] < 0 {
-			return false
-		}
-	}
-	for _, count := range seen {
-		if count != 0 {
 			return false
 		}
 	}
