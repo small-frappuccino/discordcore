@@ -30,7 +30,8 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 
 	harness := newModerationCommandTestHarness(t, guildID, ownerID)
 
-	setResp := harness.runSlash(t, reactionBlockSetSubCommandName,
+	setResp := harness.runSlash(t, reactionBlockCommandName,
+		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionSet),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 		moderationStringOpt(reactionBlockEmojisOptionName, "<:skrunklyalice:987654321098765432> :x:"),
@@ -45,14 +46,16 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 		t.Fatalf("expected two blocked emojis after set, got %d", got)
 	}
 
-	listResp := harness.runSlash(t, reactionBlockListSubCommandName,
+	listResp := harness.runSlash(t, reactionBlockCommandName,
+		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionList),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 	)
 	assertModerationEphemeralContains(t, listResp, "skrunklyalice")
 	assertModerationEphemeralContains(t, listResp, ":x:")
 
-	addResp := harness.runSlash(t, reactionBlockAddSubCommandName,
+	addResp := harness.runSlash(t, reactionBlockCommandName,
+		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionAdd),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 		moderationStringOpt(reactionBlockEmojisOptionName, "<:blobwave:123456789012345678>"),
@@ -67,7 +70,8 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 		t.Fatalf("expected three blocked emojis after add, got %d", got)
 	}
 
-	removeResp := harness.runSlash(t, reactionBlockRemoveSubCommandName,
+	removeResp := harness.runSlash(t, reactionBlockCommandName,
+		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionRemove),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 		moderationStringOpt(reactionBlockEmojisOptionName, ":x:"),
@@ -82,7 +86,8 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 		t.Fatalf("expected two blocked emojis after remove, got %d", got)
 	}
 
-	clearResp := harness.runSlash(t, reactionBlockClearSubCommandName,
+	clearResp := harness.runSlash(t, reactionBlockCommandName,
+		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionClear),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 	)
@@ -106,7 +111,8 @@ func TestReactionBlockSetRejectsInvalidEmojiList(t *testing.T) {
 	)
 
 	harness := newModerationCommandTestHarness(t, guildID, ownerID)
-	resp := harness.runSlash(t, reactionBlockSetSubCommandName,
+	resp := harness.runSlash(t, reactionBlockCommandName,
+		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionSet),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 		moderationStringOpt(reactionBlockEmojisOptionName, "not-an-emoji"),

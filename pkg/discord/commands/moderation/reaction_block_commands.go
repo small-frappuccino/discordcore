@@ -13,36 +13,24 @@ import (
 )
 
 const (
-	reactionBlockSetSubCommandName    = "reaction_block_set"
-	reactionBlockAddSubCommandName    = "reaction_block_add"
-	reactionBlockRemoveSubCommandName = "reaction_block_remove"
-	reactionBlockListSubCommandName   = "reaction_block_list"
-	reactionBlockClearSubCommandName  = "reaction_block_clear"
+	reactionBlockCommandName = "reaction_block"
 
+	reactionBlockActionOptionName  = "action"
 	reactionBlockReactorOptionName = "reactor"
 	reactionBlockTargetOptionName  = "target"
 	reactionBlockEmojisOptionName  = "emojis"
+
+	reactionBlockActionSet    = "set"
+	reactionBlockActionAdd    = "add"
+	reactionBlockActionRemove = "remove"
+	reactionBlockActionList   = "list"
+	reactionBlockActionClear  = "clear"
 )
 
 var reactionBlockCustomEmojiRe = regexp.MustCompile(`^<(a?):([^:\s>]+):(\d+)>$`)
 
-type reactionBlockSetCommand struct {
-	configManager *files.ConfigManager
-}
-
-type reactionBlockAddCommand struct {
-	configManager *files.ConfigManager
-}
-
-type reactionBlockRemoveCommand struct {
-	configManager *files.ConfigManager
-}
-
-type reactionBlockListCommand struct {
-	configManager *files.ConfigManager
-}
-
-type reactionBlockClearCommand struct {
+// reactionBlockCommand consolidates the reaction-block CRUD; the "action" choice is the discriminator so future CRUDs reuse this template instead of regrowing one top-level command per verb.
+type reactionBlockCommand struct {
 	configManager *files.ConfigManager
 }
 
@@ -52,89 +40,82 @@ type reactionBlockRequest struct {
 	emojis        []files.ReactionBlockEmojiConfig
 }
 
-func newReactionBlockSetCommand(configManager *files.ConfigManager) *reactionBlockSetCommand {
-	return &reactionBlockSetCommand{configManager: configManager}
+func newReactionBlockCommand(configManager *files.ConfigManager) *reactionBlockCommand {
+	return &reactionBlockCommand{configManager: configManager}
 }
 
-func newReactionBlockAddCommand(configManager *files.ConfigManager) *reactionBlockAddCommand {
-	return &reactionBlockAddCommand{configManager: configManager}
+func (c *reactionBlockCommand) Name() string { return reactionBlockCommandName }
+
+func (c *reactionBlockCommand) Description() string {
+	return "Manage blocked reaction emojis for a reactor/target pair"
 }
 
-func newReactionBlockRemoveCommand(configManager *files.ConfigManager) *reactionBlockRemoveCommand {
-	return &reactionBlockRemoveCommand{configManager: configManager}
+func (c *reactionBlockCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        reactionBlockActionOptionName,
+			Description: "CRUD action to perform on the blocked-reaction list",
+			Required:    true,
+			Choices: []*discordgo.ApplicationCommandOptionChoice{
+				{Name: "set", Value: reactionBlockActionSet},
+				{Name: "add", Value: reactionBlockActionAdd},
+				{Name: "remove", Value: reactionBlockActionRemove},
+				{Name: "list", Value: reactionBlockActionList},
+				{Name: "clear", Value: reactionBlockActionClear},
+			},
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionUser,
+			Name:        reactionBlockReactorOptionName,
+			Description: "User who adds the reaction",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionUser,
+			Name:        reactionBlockTargetOptionName,
+			Description: "User whose messages are being reacted to",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        reactionBlockEmojisOptionName,
+			Description: "Blocked emojis separated by spaces or commas (required for set, add, remove)",
+			Required:    false,
+		},
+	}
 }
 
-func newReactionBlockListCommand(configManager *files.ConfigManager) *reactionBlockListCommand {
-	return &reactionBlockListCommand{configManager: configManager}
-}
+func (c *reactionBlockCommand) RequiresGuild() bool { return true }
 
-func newReactionBlockClearCommand(configManager *files.ConfigManager) *reactionBlockClearCommand {
-	return &reactionBlockClearCommand{configManager: configManager}
-}
+func (c *reactionBlockCommand) RequiresPermissions() bool { return true }
 
-func (c *reactionBlockSetCommand) Name() string    { return reactionBlockSetSubCommandName }
-func (c *reactionBlockAddCommand) Name() string    { return reactionBlockAddSubCommandName }
-func (c *reactionBlockRemoveCommand) Name() string { return reactionBlockRemoveSubCommandName }
-func (c *reactionBlockListCommand) Name() string   { return reactionBlockListSubCommandName }
-func (c *reactionBlockClearCommand) Name() string  { return reactionBlockClearSubCommandName }
-
-func (c *reactionBlockSetCommand) Description() string {
-	return "Replace the blocked reaction list for one reactor and one message author"
-}
-
-func (c *reactionBlockAddCommand) Description() string {
-	return "Add blocked reaction emojis for one reactor and one message author"
-}
-
-func (c *reactionBlockRemoveCommand) Description() string {
-	return "Remove blocked reaction emojis for one reactor and one message author"
-}
-
-func (c *reactionBlockListCommand) Description() string {
-	return "Show blocked reaction emojis for one reactor and one message author"
-}
-
-func (c *reactionBlockClearCommand) Description() string {
-	return "Clear all blocked reaction emojis for one reactor and one message author"
-}
-
-func (c *reactionBlockSetCommand) Options() []*discordgo.ApplicationCommandOption {
-	return reactionBlockMutationOptions()
-}
-
-func (c *reactionBlockAddCommand) Options() []*discordgo.ApplicationCommandOption {
-	return reactionBlockMutationOptions()
-}
-
-func (c *reactionBlockRemoveCommand) Options() []*discordgo.ApplicationCommandOption {
-	return reactionBlockMutationOptions()
-}
-
-func (c *reactionBlockListCommand) Options() []*discordgo.ApplicationCommandOption {
-	return reactionBlockPairOptions()
-}
-
-func (c *reactionBlockClearCommand) Options() []*discordgo.ApplicationCommandOption {
-	return reactionBlockPairOptions()
-}
-
-func (c *reactionBlockSetCommand) RequiresGuild() bool    { return true }
-func (c *reactionBlockAddCommand) RequiresGuild() bool    { return true }
-func (c *reactionBlockRemoveCommand) RequiresGuild() bool { return true }
-func (c *reactionBlockListCommand) RequiresGuild() bool   { return true }
-func (c *reactionBlockClearCommand) RequiresGuild() bool  { return true }
-
-func (c *reactionBlockSetCommand) RequiresPermissions() bool    { return true }
-func (c *reactionBlockAddCommand) RequiresPermissions() bool    { return true }
-func (c *reactionBlockRemoveCommand) RequiresPermissions() bool { return true }
-func (c *reactionBlockListCommand) RequiresPermissions() bool   { return true }
-func (c *reactionBlockClearCommand) RequiresPermissions() bool  { return true }
-
-func (c *reactionBlockSetCommand) Handle(ctx *core.Context) error {
-	request, err := parseReactionBlockRequest(ctx, true)
+func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
+	action, err := parseReactionBlockAction(ctx)
 	if err != nil {
 		return err
 	}
+	request, err := parseReactionBlockRequest(ctx, reactionBlockActionRequiresEmojis(action))
+	if err != nil {
+		return err
+	}
+	switch action {
+	case reactionBlockActionSet:
+		return c.handleSet(ctx, request)
+	case reactionBlockActionAdd:
+		return c.handleAdd(ctx, request)
+	case reactionBlockActionRemove:
+		return c.handleRemove(ctx, request)
+	case reactionBlockActionList:
+		return c.handleList(ctx, request)
+	case reactionBlockActionClear:
+		return c.handleClear(ctx, request)
+	default:
+		return core.NewCommandError("Unknown reaction_block action.", true)
+	}
+}
+
+func (c *reactionBlockCommand) handleSet(ctx *core.Context, request reactionBlockRequest) error {
 	updated, err := updateReactionBlockConfig(ctx, c.configManager, func(current files.ReactionBlockConfig) (files.ReactionBlockConfig, error) {
 		return setReactionBlockPair(current, request.reactorUserID, request.targetUserID, request.emojis), nil
 	})
@@ -152,11 +133,7 @@ func (c *reactionBlockSetCommand) Handle(ctx *core.Context) error {
 	)
 }
 
-func (c *reactionBlockAddCommand) Handle(ctx *core.Context) error {
-	request, err := parseReactionBlockRequest(ctx, true)
-	if err != nil {
-		return err
-	}
+func (c *reactionBlockCommand) handleAdd(ctx *core.Context, request reactionBlockRequest) error {
 	updated, err := updateReactionBlockConfig(ctx, c.configManager, func(current files.ReactionBlockConfig) (files.ReactionBlockConfig, error) {
 		return addReactionBlockPairEmojis(current, request.reactorUserID, request.targetUserID, request.emojis), nil
 	})
@@ -174,12 +151,7 @@ func (c *reactionBlockAddCommand) Handle(ctx *core.Context) error {
 	)
 }
 
-func (c *reactionBlockRemoveCommand) Handle(ctx *core.Context) error {
-	request, err := parseReactionBlockRequest(ctx, true)
-	if err != nil {
-		return err
-	}
-
+func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
 		return err
@@ -212,11 +184,7 @@ func (c *reactionBlockRemoveCommand) Handle(ctx *core.Context) error {
 	)
 }
 
-func (c *reactionBlockListCommand) Handle(ctx *core.Context) error {
-	request, err := parseReactionBlockRequest(ctx, false)
-	if err != nil {
-		return err
-	}
+func (c *reactionBlockCommand) handleList(ctx *core.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
 		return err
@@ -239,11 +207,7 @@ func (c *reactionBlockListCommand) Handle(ctx *core.Context) error {
 	)
 }
 
-func (c *reactionBlockClearCommand) Handle(ctx *core.Context) error {
-	request, err := parseReactionBlockRequest(ctx, false)
-	if err != nil {
-		return err
-	}
+func (c *reactionBlockCommand) handleClear(ctx *core.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
 		return err
@@ -264,32 +228,22 @@ func (c *reactionBlockClearCommand) Handle(ctx *core.Context) error {
 	)
 }
 
-func reactionBlockPairOptions() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionUser,
-			Name:        reactionBlockReactorOptionName,
-			Description: "User who adds the reaction",
-			Required:    true,
-		},
-		{
-			Type:        discordgo.ApplicationCommandOptionUser,
-			Name:        reactionBlockTargetOptionName,
-			Description: "User whose messages are being reacted to",
-			Required:    true,
-		},
+func parseReactionBlockAction(ctx *core.Context) (string, error) {
+	options := core.GetSubCommandOptions(ctx.Interaction)
+	action := strings.ToLower(strings.TrimSpace(core.NewOptionExtractor(options).String(reactionBlockActionOptionName)))
+	if action == "" {
+		return "", core.NewCommandError("An action is required.", true)
 	}
+	return action, nil
 }
 
-func reactionBlockMutationOptions() []*discordgo.ApplicationCommandOption {
-	options := reactionBlockPairOptions()
-	options = append(options, &discordgo.ApplicationCommandOption{
-		Type:        discordgo.ApplicationCommandOptionString,
-		Name:        reactionBlockEmojisOptionName,
-		Description: "Blocked emojis separated by spaces or commas, e.g. <:skrunklyalice:123> :x:",
-		Required:    true,
-	})
-	return options
+func reactionBlockActionRequiresEmojis(action string) bool {
+	switch action {
+	case reactionBlockActionSet, reactionBlockActionAdd, reactionBlockActionRemove:
+		return true
+	default:
+		return false
+	}
 }
 
 func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionBlockRequest, error) {
