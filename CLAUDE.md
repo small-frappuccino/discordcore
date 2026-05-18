@@ -186,7 +186,8 @@ Common failure modes for this model in `discordcore`:
 - making speculative changes outside the stated bug or contract
 - growing public surface area when internal changes would suffice
 - mixing cleanup into a behavior fix when the cleanup is not required for safety
-- adding doc comments, docstrings, or inline comments to code that was not changed, or comments that restate what well-named identifiers already convey
+- adding inline body comments that narrate straight-line code, restate the next line, or annotate code that was not changed in this task
+- omitting doc comments on newly exported Go symbols, or letting non-obvious concurrency, error-sentinel, or lifecycle contracts go undocumented on a hotspot file's surface
 - adding defensive error handling, validation, or fallbacks for cases that cannot occur given current call sites and framework guarantees
 - preserving removed code as commented-out blocks, `// removed` markers, deprecated aliases, or unused renamed identifiers instead of deleting outright
 - creating a new file or package when an existing sibling seam is the natural home
@@ -203,7 +204,8 @@ Countermeasures:
 - if the repo already has a local primitive, hook, service, or builder for the job, extend it instead of creating a parallel path
 - default to extending the closest existing sibling file rather than creating a new one; create a new file only when the new behavior is a distinct responsibility that breaks the existing file's cohesion, the existing file is a documented hotspot whose explicit countermeasure is a sibling-file split, or the directory's naming pattern mandates separation (`monitoring_*.go`, `postgres_store_*.go`, `discord_oauth_*.go`, `features_*.go`)
 - name new files after the new responsibility, never after the task or feature; never introduce a new package without contract justification
-- write comments only where the WHY is non-obvious; do not annotate code that was not changed and do not restate what the identifier already says
+- in function bodies, write `//` comments only where the WHY is non-obvious; do not narrate straight-line code, do not restate the next line, and do not add or rewrite comments on code that was not changed in this task
+- on newly added exported Go symbols (types, functions, methods, package-level vars, constants, the package itself), add a doc comment in stdlib style (start with the identifier, complete sentences) and document the non-obvious contract — concurrency, error sentinels, lifecycle ordering — where one exists; the baseline is the "Code Commentary" section of AGENTS.md
 - validate only at true system boundaries: HTTP request bodies and query params, OAuth callbacks, Discord interaction payloads, and rows read from sources outside the package's trust scope
 - inside the package, treat arguments from internal callers as already validated; do not nil-check pointers, slices, or maps that the type system or immediate construction proves non-nil; do not bounds-check indexes derived from a length just measured; do not re-validate values already validated upstream
 - do not add error handling for calls that cannot fail in the current code path (e.g., `regexp.MustCompile` of a constant pattern, `time.ParseDuration` of a constant string); do not wrap errors in `fmt.Errorf` when the wrap adds no operation context beyond what the underlying error already carries
@@ -285,6 +287,7 @@ For Go code in `pkg/`, `cmd/`, and `ui/*.go`:
 - avoid unnecessary interfaces; define small consumer-side interfaces only when multiple implementations, real substitution, or import-cycle pressure justify them; accept interfaces and usually return concrete types
 - specify channel direction where ownership is one-way, and prefer real transports or generated clients over hand-rolled RPC or HTTP stand-ins when testing integrations
 - update doc comments when exported behavior changes, especially for concurrency, cleanup, context, or returned-error contracts; document the non-obvious behavior, not every parameter name
+- the durable doc-comment baseline (what gets one, stdlib form, non-obvious contracts) lives in AGENTS.md "Code Commentary"; the failure-mode and countermeasure bullets above govern WHEN to write or revise them
 
 Backend rules:
 

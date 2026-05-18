@@ -94,6 +94,27 @@ General expectations:
 - do not introduce speculative architecture or “future-proofing” abstractions
 - if a hotspot file must change, read enough neighboring code to preserve its decomposition rules first
 
+## Code Commentary
+
+Doc-comment baseline for Go:
+
+- exported types, functions, methods, package-level vars, constants, and the package itself carry a doc comment in stdlib style: start with the identifier name, complete sentences, adjacent to the declaration with no blank line between
+- the first sentence is the summary `go doc` and pkg.go.dev consumers see; describe behavior, not just the signature
+- document non-obvious contracts explicitly: concurrency guarantees (the default assumption is single-goroutine; state when a type or method deviates), returned-error semantics including sentinels and `errors.Is` branches, ownership of returned values, and lifecycle ordering (`Close`/`Stop`, idempotency)
+- `Deprecated:` is a structured marker; use it on legacy fields and aliases (see `pkg/files/types.go`) rather than free-form "old"/"legacy" prose
+- doc comments on exported APIs legitimately describe WHAT — the audience reads them through `go doc`, not the source; inline `//` comments inside function bodies stay WHY-only
+- multi-paragraph contract docs with section headers (`# Contract`, `# Parameters`, `# Why not X`) are the local idiom for load-bearing seams; see `pkg/qotd/official_post_state_transition.go` and `pkg/qotd/observability.go`
+
+TypeScript and UI: types in `ui/src/api/control.ts` and component prop interfaces are the contract; add JSDoc only when behavior cannot be expressed in the type (units, side effects, lifecycle ordering).
+
+Across both:
+
+- `TODO`/`FIXME` markers carry an owner (`TODO(user): …`) or a specific triggering event; ownerless `TODO:` is an anti-pattern
+- do not preserve removed code as commented-out blocks, `// removed` markers, or `_unused` placeholders — git history is the museum
+- do not write comments that restate the identifier or the next line; do not narrate straight-line code step by step
+- do not add or rewrite comments on code that was not changed in the current task; comment churn pollutes blame
+- do not embed history references ("added for ticket X", "renamed in 2024") — those belong in commit messages
+
 ## Scope Fidelity
 
 Do exactly what the user requested. Nothing more, nothing less.
