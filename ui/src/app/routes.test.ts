@@ -42,6 +42,9 @@ describe("app route contracts", () => {
     expect(mapLegacyDashboardPathForGuild("/dashboard/logging/", "guild-1")).toBe(
       appRoutes.dashboardModerationLogging("guild-1"),
     );
+    expect(mapLegacyDashboardPathForGuild("/dashboard/qotd/collector", "guild-1")).toBe(
+      appRoutes.qotdSettings("guild-1"),
+    );
     expect(mapLegacyDashboardPathForGuild("/dashboard/qotd/questions", "guild-1")).toBe(
       appRoutes.qotdSettings("guild-1"),
     );

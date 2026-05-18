@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -187,6 +188,70 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 	ts, ok, err := store.Heartbeat(context.Background())
 	if err != nil || !ok || ts.IsZero() {
 		t.Fatalf("expected heartbeat persistence to recover after initial failure: ok=%v err=%v", ok, err)
+	}
+}
+
+// TestRuntimeActivityStartHeartbeatReturnsWhenStartupPersistenceWedges pins
+// two invariants exposed by the heartbeat goroutine restructuring:
+//
+//  1. StartHeartbeat must return promptly even when the startup persistence
+//     is wedged. The previous code path kept Start parked inside the
+//     synchronous attemptHeartbeat, leaving `go func()` unreached and
+//     close(done) un-armed — a concurrent StopHeartbeat that observed
+//     hbCancel/hbDone then blocked on <-done forever.
+//  2. StopHeartbeat must return cleanly even when the in-flight attempt is
+//     wedged. The comprehensive fix dispatches each attempt through
+//     runCancellableHeartbeat so the outer goroutine can exit via
+//     hbCtx.Done() while the inner attempt goroutine is left to leak until
+//     its blocking call returns; close(done) is therefore reachable even
+//     if RunErr (or any callback it invokes) ignores ctx.
+//
+// A RunErr that blocks unconditionally on a channel exercises both: the
+// startup persistence cannot make progress, so without the fix Start (1)
+// hangs and Stop (2) hangs. Hard timeouts convert either regression into a
+// failure with a goroutine stack dump pointing at the wedge.
+func TestRuntimeActivityStartHeartbeatReturnsWhenStartupPersistenceWedges(t *testing.T) {
+	store, _ := newLoggingStore(t, "runtime-activity-start-stop-race.db")
+
+	release := make(chan struct{})
+	defer close(release)
+
+	activity := newRuntimeActivity(store, runtimeActivityOptions{
+		RunErr: func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
+			<-release
+			return nil
+		},
+		HeartbeatTimeout: time.Second,
+	})
+
+	startReturned := make(chan struct{})
+	go func() {
+		defer close(startReturned)
+		activity.StartHeartbeat(context.Background(), 10*time.Millisecond)
+	}()
+
+	select {
+	case <-startReturned:
+	case <-time.After(500 * time.Millisecond):
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		t.Fatalf("StartHeartbeat did not return within 500ms while the startup persistence was wedged; the heartbeat goroutine launch is gated on attemptHeartbeat completing — regression of the race-window fix.\nGoroutines:\n%s", buf[:n])
+	}
+
+	stopReturned := make(chan error, 1)
+	go func() {
+		stopReturned <- activity.StopHeartbeat(context.Background())
+	}()
+
+	select {
+	case err := <-stopReturned:
+		if err != nil {
+			t.Fatalf("stop heartbeat: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		t.Fatalf("StopHeartbeat did not return within 500ms while the in-flight attempt was wedged; close(done) is gated on the inner attempt completing — regression of the cancellable-attempt fix.\nGoroutines:\n%s", buf[:n])
 	}
 }
 

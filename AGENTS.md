@@ -204,6 +204,7 @@ Release rules:
 - do not push to `main` directly
 - do not call `git tag` by hand
 - do not bundle unrelated changes into a single release commit
+- restrict line-ending or encoding normalization commits to that scope so the diff stays trivial to audit; stylistic reformatting (e.g., gofmt-equivalent one-liner to multi-line conversions) goes in a separate `style:` or `refactor(style):` commit
 - treat the conventional-commit subject as the release message and changelog entry
 
 ## Hotspots And Cautions

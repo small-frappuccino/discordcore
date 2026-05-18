@@ -52,11 +52,9 @@ func (s *Server) handleModerationHealthRoute(w http.ResponseWriter, r *http.Requ
 	snapshot := provider.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
-		// The response status header is already in flight when Encode
-		// hits the wire; there is no recovery beyond logging. We rely
-		// on the standard library writing the partial body and the
-		// client treating a truncated JSON as a transient failure.
-		_ = err
-	}
+	// The response status header is already in flight when Encode
+	// hits the wire; there is no recovery beyond logging. We rely
+	// on the standard library writing the partial body and the
+	// client treating a truncated JSON as a transient failure.
+	_ = json.NewEncoder(w).Encode(snapshot)
 }

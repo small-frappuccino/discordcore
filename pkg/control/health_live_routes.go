@@ -77,8 +77,6 @@ func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
-		// Response status header is already in flight; nothing recoverable.
-		_ = err
-	}
+	// Response status header is already in flight; nothing recoverable.
+	_ = json.NewEncoder(w).Encode(snapshot)
 }

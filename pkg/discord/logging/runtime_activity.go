@@ -20,15 +20,16 @@ type runtimeActivityOptions struct {
 	Warn             func(string, ...any)
 	Now              func() time.Time
 	// OnHeartbeatTick fires after every heartbeat persistence attempt
-	// (initial synchronous attempt and each ticker firing), with the
-	// error returned by RunErr. Test-only seam — production callers
-	// leave it nil so the heartbeat loop adds zero work per tick.
+	// (the startup attempt and each ticker firing), with the error
+	// returned by RunErr. Test-only seam — production callers leave
+	// it nil so the heartbeat loop adds zero work per tick.
 	//
-	// The callback runs synchronously inside the heartbeat goroutine
-	// (and inside the startup attempt invoked by StartHeartbeat
-	// itself), so it must not block indefinitely; an unread channel
-	// send wedges the goroutine and deadlocks StopHeartbeat. Tests
-	// that observe ticks should pass tickRecorder.Hook so the
+	// The callback runs synchronously inside the inner attempt
+	// goroutine spawned by runCancellableHeartbeat. A callback that
+	// blocks indefinitely no longer deadlocks StopHeartbeat (the
+	// outer goroutine still exits via hbCtx.Done()), but it does
+	// leak the inner attempt goroutine until the callback returns.
+	// Tests that observe ticks should pass tickRecorder.Hook so the
 	// dedicated drainer absorbs ticks the test is not asserting on
 	// and releases in-flight sends via context cancel during cleanup.
 	OnHeartbeatTick func(err error)
@@ -121,17 +122,26 @@ func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 	ra.hbDone = done
 	ra.mu.Unlock()
 
-	ra.attemptHeartbeat(hbCtx, "Failed to persist startup heartbeat")
-
+	// Both the startup persistence and each ticker firing are dispatched
+	// through runCancellableHeartbeat so the outer goroutine can always
+	// exit via hbCtx.Done(): a RunErr or OnHeartbeatTick that ignores ctx
+	// only wedges the inner attempt goroutine (which is left to leak until
+	// its blocking call returns), never close(done) or StopHeartbeat.
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		defer close(done)
 
+		if !ra.runCancellableHeartbeat(hbCtx, "Failed to persist startup heartbeat") {
+			return
+		}
+
 		for {
 			select {
 			case <-ticker.C:
-				ra.attemptHeartbeat(hbCtx, "Failed to persist heartbeat")
+				if !ra.runCancellableHeartbeat(hbCtx, "Failed to persist heartbeat") {
+					return
+				}
 			case <-hbCtx.Done():
 				return
 			}
@@ -148,6 +158,27 @@ func (ra *runtimeActivity) attemptHeartbeat(ctx context.Context, failureMessage 
 	}
 	if ra.onHeartbeatTick != nil {
 		ra.onHeartbeatTick(err)
+	}
+}
+
+// runCancellableHeartbeat runs a single attemptHeartbeat in a child
+// goroutine and returns true when the attempt completes, false when ctx is
+// canceled first. On cancellation the child goroutine is left running and
+// exits when its underlying call eventually returns. The leak is the price
+// for keeping close(done) and StopHeartbeat reachable when RunErr (or any
+// callback it invokes) ignores ctx; in production the call respects ctx
+// and the child returns promptly, so the leak is transient.
+func (ra *runtimeActivity) runCancellableHeartbeat(ctx context.Context, failureMessage string) bool {
+	attemptDone := make(chan struct{})
+	go func() {
+		defer close(attemptDone)
+		ra.attemptHeartbeat(ctx, failureMessage)
+	}()
+	select {
+	case <-attemptDone:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 

@@ -146,8 +146,9 @@ export function mapLegacyDashboardPathForGuild(
     case "partner-board/delivery":
       return appRoutes.partnerBoardDelivery(normalizedGuildID);
     case "qotd":
-    case "qotd/settings":
+    case "qotd/collector":
     case "qotd/questions":
+    case "qotd/settings":
       return appRoutes.qotdSettings(normalizedGuildID);
     case "roles":
     case "roles-members":
