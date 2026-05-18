@@ -60,6 +60,32 @@ func TestRegisterModerationCommandsRegistersTopLevel(t *testing.T) {
 	}
 }
 
+// TestModerationCommandsDeclareDefaultMemberPermissions makes the Discord-level
+// permission floor a registration invariant: every registered moderation
+// command must implement core.DefaultMemberPermissionsProvider with a
+// non-zero value, so adding a new moderation command without declaring a
+// floor is a test failure rather than a silent regression to "any member
+// can invoke and the bot rejects later."
+func TestModerationCommandsDeclareDefaultMemberPermissions(t *testing.T) {
+	t.Parallel()
+
+	session := &discordgo.Session{State: discordgo.NewState()}
+	router := core.NewCommandRouter(session, files.NewMemoryConfigManager())
+
+	RegisterModerationCommands(router)
+
+	for name, cmd := range router.GetRegistry().GetAllCommands() {
+		provider, ok := cmd.(core.DefaultMemberPermissionsProvider)
+		if !ok {
+			t.Errorf("moderation command %q must implement core.DefaultMemberPermissionsProvider", name)
+			continue
+		}
+		if perms := provider.DefaultMemberPermissions(); perms == 0 {
+			t.Errorf("moderation command %q declared zero DefaultMemberPermissions; pick a Discord-native permission floor", name)
+		}
+	}
+}
+
 func TestEnsureModerationCommandEnabledRejectsDisabledCommands(t *testing.T) {
 	t.Parallel()
 

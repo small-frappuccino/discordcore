@@ -94,6 +94,17 @@ type SubCommand interface {
 	RequiresPermissions() bool
 }
 
+// DefaultMemberPermissionsProvider is an optional opt-in for top-level
+// commands that want Discord to enforce a permission floor before the
+// interaction reaches the bot. Discord only honors this field on the
+// top-level descriptor — subcommand entries cannot declare their own
+// floor in the protocol. The router applies the returned bits via a
+// type assertion so commands that don't implement this interface keep
+// the previous "no floor declared" behavior.
+type DefaultMemberPermissionsProvider interface {
+	DefaultMemberPermissions() int64
+}
+
 // Context provides a unified context for command execution
 type Context struct {
 	Session     *discordgo.Session

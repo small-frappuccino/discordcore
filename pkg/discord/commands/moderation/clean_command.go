@@ -116,6 +116,10 @@ func (c *cleanCommand) Options() []*discordgo.ApplicationCommandOption {
 
 func (c *cleanCommand) RequiresGuild() bool { return true }
 
+func (c *cleanCommand) DefaultMemberPermissions() int64 {
+	return discordgo.PermissionManageMessages
+}
+
 func (c *cleanCommand) RequiresPermissions() bool { return true }
 
 func (c *cleanCommand) InteractionAckPolicy() core.InteractionAckPolicy {

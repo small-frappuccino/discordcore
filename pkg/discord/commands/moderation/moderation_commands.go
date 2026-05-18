@@ -267,6 +267,8 @@ func (c *banCommand) RequiresGuild() bool { return true }
 
 func (c *banCommand) RequiresPermissions() bool { return true }
 
+func (c *banCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionBanMembers }
+
 func (c *banCommand) Handle(ctx *core.Context) error {
 	if err := ensureModerationCommandEnabled(ctx, "moderation.ban", "Ban command is disabled for this server."); err != nil {
 		return err
@@ -343,6 +345,8 @@ func (c *massBanCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *massBanCommand) RequiresGuild() bool { return true }
 
 func (c *massBanCommand) RequiresPermissions() bool { return true }
+
+func (c *massBanCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionBanMembers }
 
 func (c *massBanCommand) Handle(ctx *core.Context) error {
 	if err := ensureModerationCommandEnabled(ctx, "moderation.massban", "Mass ban command is disabled for this server."); err != nil {
@@ -446,6 +450,8 @@ func (c *kickCommand) RequiresGuild() bool { return true }
 
 func (c *kickCommand) RequiresPermissions() bool { return true }
 
+func (c *kickCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionKickMembers }
+
 func (c *kickCommand) Handle(ctx *core.Context) error {
 	if err := ensureModerationCommandEnabled(ctx, "moderation.kick", "Kick command is disabled for this server."); err != nil {
 		return err
@@ -530,6 +536,10 @@ func (c *timeoutCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *timeoutCommand) RequiresGuild() bool { return true }
 
 func (c *timeoutCommand) RequiresPermissions() bool { return true }
+
+func (c *timeoutCommand) DefaultMemberPermissions() int64 {
+	return discordgo.PermissionModerateMembers
+}
 
 func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	if err := ensureModerationCommandEnabled(ctx, "moderation.timeout", "Timeout command is disabled for this server."); err != nil {
@@ -616,6 +626,8 @@ func (c *muteCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *muteCommand) RequiresGuild() bool { return true }
 
 func (c *muteCommand) RequiresPermissions() bool { return true }
+
+func (c *muteCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageRoles }
 
 func (c *muteCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -704,6 +716,8 @@ func (c *warnCommand) RequiresGuild() bool { return true }
 
 func (c *warnCommand) RequiresPermissions() bool { return true }
 
+func (c *warnCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageMessages }
+
 func (c *warnCommand) Handle(ctx *core.Context) error {
 	if err := ensureModerationCommandEnabled(ctx, "moderation.warn", "Warn command is disabled for this server."); err != nil {
 		return err
@@ -790,6 +804,10 @@ func (c *warningsCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *warningsCommand) RequiresGuild() bool { return true }
 
 func (c *warningsCommand) RequiresPermissions() bool { return true }
+
+func (c *warningsCommand) DefaultMemberPermissions() int64 {
+	return discordgo.PermissionManageMessages
+}
 
 func (c *warningsCommand) Handle(ctx *core.Context) error {
 	if err := ensureModerationCommandEnabled(ctx, "moderation.warnings", "Warnings command is disabled for this server."); err != nil {

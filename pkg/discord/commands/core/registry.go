@@ -284,9 +284,10 @@ func (cm *CommandManager) globalDesiredCommands() map[string]*discordgo.Applicat
 	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands))
 	for name, cmd := range codeCommands {
 		desired[name] = &discordgo.ApplicationCommand{
-			Name:        cmd.Name(),
-			Description: cmd.Description(),
-			Options:     normalizeCommandOptions(cmd.Options()),
+			Name:                     cmd.Name(),
+			Description:              cmd.Description(),
+			Options:                  normalizeCommandOptions(cmd.Options()),
+			DefaultMemberPermissions: commandDefaultMemberPermissions(cmd),
 		}
 	}
 	return desired
@@ -322,9 +323,10 @@ func (cm *CommandManager) buildGuildApplicationCommand(guildID string, cmd Comma
 			return nil
 		}
 		return &discordgo.ApplicationCommand{
-			Name:        group.Name(),
-			Description: group.Description(),
-			Options:     normalizeCommandOptions(options),
+			Name:                     group.Name(),
+			Description:              group.Description(),
+			Options:                  normalizeCommandOptions(options),
+			DefaultMemberPermissions: commandDefaultMemberPermissions(group),
 		}
 	}
 
@@ -332,10 +334,24 @@ func (cm *CommandManager) buildGuildApplicationCommand(guildID string, cmd Comma
 		return nil
 	}
 	return &discordgo.ApplicationCommand{
-		Name:        cmd.Name(),
-		Description: cmd.Description(),
-		Options:     normalizeCommandOptions(cmd.Options()),
+		Name:                     cmd.Name(),
+		Description:              cmd.Description(),
+		Options:                  normalizeCommandOptions(cmd.Options()),
+		DefaultMemberPermissions: commandDefaultMemberPermissions(cmd),
 	}
+}
+
+// commandDefaultMemberPermissions returns the Discord permission floor to
+// embed in the top-level descriptor for cmd, or nil when cmd does not
+// declare one. Discord requires a pointer; nil leaves the floor unset and
+// preserves the previous "permissionGateMiddleware only" behavior.
+func commandDefaultMemberPermissions(cmd Command) *int64 {
+	provider, ok := cmd.(DefaultMemberPermissionsProvider)
+	if !ok {
+		return nil
+	}
+	perms := provider.DefaultMemberPermissions()
+	return &perms
 }
 
 func (cm *CommandManager) buildGuildGroupOptions(guildID, parentPath string, group *GroupCommand) []*discordgo.ApplicationCommandOption {

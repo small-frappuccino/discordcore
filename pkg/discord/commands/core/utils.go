@@ -523,21 +523,21 @@ func normalizeCommandOptions(options []*discordgo.ApplicationCommandOption) []*d
 
 // CompareCommands compares two commands to check if they are semantically equal.
 // Option order is normalized so equivalent command definitions with required-first
-// normalization compare as equal.
+// normalization compare as equal. DefaultMemberPermissions is included so the
+// sync path does not flag drift when only the permission floor changes — and so
+// it does flag drift when Discord-side state diverges from the local declaration.
 func CompareCommands(a, b *discordgo.ApplicationCommand) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	ca := struct {
-		Name        string                                `json:"name"`
-		Description string                                `json:"description"`
-		Options     []*discordgo.ApplicationCommandOption `json:"options"`
-	}{a.Name, a.Description, normalizeCommandOptions(a.Options)}
-	cb := struct {
-		Name        string                                `json:"name"`
-		Description string                                `json:"description"`
-		Options     []*discordgo.ApplicationCommandOption `json:"options"`
-	}{b.Name, b.Description, normalizeCommandOptions(b.Options)}
+	type comparable struct {
+		Name                     string                                `json:"name"`
+		Description              string                                `json:"description"`
+		Options                  []*discordgo.ApplicationCommandOption `json:"options"`
+		DefaultMemberPermissions *int64                                `json:"default_member_permissions"`
+	}
+	ca := comparable{a.Name, a.Description, normalizeCommandOptions(a.Options), a.DefaultMemberPermissions}
+	cb := comparable{b.Name, b.Description, normalizeCommandOptions(b.Options), b.DefaultMemberPermissions}
 	ba, _ := json.Marshal(ca)
 	bb, _ := json.Marshal(cb)
 	return string(ba) == string(bb)

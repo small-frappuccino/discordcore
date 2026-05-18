@@ -90,6 +90,10 @@ func (c *reactionBlockCommand) RequiresGuild() bool { return true }
 
 func (c *reactionBlockCommand) RequiresPermissions() bool { return true }
 
+func (c *reactionBlockCommand) DefaultMemberPermissions() int64 {
+	return discordgo.PermissionManageMessages
+}
+
 func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
 	action, err := parseReactionBlockAction(ctx)
 	if err != nil {
