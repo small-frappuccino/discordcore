@@ -73,6 +73,8 @@ func registerSafeConnConfig(databaseURL string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("parse postgres connection config: %w", err)
 	}
+	// Compose with any pre-existing BuildFrontend (today nil, but a future pgx
+	// or middleware may install one) instead of clobbering it.
 	previousBuildFrontend := config.BuildFrontend
 	config.BuildFrontend = func(r io.Reader, w io.Writer) *pgproto3.Frontend {
 		var frontend *pgproto3.Frontend

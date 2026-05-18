@@ -59,6 +59,10 @@ type cleanResult struct {
 	deletedSingle int
 	skippedPinned int
 
+	// failed* break the result.failed total down by cleanup.FailureClass so
+	// describeCleanFailures and the audit-log embed can render a per-cause
+	// breakdown. Their sum should equal result.failed once both the
+	// bulk-preferred and single-only passes complete.
 	failedForbidden      int
 	failedMissingChannel int
 	failedRateLimited    int
