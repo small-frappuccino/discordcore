@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,6 +15,42 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
+// AutoModeration trigger types. discordgo v0.29.0 only exports constants up to
+// AutoModerationEventTriggerKeywordPreset (4); Discord also issues 5
+// (MENTION_SPAM) and 6 (MEMBER_PROFILE). MEMBER_PROFILE has no message context
+// (empty ChannelID and MessageID) and is what powers "Block Words in Member
+// Profile Names" rules.
+const (
+	automodTriggerKeyword       = 1
+	automodTriggerHarmfulLink   = 2
+	automodTriggerSpam          = 3
+	automodTriggerKeywordPreset = 4
+	automodTriggerMentionSpam   = 5
+	automodTriggerMemberProfile = 6
+)
+
+// AutoModeration action types. discordgo v0.29.0 only exports 1..3; Discord
+// also issues 4 (BLOCK_MEMBER_INTERACTION, the "quarantine" applied to
+// MEMBER_PROFILE triggers).
+const (
+	automodActionBlockMessage           = 1
+	automodActionSendAlert              = 2
+	automodActionTimeout                = 3
+	automodActionBlockMemberInteraction = 4
+)
+
+const automodExcerptMaxLen = 200
+
+// automodFallbackDedupTTL mirrors the router-level IdempotencyTTL configured in
+// EnqueueAutomodAction. The fallback map only kicks in when the router-backed
+// adapter is unavailable or has failed, so dedup behavior stays consistent
+// across the normal and fallback paths.
+const automodFallbackDedupTTL = 10 * time.Second
+
+// automodFallbackDedupCleanupThreshold caps the in-process fallback map size
+// before lazy cleanup runs.
+const automodFallbackDedupCleanupThreshold = 64
+
 // AutomodService listens for Discord native AutoMod executions and routes them to logging.
 type AutomodService struct {
 	session       *discordgo.Session
@@ -23,6 +60,12 @@ type AutomodService struct {
 
 	// unsubscribe function for the registered handler
 	handlerCancel func()
+
+	// fallbackDedup guards re-deliveries when the synchronous fallback path is
+	// taken (router unavailable or non-duplicate enqueue error). Mirrors the
+	// router's inflight map at process scope.
+	fallbackDedupMu sync.Mutex
+	fallbackDedup   map[string]time.Time
 }
 
 func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager) *AutomodService {
@@ -95,51 +138,165 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		}
 	}
 
-	// Build embed from event data (fallback when adapters are not available)
-	title := "AutoMod Action"
-	desc := "Native AutoMod rule triggered."
-	channelValue := formatChannelLabel(e.ChannelID)
-	if e.ChannelID == "" {
-		channelValue = "DM/Unknown"
+	// Synchronous fallback (adapters nil or router enqueue failed). Apply an
+	// in-process dedup so Gateway re-deliveries do not duplicate the embed.
+	if as.fallbackShouldDedup(task.AutomodIdempotencyKey(e)) {
+		log.ApplicationLogger().Debug("Dropped duplicate automod log task on fallback path", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID)
+		return
+	}
+
+	embed := buildAutomodEmbed(e)
+	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
+		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
+	}
+}
+
+// fallbackShouldDedup reports whether key was seen within automodFallbackDedupTTL.
+// Empty keys never dedup (no stable identifier available).
+func (as *AutomodService) fallbackShouldDedup(key string) bool {
+	return as.fallbackShouldDedupAt(key, time.Now())
+}
+
+func (as *AutomodService) fallbackShouldDedupAt(key string, now time.Time) bool {
+	if key == "" {
+		return false
+	}
+	as.fallbackDedupMu.Lock()
+	defer as.fallbackDedupMu.Unlock()
+	if as.fallbackDedup == nil {
+		as.fallbackDedup = make(map[string]time.Time)
+	}
+	if len(as.fallbackDedup) > automodFallbackDedupCleanupThreshold {
+		for k, expiry := range as.fallbackDedup {
+			if now.After(expiry) {
+				delete(as.fallbackDedup, k)
+			}
+		}
+	}
+	if expiry, exists := as.fallbackDedup[key]; exists && now.Before(expiry) {
+		return true
+	}
+	as.fallbackDedup[key] = now.Add(automodFallbackDedupTTL)
+	return false
+}
+
+// buildAutomodEmbed dispatches to the trigger-specific embed builder.
+// MEMBER_PROFILE events have no message context and get a distinct embed; all
+// other triggers reuse the message-keyword shape.
+func buildAutomodEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+	if int(e.RuleTriggerType) == automodTriggerMemberProfile {
+		return buildAutomodMemberProfileEmbed(e)
+	}
+	return buildAutomodMessageEmbed(e)
+}
+
+func buildAutomodMessageEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+	desc := "Blocked content detected in a message."
+	if e.GuildID != "" && e.ChannelID != "" && e.MessageID != "" {
+		desc += "\n[Jump to message](https://discord.com/channels/" + e.GuildID + "/" + e.ChannelID + "/" + e.MessageID + ")"
 	}
 	embed := &discordgo.MessageEmbed{
-		Title:       title,
+		Title:       "AutoMod • Message Blocked",
 		Description: desc,
 		Color:       theme.AutomodAction(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: "User", Value: formatUserRef(e.UserID), Inline: true},
-			{Name: "Channel", Value: channelValue, Inline: true},
+			{Name: "Channel", Value: automodChannelLabel(e.ChannelID), Inline: true},
 		},
 	}
-
-	// Include rule info
+	if label := automodTriggerLabel(e.RuleTriggerType); label != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Trigger", Value: label, Inline: true})
+	}
 	if e.RuleID != "" {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
 	}
 	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched", Value: "`" + e.MatchedKeyword + "`", Inline: true})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
 	}
-	// Include a short excerpt (content or matched content if present)
-	content := e.Content
-	if strings.TrimSpace(content) == "" && e.MatchedContent != "" {
-		content = e.MatchedContent
+	if excerpt := automodExcerpt(e); excerpt != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Excerpt", Value: "```" + excerpt + "```", Inline: false})
 	}
-	if strings.TrimSpace(content) != "" {
-		excerpt := content
-		if len(excerpt) > 200 {
-			excerpt = excerpt[:200] + "..."
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Excerpt",
-			Value:  "```" + sanitizeForCodeBlock(excerpt) + "```",
-			Inline: false,
-		})
-	}
+	return embed
+}
 
-	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "err", err)
+func buildAutomodMemberProfileEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title:       "AutoMod • Member Profile Quarantined",
+		Description: "Blocked words detected in this member's profile. The user is quarantined until the profile is updated.",
+		Color:       theme.AutomodAction(),
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Member", Value: formatUserRef(e.UserID), Inline: true},
+			{Name: "Trigger", Value: "Member profile", Inline: true},
+		},
 	}
+	if e.RuleID != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
+	}
+	if e.MatchedKeyword != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
+	}
+	if excerpt := automodExcerpt(e); excerpt != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Offending fragment", Value: "```" + excerpt + "```", Inline: false})
+	}
+	if label := automodActionLabel(e.Action.Type); label != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Action", Value: label, Inline: true})
+	}
+	return embed
+}
+
+func automodTriggerLabel(t discordgo.AutoModerationRuleTriggerType) string {
+	switch int(t) {
+	case automodTriggerKeyword:
+		return "Keyword"
+	case automodTriggerHarmfulLink:
+		return "Harmful link"
+	case automodTriggerSpam:
+		return "Spam"
+	case automodTriggerKeywordPreset:
+		return "Keyword preset"
+	case automodTriggerMentionSpam:
+		return "Mention spam"
+	case automodTriggerMemberProfile:
+		return "Member profile"
+	}
+	return ""
+}
+
+func automodActionLabel(t discordgo.AutoModerationActionType) string {
+	switch int(t) {
+	case automodActionBlockMessage:
+		return "Block message"
+	case automodActionSendAlert:
+		return "Send alert"
+	case automodActionTimeout:
+		return "Timeout"
+	case automodActionBlockMemberInteraction:
+		return "Block member interactions"
+	}
+	return ""
+}
+
+func automodChannelLabel(channelID string) string {
+	if strings.TrimSpace(channelID) == "" {
+		return "Unknown"
+	}
+	return formatChannelLabel(channelID)
+}
+
+func automodExcerpt(e *discordgo.AutoModerationActionExecution) string {
+	content := strings.TrimSpace(e.Content)
+	if content == "" {
+		content = strings.TrimSpace(e.MatchedContent)
+	}
+	if content == "" {
+		return ""
+	}
+	if len(content) > automodExcerptMaxLen {
+		content = content[:automodExcerptMaxLen] + "..."
+	}
+	return sanitizeForCodeBlock(content)
 }
 
 // sanitizeForCodeBlock prevents breaking out of the code fence and removes backticks.

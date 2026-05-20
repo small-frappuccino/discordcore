@@ -2,6 +2,8 @@ package task
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -243,7 +245,7 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 		return nil
 	}
 	group := event.GuildID
-	idempotencyKey := automodIdempotencyKey(event)
+	idempotencyKey := AutomodIdempotencyKey(event)
 	return a.Router.Dispatch(context.Background(), Task{
 		Type: TaskTypeSendAutomodAction,
 		Payload: AutomodActionPayload{
@@ -261,20 +263,38 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 	})
 }
 
-func automodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
+// AutomodIdempotencyKey computes the dedupe key for an AutoMod action event.
+// Exported so the synchronous fallback path in pkg/discord/logging can compute
+// the same key the router would, and apply its own dedup before sending.
+func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
+	return automodIdempotencyKeyAt(event, time.Now())
+}
+
+func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, now time.Time) string {
 	if event == nil {
 		return ""
 	}
-	messageID := strings.TrimSpace(event.MessageID)
-	if messageID != "" {
+	if messageID := strings.TrimSpace(event.MessageID); messageID != "" {
 		return fmt.Sprintf("automod:%s:%s:%s:msg:%s", event.GuildID, event.RuleID, event.UserID, messageID)
 	}
-	alertSystemMessageID := strings.TrimSpace(event.AlertSystemMessageID)
-	if alertSystemMessageID != "" {
+	if alertSystemMessageID := strings.TrimSpace(event.AlertSystemMessageID); alertSystemMessageID != "" {
 		return fmt.Sprintf("automod:%s:%s:%s:alert:%s", event.GuildID, event.RuleID, event.UserID, alertSystemMessageID)
 	}
-	// Some native actions may not include a stable message identifier.
-	// In that case, avoid accidental dedupe drops.
+	if content := strings.TrimSpace(event.MatchedContent); content != "" {
+		// MatchedContent is the offending substring — re-deliveries carry the
+		// same content; distinct profile updates carry different content. No
+		// time bucket needed.
+		digest := sha256.Sum256([]byte(content))
+		return fmt.Sprintf("automod:%s:%s:%s:content:%s", event.GuildID, event.RuleID, event.UserID, hex.EncodeToString(digest[:8]))
+	}
+	if keyword := strings.TrimSpace(event.MatchedKeyword); keyword != "" {
+		// MatchedKeyword is the rule's configured keyword — shared across
+		// distinct events of the same rule. Bucket by second so re-deliveries
+		// within the same second collide while distinct events seconds apart
+		// stay independent, instead of falsely deduping for the full TTL.
+		digest := sha256.Sum256([]byte(keyword))
+		return fmt.Sprintf("automod:%s:%s:%s:keyword:%s:t%d", event.GuildID, event.RuleID, event.UserID, hex.EncodeToString(digest[:8]), now.Unix())
+	}
 	return ""
 }
 

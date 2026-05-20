@@ -583,63 +583,6 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 	if e == nil || channelID == "" {
 		return nil
 	}
-
-	title := "AutoMod Action"
-	desc := "Native AutoMod rule triggered."
-	channelValue := formatChannelLabel(e.ChannelID)
-	if e.ChannelID == "" {
-		channelValue = "DM/Unknown"
-	}
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: desc,
-		Color:       theme.AutomodAction(),
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "User",
-				Value:  formatUserRef(e.UserID),
-				Inline: true,
-			},
-			{
-				Name:   "Channel",
-				Value:  channelValue,
-				Inline: true,
-			},
-		},
-	}
-
-	if e.RuleID != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Rule ID",
-			Value:  "`" + e.RuleID + "`",
-			Inline: true,
-		})
-	}
-	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Matched",
-			Value:  "`" + e.MatchedKeyword + "`",
-			Inline: true,
-		})
-	}
-
-	content := e.Content
-	if content == "" && e.MatchedContent != "" {
-		content = e.MatchedContent
-	}
-	if content != "" {
-		excerpt := content
-		if len(excerpt) > 200 {
-			excerpt = excerpt[:200] + "..."
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "Excerpt",
-			Value:  "```" + sanitizeForCodeBlock(excerpt) + "```",
-			Inline: false,
-		})
-	}
-
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, buildAutomodEmbed(e))
 	return err
 }
