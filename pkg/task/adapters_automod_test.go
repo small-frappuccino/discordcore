@@ -88,8 +88,8 @@ func TestAutomodIdempotencyKey_MatchedContentDoesNotBucket(t *testing.T) {
 	}
 	t1 := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
 	t2 := time.Date(2026, 5, 19, 9, 13, 30, 0, time.UTC)
-	k1 := automodIdempotencyKeyAt(base, t1)
-	k2 := automodIdempotencyKeyAt(base, t2)
+	k1 := automodIdempotencyKeyAt(base, 0, t1)
+	k2 := automodIdempotencyKeyAt(base, 0, t2)
 	if k1 != k2 || k1 == "" {
 		t.Fatalf("MatchedContent must be time-independent, got %q vs %q", k1, k2)
 	}
@@ -108,13 +108,13 @@ func TestAutomodIdempotencyKey_MatchedKeywordBucketsBySecond(t *testing.T) {
 	tAEnd := time.Date(2026, 5, 19, 9, 13, 0, int(time.Millisecond*900), time.UTC)
 	tB := time.Date(2026, 5, 19, 9, 13, 1, 0, time.UTC)
 
-	kSameA := automodIdempotencyKeyAt(base, tA)
-	kSameB := automodIdempotencyKeyAt(base, tAEnd)
+	kSameA := automodIdempotencyKeyAt(base, 0, tA)
+	kSameB := automodIdempotencyKeyAt(base, 0, tAEnd)
 	if kSameA != kSameB || kSameA == "" {
 		t.Fatalf("same-second calls must collide, got %q vs %q", kSameA, kSameB)
 	}
 
-	kDiff := automodIdempotencyKeyAt(base, tB)
+	kDiff := automodIdempotencyKeyAt(base, 0, tB)
 	if kDiff == kSameA {
 		t.Fatalf("next-second call must produce a different key, both got %q", kDiff)
 	}
@@ -129,13 +129,13 @@ func TestAutomodIdempotencyKey_DifferentContentProducesDifferentKey(t *testing.T
 		RuleID:         "r1",
 		UserID:         "u1",
 		MatchedContent: "BigAss",
-	}, now)
+	}, 0, now)
 	k2 := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
 		MatchedContent: "DonkeyKong",
-	}, now)
+	}, 0, now)
 	if k1 == k2 {
 		t.Fatalf("different content must produce different keys, both got %q", k1)
 	}
@@ -166,8 +166,99 @@ func TestAutomodIdempotencyKey_ContentPrecedenceOverKeyword(t *testing.T) {
 		UserID:         "u1",
 		MatchedContent: "BigAss",
 		MatchedKeyword: "ass",
-	}, now)
+	}, 0, now)
 	if !strings.HasPrefix(key, "automod:g1:r1:u1:content:") {
 		t.Fatalf("expected content-based key when both fields present, got %q", key)
+	}
+}
+
+func TestAutomodIdempotencyKeyForSequence_UsesSeqWhenPositive(t *testing.T) {
+	t.Parallel()
+
+	key := AutomodIdempotencyKeyForSequence(&discordgo.AutoModerationActionExecution{
+		GuildID:        "g1",
+		RuleID:         "r1",
+		UserID:         "u1",
+		MessageID:      "m1",
+		MatchedContent: "BigAss",
+		MatchedKeyword: "ass",
+	}, 1234)
+	if key != "automod:g1:r1:u1:seq:1234" {
+		t.Fatalf("seq must win over msg/content/keyword, got %q", key)
+	}
+}
+
+func TestAutomodIdempotencyKeyForSequence_StableAcrossTime(t *testing.T) {
+	t.Parallel()
+
+	event := &discordgo.AutoModerationActionExecution{
+		GuildID:        "g1",
+		RuleID:         "r1",
+		UserID:         "u1",
+		MatchedKeyword: "ass",
+	}
+	t1 := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
+	t2 := time.Date(2026, 5, 19, 10, 0, 0, 0, time.UTC)
+	k1 := automodIdempotencyKeyAt(event, 1234, t1)
+	k2 := automodIdempotencyKeyAt(event, 1234, t2)
+	if k1 != k2 || k1 == "" {
+		t.Fatalf("seq-based key must be time-independent, got %q vs %q", k1, k2)
+	}
+}
+
+func TestAutomodIdempotencyKeyForSequence_DistinctSeqProducesDistinctKey(t *testing.T) {
+	t.Parallel()
+
+	event := &discordgo.AutoModerationActionExecution{
+		GuildID: "g1",
+		RuleID:  "r1",
+		UserID:  "u1",
+	}
+	k1 := AutomodIdempotencyKeyForSequence(event, 1234)
+	k2 := AutomodIdempotencyKeyForSequence(event, 1235)
+	if k1 == k2 {
+		t.Fatalf("distinct seqs must produce distinct keys, both got %q", k1)
+	}
+}
+
+func TestAutomodIdempotencyKeyForSequence_ZeroSeqFallsBackToMsg(t *testing.T) {
+	t.Parallel()
+
+	key := AutomodIdempotencyKeyForSequence(&discordgo.AutoModerationActionExecution{
+		GuildID:   "g1",
+		RuleID:    "r1",
+		UserID:    "u1",
+		MessageID: "m1",
+	}, 0)
+	if key != "automod:g1:r1:u1:msg:m1" {
+		t.Fatalf("seq=0 must fall back to msg key, got %q", key)
+	}
+}
+
+func TestAutomodIdempotencyKeyForSequence_NegativeSeqFallsBackToContent(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
+	key := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
+		GuildID:        "g1",
+		RuleID:         "r1",
+		UserID:         "u1",
+		MatchedContent: "BigAss",
+	}, -1, now)
+	if !strings.HasPrefix(key, "automod:g1:r1:u1:content:") {
+		t.Fatalf("negative seq must fall back to content key, got %q", key)
+	}
+}
+
+func TestAutomodIdempotencyKeyForSequence_NoSignalReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	key := AutomodIdempotencyKeyForSequence(&discordgo.AutoModerationActionExecution{
+		GuildID: "g1",
+		RuleID:  "r1",
+		UserID:  "u1",
+	}, 0)
+	if key != "" {
+		t.Fatalf("expected empty key when no signal is present, got %q", key)
 	}
 }

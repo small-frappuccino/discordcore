@@ -239,13 +239,22 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 	})
 }
 
-// EnqueueAutomodAction enqueues an automod action notification.
+// EnqueueAutomodAction enqueues an automod action notification using the
+// default idempotency key (computed without a gateway sequence number). Kept
+// for callers that do not have access to the raw *discordgo.Event envelope.
 func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *discordgo.AutoModerationActionExecution) error {
+	return a.EnqueueAutomodActionWithKey(channelID, event, AutomodIdempotencyKey(event))
+}
+
+// EnqueueAutomodActionWithKey enqueues an automod action notification with an
+// explicit idempotency key. The key is typically computed by the caller via
+// AutomodIdempotencyKeyForSequence so the gateway sequence number — which is
+// the same across Discord re-deliveries (including resume) — can drive
+// deduplication. An empty key disables router-level dedup for this event.
+func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *discordgo.AutoModerationActionExecution, idempotencyKey string) error {
 	if event == nil {
 		return nil
 	}
-	group := event.GuildID
-	idempotencyKey := AutomodIdempotencyKey(event)
 	return a.Router.Dispatch(context.Background(), Task{
 		Type: TaskTypeSendAutomodAction,
 		Payload: AutomodActionPayload{
@@ -253,7 +262,7 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 			Event:     event,
 		},
 		Options: TaskOptions{
-			GroupKey:       group,
+			GroupKey:       event.GuildID,
 			IdempotencyKey: idempotencyKey,
 			IdempotencyTTL: 10 * time.Second,
 			MaxAttempts:    3,
@@ -263,16 +272,35 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 	})
 }
 
-// AutomodIdempotencyKey computes the dedupe key for an AutoMod action event.
-// Exported so the synchronous fallback path in pkg/discord/logging can compute
-// the same key the router would, and apply its own dedup before sending.
+// AutomodIdempotencyKey computes the dedupe key for an AutoMod action event
+// without a gateway sequence number. Exported so the synchronous fallback path
+// in pkg/discord/logging can compute the same key the router would when no
+// sequence is available, and apply its own dedup before sending. The key
+// precedence chain is: msg → alert → content → keyword+second-bucket.
 func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
-	return automodIdempotencyKeyAt(event, time.Now())
+	return AutomodIdempotencyKeyForSequence(event, 0)
 }
 
-func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, now time.Time) string {
+// AutomodIdempotencyKeyForSequence computes the dedupe key for an AutoMod
+// action event, preferring the gateway sequence number when it is positive.
+// Discord guarantees the same sequence across re-deliveries (including the
+// RESUME path), so a seq-based key catches every retransmission deterministically
+// without depending on payload-level identifiers.
+//
+// Precedence: seq (when > 0) → msg → alert → content → keyword+second-bucket.
+// A sequence of 0 or negative is treated as "no signal" and falls through to
+// the payload-based chain; the raw value is never used as a key, since
+// "automod::seq:0" would collapse unrelated events.
+func AutomodIdempotencyKeyForSequence(event *discordgo.AutoModerationActionExecution, sequence int64) string {
+	return automodIdempotencyKeyAt(event, sequence, time.Now())
+}
+
+func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, sequence int64, now time.Time) string {
 	if event == nil {
 		return ""
+	}
+	if sequence > 0 {
+		return fmt.Sprintf("automod:%s:%s:%s:seq:%d", event.GuildID, event.RuleID, event.UserID, sequence)
 	}
 	if messageID := strings.TrimSpace(event.MessageID); messageID != "" {
 		return fmt.Sprintf("automod:%s:%s:%s:msg:%s", event.GuildID, event.RuleID, event.UserID, messageID)
