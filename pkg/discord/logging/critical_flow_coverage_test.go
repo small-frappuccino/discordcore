@@ -75,10 +75,15 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 	if gotJoin.Unix() != joinedAt.Unix() {
 		t.Fatalf("unexpected join timestamp: got=%s want=%s", gotJoin.UTC(), joinedAt.UTC())
 	}
-	if got := dailyMemberMetricCount(t, dbPath, "daily_member_joins", guildID, userID, time.Now().UTC()); got != 1 {
+	// Daily metric is bucketed by UTC day of joinedAt; never use `time.Now()`
+	// here — the local-time clock can be on a different UTC day from
+	// joinedAt when running near midnight UTC, which would query the wrong
+	// bucket and surface as count=0.
+	if got := dailyMemberMetricCount(t, dbPath, "daily_member_joins", guildID, userID, joinedAt); got != 1 {
 		t.Fatalf("expected one daily join metric, got %d", got)
 	}
 
+	leftAt := time.Now().UTC()
 	service.handleGuildMemberRemove(context.Background(), session, &discordgo.GuildMemberRemove{
 		Member: &discordgo.Member{
 			GuildID: guildID,
@@ -89,7 +94,8 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 		},
 	})
 
-	if got := dailyMemberMetricCount(t, dbPath, "daily_member_leaves", guildID, userID, time.Now().UTC()); got != 1 {
+	// Same UTC-day caveat as the join metric.
+	if got := dailyMemberMetricCount(t, dbPath, "daily_member_leaves", guildID, userID, leftAt); got != 1 {
 		t.Fatalf("expected one daily leave metric, got %d", got)
 	}
 	if got := atomic.LoadInt32(&messagePosts); got != 2 {

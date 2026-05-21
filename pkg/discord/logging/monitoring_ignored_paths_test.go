@@ -215,13 +215,27 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testing.T) {
 	store, _ := newLoggingStore(t, "monitoring-heartbeat.db")
 
+	// Inject a monotonic clock so the "second.After(first)" invariant is
+	// independent of the host wall clock's resolution. On Windows
+	// `time.Now()` can have ~1ms granularity, and at a 5ms tick interval
+	// under heavy parallel load (Postgres schema churn from sibling tests)
+	// two consecutive samples can collide once truncated to the precision
+	// the row carries through the round-trip. Each heartbeat attempt calls
+	// ra.now() exactly once, so monotonically advancing the counter gives
+	// the test a deterministic gap to assert against.
+	base := time.Date(2026, time.January, 2, 7, 0, 0, 0, time.UTC)
+	var calls atomic.Int32
+
 	ticks := newTickRecorder(t, 2)
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           monitoringRunErrWithTimeoutContext,
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
 		Warn:             log.ApplicationLogger().Warn,
-		OnHeartbeatTick:  ticks.Hook,
+		Now: func() time.Time {
+			return base.Add(time.Duration(calls.Add(1)) * time.Second)
+		},
+		OnHeartbeatTick: ticks.Hook,
 	})
 
 	ms := &MonitoringService{
@@ -231,7 +245,12 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	}
 
 	origInterval := heartbeatTickInterval
-	heartbeatTickInterval = 5 * time.Millisecond
+	// 25ms (rather than the prior 5ms) keeps the test fast while reducing
+	// CPU pressure when the package is run with high parallelism — under
+	// load a 5ms ticker fires faster than the scheduler can drain the
+	// hook + DB roundtrip, which inflated end-to-end wall time and pushed
+	// tickRecorder.Next past its 2s safety timeout.
+	heartbeatTickInterval = 25 * time.Millisecond
 	t.Cleanup(func() {
 		heartbeatTickInterval = origInterval
 		close(ms.stopChan)

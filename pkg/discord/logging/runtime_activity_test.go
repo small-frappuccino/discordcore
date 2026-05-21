@@ -77,7 +77,11 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		OnHeartbeatTick: ticks.Hook,
 	})
 
-	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
+	// 25ms (rather than 5ms) leaves enough room for the second ticker fire
+	// to land within tickRecorder.Next's 2s safety timeout when the package
+	// is run with high parallelism: a Postgres-backed roundtrip per tick
+	// can briefly outrun a 5ms cadence under sibling-test schema churn.
+	activity.StartHeartbeat(context.Background(), 25*time.Millisecond)
 	t.Cleanup(func() {
 		if err := activity.StopHeartbeat(context.Background()); err != nil {
 			t.Fatalf("stop heartbeat cleanup: %v", err)

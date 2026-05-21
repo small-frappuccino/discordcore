@@ -58,6 +58,11 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected 3 registered handlers after start, got %d", got)
 	}
 
+	// Capture joinedAt timestamps so the daily-metric lookups below use the
+	// same UTC day the handler used at INSERT time. `time.Now().UTC()` on
+	// the verification side can roll over to the next UTC day on machines
+	// running near midnight UTC and falsely surface count=0.
+	firstJoinedAt := time.Now().UTC().Add(-30 * time.Minute)
 	dispatchDiscordEvent(session, "GUILD_MEMBER_ADD", &discordgo.GuildMemberAdd{
 		Member: &discordgo.Member{
 			GuildID: guildID,
@@ -65,7 +70,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 				ID:       firstUserID,
 				Username: "first-user",
 			},
-			JoinedAt: time.Now().UTC().Add(-30 * time.Minute),
+			JoinedAt: firstJoinedAt,
 		},
 	})
 	if got := atomic.LoadInt32(&notificationPosts); got != 1 {
@@ -100,6 +105,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected 3 registered handlers after restart, got %d", got)
 	}
 
+	secondJoinedAt := time.Now().UTC().Add(-20 * time.Minute)
 	dispatchDiscordEvent(session, "GUILD_MEMBER_ADD", &discordgo.GuildMemberAdd{
 		Member: &discordgo.Member{
 			GuildID: guildID,
@@ -107,7 +113,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 				ID:       secondUserID,
 				Username: "second-user",
 			},
-			JoinedAt: time.Now().UTC().Add(-20 * time.Minute),
+			JoinedAt: secondJoinedAt,
 		},
 	})
 
@@ -115,10 +121,10 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		t.Fatalf("expected exactly one notification per dispatched event, got %d", got)
 	}
 
-	if got := dailyMemberMetricCount(t, dbPath, "daily_member_joins", guildID, firstUserID, time.Now().UTC()); got != 1 {
+	if got := dailyMemberMetricCount(t, dbPath, "daily_member_joins", guildID, firstUserID, firstJoinedAt); got != 1 {
 		t.Fatalf("expected first user to be counted once, got %d", got)
 	}
-	if got := dailyMemberMetricCount(t, dbPath, "daily_member_joins", guildID, secondUserID, time.Now().UTC()); got != 1 {
+	if got := dailyMemberMetricCount(t, dbPath, "daily_member_joins", guildID, secondUserID, secondJoinedAt); got != 1 {
 		t.Fatalf("expected second user to be counted once, got %d", got)
 	}
 
