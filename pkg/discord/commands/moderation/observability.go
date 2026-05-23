@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
+	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
 // Metrics is the narrow observability seam moderation commands write through.
@@ -85,18 +86,8 @@ type CleanSnapshot struct {
 	// deleted messages but failed to post the audit-log channel embed.
 	// Operators read a non-zero rate as "audit channel is broken" —
 	// the structured application log still has the primary record.
-	AuditLogFailureTotal int64           `json:"audit_log_failure_total"`
-	Duration             SummarySnapshot `json:"duration_seconds"`
-}
-
-// SummarySnapshot is the count/sum/max shape that mirrors a Prometheus
-// summary minus quantiles. Operators get average via sum/count and tail
-// behavior via max. Designed so a Prometheus migration is one transform
-// per field, not a redesign.
-type SummarySnapshot struct {
-	Count      int64   `json:"count"`
-	SumSeconds float64 `json:"sum_seconds"`
-	MaxSeconds float64 `json:"max_seconds"`
+	AuditLogFailureTotal int64                         `json:"audit_log_failure_total"`
+	Duration             observability.SummarySnapshot `json:"duration_seconds"`
 }
 
 // Stable cause tokens recorded by RecordCleanFailure. Keep this list in
@@ -187,7 +178,7 @@ type InMemoryMetrics struct {
 
 	deletedMessages atomic.Int64
 	auditLogFailure atomic.Int64
-	duration        summary
+	duration        observability.Summary
 }
 
 // NewInMemoryMetrics constructs the production metrics implementation.
@@ -209,13 +200,13 @@ func (m *InMemoryMetrics) RecordCleanSuccess(duration time.Duration, deletedMess
 	if deletedMessages > 0 {
 		m.deletedMessages.Add(int64(deletedMessages))
 	}
-	m.duration.observe(duration)
+	m.duration.Observe(duration)
 }
 
 func (m *InMemoryMetrics) RecordCleanFailure(cause string, duration time.Duration) {
 	m.failure.Add(1)
 	m.causeCounter(cause).Add(1)
-	m.duration.observe(duration)
+	m.duration.Observe(duration)
 }
 
 func (m *InMemoryMetrics) RecordCleanDeleteFailure(class cleanup.FailureClass) {
@@ -251,70 +242,15 @@ func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
 			DeleteFailureByClass: deleteFailureByClass,
 			DeletedMessagesTotal: m.deletedMessages.Load(),
 			AuditLogFailureTotal: m.auditLogFailure.Load(),
-			Duration:             m.duration.snapshot(),
+			Duration:             m.duration.Snapshot(),
 		},
 	}
 }
 
 func (m *InMemoryMetrics) causeCounter(cause string) *atomic.Int64 {
-	return getOrCreateLabeledCounter(&m.mu, m.failureByCause, cause)
+	return observability.GetOrCreateLabeledCounter(&m.mu, m.failureByCause, cause)
 }
 
 func (m *InMemoryMetrics) classCounter(label string) *atomic.Int64 {
-	return getOrCreateLabeledCounter(&m.mu, m.deleteFailureByClass, label)
-}
-
-func getOrCreateLabeledCounter(mu *sync.RWMutex, m map[string]*atomic.Int64, key string) *atomic.Int64 {
-	mu.RLock()
-	if c, ok := m[key]; ok {
-		mu.RUnlock()
-		return c
-	}
-	mu.RUnlock()
-
-	mu.Lock()
-	defer mu.Unlock()
-	if c, ok := m[key]; ok {
-		return c
-	}
-	c := &atomic.Int64{}
-	m[key] = c
-	return c
-}
-
-// summary is the count + sum + max tracker behind SummarySnapshot. It
-// uses three atomics — observe is lock-free, snapshot is one load each.
-type summary struct {
-	count    atomic.Int64
-	sumNanos atomic.Int64
-	maxNanos atomic.Int64
-}
-
-func (s *summary) observe(d time.Duration) {
-	if d < 0 {
-		d = 0
-	}
-	s.count.Add(1)
-	s.sumNanos.Add(d.Nanoseconds())
-	candidate := d.Nanoseconds()
-	for {
-		cur := s.maxNanos.Load()
-		if candidate <= cur {
-			return
-		}
-		if s.maxNanos.CompareAndSwap(cur, candidate) {
-			return
-		}
-	}
-}
-
-func (s *summary) snapshot() SummarySnapshot {
-	if s == nil {
-		return SummarySnapshot{}
-	}
-	return SummarySnapshot{
-		Count:      s.count.Load(),
-		SumSeconds: time.Duration(s.sumNanos.Load()).Seconds(),
-		MaxSeconds: time.Duration(s.maxNanos.Load()).Seconds(),
-	}
+	return observability.GetOrCreateLabeledCounter(&m.mu, m.deleteFailureByClass, label)
 }

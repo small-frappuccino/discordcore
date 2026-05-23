@@ -423,7 +423,7 @@ export interface HealthMonitoringSnapshot {
   cache: HealthMonitoringCacheSnapshot;
 }
 
-// HealthQOTDSummarySnapshot mirrors pkg/qotd.SummarySnapshot.
+// HealthQOTDSummarySnapshot mirrors pkg/observability.SummarySnapshot.
 export interface HealthQOTDSummarySnapshot {
   count: number;
   sum_seconds: number;
@@ -461,7 +461,7 @@ export interface HealthQOTDSnapshot {
   state: HealthQOTDStateSnapshot;
 }
 
-// HealthModerationSummarySnapshot mirrors pkg/discord/commands/moderation.SummarySnapshot.
+// HealthModerationSummarySnapshot mirrors pkg/observability.SummarySnapshot.
 export interface HealthModerationSummarySnapshot {
   count: number;
   sum_seconds: number;

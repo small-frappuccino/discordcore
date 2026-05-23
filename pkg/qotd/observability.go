@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
 // Metrics is the narrow observability seam the QOTD service writes through.
@@ -82,17 +84,17 @@ type SnapshotProvider interface {
 // summary for one publish mode (scheduled or manual). All fields are
 // JSON-serializable.
 type PublishModeSnapshot struct {
-	SuccessTotal   int64            `json:"success_total"`
-	FailureTotal   int64            `json:"failure_total"`
-	FailureByCause map[string]int64 `json:"failure_by_cause,omitempty"`
-	Duration       SummarySnapshot  `json:"duration_seconds"`
+	SuccessTotal   int64                         `json:"success_total"`
+	FailureTotal   int64                         `json:"failure_total"`
+	FailureByCause map[string]int64              `json:"failure_by_cause,omitempty"`
+	Duration       observability.SummarySnapshot `json:"duration_seconds"`
 }
 
 // ReconcileSnapshot is the reconcile loop's view.
 type ReconcileSnapshot struct {
-	CyclesTotal   int64           `json:"cycles_total"`
-	FailuresTotal int64           `json:"failures_total"`
-	Duration      SummarySnapshot `json:"duration_seconds"`
+	CyclesTotal   int64                         `json:"cycles_total"`
+	FailuresTotal int64                         `json:"failures_total"`
+	Duration      observability.SummarySnapshot `json:"duration_seconds"`
 }
 
 // StateSnapshot is the bag of "side event" counters that don't fit the
@@ -104,16 +106,6 @@ type StateSnapshot struct {
 	UnmanageableThreadTotal     int64 `json:"unmanageable_thread_total"`
 	OrphanReservationsReclaimed int64 `json:"orphan_reservations_reclaimed_total"`
 	SuppressionsCleared         int64 `json:"suppressions_cleared_total"`
-}
-
-// SummarySnapshot is the count/sum/max shape that mirrors a Prometheus
-// summary minus quantiles. Operators get average via sum/count and tail
-// behavior via max. Designed so a Prometheus migration is one transform
-// per field, not a redesign.
-type SummarySnapshot struct {
-	Count      int64   `json:"count"`
-	SumSeconds float64 `json:"sum_seconds"`
-	MaxSeconds float64 `json:"max_seconds"`
 }
 
 // MetricsSnapshot is the JSON payload /v1/health/qotd returns. The order
@@ -157,11 +149,11 @@ type InMemoryMetrics struct {
 	publishSuccess     map[PublishMode]*atomic.Int64
 	publishFailure     map[PublishMode]*atomic.Int64
 	publishFailByCause map[PublishMode]map[string]*atomic.Int64
-	publishDuration    map[PublishMode]*summary
+	publishDuration    map[PublishMode]*observability.Summary
 
 	reconcileCycles   atomic.Int64
 	reconcileFailures atomic.Int64
-	reconcileDuration summary
+	reconcileDuration observability.Summary
 
 	abandoned          atomic.Int64
 	divergence         atomic.Int64
@@ -178,7 +170,7 @@ func NewInMemoryMetrics() *InMemoryMetrics {
 		publishSuccess:     make(map[PublishMode]*atomic.Int64),
 		publishFailure:     make(map[PublishMode]*atomic.Int64),
 		publishFailByCause: make(map[PublishMode]map[string]*atomic.Int64),
-		publishDuration:    make(map[PublishMode]*summary),
+		publishDuration:    make(map[PublishMode]*observability.Summary),
 	}
 }
 
@@ -188,13 +180,13 @@ func (m *InMemoryMetrics) RecordPublishAttempt(mode PublishMode) {
 
 func (m *InMemoryMetrics) RecordPublishSuccess(mode PublishMode, duration time.Duration) {
 	m.counterFor(mode, m.publishSuccessGetOrCreate).Add(1)
-	m.durationFor(mode).observe(duration)
+	m.durationFor(mode).Observe(duration)
 }
 
 func (m *InMemoryMetrics) RecordPublishFailure(mode PublishMode, cause string, duration time.Duration) {
 	m.counterFor(mode, m.publishFailureGetOrCreate).Add(1)
 	m.failureCauseFor(mode, cause).Add(1)
-	m.durationFor(mode).observe(duration)
+	m.durationFor(mode).Observe(duration)
 }
 
 func (m *InMemoryMetrics) RecordReconcileCycle(duration time.Duration, err error) {
@@ -202,7 +194,7 @@ func (m *InMemoryMetrics) RecordReconcileCycle(duration time.Duration, err error
 	if err != nil {
 		m.reconcileFailures.Add(1)
 	}
-	m.reconcileDuration.observe(duration)
+	m.reconcileDuration.Observe(duration)
 }
 
 func (m *InMemoryMetrics) RecordOfficialPostAbandoned() { m.abandoned.Add(1) }
@@ -234,9 +226,9 @@ func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
 				causeMap[cause] = counter.Load()
 			}
 		}
-		duration := SummarySnapshot{}
+		duration := observability.SummarySnapshot{}
 		if s, ok := m.publishDuration[mode]; ok {
-			duration = s.snapshot()
+			duration = s.Snapshot()
 		}
 		publishes[modeKey] = PublishModeSnapshot{
 			SuccessTotal:   atomicLoad(m.publishSuccess[mode]),
@@ -251,7 +243,7 @@ func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
 		Reconcile: ReconcileSnapshot{
 			CyclesTotal:   m.reconcileCycles.Load(),
 			FailuresTotal: m.reconcileFailures.Load(),
-			Duration:      m.reconcileDuration.snapshot(),
+			Duration:      m.reconcileDuration.Snapshot(),
 		},
 		State: StateSnapshot{
 			AbandonedTotal:              m.abandoned.Load(),
@@ -271,13 +263,13 @@ func (m *InMemoryMetrics) counterFor(mode PublishMode, getOrCreate func(PublishM
 }
 
 func (m *InMemoryMetrics) publishAttemptsGetOrCreate(mode PublishMode) *atomic.Int64 {
-	return getOrCreateModeCounter(&m.mu, m.publishAttempts, mode)
+	return observability.GetOrCreateLabeledCounter(&m.mu, m.publishAttempts, mode)
 }
 func (m *InMemoryMetrics) publishSuccessGetOrCreate(mode PublishMode) *atomic.Int64 {
-	return getOrCreateModeCounter(&m.mu, m.publishSuccess, mode)
+	return observability.GetOrCreateLabeledCounter(&m.mu, m.publishSuccess, mode)
 }
 func (m *InMemoryMetrics) publishFailureGetOrCreate(mode PublishMode) *atomic.Int64 {
-	return getOrCreateModeCounter(&m.mu, m.publishFailure, mode)
+	return observability.GetOrCreateLabeledCounter(&m.mu, m.publishFailure, mode)
 }
 
 func (m *InMemoryMetrics) failureCauseFor(mode PublishMode, cause string) *atomic.Int64 {
@@ -305,7 +297,7 @@ func (m *InMemoryMetrics) failureCauseFor(mode PublishMode, cause string) *atomi
 	return counter
 }
 
-func (m *InMemoryMetrics) durationFor(mode PublishMode) *summary {
+func (m *InMemoryMetrics) durationFor(mode PublishMode) *observability.Summary {
 	m.mu.RLock()
 	if s, ok := m.publishDuration[mode]; ok {
 		m.mu.RUnlock()
@@ -317,28 +309,10 @@ func (m *InMemoryMetrics) durationFor(mode PublishMode) *summary {
 	defer m.mu.Unlock()
 	s, ok := m.publishDuration[mode]
 	if !ok {
-		s = &summary{}
+		s = &observability.Summary{}
 		m.publishDuration[mode] = s
 	}
 	return s
-}
-
-func getOrCreateModeCounter(mu *sync.RWMutex, m map[PublishMode]*atomic.Int64, mode PublishMode) *atomic.Int64 {
-	mu.RLock()
-	if c, ok := m[mode]; ok {
-		mu.RUnlock()
-		return c
-	}
-	mu.RUnlock()
-
-	mu.Lock()
-	defer mu.Unlock()
-	if c, ok := m[mode]; ok {
-		return c
-	}
-	c := &atomic.Int64{}
-	m[mode] = c
-	return c
 }
 
 func atomicLoad(c *atomic.Int64) int64 {
@@ -360,7 +334,7 @@ func collectPublishModes(maps ...interface{}) []PublishMode {
 			for k := range v {
 				seen[k] = struct{}{}
 			}
-		case map[PublishMode]*summary:
+		case map[PublishMode]*observability.Summary:
 			for k := range v {
 				seen[k] = struct{}{}
 			}
@@ -372,43 +346,6 @@ func collectPublishModes(maps ...interface{}) []PublishMode {
 	}
 	sort.Slice(out, func(i, j int) bool { return string(out[i]) < string(out[j]) })
 	return out
-}
-
-// summary is the count + sum + max tracker behind SummarySnapshot. It
-// uses three atomics — Observe is lock-free, snapshot is one load each.
-type summary struct {
-	count    atomic.Int64
-	sumNanos atomic.Int64
-	maxNanos atomic.Int64
-}
-
-func (s *summary) observe(d time.Duration) {
-	if d < 0 {
-		d = 0
-	}
-	s.count.Add(1)
-	s.sumNanos.Add(d.Nanoseconds())
-	candidate := d.Nanoseconds()
-	for {
-		cur := s.maxNanos.Load()
-		if candidate <= cur {
-			return
-		}
-		if s.maxNanos.CompareAndSwap(cur, candidate) {
-			return
-		}
-	}
-}
-
-func (s *summary) snapshot() SummarySnapshot {
-	if s == nil {
-		return SummarySnapshot{}
-	}
-	return SummarySnapshot{
-		Count:      s.count.Load(),
-		SumSeconds: time.Duration(s.sumNanos.Load()).Seconds(),
-		MaxSeconds: time.Duration(s.maxNanos.Load()).Seconds(),
-	}
 }
 
 // ClassifyPublishFailure maps a publish-path error into one of a small
