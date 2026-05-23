@@ -36,7 +36,8 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 	service.versioningEnabled = true
 	service.cacheTTL = 24 * time.Hour
 
-	writer := newMessageCreateWriter(store)
+	metrics := NewInMemoryMessageWriterMetrics()
+	writer := newMessageCreateWriter(store, metrics)
 	writer.flushInterval = time.Hour
 	service.messageCreateWriter = writer
 	writer.Start()
@@ -116,15 +117,12 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 		t.Fatalf("expected one edit history row, got %d", got)
 	}
 
-	stats, ok := service.GetCacheStats()["messageWriter"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected message writer stats in cache stats, got %#v", service.GetCacheStats())
+	snap := metrics.Snapshot()
+	if got := snap.Enqueue.UpsertsTotal; got < 2 {
+		t.Fatalf("expected message writer to record >=2 enqueued upserts, got %d (snapshot=%+v)", got, snap)
 	}
-	if got, ok := stats["enqueuedUpserts"].(uint64); !ok || got < 2 {
-		t.Fatalf("expected message writer to record enqueued upserts, got %#v", stats["enqueuedUpserts"])
-	}
-	if got, ok := stats["flushedVersions"].(uint64); !ok || got < 2 {
-		t.Fatalf("expected message writer to flush create+edit versions, got %#v", stats["flushedVersions"])
+	if got := snap.Flush.FlushedByOp[MessageWriterFlushOpVersions]; got < 2 {
+		t.Fatalf("expected message writer to flush >=2 create+edit versions, got %d (snapshot=%+v)", got, snap)
 	}
 	service.messageCreateWriter = nil
 }
@@ -155,7 +153,7 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 	service.cacheTTL = 24 * time.Hour
 	service.deleteOnLog = true
 
-	writer := newMessageCreateWriter(store)
+	writer := newMessageCreateWriter(store, nil)
 	writer.flushInterval = time.Hour
 	service.messageCreateWriter = writer
 	writer.Start()
@@ -254,7 +252,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 	service.cacheTTL = 24 * time.Hour
 	service.deleteOnLog = true
 
-	writer := newMessageCreateWriter(store)
+	writer := newMessageCreateWriter(store, nil)
 	writer.flushInterval = time.Hour
 	service.messageCreateWriter = writer
 	writer.Start()
@@ -416,7 +414,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 }
 
 func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
-	writer := newMessageCreateWriter(nil)
+	writer := newMessageCreateWriter(nil, nil)
 	writer.flushInterval = time.Hour
 	writer.Start()
 
@@ -452,7 +450,7 @@ func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
 }
 
 func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
-	writer := newMessageCreateWriter(nil)
+	writer := newMessageCreateWriter(nil, nil)
 	writer.flushInterval = time.Hour
 	writer.Start()
 

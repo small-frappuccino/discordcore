@@ -58,28 +58,6 @@ type pendingMessageToken struct {
 	token uint64
 }
 
-type messageWriteStats struct {
-	enqueuedUpserts      uint64
-	enqueuedDeletes      uint64
-	enqueuedVersions     uint64
-	enqueuedMetrics      uint64
-	queueFullErrors      uint64
-	stoppedErrors        uint64
-	flushCount           uint64
-	flushedRequests      uint64
-	flushedUpserts       uint64
-	flushedDeletes       uint64
-	flushedVersions      uint64
-	flushedMetricBuckets uint64
-	fallbackUpserts      uint64
-	fallbackDeletes      uint64
-	fallbackVersions     uint64
-	fallbackMetrics      uint64
-	maxQueueDepth        uint64
-	lastBatchSize        uint64
-	lastFlushDurationNs  int64
-}
-
 type messageCreateWriter struct {
 	store         *storage.Store
 	queue         chan messageWriteRequest
@@ -87,6 +65,7 @@ type messageCreateWriter struct {
 	done          chan struct{}
 	flushInterval time.Duration
 	maxBatch      int
+	metrics       MessageWriterMetrics
 
 	state        atomic.Uint32
 	producers    atomic.Int32
@@ -97,10 +76,12 @@ type messageCreateWriter struct {
 	nextToken uint64
 	pending   map[string]pendingMessageState
 	stopOnce  sync.Once
-	stats     messageWriteStats
 }
 
-func newMessageCreateWriter(store *storage.Store) *messageCreateWriter {
+func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics) *messageCreateWriter {
+	if metrics == nil {
+		metrics = NopMessageWriterMetrics{}
+	}
 	writer := &messageCreateWriter{
 		store:         store,
 		queue:         make(chan messageWriteRequest, messageCreateWriterQueueSize),
@@ -108,6 +89,7 @@ func newMessageCreateWriter(store *storage.Store) *messageCreateWriter {
 		done:          make(chan struct{}),
 		flushInterval: messageCreateWriterFlushInterval,
 		maxBatch:      messageCreateWriterMaxBatch,
+		metrics:       metrics,
 		pending:       make(map[string]pendingMessageState),
 	}
 	writer.producerCond = sync.NewCond(&writer.producerMu)
@@ -270,11 +252,11 @@ func cloneMessageVersion(version *storage.MessageVersion) *storage.MessageVersio
 func (w *messageCreateWriter) enqueueRequest(req messageWriteRequest) error {
 	sent, err := w.trySendRequest(req)
 	if err != nil {
-		atomic.AddUint64(&w.stats.stoppedErrors, 1)
+		w.metrics.RecordEnqueueFailure(MessageWriterEnqueueFailureStopped)
 		return err
 	}
 	if !sent {
-		atomic.AddUint64(&w.stats.queueFullErrors, 1)
+		w.metrics.RecordEnqueueFailure(MessageWriterEnqueueFailureQueueFull)
 		return fmt.Errorf("message create writer queue is full")
 	}
 	w.recordEnqueue(req)
@@ -303,29 +285,15 @@ func (w *messageCreateWriter) trySendRequest(req messageWriteRequest) (sent bool
 func (w *messageCreateWriter) recordEnqueue(req messageWriteRequest) {
 	switch req.recordOp {
 	case messageWriteRecordOpUpsert:
-		atomic.AddUint64(&w.stats.enqueuedUpserts, 1)
+		w.metrics.RecordEnqueueUpsert(req.version != nil, req.metric.Count != 0)
 	case messageWriteRecordOpDelete:
-		atomic.AddUint64(&w.stats.enqueuedDeletes, 1)
-	}
-	if req.version != nil {
-		atomic.AddUint64(&w.stats.enqueuedVersions, 1)
-	}
-	if req.metric.Count != 0 {
-		atomic.AddUint64(&w.stats.enqueuedMetrics, 1)
-	}
-	w.observeQueueDepth(uint64(len(w.queue)))
-}
-
-func (w *messageCreateWriter) observeQueueDepth(depth uint64) {
-	for {
-		current := atomic.LoadUint64(&w.stats.maxQueueDepth)
-		if depth <= current {
-			return
-		}
-		if atomic.CompareAndSwapUint64(&w.stats.maxQueueDepth, current, depth) {
-			return
+		w.metrics.RecordEnqueueDelete(req.version != nil)
+	default:
+		if req.version != nil {
+			w.metrics.RecordEnqueueVersion()
 		}
 	}
+	w.metrics.ObserveQueueDepth(len(w.queue))
 }
 
 func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
@@ -355,38 +323,6 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 		ChannelID: record.ChannelID,
 		GuildID:   record.GuildID,
 		Timestamp: record.CachedAt,
-	}
-}
-
-func (w *messageCreateWriter) Stats() map[string]any {
-	if w == nil {
-		return nil
-	}
-	w.mu.RLock()
-	pendingCount := len(w.pending)
-	w.mu.RUnlock()
-	return map[string]any{
-		"queueDepth":           len(w.queue),
-		"pendingCount":         pendingCount,
-		"enqueuedUpserts":      atomic.LoadUint64(&w.stats.enqueuedUpserts),
-		"enqueuedDeletes":      atomic.LoadUint64(&w.stats.enqueuedDeletes),
-		"enqueuedVersions":     atomic.LoadUint64(&w.stats.enqueuedVersions),
-		"enqueuedMetrics":      atomic.LoadUint64(&w.stats.enqueuedMetrics),
-		"queueFullErrors":      atomic.LoadUint64(&w.stats.queueFullErrors),
-		"stoppedErrors":        atomic.LoadUint64(&w.stats.stoppedErrors),
-		"flushCount":           atomic.LoadUint64(&w.stats.flushCount),
-		"flushedRequests":      atomic.LoadUint64(&w.stats.flushedRequests),
-		"flushedUpserts":       atomic.LoadUint64(&w.stats.flushedUpserts),
-		"flushedDeletes":       atomic.LoadUint64(&w.stats.flushedDeletes),
-		"flushedVersions":      atomic.LoadUint64(&w.stats.flushedVersions),
-		"flushedMetricBuckets": atomic.LoadUint64(&w.stats.flushedMetricBuckets),
-		"fallbackUpserts":      atomic.LoadUint64(&w.stats.fallbackUpserts),
-		"fallbackDeletes":      atomic.LoadUint64(&w.stats.fallbackDeletes),
-		"fallbackVersions":     atomic.LoadUint64(&w.stats.fallbackVersions),
-		"fallbackMetrics":      atomic.LoadUint64(&w.stats.fallbackMetrics),
-		"maxQueueDepth":        atomic.LoadUint64(&w.stats.maxQueueDepth),
-		"lastBatchSize":        atomic.LoadUint64(&w.stats.lastBatchSize),
-		"lastFlushDurationMs":  atomic.LoadInt64(&w.stats.lastFlushDurationNs) / int64(time.Millisecond),
 	}
 }
 
@@ -441,10 +377,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 
 	start := time.Now()
 	defer func() {
-		atomic.AddUint64(&w.stats.flushCount, 1)
-		atomic.AddUint64(&w.stats.flushedRequests, uint64(len(batch)))
-		atomic.StoreUint64(&w.stats.lastBatchSize, uint64(len(batch)))
-		atomic.StoreInt64(&w.stats.lastFlushDurationNs, time.Since(start).Nanoseconds())
+		w.metrics.RecordFlush(len(batch), time.Since(start))
 	}()
 
 	upserts := make([]storage.MessageRecord, 0, len(batch))
@@ -493,33 +426,33 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 
 	if len(upserts) > 0 {
 		if err := w.store.UpsertMessagesContext(context.Background(), upserts); err != nil {
-			atomic.AddUint64(&w.stats.fallbackUpserts, uint64(len(upserts)))
+			w.metrics.RecordFlushFallback(MessageWriterFlushOpUpsert, len(upserts))
 			slog.Warn("MessageCreate writer: batch message upsert failed; falling back to sequential writes", "operation", "message_create_writer.flush_messages", "messages", len(upserts), "error", err)
 			w.flushMessagesSequentially(upserts, upsertTokens)
 		} else {
-			atomic.AddUint64(&w.stats.flushedUpserts, uint64(len(upserts)))
+			w.metrics.RecordFlushSuccess(MessageWriterFlushOpUpsert, len(upserts))
 			w.clearPendingTokens(upsertTokens)
 		}
 	}
 
 	if len(deletes) > 0 {
 		if err := w.store.DeleteMessagesContext(context.Background(), deletes); err != nil {
-			atomic.AddUint64(&w.stats.fallbackDeletes, uint64(len(deletes)))
+			w.metrics.RecordFlushFallback(MessageWriterFlushOpDelete, len(deletes))
 			slog.Warn("MessageCreate writer: batch message delete failed; falling back to sequential deletes", "operation", "message_create_writer.flush_deletes", "messages", len(deletes), "error", err)
 			w.flushDeletesSequentially(deletes, deleteTokens)
 		} else {
-			atomic.AddUint64(&w.stats.flushedDeletes, uint64(len(deletes)))
+			w.metrics.RecordFlushSuccess(MessageWriterFlushOpDelete, len(deletes))
 			w.clearPendingTokens(deleteTokens)
 		}
 	}
 
 	if len(versions) > 0 {
 		if err := w.store.InsertMessageVersionsMixedBatchContext(context.Background(), versions); err != nil {
-			atomic.AddUint64(&w.stats.fallbackVersions, uint64(len(versions)))
+			w.metrics.RecordFlushFallback(MessageWriterFlushOpVersions, len(versions))
 			slog.Warn("MessageCreate writer: batch history insert failed; falling back to sequential writes", "operation", "message_create_writer.flush_versions", "versions", len(versions), "error", err)
 			w.flushVersionsSequentially(versions, "message_create_writer.flush_versions_fallback")
 		} else {
-			atomic.AddUint64(&w.stats.flushedVersions, uint64(len(versions)))
+			w.metrics.RecordFlushSuccess(MessageWriterFlushOpVersions, len(versions))
 		}
 	}
 
@@ -529,17 +462,17 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 			deltas = append(deltas, delta)
 		}
 		if err := w.store.IncrementDailyMessageCountsContext(context.Background(), deltas); err != nil {
-			atomic.AddUint64(&w.stats.fallbackMetrics, uint64(len(deltas)))
+			w.metrics.RecordFlushFallback(MessageWriterFlushOpMetricBuckets, len(deltas))
 			slog.Warn("MessageCreate writer: batch daily metric flush failed; falling back to sequential increments", "operation", "message_create_writer.flush_metrics", "buckets", len(deltas), "error", err)
 			for _, delta := range deltas {
 				if err := w.store.IncrementDailyMessageCountsContext(context.Background(), []storage.DailyMessageCountDelta{delta}); err != nil {
 					slog.Warn("MessageCreate writer: sequential daily metric increment failed", "operation", "message_create_writer.flush_metrics_fallback", "guildID", delta.GuildID, "channelID", delta.ChannelID, "userID", delta.UserID, "error", err)
 				} else {
-					atomic.AddUint64(&w.stats.flushedMetricBuckets, 1)
+					w.metrics.RecordFlushSuccess(MessageWriterFlushOpMetricBuckets, 1)
 				}
 			}
 		} else {
-			atomic.AddUint64(&w.stats.flushedMetricBuckets, uint64(len(deltas)))
+			w.metrics.RecordFlushSuccess(MessageWriterFlushOpMetricBuckets, len(deltas))
 		}
 	}
 }
@@ -550,7 +483,7 @@ func (w *messageCreateWriter) flushMessagesSequentially(records []storage.Messag
 			slog.Warn("MessageCreate writer: sequential message upsert failed", "operation", "message_create_writer.flush_messages_fallback", "guildID", record.GuildID, "channelID", record.ChannelID, "messageID", record.MessageID, "userID", record.AuthorID, "error", err)
 			continue
 		}
-		atomic.AddUint64(&w.stats.flushedUpserts, 1)
+		w.metrics.RecordFlushSuccess(MessageWriterFlushOpUpsert, 1)
 		if i < len(tokens) {
 			w.clearPendingToken(tokens[i].key, tokens[i].token)
 		}
@@ -563,7 +496,7 @@ func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDel
 			slog.Warn("MessageCreate writer: sequential message delete failed", "operation", "message_create_writer.flush_deletes_fallback", "guildID", key.GuildID, "messageID", key.MessageID, "error", err)
 			continue
 		}
-		atomic.AddUint64(&w.stats.flushedDeletes, 1)
+		w.metrics.RecordFlushSuccess(MessageWriterFlushOpDelete, 1)
 		if i < len(tokens) {
 			w.clearPendingToken(tokens[i].key, tokens[i].token)
 		}
@@ -576,7 +509,7 @@ func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.Messa
 			slog.Warn("MessageCreate writer: sequential history insert failed", "operation", operation, "guildID", version.GuildID, "channelID", version.ChannelID, "messageID", version.MessageID, "userID", version.AuthorID, "eventType", version.EventType, "error", err)
 			continue
 		}
-		atomic.AddUint64(&w.stats.flushedVersions, 1)
+		w.metrics.RecordFlushSuccess(MessageWriterFlushOpVersions, 1)
 	}
 }
 

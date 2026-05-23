@@ -71,6 +71,7 @@ type MessageEventService struct {
 	taskRouter *task.TaskRouter
 
 	messageCreateWriter *messageCreateWriter
+	writerMetrics       MessageWriterMetrics
 }
 
 const (
@@ -182,7 +183,7 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 		}
 	}
 	if mes.store != nil {
-		mes.messageCreateWriter = newMessageCreateWriter(mes.store)
+		mes.messageCreateWriter = newMessageCreateWriter(mes.store, mes.writerMetrics)
 		mes.messageCreateWriter.Start()
 	}
 
@@ -478,15 +479,11 @@ func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
 	return cfg.ResolveFeatures(guildID).MessageCache.DeleteOnLog
 }
 
-func (mes *MessageEventService) GetCacheStats() map[string]any {
-	stats := map[string]any{
-		"isRunning": mes.IsRunning(),
-		"backend":   "postgres",
-	}
-	if mes.messageCreateWriter != nil {
-		stats["messageWriter"] = mes.messageCreateWriter.Stats()
-	}
-	return stats
+// SetWriterMetrics attaches a metrics implementation for the async message
+// persistence writer. Must be called before Start; if unset the writer uses
+// NopMessageWriterMetrics, matching the qotd/moderation pattern.
+func (mes *MessageEventService) SetWriterMetrics(metrics MessageWriterMetrics) {
+	mes.writerMetrics = metrics
 }
 
 func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {
