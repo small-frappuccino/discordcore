@@ -5,7 +5,8 @@
       "Bash(go list *)",
       "Bash(go env *)",
       "Bash(rm -rf pkg/cache)",
-      "Bash(go vet *)"
+      "Bash(go vet *)",
+      "Bash(go test *)"
     ]
   }
 }

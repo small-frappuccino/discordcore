@@ -1373,10 +1373,10 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 			log.ErrorLoggerRaw().Error("Failed to persist cache", "err", err)
 			stopErrs = append(stopErrs, fmt.Errorf("persist unified cache: %w", err))
 		} else {
-			members, _, _, _ := ms.unifiedCache.MemberMetrics()
-			guilds, _, _, _ := ms.unifiedCache.GuildMetrics()
-			roles, _, _, _ := ms.unifiedCache.RolesMetrics()
-			channels, _, _, _ := ms.unifiedCache.ChannelMetrics()
+			members := ms.unifiedCache.MemberCount()
+			guilds := ms.unifiedCache.GuildCount()
+			roles := ms.unifiedCache.RolesCount()
+			channels := ms.unifiedCache.ChannelCount()
 			total := members + guilds + roles + channels
 			log.ApplicationLogger().Info("✅ Cache persisted", "entries_saved", total)
 		}

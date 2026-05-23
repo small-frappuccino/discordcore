@@ -101,10 +101,10 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 	if err := cache.Warmup(); err != nil {
 		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup from persistent cache: %v", err))
 	} else {
-		members, _, _, _ := cache.MemberMetrics()
-		guilds, _, _, _ := cache.GuildMetrics()
-		roles, _, _, _ := cache.RolesMetrics()
-		channels, _, _, _ := cache.ChannelMetrics()
+		members := cache.MemberCount()
+		guilds := cache.GuildCount()
+		roles := cache.RolesCount()
+		channels := cache.ChannelCount()
 		preloadMsg := fmt.Sprintf("💾 Restored from persistent cache: %d members, %d guilds, %d roles, %d channels",
 			members, guilds, roles, channels)
 		if members == 0 && guilds == 0 && roles == 0 && channels == 0 {

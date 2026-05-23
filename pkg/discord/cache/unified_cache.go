@@ -369,40 +369,42 @@ func (uc *UnifiedCache) InvalidateChannel(channelID string) {
 	uc.channels.Invalidate(channelID)
 }
 
-// MemberMetrics returns typed metrics for the member segment.
-func (uc *UnifiedCache) MemberMetrics() (entries int, hits, misses, evictions uint64) {
+// MemberCount returns the number of entries in the member segment. Use
+// Snapshot for the full SegmentSnapshot (hits, misses, hit rate, limits)
+// consumed by /v1/health/cache; this accessor is the cardinality-only
+// fast path for operational logs.
+func (uc *UnifiedCache) MemberCount() int {
 	if uc.members == nil {
-		return 0, 0, 0, 0
+		return 0
 	}
-	s := uc.members.Stats()
-	return s.Size, s.Hits, s.Misses, s.Evictions
+	return uc.members.Stats().Size
 }
 
-// GuildMetrics returns typed metrics for the guild segment.
-func (uc *UnifiedCache) GuildMetrics() (entries int, hits, misses, evictions uint64) {
+// GuildCount returns the number of entries in the guild segment. See
+// MemberCount for the rationale on choosing this over Snapshot.
+func (uc *UnifiedCache) GuildCount() int {
 	if uc.guilds == nil {
-		return 0, 0, 0, 0
+		return 0
 	}
-	s := uc.guilds.Stats()
-	return s.Size, s.Hits, s.Misses, s.Evictions
+	return uc.guilds.Stats().Size
 }
 
-// RolesMetrics returns typed metrics for the roles segment.
-func (uc *UnifiedCache) RolesMetrics() (entries int, hits, misses, evictions uint64) {
+// RolesCount returns the number of entries in the roles segment. See
+// MemberCount for the rationale on choosing this over Snapshot.
+func (uc *UnifiedCache) RolesCount() int {
 	if uc.roles == nil {
-		return 0, 0, 0, 0
+		return 0
 	}
-	s := uc.roles.Stats()
-	return s.Size, s.Hits, s.Misses, s.Evictions
+	return uc.roles.Stats().Size
 }
 
-// ChannelMetrics returns typed metrics for the channel segment.
-func (uc *UnifiedCache) ChannelMetrics() (entries int, hits, misses, evictions uint64) {
+// ChannelCount returns the number of entries in the channel segment. See
+// MemberCount for the rationale on choosing this over Snapshot.
+func (uc *UnifiedCache) ChannelCount() int {
 	if uc.channels == nil {
-		return 0, 0, 0, 0
+		return 0
 	}
-	s := uc.channels.Stats()
-	return s.Size, s.Hits, s.Misses, s.Evictions
+	return uc.channels.Stats().Size
 }
 
 // WasWarmedUpRecently returns whether Warmup was executed within the given duration

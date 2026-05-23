@@ -37,19 +37,19 @@ func TestIntelligentWarmupIdempotent(t *testing.T) {
 	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
 		t.Fatalf("first warmup error: %v", err)
 	}
-	firstMembers, _, _, _ := cache.MemberMetrics()
-	firstGuilds, _, _, _ := cache.GuildMetrics()
-	firstRoles, _, _, _ := cache.RolesMetrics()
-	firstChannels, _, _, _ := cache.ChannelMetrics()
+	firstMembers := cache.MemberCount()
+	firstGuilds := cache.GuildCount()
+	firstRoles := cache.RolesCount()
+	firstChannels := cache.ChannelCount()
 
 	session.memberCalls = make(map[string]int)
 	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
 		t.Fatalf("second warmup error: %v", err)
 	}
-	secondMembers, _, _, _ := cache.MemberMetrics()
-	secondGuilds, _, _, _ := cache.GuildMetrics()
-	secondRoles, _, _, _ := cache.RolesMetrics()
-	secondChannels, _, _, _ := cache.ChannelMetrics()
+	secondMembers := cache.MemberCount()
+	secondGuilds := cache.GuildCount()
+	secondRoles := cache.RolesCount()
+	secondChannels := cache.ChannelCount()
 
 	if firstMembers != secondMembers || firstGuilds != secondGuilds || firstRoles != secondRoles || firstChannels != secondChannels {
 		t.Fatalf("expected idempotent metrics, got first=%v/%v/%v/%v second=%v/%v/%v/%v",
