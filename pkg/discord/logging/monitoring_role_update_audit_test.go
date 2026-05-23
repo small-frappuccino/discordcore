@@ -218,6 +218,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
+	metrics := NewInMemoryMetrics()
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
@@ -230,6 +231,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 		rolesTTL:                time.Minute,
 		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
 		roleUpdateAuditDebounce: make(map[string]time.Time),
+		metrics:                 metrics,
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -261,7 +263,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 	if got := atomic.LoadInt32(&embedPosts); got != 2 {
 		t.Fatalf("expected two role update notifications, got %d", got)
 	}
-	if got := atomic.LoadUint64(&ms.cacheRoleAuditHits); got == 0 {
+	if got := metrics.Snapshot().Cache.RolesAuditHitsTotal; got == 0 {
 		t.Fatalf("expected guild audit cache hit on second user update")
 	}
 }

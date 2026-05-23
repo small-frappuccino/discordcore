@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	genericcache "github.com/small-frappuccino/discordcore/pkg/cache"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/util"
 )
@@ -368,75 +367,6 @@ func (uc *UnifiedCache) InvalidateChannel(channelID string) {
 	uc.channelToGuildMu.Unlock()
 
 	uc.channels.Invalidate(channelID)
-}
-
-// GetStats returns cache statistics
-func (uc *UnifiedCache) GetStats() genericcache.CacheStats {
-	memberCount, guildCount, rolesCount, channelCount := 0, 0, 0, 0
-	var memberHits, memberMisses, guildHits, guildMisses, rolesHits, rolesMisses, channelHits, channelMisses uint64
-
-	if uc.members != nil {
-		memberCount = uc.members.Len()
-		ms := uc.members.Stats()
-		memberHits = ms.Hits
-		memberMisses = ms.Misses
-	}
-	if uc.guilds != nil {
-		guildCount = uc.guilds.Len()
-		gs := uc.guilds.Stats()
-		guildHits = gs.Hits
-		guildMisses = gs.Misses
-	}
-	if uc.roles != nil {
-		rolesCount = uc.roles.Len()
-		rs := uc.roles.Stats()
-		rolesHits = rs.Hits
-		rolesMisses = rs.Misses
-	}
-	if uc.channels != nil {
-		channelCount = uc.channels.Len()
-		cs := uc.channels.Stats()
-		channelHits = cs.Hits
-		channelMisses = cs.Misses
-	}
-
-	totalEntries := memberCount + guildCount + rolesCount + channelCount
-	totalHits := float64(memberHits + guildHits + rolesHits + channelHits)
-	totalMisses := float64(memberMisses + guildMisses + rolesMisses + channelMisses)
-	var hitRate, missRate float64
-	if (totalHits + totalMisses) > 0 {
-		hitRate = totalHits / (totalHits + totalMisses)
-		missRate = totalMisses / (totalHits + totalMisses)
-	}
-
-	return genericcache.CacheStats{
-		TotalEntries:  totalEntries,
-		MemoryUsage:   0,
-		HitRate:       hitRate,
-		MissRate:      missRate,
-		LastCleanup:   uc.lastCleanup,
-		TTLEnabled:    true,
-		PerGuildStats: nil,
-		CustomMetrics: map[string]any{
-			"memberEntries":  memberCount,
-			"guildEntries":   guildCount,
-			"rolesEntries":   rolesCount,
-			"channelEntries": channelCount,
-			"memberHits":     memberHits,
-			"memberMisses":   memberMisses,
-			"guildHits":      guildHits,
-			"guildMisses":    guildMisses,
-			"rolesHits":      rolesHits,
-			"rolesMisses":    rolesMisses,
-			"channelHits":    channelHits,
-			"channelMisses":  channelMisses,
-		},
-	}
-}
-
-// StatsGeneric returns generic cache statistics for external consumers
-func (uc *UnifiedCache) StatsGeneric() genericcache.CacheStats {
-	return uc.GetStats()
 }
 
 // MemberMetrics returns typed metrics for the member segment.

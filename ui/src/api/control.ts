@@ -362,6 +362,136 @@ export type ControlAuthProbe =
   | { status: "unauthorized" }
   | { status: "oauth_unavailable" };
 
+// HealthLiveSnapshot mirrors LiveHealthSnapshot served by /v1/health/live.
+// Stable scrape payload for uptime pollers; the dashboard renders it on the
+// Health page to confirm the embedded control server is reachable.
+export interface HealthLiveSnapshot {
+  status: string;
+  app: string;
+  app_version?: string;
+  core_version: string;
+  bot_user?: string;
+  started_at: string;
+  uptime_seconds: number;
+}
+
+// HealthCacheSegmentSnapshot mirrors pkg/discord/cache.SegmentSnapshot.
+export interface HealthCacheSegmentSnapshot {
+  entries: number;
+  hits: number;
+  misses: number;
+  evictions: number;
+  hit_rate: number;
+  ttl_seconds: number;
+  limit: number;
+}
+
+// HealthCachePersistedStats mirrors pkg/storage.PersistentCacheStats.
+export interface HealthCachePersistedStats {
+  total: number;
+  by_type?: Record<string, number>;
+}
+
+// HealthCacheSnapshot mirrors pkg/discord/cache.CacheMetricsSnapshot.
+export interface HealthCacheSnapshot {
+  members: HealthCacheSegmentSnapshot;
+  guilds: HealthCacheSegmentSnapshot;
+  roles: HealthCacheSegmentSnapshot;
+  channels: HealthCacheSegmentSnapshot;
+  persisted: HealthCachePersistedStats;
+  last_warmup: string;
+}
+
+// HealthMonitoringAPISnapshot mirrors pkg/discord/logging.APISnapshot.
+export interface HealthMonitoringAPISnapshot {
+  audit_log_calls_total: number;
+  guild_member_calls_total: number;
+  messages_sent_total: number;
+}
+
+// HealthMonitoringCacheSnapshot mirrors pkg/discord/logging.MonitoringCacheSnapshot.
+export interface HealthMonitoringCacheSnapshot {
+  state_member_hits_total: number;
+  roles_memory_hits_total: number;
+  roles_store_hits_total: number;
+  roles_audit_hits_total: number;
+}
+
+// HealthMonitoringSnapshot mirrors pkg/discord/logging.MetricsSnapshot.
+export interface HealthMonitoringSnapshot {
+  api: HealthMonitoringAPISnapshot;
+  cache: HealthMonitoringCacheSnapshot;
+}
+
+// HealthQOTDSummarySnapshot mirrors pkg/qotd.SummarySnapshot.
+export interface HealthQOTDSummarySnapshot {
+  count: number;
+  sum_seconds: number;
+  max_seconds: number;
+}
+
+// HealthQOTDPublishModeSnapshot mirrors pkg/qotd.PublishModeSnapshot.
+export interface HealthQOTDPublishModeSnapshot {
+  success_total: number;
+  failure_total: number;
+  failure_by_cause?: Record<string, number>;
+  duration_seconds: HealthQOTDSummarySnapshot;
+}
+
+// HealthQOTDReconcileSnapshot mirrors pkg/qotd.ReconcileSnapshot.
+export interface HealthQOTDReconcileSnapshot {
+  cycles_total: number;
+  failures_total: number;
+  duration_seconds: HealthQOTDSummarySnapshot;
+}
+
+// HealthQOTDStateSnapshot mirrors pkg/qotd.StateSnapshot.
+export interface HealthQOTDStateSnapshot {
+  abandoned_total: number;
+  divergence_total: number;
+  unmanageable_thread_total: number;
+  orphan_reservations_reclaimed_total: number;
+  suppressions_cleared_total: number;
+}
+
+// HealthQOTDSnapshot mirrors pkg/qotd.MetricsSnapshot.
+export interface HealthQOTDSnapshot {
+  publishes: Record<string, HealthQOTDPublishModeSnapshot>;
+  reconcile: HealthQOTDReconcileSnapshot;
+  state: HealthQOTDStateSnapshot;
+}
+
+// HealthModerationSummarySnapshot mirrors pkg/discord/commands/moderation.SummarySnapshot.
+export interface HealthModerationSummarySnapshot {
+  count: number;
+  sum_seconds: number;
+  max_seconds: number;
+}
+
+// HealthModerationCleanSnapshot mirrors pkg/discord/commands/moderation.CleanSnapshot.
+export interface HealthModerationCleanSnapshot {
+  attempts_total: number;
+  success_total: number;
+  failure_total: number;
+  failure_by_cause?: Record<string, number>;
+  delete_failure_by_class?: Record<string, number>;
+  deleted_messages_total: number;
+  audit_log_failure_total: number;
+  duration_seconds: HealthModerationSummarySnapshot;
+}
+
+// HealthModerationSnapshot mirrors pkg/discord/commands/moderation.MetricsSnapshot.
+export interface HealthModerationSnapshot {
+  clean: HealthModerationCleanSnapshot;
+}
+
+// HealthResult wraps a health snapshot with a recovery branch the route
+// surfaces as 503 ("telemetry not enabled" or "subsystem not wired"). The
+// page renders the message instead of the snapshot in those cases.
+export type HealthResult<T> =
+  | { available: true; snapshot: T }
+  | { available: false; message: string };
+
 export interface ControlApiClientConfig {
   baseUrl: string;
 }
@@ -640,6 +770,58 @@ export class ControlApiClient {
       "GET",
       `/v1/guilds/${encodeURIComponent(guildId)}/member-options${suffix}`,
     );
+  }
+
+  async getHealthLive(): Promise<HealthResult<HealthLiveSnapshot>> {
+    return this.requestHealth<HealthLiveSnapshot>("/v1/health/live");
+  }
+
+  async getHealthCache(): Promise<HealthResult<HealthCacheSnapshot>> {
+    return this.requestHealth<HealthCacheSnapshot>("/v1/health/cache");
+  }
+
+  async getHealthMonitoring(): Promise<HealthResult<HealthMonitoringSnapshot>> {
+    return this.requestHealth<HealthMonitoringSnapshot>(
+      "/v1/health/monitoring",
+    );
+  }
+
+  async getHealthQOTD(): Promise<HealthResult<HealthQOTDSnapshot>> {
+    return this.requestHealth<HealthQOTDSnapshot>("/v1/health/qotd");
+  }
+
+  async getHealthModeration(): Promise<HealthResult<HealthModerationSnapshot>> {
+    return this.requestHealth<HealthModerationSnapshot>(
+      "/v1/health/moderation",
+    );
+  }
+
+  private async requestHealth<T>(
+    path: string,
+  ): Promise<HealthResult<T>> {
+    const url = this.baseUrl === "" ? path : `${this.baseUrl}${path}`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (response.status === 503) {
+      // 503 here is a contract signal ("subsystem unavailable" or
+      // "telemetry disabled"), not a transient outage. Surface the body
+      // text so operators see WHY the snapshot is missing.
+      const text = await response.text();
+      return {
+        available: false,
+        message: text.trim() === "" ? "telemetry unavailable" : text.trim(),
+      };
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Control API GET ${path} failed: ${response.status} ${response.statusText} - ${text}`.trim(),
+      );
+    }
+    const snapshot = (await response.json()) as T;
+    return { available: true, snapshot };
   }
 
   async getSessionStatus(): Promise<ControlAuthProbe> {

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { DashboardLayout } from "../pages/DashboardLayout";
 import { CommandsPage } from "../pages/CommandsPage";
+import { HealthPage } from "../pages/HealthPage";
 import { HomePage } from "../pages/HomePage";
 import { LoggingCategoryPage } from "../pages/LoggingCategoryPage";
 import { ModerationPage } from "../pages/ModerationPage";
@@ -51,6 +52,7 @@ export function AppRoutes() {
             <Route path="control-panel" element={<ControlPanelPage />} />
             <Route path="stats" element={<StatsPage />} />
             <Route path="commands" element={<CommandsPage />} />
+            <Route path="health" element={<HealthPage />} />
           </Route>
 
           <Route path="moderation">

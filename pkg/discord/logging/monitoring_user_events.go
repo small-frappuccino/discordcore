@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -64,11 +63,11 @@ func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, propo
 
 	var prev []string
 	if p, ok := ms.cacheRolesGet(guildID, userID); ok {
-		atomic.AddUint64(&ms.cacheRolesMemoryHits, 1)
+		ms.observability().RecordRolesCacheMemoryHit()
 		prev = p
 	} else if ms.store != nil {
 		if r, err := ms.store.GetMemberRoles(guildID, userID); err == nil {
-			atomic.AddUint64(&ms.cacheRolesStoreHits, 1)
+			ms.observability().RecordRolesCacheStoreHit()
 			prev = r
 		}
 	}
@@ -95,7 +94,7 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 	if !forceRefresh {
 		if entry, ok := ms.roleUpdateAuditCache[guildID]; ok && now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
 			entries := append([]*discordgo.AuditLogEntry(nil), entry.entries...)
-			atomic.AddUint64(&ms.cacheRoleAuditHits, 1)
+			ms.observability().RecordRolesAuditCacheHit()
 			ms.roleUpdateAuditMu.Unlock()
 			return entries, true, nil
 		}
@@ -103,7 +102,7 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 	ms.roleUpdateAuditMu.Unlock()
 
 	audit, err := ms.session.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMemberRoleUpdate), 10)
-	atomic.AddUint64(&ms.apiAuditLogCalls, 1)
+	ms.observability().RecordAuditLogCall()
 	if err != nil {
 		return nil, false, err
 	}
@@ -283,7 +282,7 @@ func (ms *MonitoringService) sendRoleUpdateNotification(channelID string, user *
 		},
 	}
 
-	atomic.AddUint64(&ms.apiMessagesSent, 1)
+	ms.observability().RecordMessageSent()
 	_, err := ms.session.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }

@@ -12,13 +12,29 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
+
+// CacheSnapshotResolver returns the primary UnifiedCache the control server
+// should snapshot for /v1/health/cache. The resolver is called per request so
+// it sees whichever cache the runtime layer has installed; returning nil keeps
+// the route in its 503 "cache observability not wired" state without panic.
+type CacheSnapshotResolver func() *cache.UnifiedCache
+
+// MonitoringMetricsResolver returns the monitoring observability sink the
+// control server should snapshot for /v1/health/monitoring. Mirrors
+// CacheSnapshotResolver — monitoring is constructed per bot runtime, so the
+// resolver is called per request and may return nil while the runtime is
+// still booting; the route surfaces 503 in that window.
+type MonitoringMetricsResolver func() logging.Metrics
 
 const (
 	defaultMaxBodyBytes          = 64 * 1024
@@ -56,33 +72,36 @@ type requestAuthorization struct {
 
 // Server exposes operational controls for a running Discordcore instance.
 type Server struct {
-	addr                 string
-	startedAt            time.Time
-	authBearerToken      string
-	tlsCertFile          string
-	tlsKeyFile           string
-	configManager        *files.ConfigManager
-	knownBotInstanceIDs  []string
-	partnerBoardService  partners.BoardService
-	partnerBoardSyncer   partners.GuildSyncExecutor
-	qotdService          *qotd.Service
-	moderationMetrics    moderation.Metrics
-	guildRegistration    guildRegistrationFunc
-	discordSession       discordSessionDomainResolver
-	defaultBotInstanceID string
-	discordOAuth         *discordOAuthProvider
-	publicOrigin         controlPublicOrigin
-	runtimeApplier       *runtimeapply.Manager
-	botGuildSource       *botGuildBindingSource
-	accessibleGuildCache *accessibleGuildCache
-	guildAccessEvaluator *guildAccessEvaluator
-	guildAccessResolver  *accessibleGuildResolver
-	featureBuilder       *featureWorkspaceBuilder
-	featureApplier       *featureMutationApplier
-	featureControlSvc    *featureControlService
-	discordOAuthSvc      *discordOAuthControlService
-	httpServer           *http.Server
-	listener             net.Listener
+	addr                     string
+	startedAt                time.Time
+	authBearerToken          string
+	tlsCertFile              string
+	tlsKeyFile               string
+	configManager            *files.ConfigManager
+	knownBotInstanceIDs      []string
+	partnerBoardService      partners.BoardService
+	partnerBoardSyncer       partners.GuildSyncExecutor
+	qotdService              *qotd.Service
+	moderationMetrics        moderation.Metrics
+	cacheSnapshotResolve     CacheSnapshotResolver
+	cacheSnapshotStore       *storage.Store
+	monitoringMetricsResolve MonitoringMetricsResolver
+	guildRegistration        guildRegistrationFunc
+	discordSession           discordSessionDomainResolver
+	defaultBotInstanceID     string
+	discordOAuth             *discordOAuthProvider
+	publicOrigin             controlPublicOrigin
+	runtimeApplier           *runtimeapply.Manager
+	botGuildSource           *botGuildBindingSource
+	accessibleGuildCache     *accessibleGuildCache
+	guildAccessEvaluator     *guildAccessEvaluator
+	guildAccessResolver      *accessibleGuildResolver
+	featureBuilder           *featureWorkspaceBuilder
+	featureApplier           *featureMutationApplier
+	featureControlSvc        *featureControlService
+	discordOAuthSvc          *discordOAuthControlService
+	httpServer               *http.Server
+	listener                 net.Listener
 }
 
 // NewServer returns nil if addr is empty.
@@ -162,6 +181,34 @@ func (s *Server) SetModerationMetrics(metrics moderation.Metrics) {
 		return
 	}
 	s.moderationMetrics = metrics
+}
+
+// SetCacheObservability wires the inputs /v1/health/cache scrapes. resolver is
+// late-binding because UnifiedCache is constructed per bot runtime, after the
+// control server has already started; passing a resolver lets the route see
+// the runtime's cache as soon as it exists. store may be nil; without it the
+// route still serves in-memory segment counters but the Persisted field stays
+// zero. Both nil leaves the route returning 503.
+func (s *Server) SetCacheObservability(resolver CacheSnapshotResolver, store *storage.Store) {
+	if s == nil {
+		return
+	}
+	s.cacheSnapshotResolve = resolver
+	s.cacheSnapshotStore = store
+}
+
+// SetMonitoringMetricsResolver wires the late-binding accessor /v1/health/monitoring
+// uses to obtain the monitoring service's Metrics. Late binding because the
+// monitoring service is built per bot runtime — the control server boots
+// before any runtime publishes a Metrics value. The resolver may return nil
+// (no runtime ready) or NopMetrics (runtime ready but observability disabled);
+// the route distinguishes both as 503 with different bodies so operators can
+// tell them apart.
+func (s *Server) SetMonitoringMetricsResolver(resolver MonitoringMetricsResolver) {
+	if s == nil {
+		return
+	}
+	s.monitoringMetricsResolve = resolver
 }
 
 // SetBearerToken configures bearer token authentication for control routes.

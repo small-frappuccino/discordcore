@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -15,7 +14,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // CommandHandler manages bot command setup and handling
@@ -33,8 +31,6 @@ type CommandHandler struct {
 	qotdService          qotdcmd.QuestionCatalogService
 	moderationMetrics    moderation.Metrics
 	adminServiceManager  *service.ServiceManager
-	adminUnifiedCache    *cache.UnifiedCache
-	adminStore           *storage.Store
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -130,14 +126,14 @@ func (ch *CommandHandler) SetModerationMetrics(metrics moderation.Metrics) {
 }
 
 // SetAdminCommandServices injects runtime services consumed by the admin
-// command catalog.
-func (ch *CommandHandler) SetAdminCommandServices(serviceManager *service.ServiceManager, unifiedCache *cache.UnifiedCache, store *storage.Store) {
+// command catalog. Cache and persistent-store observability moved to
+// /v1/health/cache, so this seam now carries only the service manager used by
+// /admin status/list/restart/health.
+func (ch *CommandHandler) SetAdminCommandServices(serviceManager *service.ServiceManager) {
 	if ch == nil {
 		return
 	}
 	ch.adminServiceManager = serviceManager
-	ch.adminUnifiedCache = unifiedCache
-	ch.adminStore = store
 }
 
 // SetCommandCatalogRegistrars overrides the slash command catalogs registered by

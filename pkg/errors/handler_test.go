@@ -7,7 +7,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -70,14 +69,6 @@ func TestNormalizeErrorUsesStructuredErrorContracts(t *testing.T) {
 			recoverable: false,
 			severity:    SeverityMedium,
 			actions:     []ErrorAction{ActionLog, ActionNotify},
-		},
-		{
-			name:        "cache error",
-			err:         cache.NewCacheError("load", "guild:g1", io.EOF),
-			category:    CategoryCache,
-			recoverable: true,
-			severity:    SeverityLow,
-			actions:     []ErrorAction{ActionLog},
 		},
 		{
 			name:        "command error",

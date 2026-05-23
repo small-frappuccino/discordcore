@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -119,7 +120,18 @@ func (ms *MonitoringService) cacheRolesGet(guildID, userID string) ([]string, bo
 	return out, true
 }
 
-func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
+// metricsRows returns the monitoring-local display rows surfaced via
+// Service.Stats().Metrics (and therefore /admin status). Cache observability
+// lives on the typed cache.CacheMetricsSnapshot exposed at /v1/health/cache;
+// API/cache counters live on MetricsSnapshot exposed at /v1/health/monitoring.
+// What remains here is monitoring-local bookkeeping that no other endpoint
+// covers (roles cache size, audit dedup state, run flag), plus a one-line
+// mirror of the headline counters so /admin status stays useful inside
+// Discord without curling the control plane.
+//
+// Rows are appended in display order; callers MUST iterate in slice order
+// (the consumer contract on ServiceMetric).
+func (ms *MonitoringService) metricsRows() []svc.ServiceMetric {
 	ms.rolesCacheMu.RLock()
 	size := len(ms.rolesCache)
 	ms.rolesCacheMu.RUnlock()
@@ -127,236 +139,69 @@ func (ms *MonitoringService) GetCacheStats() map[string]interface{} {
 	roleAuditCacheSize := len(ms.roleUpdateAuditCache)
 	roleAuditDebounceSize := len(ms.roleUpdateAuditDebounce)
 	ms.roleUpdateAuditMu.Unlock()
-	ttl := ms.rolesTTL
-	isRunning := ms.IsRunning()
 
-	stats := map[string]interface{}{
-		"isRunning":                   isRunning,
-		"rolesCacheSize":              size,
-		"rolesCacheTTLSeconds":        int(ttl.Seconds()),
-		"roleUpdateAuditCacheSize":    roleAuditCacheSize,
-		"roleUpdateAuditDebounceSize": roleAuditDebounceSize,
-		"apiAuditLogCalls":            atomic.LoadUint64(&ms.apiAuditLogCalls),
-		"apiGuildMemberCalls":         atomic.LoadUint64(&ms.apiGuildMemberCalls),
-		"apiMessagesSent":             atomic.LoadUint64(&ms.apiMessagesSent),
-		"cacheStateMemberHits":        atomic.LoadUint64(&ms.cacheStateMemberHits),
-		"cacheRolesMemoryHits":        atomic.LoadUint64(&ms.cacheRolesMemoryHits),
-		"cacheRolesStoreHits":         atomic.LoadUint64(&ms.cacheRolesStoreHits),
-		"cacheRoleAuditHits":          atomic.LoadUint64(&ms.cacheRoleAuditHits),
+	rows := []svc.ServiceMetric{
+		{Label: "Running", Value: formatBoolYesNo(ms.IsRunning())},
+		{Label: "Roles cache size", Value: strconv.Itoa(size)},
+		{Label: "Roles cache TTL", Value: ms.rolesTTL.String()},
+		{Label: "Role update audit cache size", Value: strconv.Itoa(roleAuditCacheSize)},
+		{Label: "Role update audit debounce size", Value: strconv.Itoa(roleAuditDebounceSize)},
+	}
+
+	if provider, ok := ms.observability().(SnapshotProvider); ok {
+		snap := provider.Snapshot()
+		rows = append(rows,
+			svc.ServiceMetric{Label: "API audit log calls", Value: strconv.FormatInt(snap.API.AuditLogCallsTotal, 10)},
+			svc.ServiceMetric{Label: "API guild member calls", Value: strconv.FormatInt(snap.API.GuildMemberCallsTotal, 10)},
+			svc.ServiceMetric{Label: "API messages sent", Value: strconv.FormatInt(snap.API.MessagesSentTotal, 10)},
+			svc.ServiceMetric{Label: "State member cache hits", Value: strconv.FormatInt(snap.Cache.StateMemberHitsTotal, 10)},
+			svc.ServiceMetric{Label: "Roles cache memory hits", Value: strconv.FormatInt(snap.Cache.RolesMemoryHitsTotal, 10)},
+			svc.ServiceMetric{Label: "Roles cache store hits", Value: strconv.FormatInt(snap.Cache.RolesStoreHitsTotal, 10)},
+			svc.ServiceMetric{Label: "Roles audit cache hits", Value: strconv.FormatInt(snap.Cache.RolesAuditHitsTotal, 10)},
+		)
 	}
 
 	if ms.unifiedCache != nil {
-		ucStats := ms.unifiedCache.GetStats()
-		stats["unifiedCache"] = ucStats
-
-		var memberEntries, guildEntries, rolesEntries, channelEntries int
-		var memberHits, memberMisses, guildHits, guildMisses, rolesHits, rolesMisses, channelHits, channelMisses uint64
-
-		if ucStats.CustomMetrics != nil {
-			if v, ok := ucStats.CustomMetrics["memberEntries"]; ok {
-				switch t := v.(type) {
-				case int:
-					memberEntries = t
-				case int64:
-					memberEntries = int(t)
-				case float64:
-					memberEntries = int(t)
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["guildEntries"]; ok {
-				switch t := v.(type) {
-				case int:
-					guildEntries = t
-				case int64:
-					guildEntries = int(t)
-				case float64:
-					guildEntries = int(t)
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["rolesEntries"]; ok {
-				switch t := v.(type) {
-				case int:
-					rolesEntries = t
-				case int64:
-					rolesEntries = int(t)
-				case float64:
-					rolesEntries = int(t)
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["channelEntries"]; ok {
-				switch t := v.(type) {
-				case int:
-					channelEntries = t
-				case int64:
-					channelEntries = int(t)
-				case float64:
-					channelEntries = int(t)
-				}
-			}
-
-			if v, ok := ucStats.CustomMetrics["memberHits"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					memberHits = t
-				case int:
-					if t >= 0 {
-						memberHits = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						memberHits = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						memberHits = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["memberMisses"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					memberMisses = t
-				case int:
-					if t >= 0 {
-						memberMisses = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						memberMisses = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						memberMisses = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["guildHits"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					guildHits = t
-				case int:
-					if t >= 0 {
-						guildHits = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						guildHits = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						guildHits = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["guildMisses"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					guildMisses = t
-				case int:
-					if t >= 0 {
-						guildMisses = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						guildMisses = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						guildMisses = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["rolesHits"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					rolesHits = t
-				case int:
-					if t >= 0 {
-						rolesHits = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						rolesHits = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						rolesHits = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["rolesMisses"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					rolesMisses = t
-				case int:
-					if t >= 0 {
-						rolesMisses = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						rolesMisses = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						rolesMisses = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["channelHits"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					channelHits = t
-				case int:
-					if t >= 0 {
-						channelHits = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						channelHits = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						channelHits = uint64(t)
-					}
-				}
-			}
-			if v, ok := ucStats.CustomMetrics["channelMisses"]; ok {
-				switch t := v.(type) {
-				case uint64:
-					channelMisses = t
-				case int:
-					if t >= 0 {
-						channelMisses = uint64(t)
-					}
-				case int64:
-					if t >= 0 {
-						channelMisses = uint64(t)
-					}
-				case float64:
-					if t >= 0 {
-						channelMisses = uint64(t)
-					}
-				}
-			}
-		}
-
-		stats["unifiedCacheSpecific"] = map[string]interface{}{
-			"memberEntries":  memberEntries,
-			"guildEntries":   guildEntries,
-			"rolesEntries":   rolesEntries,
-			"channelEntries": channelEntries,
-			"memberHits":     memberHits,
-			"memberMisses":   memberMisses,
-			"guildHits":      guildHits,
-			"guildMisses":    guildMisses,
-			"rolesHits":      rolesHits,
-			"rolesMisses":    rolesMisses,
-			"channelHits":    channelHits,
-			"channelMisses":  channelMisses,
-		}
+		// Snapshot is intentionally called without a store: persisted cache
+		// totals belong on /v1/health/cache, not on the monitoring rows. The
+		// in-memory segment summaries are what makes /admin status useful,
+		// and they require no DB call.
+		uc := ms.unifiedCache.Snapshot(context.Background(), nil)
+		rows = append(rows,
+			svc.ServiceMetric{Label: "Cache members", Value: formatSegmentSummary(uc.Members)},
+			svc.ServiceMetric{Label: "Cache guilds", Value: formatSegmentSummary(uc.Guilds)},
+			svc.ServiceMetric{Label: "Cache roles", Value: formatSegmentSummary(uc.Roles)},
+			svc.ServiceMetric{Label: "Cache channels", Value: formatSegmentSummary(uc.Channels)},
+		)
 	}
 
-	return stats
+	return rows
+}
+
+// formatBoolYesNo renders a boolean as a human label for the /admin status
+// display rows. The display-side helpers live next to metricsRows because
+// they are coupled to the row vocabulary, not generally reusable.
+func formatBoolYesNo(v bool) string {
+	if v {
+		return "Yes"
+	}
+	return "No"
+}
+
+// formatSegmentSummary renders a UnifiedCache SegmentSnapshot into a
+// single-line "<entries> entries · <hits> hits · <hit_rate>% hit rate" form
+// for /admin status. The Discord client only sees a short string per row, so
+// embedding rate and totals in one line keeps the surface compact.
+func formatSegmentSummary(segment cache.SegmentSnapshot) string {
+	if segment.Hits+segment.Misses == 0 {
+		return fmt.Sprintf("%d entries", segment.Entries)
+	}
+	return fmt.Sprintf(
+		"%d entries · %d hits · %.1f%% hit rate",
+		segment.Entries,
+		segment.Hits,
+		segment.HitRate*100,
+	)
 }
 
 func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Context) error {

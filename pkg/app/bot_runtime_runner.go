@@ -89,12 +89,17 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	var unifiedCache *cache.UnifiedCache
 	if runtime.capabilities.monitoring {
 		var err error
-		monitoringService, err = logging.NewMonitoringServiceForBot(
+		// Per-runtime metrics: each bot's monitoring service writes to its
+		// own InMemoryMetrics. The control plane reads via the default
+		// runtime's MonitoringMetricsResolver, mirroring the cache
+		// observability resolver pattern.
+		monitoringService, err = logging.NewMonitoringServiceForBotWithMetrics(
 			runtime.session,
 			opts.configManager,
 			opts.store,
 			runtime.instanceID,
 			opts.defaultBotInstanceID,
+			logging.NewInMemoryMetrics(),
 		)
 		if err != nil {
 			return fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
@@ -214,7 +219,10 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 		commandHandler.SetQOTDService(opts.qotdCommandService)
 		commandHandler.SetModerationMetrics(opts.moderationMetrics)
-		commandHandler.SetAdminCommandServices(runtime.serviceManager, unifiedCache, opts.store)
+		// Cache observability flows through /v1/health/cache via the control
+		// server's runtime resolver, not the admin command catalog; the local
+		// unifiedCache variable is still used above for SetPersistInterval.
+		commandHandler.SetAdminCommandServices(runtime.serviceManager)
 		if err := setupCommandHandler(commandHandler); err != nil {
 			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
 		}

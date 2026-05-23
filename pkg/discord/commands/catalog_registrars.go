@@ -84,7 +84,7 @@ func AdminCommandCatalogRegistrar() CommandCatalogRegistrar {
 			if ch.adminServiceManager == nil {
 				return
 			}
-			admin.NewAdminCommands(ch.adminServiceManager, ch.adminUnifiedCache, ch.adminStore).RegisterCommands(router)
+			admin.NewAdminCommands(ch.adminServiceManager).RegisterCommands(router)
 		},
 	}
 }

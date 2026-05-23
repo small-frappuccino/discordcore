@@ -12,6 +12,7 @@ export const appRoutes = {
   dashboardCoreControlPanelPattern: "/manage/:guildId/core/control-panel",
   dashboardCoreStatsPattern: "/manage/:guildId/core/stats",
   dashboardCoreCommandsPattern: "/manage/:guildId/core/commands",
+  dashboardCoreHealthPattern: "/manage/:guildId/core/health",
   dashboardModerationPattern: "/manage/:guildId/moderation",
   dashboardModerationModerationPattern:
     "/manage/:guildId/moderation/moderation",
@@ -33,6 +34,8 @@ export const appRoutes = {
     `/manage/${encodeGuildID(guildId)}/core/stats`,
   dashboardCoreCommands: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/core/commands`,
+  dashboardCoreHealth: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/core/health`,
   dashboardModeration: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/moderation`,
   dashboardModerationModeration: (guildId: string) =>

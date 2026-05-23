@@ -11,7 +11,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/errors"
 )
 
-// BaseService provides common functionality for all services
+// BaseService provides common functionality for all services. Services that
+// want to surface display metrics via Stats() override Stats() and append
+// ServiceMetric rows themselves; BaseService no longer carries an internal
+// metric bag because the previous map[string]any path was never populated by
+// any caller and only blurred the contract.
 type BaseService struct {
 	name         string
 	serviceType  ServiceType
@@ -33,10 +37,6 @@ type BaseService struct {
 	healthStatus    HealthStatus
 	healthMutex     sync.RWMutex
 
-	// Custom metrics
-	customMetrics    map[string]any
-	customMetricsMux sync.RWMutex
-
 	// Hooks for subclasses to implement
 	startHook  func(ctx context.Context) error
 	stopHook   func(ctx context.Context) error
@@ -46,12 +46,11 @@ type BaseService struct {
 // NewBaseService creates a new base service
 func NewBaseService(name string, serviceType ServiceType, priority ServicePriority, dependencies []string) *BaseService {
 	return &BaseService{
-		name:          name,
-		serviceType:   serviceType,
-		priority:      priority,
-		dependencies:  dependencies,
-		state:         StateUninitialized,
-		customMetrics: make(map[string]interface{}),
+		name:         name,
+		serviceType:  serviceType,
+		priority:     priority,
+		dependencies: dependencies,
+		state:        StateUninitialized,
 		healthStatus: HealthStatus{
 			Healthy:   true,
 			Message:   "Service initialized",
@@ -199,7 +198,9 @@ func (bs *BaseService) HealthCheck(ctx context.Context) HealthStatus {
 	return bs.healthStatus
 }
 
-// Stats returns service statistics
+// Stats returns service statistics. The Metrics slice stays nil at the base
+// level; concrete services that want to expose display rows override Stats()
+// and populate them from their own typed sources.
 func (bs *BaseService) Stats() ServiceStats {
 	bs.stateMutex.RLock()
 	defer bs.stateMutex.RUnlock()
@@ -217,16 +218,6 @@ func (bs *BaseService) Stats() ServiceStats {
 	if bs.lastError != nil {
 		stats.LastError = &bs.lastError.Timestamp
 	}
-
-	// Add custom metrics
-	bs.customMetricsMux.RLock()
-	if len(bs.customMetrics) > 0 {
-		stats.CustomMetrics = make(map[string]interface{})
-		for k, v := range bs.customMetrics {
-			stats.CustomMetrics[k] = v
-		}
-	}
-	bs.customMetricsMux.RUnlock()
 
 	return stats
 }
@@ -251,21 +242,6 @@ func (bs *BaseService) SetStopHook(hook func(ctx context.Context) error) {
 // SetHealthHook sets the function to call for health checks
 func (bs *BaseService) SetHealthHook(hook func(ctx context.Context) HealthStatus) {
 	bs.healthHook = hook
-}
-
-// SetCustomMetric sets a custom metric value
-func (bs *BaseService) SetCustomMetric(key string, value any) {
-	bs.customMetricsMux.Lock()
-	defer bs.customMetricsMux.Unlock()
-	bs.customMetrics[key] = value
-}
-
-// GetCustomMetric gets a custom metric value
-func (bs *BaseService) GetCustomMetric(key string) (interface{}, bool) {
-	bs.customMetricsMux.RLock()
-	defer bs.customMetricsMux.RUnlock()
-	value, exists := bs.customMetrics[key]
-	return value, exists
 }
 
 // IncrementRestartCount increments the restart counter

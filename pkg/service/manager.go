@@ -55,14 +55,36 @@ type HealthStatus struct {
 	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
-// ServiceStats provides runtime statistics for a service
+// ServiceMetric is a single pre-formatted display row a service exposes via
+// Stats() for surfaces like /admin status. Pre-formatting on the producer side
+// keeps the rendering responsibility next to the data semantics — boolean
+// fields, counters, and durations choose their own human-readable form
+// instead of being %v-rendered by every consumer.
+//
+// Stable-ordering contract: producers append rows in display order; consumers
+// MUST iterate in slice order rather than re-sorting, so operators see the
+// same layout across calls.
+type ServiceMetric struct {
+	// Label is the human-facing identifier shown on the left side of the
+	// row. Use sentence case ("Roles cache size"), not snake_case.
+	Label string `json:"label"`
+	// Value is the already-formatted display string. Numbers should be
+	// thousand-separated where appropriate, durations should be readable,
+	// booleans should be "Yes"/"No" or similar.
+	Value string `json:"value"`
+}
+
+// ServiceStats provides runtime statistics for a service. The Metrics slice
+// replaces the older CustomMetrics map[string]any bag: typing the rows as
+// pre-formatted Label/Value pairs lets each service own its rendering and
+// keeps the consumer (/admin status today) free of %v-formatting drift.
 type ServiceStats struct {
-	StartTime     time.Time              `json:"start_time"`
-	Uptime        time.Duration          `json:"uptime"`
-	RestartCount  int                    `json:"restart_count"`
-	ErrorCount    int                    `json:"error_count"`
-	LastError     *time.Time             `json:"last_error,omitempty"`
-	CustomMetrics map[string]interface{} `json:"custom_metrics,omitempty"`
+	StartTime    time.Time       `json:"start_time"`
+	Uptime       time.Duration   `json:"uptime"`
+	RestartCount int             `json:"restart_count"`
+	ErrorCount   int             `json:"error_count"`
+	LastError    *time.Time      `json:"last_error,omitempty"`
+	Metrics      []ServiceMetric `json:"metrics,omitempty"`
 }
 
 // Service defines the interface that all services must implement

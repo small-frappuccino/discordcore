@@ -382,6 +382,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		controlBearerToken:    controlBearerToken,
 		defaultBotInstanceID:  defaultBotInstanceID,
 		runtimeResolver:       runtimeResolver,
+		store:                 store,
 		partnerBoardService:   partnerBoardAppService,
 		partnerSyncExecutor:   partnerSyncDispatcher,
 		qotdService:           qotdService,

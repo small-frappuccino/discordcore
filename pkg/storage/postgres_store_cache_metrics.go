@@ -174,31 +174,51 @@ func (s *Store) DeleteCacheEntriesByTypeAndPrefix(cacheType, keyPrefix string) e
 	return err
 }
 
-// GetCacheStats returns statistics about the persistent cache
-func (s *Store) GetCacheStats() (map[string]int, error) {
+// PersistentCacheStats is a typed snapshot of the persistent_cache table. The
+// pkg/discord/cache snapshot embeds this directly so the /v1/health/cache route
+// can scrape both in-memory and persisted counters in one JSON document.
+type PersistentCacheStats struct {
+	Total  int            `json:"total"`
+	ByType map[string]int `json:"by_type,omitempty"`
+}
+
+// GetCacheStatsContext returns the number of non-expired entries in
+// persistent_cache, broken down by cache_type and totalled. The context bounds
+// the query so HTTP scrapers do not stall an unhealthy database connection
+// forever.
+func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats, error) {
 	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
+		return PersistentCacheStats{}, fmt.Errorf("store not initialized")
 	}
-	rows, err := s.query(
-		`SELECT cache_type, COUNT(*) as count FROM persistent_cache
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	rows, err := s.db.QueryContext(ctx, rebind(
+		`SELECT cache_type, COUNT(*) FROM persistent_cache
          WHERE expires_at > ? GROUP BY cache_type`,
-		time.Now().UTC(),
-	)
+	), time.Now().UTC())
 	if err != nil {
-		return nil, err
+		return PersistentCacheStats{}, err
 	}
 	defer rows.Close()
 
-	stats := make(map[string]int)
+	stats := PersistentCacheStats{ByType: make(map[string]int)}
 	for rows.Next() {
 		var cacheType string
 		var count int
 		if err := rows.Scan(&cacheType, &count); err != nil {
-			return nil, err
+			return PersistentCacheStats{}, err
 		}
-		stats[cacheType] = count
+		stats.ByType[cacheType] = count
+		stats.Total += count
 	}
-	return stats, rows.Err()
+	if err := rows.Err(); err != nil {
+		return PersistentCacheStats{}, err
+	}
+	if len(stats.ByType) == 0 {
+		stats.ByType = nil
+	}
+	return stats, nil
 }
 
 // IncrementDailyMessageCount increments the per-day message count for a user in a channel.

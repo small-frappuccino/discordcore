@@ -3,7 +3,9 @@
     "allow": [
       "Bash(go doc *)",
       "Bash(go list *)",
-      "Bash(go env *)"
+      "Bash(go env *)",
+      "Bash(rm -rf pkg/cache)",
+      "Bash(go vet *)"
     ]
   }
 }

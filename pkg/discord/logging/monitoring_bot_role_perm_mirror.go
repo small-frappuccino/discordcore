@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -213,7 +212,7 @@ func (ms *MonitoringService) handleRoleUpdateForBotPermMirroring(s *discordgo.Se
 
 	actionType := int(discordgo.AuditLogActionRoleUpdate)
 	audit, err := ms.session.GuildAuditLog(e.GuildID, "", "", actionType, 10)
-	atomic.AddUint64(&ms.apiAuditLogCalls, 1)
+	ms.observability().RecordAuditLogCall()
 	if err == nil && audit != nil {
 		for _, entry := range audit.AuditLogEntries {
 			if entry == nil || entry.ActionType == nil {
@@ -299,7 +298,7 @@ func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID,
 
 	if ms.session != nil && ms.session.State != nil {
 		if member, err := ms.session.State.Member(guildID, userID); err == nil && member != nil {
-			atomic.AddUint64(&ms.cacheStateMemberHits, 1)
+			ms.observability().RecordStateMemberCacheHit()
 			if ms.unifiedCache != nil {
 				ms.unifiedCache.SetMember(guildID, userID, member)
 			}
@@ -307,7 +306,7 @@ func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID,
 		}
 	}
 
-	atomic.AddUint64(&ms.apiGuildMemberCalls, 1)
+	ms.observability().RecordGuildMemberCall()
 	member, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
 		return ms.session.GuildMember(guildID, userID)
 	})

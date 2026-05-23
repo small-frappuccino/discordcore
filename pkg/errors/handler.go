@@ -19,7 +19,6 @@ type ErrorCategory string
 const (
 	CategoryService    ErrorCategory = "service"
 	CategoryDiscord    ErrorCategory = "discord"
-	CategoryCache      ErrorCategory = "cache"
 	CategoryConfig     ErrorCategory = "config"
 	CategoryCommand    ErrorCategory = "command"
 	CategoryValidation ErrorCategory = "validation"
@@ -79,10 +78,6 @@ type validationFieldError interface {
 
 type configPathError interface {
 	ConfigErrorPath() string
-}
-
-type cacheKeyError interface {
-	CacheErrorKey() string
 }
 
 type discordCodeError interface {
@@ -305,8 +300,6 @@ func (eh *ErrorHandler) categorizeError(err error) ErrorCategory {
 	switch {
 	case isDiscordError(err):
 		return CategoryDiscord
-	case isCacheError(err):
-		return CategoryCache
 	case isConfigError(err):
 		return CategoryConfig
 	case isCommandError(err):
@@ -413,11 +406,6 @@ func isConfigError(err error) bool {
 	return stderrors.As(err, &configErr)
 }
 
-func isCacheError(err error) bool {
-	var cacheErr cacheKeyError
-	return stderrors.As(err, &cacheErr)
-}
-
 func isCommandError(err error) bool {
 	var commandErr commandCodeError
 	return stderrors.As(err, &commandErr)
@@ -508,8 +496,6 @@ func (eh *ErrorHandler) getSeverityForCategory(category ErrorCategory) ErrorSeve
 		return SeverityHigh
 	case CategoryDiscord:
 		return SeverityMedium
-	case CategoryCache:
-		return SeverityLow
 	case CategoryConfig:
 		return SeverityMedium
 	case CategoryValidation:
@@ -525,8 +511,6 @@ func (eh *ErrorHandler) getDefaultActions(category ErrorCategory) []ErrorAction 
 		return []ErrorAction{ActionLog, ActionNotify}
 	case CategoryDiscord:
 		return []ErrorAction{ActionLog, ActionRetry}
-	case CategoryCache:
-		return []ErrorAction{ActionLog}
 	case CategoryConfig:
 		return []ErrorAction{ActionLog, ActionNotify}
 	default:

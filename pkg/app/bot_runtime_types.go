@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/control"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -181,6 +182,37 @@ func newBotRuntimeResolver(
 		runtimes:             runtimes,
 		defaultBotInstanceID: strings.TrimSpace(defaultBotInstanceID),
 	}
+}
+
+// defaultUnifiedCache returns the UnifiedCache from the default bot runtime's
+// monitoring service, or nil if no runtime is registered, the runtime has no
+// monitoring service, or the cache has not been constructed yet. The control
+// server's /v1/health/cache route calls this on each request so it sees the
+// cache as soon as the runtime layer publishes it.
+func (r *botRuntimeResolver) defaultUnifiedCache() *cache.UnifiedCache {
+	if r == nil {
+		return nil
+	}
+	runtime, _, err := r.defaultRuntime()
+	if err != nil || runtime == nil || runtime.monitoringService == nil {
+		return nil
+	}
+	return runtime.monitoringService.GetUnifiedCache()
+}
+
+// defaultMonitoringMetrics returns the monitoring observability sink from the
+// default bot runtime's monitoring service, or nil if no runtime is
+// registered or monitoring is disabled on that runtime. Mirrors
+// defaultUnifiedCache; /v1/health/monitoring scrapes via this accessor.
+func (r *botRuntimeResolver) defaultMonitoringMetrics() logging.Metrics {
+	if r == nil {
+		return nil
+	}
+	runtime, _, err := r.defaultRuntime()
+	if err != nil || runtime == nil || runtime.monitoringService == nil {
+		return nil
+	}
+	return runtime.monitoringService.Metrics()
 }
 
 func (r *botRuntimeResolver) defaultRuntime() (*botRuntime, string, error) {

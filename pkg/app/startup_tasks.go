@@ -9,13 +9,16 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/control"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 type controlServerHolder struct {
@@ -55,6 +58,7 @@ type controlStartupTaskOptions struct {
 	controlBearerToken    string
 	defaultBotInstanceID  string
 	runtimeResolver       *botRuntimeResolver
+	store                 *storage.Store
 	partnerBoardService   partners.BoardService
 	partnerSyncExecutor   partners.GuildSyncExecutor
 	qotdService           *qotd.Service
@@ -211,6 +215,18 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	controlServer.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 	controlServer.SetQOTDService(opts.qotdService)
 	controlServer.SetModerationMetrics(opts.moderationMetrics)
+	controlServer.SetCacheObservability(func() *cache.UnifiedCache {
+		if opts.runtimeResolver == nil {
+			return nil
+		}
+		return opts.runtimeResolver.defaultUnifiedCache()
+	}, opts.store)
+	controlServer.SetMonitoringMetricsResolver(func() logging.Metrics {
+		if opts.runtimeResolver == nil {
+			return nil
+		}
+		return opts.runtimeResolver.defaultMonitoringMetrics()
+	})
 	controlServer.SetDiscordSessionResolverForDomain(func(guildID, domain string) (*discordgo.Session, error) {
 		return opts.runtimeResolver.sessionForGuildDomain(guildID, domain)
 	})

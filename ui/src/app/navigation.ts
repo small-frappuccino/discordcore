@@ -126,6 +126,13 @@ function getDashboardCoreNavigationSection(guildId: string): NavigationSection {
         activePath: appRoutes.dashboardCoreCommands(guildId),
         homeActionLabel: "Open Commands",
       },
+      {
+        id: "health",
+        label: "Health",
+        to: appRoutes.dashboardCoreHealth(guildId),
+        activePath: appRoutes.dashboardCoreHealth(guildId),
+        homeActionLabel: "Open Health",
+      },
     ],
   };
 }

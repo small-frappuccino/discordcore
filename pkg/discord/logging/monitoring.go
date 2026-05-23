@@ -249,14 +249,39 @@ type MonitoringService struct {
 	statsGuilds            map[string]*statsGuildState
 	statsMu                sync.Mutex
 
-	// Metrics counters
-	apiAuditLogCalls     uint64
-	apiGuildMemberCalls  uint64
-	apiMessagesSent      uint64
-	cacheStateMemberHits uint64
-	cacheRolesMemoryHits uint64
-	cacheRolesStoreHits  uint64
-	cacheRoleAuditHits   uint64
+	// Observability sink. When nil, observability() returns NopMetrics
+	// so call-sites can issue Record* without nil checks. This mirrors
+	// the QOTD/moderation pattern: write-only on the hot path, read via
+	// type-asserting SnapshotProvider on the /v1/health/monitoring route.
+	metrics Metrics
+}
+
+// Metrics exposes the observability sink for read-only access by the
+// control server (/v1/health/monitoring uses a type assertion to find the
+// SnapshotProvider implementation). Returns NopMetrics when the service
+// was constructed without a metrics value.
+func (ms *MonitoringService) Metrics() Metrics {
+	return ms.observability()
+}
+
+// SetMetrics swaps the observability sink. Useful in tests; production
+// startup wires metrics via NewMonitoringServiceForBotWithMetrics. nil is
+// treated as NopMetrics via observability().
+func (ms *MonitoringService) SetMetrics(metrics Metrics) {
+	if ms == nil {
+		return
+	}
+	ms.metrics = metrics
+}
+
+// observability is the nil-safe accessor every internal Record* call site
+// uses. Hot path is one nil compare; the only branch operators take is
+// "metrics wired" vs. "default NopMetrics" — write-only on this side.
+func (ms *MonitoringService) observability() Metrics {
+	if ms == nil || ms.metrics == nil {
+		return NopMetrics{}
+	}
+	return ms.metrics
 }
 
 func (ms *MonitoringService) Name() string {
@@ -315,9 +340,9 @@ func (ms *MonitoringService) Stats() svc.ServiceStats {
 	ms.runMu.RUnlock()
 
 	stats := svc.ServiceStats{
-		RestartCount:  restartCount,
-		ErrorCount:    errorCount,
-		CustomMetrics: ms.GetCacheStats(),
+		RestartCount: restartCount,
+		ErrorCount:   errorCount,
+		Metrics:      ms.metricsRows(),
 	}
 	if startTime != nil {
 		stats.StartTime = *startTime
@@ -462,14 +487,35 @@ func NewMonitoringService(session *discordgo.Session, configManager *files.Confi
 	return NewMonitoringServiceForBot(session, configManager, store, "", "")
 }
 
-// NewMonitoringServiceForBot creates a monitoring service scoped to the guilds
-// assigned to a specific bot instance.
+// NewMonitoringServiceForBot creates a monitoring service scoped to the
+// guilds assigned to a specific bot instance. The service is constructed
+// with NopMetrics; callers that want /v1/health/monitoring telemetry
+// should use NewMonitoringServiceForBotWithMetrics instead, or invoke
+// SetMetrics on the returned service before Start.
 func NewMonitoringServiceForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
 	defaultBotInstanceID string,
+) (*MonitoringService, error) {
+	return NewMonitoringServiceForBotWithMetrics(session, configManager, store, botInstanceID, defaultBotInstanceID, nil)
+}
+
+// NewMonitoringServiceForBotWithMetrics is the constructor production startup
+// uses to attach the in-memory Metrics implementation. Passing nil falls
+// back to NopMetrics, matching NewMonitoringServiceForBot. Mirrors
+// qotd.NewServiceWithMetrics — callers wire one metrics value, expose it
+// via MonitoringService.Metrics() to the control server, and forget about
+// it; every Record* call routes through ms.observability() which falls
+// back to NopMetrics when nil.
+func NewMonitoringServiceForBotWithMetrics(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	store *storage.Store,
+	botInstanceID string,
+	defaultBotInstanceID string,
+	metrics Metrics,
 ) (*MonitoringService, error) {
 	if session == nil {
 		return nil, fmt.Errorf("discord session is nil")
@@ -511,6 +557,7 @@ func NewMonitoringServiceForBot(
 		presenceWatch:           make(map[string]presenceSnapshot),
 		statsLastRun:            make(map[string]time.Time),
 		statsGuilds:             make(map[string]*statsGuildState),
+		metrics:                 metrics,
 	}
 	ms.rebuildTaskPipeline()
 	return ms, nil
