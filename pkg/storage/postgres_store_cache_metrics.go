@@ -20,9 +20,6 @@ type DailyMessageCountDelta struct {
 
 // UpsertCacheEntry saves a cache entry to persistent storage
 func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if key == "" || cacheType == "" || data == "" {
 		return nil
 	}
@@ -39,12 +36,6 @@ func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Tim
 }
 
 func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEntryRecord) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	normalized := make([]CacheEntryRecord, 0, len(entries))
 	for _, entry := range entries {
@@ -74,9 +65,6 @@ func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEn
 
 // GetCacheEntry retrieves a cache entry from persistent storage
 func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt time.Time, ok bool, err error) {
-	if s.db == nil {
-		return "", "", time.Time{}, false, fmt.Errorf("store not initialized")
-	}
 	row := s.queryRow(
 		`SELECT cache_type, data, expires_at FROM persistent_cache WHERE cache_key=?`,
 		key,
@@ -100,9 +88,6 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 	Data      string
 	ExpiresAt time.Time
 }, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	rows, err := s.query(
 		`SELECT cache_key, data, expires_at FROM persistent_cache
          WHERE cache_type=? AND expires_at > ?`,
@@ -134,27 +119,18 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 
 // DeleteCacheEntry removes a cache entry from persistent storage
 func (s *Store) DeleteCacheEntry(key string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key=?`, key)
 	return err
 }
 
 // CleanupExpiredCacheEntries removes all expired cache entries
 func (s *Store) CleanupExpiredCacheEntries() error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	_, err := s.exec(`DELETE FROM persistent_cache WHERE expires_at <= ?`, time.Now().UTC())
 	return err
 }
 
 // DeleteCacheEntriesByPrefix deletes all cache entries with keys starting with the given prefix
 func (s *Store) DeleteCacheEntriesByPrefix(prefix string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if prefix == "" {
 		return nil
 	}
@@ -164,9 +140,6 @@ func (s *Store) DeleteCacheEntriesByPrefix(prefix string) error {
 
 // DeleteCacheEntriesByTypeAndPrefix deletes cache entries filtered by cache_type and key prefix
 func (s *Store) DeleteCacheEntriesByTypeAndPrefix(cacheType, keyPrefix string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if cacheType == "" || keyPrefix == "" {
 		return nil
 	}
@@ -187,12 +160,6 @@ type PersistentCacheStats struct {
 // the query so HTTP scrapers do not stall an unhealthy database connection
 // forever.
 func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats, error) {
-	if s.db == nil {
-		return PersistentCacheStats{}, fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	rows, err := s.db.QueryContext(ctx, rebind(
 		`SELECT cache_type, COUNT(*) FROM persistent_cache
          WHERE expires_at > ? GROUP BY cache_type`,
@@ -236,9 +203,6 @@ func dailyMetricDay(at time.Time) string {
 }
 
 func (s *Store) incrementDailyMetricByChannelAndUser(ctx context.Context, tableName, guildID, channelID, userID string, at time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	query := fmt.Sprintf(
 		`INSERT INTO %s (guild_id, channel_id, user_id, day, count)
          VALUES (?, ?, ?, ?, 1)
@@ -252,9 +216,6 @@ func (s *Store) incrementDailyMetricByChannelAndUser(ctx context.Context, tableN
 }
 
 func (s *Store) incrementDailyMetricByUser(ctx context.Context, tableName, guildID, userID string, at time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	query := fmt.Sprintf(
 		`INSERT INTO %s (guild_id, user_id, day, count)
          VALUES (?, ?, ?, 1)
@@ -277,12 +238,6 @@ func (s *Store) IncrementDailyMessageCountContext(ctx context.Context, guildID, 
 
 // IncrementDailyMessageCountsContext applies a batch of daily message count deltas.
 func (s *Store) IncrementDailyMessageCountsContext(ctx context.Context, deltas []DailyMessageCountDelta) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	normalized := normalizeDailyMessageCountDeltas(deltas)
 	if len(normalized) == 0 {
@@ -385,14 +340,8 @@ type MetricTotal struct {
 }
 
 func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimension, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || cutoffDay == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	baseSQL := fmt.Sprintf(
 		"SELECT %s, SUM(count) FROM %s WHERE guild_id=? AND day>=?",
@@ -446,14 +395,8 @@ func (s *Store) ReactionTotalsByUser(ctx context.Context, guildID, cutoffDay, ch
 }
 
 func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	if guildID == "" {
 		return 0, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	var total sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, rebind(`SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?`), guildID).Scan(&total); err != nil {
@@ -466,14 +409,8 @@ func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (i
 }
 
 func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID string) ([]string, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if guildID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	rows, err := s.db.QueryContext(ctx, rebind(`SELECT DISTINCT user_id FROM member_joins WHERE guild_id=?`), guildID)
 	if err != nil {
@@ -502,14 +439,8 @@ func (s *Store) SumDailyMemberLeavesSince(ctx context.Context, guildID, cutoffDa
 }
 
 func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay string) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || cutoffDay == "" {
 		return 0, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	var total sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, rebind(query), guildID, cutoffDay).Scan(&total); err != nil {
@@ -522,12 +453,6 @@ func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay st
 }
 
 func (s *Store) DatabaseSizeBytes(ctx context.Context) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	var size sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
 		return 0, err

@@ -58,15 +58,17 @@ type ModerationWarning struct {
 }
 
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
+// Panics when db is nil: callers construct the store from a verified *sql.DB at
+// startup, so a nil here is a programmer error, not a runtime condition.
 func NewStore(db *sql.DB) *Store {
+	if db == nil {
+		panic("storage: NewStore requires a non-nil *sql.DB")
+	}
 	return &Store{db: db}
 }
 
-// Init validates the database handle and ensures the migrated schema is present.
+// Init ensures the migrated schema is present and primes per-deployment state.
 func (s *Store) Init() error {
-	if s == nil || s.db == nil {
-		return fmt.Errorf("store database handle is nil")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := s.ensureMemberJoinColumns(ctx); err != nil {
@@ -82,13 +84,6 @@ func (s *Store) Init() error {
 }
 
 func (s *Store) resetQOTDQuestionSequenceWhenEmpty(ctx context.Context) error {
-	if s == nil || s.db == nil {
-		return fmt.Errorf("store database handle is nil")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	var hasRows bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qotd_questions LIMIT 1)`).Scan(&hasRows); err != nil {
 		return err
@@ -114,9 +109,6 @@ func (s *Store) exec(query string, args ...any) (sql.Result, error) {
 }
 
 func (s *Store) execContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return s.db.ExecContext(ctx, rebind(query), args...)
 }
 
@@ -125,9 +117,6 @@ func (s *Store) query(query string, args ...any) (*sql.Rows, error) {
 }
 
 func (s *Store) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return s.db.QueryContext(ctx, rebind(query), args...)
 }
 
@@ -136,9 +125,6 @@ func (s *Store) queryRow(query string, args ...any) *sql.Row {
 }
 
 func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return s.db.QueryRowContext(ctx, rebind(query), args...)
 }
 
@@ -147,9 +133,6 @@ func txExec(tx *sql.Tx, query string, args ...any) (sql.Result, error) {
 }
 
 func txExecContext(ctx context.Context, tx *sql.Tx, query string, args ...any) (sql.Result, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return tx.ExecContext(ctx, rebind(query), args...)
 }
 
@@ -158,9 +141,6 @@ func txQueryRow(tx *sql.Tx, query string, args ...any) *sql.Row {
 }
 
 func txQueryContext(ctx context.Context, tx *sql.Tx, query string, args ...any) (*sql.Rows, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return tx.QueryContext(ctx, rebind(query), args...)
 }
 
@@ -185,9 +165,6 @@ func rebind(query string) string {
 
 // Close closes the underlying database.
 func (s *Store) Close() error {
-	if s.db == nil {
-		return nil
-	}
 	return s.db.Close()
 }
 
@@ -248,9 +225,6 @@ func execValuesContext(ctx context.Context, db *sql.DB, prefix, suffix string, r
 	}
 	if appendArgs == nil {
 		return fmt.Errorf("append args callback is nil")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	for start := 0; start < rowCount; start += storeBulkInsertMaxRows {

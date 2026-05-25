@@ -12,6 +12,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
@@ -47,7 +48,7 @@ func newDiscordSessionWithAPI(t *testing.T, handler http.HandlerFunc) *discordgo
 }
 
 func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
-	failingStore := storage.NewStore(nil)
+	failingStore := storagetest.NewFailingStore()
 
 	memberService := NewMemberEventService(nil, nil, nil, failingStore)
 	messageService := NewMessageEventService(nil, nil, nil, failingStore)
@@ -62,7 +63,7 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 }
 
 func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
-	failingStore := storage.NewStore(nil)
+	failingStore := storagetest.NewFailingStore()
 	ms := &MonitoringService{
 		store:    failingStore,
 		stopChan: make(chan struct{}),

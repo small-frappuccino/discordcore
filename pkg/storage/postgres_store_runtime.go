@@ -3,21 +3,14 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 )
 
 // SetBotSince sets the bot_since timestamp for a guild (keeps the earliest time).
 func (s *Store) SetBotSince(ctx context.Context, guildID string, t time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if t.IsZero() {
 		t = time.Now().UTC()
@@ -38,12 +31,6 @@ func (s *Store) SetBotSince(ctx context.Context, guildID string, t time.Time) er
 
 // BotSince returns when the bot was first seen in a guild, if available.
 func (s *Store) BotSince(ctx context.Context, guildID string) (time.Time, bool, error) {
-	if s.db == nil {
-		return time.Time{}, false, fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	row := s.queryRowContext(ctx, `SELECT bot_since FROM guild_meta WHERE guild_id=?`, guildID)
 	var t sql.NullTime
 	if err := row.Scan(&t); err != nil {
@@ -59,12 +46,6 @@ func (s *Store) BotSince(ctx context.Context, guildID string) (time.Time, bool, 
 }
 
 func (s *Store) setRuntimeTimestamp(ctx context.Context, key string, t time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if t.IsZero() {
 		t = time.Now().UTC()
 	}
@@ -78,12 +59,6 @@ func (s *Store) setRuntimeTimestamp(ctx context.Context, key string, t time.Time
 }
 
 func (s *Store) getRuntimeTimestamp(ctx context.Context, key string) (time.Time, bool, error) {
-	if s.db == nil {
-		return time.Time{}, false, fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	row := s.queryRowContext(ctx, `SELECT ts FROM runtime_meta WHERE key=?`, key)
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {

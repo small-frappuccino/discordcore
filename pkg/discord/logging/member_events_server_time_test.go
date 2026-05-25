@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 )
 
 func TestCalculateServerTime_ReturnsErrorWhenStoreReadFails(t *testing.T) {
 	service := &MemberEventService{
-		store: storage.NewStore(nil),
+		store: storagetest.NewFailingStore(),
 	}
 
 	got, ok, err := service.calculateServerTime(context.Background(), "g1", "u1")

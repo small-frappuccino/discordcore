@@ -15,15 +15,9 @@ type qotdRowScanner interface {
 }
 
 func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (*QOTDQuestionRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
 		return nil, fmt.Errorf("create qotd question: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	position := normalized.QueuePosition
@@ -96,18 +90,12 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 }
 
 func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (*QOTDQuestionRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if rec.ID <= 0 {
 		return nil, fmt.Errorf("update qotd question: id is required")
 	}
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
 		return nil, fmt.Errorf("update qotd question: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -213,15 +201,9 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 }
 
 func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, questionID int64) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || questionID <= 0 {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -255,9 +237,6 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 }
 
 func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, deckIDs []string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil
@@ -265,9 +244,6 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 	normalizedDeckIDs := normalizeQOTDDeckIDs(deckIDs)
 	if len(normalizedDeckIDs) == 0 {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -293,16 +269,10 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 }
 
 func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) ([]QOTDQuestionRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	rows, err := s.queryContext(ctx,
@@ -348,15 +318,9 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 }
 
 func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID int64) (*QOTDQuestionRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || questionID <= 0 {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -390,9 +354,6 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 }
 
 func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -404,9 +365,6 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	normalizedIDs, err := normalizeQOTDOrderedIDs(orderedIDs)
 	if err != nil {
 		return fmt.Errorf("reorder qotd questions: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -484,9 +442,6 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 }
 
 func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time, selector QOTDQuestionSelector) (*QOTDQuestionRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -498,9 +453,6 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if publishDateUTC.IsZero() {
 		return nil, fmt.Errorf("reserve qotd question: publish_date_utc is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -579,9 +531,6 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 }
 
 func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string, selector QOTDQuestionSelector) (*QOTDQuestionRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -589,9 +538,6 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	}
 	if deckID == "" {
 		return nil, fmt.Errorf("reserve ready qotd question: deck_id is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -675,9 +621,6 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 // currently running. Returns the freed question IDs in queue order so callers
 // can log or test the cleanup deterministically.
 func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) ([]int64, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
@@ -685,9 +628,6 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 	todayUTC = normalizeQOTDDateUTC(todayUTC)
 	if todayUTC.IsZero() {
 		return nil, fmt.Errorf("reclaim orphan qotd reservations: today_utc is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	rows, err := s.queryContext(ctx,
@@ -740,15 +680,9 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 // semantics differ) and a subsequent attempt will succeed against the
 // updated MAX.
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	normalized, err := normalizeQOTDOfficialPostRecord(rec)
 	if err != nil {
 		return nil, fmt.Errorf("create qotd official post: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if normalized.State == "" {
 		normalized.State = "provisioning"
@@ -846,9 +780,6 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 }
 
 func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, questionListThreadID, questionListEntryMessageID, discordThreadID, starterMessageID, answerChannelID string, publishedAt time.Time) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil, fmt.Errorf("finalize qotd official post: id is required")
 	}
@@ -865,9 +796,6 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 	}
 	if publishedAt.IsZero() {
 		return nil, fmt.Errorf("finalize qotd official post: published_at is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -924,14 +852,8 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 }
 
 func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	row := s.queryRowContext(ctx,
 		`SELECT
@@ -976,16 +898,10 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (*QOTDOff
 }
 
 func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	row := s.queryRowContext(ctx,
 		`SELECT
@@ -1045,16 +961,10 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 }
 
 func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) ([]QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	rows, err := s.queryContext(ctx,
@@ -1124,16 +1034,10 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 }
 
 func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	row := s.queryRowContext(ctx,
 		`SELECT
@@ -1195,16 +1099,10 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 }
 
 func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -1265,15 +1163,9 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 }
 
 func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) ([]QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -1339,12 +1231,6 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 }
 
 func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) ([]QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -1406,18 +1292,12 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 }
 
 func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil, fmt.Errorf("update qotd official post state: id is required")
 	}
 	state = strings.TrimSpace(state)
 	if state == "" {
 		return nil, fmt.Errorf("update qotd official post state: state is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -1469,16 +1349,10 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 }
 
 func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (int, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
 		return 0, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	result, err := s.execContext(ctx,
@@ -1497,14 +1371,8 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 }
 
 func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	if _, err := s.execContext(ctx, `DELETE FROM qotd_official_posts WHERE id = ?`, id); err != nil {
@@ -1514,16 +1382,10 @@ func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) error 
 }
 
 func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (int, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
 		return 0, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	result, err := s.execContext(ctx,
@@ -1545,15 +1407,9 @@ func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, gu
 }
 
 func (s *Store) CreateQOTDThreadArchive(ctx context.Context, rec QOTDThreadArchiveRecord) (*QOTDThreadArchiveRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	normalized, err := normalizeQOTDThreadArchiveRecord(rec)
 	if err != nil {
 		return nil, fmt.Errorf("create qotd thread archive: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_thread_archives (
@@ -1586,14 +1442,8 @@ func (s *Store) CreateQOTDThreadArchive(ctx context.Context, rec QOTDThreadArchi
 }
 
 func (s *Store) AppendQOTDArchivedMessages(ctx context.Context, threadArchiveID int64, msgs []QOTDMessageArchiveRecord) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if threadArchiveID <= 0 {
 		return fmt.Errorf("append qotd archived messages: thread_archive_id is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	normalized, err := normalizeQOTDMessageArchives(threadArchiveID, msgs)
@@ -1637,15 +1487,9 @@ func (s *Store) AppendQOTDArchivedMessages(ctx context.Context, threadArchiveID 
 }
 
 func (s *Store) HasQOTDArchiveForThread(ctx context.Context, discordThreadID string) (bool, error) {
-	if s.db == nil {
-		return false, fmt.Errorf("store not initialized")
-	}
 	discordThreadID = strings.TrimSpace(discordThreadID)
 	if discordThreadID == "" {
 		return false, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	var exists bool
@@ -1659,15 +1503,9 @@ func (s *Store) HasQOTDArchiveForThread(ctx context.Context, discordThreadID str
 }
 
 func (s *Store) GetQOTDThreadArchiveByThreadID(ctx context.Context, discordThreadID string) (*QOTDThreadArchiveRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	discordThreadID = strings.TrimSpace(discordThreadID)
 	if discordThreadID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -1930,9 +1768,6 @@ func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, question
 	if tx == nil {
 		return nil, fmt.Errorf("transaction is required")
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	row := txQueryRow(tx,
 		`SELECT
@@ -1967,9 +1802,6 @@ func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, question
 func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx *sql.Tx, guildID, deckID string) error {
 	if tx == nil {
 		return fmt.Errorf("transaction is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)

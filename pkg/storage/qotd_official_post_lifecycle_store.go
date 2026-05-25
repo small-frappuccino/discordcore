@@ -7,9 +7,6 @@ import (
 )
 
 func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, progress QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil, fmt.Errorf("update qotd official post progress: id is required")
 	}
@@ -19,9 +16,6 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 	progress.DiscordStarterMessageID = strings.TrimSpace(progress.DiscordStarterMessageID)
 	progress.AnswerChannelID = strings.TrimSpace(progress.AnswerChannelID)
 	progress.PublishedAt = normalizeQOTDTimePtr(progress.PublishedAt)
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_official_posts
@@ -77,15 +71,9 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 }
 
 func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) ([]QOTDOfficialPostRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	rows, err := s.queryContext(ctx,

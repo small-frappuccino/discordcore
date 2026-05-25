@@ -9,9 +9,6 @@ import (
 
 // NextModerationCaseNumber atomically increments and returns the next moderation case number for a guild.
 func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return 0, fmt.Errorf("guildID is empty")
@@ -32,9 +29,6 @@ func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 }
 
 func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason string, createdAt time.Time) (ModerationWarning, error) {
-	if s.db == nil {
-		return ModerationWarning{}, fmt.Errorf("store not initialized")
-	}
 
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
@@ -99,9 +93,6 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 }
 
 func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]ModerationWarning, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
@@ -171,9 +162,6 @@ func nextModerationCaseNumberTx(tx *sql.Tx, guildID string) (int64, error) {
 
 // SetGuildOwnerID sets or updates the cached owner ID for a guild.
 func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || ownerID == "" {
 		return nil
 	}
@@ -189,9 +177,6 @@ func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 
 // GetGuildOwnerID retrieves the cached owner ID for a guild, if any.
 func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
-	if s.db == nil {
-		return "", false, fmt.Errorf("store not initialized")
-	}
 	row := s.queryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=?`, guildID)
 	var owner sql.NullString
 	if err := row.Scan(&owner); err != nil {
@@ -208,9 +193,6 @@ func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
 
 // UpsertMemberRoles replaces the current set of roles for a member in a guild atomically.
 func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, updatedAt time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" {
 		return nil
 	}
@@ -243,9 +225,6 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 
 // GetMemberRoles returns the current cached roles for a member in a guild.
 func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID)
 	if err != nil {
 		return nil, err

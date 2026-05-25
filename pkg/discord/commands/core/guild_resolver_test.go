@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
@@ -146,7 +147,7 @@ func TestPermissionCheckerResolveOwnerID_StateHitWithStoreWriteFailureStillSucce
 	}
 
 	checker, _ := newPermissionCheckerWithCache(t, session)
-	checker.SetStore(storage.NewStore(nil)) // intentionally not initialized
+	checker.SetStore(storagetest.NewFailingStore()) // forces store failure to test fallback
 
 	ownerID, ok, err := checker.ResolveOwnerID("g1")
 	if err != nil {

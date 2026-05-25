@@ -31,13 +31,6 @@ var requiredSchemaColumns = map[string][]string{
 }
 
 func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {
-	if s == nil || s.db == nil {
-		return fmt.Errorf("database handle is nil")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	missingColumns, err := s.missingColumns(ctx, "member_joins", requiredSchemaColumns["member_joins"])
 	if err != nil {
 		return err
@@ -78,12 +71,6 @@ func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {
 }
 
 func (s *Store) missingColumns(ctx context.Context, table string, columns []string) ([]string, error) {
-	if s == nil || s.db == nil {
-		return nil, fmt.Errorf("database handle is nil")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	missing := make([]string, 0)
 	for _, column := range columns {
 		var exists bool
@@ -109,13 +96,6 @@ func (s *Store) missingColumns(ctx context.Context, table string, columns []stri
 }
 
 func validateSchema(ctx context.Context, db *sql.DB) error {
-	if db == nil {
-		return fmt.Errorf("database handle is nil")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	missing := make([]string, 0)
 	for _, table := range requiredSchemaTables {
 		var regclass sql.NullString

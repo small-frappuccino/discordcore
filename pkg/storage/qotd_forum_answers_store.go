@@ -9,16 +9,10 @@ import (
 )
 
 func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (*QOTDSurfaceRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -46,15 +40,9 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 }
 
 func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (*QOTDSurfaceRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	normalized, err := normalizeQOTDSurfaceRecord(rec)
 	if err != nil {
 		return nil, fmt.Errorf("upsert qotd surface: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -91,16 +79,10 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (*
 }
 
 func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	if _, err := s.execContext(ctx,
@@ -114,15 +96,9 @@ func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID str
 }
 
 func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessageRecord) (*QOTDAnswerMessageRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	normalized, err := normalizeQOTDAnswerMessageRecord(rec)
 	if err != nil {
 		return nil, fmt.Errorf("create qotd answer message: %w", err)
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -169,18 +145,12 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 }
 
 func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discordMessageID string) (*QOTDAnswerMessageRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil, fmt.Errorf("finalize qotd answer message: id is required")
 	}
 	discordMessageID = strings.TrimSpace(discordMessageID)
 	if discordMessageID == "" {
 		return nil, fmt.Errorf("finalize qotd answer message: discord message id is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -213,15 +183,9 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 }
 
 func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, officialPostID int64, userID string) (*QOTDAnswerMessageRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	userID = strings.TrimSpace(userID)
 	if officialPostID <= 0 || userID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,
@@ -254,14 +218,8 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 }
 
 func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) ([]QOTDAnswerMessageRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if officialPostID <= 0 {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	rows, err := s.queryContext(ctx,
@@ -303,18 +261,12 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 }
 
 func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (*QOTDAnswerMessageRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	if id <= 0 {
 		return nil, fmt.Errorf("update qotd answer message state: id is required")
 	}
 	state = strings.TrimSpace(state)
 	if state == "" {
 		return nil, fmt.Errorf("update qotd answer message state: state is required")
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	row := s.queryRowContext(ctx,

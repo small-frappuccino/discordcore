@@ -31,12 +31,6 @@ func (s *Store) InsertMessageVersionsBatchContext(ctx context.Context, versions 
 
 // InsertMessageVersionsMixedBatchContext inserts a batch of message history rows, assigning versions for rows with Version <= 0.
 func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []MessageVersion) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	normalized := normalizeMessageVersions(versions)
 	if len(normalized) == 0 {
@@ -161,9 +155,6 @@ func groupMessageVersions(versions []MessageVersion) []messageVersionGroup {
 }
 
 func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messageID string) (int, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if guildID == "" || messageID == "" {
 		return 0, nil
 	}
@@ -186,9 +177,6 @@ func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messa
 }
 
 func updateMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messageID string, lastVersion int) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if guildID == "" || messageID == "" {
 		return nil
 	}

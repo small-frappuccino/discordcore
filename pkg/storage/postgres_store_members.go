@@ -10,15 +10,9 @@ import (
 
 // UpsertGuildMemberSnapshotsContext persists one page of guild member snapshots in a single transaction.
 func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || len(snapshots) == 0 {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
@@ -328,9 +322,6 @@ func (s *Store) UpsertMemberJoin(guildID, userID string, joinedAt time.Time) err
 
 // UpsertMemberJoinContext records the earliest known join time for a member in a guild with context support.
 func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID string, joinedAt time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" || joinedAt.IsZero() {
 		return nil
 	}
@@ -358,16 +349,10 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
 // UpsertMemberPresenceContext records that a member is currently present in a guild.
 // When joinedAt is unknown, seenAt is used as a fallback seed for the row.
 func (s *Store) UpsertMemberPresenceContext(ctx context.Context, guildID, userID string, joinedAt, seenAt time.Time, isBot bool) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if seenAt.IsZero() {
 		seenAt = time.Now().UTC()
@@ -402,16 +387,10 @@ func (s *Store) UpsertMemberPresenceContext(ctx context.Context, guildID, userID
 
 // MarkMemberLeftContext records that a member is no longer active in a guild and clears current roles.
 func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID string, leftAt time.Time) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	if leftAt.IsZero() {
 		leftAt = time.Now().UTC()
@@ -450,12 +429,6 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 
 // MemberJoin returns the stored join time for a member, if any.
 func (s *Store) MemberJoin(ctx context.Context, guildID, userID string) (time.Time, bool, error) {
-	if s.db == nil {
-		return time.Time{}, false, fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	row := s.queryRowContext(ctx, `SELECT joined_at FROM member_joins WHERE guild_id=? AND user_id=?`, guildID, userID)
 	var jt time.Time
 	if err := row.Scan(&jt); err != nil {
@@ -469,15 +442,9 @@ func (s *Store) MemberJoin(ctx context.Context, guildID, userID string) (time.Ti
 
 // GetActiveGuildMemberStatesContext returns the persisted current member state for all active members in a guild.
 func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) ([]GuildMemberCurrentState, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	rows, err := s.queryContext(ctx, `
@@ -540,9 +507,6 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 // If the hash changed, it records a row in avatars_history.
 // Returns (changed, oldHash, err).
 func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Time) (bool, string, error) {
-	if s.db == nil {
-		return false, "", fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" {
 		return false, "", nil
 	}
@@ -601,9 +565,6 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 
 // GetAvatar returns the current avatar hash for a user in a guild, if any.
 func (s *Store) GetAvatar(guildID, userID string) (hash string, updatedAt time.Time, ok bool, err error) {
-	if s.db == nil {
-		return "", time.Time{}, false, fmt.Errorf("store not initialized")
-	}
 	row := s.queryRow(
 		`SELECT avatar_hash, updated_at FROM avatars_current WHERE guild_id=? AND user_id=?`,
 		guildID, userID,
@@ -621,9 +582,6 @@ func (s *Store) GetAvatar(guildID, userID string) (hash string, updatedAt time.T
 
 // GetAllMemberJoins retrieves all member join records for a guild
 func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	rows, err := s.query(`SELECT user_id, joined_at FROM member_joins WHERE guild_id=?`, guildID)
 	if err != nil {
 		return nil, err
@@ -644,9 +602,6 @@ func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) 
 
 // GetAllGuildMemberRoles retrieves all member roles for a guild
 func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 	rows, err := s.query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=?`, guildID)
 	if err != nil {
 		return nil, err
@@ -666,9 +621,6 @@ func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, err
 
 // TouchMemberJoin refreshes member presence freshness without mutating joined_at.
 func (s *Store) TouchMemberJoin(guildID, userID string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" {
 		return nil
 	}
@@ -688,9 +640,6 @@ func (s *Store) TouchMemberJoin(guildID, userID string) error {
 
 // TouchMemberRoles updates the updated_at timestamp for all member roles (keeps them fresh)
 func (s *Store) TouchMemberRoles(guildID, userID string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	if guildID == "" || userID == "" {
 		return nil
 	}

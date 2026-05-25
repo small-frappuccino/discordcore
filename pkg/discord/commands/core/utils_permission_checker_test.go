@@ -11,7 +11,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 )
 
 func newPermissionCheckerTestSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {
@@ -65,8 +65,8 @@ func TestPermissionCheckerGetOwnerID_StoreWriteFailureKeepsRESTFallbackAndCache(
 	cfg := files.NewMemoryConfigManager()
 	checker := NewPermissionChecker(session, cfg)
 
-	// Intentionally uninitialized store to force Get/SetGuildOwnerID errors.
-	checker.SetStore(storage.NewStore(nil))
+	// Failing store forces Get/SetGuildOwnerID errors, so REST is the only path.
+	checker.SetStore(storagetest.NewFailingStore())
 
 	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
 	t.Cleanup(unifiedCache.Stop)

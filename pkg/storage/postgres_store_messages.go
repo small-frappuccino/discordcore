@@ -30,9 +30,6 @@ type MessageDeleteKey struct {
 
 // UpsertMessage inserts or updates a message record (write-through).
 func (s *Store) UpsertMessage(m MessageRecord) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 
 	var expires any
 	if m.HasExpiry {
@@ -58,12 +55,6 @@ func (s *Store) UpsertMessage(m MessageRecord) error {
 
 // UpsertMessagesContext upserts a batch of cached messages.
 func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageRecord) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	normalized := normalizeMessageRecords(records)
 	if len(normalized) == 0 {
@@ -133,9 +124,6 @@ func normalizeMessageRecords(records []MessageRecord) []MessageRecord {
 
 // GetMessage returns a non-expired message if present; nil if not found or expired.
 func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
-	if s.db == nil {
-		return nil, fmt.Errorf("store not initialized")
-	}
 
 	row := s.queryRow(
 		`SELECT guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at
@@ -171,21 +159,12 @@ func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
 
 // DeleteMessage removes a message record (no error if absent).
 func (s *Store) DeleteMessage(guildID, messageID string) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	_, err := s.exec(`DELETE FROM messages WHERE guild_id=? AND message_id=?`, guildID, messageID)
 	return err
 }
 
 // DeleteMessagesContext removes a batch of message records.
 func (s *Store) DeleteMessagesContext(ctx context.Context, keys []MessageDeleteKey) error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	normalized := normalizeMessageDeleteKeys(keys)
 	if len(normalized) == 0 {
@@ -232,9 +211,6 @@ func normalizeMessageDeleteKeys(keys []MessageDeleteKey) []MessageDeleteKey {
 
 // CleanupExpiredMessages deletes all expired messages.
 func (s *Store) CleanupExpiredMessages() error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 	_, err := s.exec(`DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP`)
 	return err
 }
@@ -248,17 +224,11 @@ func (s *Store) CleanupExpiredMessages() error {
 // If storage growth becomes a concern later, implement a cleanup policy based on an explicit
 // "left_at" / "last_seen_at" signal rather than `joined_at`.
 func (s *Store) CleanupObsoleteMemberJoins(_ int) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	return 0, nil
 }
 
 // CleanupObsoleteMemberRoles removes role records older than retentionDays
 func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	if retentionDays <= 0 {
 		retentionDays = 30
 	}
@@ -272,9 +242,6 @@ func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
 
 // CleanupObsoleteAvatars removes avatar records older than retentionDays
 func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
-	if s.db == nil {
-		return 0, fmt.Errorf("store not initialized")
-	}
 	if retentionDays <= 0 {
 		retentionDays = 180
 	}
@@ -288,9 +255,6 @@ func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
 
 // CleanupAllObsoleteData performs cleanup of all obsolete data with default retention periods
 func (s *Store) CleanupAllObsoleteData() error {
-	if s.db == nil {
-		return fmt.Errorf("store not initialized")
-	}
 
 	if err := s.CleanupExpiredMessages(); err != nil {
 		return fmt.Errorf("cleanup messages: %w", err)
