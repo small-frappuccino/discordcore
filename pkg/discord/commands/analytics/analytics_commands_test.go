@@ -1,4 +1,4 @@
-package metrics
+package analytics
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
-func newMetricsTestStore(t *testing.T) *storage.Store {
+func newAnalyticsTestStore(t *testing.T) *storage.Store {
 	t.Helper()
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
@@ -38,7 +38,7 @@ func newMetricsTestStore(t *testing.T) *storage.Store {
 }
 
 func TestServerStatsAggregationsUsePostgresStore(t *testing.T) {
-	store := newMetricsTestStore(t)
+	store := newAnalyticsTestStore(t)
 	ctx := context.Background()
 
 	now := time.Now().UTC()

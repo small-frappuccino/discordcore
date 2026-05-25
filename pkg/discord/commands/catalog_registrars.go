@@ -2,9 +2,9 @@ package commands
 
 import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/analytics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/metrics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -45,7 +45,7 @@ func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 			configCommands := config.NewConfigCommands(ch.configManager)
 			configCommands.RegisterBaseCommands(router)
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
-			metrics.RegisterMetricsCommands(router)
+			analytics.RegisterAnalyticsCommands(router)
 			if ch.partnerBoardService != nil || ch.partnerSyncExecutor != nil {
 				boardService := ch.partnerBoardService
 				if boardService == nil {

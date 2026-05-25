@@ -1,4 +1,4 @@
-package metrics
+package analytics
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-// RegisterMetricsCommands registers slash commands under the /metrics group.
-func RegisterMetricsCommands(router *core.CommandRouter) {
-	metricsGroup := core.NewGroupCommand("metrics", "Server statistics and metrics", router.GetPermissionChecker())
+// RegisterAnalyticsCommands registers slash commands under the /analytics group.
+func RegisterAnalyticsCommands(router *core.CommandRouter) {
+	analyticsGroup := core.NewGroupCommand("analytics", "Server analytics: activity and member stats", router.GetPermissionChecker())
 	activityCommand := newActivityCommand()
 	serverStatsGroup := core.NewGroupCommand("serverstats", "Server health and member statistics.", nil)
 	serverStatsHealthCommand := newServerStatsHealthCommand()
@@ -28,10 +28,10 @@ func RegisterMetricsCommands(router *core.CommandRouter) {
 	serverStatsGroup.AddSubCommand(serverStatsWeeklyCommand)
 	serverStatsGroup.AddSubCommand(serverStatsMonthlyCommand)
 	serverStatsGroup.AddSubCommand(serverStatsThreeMonthsCommand)
-	metricsGroup.AddSubCommand(activityCommand)
-	metricsGroup.AddSubCommand(serverStatsGroup)
+	analyticsGroup.AddSubCommand(activityCommand)
+	analyticsGroup.AddSubCommand(serverStatsGroup)
 
-	router.RegisterSlashCommand(metricsGroup)
+	router.RegisterSlashCommand(analyticsGroup)
 }
 
 // -------- Activity Command (messages + reactions) --------
@@ -128,7 +128,7 @@ func handleActivity(ctx *core.Context) error {
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
+		return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -138,8 +138,8 @@ func handleActivity(ctx *core.Context) error {
 	msgTotalsByChannel, err := store.MessageTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error(
-			"Metrics activity query failed",
-			"operation", "metrics.activity.query.message_totals_by_channel",
+			"Analytics activity query failed",
+			"operation", "analytics.activity.query.message_totals_by_channel",
 			"guildID", ctx.GuildID,
 			"channelID", channelID,
 			"cutoffDay", cutoff,
@@ -151,8 +151,8 @@ func handleActivity(ctx *core.Context) error {
 	msgTotalsByUser, err := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error(
-			"Metrics activity query failed",
-			"operation", "metrics.activity.query.message_totals_by_user",
+			"Analytics activity query failed",
+			"operation", "analytics.activity.query.message_totals_by_user",
 			"guildID", ctx.GuildID,
 			"channelID", channelID,
 			"cutoffDay", cutoff,
@@ -164,8 +164,8 @@ func handleActivity(ctx *core.Context) error {
 	reactTotalsByChannel, err := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error(
-			"Metrics activity query failed",
-			"operation", "metrics.activity.query.reaction_totals_by_channel",
+			"Analytics activity query failed",
+			"operation", "analytics.activity.query.reaction_totals_by_channel",
 			"guildID", ctx.GuildID,
 			"channelID", channelID,
 			"cutoffDay", cutoff,
@@ -177,8 +177,8 @@ func handleActivity(ctx *core.Context) error {
 	reactTotalsByUser, err := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error(
-			"Metrics activity query failed",
-			"operation", "metrics.activity.query.reaction_totals_by_user",
+			"Analytics activity query failed",
+			"operation", "analytics.activity.query.reaction_totals_by_user",
 			"guildID", ctx.GuildID,
 			"channelID", channelID,
 			"cutoffDay", cutoff,
@@ -275,7 +275,7 @@ func handleServerStatsHealth(ctx *core.Context) error {
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
+		return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -305,8 +305,8 @@ func handleServerStatsHealth(ctx *core.Context) error {
 		if err != nil {
 			hasStillPresent = false
 			log.ErrorLoggerRaw().Error(
-				"Metrics health retention query failed",
-				"operation", "metrics.serverstats.health.retention_query",
+				"Analytics health retention query failed",
+				"operation", "analytics.serverstats.health.retention_query",
 				"guildID", ctx.GuildID,
 				"err", err,
 			)
@@ -367,7 +367,7 @@ func handleServerStatsPeriodic(ctx *core.Context, rangeVal string) error {
 
 	store := ctx.Router().GetStore()
 	if store == nil {
-		return respondError(s, i, "The metrics store couldn't be reached, so this reply stays private.")
+		return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -670,7 +670,7 @@ func handleBackfillRun(ctx *core.Context) error {
 		Description: "The backfill request started. This reply stays private because it is an admin operation.\n" + desc,
 		Color:       theme.Info(),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "This process runs in the background. Use /metrics backfill-status to check progress.",
+			Text: "This process runs in the background. Use /analytics backfill-status to check progress.",
 		},
 	}
 
