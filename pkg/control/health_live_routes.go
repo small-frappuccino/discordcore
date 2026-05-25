@@ -1,7 +1,6 @@
 package control
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -35,48 +34,28 @@ type LiveHealthSnapshot struct {
 // runtime.throw paths that bypass deferred logging — are detected and
 // surfaced even when nothing inside the process can report them.
 //
-// Auth: same gate as the rest of /v1/*. The operator configures the
-// poller with the bearer token; rejecting unauthenticated requests
-// prevents drive-by fingerprinting of bot identity and uptime.
-//
-// 200 OK with the snapshot whenever the HTTP server is reachable. There
-// is no failure-mode branch — the only way this endpoint does not return
-// 200 is if the process or socket is unreachable, which is precisely the
+// Auth and method gating are delegated to serveHealthRoute. There is no
+// failure-mode branch — the only way this endpoint does not return 200
+// is if the process or socket is unreachable, which is precisely the
 // signal the external poller needs.
 func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
-	auth, ok := s.authorizeRequest(w, r)
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
-		return
-	}
-
-	startedAt := s.startedAt
-	if startedAt.IsZero() {
-		startedAt = time.Now().UTC()
-	}
-	uptime := time.Since(startedAt)
-	if uptime < 0 {
-		uptime = 0
-	}
-
-	snapshot := LiveHealthSnapshot{
-		Status:        "ok",
-		App:           strings.TrimSpace(util.ConfiguredAppName),
-		AppVersion:    strings.TrimSpace(util.AppVersion),
-		CoreVersion:   util.DiscordCoreVersion,
-		BotUser:       strings.TrimSpace(util.DiscordBotName),
-		StartedAt:     startedAt.UTC().Format(time.RFC3339),
-		UptimeSeconds: int64(uptime.Seconds()),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	// Response status header is already in flight; nothing recoverable.
-	_ = json.NewEncoder(w).Encode(snapshot)
+	s.serveHealthRoute(w, r, func() (any, string) {
+		startedAt := s.startedAt
+		if startedAt.IsZero() {
+			startedAt = time.Now().UTC()
+		}
+		uptime := time.Since(startedAt)
+		if uptime < 0 {
+			uptime = 0
+		}
+		return LiveHealthSnapshot{
+			Status:        "ok",
+			App:           strings.TrimSpace(util.ConfiguredAppName),
+			AppVersion:    strings.TrimSpace(util.AppVersion),
+			CoreVersion:   util.DiscordCoreVersion,
+			BotUser:       strings.TrimSpace(util.DiscordBotName),
+			StartedAt:     startedAt.UTC().Format(time.RFC3339),
+			UptimeSeconds: int64(uptime.Seconds()),
+		}, ""
+	})
 }

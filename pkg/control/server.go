@@ -447,6 +447,37 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
+// serveHealthRoute consolidates the auth, method-check, JSON-header, and
+// encode boilerplate every /v1/health/* snapshot route shares. resolve
+// returns the snapshot to encode for a 200 response, or a non-empty reason
+// string for 503 Service Unavailable with that body so each subsystem keeps
+// its own distinct "wired but inactive" vs "service unavailable" message
+// without reimplementing the surrounding auth/method/header policy.
+func (s *Server) serveHealthRoute(w http.ResponseWriter, r *http.Request, resolve func() (snapshot any, unavailable string)) {
+	auth, ok := s.authorizeRequest(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
+		return
+	}
+
+	snapshot, unavailable := resolve()
+	if unavailable != "" {
+		http.Error(w, unavailable, http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	// Response status header is already in flight; nothing recoverable.
+	_ = json.NewEncoder(w).Encode(snapshot)
+}
+
 func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	auth, ok := s.authorizeRequest(w, r)
 	if !ok {
