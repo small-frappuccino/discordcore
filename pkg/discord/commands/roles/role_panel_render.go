@@ -39,7 +39,6 @@ func rolePanelButtonRoleIDFromCustomID(customID string) string {
 	return strings.TrimSpace(strings.TrimPrefix(customID, prefix))
 }
 
-// renderRolePanelEmbed builds the discordgo embed for one panel.
 func renderRolePanelEmbed(panel files.RolePanelConfig) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{}
 	if title := strings.TrimSpace(panel.Title); title != "" {
@@ -51,6 +50,43 @@ func renderRolePanelEmbed(panel files.RolePanelConfig) *discordgo.MessageEmbed {
 	if panel.Color > 0 {
 		embed.Color = panel.Color
 	}
+
+	authorName := strings.TrimSpace(panel.AuthorName)
+	authorIcon := strings.TrimSpace(panel.AuthorIconURL)
+	if authorName != "" || authorIcon != "" {
+		embed.Author = &discordgo.MessageEmbedAuthor{
+			Name:    authorName,
+			IconURL: authorIcon,
+		}
+	}
+
+	footerText := strings.TrimSpace(panel.FooterText)
+	footerIcon := strings.TrimSpace(panel.FooterIconURL)
+	if footerText != "" || footerIcon != "" {
+		embed.Footer = &discordgo.MessageEmbedFooter{
+			Text:    footerText,
+			IconURL: footerIcon,
+		}
+	}
+
+	if imageURL := strings.TrimSpace(panel.ImageURL); imageURL != "" {
+		embed.Image = &discordgo.MessageEmbedImage{URL: imageURL}
+	}
+	if thumbnailURL := strings.TrimSpace(panel.ThumbnailURL); thumbnailURL != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumbnailURL}
+	}
+
+	if len(panel.Fields) > 0 {
+		embed.Fields = make([]*discordgo.MessageEmbedField, 0, len(panel.Fields))
+		for _, f := range panel.Fields {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name:   f.Name,
+				Value:  f.Value,
+				Inline: f.Inline,
+			})
+		}
+	}
+
 	return embed
 }
 

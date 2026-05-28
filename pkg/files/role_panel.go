@@ -37,7 +37,24 @@ const (
 	RolePanelDescriptionMaxLen = 4000
 	// RolePanelColorMax is the maximum allowed 24-bit RGB color value.
 	RolePanelColorMax = 0xFFFFFF
+	// RolePanelAuthorMaxLen mirrors Discord's embed author name limit.
+	RolePanelAuthorMaxLen = 256
+	// RolePanelFooterMaxLen mirrors Discord's embed footer text limit.
+	RolePanelFooterMaxLen = 2048
+	// RolePanelFieldNameMaxLen mirrors Discord's embed field name limit.
+	RolePanelFieldNameMaxLen = 256
+	// RolePanelFieldValueMaxLen mirrors Discord's embed field value limit.
+	RolePanelFieldValueMaxLen = 1024
+	// RolePanelMaxFields mirrors Discord's embed fields limit.
+	RolePanelMaxFields = 25
 )
+
+// RolePanelEmbedFieldConfig captures one field in a role panel embed.
+type RolePanelEmbedFieldConfig struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Inline bool   `json:"inline,omitempty"`
+}
 
 // RolePanelButtonConfig captures one toggleable role button on a panel.
 //
@@ -70,12 +87,19 @@ func (p RolePanelPostingConfig) IsZero() bool {
 
 // RolePanelConfig captures one keyed role panel for a guild.
 type RolePanelConfig struct {
-	Key         string                   `json:"key"`
-	Title       string                   `json:"title,omitempty"`
-	Description string                   `json:"description,omitempty"`
-	Color       int                      `json:"color,omitempty"`
-	Buttons     []RolePanelButtonConfig  `json:"buttons,omitempty"`
-	Postings    []RolePanelPostingConfig `json:"postings,omitempty"`
+	Key           string                      `json:"key"`
+	Title         string                      `json:"title,omitempty"`
+	Description   string                      `json:"description,omitempty"`
+	Color         int                         `json:"color,omitempty"`
+	AuthorName    string                      `json:"author_name,omitempty"`
+	AuthorIconURL string                      `json:"author_icon_url,omitempty"`
+	FooterText    string                      `json:"footer_text,omitempty"`
+	FooterIconURL string                      `json:"footer_icon_url,omitempty"`
+	ImageURL      string                      `json:"image_url,omitempty"`
+	ThumbnailURL  string                      `json:"thumbnail_url,omitempty"`
+	Fields        []RolePanelEmbedFieldConfig `json:"fields,omitempty"`
+	Buttons       []RolePanelButtonConfig     `json:"buttons,omitempty"`
+	Postings      []RolePanelPostingConfig    `json:"postings,omitempty"`
 }
 
 // IsZero reports whether the button carries no meaningful data.
@@ -97,6 +121,13 @@ func (cfg RolePanelConfig) IsZero() bool {
 		strings.TrimSpace(cfg.Title) == "" &&
 		strings.TrimSpace(cfg.Description) == "" &&
 		cfg.Color == 0 &&
+		strings.TrimSpace(cfg.AuthorName) == "" &&
+		strings.TrimSpace(cfg.AuthorIconURL) == "" &&
+		strings.TrimSpace(cfg.FooterText) == "" &&
+		strings.TrimSpace(cfg.FooterIconURL) == "" &&
+		strings.TrimSpace(cfg.ImageURL) == "" &&
+		strings.TrimSpace(cfg.ThumbnailURL) == "" &&
+		len(cfg.Fields) == 0 &&
 		len(cfg.Buttons) == 0 &&
 		len(cfg.Postings) == 0
 }
@@ -175,19 +206,54 @@ func normalizeRolePanelButton(in RolePanelButtonConfig) (RolePanelButtonConfig, 
 	return out, nil
 }
 
-func validateRolePanelEmbedFields(title, description string, color int) (string, string, error) {
-	title = strings.TrimSpace(title)
-	description = strings.TrimSpace(description)
-	if utf8.RuneCountInString(title) > RolePanelTitleMaxLen {
-		return "", "", invalidRolePanelInput("title must be at most %d characters", RolePanelTitleMaxLen)
+func validateRolePanelEmbedFields(in RolePanelConfig) (RolePanelConfig, error) {
+	out := in
+	out.Title = strings.TrimSpace(in.Title)
+	out.Description = strings.TrimSpace(in.Description)
+	out.AuthorName = strings.TrimSpace(in.AuthorName)
+	out.AuthorIconURL = strings.TrimSpace(in.AuthorIconURL)
+	out.FooterText = strings.TrimSpace(in.FooterText)
+	out.FooterIconURL = strings.TrimSpace(in.FooterIconURL)
+	out.ImageURL = strings.TrimSpace(in.ImageURL)
+	out.ThumbnailURL = strings.TrimSpace(in.ThumbnailURL)
+
+	if utf8.RuneCountInString(out.Title) > RolePanelTitleMaxLen {
+		return RolePanelConfig{}, invalidRolePanelInput("title must be at most %d characters", RolePanelTitleMaxLen)
 	}
-	if utf8.RuneCountInString(description) > RolePanelDescriptionMaxLen {
-		return "", "", invalidRolePanelInput("description must be at most %d characters", RolePanelDescriptionMaxLen)
+	if utf8.RuneCountInString(out.Description) > RolePanelDescriptionMaxLen {
+		return RolePanelConfig{}, invalidRolePanelInput("description must be at most %d characters", RolePanelDescriptionMaxLen)
 	}
-	if color < 0 || color > RolePanelColorMax {
-		return "", "", invalidRolePanelInput("color must be in range [0, %d]", RolePanelColorMax)
+	if out.Color < 0 || out.Color > RolePanelColorMax {
+		return RolePanelConfig{}, invalidRolePanelInput("color must be in range [0, %d]", RolePanelColorMax)
 	}
-	return title, description, nil
+	if utf8.RuneCountInString(out.AuthorName) > RolePanelAuthorMaxLen {
+		return RolePanelConfig{}, invalidRolePanelInput("author_name must be at most %d characters", RolePanelAuthorMaxLen)
+	}
+	if utf8.RuneCountInString(out.FooterText) > RolePanelFooterMaxLen {
+		return RolePanelConfig{}, invalidRolePanelInput("footer_text must be at most %d characters", RolePanelFooterMaxLen)
+	}
+	return out, nil
+}
+
+func normalizeRolePanelEmbedField(in RolePanelEmbedFieldConfig) (RolePanelEmbedFieldConfig, error) {
+	out := RolePanelEmbedFieldConfig{
+		Name:   strings.TrimSpace(in.Name),
+		Value:  strings.TrimSpace(in.Value),
+		Inline: in.Inline,
+	}
+	if out.Name == "" {
+		return RolePanelEmbedFieldConfig{}, invalidRolePanelInput("field name is required")
+	}
+	if out.Value == "" {
+		return RolePanelEmbedFieldConfig{}, invalidRolePanelInput("field value is required")
+	}
+	if utf8.RuneCountInString(out.Name) > RolePanelFieldNameMaxLen {
+		return RolePanelEmbedFieldConfig{}, invalidRolePanelInput("field name must be at most %d characters", RolePanelFieldNameMaxLen)
+	}
+	if utf8.RuneCountInString(out.Value) > RolePanelFieldValueMaxLen {
+		return RolePanelEmbedFieldConfig{}, invalidRolePanelInput("field value must be at most %d characters", RolePanelFieldValueMaxLen)
+	}
+	return out, nil
 }
 
 func normalizeRolePanelPosting(in RolePanelPostingConfig) (RolePanelPostingConfig, error) {
@@ -215,9 +281,21 @@ func normalizeRolePanel(in RolePanelConfig) (RolePanelConfig, error) {
 	if err != nil {
 		return RolePanelConfig{}, err
 	}
-	title, description, err := validateRolePanelEmbedFields(in.Title, in.Description, in.Color)
+	embedFields, err := validateRolePanelEmbedFields(in)
 	if err != nil {
 		return RolePanelConfig{}, err
+	}
+
+	fields := make([]RolePanelEmbedFieldConfig, 0, len(in.Fields))
+	for i, f := range in.Fields {
+		nf, err := normalizeRolePanelEmbedField(f)
+		if err != nil {
+			return RolePanelConfig{}, fmt.Errorf("fields[%d]: %w", i, err)
+		}
+		fields = append(fields, nf)
+	}
+	if len(fields) > RolePanelMaxFields {
+		return RolePanelConfig{}, invalidRolePanelInput("panel must have at most %d fields", RolePanelMaxFields)
 	}
 
 	seen := make(map[string]struct{}, len(in.Buttons))
@@ -243,12 +321,19 @@ func normalizeRolePanel(in RolePanelConfig) (RolePanelConfig, error) {
 	}
 
 	return RolePanelConfig{
-		Key:         key,
-		Title:       title,
-		Description: description,
-		Color:       in.Color,
-		Buttons:     buttons,
-		Postings:    postings,
+		Key:           key,
+		Title:         embedFields.Title,
+		Description:   embedFields.Description,
+		Color:         embedFields.Color,
+		AuthorName:    embedFields.AuthorName,
+		AuthorIconURL: embedFields.AuthorIconURL,
+		FooterText:    embedFields.FooterText,
+		FooterIconURL: embedFields.FooterIconURL,
+		ImageURL:      embedFields.ImageURL,
+		ThumbnailURL:  embedFields.ThumbnailURL,
+		Fields:        fields,
+		Buttons:       buttons,
+		Postings:      postings,
 	}, nil
 }
 
@@ -285,10 +370,26 @@ func cloneRolePanelButton(in RolePanelButtonConfig) RolePanelButtonConfig {
 
 func cloneRolePanel(in RolePanelConfig) RolePanelConfig {
 	out := RolePanelConfig{
-		Key:         in.Key,
-		Title:       in.Title,
-		Description: in.Description,
-		Color:       in.Color,
+		Key:           in.Key,
+		Title:         in.Title,
+		Description:   in.Description,
+		Color:         in.Color,
+		AuthorName:    in.AuthorName,
+		AuthorIconURL: in.AuthorIconURL,
+		FooterText:    in.FooterText,
+		FooterIconURL: in.FooterIconURL,
+		ImageURL:      in.ImageURL,
+		ThumbnailURL:  in.ThumbnailURL,
+	}
+	if len(in.Fields) > 0 {
+		out.Fields = make([]RolePanelEmbedFieldConfig, 0, len(in.Fields))
+		for _, f := range in.Fields {
+			out.Fields = append(out.Fields, RolePanelEmbedFieldConfig{
+				Name:   f.Name,
+				Value:  f.Value,
+				Inline: f.Inline,
+			})
+		}
 	}
 	if len(in.Buttons) > 0 {
 		out.Buttons = make([]RolePanelButtonConfig, 0, len(in.Buttons))
@@ -414,10 +515,10 @@ func (mgr *ConfigManager) RolePanel(guildID, key string) (RolePanelConfig, error
 	return cloneRolePanel(guildConfig.RolePanels[idx]), nil
 }
 
-// SetRolePanelEmbed sets the embed-level fields (title, description,
-// color) for one panel, creating the panel when missing. Buttons on an
+// SetRolePanelEmbed sets the embed-level fields for one panel,
+// creating the panel when missing. Buttons, fields, and postings on an
 // existing panel are preserved.
-func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key, title, description string, color int) error {
+func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key string, embed RolePanelConfig) error {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidRolePanelInput("guild_id is required")
@@ -426,7 +527,7 @@ func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key, title, description str
 	if err != nil {
 		return err
 	}
-	cleanTitle, cleanDescription, err := validateRolePanelEmbedFields(title, description, color)
+	cleanEmbed, err := validateRolePanelEmbedFields(embed)
 	if err != nil {
 		return err
 	}
@@ -434,18 +535,73 @@ func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key, title, description str
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
 		idx := findRolePanelIndex(gc.RolePanels, target)
 		if idx < 0 {
-			gc.RolePanels = append(gc.RolePanels, RolePanelConfig{
-				Key:         target,
-				Title:       cleanTitle,
-				Description: cleanDescription,
-				Color:       color,
-			})
+			cleanEmbed.Key = target
+			gc.RolePanels = append(gc.RolePanels, cleanEmbed)
 			sortRolePanels(gc.RolePanels)
 			return nil
 		}
-		gc.RolePanels[idx].Title = cleanTitle
-		gc.RolePanels[idx].Description = cleanDescription
-		gc.RolePanels[idx].Color = color
+		gc.RolePanels[idx].Title = cleanEmbed.Title
+		gc.RolePanels[idx].Description = cleanEmbed.Description
+		gc.RolePanels[idx].Color = cleanEmbed.Color
+		gc.RolePanels[idx].AuthorName = cleanEmbed.AuthorName
+		gc.RolePanels[idx].AuthorIconURL = cleanEmbed.AuthorIconURL
+		gc.RolePanels[idx].FooterText = cleanEmbed.FooterText
+		gc.RolePanels[idx].FooterIconURL = cleanEmbed.FooterIconURL
+		gc.RolePanels[idx].ImageURL = cleanEmbed.ImageURL
+		gc.RolePanels[idx].ThumbnailURL = cleanEmbed.ThumbnailURL
+		return nil
+	})
+}
+
+// AddRolePanelField appends a field to the panel's embed.
+func (mgr *ConfigManager) AddRolePanelField(guildID, key string, field RolePanelEmbedFieldConfig) error {
+	scope := strings.TrimSpace(guildID)
+	if scope == "" {
+		return invalidRolePanelInput("guild_id is required")
+	}
+	target, err := validateRolePanelKey(key)
+	if err != nil {
+		return err
+	}
+	nf, err := normalizeRolePanelEmbedField(field)
+	if err != nil {
+		return err
+	}
+
+	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
+		idx := findRolePanelIndex(gc.RolePanels, target)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrRolePanelNotFound, target)
+		}
+		if len(gc.RolePanels[idx].Fields) >= RolePanelMaxFields {
+			return invalidRolePanelInput("panel must have at most %d fields", RolePanelMaxFields)
+		}
+		gc.RolePanels[idx].Fields = append(gc.RolePanels[idx].Fields, nf)
+		return nil
+	})
+}
+
+// RemoveRolePanelField removes a field from the panel's embed by its index (0-based).
+func (mgr *ConfigManager) RemoveRolePanelField(guildID, key string, fieldIndex int) error {
+	scope := strings.TrimSpace(guildID)
+	if scope == "" {
+		return invalidRolePanelInput("guild_id is required")
+	}
+	target, err := validateRolePanelKey(key)
+	if err != nil {
+		return err
+	}
+
+	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
+		idx := findRolePanelIndex(gc.RolePanels, target)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrRolePanelNotFound, target)
+		}
+		fields := gc.RolePanels[idx].Fields
+		if fieldIndex < 0 || fieldIndex >= len(fields) {
+			return invalidRolePanelInput("invalid field index")
+		}
+		gc.RolePanels[idx].Fields = slices.Delete(fields, fieldIndex, fieldIndex+1)
 		return nil
 	})
 }

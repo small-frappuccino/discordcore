@@ -128,18 +128,77 @@ func TestRolePanelButtonValidation(t *testing.T) {
 
 func TestRolePanelEmbedFieldValidation(t *testing.T) {
 	t.Parallel()
-	if _, _, err := validateRolePanelEmbedFields("  Title  ", "  Desc  ", 16753104); err != nil {
+	validCfg := RolePanelConfig{
+		Title:       "  Title  ",
+		Description: "  Desc  ",
+		Color:       16753104,
+	}
+	if _, err := validateRolePanelEmbedFields(validCfg); err != nil {
 		t.Fatalf("unexpected error on valid input: %v", err)
 	}
-	if _, _, err := validateRolePanelEmbedFields("", "", -1); err == nil {
+	if _, err := validateRolePanelEmbedFields(RolePanelConfig{Color: -1}); err == nil {
 		t.Fatalf("expected error for negative color")
 	}
-	if _, _, err := validateRolePanelEmbedFields("", "", RolePanelColorMax+1); err == nil {
+	if _, err := validateRolePanelEmbedFields(RolePanelConfig{Color: RolePanelColorMax + 1}); err == nil {
 		t.Fatalf("expected error for color overflow")
 	}
 	bigTitle := strings.Repeat("a", RolePanelTitleMaxLen+1)
-	if _, _, err := validateRolePanelEmbedFields(bigTitle, "", 0); err == nil {
+	if _, err := validateRolePanelEmbedFields(RolePanelConfig{Title: bigTitle}); err == nil {
 		t.Fatalf("expected error for oversized title")
+	}
+	bigAuthor := strings.Repeat("a", RolePanelAuthorMaxLen+1)
+	if _, err := validateRolePanelEmbedFields(RolePanelConfig{AuthorName: bigAuthor}); err == nil {
+		t.Fatalf("expected error for oversized author name")
+	}
+}
+
+func TestRolePanelFieldCRUD(t *testing.T) {
+	t.Parallel()
+	guildID := "guild-fields"
+	mgr := newRolePanelTestManager(t, guildID)
+
+	if err := mgr.SetRolePanelEmbed(guildID, "test-panel", RolePanelConfig{
+		Title: "Panel with fields",
+	}); err != nil {
+		t.Fatalf("set embed: %v", err)
+	}
+
+	f1 := RolePanelEmbedFieldConfig{Name: "Field 1", Value: "Value 1"}
+	if err := mgr.AddRolePanelField(guildID, "test-panel", f1); err != nil {
+		t.Fatalf("add field 1: %v", err)
+	}
+
+	f2 := RolePanelEmbedFieldConfig{Name: "Field 2", Value: "Value 2", Inline: true}
+	if err := mgr.AddRolePanelField(guildID, "test-panel", f2); err != nil {
+		t.Fatalf("add field 2: %v", err)
+	}
+
+	panel, err := mgr.RolePanel(guildID, "test-panel")
+	if err != nil {
+		t.Fatalf("get panel: %v", err)
+	}
+	if len(panel.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(panel.Fields))
+	}
+	if panel.Fields[0].Name != "Field 1" || panel.Fields[1].Name != "Field 2" {
+		t.Fatalf("fields did not match: %+v", panel.Fields)
+	}
+
+	if err := mgr.RemoveRolePanelField(guildID, "test-panel", 0); err != nil {
+		t.Fatalf("remove field 0: %v", err)
+	}
+
+	panel, err = mgr.RolePanel(guildID, "test-panel")
+	if err != nil {
+		t.Fatalf("get panel after remove: %v", err)
+	}
+	if len(panel.Fields) != 1 || panel.Fields[0].Name != "Field 2" {
+		t.Fatalf("expected 1 field named 'Field 2', got %+v", panel.Fields)
+	}
+
+	// Test out of bounds remove
+	if err := mgr.RemoveRolePanelField(guildID, "test-panel", 5); err == nil {
+		t.Fatalf("expected error for out of bounds field removal")
 	}
 }
 
@@ -148,11 +207,11 @@ func TestRolePanelCRUDLifecycle(t *testing.T) {
 	guildID := "guild-1"
 	mgr := newRolePanelTestManager(t, guildID)
 
-	if err := mgr.SetRolePanelEmbed(guildID, "pings",
-		"⋆｡°✩ ! ✩°｡⋆ Pings! ⋆｡°✩ ! ✩°｡⋆",
-		"Please select some of our optional roles below!",
-		16753104,
-	); err != nil {
+	if err := mgr.SetRolePanelEmbed(guildID, "pings", RolePanelConfig{
+		Title:       "⋆｡°✩ ! ✩°｡⋆ Pings! ⋆｡°✩ ! ✩°｡⋆",
+		Description: "Please select some of our optional roles below!",
+		Color:       16753104,
+	}); err != nil {
 		t.Fatalf("set embed: %v", err)
 	}
 
