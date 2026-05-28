@@ -1,7 +1,11 @@
 package config
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -226,4 +230,238 @@ func testSchedulesEqual(left, right files.QOTDPublishScheduleConfig) bool {
 		return false
 	}
 	return true
+}
+
+type interactionRecorder struct {
+	mu                 sync.Mutex
+	responses          []discordgo.InteractionResponse
+	webhookPatchCalls  int
+	webhookLookupCalls int
+	messageLookupCalls int
+	lastWebhookReqPath string
+	lastMessageReqPath string
+	lastWebhookGetPath string
+}
+
+func (r *interactionRecorder) addResponse(resp discordgo.InteractionResponse) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.responses = append(r.responses, resp)
+}
+
+func (r *interactionRecorder) recordWebhookPatch(path string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.webhookPatchCalls++
+	r.lastWebhookReqPath = path
+}
+
+func (r *interactionRecorder) recordWebhookLookup(path string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.webhookLookupCalls++
+	r.lastWebhookGetPath = path
+}
+
+func (r *interactionRecorder) recordMessageLookup(path string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.messageLookupCalls++
+	r.lastMessageReqPath = path
+}
+
+func (r *interactionRecorder) lastResponse(t *testing.T) discordgo.InteractionResponse {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.responses) == 0 {
+		t.Fatal("expected at least one interaction response")
+	}
+	return r.responses[len(r.responses)-1]
+}
+
+func (r *interactionRecorder) webhookPatchCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.webhookPatchCalls
+}
+
+func (r *interactionRecorder) webhookPath() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.lastWebhookReqPath
+}
+
+func (r *interactionRecorder) webhookLookupCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.webhookLookupCalls
+}
+
+func (r *interactionRecorder) messageLookupCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.messageLookupCalls
+}
+
+type webhookEndpointBehavior struct {
+	patchStatus         int
+	webhookLookupStatus int
+	messageLookupStatus int
+}
+
+func (b webhookEndpointBehavior) normalized() webhookEndpointBehavior {
+	out := b
+	if out.patchStatus == 0 {
+		out.patchStatus = http.StatusOK
+	}
+	if out.webhookLookupStatus == 0 {
+		out.webhookLookupStatus = http.StatusOK
+	}
+	if out.messageLookupStatus == 0 {
+		out.messageLookupStatus = http.StatusOK
+	}
+	return out
+}
+
+func newConfigCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRecorder) {
+	return newConfigCommandTestSessionWithWebhookBehavior(t, webhookEndpointBehavior{})
+}
+
+func newConfigCommandTestSessionWithWebhookPatchStatus(t *testing.T, webhookPatchStatus int) (*discordgo.Session, *interactionRecorder) {
+	return newConfigCommandTestSessionWithWebhookBehavior(t, webhookEndpointBehavior{
+		patchStatus: webhookPatchStatus,
+	})
+}
+
+func newConfigCommandTestSessionWithWebhookValidationStatus(
+	t *testing.T,
+	webhookLookupStatus, messageLookupStatus int,
+) (*discordgo.Session, *interactionRecorder) {
+	return newConfigCommandTestSessionWithWebhookBehavior(t, webhookEndpointBehavior{
+		webhookLookupStatus: webhookLookupStatus,
+		messageLookupStatus: messageLookupStatus,
+	})
+}
+
+func newConfigCommandTestSessionWithWebhookBehavior(
+	t *testing.T,
+	behavior webhookEndpointBehavior,
+) (*discordgo.Session, *interactionRecorder) {
+	t.Helper()
+
+	behavior = behavior.normalized()
+	rec := &interactionRecorder{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch {
+		case strings.Contains(req.URL.Path, "/callback"):
+			var resp discordgo.InteractionResponse
+			_ = json.NewDecoder(req.Body).Decode(&resp)
+			rec.addResponse(resp)
+			w.WriteHeader(http.StatusOK)
+			return
+
+		case strings.Contains(req.URL.Path, "/webhooks/") && req.Method == http.MethodPatch:
+			rec.recordWebhookPatch(req.URL.Path)
+			if behavior.patchStatus != http.StatusOK {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(behavior.patchStatus)
+				_, _ = w.Write([]byte(`{"message":"forced patch failure"}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"message-edited"}`))
+			return
+
+		case strings.Contains(req.URL.Path, "/webhooks/") &&
+			req.Method == http.MethodGet &&
+			strings.Contains(req.URL.Path, "/messages/"):
+			rec.recordMessageLookup(req.URL.Path)
+			w.Header().Set("Content-Type", "application/json")
+			if behavior.messageLookupStatus != http.StatusOK {
+				w.WriteHeader(behavior.messageLookupStatus)
+				_, _ = w.Write([]byte(`{"message":"forced message lookup failure"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"message-target","channel_id":"1","content":""}`))
+			return
+
+		case strings.Contains(req.URL.Path, "/webhooks/") && req.Method == http.MethodGet:
+			rec.recordWebhookLookup(req.URL.Path)
+			w.Header().Set("Content-Type", "application/json")
+			if behavior.webhookLookupStatus != http.StatusOK {
+				w.WriteHeader(behavior.webhookLookupStatus)
+				_, _ = w.Write([]byte(`{"message":"forced webhook lookup failure"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"123","type":1,"name":"test","token":"test-token","channel_id":"1","guild_id":"1"}`))
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	oldAPI := discordgo.EndpointAPI
+	oldWebhooks := discordgo.EndpointWebhooks
+	discordgo.EndpointAPI = server.URL + "/"
+	discordgo.EndpointWebhooks = server.URL + "/webhooks/"
+	t.Cleanup(func() {
+		discordgo.EndpointAPI = oldAPI
+		discordgo.EndpointWebhooks = oldWebhooks
+	})
+
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("failed to create discord session: %v", err)
+	}
+	if session.State == nil {
+		t.Fatalf("expected session state to be initialized")
+	}
+
+	return session, rec
+}
+
+func newConfigCommandTestRouter(t *testing.T, session *discordgo.Session, guildID, ownerID string) (*core.CommandRouter, *files.ConfigManager) {
+	return newConfigCommandTestRouterWithClock(t, session, guildID, ownerID, nil)
+}
+
+func newConfigCommandTestRouterWithClock(t *testing.T, session *discordgo.Session, guildID, ownerID string, now func() time.Time) (*core.CommandRouter, *files.ConfigManager) {
+	t.Helper()
+
+	cm := files.NewMemoryConfigManager()
+	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
+		t.Fatalf("failed to add guild config: %v", err)
+	}
+
+	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, OwnerID: ownerID}); err != nil {
+		t.Fatalf("failed to add guild to state: %v", err)
+	}
+
+	router := core.NewCommandRouter(session, cm)
+	NewConfigCommandsWithClock(cm, now).RegisterCommands(router)
+	return router, cm
+}
+
+func newConfigSlashInteraction(guildID, userID, subCommand string, options []*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:      "interaction-" + subCommand,
+			AppID:   "app",
+			Token:   "token",
+			Type:    discordgo.InteractionApplicationCommand,
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: "config",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{
+						Name:    subCommand,
+						Type:    discordgo.ApplicationCommandOptionSubCommand,
+						Options: options,
+					},
+				},
+			},
+		},
+	}
 }

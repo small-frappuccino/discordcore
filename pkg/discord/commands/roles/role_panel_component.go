@@ -113,8 +113,26 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *core.Context) error {
 	return rolePanelToggleEphemeralSuccess(ctx, fmt.Sprintf("Assigned <@&%s>.", roleID))
 }
 
+func isInteractiveEphemeralDisabled(ctx *core.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	if ctx.GuildConfig != nil {
+		return ctx.GuildConfig.RuntimeConfig.DisableInteractiveEphemeral
+	}
+	if ctx.Config != nil && ctx.GuildID != "" {
+		if gc := ctx.Config.GuildConfig(ctx.GuildID); gc != nil {
+			return gc.RuntimeConfig.DisableInteractiveEphemeral
+		}
+	}
+	return false
+}
+
 func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
-	rm := rolePanelToggleResponseBuilder(ctx.Session).WithContext(ctx).Build()
+	if isInteractiveEphemeralDisabled(ctx) {
+		return nil
+	}
+	rm := rolePanelToggleResponseBuilder(ctx).WithContext(ctx).Build()
 	if err := rm.Custom(ctx.Interaction, message, nil); err != nil {
 		slog.Error("Role panel toggle response failed", "err", err)
 		return err
@@ -123,7 +141,10 @@ func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
 }
 
 func rolePanelToggleEphemeralSuccess(ctx *core.Context, message string) error {
-	rm := rolePanelToggleResponseBuilder(ctx.Session).WithContext(ctx).Build()
+	if isInteractiveEphemeralDisabled(ctx) {
+		return nil
+	}
+	rm := rolePanelToggleResponseBuilder(ctx).WithContext(ctx).Build()
 	return rm.Custom(ctx.Interaction, message, nil)
 }
 

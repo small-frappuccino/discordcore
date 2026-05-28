@@ -8,6 +8,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -58,6 +59,7 @@ func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 			}
 			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
 			roles.NewRolePanelCommands(ch.configManager).RegisterCommands(router)
+			embeds.NewEmbedCommands(ch.configManager).RegisterCommands(router)
 		},
 	}
 }

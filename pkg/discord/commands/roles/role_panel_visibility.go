@@ -49,6 +49,21 @@ func rolePanelPreviewResponseBuilder(session *discordgo.Session) *core.ResponseB
 	return rolePanelResponseBuilder(session, rolePanelVisibilityPreview)
 }
 
-func rolePanelToggleResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
-	return rolePanelResponseBuilder(session, rolePanelVisibilityToggle)
+func rolePanelToggleResponseBuilder(ctx *core.Context) *core.ResponseBuilder {
+	disableEphemeral := false
+	if ctx != nil {
+		if ctx.GuildConfig != nil {
+			disableEphemeral = ctx.GuildConfig.RuntimeConfig.DisableInteractiveEphemeral
+		} else if ctx.Config != nil && ctx.GuildID != "" {
+			if gc := ctx.Config.GuildConfig(ctx.GuildID); gc != nil {
+				disableEphemeral = gc.RuntimeConfig.DisableInteractiveEphemeral
+			}
+		}
+	}
+
+	builder := core.NewResponseBuilder(ctx.Session)
+	if !disableEphemeral && rolePanelVisibilityIsEphemeral(rolePanelVisibilityToggle) {
+		builder = builder.Ephemeral()
+	}
+	return builder
 }

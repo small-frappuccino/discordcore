@@ -77,7 +77,7 @@ func TestConfigListSubCommandUsesPrivateListPolicy(t *testing.T) {
 		t.Fatalf("expected config list response to include one embed, got %+v", resp.Data.Embeds)
 	}
 	description := resp.Data.Embeds[0].Description
-	if !strings.Contains(description, "/config allowed_role_list") || !strings.Contains(description, "/config webhook_embed_list") {
+	if !strings.Contains(description, "/config allowed_role_list") {
 		t.Fatalf("expected config option catalog in response, got %q", description)
 	}
 }

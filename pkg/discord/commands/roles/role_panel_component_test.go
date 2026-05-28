@@ -339,3 +339,54 @@ func TestRolePanelComponentSurfacesAddFailure(t *testing.T) {
 		t.Fatalf("expected add failure surface, got %q", resp.Data.Content)
 	}
 }
+
+func TestRolePanelComponentRespectsDisableInteractiveEphemeral(t *testing.T) {
+	guildID := "guild-disable-ephemeral"
+	userID := "user-disable-ephemeral"
+	roleID := "1380646772698910862"
+
+	cm := files.NewMemoryConfigManager()
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID: guildID,
+		RuntimeConfig: files.RuntimeConfig{
+			DisableInteractiveEphemeral: true,
+		},
+	}); err != nil {
+		t.Fatalf("add guild config: %v", err)
+	}
+	if err := cm.UpsertRolePanelButton(guildID, "pings", files.RolePanelButtonConfig{
+		RoleID: roleID,
+		Label:  "Test",
+	}); err != nil {
+		t.Fatalf("upsert button: %v", err)
+	}
+
+	session, rec := newRolePanelTestSession(t)
+	interaction := newRolePanelTestComponentInteraction(guildID, userID, roleID)
+
+	var calls struct {
+		add, remove int
+	}
+	handler := newRolePanelComponentHandler(cm)
+	handler.memberLookup = stubMemberHasRole(false)
+	handler.addRole = func(_ *discordgo.Session, gid, uid, rid string) error {
+		calls.add++
+		return nil
+	}
+	handler.removeRole = func(_ *discordgo.Session, _, _, _ string) error {
+		calls.remove++
+		return nil
+	}
+
+	if err := runRolePanelComponent(t, cm, session, interaction, handler); err != nil {
+		t.Fatalf("handle component: %v", err)
+	}
+
+	if calls.add != 1 || calls.remove != 0 {
+		t.Fatalf("unexpected toggle counts: add=%d remove=%d", calls.add, calls.remove)
+	}
+
+	if len(rec.responses) != 0 {
+		t.Fatalf("expected no interaction responses recorded when ephemeral messages are disabled, got %d", len(rec.responses))
+	}
+}

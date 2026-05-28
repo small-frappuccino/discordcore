@@ -59,11 +59,7 @@ func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 	allowedRoleAddCmd := NewAllowedRoleAddSubCommand(cc.configManager)
 	allowedRoleRemoveCmd := NewAllowedRoleRemoveSubCommand(cc.configManager)
 	allowedRoleListCmd := NewAllowedRoleListSubCommand(cc.configManager)
-	webhookCatalog := newWebhookEmbedInteractionCatalog(cc.configManager)
-	pingCmd := NewPingCommand()
-	echoCmd := NewEchoCommand()
-
-	cc.registerConfigSubcommands(router, "", append([]core.SubCommand{
+	cc.registerConfigSubcommands(router, "",
 		setCmd,
 		getCmd,
 		listCmd,
@@ -73,7 +69,10 @@ func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 		allowedRoleAddCmd,
 		allowedRoleRemoveCmd,
 		allowedRoleListCmd,
-	}, webhookCatalog.subcommands()...)...)
+	)
+
+	pingCmd := NewPingCommand()
+	echoCmd := NewEchoCommand()
 
 	// Optionally register simple commands (useful for quick health checks of the routing stack)
 	router.RegisterSlashCommand(pingCmd)
@@ -392,12 +391,6 @@ func (c *ConfigListSubCommand) Handle(ctx *core.Context) error {
 		"`/config qotd_get` - Show the current reduced QOTD configuration",
 		"`/config qotd_enabled <enabled>` - Enable or disable QOTD publishing for the active deck",
 		"`/config qotd_channel <channel>` - Set the QOTD delivery channel for the active deck",
-		"",
-		"`/config webhook_embed_create` - Add webhook embed patch entry",
-		"`/config webhook_embed_read` - Show one webhook embed patch entry",
-		"`/config webhook_embed_update` - Update existing webhook embed patch entry",
-		"`/config webhook_embed_delete` - Delete webhook embed patch entry",
-		"`/config webhook_embed_list` - List webhook embed patch entries",
 	}
 
 	builder := configCommandAvailableOptionsResponseBuilder(ctx.Session).

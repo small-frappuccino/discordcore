@@ -99,6 +99,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 	rolesGroup.AddSubCommand(newRolePanelListSubCommand(rc.configManager))
 	rolesGroup.AddSubCommand(newRolePanelRefreshSubCommand(rc.configManager, rc.syncer))
 	rolesGroup.AddSubCommand(newRolePanelUnpostSubCommand(rc.configManager, rc.syncer))
+	rolesGroup.AddSubCommand(newRolePanelToggleSubCommand(rc.configManager))
 
 	buttonGroup := core.NewGroupCommand(
 		rolePanelButtonGroupName,
@@ -859,6 +860,50 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Posting `%s` on panel `%s` was retired.%s", posting.MessageID, panelKey, syncSummary),
+	)
+}
+
+type rolePanelToggleSubCommand struct {
+	configManager *files.ConfigManager
+}
+
+func newRolePanelToggleSubCommand(cm *files.ConfigManager) *rolePanelToggleSubCommand {
+	return &rolePanelToggleSubCommand{configManager: cm}
+}
+
+func (c *rolePanelToggleSubCommand) Name() string { return "toggle" }
+func (c *rolePanelToggleSubCommand) Description() string {
+	return "Toggle interactive ephemeral messages for this server"
+}
+func (c *rolePanelToggleSubCommand) Options() []*discordgo.ApplicationCommandOption {
+	return nil
+}
+func (c *rolePanelToggleSubCommand) RequiresGuild() bool       { return true }
+func (c *rolePanelToggleSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
+	var newValue bool
+	_, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+		for i := range cfg.Guilds {
+			if cfg.Guilds[i].GuildID == ctx.GuildID {
+				cfg.Guilds[i].RuntimeConfig.DisableInteractiveEphemeral = !cfg.Guilds[i].RuntimeConfig.DisableInteractiveEphemeral
+				newValue = cfg.Guilds[i].RuntimeConfig.DisableInteractiveEphemeral
+				return nil
+			}
+		}
+		return fmt.Errorf("guild config for %s not found in memory during save", ctx.GuildID)
+	})
+	if err != nil {
+		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to update configuration: %v", err))
+	}
+
+	state := "enabled"
+	if newValue {
+		state = "disabled"
+	}
+
+	return core.NewResponseBuilder(ctx.Session).Success(
+		ctx.Interaction,
+		fmt.Sprintf("Interactive ephemeral messages have been %s for this server.", state),
 	)
 }
 

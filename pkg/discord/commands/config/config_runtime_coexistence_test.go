@@ -26,11 +26,6 @@ func TestConfigCommandFragmentsRegisterIndependently(t *testing.T) {
 		"allowed_role_add",
 		"allowed_role_remove",
 		"allowed_role_list",
-		"webhook_embed_create",
-		"webhook_embed_read",
-		"webhook_embed_update",
-		"webhook_embed_delete",
-		"webhook_embed_list",
 	})
 	assertConfigGroupOmitsSubcommands(t, router, []string{
 		"qotd_get",
@@ -83,11 +78,6 @@ func TestConfigRuntimeCoexistenceRegisterOrderConfigThenRuntime(t *testing.T) {
 		"qotd_channel",
 		"qotd_schedule",
 		"runtime",
-		"webhook_embed_create",
-		"webhook_embed_read",
-		"webhook_embed_update",
-		"webhook_embed_delete",
-		"webhook_embed_list",
 	})
 }
 
@@ -114,11 +104,6 @@ func TestConfigRuntimeCoexistenceRegisterOrderRuntimeThenConfig(t *testing.T) {
 		"qotd_channel",
 		"qotd_schedule",
 		"runtime",
-		"webhook_embed_create",
-		"webhook_embed_read",
-		"webhook_embed_update",
-		"webhook_embed_delete",
-		"webhook_embed_list",
 	})
 }
 

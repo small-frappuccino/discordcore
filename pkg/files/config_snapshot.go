@@ -177,6 +177,7 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		ReactionBlocks:       cloneReactionBlockConfig(in.ReactionBlocks),
 		QOTD:                 cloneQOTDConfig(in.QOTD),
 		RolePanels:           cloneRolePanels(in.RolePanels),
+		CustomEmbeds:         cloneCustomEmbeds(in.CustomEmbeds),
 		RuntimeConfig:        cloneRuntimeConfig(in.RuntimeConfig),
 	}
 }
@@ -238,6 +239,7 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 		BotRolePermMirrorActorRoleID: in.BotRolePermMirrorActorRoleID,
 		WebhookEmbedUpdates:          cloneWebhookEmbedUpdateList(in.WebhookEmbedUpdates),
 		WebhookEmbedValidation:       in.WebhookEmbedValidation,
+		DisableInteractiveEphemeral:  in.DisableInteractiveEphemeral,
 	}
 }
 

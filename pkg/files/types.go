@@ -67,6 +67,9 @@ type RuntimeConfig struct {
 	WebhookEmbedUpdates []WebhookEmbedUpdateConfig `json:"webhook_embed_updates,omitempty"`
 	// Remote validation behavior for webhook embed targets used by CRUD commands.
 	WebhookEmbedValidation WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+
+	// Toggle to disable ephemeral messages for interactive embeds per guild.
+	DisableInteractiveEphemeral bool `json:"disable_interactive_ephemeral,omitempty"`
 }
 
 // UnmarshalJSON decodes a RuntimeConfig and absorbs legacy persisted keys into
@@ -107,6 +110,7 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		WebhookEmbedUpdates          []WebhookEmbedUpdateConfig   `json:"webhook_embed_updates,omitempty"`
 		LegacyWebhookEmbedUpdate     WebhookEmbedUpdateConfig     `json:"webhook_embed_update,omitempty"`
 		WebhookEmbedValidation       WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+		DisableInteractiveEphemeral  bool                         `json:"disable_interactive_ephemeral,omitempty"`
 	}
 
 	var raw rawRuntimeConfig
@@ -140,6 +144,7 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		BotRolePermMirrorActorRoleID: raw.BotRolePermMirrorActorRoleID,
 		WebhookEmbedUpdates:          raw.WebhookEmbedUpdates,
 		WebhookEmbedValidation:       raw.WebhookEmbedValidation,
+		DisableInteractiveEphemeral:  raw.DisableInteractiveEphemeral,
 	}
 
 	if rc.ModerationLogging == nil && strings.TrimSpace(raw.LegacyModerationLogMode) != "" {
@@ -513,6 +518,7 @@ type GuildConfig struct {
 	ReactionBlocks ReactionBlockConfig `json:"reaction_blocks,omitempty"`
 	QOTD           QOTDConfig          `json:"qotd,omitempty"`
 	RolePanels     []RolePanelConfig   `json:"role_panels,omitempty"`
+	CustomEmbeds   []CustomEmbedConfig `json:"custom_embeds,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
@@ -728,6 +734,9 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildUpdates := guildRC.NormalizedWebhookEmbedUpdates(); len(guildUpdates) > 0 {
 		resolved.WebhookEmbedUpdates = append([]WebhookEmbedUpdateConfig(nil), guildUpdates...)
+	}
+	if guildRC.DisableInteractiveEphemeral {
+		resolved.DisableInteractiveEphemeral = true
 	}
 
 	return resolved
