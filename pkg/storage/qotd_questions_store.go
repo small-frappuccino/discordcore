@@ -15,10 +15,11 @@ type qotdRowScanner interface {
 	Scan(dest ...any) error
 }
 
-func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (*QOTDQuestionRecord, error) {
+func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (res *QOTDQuestionRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "create qotd question") }()
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
-		return nil, fmt.Errorf("create qotd question: %w", err)
+		return nil, err
 	}
 
 	position := normalized.QueuePosition
@@ -85,7 +86,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	)
 	created, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("create qotd question: %w", err)
+		return nil, err
 	}
 	return created, nil
 }
@@ -353,7 +354,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get qotd question: %w", err)
+		return nil, err
 	}
 	return record, nil
 }

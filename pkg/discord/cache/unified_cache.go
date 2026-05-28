@@ -107,7 +107,7 @@ func stripPersistKey(cacheType, key string) string {
 
 // Cached value types
 
-// Persistent cache entry for the persistent store
+// persistentCacheEntry is a persistent cache entry for the persistent store.
 type persistentCacheEntry struct {
 	Key       string    `json:"key"`
 	Type      string    `json:"type"` // "member", "guild", "roles", "channel"

@@ -67,7 +67,7 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("update qotd official post progress: %w", err)
+		return nil, err
 	}
 	return record, nil
 }

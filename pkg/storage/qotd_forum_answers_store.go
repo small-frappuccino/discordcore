@@ -10,7 +10,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
-func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (*QOTDSurfaceRecord, error) {
+func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (res *QOTDSurfaceRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "get qotd surface by deck") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
@@ -36,15 +37,16 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get qotd surface by deck: %w", err)
+		return nil, err
 	}
 	return record, nil
 }
 
-func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (*QOTDSurfaceRecord, error) {
+func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (res *QOTDSurfaceRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "upsert qotd surface") }()
 	normalized, err := normalizeQOTDSurfaceRecord(rec)
 	if err != nil {
-		return nil, fmt.Errorf("upsert qotd surface: %w", err)
+		return nil, err
 	}
 
 	row := s.queryRowContext(ctx,
@@ -75,12 +77,13 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (*
 	)
 	updated, err := scanQOTDSurfaceRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("upsert qotd surface: %w", err)
+		return nil, err
 	}
 	return updated, nil
 }
 
-func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) error {
+func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (err error) {
+	defer func() { err = errutil.Wrap(err, "delete qotd surface by deck") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
@@ -92,15 +95,16 @@ func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID str
 		guildID,
 		deckID,
 	); err != nil {
-		return fmt.Errorf("delete qotd surface by deck: %w", err)
+		return err
 	}
 	return nil
 }
 
-func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessageRecord) (*QOTDAnswerMessageRecord, error) {
+func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessageRecord) (res *QOTDAnswerMessageRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "create qotd answer message") }()
 	normalized, err := normalizeQOTDAnswerMessageRecord(rec)
 	if err != nil {
-		return nil, fmt.Errorf("create qotd answer message: %w", err)
+		return nil, err
 	}
 
 	row := s.queryRowContext(ctx,
@@ -141,7 +145,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 	)
 	created, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("create qotd answer message: %w", err)
+		return nil, err
 	}
 	return created, nil
 }
@@ -185,7 +189,8 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 	return record, nil
 }
 
-func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, officialPostID int64, userID string) (*QOTDAnswerMessageRecord, error) {
+func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, officialPostID int64, userID string) (res *QOTDAnswerMessageRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "get qotd answer message by official post and user") }()
 	userID = strings.TrimSpace(userID)
 	if officialPostID <= 0 || userID == "" {
 		return nil, nil
@@ -215,7 +220,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get qotd answer message by official post and user: %w", err)
+		return nil, err
 	}
 	return record, nil
 }

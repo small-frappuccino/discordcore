@@ -737,6 +737,3 @@ func buildCleanLogDetails(request cleanRequest, result cleanResult) string {
 	}
 	return strings.Join(parts, " | ")
 }
-
-
-

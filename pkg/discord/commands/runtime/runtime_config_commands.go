@@ -87,7 +87,7 @@ type panelState struct {
 	Mode   pageMode
 	Group  string
 	Key    runtimeKey
-	Filter string // reserved for future search; not wired yet
+	Filter string
 	Scope  string // "global" or guildID
 }
 
@@ -878,8 +878,7 @@ func fieldsForLines(name string, lines []string) []*discordgo.MessageEmbedField 
 			candidate = curVal + "\n" + line
 		}
 		if len(candidate) > maxValueLen {
-			// If a single line is too long, truncate it (shouldn't happen with current formatting,
-			// but keep it safe for future keys/values).
+			// If a single line is too long, truncate it.
 			if curVal == "" {
 				tr := line
 				if len(tr) > maxValueLen {

@@ -680,5 +680,3 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	record.ArchiveAt = record.ArchiveAt.UTC()
 	return &record, nil
 }
-
-
