@@ -63,6 +63,31 @@ func HandleDiscordError(operation string, fn func() error) error {
 	return err
 }
 
+// Wrap returns nil when err is nil; otherwise returns fmt.Errorf("%s: %w", prefix, err).
+// It is intended for use in a deferred closure that mutates a named error return,
+// so that every error path of a function picks up a single operation prefix without
+// having to repeat it at each fmt.Errorf call site:
+//
+//	func Op() (err error) {
+//	    defer func() { err = errutil.Wrap(err, "op") }()
+//	    ...
+//	}
+func Wrap(err error, prefix string) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", prefix, err)
+}
+
+// Wrapf is the formatting variant of [Wrap]: the prefix is built from format and args.
+// It returns nil when err is nil.
+func Wrapf(err error, format string, args ...any) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), err)
+}
+
 // HandleConfigError executes fn and logs any error that occurs as a configuration-related error.
 // It returns a wrapped error with context about the operation and path.
 func HandleConfigError(operation, path string, fn func() error) error {
