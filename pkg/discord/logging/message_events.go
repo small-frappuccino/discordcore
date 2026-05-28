@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -65,21 +64,11 @@ type MessageEventService struct {
 	auditCacheTTL time.Duration
 	auditEntryMax time.Duration
 
-	verifyMu      sync.Mutex
-	verifyPending map[string]time.Time
-
 	taskRouter *task.TaskRouter
 
 	messageCreateWriter *messageCreateWriter
 	writerMetrics       MessageWriterMetrics
 }
-
-const (
-	verificationCleanupInterval     = 5 * time.Minute
-	verificationInactivityThreshold = 30 * time.Minute
-	verificationMimuEmbedMessageID  = "1375847102344593482"
-	verificationPendingWindow       = 30 * time.Minute
-)
 
 const (
 	messageEventRetryInitialBackoff = 300 * time.Millisecond
@@ -133,7 +122,6 @@ func NewMessageEventServiceForBot(
 		auditCache:     make(map[string]auditCacheEntry),
 		auditCacheTTL:  2 * time.Second,
 		auditEntryMax:  15 * time.Second,
-		verifyPending:  make(map[string]time.Time),
 		handlerCancels: make([]func(), 0, 4),
 	}
 }
@@ -216,37 +204,12 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 
 			mes.handleMessageDelete(runCtx, s, m)
 		}),
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleGuildMemberUpdate(runCtx, s, m)
-		}),
 	)
 
 	if mes.taskRouter != nil {
 		mes.taskRouter.RegisterHandler(taskTypeMessageUpdateProcess, mes.handleMessageUpdateTask)
 		mes.taskRouter.RegisterHandler(taskTypeMessageDeleteProcess, mes.handleMessageDeleteTask)
 	}
-
-	cleanupCtx, done, ok := mes.lifecycle.Begin()
-	if !ok {
-		for _, cancel := range mes.handlerCancels {
-			if cancel != nil {
-				cancel()
-			}
-		}
-		mes.handlerCancels = nil
-		_ = mes.lifecycle.Cancel()
-		return fmt.Errorf("message event service cleanup worker failed to start")
-	}
-	go func() {
-		defer done()
-		mes.verificationCleanupLoop(cleanupCtx)
-	}()
 
 	// TTL cache handles cleanup internally
 
@@ -361,15 +324,9 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 		return
 	}
 
-	guildConfig := mes.configManager.GuildConfig(guildID)
-	if guildConfig == nil {
+	if guildConfig := mes.configManager.GuildConfig(guildID); guildConfig == nil {
 		slog.Debug("MessageCreate: no guild config; skipping cache", "guildID", guildID)
 		return
-	}
-
-	if guildConfig.Channels.VerificationCleanupChannelID() == m.ChannelID {
-		mes.cleanupPreviousVerificationMessages(guildID, m.ChannelID, m.Author.ID, m.ID)
-		mes.markVerificationPendingIfNonverified(s, guildConfig, m)
 	}
 
 	mes.markEvent(ctx)
@@ -1052,53 +1009,6 @@ func (mes *MessageEventService) summarizeMessageContent(msg *discordgo.Message, 
 	return base + "\n" + strings.TrimSpace(extra)
 }
 
-func (mes *MessageEventService) verificationCleanupLoop(ctx context.Context) {
-	if verificationCleanupInterval <= 0 {
-		return
-	}
-
-	ticker := time.NewTicker(verificationCleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			mes.cleanupVerificationChannels()
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (mes *MessageEventService) cleanupVerificationChannels() {
-	if mes.session == nil || mes.configManager == nil {
-		return
-	}
-	guilds := mes.configuredGuilds()
-	if len(guilds) == 0 {
-		return
-	}
-
-	for _, gcfg := range guilds {
-		channelID := gcfg.Channels.VerificationCleanupChannelID()
-		if channelID == "" {
-			continue
-		}
-		mes.cleanupIdleVerificationChannel(gcfg.GuildID, channelID)
-	}
-}
-
-func (mes *MessageEventService) configuredGuilds() []files.GuildConfig {
-	if mes == nil || mes.configManager == nil {
-		return nil
-	}
-	cfg := mes.configManager.Config()
-	if cfg == nil {
-		return nil
-	}
-	return cfg.GuildsForBotInstance(mes.botInstanceID, mes.defaultBotID)
-}
-
 func (mes *MessageEventService) handlesGuild(guildID string) bool {
 	if mes == nil || mes.configManager == nil {
 		return false
@@ -1115,210 +1025,6 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 		return false
 	}
 	return guild.EffectiveBotInstanceID(mes.defaultBotID) == files.NormalizeBotInstanceID(mes.botInstanceID)
-}
-
-func (mes *MessageEventService) cleanupIdleVerificationChannel(guildID, channelID string) {
-	if mes.session == nil || channelID == "" {
-		return
-	}
-
-	msgs, err := mes.session.ChannelMessages(channelID, 100, "", "", "")
-	if err != nil {
-		slog.Warn("Verification cleanup: failed to fetch channel messages", "guildID", guildID, "channelID", channelID, "error", err)
-		return
-	}
-
-	var newest time.Time
-	toDelete := make([]string, 0, len(msgs))
-	for _, msg := range msgs {
-		if msg == nil || msg.ID == verificationMimuEmbedMessageID {
-			continue
-		}
-		toDelete = append(toDelete, msg.ID)
-		if msg.Timestamp.After(newest) {
-			newest = msg.Timestamp
-		}
-	}
-
-	if len(toDelete) == 0 || newest.IsZero() {
-		return
-	}
-	if time.Since(newest) < verificationInactivityThreshold {
-		return
-	}
-
-	removed, failed := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
-		Mode: cleanup.DeleteModeSingleOnly,
-		OnDeleteError: func(messageID string, err error, _ cleanup.FailureClass) {
-			slog.Warn("Verification cleanup: failed to delete stale message", "guildID", guildID, "channelID", channelID, "messageID", messageID, "error", err)
-		},
-	})
-
-	if removed > 0 || failed > 0 {
-		slog.Info("Verification cleanup: stale messages cleanup summary", "guildID", guildID, "channelID", channelID, "requested", len(toDelete), "removed", removed, "failed", failed)
-	}
-}
-
-func (mes *MessageEventService) cleanupPreviousVerificationMessages(guildID, channelID, userID, currentMessageID string) {
-	if mes.session == nil || channelID == "" || userID == "" {
-		return
-	}
-
-	msgs, err := mes.session.ChannelMessages(channelID, 100, "", "", "")
-	if err != nil {
-		slog.Warn("Verification cleanup: failed to fetch channel messages", "guildID", guildID, "channelID", channelID, "error", err)
-		return
-	}
-
-	toDelete := make([]string, 0, len(msgs))
-	for _, msg := range msgs {
-		if msg == nil || msg.Author == nil {
-			continue
-		}
-		if msg.ID == currentMessageID || msg.ID == verificationMimuEmbedMessageID {
-			continue
-		}
-		if msg.Author.ID != userID {
-			continue
-		}
-		toDelete = append(toDelete, msg.ID)
-	}
-	if len(toDelete) == 0 {
-		return
-	}
-
-	removed, failed := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
-		Mode: cleanup.DeleteModeSingleOnly,
-		OnDeleteError: func(messageID string, err error, _ cleanup.FailureClass) {
-			slog.Warn("Verification cleanup: failed to delete previous message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", messageID, "error", err)
-		},
-	})
-
-	if removed > 0 || failed > 0 {
-		slog.Info("Verification cleanup: previous messages cleanup summary", "guildID", guildID, "channelID", channelID, "userID", userID, "requested", len(toDelete), "removed", removed, "failed", failed)
-	}
-}
-
-func (mes *MessageEventService) cleanupAllVerificationMessagesForUser(guildID, channelID, userID string) {
-	if mes.session == nil || channelID == "" || userID == "" {
-		return
-	}
-
-	msgs, err := mes.session.ChannelMessages(channelID, 100, "", "", "")
-	if err != nil {
-		slog.Warn("Verification cleanup: failed to fetch channel messages", "guildID", guildID, "channelID", channelID, "error", err)
-		return
-	}
-
-	toDelete := make([]string, 0, len(msgs))
-	for _, msg := range msgs {
-		if msg == nil || msg.Author == nil {
-			continue
-		}
-		if msg.ID == verificationMimuEmbedMessageID {
-			continue
-		}
-		if msg.Author.ID != userID {
-			continue
-		}
-		toDelete = append(toDelete, msg.ID)
-	}
-	if len(toDelete) == 0 {
-		return
-	}
-
-	removed, failed := cleanup.DeleteMessages(mes.session, channelID, toDelete, cleanup.DeleteOptions{
-		Mode: cleanup.DeleteModeSingleOnly,
-		OnDeleteError: func(messageID string, err error, _ cleanup.FailureClass) {
-			slog.Warn("Verification cleanup: failed to delete verified user message", "guildID", guildID, "channelID", channelID, "userID", userID, "messageID", messageID, "error", err)
-		},
-	})
-
-	if removed > 0 || failed > 0 {
-		slog.Info("Verification cleanup: verified user messages cleanup summary", "guildID", guildID, "channelID", channelID, "userID", userID, "requested", len(toDelete), "removed", removed, "failed", failed)
-	}
-}
-
-func (mes *MessageEventService) markVerificationPendingIfNonverified(s *discordgo.Session, gcfg *files.GuildConfig, m *discordgo.MessageCreate) {
-	if gcfg == nil || m == nil || m.Author == nil || m.Author.Bot {
-		return
-	}
-	verifiedRoleID := strings.TrimSpace(gcfg.Roles.VerificationRole)
-	if verifiedRoleID == "" {
-		return
-	}
-
-	roles := []string{}
-	if m.Member != nil {
-		roles = m.Member.Roles
-	} else if s != nil && s.State != nil && m.GuildID != "" {
-		if member, err := s.State.Member(m.GuildID, m.Author.ID); err == nil && member != nil {
-			roles = member.Roles
-		}
-	}
-	if hasRoleID(roles, verifiedRoleID) {
-		return
-	}
-
-	key := m.GuildID + ":" + m.Author.ID
-	mes.verifyMu.Lock()
-	if mes.verifyPending == nil {
-		mes.verifyPending = make(map[string]time.Time)
-	}
-	mes.verifyPending[key] = time.Now().UTC()
-	mes.verifyMu.Unlock()
-}
-
-func (mes *MessageEventService) handleGuildMemberUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-	if m == nil || m.User == nil || m.User.Bot {
-		return
-	}
-	if err := ctx.Err(); err != nil {
-		return
-	}
-	if !mes.handlesGuild(m.GuildID) {
-		return
-	}
-	cfg := mes.configManager.Config()
-	if cfg == nil {
-		return
-	}
-	guildConfig := mes.configManager.GuildConfig(m.GuildID)
-	if guildConfig == nil {
-		return
-	}
-	channelID := guildConfig.Channels.VerificationCleanupChannelID()
-	if channelID == "" {
-		return
-	}
-	verifiedRoleID := strings.TrimSpace(guildConfig.Roles.VerificationRole)
-	if verifiedRoleID == "" {
-		return
-	}
-
-	key := m.GuildID + ":" + m.User.ID
-	mes.verifyMu.Lock()
-	pendingAt, ok := mes.verifyPending[key]
-	if !ok {
-		mes.verifyMu.Unlock()
-		return
-	}
-	if verificationPendingWindow > 0 && time.Since(pendingAt) > verificationPendingWindow {
-		delete(mes.verifyPending, key)
-		mes.verifyMu.Unlock()
-		return
-	}
-	mes.verifyMu.Unlock()
-
-	if !hasRoleID(m.Roles, verifiedRoleID) {
-		return
-	}
-
-	mes.cleanupAllVerificationMessagesForUser(m.GuildID, channelID, m.User.ID)
-
-	mes.verifyMu.Lock()
-	delete(mes.verifyPending, key)
-	mes.verifyMu.Unlock()
 }
 
 // determineDeletedBy tries to resolve the actor for a deletion via audit log (best-effort).

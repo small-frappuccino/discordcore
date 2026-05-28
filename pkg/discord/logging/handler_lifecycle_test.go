@@ -150,8 +150,8 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("start message event service: %v", err)
 	}
-	if got := len(service.handlerCancels); got != 4 {
-		t.Fatalf("expected 4 registered handlers after start, got %d", got)
+	if got := len(service.handlerCancels); got != 3 {
+		t.Fatalf("expected 3 registered handlers after start, got %d", got)
 	}
 
 	dispatchDiscordEvent(session, "MESSAGE_CREATE", &discordgo.MessageCreate{
@@ -194,8 +194,8 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("restart message event service: %v", err)
 	}
-	if got := len(service.handlerCancels); got != 4 {
-		t.Fatalf("expected 4 registered handlers after restart, got %d", got)
+	if got := len(service.handlerCancels); got != 3 {
+		t.Fatalf("expected 3 registered handlers after restart, got %d", got)
 	}
 
 	dispatchDiscordEvent(session, "MESSAGE_CREATE", &discordgo.MessageCreate{
