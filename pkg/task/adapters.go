@@ -248,9 +248,11 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 
 // EnqueueAutomodActionWithKey enqueues an automod action notification with an
 // explicit idempotency key. The key is typically computed by the caller via
-// AutomodIdempotencyKeyForSequence so the gateway sequence number — which is
-// the same across Discord re-deliveries (including resume) — can drive
-// deduplication. An empty key disables router-level dedup for this event.
+// AutomodIdempotencyKey, which prefers per-violation identifiers (MessageID,
+// MatchedContent, MatchedKeyword) over per-action ones so the multiple
+// AUTO_MODERATION_ACTION_EXECUTION events Discord fires for a single rule
+// trigger collapse to one notification. An empty key disables router-level
+// dedup for this event.
 func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *discordgo.AutoModerationActionExecution, idempotencyKey string) error {
 	if event == nil {
 		return nil
@@ -272,46 +274,54 @@ func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, eve
 	})
 }
 
-// AutomodIdempotencyKey computes the dedupe key for an AutoMod action event
-// without a gateway sequence number. Exported so the synchronous fallback path
-// in pkg/discord/logging can compute the same key the router would when no
-// sequence is available, and apply its own dedup before sending. The key
-// precedence chain is: msg → alert → content → keyword+second-bucket.
-func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
-	return AutomodIdempotencyKeyForSequence(event, 0)
-}
+// automodCoalesceBucketSec is the time-bucket width (seconds) for the
+// last-resort idempotency key fallback. Wide enough that the per-action
+// gateway events Discord fires for one violation (typically arriving
+// milliseconds apart) land in the same bucket and dedup, narrow enough
+// that genuinely-distinct violations on the same (guild, rule, user)
+// tuple stay independent.
+const automodCoalesceBucketSec = 3
 
-// AutomodIdempotencyKeyForSequence computes the dedupe key for an AutoMod
-// action event, preferring the gateway sequence number when it is positive.
-// Discord guarantees the same sequence across re-deliveries (including the
-// RESUME path), so a seq-based key catches every retransmission deterministically
-// without depending on payload-level identifiers.
+// AutomodIdempotencyKey computes the dedupe key for an AutoMod action event.
 //
-// Precedence: seq (when > 0) → msg → alert → content → keyword+second-bucket.
-// A sequence of 0 or negative is treated as "no signal" and falls through to
-// the payload-based chain; the raw value is never used as a key, since
-// "automod::seq:0" would collapse unrelated events.
-func AutomodIdempotencyKeyForSequence(event *discordgo.AutoModerationActionExecution, sequence int64) string {
-	return automodIdempotencyKeyAt(event, sequence, time.Now())
+// Discord emits AUTO_MODERATION_ACTION_EXECUTION once per *action* configured
+// on a triggered rule (Block Message, Send Alert Message, Timeout, Block
+// Member Interactions). A single rule trigger therefore produces multiple
+// gateway events whose only stable shared identifiers are the per-violation
+// fields — MessageID for message triggers, MatchedContent/MatchedKeyword for
+// member-profile triggers. Keying on those collapses the per-action stream to
+// one notification, matching Discord's own chat-side "one notice per
+// violation" behavior. The gateway sequence number and the per-action
+// AlertSystemMessageID are intentionally NOT used here because they differ
+// across the actions of a single violation and would defeat the coalescing.
+//
+// Precedence: msg → content → keyword+second-bucket → (guild, rule, user)
+// tbucket fallback. The tbucket fallback always returns a non-empty key so
+// router-level dedup remains active even if a future trigger type carries
+// no per-violation payload identifiers.
+//
+// Exported so the synchronous fallback path in pkg/discord/logging can
+// compute the same key the router would and apply its own dedup before
+// sending.
+func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
+	return automodIdempotencyKeyAt(event, time.Now())
 }
 
-func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, sequence int64, now time.Time) string {
+func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, now time.Time) string {
 	if event == nil {
 		return ""
 	}
-	if sequence > 0 {
-		return fmt.Sprintf("automod:%s:%s:%s:seq:%d", event.GuildID, event.RuleID, event.UserID, sequence)
-	}
 	if messageID := strings.TrimSpace(event.MessageID); messageID != "" {
+		// MessageID is set on every action event for a message-triggered
+		// violation (the blocked message), so all per-action events for one
+		// violation share it.
 		return fmt.Sprintf("automod:%s:%s:%s:msg:%s", event.GuildID, event.RuleID, event.UserID, messageID)
 	}
-	if alertSystemMessageID := strings.TrimSpace(event.AlertSystemMessageID); alertSystemMessageID != "" {
-		return fmt.Sprintf("automod:%s:%s:%s:alert:%s", event.GuildID, event.RuleID, event.UserID, alertSystemMessageID)
-	}
 	if content := strings.TrimSpace(event.MatchedContent); content != "" {
-		// MatchedContent is the offending substring — re-deliveries carry the
-		// same content; distinct profile updates carry different content. No
-		// time bucket needed.
+		// MatchedContent is the offending substring — shared across the
+		// per-action events of one member-profile violation. Re-deliveries
+		// carry the same content; distinct profile updates carry different
+		// content. No time bucket needed.
 		digest := sha256.Sum256([]byte(content))
 		return fmt.Sprintf("automod:%s:%s:%s:content:%s", event.GuildID, event.RuleID, event.UserID, hex.EncodeToString(digest[:8]))
 	}
@@ -323,7 +333,14 @@ func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, seq
 		digest := sha256.Sum256([]byte(keyword))
 		return fmt.Sprintf("automod:%s:%s:%s:keyword:%s:t%d", event.GuildID, event.RuleID, event.UserID, hex.EncodeToString(digest[:8]), now.Unix())
 	}
-	return ""
+	// Defensive coalescing fallback. Triggered when no per-violation
+	// identifier is present — a shape Discord does not emit today on the
+	// rules in use, but worth keying anyway so a future trigger type's
+	// per-action stream still collapses to one embed per violation.
+	// AlertSystemMessageID is intentionally NOT used as a tiebreaker here
+	// because it is per-action; mixing it in would split a violation across
+	// its block + alert events.
+	return fmt.Sprintf("automod:%s:%s:%s:tbucket:%d", event.GuildID, event.RuleID, event.UserID, now.Unix()/automodCoalesceBucketSec)
 }
 
 // EnqueueProcessAvatarChange enqueues processing of an avatar change.

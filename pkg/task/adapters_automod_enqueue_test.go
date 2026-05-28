@@ -12,9 +12,10 @@ import (
 
 // TestEnqueueAutomodActionWithKey_DedupOnExplicitKey confirms two enqueues
 // with the same explicit idempotency key collide on the router-level
-// inflight map. This is the path the AutomodService takes once it has the
-// gateway sequence: same seq across re-deliveries → same key → router dedups
-// the second arrival before any handler runs.
+// inflight map. This is the path the AutomodService takes once it has
+// computed the per-violation key via AutomodIdempotencyKey: distinct
+// per-action gateway events for one violation collapse to one key, so the
+// router dedups the second arrival before any handler runs.
 func TestEnqueueAutomodActionWithKey_DedupOnExplicitKey(t *testing.T) {
 	t.Parallel()
 
@@ -45,7 +46,7 @@ func TestEnqueueAutomodActionWithKey_DedupOnExplicitKey(t *testing.T) {
 		UserID:    "u1",
 		MessageID: "m1",
 	}
-	key := AutomodIdempotencyKeyForSequence(event, 4242)
+	key := AutomodIdempotencyKey(event)
 
 	if err := adapters.EnqueueAutomodActionWithKey("c-log", event, key); err != nil {
 		t.Fatalf("first enqueue failed: %v", err)
@@ -55,11 +56,10 @@ func TestEnqueueAutomodActionWithKey_DedupOnExplicitKey(t *testing.T) {
 	}
 }
 
-// TestEnqueueAutomodAction_DefaultKeyHasNoSeq ensures the wrapper that does
-// not take the gateway envelope continues to produce the payload-derived key.
-// Callers without access to the *Event envelope (synthetic events in older
-// tests, future internal APIs) must keep working.
-func TestEnqueueAutomodAction_DefaultKeyHasNoSeq(t *testing.T) {
+// TestEnqueueAutomodAction_DefaultKeyUsesMsgPrecedence ensures the wrapper
+// produces the expected per-violation key shape so callers without a
+// pre-computed key still hit the same dedup as the explicit path.
+func TestEnqueueAutomodAction_DefaultKeyUsesMsgPrecedence(t *testing.T) {
 	t.Parallel()
 
 	event := &discordgo.AutoModerationActionExecution{
@@ -70,6 +70,6 @@ func TestEnqueueAutomodAction_DefaultKeyHasNoSeq(t *testing.T) {
 	}
 	got := AutomodIdempotencyKey(event)
 	if got != "automod:g1:r1:u1:msg:m1" {
-		t.Fatalf("default (no-seq) key must use msg precedence, got %q", got)
+		t.Fatalf("default key must use msg precedence, got %q", got)
 	}
 }

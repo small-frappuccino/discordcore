@@ -104,11 +104,12 @@ func TestAutomodHandleRawEvent_FallbackOnInvalidRawData(t *testing.T) {
 }
 
 // TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence is the
-// integration-style canary: two raw envelopes with the same Sequence and same
-// guild context must land on the same router-level idempotency key, so the
-// second one is dropped before any handler runs. This is the load-bearing
-// behavior the spec calls out — Discord re-deliveries during a RESUME carry
-// the original sequence, and the seq-based key catches them all.
+// integration-style canary: two raw envelopes for the same violation must
+// land on the same router-level idempotency key, so the second one is
+// dropped before any handler runs. The key is derived from the
+// per-violation MessageID (see task.AutomodIdempotencyKey), which is
+// stable across both Discord re-deliveries (RESUME path) and the
+// per-action stream Discord fires for one rule trigger.
 func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 	t.Parallel()
 
@@ -184,15 +185,18 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 	}
 }
 
-// TestAutomodHandleRawEvent_DistinctSequencesBothRun is the inverse canary:
-// two envelopes with different Sequences must both flow through. Without this
-// test, a regression that hardcodes the seq path or collapses on rule/user
-// would silently lose legitimate events.
-func TestAutomodHandleRawEvent_DistinctSequencesBothRun(t *testing.T) {
+// TestAutomodHandleRawEvent_CoalescesPerActionStream is the
+// 1:1-parity canary: Discord fires AUTO_MODERATION_ACTION_EXECUTION once
+// per *action* configured on a triggered rule (e.g. BLOCK_MESSAGE +
+// SEND_ALERT_MESSAGE for one message violation). Each event carries a
+// distinct gateway sequence but the same MessageID, so the per-violation
+// key collapses them and the handler runs only once. This pins the
+// behavior the user-facing embed depends on.
+func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 	t.Parallel()
 
 	const (
-		guildID   = "g-seq-distinct"
+		guildID   = "g-coalesce"
 		channelID = "c-auto"
 		botID     = "bot"
 	)
@@ -231,22 +235,121 @@ func TestAutomodHandleRawEvent_DistinctSequencesBothRun(t *testing.T) {
 	svc := NewAutomodService(session, cm)
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
-	payload := &discordgo.AutoModerationActionExecution{
+	// Two per-action events for the same message violation: same MessageID,
+	// different Action.Type, different gateway sequence. Use BLOCK_MESSAGE +
+	// TIMEOUT (rather than BLOCK_MESSAGE + SEND_ALERT_MESSAGE) so this test
+	// exercises the per-violation key path; the SEND_ALERT_MESSAGE filter
+	// is pinned separately in TestAutomodHandleRawEvent_DropsSendAlertMessageEvents.
+	blockEvent := &discordgo.AutoModerationActionExecution{
 		GuildID:   guildID,
 		RuleID:    "r1",
 		UserID:    "u1",
 		ChannelID: channelID,
 		MessageID: "m1",
+		Action:    discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(1)}, // BLOCK_MESSAGE
+	}
+	timeoutEvent := &discordgo.AutoModerationActionExecution{
+		GuildID:   guildID,
+		RuleID:    "r1",
+		UserID:    "u1",
+		ChannelID: channelID,
+		MessageID: "m1",
+		Action:    discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(3)}, // TIMEOUT
 	}
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 100,
-		Struct:   payload,
+		Struct:   blockEvent,
 	})
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 101,
-		Struct:   payload,
+		Struct:   timeoutEvent,
+	})
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt32(&handlerCalls) >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	if got := atomic.LoadInt32(&handlerCalls); got != 1 {
+		t.Fatalf("expected per-action stream to coalesce to one handler call, got %d", got)
+	}
+}
+
+// TestAutomodHandleRawEvent_DistinctViolationsBothRun is the inverse
+// canary: two distinct violations (different MessageIDs) must both flow
+// through. Without this test, a regression that over-coalesces on
+// rule/user/guild alone would silently lose legitimate notifications.
+func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
+	t.Parallel()
+
+	const (
+		guildID   = "g-distinct-violations"
+		channelID = "c-auto"
+		botID     = "bot"
+	)
+	perms := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
+
+	cm := newTestConfigManager(t)
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID:  guildID,
+		Channels: files.ChannelsConfig{AutomodAction: channelID},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session.Identify.Intents = discordgo.IntentAutoModerationExecution
+
+	cfg := task.RouterConfig{
+		DefaultMaxAttempts: 1,
+		InitialBackoff:     5 * time.Millisecond,
+		MaxBackoff:         5 * time.Millisecond,
+		IdempotencyTTL:     500 * time.Millisecond,
+		GroupBuffer:        8,
+		GroupIdleTTL:       200 * time.Millisecond,
+		CleanupInterval:    20 * time.Millisecond,
+		GroupMaxParallel:   1,
+	}
+	router := task.NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	var handlerCalls int32
+	router.RegisterHandler(task.TaskTypeSendAutomodAction, func(_ context.Context, _ any) error {
+		atomic.AddInt32(&handlerCalls, 1)
+		return nil
+	})
+
+	svc := NewAutomodService(session, cm)
+	svc.SetAdapters(&task.NotificationAdapters{Router: router})
+
+	violationA := &discordgo.AutoModerationActionExecution{
+		GuildID:   guildID,
+		RuleID:    "r1",
+		UserID:    "u1",
+		ChannelID: channelID,
+		MessageID: "m-a",
+	}
+	violationB := &discordgo.AutoModerationActionExecution{
+		GuildID:   guildID,
+		RuleID:    "r1",
+		UserID:    "u1",
+		ChannelID: channelID,
+		MessageID: "m-b",
+	}
+	svc.handleRawEvent(session, &discordgo.Event{
+		Type:     automodActionExecutionEventType,
+		Sequence: 100,
+		Struct:   violationA,
+	})
+	svc.handleRawEvent(session, &discordgo.Event{
+		Type:     automodActionExecutionEventType,
+		Sequence: 101,
+		Struct:   violationB,
 	})
 
 	deadline := time.Now().Add(500 * time.Millisecond)
@@ -258,7 +361,80 @@ func TestAutomodHandleRawEvent_DistinctSequencesBothRun(t *testing.T) {
 	}
 
 	if got := atomic.LoadInt32(&handlerCalls); got != 2 {
-		t.Fatalf("expected handler to run twice for distinct seqs, got %d", got)
+		t.Fatalf("expected handler to run twice for distinct violations, got %d", got)
+	}
+}
+
+// TestAutomodHandleRawEvent_DropsSendAlertMessageEvents pins the Option-C
+// belt-and-suspenders filter: SEND_ALERT_MESSAGE action events are dropped
+// inside handleAutoModerationAction before any embed work runs, even when
+// the payload would otherwise be enqueued. This guarantees we never emit a
+// sibling embed for Discord's native alert message, regardless of how the
+// per-violation idempotency key is computed.
+func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
+	t.Parallel()
+
+	const (
+		guildID   = "g-alert-filter"
+		channelID = "c-auto"
+		botID     = "bot"
+	)
+	perms := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
+
+	cm := newTestConfigManager(t)
+	if err := cm.AddGuildConfig(files.GuildConfig{
+		GuildID:  guildID,
+		Channels: files.ChannelsConfig{AutomodAction: channelID},
+	}); err != nil {
+		t.Fatalf("AddGuildConfig: %v", err)
+	}
+
+	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session.Identify.Intents = discordgo.IntentAutoModerationExecution
+
+	cfg := task.RouterConfig{
+		DefaultMaxAttempts: 1,
+		InitialBackoff:     5 * time.Millisecond,
+		MaxBackoff:         5 * time.Millisecond,
+		IdempotencyTTL:     500 * time.Millisecond,
+		GroupBuffer:        8,
+		GroupIdleTTL:       200 * time.Millisecond,
+		CleanupInterval:    20 * time.Millisecond,
+		GroupMaxParallel:   1,
+	}
+	router := task.NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	var handlerCalls int32
+	router.RegisterHandler(task.TaskTypeSendAutomodAction, func(_ context.Context, _ any) error {
+		atomic.AddInt32(&handlerCalls, 1)
+		return nil
+	})
+
+	svc := NewAutomodService(session, cm)
+	svc.SetAdapters(&task.NotificationAdapters{Router: router})
+
+	alertEvent := &discordgo.AutoModerationActionExecution{
+		GuildID:              guildID,
+		RuleID:               "r1",
+		UserID:               "u1",
+		ChannelID:            channelID,
+		MessageID:            "m1",
+		AlertSystemMessageID: "alert-1",
+		Action:               discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(2)}, // SEND_ALERT_MESSAGE
+	}
+	svc.handleRawEvent(session, &discordgo.Event{
+		Type:     automodActionExecutionEventType,
+		Sequence: 100,
+		Struct:   alertEvent,
+	})
+
+	// Give the worker enough time to drain anything that was (incorrectly)
+	// enqueued; the assertion is that nothing was enqueued in the first place.
+	time.Sleep(50 * time.Millisecond)
+
+	if got := atomic.LoadInt32(&handlerCalls); got != 0 {
+		t.Fatalf("expected SEND_ALERT_MESSAGE event to be dropped at the handler, got %d enqueued task(s)", got)
 	}
 }
 

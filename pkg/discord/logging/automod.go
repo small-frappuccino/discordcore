@@ -16,6 +16,66 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
+// Discord AutoMod logging — per-action gateway behavior and coalescing
+//
+// Discord emits one AUTO_MODERATION_ACTION_EXECUTION gateway event per
+// *action* configured on a triggered rule, not one event per violation. A
+// member-profile rule with both Block Member Interactions and Send Alert
+// Message configured therefore fires TWO events for a single profile
+// violation, with the same rule_id, user_id, and matched_content but
+// different gateway sequence numbers and different Action.Type values.
+// Message rules with Block Message + Send Alert Message behave the same
+// way, sharing the blocked MessageID across actions.
+//
+// To match Discord's chat-side "one notice per violation" parity, this
+// package collapses the per-action stream through two layered defenses:
+//
+//   1. Per-violation idempotency key (task.AutomodIdempotencyKey): the key
+//      derives from per-violation fields (MessageID, MatchedContent,
+//      MatchedKeyword) and falls back to a 3-second (guild, rule, user)
+//      tbucket. Per-action fields (gateway sequence, AlertSystemMessageID)
+//      are excluded so multiple actions for one violation collide on the
+//      same key and the router drops the second arrival.
+//
+//   2. SEND_ALERT_MESSAGE handler filter (handleAutoModerationAction):
+//      events whose Action.Type is the alert action are dropped before any
+//      key is computed. Discord posts its own native rich alert message to
+//      the configured alert channel for these, so our embed would be
+//      redundant; the filter also guarantees we cannot accidentally emit a
+//      sibling embed if a future trigger type's payload shape breaks the
+//      key-level coalescing. Rules configured with ONLY Send Alert Message
+//      (no block action) therefore produce no embed on our side — Discord's
+//      native alert remains the staff-visible notice.
+//
+// The user-facing embed reports what was blocked (matched keyword +
+// offending fragment) and lets the description convey that the user has
+// been restricted, without duplicating one log line per action type.
+//
+// Future debug mode
+//
+// Per-action detail is intentionally preserved in automodActionLabel and
+// in the typed payload reaching buildAutomodEmbed. A later "debug embeds"
+// mode can re-expose it by:
+//
+//   1. bypassing the SEND_ALERT_MESSAGE filter so all action types reach
+//      the embed builder;
+//   2. routing keys through a debug-aware variant that includes the
+//      gateway sequence number, restoring one embed per action;
+//   3. re-adding an "Action" field on the embeds via
+//      automodActionLabel(e.Action.Type);
+//   4. optionally surfacing the gateway sequence and event type for
+//      cross-referencing with Discord's audit log.
+//
+// Trigger types Discord can fire (see automodTrigger* constants):
+//
+//   1 Keyword            2 Harmful link       3 Spam
+//   4 Keyword preset     5 Mention spam       6 Member profile
+//
+// Action types Discord can fire (see automodAction* constants):
+//
+//   1 Block message      2 Send alert message
+//   3 Timeout            4 Block member interactions (quarantine)
+
 // automodActionExecutionEventType is the gateway event type Discord uses for
 // AutoMod action executions. Mirrored here so the raw *Event handler can
 // filter without importing the discordgo-internal constant.
@@ -144,9 +204,16 @@ func (as *AutomodService) handleRawEvent(s *discordgo.Session, evt *discordgo.Ev
 
 // handleAutoModerationAction logs native AutoMod events to the configured
 // automod log channel. The sequence argument is the gateway sequence number
-// from the *Event envelope; pass 0 (or negative) when the sequence is
-// unavailable (synthetic events in tests, future callers without the raw
-// envelope) and the idempotency key falls back to the payload-based chain.
+// from the *Event envelope and is recorded for observability only; the
+// idempotency key is derived from per-violation payload fields so the
+// multiple action events Discord fires for one trigger coalesce to a single
+// log embed (see the package-level "AutoMod logging" comment block above).
+//
+// SEND_ALERT_MESSAGE action events are dropped here as a belt-and-suspenders
+// complement to the per-violation key: Discord posts its own native rich
+// alert message to the configured alert channel for those, and dropping
+// them at the handler guarantees no sibling embed leaks through even if a
+// future trigger type's payload shape breaks the key-level coalescing.
 func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *discordgo.AutoModerationActionExecution, sequence int64) {
 	if e == nil || e.GuildID == "" {
 		return
@@ -162,13 +229,18 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	)
 	defer done()
 
+	if int(e.Action.Type) == automodActionSendAlert {
+		log.ApplicationLogger().Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", e.GuildID, "ruleID", e.RuleID, "userID", e.UserID, "seq", sequence)
+		return
+	}
+
 	emit := ShouldEmitLogEvent(s, as.configManager, LogEventAutomodAction, e.GuildID)
 	if !emit.Enabled {
 		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "seq", sequence, "reason", emit.Reason)
 		return
 	}
 	logChannelID := emit.ChannelID
-	idempotencyKey := task.AutomodIdempotencyKeyForSequence(e, sequence)
+	idempotencyKey := task.AutomodIdempotencyKey(e)
 
 	// If adapters are wired, enqueue via TaskRouter for retries/backoff
 	if as.adapters != nil {
@@ -266,6 +338,11 @@ func buildAutomodMessageEmbed(e *discordgo.AutoModerationActionExecution) *disco
 }
 
 func buildAutomodMemberProfileEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+	// The per-action Action.Type is intentionally not surfaced on the
+	// embed: the package-level coalescing collapses Block Member
+	// Interactions + Send Alert Message into a single embed per violation,
+	// and "user is quarantined" is already conveyed by the description.
+	// automodActionLabel remains available for a future debug-embed mode.
 	embed := &discordgo.MessageEmbed{
 		Title:       "AutoMod • Member Profile Quarantined",
 		Description: "Blocked words detected in this member's profile. The user is quarantined until the profile is updated.",
@@ -284,9 +361,6 @@ func buildAutomodMemberProfileEmbed(e *discordgo.AutoModerationActionExecution) 
 	}
 	if excerpt := automodExcerpt(e); excerpt != "" {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Offending fragment", Value: "```" + excerpt + "```", Inline: false})
-	}
-	if label := automodActionLabel(e.Action.Type); label != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Action", Value: label, Inline: true})
 	}
 	return embed
 }
@@ -309,6 +383,12 @@ func automodTriggerLabel(t discordgo.AutoModerationRuleTriggerType) string {
 	return ""
 }
 
+// automodActionLabel returns a human-readable label for a Discord AutoMod
+// action type. The standard (non-debug) embed builders deliberately do not
+// surface this label because the per-action stream is coalesced into one
+// embed per violation; the function is retained for a future debug-embed
+// mode that re-exposes per-action detail. See the package-level "AutoMod
+// logging" comment block.
 func automodActionLabel(t discordgo.AutoModerationActionType) string {
 	switch int(t) {
 	case automodActionBlockMessage:

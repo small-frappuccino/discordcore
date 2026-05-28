@@ -41,8 +41,12 @@ func TestBuildAutomodEmbed_MemberProfile_OmitsChannelField(t *testing.T) {
 	if f := findField(embed.Fields, "Trigger"); f == nil || f.Value != "Member profile" {
 		t.Fatalf("expected Trigger 'Member profile', got %+v", f)
 	}
-	if f := findField(embed.Fields, "Action"); f == nil || f.Value != "Block member interactions" {
-		t.Fatalf("expected Action 'Block member interactions', got %+v", f)
+	// The Action field is intentionally omitted: per-action events are
+	// coalesced into one embed and the description already conveys that
+	// the user has been restricted. See the package-level "AutoMod
+	// logging" comment block for the debug-mode hook.
+	if findField(embed.Fields, "Action") != nil {
+		t.Fatal("Member Profile embed must not include an Action field (coalesced per-violation)")
 	}
 	if f := findField(embed.Fields, "Offending fragment"); f == nil || !strings.Contains(f.Value, "BigAss") {
 		t.Fatalf("expected Offending fragment containing 'BigAss', got %+v", f)
