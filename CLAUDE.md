@@ -413,7 +413,7 @@ Feature toggle subsystem — load-bearing patterns that new edits must preserve:
 - `FeatureToggles` (with `*bool` fields and JSON tags) is the persisted schema and must not change shape — adding a toggle means a new field on the relevant sub-struct PLUS one entry in `featureRegistry`. The dotted `Path` must match the field name on both `FeatureToggles` and `ResolvedFeatureToggles`; an invariant test in `feature_registry_test.go` enforces this
 - `ResolvedFeatureToggles` is intentionally a mirrored struct (not a `map[string]bool` or accessor-only API) so call-sites keep tight, typo-safe access like `resolved.Moderation.Clean`. The reflection-driven populate path keeps that struct from drifting from the registry; do not "consolidate" it away
 - product-facing metadata (label, description, area, tags, editable fields, `LogEvent`) lives in `pkg/control/features_catalog.go` (`featureDefinitions`), not in the registry. The two sets of IDs are kept in bijection by `TestFeatureRegistryMatchesCatalog` and against `ui/src/features/features/featureContract.json` by `TestFeatureRegistryMatchesUIContract`; both must stay green when adding a toggle
-- `moderationCommandFeatureEnabled` and the dashboard toggle bindings in `pkg/control/features_toggle_bindings.go` are thin shims over `Lookup`/`LookupToggle`/`SetToggle` — do not regrow a per-feature switch inside them
+- the dashboard toggle bindings in `pkg/control/features_toggle_bindings.go` are thin shims over `Lookup`/`LookupToggle`/`SetToggle`; moderation command gating reads `ResolveFeatures(guildID).Lookup(id)` inline — do not regrow a per-feature switch in either site
 
 Additional caution:
 

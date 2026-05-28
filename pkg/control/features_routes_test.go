@@ -212,7 +212,7 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 		{path: "/v1/guilds/g1/features/backfill.enabled", payload: map[string]any{"channel_id": "backfill-channel", "start_day": "2026-03-10", "initial_date": "2026-03-01"}},
 		{path: "/v1/guilds/g1/features/stats_channels", payload: map[string]any{"config_enabled": false, "update_interval_mins": 15}},
 		{path: "/v1/guilds/g1/features/auto_role_assignment", payload: map[string]any{"config_enabled": true, "target_role_id": "target-role", "required_role_ids": []string{"level-role", "booster-role"}}},
-		{path: "/v1/guilds/g1/features/user_prune", payload: map[string]any{"config_enabled": true, "grace_days": 31, "scan_interval_mins": 45, "initial_delay_secs": 90, "kicks_per_second": 2, "max_kicks_per_run": 8, "exempt_role_ids": []string{"staff", "vip"}, "dry_run": true}},
+		{path: "/v1/guilds/g1/features/user_prune", payload: map[string]any{"config_enabled": true}},
 	}
 
 	for _, req := range requests {
@@ -278,11 +278,8 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	if guild.Roles.BoosterRole != "booster-role" {
 		t.Fatalf("expected booster role backfilled from required roles, got %+v", guild.Roles)
 	}
-	if !guild.UserPrune.Enabled || guild.UserPrune.GraceDays != 31 || guild.UserPrune.ScanIntervalMins != 45 || guild.UserPrune.InitialDelaySecs != 90 || guild.UserPrune.KicksPerSecond != 2 || guild.UserPrune.MaxKicksPerRun != 8 || !guild.UserPrune.DryRun {
+	if !guild.UserPrune.Enabled {
 		t.Fatalf("expected user prune settings persisted, got %+v", guild.UserPrune)
-	}
-	if got := strings.Join(guild.UserPrune.ExemptRoleIDs, ","); got != "staff,vip" {
-		t.Fatalf("unexpected exempt roles: %q", got)
 	}
 }
 

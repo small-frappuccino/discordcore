@@ -28,7 +28,6 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 		guild.Roles.AutoAssignment.Enabled ||
 		guild.Roles.AutoAssignment.TargetRoleID != "" ||
 		len(guild.Roles.AutoAssignment.RequiredRoles) != 0 ||
-		guild.Roles.VerificationRole != "" ||
 		guild.Roles.BoosterRole != "" ||
 		guild.Roles.MuteRole != "" {
 		t.Fatalf("expected minimal guild to avoid role bootstrap, got %+v", guild.Roles)

@@ -230,11 +230,10 @@ func TestGuildSettingsPutGetListAndDelete(t *testing.T) {
 
 	payload := updateGuildSettingsRequest{
 		Channels: &files.ChannelsConfig{
-			Commands:            "100",
-			AutomodAction:       "200",
-			ModerationCase:      "300",
-			EntryBackfill:       "400",
-			VerificationCleanup: "500",
+			Commands:       "100",
+			AutomodAction:  "200",
+			ModerationCase: "300",
+			EntryBackfill:  "400",
 		},
 		Cache: &guildCacheSettingsSection{
 			RolesCacheTTL:   "10m",

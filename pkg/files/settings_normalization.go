@@ -23,8 +23,7 @@ func NormalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 		return RuntimeConfig{}, fmt.Errorf("global_max_workers must be >= 0")
 	}
 
-	updates := out.NormalizedWebhookEmbedUpdates()
-	if len(updates) > 0 {
+	if updates := out.NormalizedWebhookEmbedUpdates(); len(updates) > 0 {
 		normalized := make([]WebhookEmbedUpdateConfig, 0, len(updates))
 		seen := make(map[string]struct{}, len(updates))
 		for idx, item := range updates {
@@ -39,13 +38,8 @@ func NormalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 			normalized = append(normalized, next)
 		}
 		out.WebhookEmbedUpdates = normalized
-		out.WebhookEmbedUpdate = WebhookEmbedUpdateConfig{}
-	} else if !out.WebhookEmbedUpdate.IsZero() {
-		normalized, err := normalizeWebhookEmbedUpdateConfig(out.WebhookEmbedUpdate)
-		if err != nil {
-			return RuntimeConfig{}, fmt.Errorf("webhook_embed_update: %w", err)
-		}
-		out.WebhookEmbedUpdate = normalized
+	} else {
+		out.WebhookEmbedUpdates = nil
 	}
 
 	out.WebhookEmbedValidation = out.WebhookEmbedValidation.Normalized()

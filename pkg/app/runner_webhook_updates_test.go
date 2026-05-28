@@ -41,11 +41,12 @@ func TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild(t *testing.T) {
 			{
 				GuildID: "guild-b",
 				RuntimeConfig: files.RuntimeConfig{
-					// Legacy single-item field should be included via NormalizedWebhookEmbedUpdates().
-					WebhookEmbedUpdate: files.WebhookEmbedUpdateConfig{
-						MessageID:  "guild-b-legacy",
-						WebhookURL: "https://discord.com/api/webhooks/4/token",
-						Embed:      json.RawMessage(`{"title":"b-legacy"}`),
+					WebhookEmbedUpdates: []files.WebhookEmbedUpdateConfig{
+						{
+							MessageID:  "guild-b-1",
+							WebhookURL: "https://discord.com/api/webhooks/4/token",
+							Embed:      json.RawMessage(`{"title":"b1"}`),
+						},
 					},
 				},
 			},
@@ -66,7 +67,7 @@ func TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild(t *testing.T) {
 	if got[2].scope != "guild:guild-a" || got[2].index != 1 || got[2].update.MessageID != "guild-a-2" {
 		t.Fatalf("unexpected third item: %+v", got[2])
 	}
-	if got[3].scope != "guild:guild-b" || got[3].index != 0 || got[3].update.MessageID != "guild-b-legacy" {
+	if got[3].scope != "guild:guild-b" || got[3].index != 0 || got[3].update.MessageID != "guild-b-1" {
 		t.Fatalf("unexpected fourth item: %+v", got[3])
 	}
 }

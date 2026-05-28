@@ -131,8 +131,7 @@ The canonical bot config is stored in Postgres as one JSONB document. A minimal 
         "automod_action": "222222222",
         "moderation_case": "333333334",
         "clean_action": "333333335",
-        "entry_backfill": "555555555",
-        "verification_cleanup": "666666666"
+        "entry_backfill": "555555555"
       },
       "features": {
         "logging": {
@@ -150,8 +149,7 @@ The canonical bot config is stored in Postgres as one JSONB document. A minimal 
         }
       },
       "roles": {
-        "allowed": ["333333333"],
-        "verification_role": "333333335"
+        "allowed": ["333333333"]
       },
       "user_prune": {
         "enabled": false

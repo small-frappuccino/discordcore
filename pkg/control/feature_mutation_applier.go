@@ -277,41 +277,6 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 		} else if present {
 			guild.UserPrune.Enabled = value
 		}
-		if present, value, err := consumeInt(remaining, "grace_days"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.GraceDays = value
-		}
-		if present, value, err := consumeInt(remaining, "scan_interval_mins"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.ScanIntervalMins = value
-		}
-		if present, value, err := consumeInt(remaining, "initial_delay_secs"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.InitialDelaySecs = value
-		}
-		if present, value, err := consumeInt(remaining, "kicks_per_second"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.KicksPerSecond = value
-		}
-		if present, value, err := consumeInt(remaining, "max_kicks_per_run"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.MaxKicksPerRun = value
-		}
-		if present, value, err := consumeStringSlice(remaining, "exempt_role_ids"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.ExemptRoleIDs = normalizeStringList(value)
-		}
-		if present, value, err := consumeBool(remaining, "dry_run"); err != nil {
-			return err
-		} else if present {
-			guild.UserPrune.DryRun = value
-		}
 		return nil
 	},
 }

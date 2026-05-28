@@ -21,13 +21,34 @@ func TestRuntimeConfigModerationLoggingEnabled(t *testing.T) {
 	if got := (RuntimeConfig{ModerationLogging: &disabled}).ModerationLoggingEnabled(); got {
 		t.Fatal("expected moderation_logging=false to disable logs")
 	}
+}
 
-	if got := (RuntimeConfig{ModerationLogMode: "off"}).ModerationLoggingEnabled(); got {
-		t.Fatal("expected legacy moderation_log_mode=off to disable logs")
+func TestRuntimeConfigUnmarshalMigratesLegacyModerationLogMode(t *testing.T) {
+	t.Parallel()
+
+	var off RuntimeConfig
+	if err := json.Unmarshal([]byte(`{"moderation_log_mode":"off"}`), &off); err != nil {
+		t.Fatalf("unmarshal legacy off: %v", err)
+	}
+	if off.ModerationLogging == nil || *off.ModerationLogging {
+		t.Fatalf("expected legacy moderation_log_mode=off to migrate to moderation_logging=false, got %+v", off.ModerationLogging)
 	}
 
-	if got := (RuntimeConfig{ModerationLogMode: "alice_only"}).ModerationLoggingEnabled(); !got {
-		t.Fatal("expected legacy moderation_log_mode=alice_only to enable logs")
+	var aliceOnly RuntimeConfig
+	if err := json.Unmarshal([]byte(`{"moderation_log_mode":"alice_only"}`), &aliceOnly); err != nil {
+		t.Fatalf("unmarshal legacy alice_only: %v", err)
+	}
+	if aliceOnly.ModerationLogging == nil || !*aliceOnly.ModerationLogging {
+		t.Fatalf("expected legacy moderation_log_mode=alice_only to migrate to moderation_logging=true, got %+v", aliceOnly.ModerationLogging)
+	}
+
+	// Canonical value wins over the legacy key when both are present.
+	var both RuntimeConfig
+	if err := json.Unmarshal([]byte(`{"moderation_logging":true,"moderation_log_mode":"off"}`), &both); err != nil {
+		t.Fatalf("unmarshal both: %v", err)
+	}
+	if both.ModerationLogging == nil || !*both.ModerationLogging {
+		t.Fatalf("expected canonical moderation_logging=true to win, got %+v", both.ModerationLogging)
 	}
 }
 
@@ -56,15 +77,16 @@ func TestResolveRuntimeConfigModerationLoggingMerge(t *testing.T) {
 		t.Fatal("expected guild moderation_logging=false to override global true")
 	}
 
+	disabled := false
 	legacyCfg := &BotConfig{
 		RuntimeConfig: RuntimeConfig{
-			ModerationLogMode: "off",
+			ModerationLogging: &disabled,
 		},
 		Guilds: []GuildConfig{{GuildID: "g2"}},
 	}
 	legacyRC := legacyCfg.ResolveRuntimeConfig("g2")
 	if legacyRC.ModerationLogging == nil || *legacyRC.ModerationLogging {
-		t.Fatal("expected legacy global moderation_log_mode=off to resolve as disabled")
+		t.Fatal("expected global moderation_logging=false to resolve as disabled")
 	}
 }
 
@@ -96,18 +118,6 @@ func TestResolveRuntimeConfigGlobalMaxWorkersMerge(t *testing.T) {
 func TestRuntimeConfigNormalizedWebhookEmbedUpdates(t *testing.T) {
 	t.Parallel()
 
-	legacy := RuntimeConfig{
-		WebhookEmbedUpdate: WebhookEmbedUpdateConfig{
-			MessageID:  "m1",
-			WebhookURL: "https://discord.com/api/webhooks/1/token",
-			Embed:      json.RawMessage(`{"title":"legacy"}`),
-		},
-	}
-	legacyUpdates := legacy.NormalizedWebhookEmbedUpdates()
-	if len(legacyUpdates) != 1 || legacyUpdates[0].MessageID != "m1" {
-		t.Fatalf("expected legacy fallback with 1 item, got %+v", legacyUpdates)
-	}
-
 	list := RuntimeConfig{
 		WebhookEmbedUpdates: []WebhookEmbedUpdateConfig{
 			{},
@@ -117,15 +127,34 @@ func TestRuntimeConfigNormalizedWebhookEmbedUpdates(t *testing.T) {
 				Embed:      json.RawMessage(`{"title":"list"}`),
 			},
 		},
-		WebhookEmbedUpdate: WebhookEmbedUpdateConfig{
-			MessageID:  "legacy-ignored",
-			WebhookURL: "https://discord.com/api/webhooks/9/token",
-			Embed:      json.RawMessage(`{"title":"legacy"}`),
-		},
 	}
 	listUpdates := list.NormalizedWebhookEmbedUpdates()
 	if len(listUpdates) != 1 || listUpdates[0].MessageID != "m2" {
-		t.Fatalf("expected list to win over legacy with filtered non-empty items, got %+v", listUpdates)
+		t.Fatalf("expected normalized list to drop empty placeholders, got %+v", listUpdates)
+	}
+}
+
+func TestRuntimeConfigUnmarshalMigratesLegacyWebhookEmbedUpdate(t *testing.T) {
+	t.Parallel()
+
+	// Sole legacy single-entry key — migrates into the canonical list.
+	var legacyOnly RuntimeConfig
+	legacyJSON := `{"webhook_embed_update":{"message_id":"m1","webhook_url":"https://discord.com/api/webhooks/1/token","embed":{"title":"legacy"}}}`
+	if err := json.Unmarshal([]byte(legacyJSON), &legacyOnly); err != nil {
+		t.Fatalf("unmarshal legacy-only: %v", err)
+	}
+	if len(legacyOnly.WebhookEmbedUpdates) != 1 || legacyOnly.WebhookEmbedUpdates[0].MessageID != "m1" {
+		t.Fatalf("expected legacy single key migrated into canonical list, got %+v", legacyOnly.WebhookEmbedUpdates)
+	}
+
+	// Canonical list with a non-empty entry shadows the legacy key.
+	var both RuntimeConfig
+	bothJSON := `{"webhook_embed_updates":[{"message_id":"m2","webhook_url":"https://discord.com/api/webhooks/2/token","embed":{"title":"list"}}],"webhook_embed_update":{"message_id":"legacy-ignored","webhook_url":"https://discord.com/api/webhooks/9/token","embed":{"title":"legacy"}}}`
+	if err := json.Unmarshal([]byte(bothJSON), &both); err != nil {
+		t.Fatalf("unmarshal both: %v", err)
+	}
+	if len(both.WebhookEmbedUpdates) != 1 || both.WebhookEmbedUpdates[0].MessageID != "m2" {
+		t.Fatalf("expected canonical list to shadow legacy key, got %+v", both.WebhookEmbedUpdates)
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 var (
@@ -38,10 +40,11 @@ func (mgr *ConfigManager) ListWebhookEmbedUpdates(guildID string) ([]WebhookEmbe
 }
 
 // GetWebhookEmbedUpdate fetches one entry by message_id from the target scope.
-func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (WebhookEmbedUpdateConfig, error) {
+func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (_ WebhookEmbedUpdateConfig, err error) {
+	defer func() { err = errutil.Wrap(err, "get webhook embed update") }()
 	targetID := strings.TrimSpace(messageID)
 	if targetID == "" {
-		return WebhookEmbedUpdateConfig{}, fmt.Errorf("get webhook embed update: message_id is required")
+		return WebhookEmbedUpdateConfig{}, fmt.Errorf("message_id is required")
 	}
 
 	scope := normalizeWebhookScope(guildID)
@@ -66,14 +69,15 @@ func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (Webh
 }
 
 // CreateWebhookEmbedUpdate appends a new entry to the target scope.
-func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update WebhookEmbedUpdateConfig) error {
+func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update WebhookEmbedUpdateConfig) (err error) {
+	defer func() { err = errutil.Wrap(err, "create webhook embed update") }()
 	scope := normalizeWebhookScope(guildID)
 
 	normalized, err := normalizeWebhookEmbedUpdateConfig(update)
 	if err != nil {
-		return fmt.Errorf("create webhook embed update: %w", err)
+		return err
 	}
-	if err := mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
+	return mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
 		updates := rc.NormalizedWebhookEmbedUpdates()
 		if findWebhookEmbedUpdateIndexByMessageID(updates, normalized.MessageID) >= 0 {
 			return fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateAlreadyExists, normalized.MessageID)
@@ -82,25 +86,23 @@ func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update Webhoo
 		updates = append(updates, normalized)
 		setWebhookEmbedUpdatesCanonical(rc, updates)
 		return nil
-	}); err != nil {
-		return fmt.Errorf("create webhook embed update: %w", err)
-	}
-	return nil
+	})
 }
 
 // UpdateWebhookEmbedUpdate replaces an existing entry selected by message_id.
-func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, update WebhookEmbedUpdateConfig) error {
+func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, update WebhookEmbedUpdateConfig) (err error) {
+	defer func() { err = errutil.Wrap(err, "update webhook embed update") }()
 	scope := normalizeWebhookScope(guildID)
 	targetID := strings.TrimSpace(messageID)
 	if targetID == "" {
-		return fmt.Errorf("update webhook embed update: message_id is required")
+		return fmt.Errorf("message_id is required")
 	}
 
 	normalized, err := normalizeWebhookEmbedUpdateConfig(update)
 	if err != nil {
-		return fmt.Errorf("update webhook embed update: %w", err)
+		return err
 	}
-	if err := mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
+	return mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
 		updates := rc.NormalizedWebhookEmbedUpdates()
 		idx := findWebhookEmbedUpdateIndexByMessageID(updates, targetID)
 		if idx < 0 {
@@ -117,21 +119,19 @@ func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, up
 		updates[idx] = normalized
 		setWebhookEmbedUpdatesCanonical(rc, updates)
 		return nil
-	}); err != nil {
-		return fmt.Errorf("update webhook embed update: %w", err)
-	}
-	return nil
+	})
 }
 
 // DeleteWebhookEmbedUpdate removes an entry from the target scope.
-func (mgr *ConfigManager) DeleteWebhookEmbedUpdate(guildID, messageID string) error {
+func (mgr *ConfigManager) DeleteWebhookEmbedUpdate(guildID, messageID string) (err error) {
+	defer func() { err = errutil.Wrap(err, "delete webhook embed update") }()
 	scope := normalizeWebhookScope(guildID)
 	targetID := strings.TrimSpace(messageID)
 	if targetID == "" {
-		return fmt.Errorf("delete webhook embed update: message_id is required")
+		return fmt.Errorf("message_id is required")
 	}
 
-	if err := mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
+	return mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
 		updates := rc.NormalizedWebhookEmbedUpdates()
 		idx := findWebhookEmbedUpdateIndexByMessageID(updates, targetID)
 		if idx < 0 {
@@ -141,10 +141,7 @@ func (mgr *ConfigManager) DeleteWebhookEmbedUpdate(guildID, messageID string) er
 		updates = slices.Delete(updates, idx, idx+1)
 		setWebhookEmbedUpdatesCanonical(rc, updates)
 		return nil
-	}); err != nil {
-		return fmt.Errorf("delete webhook embed update: %w", err)
-	}
-	return nil
+	})
 }
 
 func normalizeWebhookScope(guildID string) string {
@@ -208,7 +205,6 @@ func setWebhookEmbedUpdatesCanonical(rc *RuntimeConfig, updates []WebhookEmbedUp
 		return
 	}
 	rc.WebhookEmbedUpdates = cloneWebhookEmbedUpdateList(updates)
-	rc.WebhookEmbedUpdate = WebhookEmbedUpdateConfig{}
 }
 
 func cloneWebhookEmbedUpdateConfig(in WebhookEmbedUpdateConfig) WebhookEmbedUpdateConfig {

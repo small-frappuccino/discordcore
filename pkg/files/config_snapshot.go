@@ -176,6 +176,7 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		PartnerBoard:         clonePartnerBoardConfig(in.PartnerBoard),
 		ReactionBlocks:       cloneReactionBlockConfig(in.ReactionBlocks),
 		QOTD:                 cloneQOTDConfig(in.QOTD),
+		RolePanels:           cloneRolePanels(in.RolePanels),
 		RuntimeConfig:        cloneRuntimeConfig(in.RuntimeConfig),
 	}
 }
@@ -224,7 +225,6 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 		DisableUserLogs:              in.DisableUserLogs,
 		DisableCleanLog:              in.DisableCleanLog,
 		ModerationLogging:            cloneBoolPtr(in.ModerationLogging),
-		ModerationLogMode:            in.ModerationLogMode,
 		PresenceWatchUserID:          in.PresenceWatchUserID,
 		PresenceWatchBot:             in.PresenceWatchBot,
 		MessageCacheTTLHours:         in.MessageCacheTTLHours,
@@ -237,7 +237,6 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 		DisableBotRolePermMirror:     in.DisableBotRolePermMirror,
 		BotRolePermMirrorActorRoleID: in.BotRolePermMirrorActorRoleID,
 		WebhookEmbedUpdates:          cloneWebhookEmbedUpdateList(in.WebhookEmbedUpdates),
-		WebhookEmbedUpdate:           cloneWebhookEmbedUpdateConfig(in.WebhookEmbedUpdate),
 		WebhookEmbedValidation:       in.WebhookEmbedValidation,
 	}
 }
@@ -252,13 +251,12 @@ func cloneFeatureToggles(in FeatureToggles) FeatureToggles {
 
 func cloneRolesConfig(in RolesConfig) RolesConfig {
 	return RolesConfig{
-		Allowed:          cloneStringSlice(in.Allowed),
-		DashboardRead:    cloneStringSlice(in.DashboardRead),
-		DashboardWrite:   cloneStringSlice(in.DashboardWrite),
-		AutoAssignment:   cloneAutoAssignmentConfig(in.AutoAssignment),
-		VerificationRole: in.VerificationRole,
-		BoosterRole:      in.BoosterRole,
-		MuteRole:         in.MuteRole,
+		Allowed:        cloneStringSlice(in.Allowed),
+		DashboardRead:  cloneStringSlice(in.DashboardRead),
+		DashboardWrite: cloneStringSlice(in.DashboardWrite),
+		AutoAssignment: cloneAutoAssignmentConfig(in.AutoAssignment),
+		BoosterRole:    in.BoosterRole,
+		MuteRole:       in.MuteRole,
 	}
 }
 
@@ -289,14 +287,7 @@ func cloneStatsChannelConfigs(in []StatsChannelConfig) []StatsChannelConfig {
 
 func cloneUserPruneConfig(in UserPruneConfig) UserPruneConfig {
 	return UserPruneConfig{
-		Enabled:          in.Enabled,
-		GraceDays:        in.GraceDays,
-		ScanIntervalMins: in.ScanIntervalMins,
-		InitialDelaySecs: in.InitialDelaySecs,
-		KicksPerSecond:   in.KicksPerSecond,
-		MaxKicksPerRun:   in.MaxKicksPerRun,
-		ExemptRoleIDs:    cloneStringSlice(in.ExemptRoleIDs),
-		DryRun:           in.DryRun,
+		Enabled: in.Enabled,
 	}
 }
 

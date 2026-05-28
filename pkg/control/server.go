@@ -571,11 +571,6 @@ var runtimeConfigFieldSetters = map[string]setterFunc{
 	"disable_user_logs":       boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableUserLogs = v }),
 	"disable_clean_log":       boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.DisableCleanLog = v }),
 	"moderation_logging":      boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.ModerationLogging = boolPtr(v) }),
-	// Deprecated (legacy). Accepted for backward compatibility; converted to moderation_logging.
-	"moderation_log_mode": stringSetter(func(rc *files.RuntimeConfig, v string) {
-		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(v)) != "off")
-		rc.ModerationLogMode = v
-	}),
 	"presence_watch_user_id":  stringSetter(func(rc *files.RuntimeConfig, v string) { rc.PresenceWatchUserID = v }),
 	"presence_watch_bot":      boolSetter(func(rc *files.RuntimeConfig, v bool) { rc.PresenceWatchBot = v }),
 	"message_cache_ttl_hours": intSetter(func(rc *files.RuntimeConfig, v int) { rc.MessageCacheTTLHours = v }),

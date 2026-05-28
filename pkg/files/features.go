@@ -70,6 +70,7 @@ type FeatureToggles struct {
 	StatsChannels  *bool                       `json:"stats_channels,omitempty"`
 	AutoRoleAssign *bool                       `json:"auto_role_assignment,omitempty"`
 	UserPrune      *bool                       `json:"user_prune,omitempty"`
+	RolePanels     *bool                       `json:"role_panels,omitempty"`
 }
 
 func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
@@ -132,6 +133,7 @@ type ResolvedFeatureToggles struct {
 	StatsChannels  bool
 	AutoRoleAssign bool
 	UserPrune      bool
+	RolePanels     bool
 }
 
 func boolPtr(v bool) *bool {

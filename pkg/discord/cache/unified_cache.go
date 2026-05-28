@@ -18,6 +18,7 @@ import (
 
 const unifiedCachePersistTimeout = 30 * time.Second
 
+// UnifiedCache holds segmented Discord entity caches (members, guilds, roles, channels)
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
 // and optional Postgres-backed persistence.
 type UnifiedCache struct {

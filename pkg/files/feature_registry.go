@@ -67,6 +67,7 @@ var featureRegistry = []toggleSpec{
 	{ID: "stats_channels", Path: "StatsChannels", Default: true},
 	{ID: "auto_role_assignment", Path: "AutoRoleAssign", Default: true},
 	{ID: "user_prune", Path: "UserPrune", Default: true},
+	{ID: "role_panels", Path: "RolePanels", Default: true},
 }
 
 var featureSpecByID = func() map[string]toggleSpec {

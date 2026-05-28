@@ -18,8 +18,7 @@ func TestChannelsConfigUnmarshalStrictSchema(t *testing.T) {
 		"automod_action": "c-automod",
 		"moderation_case": "c-mod",
 		"clean_action": "c-clean",
-		"entry_backfill": "c-backfill",
-		"verification_cleanup": "c-verify"
+		"entry_backfill": "c-backfill"
 	}`)
 
 	var channels ChannelsConfig
@@ -39,8 +38,8 @@ func TestChannelsConfigUnmarshalStrictSchema(t *testing.T) {
 	if channels.AutomodAction != "c-automod" || channels.ModerationCase != "c-mod" || channels.CleanAction != "c-clean" {
 		t.Fatalf("unexpected moderation channel mapping: automod=%q moderation=%q clean=%q", channels.AutomodAction, channels.ModerationCase, channels.CleanAction)
 	}
-	if channels.EntryBackfill != "c-backfill" || channels.VerificationCleanup != "c-verify" {
-		t.Fatalf("unexpected utility channels: backfill=%q verify=%q", channels.EntryBackfill, channels.VerificationCleanup)
+	if channels.EntryBackfill != "c-backfill" {
+		t.Fatalf("unexpected utility channels: backfill=%q", channels.EntryBackfill)
 	}
 }
 
@@ -48,14 +47,10 @@ func TestChannelsConfigHelpersStrict(t *testing.T) {
 	t.Parallel()
 
 	channels := ChannelsConfig{
-		EntryBackfill:       "c-backfill",
-		VerificationCleanup: "c-verify",
+		EntryBackfill: "c-backfill",
 	}
 
 	if got := channels.BackfillChannelID(); got != "c-backfill" {
 		t.Fatalf("expected strict backfill channel, got %q", got)
-	}
-	if got := channels.VerificationCleanupChannelID(); got != "c-verify" {
-		t.Fatalf("expected strict verification channel, got %q", got)
 	}
 }

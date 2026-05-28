@@ -19,15 +19,6 @@ import (
 
 func ptrInt(v int) *int { return &v }
 
-// Refactor goals:
-// - One source of truth for runtime keys (spec registry)
-// - Clean, explicit state handling (no implicit "packed values" hacks)
-// - Smaller, testable helpers (parsing/formatting/set/reset/render)
-// - UX/QoL: grouping, search/filter, safe defaults, clear restart hints
-//
-// Notes / constraints:
-// - Runtime config is bot-global.
-
 const (
 	groupName   = "config"
 	commandName = "runtime"
@@ -829,7 +820,7 @@ func groupFieldsForMain(rc files.RuntimeConfig, st panelState) []*discordgo.Mess
 		grouped[sp.Group] = append(grouped[sp.Group], line)
 	}
 
-	groupOrder := []string{"THEME", "SERVICES (LOGGING)", "MODERATION", "MESSAGE CACHE", "BACKFILL", "SAFETY"}
+	groupOrder := []string{"THEME", "SERVICES (LOGGING)", "MODERATION", "MESSAGE CACHE", "BACKFILL", "SAFETY", "VERIFICATION"}
 	fields := []*discordgo.MessageEmbedField{}
 
 	if st.Group != "" && st.Group != "ALL" {

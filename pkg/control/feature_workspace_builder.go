@@ -286,17 +286,8 @@ var featureDetailBuilders = map[string]func(*files.BotConfig, string) map[string
 			return map[string]any{}
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			prune := guild.UserPrune
 			return map[string]any{
-				"config_enabled":     prune.Enabled,
-				"grace_days":         prune.GraceDays,
-				"scan_interval_mins": prune.ScanIntervalMins,
-				"initial_delay_secs": prune.InitialDelaySecs,
-				"kicks_per_second":   prune.KicksPerSecond,
-				"max_kicks_per_run":  prune.MaxKicksPerRun,
-				"exempt_role_ids":    slices.Clone(prune.ExemptRoleIDs),
-				"exempt_role_count":  len(prune.ExemptRoleIDs),
-				"dry_run":            prune.DryRun,
+				"config_enabled": guild.UserPrune.Enabled,
 			}
 		}
 		return map[string]any{}

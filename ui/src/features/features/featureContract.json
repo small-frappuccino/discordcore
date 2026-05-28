@@ -82,6 +82,7 @@
     { "id": "backfill.enabled", "area": "maintenance", "tags": [] },
     { "id": "stats_channels", "area": "stats", "tags": ["stats.primary", "home.stats"] },
     { "id": "auto_role_assignment", "area": "roles", "tags": ["roles.auto_assignment", "home.auto_role"] },
-    { "id": "user_prune", "area": "maintenance", "tags": [] }
+    { "id": "user_prune", "area": "maintenance", "tags": [] },
+    { "id": "role_panels", "area": "roles", "tags": [] }
   ]
 }

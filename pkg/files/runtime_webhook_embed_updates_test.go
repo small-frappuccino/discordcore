@@ -177,22 +177,22 @@ func TestWebhookEmbedUpdatesCreateValidationAndDuplicates(t *testing.T) {
 func TestWebhookEmbedUpdatesLegacyFallbackMigration(t *testing.T) {
 	t.Parallel()
 
-	mgr := newWebhookUpdatesTestManager(t, &BotConfig{
-		RuntimeConfig: RuntimeConfig{
-			WebhookEmbedUpdate: WebhookEmbedUpdateConfig{
-				MessageID:  "legacy",
-				WebhookURL: "https://discord.com/api/webhooks/9/token",
-				Embed:      json.RawMessage(`{"title":"legacy"}`),
-			},
-		},
-	})
+	var bot BotConfig
+	legacyJSON := `{"guilds":[],"runtime_config":{"webhook_embed_update":{"message_id":"legacy","webhook_url":"https://discord.com/api/webhooks/9/token","embed":{"title":"legacy"}}}}`
+	if err := json.Unmarshal([]byte(legacyJSON), &bot); err != nil {
+		t.Fatalf("unmarshal legacy bot config: %v", err)
+	}
+	if len(bot.RuntimeConfig.WebhookEmbedUpdates) != 1 || bot.RuntimeConfig.WebhookEmbedUpdates[0].MessageID != "legacy" {
+		t.Fatalf("expected legacy single key migrated into canonical list at decode time, got %+v", bot.RuntimeConfig.WebhookEmbedUpdates)
+	}
 
+	mgr := newWebhookUpdatesTestManager(t, &bot)
 	list, err := mgr.ListWebhookEmbedUpdates("")
 	if err != nil {
-		t.Fatalf("list with legacy fallback: %v", err)
+		t.Fatalf("list after legacy migration: %v", err)
 	}
 	if len(list) != 1 || list[0].MessageID != "legacy" {
-		t.Fatalf("expected legacy item in list fallback, got %+v", list)
+		t.Fatalf("expected legacy item to remain visible after migration, got %+v", list)
 	}
 
 	if err := mgr.CreateWebhookEmbedUpdate("", WebhookEmbedUpdateConfig{
@@ -200,15 +200,12 @@ func TestWebhookEmbedUpdatesLegacyFallbackMigration(t *testing.T) {
 		WebhookURL: "https://discord.com/api/webhooks/10/token",
 		Embed:      json.RawMessage(`{"title":"new"}`),
 	}); err != nil {
-		t.Fatalf("create new item while legacy exists: %v", err)
+		t.Fatalf("create new item alongside migrated legacy: %v", err)
 	}
 
 	cfg := mgr.Config()
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
-	}
-	if !cfg.RuntimeConfig.WebhookEmbedUpdate.IsZero() {
-		t.Fatalf("expected legacy single-field key to be cleared after canonical write, got %+v", cfg.RuntimeConfig.WebhookEmbedUpdate)
 	}
 	if len(cfg.RuntimeConfig.WebhookEmbedUpdates) != 2 {
 		t.Fatalf("expected canonical list with 2 items, got %+v", cfg.RuntimeConfig.WebhookEmbedUpdates)

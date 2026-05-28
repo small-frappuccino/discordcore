@@ -187,9 +187,7 @@ type runtimeWebhookSection struct {
 }
 
 type runtimeAdvancedSection struct {
-	GlobalMaxWorkers        int                            `json:"global_max_workers,omitempty"`
-	ModerationLogMode       string                         `json:"moderation_log_mode,omitempty"`
-	LegacyWebhookEmbedPatch files.WebhookEmbedUpdateConfig `json:"legacy_webhook_embed_update,omitempty"`
+	GlobalMaxWorkers int `json:"global_max_workers,omitempty"`
 }
 
 type updateGlobalSettingsRequest struct {
@@ -254,7 +252,7 @@ func buildSettingsCatalog() settingsCatalog {
 			{
 				ID:          "roles",
 				Title:       "Roles and auto-assignment",
-				Description: "Allowed admin roles, mute role setup, verification roles, booster role anchoring, and auto-assignment rules.",
+				Description: "Allowed admin roles, mute role setup, booster role anchoring, and auto-assignment rules.",
 				Scope:       "guild",
 				Kind:        "object",
 			},
@@ -572,9 +570,7 @@ func groupRuntimeSettings(rc files.RuntimeConfig) runtimeSettingsSections {
 			Validation: rc.WebhookEmbedValidation,
 		},
 		Advanced: runtimeAdvancedSection{
-			GlobalMaxWorkers:        rc.GlobalMaxWorkers,
-			ModerationLogMode:       rc.ModerationLogMode,
-			LegacyWebhookEmbedPatch: rc.WebhookEmbedUpdate,
+			GlobalMaxWorkers: rc.GlobalMaxWorkers,
 		},
 	}
 }
@@ -591,7 +587,6 @@ func flattenRuntimeSettingsSections(in runtimeSettingsSections) files.RuntimeCon
 		DisableUserLogs:              in.Logging.DisableUserLogs,
 		DisableCleanLog:              in.Logging.DisableCleanLog,
 		ModerationLogging:            in.Logging.ModerationLogging,
-		ModerationLogMode:            in.Advanced.ModerationLogMode,
 		PresenceWatchUserID:          in.PresenceWatch.PresenceWatchUserID,
 		PresenceWatchBot:             in.PresenceWatch.PresenceWatchBot,
 		MessageCacheTTLHours:         in.MessageCache.MessageCacheTTLHours,
@@ -604,7 +599,6 @@ func flattenRuntimeSettingsSections(in runtimeSettingsSections) files.RuntimeCon
 		DisableBotRolePermMirror:     in.Safety.DisableBotRolePermMirror,
 		BotRolePermMirrorActorRoleID: in.Safety.BotRolePermMirrorActorRoleID,
 		WebhookEmbedUpdates:          in.Webhook.Updates,
-		WebhookEmbedUpdate:           in.Advanced.LegacyWebhookEmbedPatch,
 		WebhookEmbedValidation:       in.Webhook.Validation,
 	}
 }
@@ -651,7 +645,6 @@ func countConfiguredChannels(ch files.ChannelsConfig) int {
 		ch.AutomodAction,
 		ch.ModerationCase,
 		ch.EntryBackfill,
-		ch.VerificationCleanup,
 	}
 	for _, value := range values {
 		if value != "" {
@@ -669,7 +662,7 @@ func hasRuntimeOverrides(rc files.RuntimeConfig) bool {
 	if rc.Database != (files.DatabaseRuntimeConfig{}) {
 		return true
 	}
-	if rc.BotTheme != "" ||
+	return rc.BotTheme != "" ||
 		rc.DisableDBCleanup ||
 		rc.DisableAutomodLogs ||
 		rc.DisableMessageLogs ||
@@ -678,7 +671,6 @@ func hasRuntimeOverrides(rc files.RuntimeConfig) bool {
 		rc.DisableUserLogs ||
 		rc.DisableCleanLog ||
 		rc.ModerationLogging != nil ||
-		rc.ModerationLogMode != "" ||
 		rc.PresenceWatchUserID != "" ||
 		rc.PresenceWatchBot ||
 		rc.MessageCacheTTLHours != 0 ||
@@ -691,8 +683,5 @@ func hasRuntimeOverrides(rc files.RuntimeConfig) bool {
 		rc.DisableBotRolePermMirror ||
 		rc.BotRolePermMirrorActorRoleID != "" ||
 		len(rc.NormalizedWebhookEmbedUpdates()) > 0 ||
-		rc.WebhookEmbedValidation != (files.WebhookEmbedValidationConfig{}) {
-		return true
-	}
-	return !rc.WebhookEmbedUpdate.IsZero()
+		rc.WebhookEmbedValidation != (files.WebhookEmbedValidationConfig{})
 }

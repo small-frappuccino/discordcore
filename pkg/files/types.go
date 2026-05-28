@@ -34,9 +34,6 @@ type RuntimeConfig struct {
 	// true/nil: send moderation logs automatically
 	// false: do not send moderation logs
 	ModerationLogging *bool `json:"moderation_logging,omitempty"`
-	// Deprecated: legacy mode key kept for backward compatibility with older settings.
-	// New behavior ignores mode semantics and only uses moderation_logging true/false.
-	ModerationLogMode string `json:"moderation_log_mode,omitempty"`
 
 	// PRESENCE WATCH
 	PresenceWatchUserID string `json:"presence_watch_user_id,omitempty"`
@@ -66,10 +63,97 @@ type RuntimeConfig struct {
 	// Webhook embed message patch (global or per-guild override).
 	// Intended for editing an existing webhook message embed by ID.
 	WebhookEmbedUpdates []WebhookEmbedUpdateConfig `json:"webhook_embed_updates,omitempty"`
-	// Deprecated: single-item legacy key kept for backward compatibility.
-	WebhookEmbedUpdate WebhookEmbedUpdateConfig `json:"webhook_embed_update,omitempty"`
 	// Remote validation behavior for webhook embed targets used by CRUD commands.
 	WebhookEmbedValidation WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+}
+
+// UnmarshalJSON decodes a RuntimeConfig and absorbs legacy persisted keys into
+// their canonical successors so older settings files continue to load:
+//   - "moderation_log_mode" (off/non-off string) migrates into ModerationLogging
+//     when ModerationLogging is unset
+//   - "webhook_embed_update" (single-entry legacy form) is appended to
+//     WebhookEmbedUpdates when no non-empty canonical entry shadows it
+//
+// The legacy keys never round-trip into the public type; the marshalled form
+// only emits the canonical fields.
+func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
+	type rawRuntimeConfig struct {
+		Database                     DatabaseRuntimeConfig        `json:"database,omitempty"`
+		BotTheme                     string                       `json:"bot_theme,omitempty"`
+		DisableDBCleanup             bool                         `json:"disable_db_cleanup,omitempty"`
+		DisableAutomodLogs           bool                         `json:"disable_automod_logs,omitempty"`
+		DisableMessageLogs           bool                         `json:"disable_message_logs,omitempty"`
+		DisableEntryExitLogs         bool                         `json:"disable_entry_exit_logs,omitempty"`
+		DisableReactionLogs          bool                         `json:"disable_reaction_logs,omitempty"`
+		DisableUserLogs              bool                         `json:"disable_user_logs,omitempty"`
+		DisableCleanLog              bool                         `json:"disable_clean_log,omitempty"`
+		ModerationLogging            *bool                        `json:"moderation_logging,omitempty"`
+		LegacyModerationLogMode      string                       `json:"moderation_log_mode,omitempty"`
+		PresenceWatchUserID          string                       `json:"presence_watch_user_id,omitempty"`
+		PresenceWatchBot             bool                         `json:"presence_watch_bot,omitempty"`
+		MessageCacheTTLHours         int                          `json:"message_cache_ttl_hours,omitempty"`
+		MessageDeleteOnLog           bool                         `json:"message_delete_on_log,omitempty"`
+		MessageCacheCleanup          bool                         `json:"message_cache_cleanup,omitempty"`
+		GlobalMaxWorkers             int                          `json:"global_max_workers,omitempty"`
+		BackfillChannelID            string                       `json:"backfill_channel_id,omitempty"`
+		BackfillStartDay             string                       `json:"backfill_start_day,omitempty"`
+		BackfillInitialDate          string                       `json:"backfill_initial_date,omitempty"`
+		DisableBotRolePermMirror     bool                         `json:"disable_bot_role_perm_mirror,omitempty"`
+		BotRolePermMirrorActorRoleID string                       `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
+		WebhookEmbedUpdates          []WebhookEmbedUpdateConfig   `json:"webhook_embed_updates,omitempty"`
+		LegacyWebhookEmbedUpdate     WebhookEmbedUpdateConfig     `json:"webhook_embed_update,omitempty"`
+		WebhookEmbedValidation       WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+	}
+
+	var raw rawRuntimeConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*rc = RuntimeConfig{
+		Database:                     raw.Database,
+		BotTheme:                     raw.BotTheme,
+		DisableDBCleanup:             raw.DisableDBCleanup,
+		DisableAutomodLogs:           raw.DisableAutomodLogs,
+		DisableMessageLogs:           raw.DisableMessageLogs,
+		DisableEntryExitLogs:         raw.DisableEntryExitLogs,
+		DisableReactionLogs:          raw.DisableReactionLogs,
+		DisableUserLogs:              raw.DisableUserLogs,
+		DisableCleanLog:              raw.DisableCleanLog,
+		ModerationLogging:            raw.ModerationLogging,
+		PresenceWatchUserID:          raw.PresenceWatchUserID,
+		PresenceWatchBot:             raw.PresenceWatchBot,
+		MessageCacheTTLHours:         raw.MessageCacheTTLHours,
+		MessageDeleteOnLog:           raw.MessageDeleteOnLog,
+		MessageCacheCleanup:          raw.MessageCacheCleanup,
+		GlobalMaxWorkers:             raw.GlobalMaxWorkers,
+		BackfillChannelID:            raw.BackfillChannelID,
+		BackfillStartDay:             raw.BackfillStartDay,
+		BackfillInitialDate:          raw.BackfillInitialDate,
+		DisableBotRolePermMirror:     raw.DisableBotRolePermMirror,
+		BotRolePermMirrorActorRoleID: raw.BotRolePermMirrorActorRoleID,
+		WebhookEmbedUpdates:          raw.WebhookEmbedUpdates,
+		WebhookEmbedValidation:       raw.WebhookEmbedValidation,
+	}
+
+	if rc.ModerationLogging == nil && strings.TrimSpace(raw.LegacyModerationLogMode) != "" {
+		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(raw.LegacyModerationLogMode)) != "off")
+	}
+
+	if !raw.LegacyWebhookEmbedUpdate.IsZero() {
+		hasCanonical := false
+		for _, item := range rc.WebhookEmbedUpdates {
+			if !item.IsZero() {
+				hasCanonical = true
+				break
+			}
+		}
+		if !hasCanonical {
+			rc.WebhookEmbedUpdates = append(rc.WebhookEmbedUpdates, raw.LegacyWebhookEmbedUpdate)
+		}
+	}
+
+	return nil
 }
 
 // DatabaseRuntimeConfig defines runtime database configuration.
@@ -140,9 +224,10 @@ func (c WebhookEmbedUpdateConfig) IsZero() bool {
 		len(bytes.TrimSpace(c.Embed)) == 0
 }
 
-// NormalizedWebhookEmbedUpdates returns a normalized list:
-// - prefers webhook_embed_updates when any non-empty entries exist
-// - falls back to legacy webhook_embed_update when list is empty
+// NormalizedWebhookEmbedUpdates returns the canonical webhook_embed_updates list
+// with empty placeholder entries filtered out. The legacy single-entry
+// "webhook_embed_update" key is migrated into this slice at JSON decode time by
+// RuntimeConfig.UnmarshalJSON, so callers no longer need a fallback branch.
 func (rc RuntimeConfig) NormalizedWebhookEmbedUpdates() []WebhookEmbedUpdateConfig {
 	updates := make([]WebhookEmbedUpdateConfig, 0, len(rc.WebhookEmbedUpdates))
 	for _, item := range rc.WebhookEmbedUpdates {
@@ -151,13 +236,10 @@ func (rc RuntimeConfig) NormalizedWebhookEmbedUpdates() []WebhookEmbedUpdateConf
 		}
 		updates = append(updates, item)
 	}
-	if len(updates) > 0 {
-		return updates
+	if len(updates) == 0 {
+		return nil
 	}
-	if !rc.WebhookEmbedUpdate.IsZero() {
-		return []WebhookEmbedUpdateConfig{rc.WebhookEmbedUpdate}
-	}
-	return nil
+	return updates
 }
 
 // EffectiveWebhookEmbedValidation resolves webhook_embed_validation defaults.
@@ -172,25 +254,20 @@ type ChannelsConfig struct {
 	Commands string `json:"commands,omitempty"`
 
 	// Event/feature-scoped channels (canonical settings schema).
-	AvatarLogging       string `json:"avatar_logging,omitempty"`
-	RoleUpdate          string `json:"role_update,omitempty"`
-	MemberJoin          string `json:"member_join,omitempty"`
-	MemberLeave         string `json:"member_leave,omitempty"`
-	MessageEdit         string `json:"message_edit,omitempty"`
-	MessageDelete       string `json:"message_delete,omitempty"`
-	AutomodAction       string `json:"automod_action,omitempty"`
-	ModerationCase      string `json:"moderation_case,omitempty"`
-	CleanAction         string `json:"clean_action,omitempty"`
-	EntryBackfill       string `json:"entry_backfill,omitempty"`
-	VerificationCleanup string `json:"verification_cleanup,omitempty"`
+	AvatarLogging  string `json:"avatar_logging,omitempty"`
+	RoleUpdate     string `json:"role_update,omitempty"`
+	MemberJoin     string `json:"member_join,omitempty"`
+	MemberLeave    string `json:"member_leave,omitempty"`
+	MessageEdit    string `json:"message_edit,omitempty"`
+	MessageDelete  string `json:"message_delete,omitempty"`
+	AutomodAction  string `json:"automod_action,omitempty"`
+	ModerationCase string `json:"moderation_case,omitempty"`
+	CleanAction    string `json:"clean_action,omitempty"`
+	EntryBackfill  string `json:"entry_backfill,omitempty"`
 }
 
 func (cc ChannelsConfig) BackfillChannelID() string {
 	return strings.TrimSpace(cc.EntryBackfill)
-}
-
-func (cc ChannelsConfig) VerificationCleanupChannelID() string {
-	return strings.TrimSpace(cc.VerificationCleanup)
 }
 
 // StatsChannelConfig defines a channel that should reflect a member count.
@@ -218,13 +295,12 @@ type AutoAssignmentConfig struct {
 
 // RolesConfig groups role-related settings per guild.
 type RolesConfig struct {
-	Allowed          []string             `json:"allowed,omitempty"`
-	DashboardRead    []string             `json:"dashboard_read,omitempty"`
-	DashboardWrite   []string             `json:"dashboard_write,omitempty"`
-	AutoAssignment   AutoAssignmentConfig `json:"auto_assignment,omitempty"`
-	VerificationRole string               `json:"verification_role,omitempty"`
-	BoosterRole      string               `json:"booster_role,omitempty"`
-	MuteRole         string               `json:"mute_role,omitempty"`
+	Allowed        []string             `json:"allowed,omitempty"`
+	DashboardRead  []string             `json:"dashboard_read,omitempty"`
+	DashboardWrite []string             `json:"dashboard_write,omitempty"`
+	AutoAssignment AutoAssignmentConfig `json:"auto_assignment,omitempty"`
+	BoosterRole    string               `json:"booster_role,omitempty"`
+	MuteRole       string               `json:"mute_role,omitempty"`
 }
 
 const (
@@ -325,21 +401,6 @@ type UserPruneConfig struct {
 	// true: execute native Discord prune automatically on day 28 (30-day inactivity window)
 	// false: do not execute automatically
 	Enabled bool `json:"enabled,omitempty"`
-
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	GraceDays int `json:"grace_days,omitempty"`
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	ScanIntervalMins int `json:"scan_interval_mins,omitempty"`
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	InitialDelaySecs int `json:"initial_delay_secs,omitempty"`
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	KicksPerSecond int `json:"kps,omitempty"`
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	MaxKicksPerRun int `json:"max_kicks_per_run,omitempty"`
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	ExemptRoleIDs []string `json:"exempt_role_ids,omitempty"`
-	// Deprecated: ignored. Kept only for backward compatibility with older settings files.
-	DryRun bool `json:"dry_run,omitempty"`
 }
 
 // ReactionBlockEmojiConfig stores one blocked emoji selector.
@@ -391,6 +452,7 @@ type GuildConfig struct {
 	PartnerBoard   PartnerBoardConfig  `json:"partner_board,omitempty"`
 	ReactionBlocks ReactionBlockConfig `json:"reaction_blocks,omitempty"`
 	QOTD           QOTDConfig          `json:"qotd,omitempty"`
+	RolePanels     []RolePanelConfig   `json:"role_panels,omitempty"`
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
@@ -553,8 +615,6 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildRC.ModerationLogging != nil {
 		resolved.ModerationLogging = boolPtr(*guildRC.ModerationLogging)
-	} else if guildRC.ModerationLogMode != "" {
-		resolved.ModerationLogging = boolPtr(guildRC.ModerationLoggingEnabled())
 	}
 	if guildRC.PresenceWatchUserID != "" {
 		resolved.PresenceWatchUserID = guildRC.PresenceWatchUserID
@@ -601,20 +661,20 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildUpdates := guildRC.NormalizedWebhookEmbedUpdates(); len(guildUpdates) > 0 {
 		resolved.WebhookEmbedUpdates = append([]WebhookEmbedUpdateConfig(nil), guildUpdates...)
-		resolved.WebhookEmbedUpdate = WebhookEmbedUpdateConfig{}
 	}
 
 	return resolved
 }
 
 // ModerationLoggingEnabled resolves whether moderation logs should be sent.
-// New key: runtime_config.moderation_logging (true/false).
-// Backward compatibility: when unset, moderation_log_mode="off" disables logs; any other value enables.
+// Defaults to true when runtime_config.moderation_logging is unset; the legacy
+// "moderation_log_mode" key is migrated into ModerationLogging at JSON decode
+// time by RuntimeConfig.UnmarshalJSON.
 func (rc RuntimeConfig) ModerationLoggingEnabled() bool {
 	if rc.ModerationLogging != nil {
 		return *rc.ModerationLogging
 	}
-	return strings.ToLower(strings.TrimSpace(rc.ModerationLogMode)) != "off"
+	return true
 }
 
 // ConfigManager handles bot configuration management.

@@ -12,7 +12,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -196,15 +195,10 @@ func ensureModerationCommandEnabled(ctx *core.Context, featureID, disabledMessag
 	if cfg == nil {
 		return core.NewCommandError("Configuration is not available right now.", true)
 	}
-	if !moderationCommandFeatureEnabled(cfg.ResolveFeatures(ctx.GuildID), featureID) {
+	if enabled, _ := cfg.ResolveFeatures(ctx.GuildID).Lookup(featureID); !enabled {
 		return core.NewCommandError(disabledMessage, true)
 	}
 	return nil
-}
-
-func moderationCommandFeatureEnabled(features files.ResolvedFeatureToggles, featureID string) bool {
-	enabled, _ := features.Lookup(featureID)
-	return enabled
 }
 
 // RegisterModerationCommands registers the moderation slash commands as
