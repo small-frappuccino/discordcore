@@ -46,10 +46,6 @@ func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, 
 	return nil
 }
 
-func (p *fakePublisher) FetchThreadMessages(_ context.Context, _ *discordgo.Session, _ string) ([]discordqotd.ArchivedMessage, error) {
-	return nil, nil
-}
-
 func newIntegrationQOTDCommandTestRouter(
 	t *testing.T,
 	session *discordgo.Session,

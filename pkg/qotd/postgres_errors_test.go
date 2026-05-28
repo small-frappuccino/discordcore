@@ -17,7 +17,7 @@ func TestIsQOTDScheduledPublishConflictMatchesRelevantConstraints(t *testing.T) 
 	}{
 		{name: "current scheduled constraint", constraintName: qotdScheduledPublishConstraint, want: true},
 		{name: "legacy scheduled constraint", constraintName: qotdLegacyPublishDateConstraint, want: true},
-		{name: "wrong qotd constraint", constraintName: qotdThreadArchiveConstraint, want: false},
+		{name: "wrong qotd constraint", constraintName: qotdAnswerMessagesUniqueUserConstraint, want: false},
 	}
 
 	for _, tt := range tests {
@@ -32,18 +32,6 @@ func TestIsQOTDScheduledPublishConflictMatchesRelevantConstraints(t *testing.T) 
 				t.Fatalf("isQOTDScheduledPublishConflict() = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestIsQOTDThreadArchiveConflictMatchesThreadConstraint(t *testing.T) {
-	t.Parallel()
-
-	err := fmt.Errorf("wrapped: %w", &pgconn.PgError{
-		Code:           postgresUniqueViolationCode,
-		ConstraintName: qotdThreadArchiveConstraint,
-	})
-	if !isQOTDThreadArchiveConflict(err) {
-		t.Fatal("expected thread archive conflict to match typed postgres error")
 	}
 }
 
@@ -74,7 +62,7 @@ func TestQOTDUniqueConstraintHelpersIgnoreNonMatchingErrors(t *testing.T) {
 		Code:           postgresUniqueViolationCode,
 		ConstraintName: "idx_other_unique_constraint",
 	})
-	if isQOTDAnswerMessageConflict(wrongConstraint) || isQOTDThreadArchiveConflict(wrongConstraint) {
+	if isQOTDAnswerMessageConflict(wrongConstraint) {
 		t.Fatal("expected unrelated unique constraint to be ignored")
 	}
 }

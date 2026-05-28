@@ -25,10 +25,6 @@ func (p *stubSetThreadStatePublisher) SetThreadState(_ context.Context, _ *disco
 	return p.err
 }
 
-func (p *stubSetThreadStatePublisher) FetchThreadMessages(context.Context, *discordgo.Session, string) ([]discordqotd.ArchivedMessage, error) {
-	return nil, errors.New("unexpected FetchThreadMessages call")
-}
-
 func TestSetThreadStateDegradesGracefullyOnMissingAccess(t *testing.T) {
 	t.Parallel()
 

@@ -17,8 +17,6 @@ func TestQOTDTablesInitialized(t *testing.T) {
 		"qotd_official_posts",
 		"qotd_forum_surfaces",
 		"qotd_answer_messages",
-		"qotd_thread_archives",
-		"qotd_message_archives",
 	}
 	for _, tableName := range required {
 		var exists bool
@@ -38,7 +36,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 		}
 	}
 
-	legacyTables := []string{"qotd_reply_threads"}
+	legacyTables := []string{"qotd_reply_threads", "qotd_thread_archives", "qotd_message_archives"}
 	for _, tableName := range legacyTables {
 		var exists bool
 		if err := store.db.QueryRow(
@@ -63,7 +61,6 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	}{
 		{tableName: "qotd_official_posts", columnName: "response_channel_id_snapshot"},
 		{tableName: "qotd_official_posts", columnName: "is_pinned"},
-		{tableName: "qotd_thread_archives", columnName: "reply_thread_id"},
 	}
 	for _, legacyColumn := range legacyColumns {
 		var exists bool

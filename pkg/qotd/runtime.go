@@ -2,7 +2,6 @@ package qotd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,10 +13,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-)
-
-const (
-	qotdArchiveSourceOfficial = "official"
 )
 
 // PublishScheduledIfDue publishes the scheduled QOTD for the active slot when
@@ -366,22 +361,6 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 		return err
 	}
 
-	messageMode := strings.TrimSpace(post.DiscordThreadID) == ""
-	missingOfficial := false
-	if !messageMode {
-		var err error
-		missingOfficial, err = s.archiveThreadMessages(ctx, session, storage.QOTDThreadArchiveRecord{
-			GuildID:         post.GuildID,
-			OfficialPostID:  post.ID,
-			SourceKind:      qotdArchiveSourceOfficial,
-			DiscordThreadID: post.DiscordThreadID,
-			ArchivedAt:      archivedAt,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
 	answerRecords, err := s.store.ListQOTDAnswerMessagesByOfficialPost(ctx, post.ID)
 	if err != nil {
 		return err
@@ -396,12 +375,8 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	// directly. The Discord-thread path below routes through
 	// applyOfficialPostThreadTransition so the divergence semantics stay
 	// in one place.
-	if messageMode {
+	if strings.TrimSpace(post.DiscordThreadID) == "" {
 		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchived), &archivedAt, &archivedAt)
-		return err
-	}
-	if missingOfficial {
-		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateMissingDiscord), &archivedAt, &archivedAt)
 		return err
 	}
 
@@ -412,7 +387,9 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	// be required, but now it would race the Discord auto-archive and
 	// risk unarchiving a thread the platform just closed. The lock stays
 	// so reply traffic on the past QOTD cannot reopen the thread from
-	// the archived state.
+	// the archived state. applyOfficialPostThreadTransition flips the
+	// final state to OfficialPostStateMissingDiscord when the thread is
+	// gone from Discord's side.
 	_, err = s.applyOfficialPostThreadTransition(
 		ctx,
 		session,
@@ -431,62 +408,6 @@ func (s *Service) archiveAnswerRecord(ctx context.Context, answerRecord storage.
 	}
 	_, err := s.store.UpdateQOTDAnswerMessageState(ctx, answerRecord.ID, string(AnswerRecordStateArchived), &archivedAt, &archivedAt)
 	return err
-}
-
-func (s *Service) archiveThreadMessages(ctx context.Context, session *discordgo.Session, record storage.QOTDThreadArchiveRecord) (bool, error) {
-	threadID := strings.TrimSpace(record.DiscordThreadID)
-	if threadID == "" {
-		return true, nil
-	}
-
-	archive, err := s.store.GetQOTDThreadArchiveByThreadID(ctx, threadID)
-	if err != nil {
-		return false, err
-	}
-
-	messages, err := s.publisher.FetchThreadMessages(ctx, session, threadID)
-	if err != nil {
-		if isMissingDiscordThreadError(err) {
-			return archive == nil, nil
-		}
-		return false, err
-	}
-
-	if archive == nil {
-		archive, err = s.ensureThreadArchive(ctx, record)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	if err := s.store.AppendQOTDArchivedMessages(ctx, archive.ID, buildArchivedMessageRecords(messages)); err != nil {
-		return false, err
-	}
-	return false, nil
-}
-
-func (s *Service) ensureThreadArchive(ctx context.Context, record storage.QOTDThreadArchiveRecord) (*storage.QOTDThreadArchiveRecord, error) {
-	threadID := strings.TrimSpace(record.DiscordThreadID)
-	if threadID == "" {
-		return nil, fmt.Errorf("ensure qotd thread archive: discord_thread_id is required")
-	}
-
-	existing, err := s.store.GetQOTDThreadArchiveByThreadID(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil {
-		return existing, nil
-	}
-
-	created, err := s.store.CreateQOTDThreadArchive(ctx, record)
-	if err != nil {
-		if !isQOTDThreadArchiveConflict(err) {
-			return nil, err
-		}
-		return s.store.GetQOTDThreadArchiveByThreadID(ctx, threadID)
-	}
-	return created, nil
 }
 
 func (s *Service) setThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) (bool, error) {
@@ -537,42 +458,6 @@ func (s *Service) logUnmanageableThreadOnce(threadID string, state discordqotd.T
 		"targetArchived", state.Archived,
 		"err", cause,
 	)
-}
-
-func buildArchivedMessageRecords(messages []discordqotd.ArchivedMessage) []storage.QOTDMessageArchiveRecord {
-	if len(messages) == 0 {
-		return nil
-	}
-	records := make([]storage.QOTDMessageArchiveRecord, 0, len(messages))
-	for _, message := range messages {
-		records = append(records, storage.QOTDMessageArchiveRecord{
-			DiscordMessageID:   strings.TrimSpace(message.MessageID),
-			AuthorID:           strings.TrimSpace(message.AuthorID),
-			AuthorNameSnapshot: strings.TrimSpace(message.AuthorNameSnapshot),
-			AuthorIsBot:        message.AuthorIsBot,
-			Content:            message.Content,
-			EmbedsJSON:         cloneArchiveJSON(message.EmbedsJSON),
-			AttachmentsJSON:    cloneArchiveJSON(message.AttachmentsJSON),
-			CreatedAt:          normalizeArchivedMessageTime(message.CreatedAt),
-		})
-	}
-	return records
-}
-
-func cloneArchiveJSON(raw json.RawMessage) json.RawMessage {
-	if len(raw) == 0 {
-		return nil
-	}
-	out := make(json.RawMessage, len(raw))
-	copy(out, raw)
-	return out
-}
-
-func normalizeArchivedMessageTime(value time.Time) time.Time {
-	if value.IsZero() {
-		return time.Now().UTC()
-	}
-	return value.UTC()
 }
 
 func isMissingDiscordThreadError(err error) bool {

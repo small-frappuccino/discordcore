@@ -66,10 +66,6 @@ CREATE UNIQUE INDEX idx_qotd_reply_threads_unique_user ON qotd_reply_threads(off
 CREATE UNIQUE INDEX idx_qotd_reply_threads_thread ON qotd_reply_threads(discord_thread_id) WHERE discord_thread_id IS NOT NULL;
 CREATE INDEX idx_qotd_reply_threads_state ON qotd_reply_threads(official_post_id, state, created_at);
 CREATE INDEX idx_qotd_reply_threads_provisioning_recovery ON qotd_reply_threads(guild_id, state, updated_at) WHERE discord_thread_id IS NULL;
-ALTER TABLE qotd_thread_archives ADD COLUMN reply_thread_id BIGINT;
-ALTER TABLE qotd_thread_archives
-	ADD CONSTRAINT qotd_thread_archives_reply_thread_id_fkey
-	FOREIGN KEY (reply_thread_id) REFERENCES qotd_reply_threads(id) ON DELETE CASCADE;
 `); err != nil {
 		t.Fatalf("recreate legacy qotd artifacts: %v", err)
 	}
@@ -89,6 +85,9 @@ RETURNING id
 		t.Fatalf("insert question: %v", err)
 	}
 
+	// publish_ordinal must be set explicitly: migration 19 made it NOT NULL,
+	// and this fixture represents a row that has already been migrated past
+	// 19 but still carries other legacy drift the repair must clean up.
 	var officialPostID int64
 	if err := db.QueryRowContext(context.Background(), `
 INSERT INTO qotd_official_posts (
@@ -106,6 +105,7 @@ INSERT INTO qotd_official_posts (
 	deck_id,
 	deck_name_snapshot,
 	publish_mode,
+	publish_ordinal,
 	response_channel_id_snapshot,
 	is_pinned
 ) VALUES (
@@ -123,6 +123,7 @@ INSERT INTO qotd_official_posts (
 	'default',
 	'Default',
 	'scheduled',
+	1,
 	'response-legacy',
 	TRUE
 )
@@ -131,8 +132,7 @@ RETURNING id
 		t.Fatalf("insert official post: %v", err)
 	}
 
-	var replyThreadID int64
-	if err := db.QueryRowContext(context.Background(), `
+	if _, err := db.ExecContext(context.Background(), `
 INSERT INTO qotd_reply_threads (
 	guild_id,
 	official_post_id,
@@ -152,29 +152,8 @@ INSERT INTO qotd_reply_threads (
 	'legacy-answer-message',
 	'interaction-1'
 )
-RETURNING id
-`, officialPostID).Scan(&replyThreadID); err != nil {
+`, officialPostID); err != nil {
 		t.Fatalf("insert legacy reply thread: %v", err)
-	}
-
-	if _, err := db.ExecContext(context.Background(), `
-INSERT INTO qotd_thread_archives (
-	guild_id,
-	official_post_id,
-	reply_thread_id,
-	source_kind,
-	discord_thread_id,
-	archived_at
-) VALUES (
-	'g1',
-	$1,
-	$2,
-	'answer',
-	'archived-thread-1',
-	NOW()
-)
-`, officialPostID, replyThreadID); err != nil {
-		t.Fatalf("insert thread archive: %v", err)
 	}
 
 	if err := migrator.Up(context.Background()); err != nil {
@@ -223,9 +202,6 @@ WHERE official_post_id = $1
 		t.Fatal(err)
 	}
 	if err := columnAbsent(db, "qotd_official_posts", "is_pinned"); err != nil {
-		t.Fatal(err)
-	}
-	if err := columnAbsent(db, "qotd_thread_archives", "reply_thread_id"); err != nil {
 		t.Fatal(err)
 	}
 }

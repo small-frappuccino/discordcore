@@ -51,9 +51,6 @@ type fakePublisher struct {
 	publishedParams  []discordqotd.PublishOfficialPostParams
 	publishResponses []fakePublishResponse
 	threadStates     map[string]discordqotd.ThreadState
-	fetchCalls       []string
-	threadMessages   map[string][]discordqotd.ArchivedMessage
-	fetchErrs        map[string]error
 }
 
 type fakePublishResponse struct {
@@ -136,19 +133,6 @@ func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, 
 	}
 	p.threadStates[threadID] = state
 	return nil
-}
-
-func (p *fakePublisher) FetchThreadMessages(_ context.Context, _ *discordgo.Session, threadID string) ([]discordqotd.ArchivedMessage, error) {
-	p.fetchCalls = append(p.fetchCalls, threadID)
-	if p.fetchErrs != nil {
-		if err := p.fetchErrs[threadID]; err != nil {
-			return nil, err
-		}
-	}
-	if p.threadMessages == nil {
-		return nil, nil
-	}
-	return append([]discordqotd.ArchivedMessage(nil), p.threadMessages[threadID]...), nil
 }
 
 func newIntegrationTestQOTDService(t *testing.T) (*Service, *storage.Store, *fakePublisher) {
@@ -2431,17 +2415,6 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
-	fake.threadMessages = map[string][]discordqotd.ArchivedMessage{
-		"official-thread-archive": {
-			{
-				MessageID:          "official-message-1",
-				AuthorID:           "user-1",
-				AuthorNameSnapshot: "Author One",
-				Content:            "Official archive snapshot",
-				CreatedAt:          time.Date(2026, 4, 1, 12, 43, 0, 0, time.UTC),
-			},
-		},
-	}
 
 	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
 		Body:   "Archive me",
@@ -2500,16 +2473,6 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 		t.Fatalf("UpdateQOTDAnswerMessageState() failed: %v", err)
 	}
 
-	if _, err := store.CreateQOTDThreadArchive(context.Background(), storage.QOTDThreadArchiveRecord{
-		GuildID:         "g1",
-		OfficialPostID:  official.ID,
-		SourceKind:      qotdArchiveSourceOfficial,
-		DiscordThreadID: "official-thread-archive",
-		ArchivedAt:      service.clock().Add(-time.Hour),
-	}); err != nil {
-		t.Fatalf("CreateQOTDThreadArchive(existing official) failed: %v", err)
-	}
-
 	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
 		t.Fatalf("ReconcileGuild() failed: %v", err)
 	}
@@ -2530,16 +2493,6 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 		t.Fatalf("expected archived answer record after reconcile, got %+v", updatedReply)
 	}
 
-	officialArchive, err := store.GetQOTDThreadArchiveByThreadID(context.Background(), "official-thread-archive")
-	if err != nil {
-		t.Fatalf("GetQOTDThreadArchiveByThreadID(official) failed: %v", err)
-	}
-	if officialArchive == nil {
-		t.Fatal("expected official archive record to exist after reconcile")
-	}
-	if len(fake.fetchCalls) != 1 {
-		t.Fatalf("expected reconcile to fetch the official thread archive only, got %v", fake.fetchCalls)
-	}
 	// At ArchiveAt the bot only locks the Discord thread; Discord's
 	// auto_archive_duration (set to the QOTD answer window at creation)
 	// handles the actual "Close" transition. Setting Archived=true ourselves
@@ -2550,9 +2503,6 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 
 	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
 		t.Fatalf("ReconcileGuild(second) failed: %v", err)
-	}
-	if len(fake.fetchCalls) != 1 {
-		t.Fatalf("expected archived posts to be skipped on repeat reconcile, got fetches=%v", fake.fetchCalls)
 	}
 }
 

@@ -3,11 +3,12 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 type qotdRowScanner interface {
@@ -89,18 +90,19 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	return created, nil
 }
 
-func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (*QOTDQuestionRecord, error) {
+func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (_ *QOTDQuestionRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "update qotd question") }()
 	if rec.ID <= 0 {
-		return nil, fmt.Errorf("update qotd question: id is required")
+		return nil, fmt.Errorf("id is required")
 	}
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
-		return nil, fmt.Errorf("update qotd question: %w", err)
+		return nil, err
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("update qotd question: %w", err)
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -111,7 +113,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		normalized.ID,
 		normalized.GuildID,
 	).Scan(&currentDeckID, &currentQueuePosition); err != nil {
-		return nil, fmt.Errorf("update qotd question: %w", err)
+		return nil, err
 	}
 
 	position := normalized.QueuePosition
@@ -175,32 +177,33 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	)
 	updated, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("update qotd question: %w", err)
+		return nil, err
 	}
 
 	needsReindex := movingDeck || (position > 0 && position != currentQueuePosition)
 	if needsReindex {
 		if movingDeck {
 			if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, normalized.GuildID, currentDeckID); err != nil {
-				return nil, fmt.Errorf("update qotd question: %w", err)
+				return nil, err
 			}
 		}
 		if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, normalized.GuildID, normalized.DeckID); err != nil {
-			return nil, fmt.Errorf("update qotd question: %w", err)
+			return nil, err
 		}
 		updated, err = getQOTDQuestionTx(ctx, tx, normalized.GuildID, normalized.ID)
 		if err != nil {
-			return nil, fmt.Errorf("update qotd question: %w", err)
+			return nil, err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("update qotd question: %w", err)
+		return nil, err
 	}
 	return updated, nil
 }
 
-func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, questionID int64) error {
+func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, questionID int64) (err error) {
+	defer func() { err = errutil.Wrap(err, "delete qotd question") }()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || questionID <= 0 {
 		return nil
@@ -208,7 +211,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("delete qotd question: %w", err)
+		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -221,22 +224,23 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 		if err == sql.ErrNoRows {
 			return nil
 		}
-		return fmt.Errorf("delete qotd question: %w", err)
+		return err
 	}
 
 	if _, err := txExecContext(ctx, tx, `DELETE FROM qotd_questions WHERE guild_id = ? AND id = ?`, guildID, questionID); err != nil {
-		return fmt.Errorf("delete qotd question: %w", err)
+		return err
 	}
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
-		return fmt.Errorf("delete qotd question: %w", err)
+		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("delete qotd question: %w", err)
+		return err
 	}
 	return nil
 }
 
-func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, deckIDs []string) error {
+func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, deckIDs []string) (err error) {
+	defer func() { err = errutil.Wrap(err, "delete qotd questions by decks") }()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil
@@ -248,7 +252,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("delete qotd questions by decks: %w", err)
+		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -258,17 +262,18 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 			guildID,
 			deckID,
 		); err != nil {
-			return fmt.Errorf("delete qotd questions by decks: %w", err)
+			return err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("delete qotd questions by decks: %w", err)
+		return err
 	}
 	return nil
 }
 
-func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) ([]QOTDQuestionRecord, error) {
+func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ []QOTDQuestionRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "list qotd questions") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -299,7 +304,7 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 		deckID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list qotd questions: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -307,12 +312,12 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 	for rows.Next() {
 		record, err := scanQOTDQuestionRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list qotd questions: %w", err)
+			return nil, err
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list qotd questions: %w", err)
+		return nil, err
 	}
 	return records, nil
 }
@@ -353,23 +358,24 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 	return record, nil
 }
 
-func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) error {
+func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) (err error) {
+	defer func() { err = errutil.Wrap(err, "reorder qotd questions") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
-		return fmt.Errorf("reorder qotd questions: guild_id is required")
+		return fmt.Errorf("guild_id is required")
 	}
 	if deckID == "" {
-		return fmt.Errorf("reorder qotd questions: deck_id is required")
+		return fmt.Errorf("deck_id is required")
 	}
 	normalizedIDs, err := normalizeQOTDOrderedIDs(orderedIDs)
 	if err != nil {
-		return fmt.Errorf("reorder qotd questions: %w", err)
+		return err
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("reorder qotd questions: %w", err)
+		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -384,7 +390,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		deckID,
 	)
 	if err != nil {
-		return fmt.Errorf("reorder qotd questions: %w", err)
+		return err
 	}
 	defer rows.Close()
 
@@ -394,7 +400,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		var id int64
 		var queuePosition int64
 		if err := rows.Scan(&id, &queuePosition); err != nil {
-			return fmt.Errorf("reorder qotd questions: %w", err)
+			return err
 		}
 		currentIDs = append(currentIDs, id)
 		if queuePosition > maxQueuePosition {
@@ -402,10 +408,10 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("reorder qotd questions: %w", err)
+		return err
 	}
 	if !sameQOTDIDSet(currentIDs, normalizedIDs) {
-		return fmt.Errorf("reorder qotd questions: ordered ids must match the full guild question set")
+		return fmt.Errorf("ordered ids must match the full guild question set")
 	}
 
 	// Move rows out of the indexed range first so swaps do not trip the unique queue constraint.
@@ -418,7 +424,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 			deckID,
 			id,
 		); err != nil {
-			return fmt.Errorf("reorder qotd questions: %w", err)
+			return err
 		}
 	}
 	for idx, id := range normalizedIDs {
@@ -429,35 +435,36 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 			deckID,
 			id,
 		); err != nil {
-			return fmt.Errorf("reorder qotd questions: %w", err)
+			return err
 		}
 	}
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
-		return fmt.Errorf("reorder qotd questions: %w", err)
+		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("reorder qotd questions: %w", err)
+		return err
 	}
 	return nil
 }
 
-func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time, selector QOTDQuestionSelector) (*QOTDQuestionRecord, error) {
+func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time, selector QOTDQuestionSelector) (_ *QOTDQuestionRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "reserve qotd question") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
-		return nil, fmt.Errorf("reserve qotd question: guild_id is required")
+		return nil, fmt.Errorf("guild_id is required")
 	}
 	if deckID == "" {
-		return nil, fmt.Errorf("reserve qotd question: deck_id is required")
+		return nil, fmt.Errorf("deck_id is required")
 	}
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if publishDateUTC.IsZero() {
-		return nil, fmt.Errorf("reserve qotd question: publish_date_utc is required")
+		return nil, fmt.Errorf("publish_date_utc is required")
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("reserve qotd question: %w", err)
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -493,7 +500,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("reserve qotd question: %w", err)
+		return nil, err
 	}
 
 	row = txQueryRow(tx,
@@ -522,27 +529,28 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	)
 	record, err = scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("reserve qotd question: %w", err)
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("reserve qotd question: %w", err)
+		return nil, err
 	}
 	return record, nil
 }
 
-func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string, selector QOTDQuestionSelector) (*QOTDQuestionRecord, error) {
+func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string, selector QOTDQuestionSelector) (_ *QOTDQuestionRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "reserve ready qotd question") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
-		return nil, fmt.Errorf("reserve ready qotd question: guild_id is required")
+		return nil, fmt.Errorf("guild_id is required")
 	}
 	if deckID == "" {
-		return nil, fmt.Errorf("reserve ready qotd question: deck_id is required")
+		return nil, fmt.Errorf("deck_id is required")
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -578,7 +586,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+		return nil, err
 	}
 
 	row = txQueryRow(tx,
@@ -605,10 +613,10 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	)
 	record, err = scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("reserve ready qotd question: %w", err)
+		return nil, err
 	}
 	return record, nil
 }
@@ -620,14 +628,15 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 // reservations may belong to an in-flight publish that another goroutine is
 // currently running. Returns the freed question IDs in queue order so callers
 // can log or test the cleanup deterministically.
-func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) ([]int64, error) {
+func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) (_ []int64, err error) {
+	defer func() { err = errutil.Wrap(err, "reclaim orphan qotd reservations") }()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
 	}
 	todayUTC = normalizeQOTDDateUTC(todayUTC)
 	if todayUTC.IsZero() {
-		return nil, fmt.Errorf("reclaim orphan qotd reservations: today_utc is required")
+		return nil, fmt.Errorf("today_utc is required")
 	}
 
 	rows, err := s.queryContext(ctx,
@@ -651,7 +660,7 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 		todayUTC,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -659,12 +668,12 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+		return nil, err
 	}
 	return ids, nil
 }
@@ -779,9 +788,10 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 	return created, nil
 }
 
-func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, questionListThreadID, questionListEntryMessageID, discordThreadID, starterMessageID, answerChannelID string, publishedAt time.Time) (*QOTDOfficialPostRecord, error) {
+func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, questionListThreadID, questionListEntryMessageID, discordThreadID, starterMessageID, answerChannelID string, publishedAt time.Time) (_ *QOTDOfficialPostRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "finalize qotd official post") }()
 	if id <= 0 {
-		return nil, fmt.Errorf("finalize qotd official post: id is required")
+		return nil, fmt.Errorf("id is required")
 	}
 	questionListThreadID = strings.TrimSpace(questionListThreadID)
 	questionListEntryMessageID = strings.TrimSpace(questionListEntryMessageID)
@@ -789,13 +799,13 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 	starterMessageID = strings.TrimSpace(starterMessageID)
 	answerChannelID = strings.TrimSpace(answerChannelID)
 	if starterMessageID == "" {
-		return nil, fmt.Errorf("finalize qotd official post: starter message id is required")
+		return nil, fmt.Errorf("starter message id is required")
 	}
 	if answerChannelID == "" {
-		return nil, fmt.Errorf("finalize qotd official post: answer channel id is required")
+		return nil, fmt.Errorf("answer channel id is required")
 	}
 	if publishedAt.IsZero() {
-		return nil, fmt.Errorf("finalize qotd official post: published_at is required")
+		return nil, fmt.Errorf("published_at is required")
 	}
 
 	row := s.queryRowContext(ctx,
@@ -846,7 +856,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 	)
 	updated, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("finalize qotd official post: %w", err)
+		return nil, err
 	}
 	return updated, nil
 }
@@ -960,7 +970,8 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 	return record, nil
 }
 
-func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) ([]QOTDOfficialPostRecord, error) {
+func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (_ []QOTDOfficialPostRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "list qotd official posts by date") }()
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
@@ -1015,7 +1026,7 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 		publishDateUTC,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list qotd official posts by date: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -1023,12 +1034,12 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list qotd official posts by date: %w", err)
+			return nil, err
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list qotd official posts by date: %w", err)
+		return nil, err
 	}
 	return records, nil
 }
@@ -1162,7 +1173,8 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 	return record, nil
 }
 
-func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) ([]QOTDOfficialPostRecord, error) {
+func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "list current and previous qotd posts") }()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
@@ -1212,7 +1224,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 		now,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list current and previous qotd posts: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -1220,17 +1232,18 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list current and previous qotd posts: %w", err)
+			return nil, err
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list current and previous qotd posts: %w", err)
+		return nil, err
 	}
 	return records, nil
 }
 
-func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) ([]QOTDOfficialPostRecord, error) {
+func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "list qotd official posts needing archive") }()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -1273,7 +1286,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 		now,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list qotd official posts needing archive: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -1281,23 +1294,24 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list qotd official posts needing archive: %w", err)
+			return nil, err
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list qotd official posts needing archive: %w", err)
+		return nil, err
 	}
 	return records, nil
 }
 
-func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (*QOTDOfficialPostRecord, error) {
+func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (_ *QOTDOfficialPostRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "update qotd official post state") }()
 	if id <= 0 {
-		return nil, fmt.Errorf("update qotd official post state: id is required")
+		return nil, fmt.Errorf("id is required")
 	}
 	state = strings.TrimSpace(state)
 	if state == "" {
-		return nil, fmt.Errorf("update qotd official post state: state is required")
+		return nil, fmt.Errorf("state is required")
 	}
 
 	row := s.queryRowContext(ctx,
@@ -1343,7 +1357,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("update qotd official post state: %w", err)
+		return nil, err
 	}
 	return record, nil
 }
@@ -1404,131 +1418,6 @@ func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, gu
 		return 0, fmt.Errorf("delete unpublished qotd official posts by deck: %w", err)
 	}
 	return int(deleted), nil
-}
-
-func (s *Store) CreateQOTDThreadArchive(ctx context.Context, rec QOTDThreadArchiveRecord) (*QOTDThreadArchiveRecord, error) {
-	normalized, err := normalizeQOTDThreadArchiveRecord(rec)
-	if err != nil {
-		return nil, fmt.Errorf("create qotd thread archive: %w", err)
-	}
-	row := s.queryRowContext(ctx,
-		`INSERT INTO qotd_thread_archives (
-			guild_id,
-			official_post_id,
-			source_kind,
-			discord_thread_id,
-			archived_at
-		)
-		VALUES (?, ?, ?, ?, ?)
-		RETURNING
-			id,
-			guild_id,
-			official_post_id,
-			source_kind,
-			discord_thread_id,
-			archived_at,
-			created_at`,
-		normalized.GuildID,
-		normalized.OfficialPostID,
-		normalized.SourceKind,
-		normalized.DiscordThreadID,
-		normalized.ArchivedAt.UTC(),
-	)
-	created, err := scanQOTDThreadArchiveRecord(row)
-	if err != nil {
-		return nil, fmt.Errorf("create qotd thread archive: %w", err)
-	}
-	return created, nil
-}
-
-func (s *Store) AppendQOTDArchivedMessages(ctx context.Context, threadArchiveID int64, msgs []QOTDMessageArchiveRecord) error {
-	if threadArchiveID <= 0 {
-		return fmt.Errorf("append qotd archived messages: thread_archive_id is required")
-	}
-
-	normalized, err := normalizeQOTDMessageArchives(threadArchiveID, msgs)
-	if err != nil {
-		return fmt.Errorf("append qotd archived messages: %w", err)
-	}
-	if len(normalized) == 0 {
-		return nil
-	}
-
-	return execValuesContext(ctx, s.db,
-		`INSERT INTO qotd_message_archives (
-			thread_archive_id,
-			discord_message_id,
-			author_id,
-			author_name_snapshot,
-			author_is_bot,
-			content,
-			embeds_json,
-			attachments_json,
-			created_at
-		) VALUES `,
-		` ON CONFLICT(thread_archive_id, discord_message_id) DO NOTHING`,
-		len(normalized),
-		9,
-		func(args []any, rowIndex int) []any {
-			record := normalized[rowIndex]
-			return append(args,
-				record.ThreadArchiveID,
-				record.DiscordMessageID,
-				zeroEmptyString(record.AuthorID),
-				record.AuthorNameSnapshot,
-				record.AuthorIsBot,
-				record.Content,
-				nullableJSON(record.EmbedsJSON),
-				nullableJSON(record.AttachmentsJSON),
-				record.CreatedAt.UTC(),
-			)
-		},
-	)
-}
-
-func (s *Store) HasQOTDArchiveForThread(ctx context.Context, discordThreadID string) (bool, error) {
-	discordThreadID = strings.TrimSpace(discordThreadID)
-	if discordThreadID == "" {
-		return false, nil
-	}
-
-	var exists bool
-	if err := s.queryRowContext(ctx,
-		`SELECT EXISTS(SELECT 1 FROM qotd_thread_archives WHERE discord_thread_id = ?)`,
-		discordThreadID,
-	).Scan(&exists); err != nil {
-		return false, fmt.Errorf("check qotd archive for thread: %w", err)
-	}
-	return exists, nil
-}
-
-func (s *Store) GetQOTDThreadArchiveByThreadID(ctx context.Context, discordThreadID string) (*QOTDThreadArchiveRecord, error) {
-	discordThreadID = strings.TrimSpace(discordThreadID)
-	if discordThreadID == "" {
-		return nil, nil
-	}
-
-	row := s.queryRowContext(ctx,
-		`SELECT
-			id,
-			guild_id,
-			official_post_id,
-			source_kind,
-			discord_thread_id,
-			archived_at,
-			created_at
-		FROM qotd_thread_archives
-		WHERE discord_thread_id = ?`,
-		discordThreadID,
-	)
-	record, err := scanQOTDThreadArchiveRecord(row)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("get qotd thread archive by thread: %w", err)
-	}
-	return record, nil
 }
 
 func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, error) {
@@ -1618,67 +1507,6 @@ func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPo
 		return QOTDOfficialPostRecord{}, fmt.Errorf("archive_at is required")
 	}
 	return rec, nil
-}
-
-func normalizeQOTDThreadArchiveRecord(rec QOTDThreadArchiveRecord) (QOTDThreadArchiveRecord, error) {
-	rec.GuildID = strings.TrimSpace(rec.GuildID)
-	rec.SourceKind = strings.TrimSpace(rec.SourceKind)
-	rec.DiscordThreadID = strings.TrimSpace(rec.DiscordThreadID)
-	rec.ArchivedAt = normalizeQOTDRequiredTime(rec.ArchivedAt)
-
-	if rec.GuildID == "" {
-		return QOTDThreadArchiveRecord{}, fmt.Errorf("guild_id is required")
-	}
-	if rec.OfficialPostID <= 0 {
-		return QOTDThreadArchiveRecord{}, fmt.Errorf("official_post_id is required")
-	}
-	if rec.SourceKind == "" {
-		return QOTDThreadArchiveRecord{}, fmt.Errorf("source_kind is required")
-	}
-	if rec.DiscordThreadID == "" {
-		return QOTDThreadArchiveRecord{}, fmt.Errorf("discord_thread_id is required")
-	}
-	if rec.ArchivedAt.IsZero() {
-		return QOTDThreadArchiveRecord{}, fmt.Errorf("archived_at is required")
-	}
-	return rec, nil
-}
-
-func normalizeQOTDMessageArchives(threadArchiveID int64, msgs []QOTDMessageArchiveRecord) ([]QOTDMessageArchiveRecord, error) {
-	if len(msgs) == 0 {
-		return nil, nil
-	}
-
-	order := make([]string, 0, len(msgs))
-	byMessage := make(map[string]QOTDMessageArchiveRecord, len(msgs))
-	for _, msg := range msgs {
-		msg.ThreadArchiveID = threadArchiveID
-		msg.DiscordMessageID = strings.TrimSpace(msg.DiscordMessageID)
-		msg.AuthorID = strings.TrimSpace(msg.AuthorID)
-		msg.AuthorNameSnapshot = strings.TrimSpace(msg.AuthorNameSnapshot)
-		msg.Content = strings.TrimSpace(msg.Content)
-		msg.EmbedsJSON = cloneQOTDJSONRawMessage(msg.EmbedsJSON)
-		msg.AttachmentsJSON = cloneQOTDJSONRawMessage(msg.AttachmentsJSON)
-		if msg.CreatedAt.IsZero() {
-			msg.CreatedAt = time.Now().UTC()
-		} else {
-			msg.CreatedAt = msg.CreatedAt.UTC()
-		}
-
-		if msg.DiscordMessageID == "" {
-			return nil, fmt.Errorf("discord_message_id is required")
-		}
-		if _, ok := byMessage[msg.DiscordMessageID]; !ok {
-			order = append(order, msg.DiscordMessageID)
-		}
-		byMessage[msg.DiscordMessageID] = msg
-	}
-
-	normalized := make([]QOTDMessageArchiveRecord, 0, len(order))
-	for _, messageID := range order {
-		normalized = append(normalized, byMessage[messageID])
-	}
-	return normalized, nil
 }
 
 func normalizeQOTDOrderedIDs(ids []int64) ([]int64, error) {
@@ -1901,44 +1729,11 @@ func scanQOTDOfficialPostRecord(scanner qotdRowScanner) (*QOTDOfficialPostRecord
 	return &record, nil
 }
 
-func scanQOTDThreadArchiveRecord(scanner qotdRowScanner) (*QOTDThreadArchiveRecord, error) {
-	var record QOTDThreadArchiveRecord
-	if err := scanner.Scan(
-		&record.ID,
-		&record.GuildID,
-		&record.OfficialPostID,
-		&record.SourceKind,
-		&record.DiscordThreadID,
-		&record.ArchivedAt,
-		&record.CreatedAt,
-	); err != nil {
-		return nil, err
-	}
-	record.ArchivedAt = record.ArchivedAt.UTC()
-	return &record, nil
-}
-
 func nullableTime(value *time.Time) any {
 	if value == nil || value.IsZero() {
 		return nil
 	}
 	return value.UTC()
-}
-
-func nullableJSON(raw json.RawMessage) any {
-	if len(raw) == 0 {
-		return nil
-	}
-	return raw
-}
-
-func cloneQOTDJSONRawMessage(raw json.RawMessage) json.RawMessage {
-	if len(raw) == 0 {
-		return nil
-	}
-	out := make(json.RawMessage, len(raw))
-	copy(out, raw)
-	return out
 }
 
 func timePtrFromNull(value sql.NullTime) *time.Time {

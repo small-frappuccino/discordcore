@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -117,27 +116,4 @@ type QOTDAnswerMessageRecord struct {
 	UpdatedAt               time.Time
 	ClosedAt                *time.Time
 	ArchivedAt              *time.Time
-}
-
-type QOTDThreadArchiveRecord struct {
-	ID              int64
-	GuildID         string
-	OfficialPostID  int64
-	SourceKind      string
-	DiscordThreadID string
-	ArchivedAt      time.Time
-	CreatedAt       time.Time
-}
-
-type QOTDMessageArchiveRecord struct {
-	ID                 int64
-	ThreadArchiveID    int64
-	DiscordMessageID   string
-	AuthorID           string
-	AuthorNameSnapshot string
-	AuthorIsBot        bool
-	Content            string
-	EmbedsJSON         json.RawMessage
-	AttachmentsJSON    json.RawMessage
-	CreatedAt          time.Time
 }

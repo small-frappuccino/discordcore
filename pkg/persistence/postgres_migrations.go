@@ -637,4 +637,51 @@ var postgresMigrations = []migration{
 			 ON qotd_collected_questions(guild_id, source_created_at DESC, id DESC)`,
 		},
 	},
+	{
+		// The QOTD thread-archive subsystem (Publisher.FetchThreadMessages
+		// plus the Service.archiveThreadMessages / ensureThreadArchive flow
+		// and their storage helpers) was removed once the archive on
+		// retroactive QOTD threads stopped feeding any reader. The
+		// qotd_thread_archives / qotd_message_archives tables created in
+		// migration 7 had no remaining writers, so drop them here. The
+		// DownSQL mirrors the original CREATE statements so a rollback
+		// restores the empty schema shape even though no Go code reads
+		// from it anymore.
+		Version: 21,
+		UpSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_message_archives_created`,
+			`DROP INDEX IF EXISTS idx_qotd_message_archives_unique_message`,
+			`DROP TABLE IF EXISTS qotd_message_archives`,
+			`DROP INDEX IF EXISTS idx_qotd_thread_archives_post`,
+			`DROP INDEX IF EXISTS idx_qotd_thread_archives_thread`,
+			`DROP TABLE IF EXISTS qotd_thread_archives`,
+		},
+		DownSQL: []string{
+			`CREATE TABLE IF NOT EXISTS qotd_thread_archives (
+				id                BIGSERIAL PRIMARY KEY,
+				guild_id          TEXT NOT NULL,
+				official_post_id  BIGINT NOT NULL REFERENCES qotd_official_posts(id) ON DELETE CASCADE,
+				source_kind       TEXT NOT NULL,
+				discord_thread_id TEXT NOT NULL,
+				archived_at       TIMESTAMPTZ NOT NULL,
+				created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_thread_archives_thread ON qotd_thread_archives(discord_thread_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_thread_archives_post ON qotd_thread_archives(official_post_id, source_kind, archived_at DESC)`,
+			`CREATE TABLE IF NOT EXISTS qotd_message_archives (
+				id                   BIGSERIAL PRIMARY KEY,
+				thread_archive_id    BIGINT NOT NULL REFERENCES qotd_thread_archives(id) ON DELETE CASCADE,
+				discord_message_id   TEXT NOT NULL,
+				author_id            TEXT,
+				author_name_snapshot TEXT,
+				author_is_bot        BOOLEAN NOT NULL DEFAULT FALSE,
+				content              TEXT,
+				embeds_json          JSONB,
+				attachments_json     JSONB,
+				created_at           TIMESTAMPTZ NOT NULL
+			)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_qotd_message_archives_unique_message ON qotd_message_archives(thread_archive_id, discord_message_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_qotd_message_archives_created ON qotd_message_archives(thread_archive_id, created_at ASC)`,
+		},
+	},
 }

@@ -68,10 +68,6 @@ func (routeFakePublisher) SetThreadState(context.Context, *discordgo.Session, st
 	return nil
 }
 
-func (routeFakePublisher) FetchThreadMessages(context.Context, *discordgo.Session, string) ([]discordqotd.ArchivedMessage, error) {
-	return nil, nil
-}
-
 func newQOTDControlTestServer(t *testing.T) (*Server, *qotd.Service, *storage.Store, *routeFakePublisher) {
 	t.Helper()
 

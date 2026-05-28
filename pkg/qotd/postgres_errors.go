@@ -10,7 +10,6 @@ const (
 	postgresUniqueViolationCode            = "23505"
 	qotdScheduledPublishConstraint         = "idx_qotd_official_posts_scheduled_publish_date"
 	qotdLegacyPublishDateConstraint        = "idx_qotd_official_posts_publish_date"
-	qotdThreadArchiveConstraint            = "idx_qotd_thread_archives_thread"
 	qotdAnswerMessagesUniqueUserConstraint = "idx_qotd_answer_messages_unique_user"
 )
 
@@ -19,10 +18,6 @@ func isQOTDScheduledPublishConflict(err error) bool {
 		qotdScheduledPublishConstraint,
 		qotdLegacyPublishDateConstraint,
 	)
-}
-
-func isQOTDThreadArchiveConflict(err error) bool {
-	return isQOTDUniqueConstraint(err, qotdThreadArchiveConstraint)
 }
 
 func isQOTDAnswerMessageConflict(err error) bool {
