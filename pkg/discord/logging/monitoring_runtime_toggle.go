@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -109,30 +110,39 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 	}
 
 	if state.avatarScan {
-		ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, _ any) error {
+		ms.router.RegisterHandler("monitor.scan_avatars", func(ctx context.Context, payload any) error {
+			if _, ok := payload.(task.EmptyPayload); !ok {
+				return fmt.Errorf("invalid payload type for monitor.scan_avatars")
+			}
 			return ms.runAvatarScanTask(runCtx)
 		})
 		if ms.cronCancel == nil {
-			ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars"})
+			ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars", Payload: task.EmptyPayload{}})
 		}
 	}
 
 	if state.statsUpdates {
-		ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, _ any) error {
+		ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, payload any) error {
+			if _, ok := payload.(task.EmptyPayload); !ok {
+				return fmt.Errorf("invalid payload type for monitor.update_stats_channels")
+			}
 			return ms.runStatsUpdateTask(runCtx)
 		})
 		if ms.statsCronCancel == nil {
-			ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels"})
+			ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels", Payload: task.EmptyPayload{}})
 			ms.dispatchMonitorTaskLocked(runCtx, "monitor.update_stats_channels")
 		}
 	}
 
 	if state.rolesRefresh {
-		ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, _ any) error {
+		ms.router.RegisterHandler("monitor.refresh_roles", func(ctx context.Context, payload any) error {
+			if _, ok := payload.(task.EmptyPayload); !ok {
+				return fmt.Errorf("invalid payload type for monitor.refresh_roles")
+			}
 			return ms.runRolesRefreshTask(runCtx)
 		})
 		if ms.rolesRefreshCronCancel == nil {
-			ms.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles"})
+			ms.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles", Payload: task.EmptyPayload{}})
 			ms.dispatchMonitorTaskLocked(runCtx, "monitor.refresh_roles")
 		}
 	}

@@ -86,6 +86,10 @@ type AutomodActionPayload struct {
 }
 
 // AvatarChangePayload holds information to process an avatar change.
+
+// FlushAvatarCachePayload holds information for flushing the avatar cache.
+type FlushAvatarCachePayload struct{}
+
 type AvatarChangePayload struct {
 	GuildID   string
 	UserID    string
@@ -368,7 +372,7 @@ func (a *NotificationAdapters) EnqueueProcessAvatarChange(guildID, userID, usern
 func (a *NotificationAdapters) EnqueueFlushAvatarCache() error {
 	return a.Router.Dispatch(context.Background(), Task{
 		Type:    TaskTypeFlushAvatarCache,
-		Payload: struct{}{},
+		Payload: FlushAvatarCachePayload{},
 		Options: TaskOptions{
 			GroupKey:       "avatar_cache",
 			IdempotencyKey: fmt.Sprintf("avatar_flush:%d", time.Now().Unix()/5), // coalesce every 5s
@@ -472,6 +476,10 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 }
 
 func (a *NotificationAdapters) handleFlushAvatarCache(ctx context.Context, payload any) error {
+	_, ok := payload.(FlushAvatarCachePayload)
+	if !ok {
+		return fmt.Errorf("invalid payload type for avatar cache flush")
+	}
 	// No-op when using database-backed avatar persistence
 	return nil
 }

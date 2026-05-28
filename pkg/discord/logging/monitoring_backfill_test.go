@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func TestParseEntryExitBackfillMessage_MimuWelcome(t *testing.T) {
 	m := &discordgo.Message{
 		Content: "<@1234567890> Welcome to Alice Mains!",
 	}
-	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "")
+	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}
@@ -26,7 +27,7 @@ func TestParseEntryExitBackfillMessage_MimuGoodbye(t *testing.T) {
 	m := &discordgo.Message{
 		Content: "<@!987654321> goodbye!",
 	}
-	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "")
+	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}
@@ -45,7 +46,7 @@ func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
 			{Title: "Member Joined", Description: "**u** (<@123>, `123`)"},
 		},
 	}
-	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "42")
+	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "42", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}
@@ -62,7 +63,7 @@ func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 		m := &discordgo.Message{
 			Content: "welcome to alice mains! <@1234567890>",
 		}
-		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "")
+		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
 			t.Fatalf("expected ok=true")
 		}
@@ -78,7 +79,7 @@ func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 		m := &discordgo.Message{
 			Content: "<@987654321> has left the server... :(",
 		}
-		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "")
+		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
 			t.Fatalf("expected ok=true")
 		}
@@ -93,7 +94,7 @@ func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 
 func TestParseEntryExitBackfillMessage_IgnoresNonMatching(t *testing.T) {
 	m := &discordgo.Message{Content: "hello world"}
-	_, _, ok := parseEntryExitBackfillMessage(m, "")
+	_, _, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if ok {
 		t.Fatalf("expected ok=false")
 	}

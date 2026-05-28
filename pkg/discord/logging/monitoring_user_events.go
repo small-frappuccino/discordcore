@@ -10,6 +10,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
@@ -311,7 +312,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	ms.applyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 
-	emit := ShouldEmitLogEvent(ms.session, ms.configManager, LogEventRoleChange, m.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(ms.session, ms.configManager, logpolicy.LogEventRoleChange, m.GuildID)
 	if !emit.Enabled {
 		log.ApplicationLogger().Debug("Role update notification suppressed by policy", "guildID", m.GuildID, "userID", m.User.ID, "reason", emit.Reason)
 		return
@@ -563,9 +564,9 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 
 	log.ApplicationLogger().Info("Avatar change detected and processing", "userID", userID, "guildID", guildID, "old_avatar", oldAvatar, "new_avatar", currentAvatar)
 
-	emit := ShouldEmitLogEvent(aw.session, aw.configManager, LogEventAvatarChange, guildID)
+	emit := logpolicy.ShouldEmitLogEvent(aw.session, aw.configManager, logpolicy.LogEventAvatarChange, guildID)
 	if !emit.Enabled {
-		if emit.Reason == EmitReasonNoChannelConfigured {
+		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			log.ErrorLoggerRaw().Error("User activity log channel not configured; notification not sent", "guildID", guildID)
 		} else {
 			log.ApplicationLogger().Debug("Avatar notification suppressed by policy", "guildID", guildID, "userID", userID, "reason", emit.Reason)

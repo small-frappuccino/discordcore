@@ -42,6 +42,9 @@ type TaskOptions struct {
 	IdempotencyTTL time.Duration
 }
 
+// EmptyPayload is a concrete struct used for tasks that do not require a payload.
+type EmptyPayload struct{}
+
 // Task encapsulates the work to be executed by the router.
 type Task struct {
 	Type    string
