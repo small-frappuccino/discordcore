@@ -7,6 +7,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/messageupdate"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -46,30 +47,32 @@ func NewBoardSyncServiceWithDependencies(
 }
 
 // SyncGuild renders and publishes the partner board for one guild.
-func (s *BoardSyncService) SyncGuild(ctx context.Context, session *discordgo.Session, guildID string) error {
+func (s *BoardSyncService) SyncGuild(ctx context.Context, session *discordgo.Session, guildID string) (err error) {
+	defer func() { err = errutil.Wrapf(err, "sync partner board guild_id=%s", guildID) }()
+
 	if s == nil {
-		return fmt.Errorf("sync partner board: service is nil")
+		return fmt.Errorf("service is nil")
 	}
 	if s.configManager == nil {
-		return fmt.Errorf("sync partner board: config manager is nil")
+		return fmt.Errorf("config manager is nil")
 	}
 	if s.renderer == nil {
-		return fmt.Errorf("sync partner board: renderer is nil")
+		return fmt.Errorf("renderer is nil")
 	}
 	if s.updater == nil {
-		return fmt.Errorf("sync partner board: updater is nil")
+		return fmt.Errorf("updater is nil")
 	}
 	if session == nil {
-		return fmt.Errorf("sync partner board: discord session is nil")
+		return fmt.Errorf("discord session is nil")
 	}
 
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
-		return fmt.Errorf("sync partner board: guild_id is required")
+		return fmt.Errorf("guild_id is required")
 	}
 
 	if err := contextErr(ctx); err != nil {
-		return fmt.Errorf("sync partner board guild_id=%s: %w", guildID, err)
+		return err
 	}
 
 	log.ApplicationLogger().Info(
@@ -79,14 +82,14 @@ func (s *BoardSyncService) SyncGuild(ctx context.Context, session *discordgo.Ses
 
 	board, err := s.configManager.GetPartnerBoard(guildID)
 	if err != nil {
-		wrapped := fmt.Errorf("sync partner board guild_id=%s: load board config: %w", guildID, err)
+		wrapped := fmt.Errorf("load board config: %w", err)
 		log.ApplicationLogger().Error("Partner board sync failed", "guild_id", guildID, "err", wrapped)
 		return wrapped
 	}
 
 	target, err := toMessageUpdateTarget(board.Target)
 	if err != nil {
-		wrapped := fmt.Errorf("sync partner board guild_id=%s: resolve target: %w", guildID, err)
+		wrapped := fmt.Errorf("resolve target: %w", err)
 		log.ApplicationLogger().Error("Partner board sync failed", "guild_id", guildID, "err", wrapped)
 		return wrapped
 	}
@@ -96,7 +99,7 @@ func (s *BoardSyncService) SyncGuild(ctx context.Context, session *discordgo.Ses
 
 	embeds, err := s.renderer.Render(template, records)
 	if err != nil {
-		wrapped := fmt.Errorf("sync partner board guild_id=%s: render embeds: %w", guildID, err)
+		wrapped := fmt.Errorf("render embeds: %w", err)
 		log.ApplicationLogger().Error(
 			"Partner board sync failed",
 			"guild_id", guildID,
@@ -108,11 +111,11 @@ func (s *BoardSyncService) SyncGuild(ctx context.Context, session *discordgo.Ses
 	}
 
 	if err := contextErr(ctx); err != nil {
-		return fmt.Errorf("sync partner board guild_id=%s: %w", guildID, err)
+		return err
 	}
 
 	if err := s.updater.UpdateEmbeds(session, target, embeds); err != nil {
-		wrapped := fmt.Errorf("sync partner board guild_id=%s: publish embeds: %w", guildID, err)
+		wrapped := fmt.Errorf("publish embeds: %w", err)
 		log.ApplicationLogger().Error(
 			"Partner board sync failed",
 			"guild_id", guildID,

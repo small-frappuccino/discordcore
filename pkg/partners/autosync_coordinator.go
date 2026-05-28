@@ -2,12 +2,14 @@ package partners
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -176,14 +178,15 @@ func (c *AutoSyncCoordinator) Stop(ctx context.Context) error {
 }
 
 // Notify schedules a guild sync with debounce.
-func (c *AutoSyncCoordinator) Notify(guildID string) error {
+func (c *AutoSyncCoordinator) Notify(guildID string) (err error) {
+	defer func() { err = errutil.Wrap(err, "notify auto-sync coordinator") }()
 	if c == nil {
-		return fmt.Errorf("notify auto-sync coordinator: coordinator is nil")
+		return errors.New("coordinator is nil")
 	}
 
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
-		return fmt.Errorf("notify auto-sync coordinator: guild_id is required")
+		return errors.New("guild_id is required")
 	}
 
 	c.mu.Lock()
@@ -192,14 +195,14 @@ func (c *AutoSyncCoordinator) Notify(guildID string) error {
 	c.mu.Unlock()
 
 	if !running || notifyQueue == nil {
-		return fmt.Errorf("notify auto-sync coordinator: coordinator is not running")
+		return errors.New("coordinator is not running")
 	}
 
 	select {
 	case notifyQueue <- guildID:
 		return nil
 	default:
-		return fmt.Errorf("notify auto-sync coordinator: notify queue is full")
+		return errors.New("notify queue is full")
 	}
 }
 

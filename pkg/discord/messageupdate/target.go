@@ -16,6 +16,8 @@ const (
 	TargetTypeChannelMessage = "channel_message"
 )
 
+const updateEmbedsErrPrefix = "update embeds: "
+
 var (
 	// ErrInvalidTarget indicates a target definition is invalid.
 	ErrInvalidTarget = errors.New("invalid embed update target")
@@ -112,37 +114,37 @@ func (t EmbedUpdateTarget) Normalize() (EmbedUpdateTarget, error) {
 // UpdateEmbeds applies embed updates to either webhook or channel message targets.
 func UpdateEmbeds(session *discordgo.Session, target EmbedUpdateTarget, embeds []*discordgo.MessageEmbed) error {
 	if session == nil {
-		return fmt.Errorf("update embeds: nil discord session")
+		return fmt.Errorf(updateEmbedsErrPrefix + "nil discord session")
 	}
 	if len(embeds) == 0 {
-		return fmt.Errorf("update embeds: embeds are required")
+		return fmt.Errorf(updateEmbedsErrPrefix + "embeds are required")
 	}
 	if len(embeds) > 10 {
-		return fmt.Errorf("update embeds: embeds exceed Discord limit (10)")
+		return fmt.Errorf(updateEmbedsErrPrefix + "embeds exceed Discord limit (10)")
 	}
 	for i, embed := range embeds {
 		if embed == nil {
-			return fmt.Errorf("update embeds: embeds[%d] is nil", i)
+			return fmt.Errorf(updateEmbedsErrPrefix+"embeds[%d] is nil", i)
 		}
 	}
 
 	normalized, err := target.Normalize()
 	if err != nil {
-		return fmt.Errorf("update embeds: %w", err)
+		return fmt.Errorf(updateEmbedsErrPrefix+"%w", err)
 	}
 
 	switch normalized.Type {
 	case TargetTypeWebhookMessage:
 		payload, err := json.Marshal(embeds)
 		if err != nil {
-			return fmt.Errorf("update embeds: marshal embeds for webhook target: %w", err)
+			return fmt.Errorf(updateEmbedsErrPrefix+"marshal embeds for webhook target: %w", err)
 		}
 		if err := webhook.PatchMessageEmbed(session, webhook.MessageEmbedPatch{
 			MessageID:  normalized.MessageID,
 			WebhookURL: normalized.WebhookURL,
 			Embed:      payload,
 		}); err != nil {
-			return fmt.Errorf("update embeds: webhook target patch failed: %w", err)
+			return fmt.Errorf(updateEmbedsErrPrefix+"webhook target patch failed: %w", err)
 		}
 		return nil
 	case TargetTypeChannelMessage:
@@ -153,7 +155,7 @@ func UpdateEmbeds(session *discordgo.Session, target EmbedUpdateTarget, embeds [
 		}
 		if _, err := session.ChannelMessageEditComplex(edit); err != nil {
 			return fmt.Errorf(
-				"update embeds: channel target patch failed (channel_id=%s message_id=%s): %w",
+				updateEmbedsErrPrefix+"channel target patch failed (channel_id=%s message_id=%s): %w",
 				normalized.ChannelID,
 				normalized.MessageID,
 				err,
@@ -161,7 +163,7 @@ func UpdateEmbeds(session *discordgo.Session, target EmbedUpdateTarget, embeds [
 		}
 		return nil
 	default:
-		return fmt.Errorf("update embeds: unsupported target type %q", normalized.Type)
+		return fmt.Errorf(updateEmbedsErrPrefix+"unsupported target type %q", normalized.Type)
 	}
 }
 

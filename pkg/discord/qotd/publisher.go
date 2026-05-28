@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 const (
@@ -288,20 +289,21 @@ func (post *PublishedOfficialPost) withPostURL(guildID, channelID string) *Publi
 	return post
 }
 
-func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) error {
+func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) (err error) {
+	defer func() { err = errutil.Wrap(err, "set qotd thread state") }()
 	if session == nil {
-		return fmt.Errorf("set qotd thread state: discord session is required")
+		return errors.New("discord session is required")
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
-		return fmt.Errorf("set qotd thread state: thread id is required")
+		return errors.New("thread id is required")
 	}
 
 	if _, err := session.ChannelEditComplex(
 		threadID,
 		buildThreadStateChannelEdit(state),
 	); err != nil {
-		return fmt.Errorf("set qotd thread state: %w", err)
+		return err
 	}
 	return nil
 }

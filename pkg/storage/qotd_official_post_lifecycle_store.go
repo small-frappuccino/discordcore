@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, progress QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
@@ -70,7 +72,8 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 	return record, nil
 }
 
-func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) ([]QOTDOfficialPostRecord, error) {
+func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) (_ []QOTDOfficialPostRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "list qotd official posts pending recovery") }()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
@@ -112,7 +115,7 @@ func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildI
 		guildID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list qotd official posts pending recovery: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -120,12 +123,12 @@ func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildI
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list qotd official posts pending recovery: %w", err)
+			return nil, err
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list qotd official posts pending recovery: %w", err)
+		return nil, err
 	}
 	return records, nil
 }

@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 type ArchivedMessage struct {
@@ -32,25 +32,26 @@ func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.
 	return archiveMessagesAscending(collected), nil
 }
 
-func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, threadID string) ([]*discordgo.Message, error) {
+func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, threadID string) (collected []*discordgo.Message, err error) {
+	defer func() { err = errutil.Wrap(err, "fetch qotd thread messages") }()
 	if session == nil {
-		return nil, fmt.Errorf("fetch qotd thread messages: discord session is required")
+		return nil, errors.New("discord session is required")
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
-		return nil, fmt.Errorf("fetch qotd thread messages: thread id is required")
+		return nil, errors.New("thread id is required")
 	}
 
-	collected := make([]*discordgo.Message, 0, 32)
+	collected = make([]*discordgo.Message, 0, 32)
 	before := ""
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 
-		page, err := session.ChannelMessages(threadID, 100, before, "", "")
-		if err != nil {
-			return nil, fmt.Errorf("fetch qotd thread messages: %w", err)
+		page, fetchErr := session.ChannelMessages(threadID, 100, before, "", "")
+		if fetchErr != nil {
+			return nil, fetchErr
 		}
 		if len(page) == 0 {
 			break

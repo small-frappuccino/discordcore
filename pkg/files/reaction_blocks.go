@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 const (
@@ -134,10 +136,11 @@ func NormalizeReactionBlockConfig(in ReactionBlockConfig) (ReactionBlockConfig, 
 	return ReactionBlockConfig{Rules: out}, nil
 }
 
-func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (ReactionBlockConfig, error) {
+func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (_ ReactionBlockConfig, err error) {
+	defer func() { err = errutil.Wrap(err, "get reaction block config") }()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
-		return ReactionBlockConfig{}, fmt.Errorf("get reaction block config: %w", invalidReactionBlockInput("guild_id is required"))
+		return ReactionBlockConfig{}, invalidReactionBlockInput("guild_id is required")
 	}
 
 	mgr.mu.RLock()
@@ -150,7 +153,7 @@ func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (ReactionBlockConf
 
 	normalized, err := NormalizeReactionBlockConfig(guildConfig.ReactionBlocks)
 	if err != nil {
-		return ReactionBlockConfig{}, fmt.Errorf("get reaction block config: %w", err)
+		return ReactionBlockConfig{}, err
 	}
 	return normalized, nil
 }
@@ -159,23 +162,21 @@ func (mgr *ConfigManager) GetReactionBlockConfig(guildID string) (ReactionBlockC
 	return mgr.ReactionBlockConfig(guildID)
 }
 
-func (mgr *ConfigManager) SetReactionBlockConfig(guildID string, cfg ReactionBlockConfig) error {
+func (mgr *ConfigManager) SetReactionBlockConfig(guildID string, cfg ReactionBlockConfig) (err error) {
+	defer func() { err = errutil.Wrap(err, "set reaction block config") }()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
-		return fmt.Errorf("set reaction block config: %w", invalidReactionBlockInput("guild_id is required"))
+		return invalidReactionBlockInput("guild_id is required")
 	}
 
 	normalized, err := NormalizeReactionBlockConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("set reaction block config: %w", err)
+		return err
 	}
-	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		guildConfig.ReactionBlocks = normalized
 		return nil
-	}); err != nil {
-		return fmt.Errorf("set reaction block config: %w", err)
-	}
-	return nil
+	})
 }
 
 func invalidReactionBlockInput(format string, args ...any) error {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 // MessageEmbedPatch defines the payload for editing an existing webhook message.
@@ -23,31 +24,32 @@ type MessageEmbedPatch struct {
 // - a single embed object
 // - an embeds array
 // - an object containing { "embeds": [...] }
-func PatchMessageEmbed(session *discordgo.Session, patch MessageEmbedPatch) error {
+func PatchMessageEmbed(session *discordgo.Session, patch MessageEmbedPatch) (err error) {
+	defer func() { err = errutil.Wrap(err, "patch webhook message embed") }()
 	if session == nil {
-		return errors.New("patch webhook message embed: nil discord session")
+		return errors.New("nil discord session")
 	}
 
 	messageID := strings.TrimSpace(patch.MessageID)
 	if messageID == "" {
-		return errors.New("patch webhook message embed: missing message_id")
+		return errors.New("missing message_id")
 	}
 
 	webhookID, webhookToken, err := parseWebhookURL(strings.TrimSpace(patch.WebhookURL))
 	if err != nil {
-		return fmt.Errorf("patch webhook message embed: %w", err)
+		return err
 	}
 
 	embeds, err := decodeEmbeds(patch.Embed)
 	if err != nil {
-		return fmt.Errorf("patch webhook message embed: decode embed payload: %w", err)
+		return err
 	}
 
 	_, err = session.WebhookMessageEdit(webhookID, webhookToken, messageID, &discordgo.WebhookEdit{
 		Embeds: &embeds,
 	})
 	if err != nil {
-		return fmt.Errorf("patch webhook message embed: edit message_id=%s: %w", messageID, err)
+		return fmt.Errorf("edit message_id=%s: %w", messageID, err)
 	}
 	return nil
 }

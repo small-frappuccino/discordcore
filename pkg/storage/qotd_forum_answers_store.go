@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (*QOTDSurfaceRecord, error) {
@@ -144,13 +146,14 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 	return created, nil
 }
 
-func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discordMessageID string) (*QOTDAnswerMessageRecord, error) {
+func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discordMessageID string) (_ *QOTDAnswerMessageRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "finalize qotd answer message") }()
 	if id <= 0 {
-		return nil, fmt.Errorf("finalize qotd answer message: id is required")
+		return nil, fmt.Errorf("id is required")
 	}
 	discordMessageID = strings.TrimSpace(discordMessageID)
 	if discordMessageID == "" {
-		return nil, fmt.Errorf("finalize qotd answer message: discord message id is required")
+		return nil, fmt.Errorf("discord message id is required")
 	}
 
 	row := s.queryRowContext(ctx,
@@ -177,7 +180,7 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 	)
 	record, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("finalize qotd answer message: %w", err)
+		return nil, err
 	}
 	return record, nil
 }
@@ -217,7 +220,8 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 	return record, nil
 }
 
-func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) ([]QOTDAnswerMessageRecord, error) {
+func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ []QOTDAnswerMessageRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "list qotd answer messages by official post") }()
 	if officialPostID <= 0 {
 		return nil, nil
 	}
@@ -242,7 +246,7 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 		officialPostID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list qotd answer messages by official post: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -250,23 +254,24 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 	for rows.Next() {
 		record, err := scanQOTDAnswerMessageRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list qotd answer messages by official post: %w", err)
+			return nil, err
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list qotd answer messages by official post: %w", err)
+		return nil, err
 	}
 	return records, nil
 }
 
-func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (*QOTDAnswerMessageRecord, error) {
+func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (_ *QOTDAnswerMessageRecord, err error) {
+	defer func() { err = errutil.Wrap(err, "update qotd answer message state") }()
 	if id <= 0 {
-		return nil, fmt.Errorf("update qotd answer message state: id is required")
+		return nil, fmt.Errorf("id is required")
 	}
 	state = strings.TrimSpace(state)
 	if state == "" {
-		return nil, fmt.Errorf("update qotd answer message state: state is required")
+		return nil, fmt.Errorf("state is required")
 	}
 
 	row := s.queryRowContext(ctx,
@@ -297,7 +302,7 @@ func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, stat
 	)
 	record, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		return nil, fmt.Errorf("update qotd answer message state: %w", err)
+		return nil, err
 	}
 	return record, nil
 }

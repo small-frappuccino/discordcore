@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 var (
@@ -393,10 +395,11 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 }
 
 // QOTDConfig returns the canonical QOTD config for one guild.
-func (mgr *ConfigManager) QOTDConfig(guildID string) (QOTDConfig, error) {
+func (mgr *ConfigManager) QOTDConfig(guildID string) (_ QOTDConfig, err error) {
+	defer func() { err = errutil.Wrap(err, "get qotd config") }()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
-		return QOTDConfig{}, fmt.Errorf("get qotd config: %w", invalidQOTDInput("guild_id is required"))
+		return QOTDConfig{}, invalidQOTDInput("guild_id is required")
 	}
 
 	mgr.mu.RLock()
@@ -409,7 +412,7 @@ func (mgr *ConfigManager) QOTDConfig(guildID string) (QOTDConfig, error) {
 
 	normalized, err := NormalizeQOTDConfig(guildConfig.QOTD)
 	if err != nil {
-		return QOTDConfig{}, fmt.Errorf("get qotd config: %w", err)
+		return QOTDConfig{}, err
 	}
 	return normalized, nil
 }
@@ -420,23 +423,21 @@ func (mgr *ConfigManager) GetQOTDConfig(guildID string) (QOTDConfig, error) {
 }
 
 // SetQOTDConfig validates and persists the QOTD config for one guild.
-func (mgr *ConfigManager) SetQOTDConfig(guildID string, cfg QOTDConfig) error {
+func (mgr *ConfigManager) SetQOTDConfig(guildID string, cfg QOTDConfig) (err error) {
+	defer func() { err = errutil.Wrap(err, "set qotd config") }()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
-		return fmt.Errorf("set qotd config: %w", invalidQOTDInput("guild_id is required"))
+		return invalidQOTDInput("guild_id is required")
 	}
 
 	normalized, err := NormalizeQOTDConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("set qotd config: %w", err)
+		return err
 	}
-	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		guildConfig.QOTD = normalized
 		return nil
-	}); err != nil {
-		return fmt.Errorf("set qotd config: %w", err)
-	}
-	return nil
+	})
 }
 
 func invalidQOTDInput(format string, args ...any) error {

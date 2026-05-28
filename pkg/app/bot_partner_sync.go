@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 )
@@ -37,12 +38,13 @@ func newBotPartnerSyncDispatcher(
 	}
 }
 
-func (d *botPartnerSyncDispatcher) Start() error {
+func (d *botPartnerSyncDispatcher) Start() (err error) {
+	defer func() { err = errutil.Wrap(err, "partner sync dispatcher") }()
 	if d == nil {
-		return fmt.Errorf("partner sync dispatcher is nil")
+		return errors.New("dispatcher is nil")
 	}
 	if d.syncService == nil {
-		return fmt.Errorf("partner sync dispatcher: sync service is nil")
+		return errors.New("sync service is nil")
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -53,7 +55,8 @@ func (d *botPartnerSyncDispatcher) Start() error {
 	return nil
 }
 
-func (d *botPartnerSyncDispatcher) Stop(ctx context.Context) error {
+func (d *botPartnerSyncDispatcher) Stop(ctx context.Context) (err error) {
+	defer func() { err = errutil.Wrap(err, "partner sync dispatcher") }()
 	if d == nil {
 		return nil
 	}
@@ -73,67 +76,70 @@ func (d *botPartnerSyncDispatcher) Stop(ctx context.Context) error {
 		}
 	}
 	if len(stopErrs) > 0 {
-		return fmt.Errorf("stop partner sync dispatcher: %w", errors.Join(stopErrs...))
+		return fmt.Errorf("stop: %w", errors.Join(stopErrs...))
 	}
 	return nil
 }
 
-func (d *botPartnerSyncDispatcher) Notify(guildID string) error {
+func (d *botPartnerSyncDispatcher) Notify(guildID string) (err error) {
+	defer func() { err = errutil.Wrap(err, "partner sync dispatcher") }()
 	if d == nil {
-		return fmt.Errorf("partner sync dispatcher is nil")
+		return errors.New("dispatcher is nil")
 	}
 	coordinator, botInstanceID, err := d.ensureCoordinatorForGuild(guildID)
 	if err != nil {
 		return err
 	}
 	if coordinator == nil {
-		return fmt.Errorf("partner sync dispatcher: coordinator for %s is unavailable", botInstanceID)
+		return fmt.Errorf("coordinator for %s is unavailable", botInstanceID)
 	}
 	return coordinator.Notify(guildID)
 }
 
-func (d *botPartnerSyncDispatcher) SyncGuild(ctx context.Context, guildID string) error {
+func (d *botPartnerSyncDispatcher) SyncGuild(ctx context.Context, guildID string) (err error) {
+	defer func() { err = errutil.Wrap(err, "partner sync dispatcher") }()
 	if d == nil {
-		return fmt.Errorf("partner sync dispatcher is nil")
+		return errors.New("dispatcher is nil")
 	}
 	runtime, botInstanceID, err := d.runtimeForGuild(guildID)
 	if err != nil {
 		return err
 	}
 	if runtime == nil || runtime.session == nil {
-		return fmt.Errorf("partner sync dispatcher: bot runtime %q is unavailable for guild %s", botInstanceID, guildID)
+		return fmt.Errorf("bot runtime %q is unavailable for guild %s", botInstanceID, guildID)
 	}
 	return d.syncService.SyncGuild(ctx, runtime.session, guildID)
 }
 
-func (d *botPartnerSyncDispatcher) ensureCoordinatorForGuild(guildID string) (*partners.AutoSyncCoordinator, string, error) {
+func (d *botPartnerSyncDispatcher) ensureCoordinatorForGuild(guildID string) (coordinator *partners.AutoSyncCoordinator, botInstanceID string, err error) {
+	defer func() { err = errutil.Wrap(err, "partner sync dispatcher") }()
 	runtime, botInstanceID, err := d.runtimeForGuild(guildID)
 	if err != nil {
 		return nil, "", err
 	}
 	if runtime == nil {
-		return nil, "", fmt.Errorf("partner sync dispatcher: no runtime for guild %s", guildID)
+		return nil, "", fmt.Errorf("no runtime for guild %s", guildID)
 	}
 	d.mu.Lock()
 	if !d.running {
 		d.mu.Unlock()
-		return nil, "", fmt.Errorf("partner sync dispatcher: dispatcher is not running")
+		return nil, "", errors.New("dispatcher is not running")
 	}
-	if coordinator := d.coordinators[botInstanceID]; coordinator != nil {
+	if coordinator = d.coordinators[botInstanceID]; coordinator != nil {
 		d.mu.Unlock()
 		return coordinator, botInstanceID, nil
 	}
 	d.mu.Unlock()
 
 	if runtime.session == nil {
-		return nil, "", fmt.Errorf("partner sync dispatcher: bot runtime %q has no discord session", botInstanceID)
+		return nil, "", fmt.Errorf("bot runtime %q has no discord session", botInstanceID)
 	}
-	coordinator := partners.NewAutoSyncCoordinator(
+	coordinator = partners.NewAutoSyncCoordinator(
 		partners.NewSessionBoundBoardSyncExecutor(d.syncService, runtime.session),
 		partners.AutoSyncCoordinatorOptions{},
 	)
-	if err := coordinator.Start(); err != nil {
-		return nil, "", fmt.Errorf("start partner auto-sync coordinator for %s: %w", botInstanceID, err)
+	if startErr := coordinator.Start(); startErr != nil {
+		return nil, "", fmt.Errorf("start partner auto-sync coordinator for %s: %w", botInstanceID, startErr)
 	}
 
 	d.mu.Lock()
@@ -142,7 +148,7 @@ func (d *botPartnerSyncDispatcher) ensureCoordinatorForGuild(guildID string) (*p
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = coordinator.Stop(stopCtx)
-		return nil, "", fmt.Errorf("partner sync dispatcher: dispatcher is not running")
+		return nil, "", errors.New("dispatcher is not running")
 	}
 	if existing := d.coordinators[botInstanceID]; existing != nil {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -154,22 +160,23 @@ func (d *botPartnerSyncDispatcher) ensureCoordinatorForGuild(guildID string) (*p
 	return coordinator, botInstanceID, nil
 }
 
-func (d *botPartnerSyncDispatcher) runtimeForGuild(guildID string) (*botRuntime, string, error) {
+func (d *botPartnerSyncDispatcher) runtimeForGuild(guildID string) (runtime *botRuntime, botInstanceID string, err error) {
+	defer func() { err = errutil.Wrap(err, "partner sync dispatcher") }()
 	if d == nil || d.configManager == nil {
-		return nil, "", fmt.Errorf("partner sync dispatcher: config manager is unavailable")
+		return nil, "", errors.New("config manager is unavailable")
 	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
-		return nil, "", fmt.Errorf("partner sync dispatcher: guild_id is required")
+		return nil, "", errors.New("guild_id is required")
 	}
 	guild := d.configManager.GuildConfig(guildID)
 	if guild == nil {
-		return nil, "", fmt.Errorf("partner sync dispatcher: guild %s is not configured", guildID)
+		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
-	botInstanceID := guild.EffectiveBotInstanceID(d.defaultBotInstanceID)
-	runtime := d.runtimes[botInstanceID]
+	botInstanceID = guild.EffectiveBotInstanceID(d.defaultBotInstanceID)
+	runtime = d.runtimes[botInstanceID]
 	if runtime == nil {
-		return nil, botInstanceID, fmt.Errorf("partner sync dispatcher: bot runtime %q is unavailable", botInstanceID)
+		return nil, botInstanceID, fmt.Errorf("bot runtime %q is unavailable", botInstanceID)
 	}
 	return runtime, botInstanceID, nil
 }
