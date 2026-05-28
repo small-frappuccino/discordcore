@@ -13,6 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -80,12 +81,12 @@ const (
 	taskTypeMessageDeleteProcess = "message_event.process_delete"
 )
 
-type messageUpdateTaskPayload struct {
+type MessageUpdateTaskPayload struct {
 	Update     *discordgo.MessageUpdate
 	ReceivedAt time.Time
 }
 
-type messageDeleteTaskPayload struct {
+type MessageDeleteTaskPayload struct {
 	Delete     *discordgo.MessageDelete
 	ReceivedAt time.Time
 }
@@ -318,7 +319,7 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 		return
 	}
 
-	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageProcess, guildID)
+	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
 	if !emit.Enabled {
 		slog.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
 		return
@@ -455,7 +456,7 @@ func (mes *MessageEventService) dispatchMessageUpdateTask(m *discordgo.MessageUp
 	if mes.taskRouter == nil || m == nil || m.ID == "" {
 		return nil
 	}
-	payload := messageUpdateTaskPayload{
+	payload := MessageUpdateTaskPayload{
 		Update:     cloneMessageUpdate(m),
 		ReceivedAt: time.Now().UTC(),
 	}
@@ -484,7 +485,7 @@ func (mes *MessageEventService) dispatchMessageDeleteTask(m *discordgo.MessageDe
 	if mes.taskRouter == nil || m == nil || m.ID == "" {
 		return nil
 	}
-	payload := messageDeleteTaskPayload{
+	payload := MessageDeleteTaskPayload{
 		Delete:     cloneMessageDelete(m),
 		ReceivedAt: time.Now().UTC(),
 	}
@@ -510,7 +511,7 @@ func (mes *MessageEventService) dispatchMessageDeleteTask(m *discordgo.MessageDe
 }
 
 func (mes *MessageEventService) handleMessageUpdateTask(ctx context.Context, payload any) error {
-	p, ok := payload.(messageUpdateTaskPayload)
+	p, ok := payload.(MessageUpdateTaskPayload)
 	if !ok || p.Update == nil {
 		return fmt.Errorf("invalid payload for %s", taskTypeMessageUpdateProcess)
 	}
@@ -518,7 +519,7 @@ func (mes *MessageEventService) handleMessageUpdateTask(ctx context.Context, pay
 }
 
 func (mes *MessageEventService) handleMessageDeleteTask(ctx context.Context, payload any) error {
-	p, ok := payload.(messageDeleteTaskPayload)
+	p, ok := payload.(MessageDeleteTaskPayload)
 	if !ok || p.Delete == nil {
 		return fmt.Errorf("invalid payload for %s", taskTypeMessageDeleteProcess)
 	}
@@ -564,9 +565,9 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 		return nil
 	}
 
-	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageEdit, cached.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageEdit, cached.GuildID)
 	if !emit.Enabled {
-		if emit.Reason == EmitReasonNoChannelConfigured {
+		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			slog.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		} else {
 			slog.Debug("MessageUpdate: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
@@ -682,9 +683,9 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 		return nil
 	}
 
-	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageDelete, cached.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageDelete, cached.GuildID)
 	if !emit.Enabled {
-		if emit.Reason == EmitReasonNoChannelConfigured {
+		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			slog.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		} else {
 			slog.Debug("MessageDelete: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
@@ -753,12 +754,12 @@ func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(s *discordgo.S
 		return false
 	}
 
-	processDecision := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageProcess, guildID)
+	processDecision := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
 	if !processDecision.Enabled {
 		return false
 	}
 
-	deleteDecision := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMessageDelete, guildID)
+	deleteDecision := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageDelete, guildID)
 	if !deleteDecision.Enabled {
 		return false
 	}

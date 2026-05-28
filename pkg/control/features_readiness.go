@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	discordlogging "github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 )
 
 func buildFeatureReadiness(
@@ -137,7 +137,7 @@ func buildLogFeatureReadiness(
 	cfg *files.BotConfig,
 	configManager *files.ConfigManager,
 	guildID string,
-	eventType discordlogging.LogEventType,
+	eventType logpolicy.LogEventType,
 	session *discordgo.Session,
 ) (string, []featureBlocker) {
 	if guildID == "" {
@@ -147,7 +147,7 @@ func buildLogFeatureReadiness(
 		return "blocked", []featureBlocker{{Code: "config_unavailable", Message: "Config manager is unavailable."}}
 	}
 
-	decision := discordlogging.ShouldEmitLogEvent(session, configManager, eventType, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, configManager, eventType, guildID)
 	if decision.Enabled {
 		return "ready", nil
 	}
@@ -156,14 +156,14 @@ func buildLogFeatureReadiness(
 
 func buildGlobalLogFeatureReadiness(
 	cfg *files.BotConfig,
-	eventType discordlogging.LogEventType,
+	eventType logpolicy.LogEventType,
 	session *discordgo.Session,
 ) (string, []featureBlocker) {
 	if blocker, ok := globalLogRuntimeBlocker(cfg.ResolveRuntimeConfig(""), eventType); ok {
 		return "blocked", []featureBlocker{blocker}
 	}
 
-	capability, ok := discordlogging.LogEventCapabilities()[eventType]
+	capability, ok := logpolicy.LogEventCapabilities()[eventType]
 	if ok && capability.RequiredIntentsMask != 0 && session != nil {
 		currentMask := int(session.Identify.Intents)
 		missing := capability.RequiredIntentsMask &^ currentMask
@@ -177,58 +177,58 @@ func buildGlobalLogFeatureReadiness(
 	return "ready", nil
 }
 
-func logDecisionToReadiness(decision discordlogging.EmitDecision) (string, []featureBlocker) {
+func logDecisionToReadiness(decision logpolicy.EmitDecision) (string, []featureBlocker) {
 	switch decision.Reason {
-	case discordlogging.EmitReasonRuntimeDisableUserLogs,
-		discordlogging.EmitReasonRuntimeDisableEntryExitLogs,
-		discordlogging.EmitReasonRuntimeDisableMessageLogs,
-		discordlogging.EmitReasonRuntimeDisableReactionLogs,
-		discordlogging.EmitReasonRuntimeDisableAutomodLogs,
-		discordlogging.EmitReasonRuntimeModerationLoggingOff,
-		discordlogging.EmitReasonRuntimeDisableCleanLog:
+	case logpolicy.EmitReasonRuntimeDisableUserLogs,
+		logpolicy.EmitReasonRuntimeDisableEntryExitLogs,
+		logpolicy.EmitReasonRuntimeDisableMessageLogs,
+		logpolicy.EmitReasonRuntimeDisableReactionLogs,
+		logpolicy.EmitReasonRuntimeDisableAutomodLogs,
+		logpolicy.EmitReasonRuntimeModerationLoggingOff,
+		logpolicy.EmitReasonRuntimeDisableCleanLog:
 		return "blocked", []featureBlocker{{Code: "runtime_kill_switch", Message: "A runtime kill switch currently disables this feature."}}
-	case discordlogging.EmitReasonNoChannelConfigured:
+	case logpolicy.EmitReasonNoChannelConfigured:
 		return "blocked", []featureBlocker{{Code: "missing_channel", Message: "A channel must be configured for this feature.", Field: "channel_id"}}
-	case discordlogging.EmitReasonMissingIntent:
+	case logpolicy.EmitReasonMissingIntent:
 		return "blocked", []featureBlocker{{Code: "missing_intent", Message: fmt.Sprintf("Gateway intents are missing required bits %d.", decision.MissingMask)}}
-	case discordlogging.EmitReasonChannelInvalid:
+	case logpolicy.EmitReasonChannelInvalid:
 		return "blocked", []featureBlocker{{Code: "invalid_channel", Message: "The configured channel failed validation for this feature.", Field: "channel_id"}}
-	case discordlogging.EmitReasonGuildConfigMissing:
+	case logpolicy.EmitReasonGuildConfigMissing:
 		return "blocked", []featureBlocker{{Code: "missing_guild_registration", Message: "This guild is not registered in settings yet."}}
-	case discordlogging.EmitReasonConfigManagerUnavailable, discordlogging.EmitReasonConfigUnavailable:
+	case logpolicy.EmitReasonConfigManagerUnavailable, logpolicy.EmitReasonConfigUnavailable:
 		return "blocked", []featureBlocker{{Code: "config_unavailable", Message: "Feature config is unavailable."}}
 	default:
 		return "blocked", []featureBlocker{{Code: "blocked", Message: string(decision.Reason)}}
 	}
 }
 
-func globalLogRuntimeBlocker(rc files.RuntimeConfig, eventType discordlogging.LogEventType) (featureBlocker, bool) {
+func globalLogRuntimeBlocker(rc files.RuntimeConfig, eventType logpolicy.LogEventType) (featureBlocker, bool) {
 	switch eventType {
-	case discordlogging.LogEventAvatarChange, discordlogging.LogEventRoleChange:
+	case logpolicy.LogEventAvatarChange, logpolicy.LogEventRoleChange:
 		if rc.DisableUserLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime user logging is disabled."}, true
 		}
-	case discordlogging.LogEventMemberJoin, discordlogging.LogEventMemberLeave:
+	case logpolicy.LogEventMemberJoin, logpolicy.LogEventMemberLeave:
 		if rc.DisableEntryExitLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime entry/exit logging is disabled."}, true
 		}
-	case discordlogging.LogEventMessageProcess, discordlogging.LogEventMessageEdit, discordlogging.LogEventMessageDelete:
+	case logpolicy.LogEventMessageProcess, logpolicy.LogEventMessageEdit, logpolicy.LogEventMessageDelete:
 		if rc.DisableMessageLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime message logging is disabled."}, true
 		}
-	case discordlogging.LogEventReactionMetric:
+	case logpolicy.LogEventReactionMetric:
 		if rc.DisableReactionLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime reaction logging is disabled."}, true
 		}
-	case discordlogging.LogEventAutomodAction:
+	case logpolicy.LogEventAutomodAction:
 		if rc.DisableAutomodLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime AutoMod logging is disabled."}, true
 		}
-	case discordlogging.LogEventModerationCase:
+	case logpolicy.LogEventModerationCase:
 		if !rc.ModerationLoggingEnabled() {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime moderation logging is disabled."}, true
 		}
-	case discordlogging.LogEventCleanAction:
+	case logpolicy.LogEventCleanAction:
 		if rc.DisableCleanLog {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime clean logging is disabled."}, true
 		}

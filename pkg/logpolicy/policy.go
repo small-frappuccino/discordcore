@@ -1,6 +1,7 @@
-package logging
+package logpolicy
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -356,7 +357,7 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 		decision.ChannelID = channelID
 
 		if capability.ValidateChannelPerms {
-			if capability.RequireExclusiveModeration && isSharedModerationChannel(channelID, gcfg) {
+			if capability.RequireExclusiveModeration && IsSharedModerationChannel(channelID, gcfg) {
 				decision.Reason = EmitReasonChannelInvalid
 				return decision
 			}
@@ -364,7 +365,7 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 			if session != nil && session.State != nil && session.State.User != nil {
 				botID = session.State.User.ID
 			}
-			if err := validateModerationLogChannel(session, guildID, channelID, botID); err != nil {
+			if err := ValidateModerationLogChannel(session, guildID, channelID, botID); err != nil {
 				decision.Reason = EmitReasonChannelInvalid
 				return decision
 			}
@@ -422,4 +423,76 @@ func firstNonEmptyChannel(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func IsSharedModerationChannel(channelID string, gcfg *files.GuildConfig) bool {
+	channelID = strings.TrimSpace(channelID)
+	if gcfg == nil || channelID == "" {
+		return false
+	}
+	sharedCandidates := []string{
+		gcfg.Channels.Commands,
+		gcfg.Channels.AvatarLogging,
+		gcfg.Channels.RoleUpdate,
+		gcfg.Channels.MemberJoin,
+		gcfg.Channels.MemberLeave,
+		gcfg.Channels.MessageEdit,
+		gcfg.Channels.MessageDelete,
+		gcfg.Channels.AutomodAction,
+		gcfg.Channels.CleanAction,
+	}
+	for _, candidate := range sharedCandidates {
+		if strings.TrimSpace(candidate) == channelID {
+			return true
+		}
+	}
+	return false
+}
+
+func ValidateModerationLogChannel(session *discordgo.Session, guildID, channelID, botID string) error {
+	if session == nil {
+		return fmt.Errorf("session is nil")
+	}
+	if guildID == "" || channelID == "" {
+		return fmt.Errorf("missing guildID or channelID")
+	}
+
+	var ch *discordgo.Channel
+	if session.State != nil {
+		if cached, _ := session.State.Channel(channelID); cached != nil {
+			ch = cached
+		}
+	}
+	if ch == nil {
+		c, err := session.Channel(channelID)
+		if err != nil {
+			return fmt.Errorf("channel lookup failed: %w", err)
+		}
+		ch = c
+	}
+
+	if ch == nil {
+		return fmt.Errorf("channel not found")
+	}
+	if ch.GuildID != "" && ch.GuildID != guildID {
+		return fmt.Errorf("channel guild mismatch")
+	}
+	if ch.Type != discordgo.ChannelTypeGuildText && ch.Type != discordgo.ChannelTypeGuildNews {
+		return fmt.Errorf("channel is not a guild text channel")
+	}
+
+	if botID == "" {
+		return fmt.Errorf("bot identity not available")
+	}
+
+	perms, err := session.UserChannelPermissions(botID, channelID)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+
+	required := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
+	if perms&required != required {
+		return fmt.Errorf("missing permissions (need view/send/embed)")
+	}
+	return nil
 }

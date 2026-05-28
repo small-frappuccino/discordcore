@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	discordlogging "github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 )
 
 func normalizeFeatureRoutePath(path string) string {
@@ -136,56 +136,56 @@ func normalizeStringList(values []string) []string {
 	return out
 }
 
-func logFeatureChannelID(guild *files.GuildConfig, eventType discordlogging.LogEventType) string {
+func logFeatureChannelID(guild *files.GuildConfig, eventType logpolicy.LogEventType) string {
 	if guild == nil {
 		return ""
 	}
 	switch eventType {
-	case discordlogging.LogEventAvatarChange:
+	case logpolicy.LogEventAvatarChange:
 		return strings.TrimSpace(guild.Channels.AvatarLogging)
-	case discordlogging.LogEventRoleChange:
+	case logpolicy.LogEventRoleChange:
 		return strings.TrimSpace(guild.Channels.RoleUpdate)
-	case discordlogging.LogEventMemberJoin:
+	case logpolicy.LogEventMemberJoin:
 		return strings.TrimSpace(guild.Channels.MemberJoin)
-	case discordlogging.LogEventMemberLeave:
+	case logpolicy.LogEventMemberLeave:
 		return strings.TrimSpace(guild.Channels.MemberLeave)
-	case discordlogging.LogEventMessageEdit:
+	case logpolicy.LogEventMessageEdit:
 		return strings.TrimSpace(guild.Channels.MessageEdit)
-	case discordlogging.LogEventMessageDelete:
+	case logpolicy.LogEventMessageDelete:
 		return strings.TrimSpace(guild.Channels.MessageDelete)
-	case discordlogging.LogEventAutomodAction:
+	case logpolicy.LogEventAutomodAction:
 		return strings.TrimSpace(guild.Channels.AutomodAction)
-	case discordlogging.LogEventModerationCase:
+	case logpolicy.LogEventModerationCase:
 		return strings.TrimSpace(guild.Channels.ModerationCase)
-	case discordlogging.LogEventCleanAction:
+	case logpolicy.LogEventCleanAction:
 		return strings.TrimSpace(guild.Channels.CleanAction)
 	default:
 		return ""
 	}
 }
 
-func setLogFeatureChannelID(guild *files.GuildConfig, eventType discordlogging.LogEventType, channelID string) {
+func setLogFeatureChannelID(guild *files.GuildConfig, eventType logpolicy.LogEventType, channelID string) {
 	if guild == nil {
 		return
 	}
 	switch eventType {
-	case discordlogging.LogEventAvatarChange:
+	case logpolicy.LogEventAvatarChange:
 		guild.Channels.AvatarLogging = channelID
-	case discordlogging.LogEventRoleChange:
+	case logpolicy.LogEventRoleChange:
 		guild.Channels.RoleUpdate = channelID
-	case discordlogging.LogEventMemberJoin:
+	case logpolicy.LogEventMemberJoin:
 		guild.Channels.MemberJoin = channelID
-	case discordlogging.LogEventMemberLeave:
+	case logpolicy.LogEventMemberLeave:
 		guild.Channels.MemberLeave = channelID
-	case discordlogging.LogEventMessageEdit:
+	case logpolicy.LogEventMessageEdit:
 		guild.Channels.MessageEdit = channelID
-	case discordlogging.LogEventMessageDelete:
+	case logpolicy.LogEventMessageDelete:
 		guild.Channels.MessageDelete = channelID
-	case discordlogging.LogEventAutomodAction:
+	case logpolicy.LogEventAutomodAction:
 		guild.Channels.AutomodAction = channelID
-	case discordlogging.LogEventModerationCase:
+	case logpolicy.LogEventModerationCase:
 		guild.Channels.ModerationCase = channelID
-	case discordlogging.LogEventCleanAction:
+	case logpolicy.LogEventCleanAction:
 		guild.Channels.CleanAction = channelID
 	}
 }

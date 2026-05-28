@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 )
 
 func TestShouldEmitLogEventRoleChange(t *testing.T) {
@@ -28,7 +29,7 @@ func TestShouldEmitLogEventRoleChange(t *testing.T) {
 		},
 	}
 
-	decision := ShouldEmitLogEvent(session, cm, LogEventRoleChange, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventRoleChange, guildID)
 	if !decision.Enabled {
 		t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 	}
@@ -57,12 +58,12 @@ func TestShouldEmitLogEventRoleChangeMissingIntent(t *testing.T) {
 		},
 	}
 
-	decision := ShouldEmitLogEvent(session, cm, LogEventRoleChange, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventRoleChange, guildID)
 	if decision.Enabled {
 		t.Fatal("expected disabled decision for missing intent")
 	}
-	if decision.Reason != EmitReasonMissingIntent {
-		t.Fatalf("expected reason %s, got %s", EmitReasonMissingIntent, decision.Reason)
+	if decision.Reason != logpolicy.EmitReasonMissingIntent {
+		t.Fatalf("expected reason %s, got %s", logpolicy.EmitReasonMissingIntent, decision.Reason)
 	}
 }
 
@@ -88,12 +89,12 @@ func TestShouldEmitLogEventRoleChangeDisabledByRuntime(t *testing.T) {
 			Intents: discordgo.IntentsGuildMembers,
 		},
 	}
-	decision := ShouldEmitLogEvent(session, cm, LogEventRoleChange, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventRoleChange, guildID)
 	if decision.Enabled {
 		t.Fatal("expected disabled decision")
 	}
-	if decision.Reason != EmitReasonRuntimeDisableUserLogs {
-		t.Fatalf("expected reason %s, got %s", EmitReasonRuntimeDisableUserLogs, decision.Reason)
+	if decision.Reason != logpolicy.EmitReasonRuntimeDisableUserLogs {
+		t.Fatalf("expected reason %s, got %s", logpolicy.EmitReasonRuntimeDisableUserLogs, decision.Reason)
 	}
 }
 
@@ -118,7 +119,7 @@ func TestShouldEmitLogEventMemberJoinChannelFallback(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(session, cm, LogEventMemberJoin, "g-join-1")
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMemberJoin, "g-join-1")
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
@@ -138,7 +139,7 @@ func TestShouldEmitLogEventMemberJoinChannelFallback(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(session, cm, LogEventMemberJoin, "g-join-2")
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMemberJoin, "g-join-2")
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
@@ -171,12 +172,12 @@ func TestShouldEmitLogEventModerationCase(t *testing.T) {
 			cfg.RuntimeConfig.ModerationLogging = &disabled
 		})
 
-		decision := ShouldEmitLogEvent(testSessionWithChannel(guildID, channelID, botID, perms), cm, LogEventModerationCase, guildID)
+		decision := logpolicy.ShouldEmitLogEvent(testSessionWithChannel(guildID, channelID, botID, perms), cm, logpolicy.LogEventModerationCase, guildID)
 		if decision.Enabled {
 			t.Fatal("expected disabled decision")
 		}
-		if decision.Reason != EmitReasonRuntimeModerationLoggingOff {
-			t.Fatalf("expected reason %s, got %s", EmitReasonRuntimeModerationLoggingOff, decision.Reason)
+		if decision.Reason != logpolicy.EmitReasonRuntimeModerationLoggingOff {
+			t.Fatalf("expected reason %s, got %s", logpolicy.EmitReasonRuntimeModerationLoggingOff, decision.Reason)
 		}
 	})
 
@@ -197,12 +198,12 @@ func TestShouldEmitLogEventModerationCase(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(testSessionWithChannel(guildID+"-feature", channelID, botID, perms), cm, LogEventModerationCase, guildID+"-feature")
+		decision := logpolicy.ShouldEmitLogEvent(testSessionWithChannel(guildID+"-feature", channelID, botID, perms), cm, logpolicy.LogEventModerationCase, guildID+"-feature")
 		if decision.Enabled {
 			t.Fatal("expected disabled decision")
 		}
-		if decision.Reason != EmitReasonFeatureLoggingModerationDisabled {
-			t.Fatalf("expected reason %s, got %s", EmitReasonFeatureLoggingModerationDisabled, decision.Reason)
+		if decision.Reason != logpolicy.EmitReasonFeatureLoggingModerationDisabled {
+			t.Fatalf("expected reason %s, got %s", logpolicy.EmitReasonFeatureLoggingModerationDisabled, decision.Reason)
 		}
 	})
 
@@ -217,7 +218,7 @@ func TestShouldEmitLogEventModerationCase(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(testSessionWithChannel(guildID+"-enabled", channelID, botID, perms), cm, LogEventModerationCase, guildID+"-enabled")
+		decision := logpolicy.ShouldEmitLogEvent(testSessionWithChannel(guildID+"-enabled", channelID, botID, perms), cm, logpolicy.LogEventModerationCase, guildID+"-enabled")
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
@@ -248,7 +249,7 @@ func TestShouldEmitLogEventMessageDeleteChannelFallback(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(session, cm, LogEventMessageDelete, "g-msg-1")
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMessageDelete, "g-msg-1")
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
@@ -268,7 +269,7 @@ func TestShouldEmitLogEventMessageDeleteChannelFallback(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(session, cm, LogEventMessageDelete, "g-msg-2")
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMessageDelete, "g-msg-2")
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
@@ -285,11 +286,11 @@ func TestShouldEmitLogEventMessageDeleteChannelFallback(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		decision := ShouldEmitLogEvent(session, cm, LogEventMessageDelete, "g-msg-3")
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMessageDelete, "g-msg-3")
 		if decision.Enabled {
 			t.Fatal("expected disabled decision")
 		}
-		if decision.Reason != EmitReasonNoChannelConfigured {
+		if decision.Reason != logpolicy.EmitReasonNoChannelConfigured {
 			t.Fatalf("expected no channel reason, got %s", decision.Reason)
 		}
 	})
@@ -310,7 +311,7 @@ func TestShouldEmitLogEventReactionMetric(t *testing.T) {
 		},
 	}
 
-	decision := ShouldEmitLogEvent(session, cm, LogEventReactionMetric, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventReactionMetric, guildID)
 	if !decision.Enabled {
 		t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 	}
@@ -321,8 +322,8 @@ func TestShouldEmitLogEventReactionMetric(t *testing.T) {
 	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
 		cfg.Guilds[0].RuntimeConfig.DisableReactionLogs = true
 	})
-	decision = ShouldEmitLogEvent(session, cm, LogEventReactionMetric, guildID)
-	if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableReactionLogs {
+	decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventReactionMetric, guildID)
+	if decision.Enabled || decision.Reason != logpolicy.EmitReasonRuntimeDisableReactionLogs {
 		t.Fatalf("expected reaction disabled by runtime config, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 }
@@ -354,8 +355,8 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 		mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
 			cfg.Guilds[0].RuntimeConfig.DisableMessageLogs = true
 		})
-		decision := ShouldEmitLogEvent(session, cm, LogEventMessageProcess, guildID)
-		if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableMessageLogs {
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMessageProcess, guildID)
+		if decision.Enabled || decision.Reason != logpolicy.EmitReasonRuntimeDisableMessageLogs {
 			t.Fatalf("expected runtime kill switch reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 
@@ -364,8 +365,8 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 			cfg.Guilds[0].RuntimeConfig.DisableMessageLogs = false
 			cfg.Guilds[0].Features.Logging.MessageProcess = &disabled
 		})
-		decision = ShouldEmitLogEvent(session, cm, LogEventMessageProcess, guildID)
-		if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingMessageDisabled {
+		decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventMessageProcess, guildID)
+		if decision.Enabled || decision.Reason != logpolicy.EmitReasonFeatureLoggingMessageDisabled {
 			t.Fatalf("expected feature toggle reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 	})
@@ -394,8 +395,8 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 		mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
 			cfg.Guilds[0].RuntimeConfig.DisableReactionLogs = true
 		})
-		decision := ShouldEmitLogEvent(session, cm, LogEventReactionMetric, guildID)
-		if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableReactionLogs {
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventReactionMetric, guildID)
+		if decision.Enabled || decision.Reason != logpolicy.EmitReasonRuntimeDisableReactionLogs {
 			t.Fatalf("expected runtime kill switch reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 
@@ -404,8 +405,8 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 			cfg.Guilds[0].RuntimeConfig.DisableReactionLogs = false
 			cfg.Guilds[0].Features.Logging.ReactionMetric = &disabled
 		})
-		decision = ShouldEmitLogEvent(session, cm, LogEventReactionMetric, guildID)
-		if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingReactionDisabled {
+		decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventReactionMetric, guildID)
+		if decision.Enabled || decision.Reason != logpolicy.EmitReasonFeatureLoggingReactionDisabled {
 			t.Fatalf("expected feature toggle reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 	})
@@ -438,8 +439,8 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 		mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
 			cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = true
 		})
-		decision := ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
-		if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableAutomodLogs {
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
+		if decision.Enabled || decision.Reason != logpolicy.EmitReasonRuntimeDisableAutomodLogs {
 			t.Fatalf("expected runtime kill switch reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 
@@ -448,8 +449,8 @@ func TestShouldEmitLogEventTogglePrecedence(t *testing.T) {
 			cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = false
 			cfg.Guilds[0].Features.Logging.AutomodAction = &disabled
 		})
-		decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
-		if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingAutomodDisabled {
+		decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
+		if decision.Enabled || decision.Reason != logpolicy.EmitReasonFeatureLoggingAutomodDisabled {
 			t.Fatalf("expected feature toggle reason, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 		}
 	})
@@ -475,7 +476,7 @@ func TestShouldEmitLogEventCleanAction(t *testing.T) {
 
 	session := testSessionWithChannel(guildID, channelID, botID, perms)
 
-	decision := ShouldEmitLogEvent(session, cm, LogEventCleanAction, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventCleanAction, guildID)
 	if !decision.Enabled {
 		t.Fatalf("expected clean logging enabled by default, got reason=%s", decision.Reason)
 	}
@@ -486,8 +487,8 @@ func TestShouldEmitLogEventCleanAction(t *testing.T) {
 	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
 		cfg.Guilds[0].RuntimeConfig.DisableCleanLog = true
 	})
-	decision = ShouldEmitLogEvent(session, cm, LogEventCleanAction, guildID)
-	if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableCleanLog {
+	decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventCleanAction, guildID)
+	if decision.Enabled || decision.Reason != logpolicy.EmitReasonRuntimeDisableCleanLog {
 		t.Fatalf("expected clean disabled by runtime switch, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 
@@ -496,8 +497,8 @@ func TestShouldEmitLogEventCleanAction(t *testing.T) {
 		cfg.Guilds[0].RuntimeConfig.DisableCleanLog = false
 		cfg.Guilds[0].Features.Logging.CleanAction = &disabled
 	})
-	decision = ShouldEmitLogEvent(session, cm, LogEventCleanAction, guildID)
-	if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingCleanDisabled {
+	decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventCleanAction, guildID)
+	if decision.Enabled || decision.Reason != logpolicy.EmitReasonFeatureLoggingCleanDisabled {
 		t.Fatalf("expected clean disabled by feature toggle, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 }
@@ -516,7 +517,7 @@ func TestResolveLogChannelCleanFallback(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	if got := ResolveLogChannel(LogEventCleanAction, guildID, cm); got != "c-mod" {
+	if got := logpolicy.ResolveLogChannel(logpolicy.LogEventCleanAction, guildID, cm); got != "c-mod" {
 		t.Fatalf("expected clean fallback to moderation_case, got %q", got)
 	}
 }

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
@@ -323,7 +323,7 @@ func (s *UserPruneService) sendRunEmbed(guildID, botID string, estimated, pruned
 	if botID == "" {
 		botID = s.currentBotID()
 	}
-	emit := logging.ShouldEmitLogEvent(s.session, s.configManager, logging.LogEventModerationCase, guildID)
+	emit := logpolicy.ShouldEmitLogEvent(s.session, s.configManager, logpolicy.LogEventModerationCase, guildID)
 	if !emit.Enabled || strings.TrimSpace(emit.ChannelID) == "" {
 		return
 	}

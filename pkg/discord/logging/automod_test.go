@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 )
 
 func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
@@ -28,7 +29,7 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 	session := testSessionWithChannel(guildID, channelID, botID, perms)
 	session.Identify.Intents = discordgo.IntentAutoModerationExecution
 
-	decision := ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
+	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
 	if !decision.Enabled {
 		t.Fatalf("expected automod logging enabled by default, got reason=%s", decision.Reason)
 	}
@@ -41,8 +42,8 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 	mustUpdateConfig(t, cm, func(cfg *files.BotConfig) {
 		cfg.Guilds[0].Features.Logging.AutomodAction = &disabled
 	})
-	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
-	if decision.Enabled || decision.Reason != EmitReasonFeatureLoggingAutomodDisabled {
+	decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
+	if decision.Enabled || decision.Reason != logpolicy.EmitReasonFeatureLoggingAutomodDisabled {
 		t.Fatalf("expected automod disabled by feature toggle, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 
@@ -51,8 +52,8 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 		cfg.Guilds[0].Features.Logging.AutomodAction = &enabled
 		cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = true
 	})
-	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
-	if decision.Enabled || decision.Reason != EmitReasonRuntimeDisableAutomodLogs {
+	decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
+	if decision.Enabled || decision.Reason != logpolicy.EmitReasonRuntimeDisableAutomodLogs {
 		t.Fatalf("expected automod disabled by runtime config, got enabled=%v reason=%s", decision.Enabled, decision.Reason)
 	}
 
@@ -62,7 +63,7 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 		cfg.Guilds[0].RuntimeConfig.DisableAutomodLogs = false
 		cfg.RuntimeConfig.ModerationLogging = &disabledModeration
 	})
-	decision = ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
+	decision = logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
 	if !decision.Enabled {
 		t.Fatalf("expected automod logging independent from moderation_logging, got reason=%s", decision.Reason)
 	}
@@ -90,7 +91,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 
 		session := testSessionWithChannel(guildID, automodChannelID, botID, perms)
 		session.Identify.Intents = discordgo.IntentAutoModerationExecution
-		decision := ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
 		if !decision.Enabled {
 			t.Fatalf("expected enabled decision, got reason=%s", decision.Reason)
 		}
@@ -111,12 +112,12 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 
 		session := testSessionWithChannel(guildID, "c-other", botID, perms)
 		session.Identify.Intents = discordgo.IntentAutoModerationExecution
-		decision := ShouldEmitLogEvent(session, cm, LogEventAutomodAction, guildID)
+		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
 		if decision.Enabled {
 			t.Fatal("expected disabled decision")
 		}
-		if decision.Reason != EmitReasonNoChannelConfigured {
-			t.Fatalf("expected reason %s, got %s", EmitReasonNoChannelConfigured, decision.Reason)
+		if decision.Reason != logpolicy.EmitReasonNoChannelConfigured {
+			t.Fatalf("expected reason %s, got %s", logpolicy.EmitReasonNoChannelConfigured, decision.Reason)
 		}
 	})
 }

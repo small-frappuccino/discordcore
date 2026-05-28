@@ -9,8 +9,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 )
 
 const (
@@ -134,7 +134,8 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 	start := c.now()
 	c.metrics.RecordCleanAttempt()
 
-	if err := ensureModerationCommandEnabled(ctx, "moderation.clean", "Clean command is disabled for this server."); err != nil {
+	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.clean"); !enabled {
+		err := core.NewCommandError("Clean command is disabled for this server.", true)
 		c.recordEarlyFailure(ctx, "", CleanFailureCauseFeatureDisabled, start, err)
 		return err
 	}
@@ -676,7 +677,7 @@ func (c *cleanCommand) sendCleanActionLog(ctx *core.Context, request cleanReques
 		RequestedBy: ctx.UserID,
 		Extra:       buildCleanLogDetails(request, result),
 	}
-	emit := postModerationEventEmbed(ctx, payload, logging.LogEventCleanAction)
+	emit := postModerationEventEmbed(ctx, payload, logpolicy.LogEventCleanAction)
 	if !emit.Enabled {
 		return
 	}
@@ -736,3 +737,6 @@ func buildCleanLogDetails(request cleanRequest, result cleanResult) string {
 	}
 	return strings.Join(parts, " | ")
 }
+
+
+

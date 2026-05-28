@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
@@ -51,20 +52,6 @@ import (
 // offending fragment) and lets the description convey that the user has
 // been restricted, without duplicating one log line per action type.
 //
-// Future debug mode
-//
-// Per-action detail is intentionally preserved in automodActionLabel and
-// in the typed payload reaching buildAutomodEmbed. A later "debug embeds"
-// mode can re-expose it by:
-//
-//   1. bypassing the SEND_ALERT_MESSAGE filter so all action types reach
-//      the embed builder;
-//   2. routing keys through a debug-aware variant that includes the
-//      gateway sequence number, restoring one embed per action;
-//   3. re-adding an "Action" field on the embeds via
-//      automodActionLabel(e.Action.Type);
-//   4. optionally surfacing the gateway sequence and event type for
-//      cross-referencing with Discord's audit log.
 //
 // Trigger types Discord can fire (see automodTrigger* constants):
 //
@@ -234,7 +221,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	emit := ShouldEmitLogEvent(s, as.configManager, LogEventAutomodAction, e.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(s, as.configManager, logpolicy.LogEventAutomodAction, e.GuildID)
 	if !emit.Enabled {
 		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "seq", sequence, "reason", emit.Reason)
 		return
@@ -342,7 +329,6 @@ func buildAutomodMemberProfileEmbed(e *discordgo.AutoModerationActionExecution) 
 	// embed: the package-level coalescing collapses Block Member
 	// Interactions + Send Alert Message into a single embed per violation,
 	// and "user is quarantined" is already conveyed by the description.
-	// automodActionLabel remains available for a future debug-embed mode.
 	embed := &discordgo.MessageEmbed{
 		Title:       "AutoMod • Member Profile Quarantined",
 		Description: "Blocked words detected in this member's profile. The user is quarantined until the profile is updated.",
@@ -384,11 +370,9 @@ func automodTriggerLabel(t discordgo.AutoModerationRuleTriggerType) string {
 }
 
 // automodActionLabel returns a human-readable label for a Discord AutoMod
-// action type. The standard (non-debug) embed builders deliberately do not
+// action type. The standard embed builders deliberately do not
 // surface this label because the per-action stream is coalesced into one
-// embed per violation; the function is retained for a future debug-embed
-// mode that re-exposes per-action detail. See the package-level "AutoMod
-// logging" comment block.
+// embed per violation. See the package-level "AutoMod logging" comment block.
 func automodActionLabel(t discordgo.AutoModerationActionType) string {
 	switch int(t) {
 	case automodActionBlockMessage:

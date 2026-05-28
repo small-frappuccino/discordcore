@@ -10,6 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -168,7 +169,7 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 		return
 	}
 
-	emit := ShouldEmitLogEvent(rs.session, rs.configManager, LogEventReactionMetric, guildID)
+	emit := logpolicy.ShouldEmitLogEvent(rs.session, rs.configManager, logpolicy.LogEventReactionMetric, guildID)
 	if !emit.Enabled {
 		slog.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
 		return

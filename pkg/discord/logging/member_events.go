@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -248,9 +249,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 		}
 	}
 
-	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMemberJoin, m.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMemberJoin, m.GuildID)
 	if !emit.Enabled {
-		if emit.Reason == EmitReasonNoChannelConfigured {
+		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
 		} else {
 			slog.Debug(fmt.Sprintf("Member join notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
@@ -347,9 +348,9 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, s *d
 	if cfg == nil {
 		return
 	}
-	emit := ShouldEmitLogEvent(mes.session, mes.configManager, LogEventMemberLeave, m.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMemberLeave, m.GuildID)
 	if !emit.Enabled {
-		if emit.Reason == EmitReasonNoChannelConfigured {
+		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
 		} else {
 			slog.Debug(fmt.Sprintf("Member leave notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))

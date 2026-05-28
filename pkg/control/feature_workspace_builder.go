@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	discordlogging "github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 )
 
 type featureWorkspaceBuilder struct {
@@ -297,11 +297,11 @@ var featureDetailBuilders = map[string]func(*files.BotConfig, string) map[string
 func buildLogFeatureDetails(
 	cfg *files.BotConfig,
 	guildID string,
-	logEvent discordlogging.LogEventType,
+	logEvent logpolicy.LogEventType,
 ) map[string]any {
 	out := map[string]any{}
 
-	capability, ok := discordlogging.LogEventCapabilities()[logEvent]
+	capability, ok := logpolicy.LogEventCapabilities()[logEvent]
 	if !ok {
 		return out
 	}
