@@ -2,7 +2,7 @@ package files
 
 import "encoding/json"
 
-// Feature toggles are optional overrides for runtime behavior.
+// FeatureServiceToggles holds optional overrides for runtime behavior.
 // When unset, defaults preserve current behavior.
 type FeatureServiceToggles struct {
 	Monitoring    *bool `json:"monitoring,omitempty"`

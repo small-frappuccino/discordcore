@@ -25,7 +25,7 @@ func NewConfigManagerWithStore(store ConfigStore) *ConfigManager {
 	}
 }
 
-// Load loads the configuration from file.
+// LoadConfig loads the configuration from file.
 func (mgr *ConfigManager) LoadConfig() error {
 	mgr.mu.Lock()
 
@@ -77,7 +77,7 @@ func (mgr *ConfigManager) LoadConfig() error {
 	return nil
 }
 
-// Save saves the current configuration to file.
+// SaveConfig saves the current configuration to file.
 func (mgr *ConfigManager) SaveConfig() error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -149,7 +149,7 @@ func (mgr *ConfigManager) Config() *BotConfig {
 	return snap.config
 }
 
-// HasGuilds checks if there are configured guilds.
+// HasAnyGuilds checks if there are configured guilds.
 func (mgr *ConfigManager) HasAnyGuilds() bool {
 	snap := mgr.currentPublishedSnapshot()
 	return snap != nil && snap.config != nil && len(snap.config.Guilds) > 0
@@ -298,7 +298,7 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 
 // --- Guild Detection & Addition ---
 
-// AutoDetectGuilds automatically detects guilds where the bot is present.
+// DetectGuilds automatically detects guilds where the bot is present.
 func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 	return mgr.DetectGuildsForBot(session, "")
 }
@@ -357,7 +357,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 	return err
 }
 
-// AddGuildToConfig adds a new guild to the configuration.
+// RegisterGuild adds a new guild to the configuration.
 func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID string) error {
 	return mgr.RegisterGuildForBot(session, guildID, "")
 }
@@ -511,7 +511,7 @@ func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []strin
 	return allowedRoles
 }
 
-func GetTextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
+func TextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
 	// Verify session state is properly initialized
 	if session == nil || session.State == nil || session.State.User == nil {
 		return nil, fmt.Errorf("session not properly initialized")

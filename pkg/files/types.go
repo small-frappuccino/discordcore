@@ -52,6 +52,8 @@ type RuntimeConfig struct {
 	BackfillChannelID   string `json:"backfill_channel_id,omitempty"`
 	BackfillStartDay    string `json:"backfill_start_day,omitempty"` // YYYY-MM-DD, default: today UTC when empty
 	BackfillInitialDate string `json:"backfill_initial_date,omitempty"`
+	MimuWelcomeString   string `json:"mimu_welcome_string,omitempty"`
+	MimuGoodbyeString   string `json:"mimu_goodbye_string,omitempty"`
 
 	// BOT ROLE PERMISSION MIRRORING (SAFETY)
 	// Previously controllable via env vars:
@@ -98,6 +100,8 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		BackfillChannelID            string                       `json:"backfill_channel_id,omitempty"`
 		BackfillStartDay             string                       `json:"backfill_start_day,omitempty"`
 		BackfillInitialDate          string                       `json:"backfill_initial_date,omitempty"`
+		MimuWelcomeString            string                       `json:"mimu_welcome_string,omitempty"`
+		MimuGoodbyeString            string                       `json:"mimu_goodbye_string,omitempty"`
 		DisableBotRolePermMirror     bool                         `json:"disable_bot_role_perm_mirror,omitempty"`
 		BotRolePermMirrorActorRoleID string                       `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
 		WebhookEmbedUpdates          []WebhookEmbedUpdateConfig   `json:"webhook_embed_updates,omitempty"`
@@ -130,6 +134,8 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		BackfillChannelID:            raw.BackfillChannelID,
 		BackfillStartDay:             raw.BackfillStartDay,
 		BackfillInitialDate:          raw.BackfillInitialDate,
+		MimuWelcomeString:            raw.MimuWelcomeString,
+		MimuGoodbyeString:            raw.MimuGoodbyeString,
 		DisableBotRolePermMirror:     raw.DisableBotRolePermMirror,
 		BotRolePermMirrorActorRoleID: raw.BotRolePermMirrorActorRoleID,
 		WebhookEmbedUpdates:          raw.WebhookEmbedUpdates,
@@ -266,6 +272,22 @@ type ChannelsConfig struct {
 	EntryBackfill  string `json:"entry_backfill,omitempty"`
 }
 
+func (cc *ChannelsConfig) UnmarshalJSON(data []byte) error {
+	type alias ChannelsConfig
+	type rawChannelsConfig struct {
+		alias
+		LegacyVerificationCleanup string `json:"verification_cleanup,omitempty"`
+	}
+
+	var raw rawChannelsConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*cc = ChannelsConfig(raw.alias)
+	return nil
+}
+
 func (cc ChannelsConfig) BackfillChannelID() string {
 	return strings.TrimSpace(cc.EntryBackfill)
 }
@@ -301,6 +323,22 @@ type RolesConfig struct {
 	AutoAssignment AutoAssignmentConfig `json:"auto_assignment,omitempty"`
 	BoosterRole    string               `json:"booster_role,omitempty"`
 	MuteRole       string               `json:"mute_role,omitempty"`
+}
+
+func (rc *RolesConfig) UnmarshalJSON(data []byte) error {
+	type alias RolesConfig
+	type rawRolesConfig struct {
+		alias
+		LegacyVerificationRole string `json:"verification_role,omitempty"`
+	}
+
+	var raw rawRolesConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*rc = RolesConfig(raw.alias)
+	return nil
 }
 
 const (
@@ -401,6 +439,28 @@ type UserPruneConfig struct {
 	// true: execute native Discord prune automatically on day 28 (30-day inactivity window)
 	// false: do not execute automatically
 	Enabled bool `json:"enabled,omitempty"`
+}
+
+func (upc *UserPruneConfig) UnmarshalJSON(data []byte) error {
+	type alias UserPruneConfig
+	type rawUserPruneConfig struct {
+		alias
+		LegacyGraceDays int      `json:"grace_days,omitempty"`
+		LegacyScanInt   int      `json:"scan_interval_mins,omitempty"`
+		LegacyDelay     int      `json:"initial_delay_secs,omitempty"`
+		LegacyKPS       int      `json:"kps,omitempty"`
+		LegacyMaxKicks  int      `json:"max_kicks_per_run,omitempty"`
+		LegacyExempt    []string `json:"exempt_role_ids,omitempty"`
+		LegacyDryRun    bool     `json:"dry_run,omitempty"`
+	}
+
+	var raw rawUserPruneConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*upc = UserPruneConfig(raw.alias)
+	return nil
 }
 
 // ReactionBlockEmojiConfig stores one blocked emoji selector.
@@ -646,6 +706,13 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	// BackfillInitialDate is GuildOnly: it must be set in the guild config
 	// and does not fall back to the global config.
 	resolved.BackfillInitialDate = guildRC.BackfillInitialDate
+
+	if guildRC.MimuWelcomeString != "" {
+		resolved.MimuWelcomeString = guildRC.MimuWelcomeString
+	}
+	if guildRC.MimuGoodbyeString != "" {
+		resolved.MimuGoodbyeString = guildRC.MimuGoodbyeString
+	}
 
 	if guildRC.DisableBotRolePermMirror {
 		resolved.DisableBotRolePermMirror = true
