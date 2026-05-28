@@ -130,7 +130,9 @@ func isInteractiveEphemeralDisabled(ctx *core.Context) bool {
 
 func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
 	if isInteractiveEphemeralDisabled(ctx) {
-		return nil
+		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		})
 	}
 	rm := rolePanelToggleResponseBuilder(ctx).WithContext(ctx).Build()
 	if err := rm.Custom(ctx.Interaction, message, nil); err != nil {
@@ -142,7 +144,9 @@ func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
 
 func rolePanelToggleEphemeralSuccess(ctx *core.Context, message string) error {
 	if isInteractiveEphemeralDisabled(ctx) {
-		return nil
+		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		})
 	}
 	rm := rolePanelToggleResponseBuilder(ctx).WithContext(ctx).Build()
 	return rm.Custom(ctx.Interaction, message, nil)

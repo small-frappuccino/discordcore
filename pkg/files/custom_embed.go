@@ -26,6 +26,7 @@ const (
 	CustomEmbedFieldNameMaxLen   = 256
 	CustomEmbedFieldValueMaxLen  = 1024
 	CustomEmbedMaxFields         = 25
+	CustomEmbedMaxTotalLen       = 6000
 )
 
 // CustomEmbedFieldConfig captures one field in a custom embed.
@@ -135,6 +136,17 @@ func validateCustomEmbedFields(in CustomEmbedConfig) (CustomEmbedConfig, error) 
 		return CustomEmbedConfig{}, invalidCustomEmbedInput("footer_text must be at most %d characters", CustomEmbedFooterMaxLen)
 	}
 	return out, nil
+}
+
+func customEmbedTotalLen(embed CustomEmbedConfig) int {
+	count := utf8.RuneCountInString(embed.Title) +
+		utf8.RuneCountInString(embed.Description) +
+		utf8.RuneCountInString(embed.AuthorName) +
+		utf8.RuneCountInString(embed.FooterText)
+	for _, f := range embed.Fields {
+		count += utf8.RuneCountInString(f.Name) + utf8.RuneCountInString(f.Value)
+	}
+	return count
 }
 
 func normalizeCustomEmbedField(in CustomEmbedFieldConfig) (CustomEmbedFieldConfig, error) {
@@ -303,15 +315,22 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
 		if idx >= 0 {
-			gc.CustomEmbeds[idx].Title = validated.Title
-			gc.CustomEmbeds[idx].Description = validated.Description
-			gc.CustomEmbeds[idx].Color = validated.Color
-			gc.CustomEmbeds[idx].AuthorName = validated.AuthorName
-			gc.CustomEmbeds[idx].AuthorIconURL = validated.AuthorIconURL
-			gc.CustomEmbeds[idx].FooterText = validated.FooterText
-			gc.CustomEmbeds[idx].FooterIconURL = validated.FooterIconURL
-			gc.CustomEmbeds[idx].ImageURL = validated.ImageURL
-			gc.CustomEmbeds[idx].ThumbnailURL = validated.ThumbnailURL
+			copyEmbed := gc.CustomEmbeds[idx]
+			copyEmbed.Title = validated.Title
+			copyEmbed.Description = validated.Description
+			copyEmbed.Color = validated.Color
+			copyEmbed.AuthorName = validated.AuthorName
+			copyEmbed.AuthorIconURL = validated.AuthorIconURL
+			copyEmbed.FooterText = validated.FooterText
+			copyEmbed.FooterIconURL = validated.FooterIconURL
+			copyEmbed.ImageURL = validated.ImageURL
+			copyEmbed.ThumbnailURL = validated.ThumbnailURL
+
+			if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
+				return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
+			}
+
+			gc.CustomEmbeds[idx] = copyEmbed
 		} else {
 			if len(gc.CustomEmbeds) >= 25 {
 				return invalidCustomEmbedInput("guild cannot have more than 25 custom embeds")
@@ -441,6 +460,53 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 	return err
 }
 
+func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	if guildID == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	targetKey, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return err
+	}
+
+	idsToRemove := make(map[string]bool, len(messageIDs))
+	for _, id := range messageIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" {
+			idsToRemove[trimmed] = true
+		}
+	}
+	if len(idsToRemove) == 0 {
+		return nil
+	}
+
+	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+		gc, err := guildConfigByID(cfg, guildID)
+		if err != nil {
+			return err
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
+		}
+
+		embed := &gc.CustomEmbeds[idx]
+		var kept []CustomEmbedPostingConfig
+		for _, p := range embed.Postings {
+			if !idsToRemove[p.MessageID] {
+				kept = append(kept, p)
+			}
+		}
+		embed.Postings = kept
+		return nil
+	})
+	return err
+}
+
 func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []CustomEmbedFieldConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
@@ -474,12 +540,14 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
 		}
 
-		if len(normalized) > 0 {
-			gc.CustomEmbeds[idx].Fields = make([]CustomEmbedFieldConfig, len(normalized))
-			copy(gc.CustomEmbeds[idx].Fields, normalized)
-		} else {
-			gc.CustomEmbeds[idx].Fields = nil
+		copyEmbed := gc.CustomEmbeds[idx]
+		copyEmbed.Fields = normalized
+
+		if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
+			return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
 		}
+
+		gc.CustomEmbeds[idx] = copyEmbed
 		return nil
 	})
 	return err
@@ -551,7 +619,15 @@ func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomE
 		if len(gc.CustomEmbeds[idx].Fields) >= CustomEmbedMaxFields {
 			return invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
 		}
-		gc.CustomEmbeds[idx].Fields = append(gc.CustomEmbeds[idx].Fields, nf)
+
+		copyEmbed := gc.CustomEmbeds[idx]
+		copyEmbed.Fields = append(copyEmbed.Fields, nf)
+
+		if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
+			return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
+		}
+
+		gc.CustomEmbeds[idx] = copyEmbed
 		return nil
 	})
 	return err
@@ -597,6 +673,3 @@ func cloneCustomEmbeds(in []CustomEmbedConfig) []CustomEmbedConfig {
 	}
 	return out
 }
-
-
-

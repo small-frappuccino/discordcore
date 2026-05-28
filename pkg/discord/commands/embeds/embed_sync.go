@@ -33,14 +33,14 @@ func (r customEmbedSyncResult) HasIssues() bool {
 type customEmbedPostingSyncer struct {
 	configManager *files.ConfigManager
 	editMessage   func(s *discordgo.Session, edit *discordgo.MessageEdit) error
-	dropPosting   func(cm *files.ConfigManager, guildID, key, messageID string) error
+	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
 }
 
 func newCustomEmbedPostingSyncer(cm *files.ConfigManager) *customEmbedPostingSyncer {
 	return &customEmbedPostingSyncer{
 		configManager: cm,
 		editMessage:   defaultCustomEmbedEditMessage,
-		dropPosting:   defaultCustomEmbedDropPosting,
+		dropPostings:  defaultCustomEmbedDropPostings,
 	}
 }
 
@@ -75,19 +75,26 @@ func (s *customEmbedPostingSyncer) Sync(
 
 		if isCustomEmbedPostingMissingError(err) {
 			result.Dropped = append(result.Dropped, posting)
-			if dropErr := s.dropPosting(s.configManager, guildID, key, posting.MessageID); dropErr != nil && !errors.Is(dropErr, files.ErrCustomEmbedPostingNotFound) {
-				slog.Warn("Custom embed posting cleanup failed",
-					"guildID", guildID,
-					"key", key,
-					"messageID", posting.MessageID,
-					"err", dropErr,
-				)
-			}
 			continue
 		}
 
 		result.Failed = append(result.Failed, customEmbedSyncFailure{Posting: posting, Err: err})
 	}
+
+	if len(result.Dropped) > 0 {
+		ids := make([]string, 0, len(result.Dropped))
+		for _, p := range result.Dropped {
+			ids = append(ids, p.MessageID)
+		}
+		if dropErr := s.dropPostings(s.configManager, guildID, key, ids); dropErr != nil {
+			slog.Warn("Custom embed batch posting cleanup failed",
+				"guildID", guildID,
+				"key", key,
+				"err", dropErr,
+			)
+		}
+	}
+
 	return result
 }
 
@@ -136,9 +143,9 @@ func defaultCustomEmbedEditMessage(s *discordgo.Session, edit *discordgo.Message
 	return err
 }
 
-func defaultCustomEmbedDropPosting(cm *files.ConfigManager, guildID, key, messageID string) error {
+func defaultCustomEmbedDropPostings(cm *files.ConfigManager, guildID, key string, messageIDs []string) error {
 	if cm == nil {
 		return errors.New("config manager is nil")
 	}
-	return cm.RemoveCustomEmbedPosting(guildID, key, messageID)
+	return cm.RemoveCustomEmbedPostings(guildID, key, messageIDs)
 }

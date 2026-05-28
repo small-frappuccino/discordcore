@@ -105,8 +105,8 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 			editedPaths = append(editedPaths, edit.ID)
 			return nil
 		},
-		dropPosting: func(c *files.ConfigManager, gid, k, mid string) error {
-			return c.RemoveCustomEmbedPosting(gid, k, mid)
+		dropPostings: func(c *files.ConfigManager, gid, k string, mid []string) error {
+			return c.RemoveCustomEmbedPostings(gid, k, mid)
 		},
 	}
 

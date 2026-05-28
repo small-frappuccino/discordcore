@@ -127,7 +127,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 		Path:      rolePanelComponentRouteID,
 		Component: newRolePanelComponentHandler(rc.configManager),
 		AckPolicy: core.InteractionAckPolicy{
-			Mode:      core.InteractionAckModeDefer,
+			Mode:      core.InteractionAckModeNone,
 			Ephemeral: true,
 		},
 	})
@@ -152,6 +152,12 @@ func (c *rolePanelPostSubCommand) Options() []*discordgo.ApplicationCommandOptio
 }
 func (c *rolePanelPostSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelPostSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -212,6 +218,12 @@ func (c *rolePanelPreviewSubCommand) Options() []*discordgo.ApplicationCommandOp
 }
 func (c *rolePanelPreviewSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelPreviewSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelPreviewSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -261,6 +273,12 @@ func (c *rolePanelSetSubCommand) Options() []*discordgo.ApplicationCommandOption
 }
 func (c *rolePanelSetSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelSetSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -334,6 +352,12 @@ func (c *rolePanelDeleteSubCommand) Options() []*discordgo.ApplicationCommandOpt
 }
 func (c *rolePanelDeleteSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelDeleteSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelDeleteSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -435,6 +459,12 @@ func (c *rolePanelButtonAddSubCommand) Options() []*discordgo.ApplicationCommand
 }
 func (c *rolePanelButtonAddSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelButtonAddSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelButtonAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -498,6 +528,12 @@ func (c *rolePanelButtonRemoveSubCommand) Options() []*discordgo.ApplicationComm
 }
 func (c *rolePanelButtonRemoveSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelButtonRemoveSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelButtonRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -544,6 +580,12 @@ func (c *rolePanelButtonListSubCommand) Options() []*discordgo.ApplicationComman
 }
 func (c *rolePanelButtonListSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelButtonListSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelButtonListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelButtonListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -596,6 +638,12 @@ func (c *rolePanelFieldAddSubCommand) Options() []*discordgo.ApplicationCommandO
 }
 func (c *rolePanelFieldAddSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelFieldAddSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -655,6 +703,12 @@ func (c *rolePanelFieldRemoveSubCommand) Options() []*discordgo.ApplicationComma
 }
 func (c *rolePanelFieldRemoveSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelFieldRemoveSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -702,6 +756,12 @@ func (c *rolePanelFieldListSubCommand) Options() []*discordgo.ApplicationCommand
 }
 func (c *rolePanelFieldListSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelFieldListSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelFieldListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelFieldListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -753,6 +813,12 @@ func (c *rolePanelRefreshSubCommand) Options() []*discordgo.ApplicationCommandOp
 }
 func (c *rolePanelRefreshSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelRefreshSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -810,6 +876,12 @@ func (c *rolePanelUnpostSubCommand) Options() []*discordgo.ApplicationCommandOpt
 }
 func (c *rolePanelUnpostSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelUnpostSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
 func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return err
@@ -945,11 +1017,44 @@ func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, syncer *rolePan
 
 func rolePanelKeyOption(required bool) *discordgo.ApplicationCommandOption {
 	return &discordgo.ApplicationCommandOption{
-		Type:        discordgo.ApplicationCommandOptionString,
-		Name:        rolePanelOptionKey,
-		Description: "Panel identifier (lowercase letters, digits, '-' or '_'); used to bind buttons together",
-		Required:    required,
+		Type:         discordgo.ApplicationCommandOptionString,
+		Name:         rolePanelOptionKey,
+		Description:  "Panel identifier (lowercase letters, digits, '-' or '_'); used to bind buttons together",
+		Required:     required,
+		Autocomplete: true,
 	}
+}
+
+func handleRolePanelKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if ctx.GuildID == "" {
+		return nil, nil
+	}
+	panels, err := cm.RolePanels(ctx.GuildID)
+	if err != nil || len(panels) == 0 {
+		return nil, nil
+	}
+
+	opts := core.GetSubCommandOptions(ctx.Interaction)
+	focused, found := core.HasFocusedOption(opts)
+	if !found {
+		return nil, nil
+	}
+
+	input := strings.ToLower(fmt.Sprintf("%v", focused.Value))
+
+	var choices []*discordgo.ApplicationCommandOptionChoice
+	for _, p := range panels {
+		if input == "" || strings.HasPrefix(p.Key, input) {
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  p.Key,
+				Value: p.Key,
+			})
+		}
+	}
+	if len(choices) > 25 {
+		choices = choices[:25]
+	}
+	return choices, nil
 }
 
 func rolePanelKeyFromOptions(i *discordgo.InteractionCreate) (string, error) {

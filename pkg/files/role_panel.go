@@ -47,6 +47,8 @@ const (
 	RolePanelFieldValueMaxLen = 1024
 	// RolePanelMaxFields mirrors Discord's embed fields limit.
 	RolePanelMaxFields = 25
+	// RolePanelMaxTotalLen mirrors Discord's embed character limit.
+	RolePanelMaxTotalLen = 6000
 )
 
 // RolePanelEmbedFieldConfig captures one field in a role panel embed.
@@ -233,6 +235,17 @@ func validateRolePanelEmbedFields(in RolePanelConfig) (RolePanelConfig, error) {
 		return RolePanelConfig{}, invalidRolePanelInput("footer_text must be at most %d characters", RolePanelFooterMaxLen)
 	}
 	return out, nil
+}
+
+func rolePanelTotalLen(embed RolePanelConfig) int {
+	count := utf8.RuneCountInString(embed.Title) +
+		utf8.RuneCountInString(embed.Description) +
+		utf8.RuneCountInString(embed.AuthorName) +
+		utf8.RuneCountInString(embed.FooterText)
+	for _, f := range embed.Fields {
+		count += utf8.RuneCountInString(f.Name) + utf8.RuneCountInString(f.Value)
+	}
+	return count
 }
 
 func normalizeRolePanelEmbedField(in RolePanelEmbedFieldConfig) (RolePanelEmbedFieldConfig, error) {
@@ -527,7 +540,8 @@ func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key string, embed RolePanel
 	if err != nil {
 		return err
 	}
-	cleanEmbed, err := validateRolePanelEmbedFields(embed)
+
+	validated, err := validateRolePanelEmbedFields(embed)
 	if err != nil {
 		return err
 	}
@@ -535,20 +549,31 @@ func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key string, embed RolePanel
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
 		idx := findRolePanelIndex(gc.RolePanels, target)
 		if idx < 0 {
-			cleanEmbed.Key = target
-			gc.RolePanels = append(gc.RolePanels, cleanEmbed)
+			validated.Key = target
+			if rolePanelTotalLen(validated) > RolePanelMaxTotalLen {
+				return invalidRolePanelInput("panel total character count must be at most %d", RolePanelMaxTotalLen)
+			}
+			gc.RolePanels = append(gc.RolePanels, validated)
 			sortRolePanels(gc.RolePanels)
 			return nil
 		}
-		gc.RolePanels[idx].Title = cleanEmbed.Title
-		gc.RolePanels[idx].Description = cleanEmbed.Description
-		gc.RolePanels[idx].Color = cleanEmbed.Color
-		gc.RolePanels[idx].AuthorName = cleanEmbed.AuthorName
-		gc.RolePanels[idx].AuthorIconURL = cleanEmbed.AuthorIconURL
-		gc.RolePanels[idx].FooterText = cleanEmbed.FooterText
-		gc.RolePanels[idx].FooterIconURL = cleanEmbed.FooterIconURL
-		gc.RolePanels[idx].ImageURL = cleanEmbed.ImageURL
-		gc.RolePanels[idx].ThumbnailURL = cleanEmbed.ThumbnailURL
+
+		copyEmbed := gc.RolePanels[idx]
+		copyEmbed.Title = validated.Title
+		copyEmbed.Description = validated.Description
+		copyEmbed.Color = validated.Color
+		copyEmbed.AuthorName = validated.AuthorName
+		copyEmbed.AuthorIconURL = validated.AuthorIconURL
+		copyEmbed.FooterText = validated.FooterText
+		copyEmbed.FooterIconURL = validated.FooterIconURL
+		copyEmbed.ImageURL = validated.ImageURL
+		copyEmbed.ThumbnailURL = validated.ThumbnailURL
+
+		if rolePanelTotalLen(copyEmbed) > RolePanelMaxTotalLen {
+			return invalidRolePanelInput("panel total character count must be at most %d", RolePanelMaxTotalLen)
+		}
+
+		gc.RolePanels[idx] = copyEmbed
 		return nil
 	})
 }
@@ -563,7 +588,7 @@ func (mgr *ConfigManager) AddRolePanelField(guildID, key string, field RolePanel
 	if err != nil {
 		return err
 	}
-	nf, err := normalizeRolePanelEmbedField(field)
+	validated, err := normalizeRolePanelEmbedField(field)
 	if err != nil {
 		return err
 	}
@@ -576,7 +601,15 @@ func (mgr *ConfigManager) AddRolePanelField(guildID, key string, field RolePanel
 		if len(gc.RolePanels[idx].Fields) >= RolePanelMaxFields {
 			return invalidRolePanelInput("panel must have at most %d fields", RolePanelMaxFields)
 		}
-		gc.RolePanels[idx].Fields = append(gc.RolePanels[idx].Fields, nf)
+
+		copyEmbed := gc.RolePanels[idx]
+		copyEmbed.Fields = append(copyEmbed.Fields, validated)
+
+		if rolePanelTotalLen(copyEmbed) > RolePanelMaxTotalLen {
+			return invalidRolePanelInput("panel total character count must be at most %d", RolePanelMaxTotalLen)
+		}
+
+		gc.RolePanels[idx] = copyEmbed
 		return nil
 	})
 }
@@ -601,7 +634,17 @@ func (mgr *ConfigManager) RemoveRolePanelField(guildID, key string, fieldIndex i
 		if fieldIndex < 0 || fieldIndex >= len(fields) {
 			return invalidRolePanelInput("invalid field index")
 		}
-		gc.RolePanels[idx].Fields = slices.Delete(fields, fieldIndex, fieldIndex+1)
+
+		normalized := slices.Delete(fields, fieldIndex, fieldIndex+1)
+
+		copyEmbed := gc.RolePanels[idx]
+		copyEmbed.Fields = normalized
+
+		if rolePanelTotalLen(copyEmbed) > RolePanelMaxTotalLen {
+			return invalidRolePanelInput("panel total character count must be at most %d", RolePanelMaxTotalLen)
+		}
+
+		gc.RolePanels[idx] = copyEmbed
 		return nil
 	})
 }
@@ -789,6 +832,49 @@ func (mgr *ConfigManager) RemoveRolePanelPosting(guildID, key, messageID string)
 			return fmt.Errorf("%w: message_id=%s", ErrRolePanelPostingNotFound, mid)
 		}
 		gc.RolePanels[idx].Postings = slices.Delete(gc.RolePanels[idx].Postings, pIdx, pIdx+1)
+		return nil
+	})
+}
+
+// RemoveRolePanelPostings drops multiple (channel_id, message_id) pairs from a
+// panel. Message IDs that are not tracked are safely ignored.
+func (mgr *ConfigManager) RemoveRolePanelPostings(guildID, key string, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	scope := strings.TrimSpace(guildID)
+	if scope == "" {
+		return invalidRolePanelInput("guild_id is required")
+	}
+	target, err := validateRolePanelKey(key)
+	if err != nil {
+		return err
+	}
+
+	idsToRemove := make(map[string]bool, len(messageIDs))
+	for _, id := range messageIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" {
+			idsToRemove[trimmed] = true
+		}
+	}
+	if len(idsToRemove) == 0 {
+		return nil
+	}
+
+	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
+		idx := findRolePanelIndex(gc.RolePanels, target)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrRolePanelNotFound, target)
+		}
+
+		var kept []RolePanelPostingConfig
+		for _, p := range gc.RolePanels[idx].Postings {
+			if !idsToRemove[p.MessageID] {
+				kept = append(kept, p)
+			}
+		}
+		gc.RolePanels[idx].Postings = kept
 		return nil
 	})
 }

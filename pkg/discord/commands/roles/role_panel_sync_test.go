@@ -140,8 +140,8 @@ func TestRolePanelSyncRecordsNonTerminalFailures(t *testing.T) {
 	syncer.editMessage = func(_ *discordgo.Session, _ *discordgo.MessageEdit) error {
 		return &discordgo.RESTError{Message: &discordgo.APIErrorMessage{Code: 50013, Message: "Missing Permissions"}}
 	}
-	syncer.dropPosting = func(_ *files.ConfigManager, _, _, _ string) error {
-		t.Fatal("dropPosting should not run for non-terminal failures")
+	syncer.dropPostings = func(_ *files.ConfigManager, _, _ string, _ []string) error {
+		t.Fatal("dropPostings should not run for non-terminal failures")
 		return nil
 	}
 
@@ -211,5 +211,61 @@ func TestIsRolePanelPostingMissingError(t *testing.T) {
 				t.Fatalf("isRolePanelPostingMissingError(%v) = %v want %v", tc.err, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRolePanelPostingSyncer_BatchDrops(t *testing.T) {
+	cm := newRolePanelSyncTestManager(t)
+	const (
+		goneMsg1 = "300001"
+		goneMsg2 = "300002"
+		keep     = "300003"
+	)
+	for _, mid := range []string{goneMsg1, goneMsg2, keep} {
+		if err := cm.AddRolePanelPosting("guild", "pings", files.RolePanelPostingConfig{ChannelID: "111000", MessageID: mid}); err != nil {
+			t.Fatalf("seed posting %s: %v", mid, err)
+		}
+	}
+
+	syncer := newRolePanelPostingSyncer(cm)
+	syncer.editMessage = func(_ *discordgo.Session, edit *discordgo.MessageEdit) error {
+		switch edit.ID {
+		case goneMsg1, goneMsg2:
+			return &discordgo.RESTError{Message: &discordgo.APIErrorMessage{Code: discordErrUnknownMessage}}
+		default:
+			return nil
+		}
+	}
+
+	var dropCallCount int
+	var droppedIDs []string
+	syncer.dropPostings = func(_ *files.ConfigManager, guildID, key string, messageIDs []string) error {
+		dropCallCount++
+		droppedIDs = messageIDs
+		return cm.RemoveRolePanelPostings(guildID, key, messageIDs)
+	}
+
+	postings, _ := cm.ListRolePanelPostings("guild", "pings")
+	result := syncer.Sync(nil, "guild", "pings", postings, &discordgo.MessageEmbed{}, nil)
+
+	if dropCallCount != 1 {
+		t.Fatalf("expected exactly 1 call to dropPostings, got %d", dropCallCount)
+	}
+	if len(droppedIDs) != 2 {
+		t.Fatalf("expected 2 dropped IDs in batch call, got %d", len(droppedIDs))
+	}
+	if result.Edited != 1 {
+		t.Fatalf("expected 1 edited, got %d", result.Edited)
+	}
+	if len(result.Dropped) != 2 {
+		t.Fatalf("expected 2 dropped, got %d", len(result.Dropped))
+	}
+
+	remaining, err := cm.ListRolePanelPostings("guild", "pings")
+	if err != nil {
+		t.Fatalf("list remaining: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].MessageID != keep {
+		t.Fatalf("expected only %s to remain, got %+v", keep, remaining)
 	}
 }

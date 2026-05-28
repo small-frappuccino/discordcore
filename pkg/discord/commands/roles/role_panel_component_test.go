@@ -340,53 +340,73 @@ func TestRolePanelComponentSurfacesAddFailure(t *testing.T) {
 	}
 }
 
-func TestRolePanelComponentRespectsDisableInteractiveEphemeral(t *testing.T) {
-	guildID := "guild-disable-ephemeral"
-	userID := "user-disable-ephemeral"
-	roleID := "1380646772698910862"
-
-	cm := files.NewMemoryConfigManager()
-	if err := cm.AddGuildConfig(files.GuildConfig{
-		GuildID: guildID,
-		RuntimeConfig: files.RuntimeConfig{
-			DisableInteractiveEphemeral: true,
-		},
-	}); err != nil {
-		t.Fatalf("add guild config: %v", err)
-	}
-	if err := cm.UpsertRolePanelButton(guildID, "pings", files.RolePanelButtonConfig{
-		RoleID: roleID,
-		Label:  "Test",
-	}); err != nil {
-		t.Fatalf("upsert button: %v", err)
-	}
+func TestRolePanelComponentHandler_AckBehavior(t *testing.T) {
+	guildID := "guild-ack"
+	userID := "user-ack"
+	roleID := "1380646673482518639"
+	cm := newRolePanelTestConfigManager(t, guildID, roleID)
 
 	session, rec := newRolePanelTestSession(t)
 	interaction := newRolePanelTestComponentInteraction(guildID, userID, roleID)
 
-	var calls struct {
-		add, remove int
-	}
 	handler := newRolePanelComponentHandler(cm)
 	handler.memberLookup = stubMemberHasRole(false)
-	handler.addRole = func(_ *discordgo.Session, gid, uid, rid string) error {
-		calls.add++
+	handler.addRole = func(_ *discordgo.Session, _, _, _ string) error {
 		return nil
 	}
 	handler.removeRole = func(_ *discordgo.Session, _, _, _ string) error {
-		calls.remove++
 		return nil
 	}
 
-	if err := runRolePanelComponent(t, cm, session, interaction, handler); err != nil {
-		t.Fatalf("handle component: %v", err)
-	}
+	t.Run("EphemeralEnabled", func(t *testing.T) {
+		rec.responses = nil
 
-	if calls.add != 1 || calls.remove != 0 {
-		t.Fatalf("unexpected toggle counts: add=%d remove=%d", calls.add, calls.remove)
-	}
+		if err := cm.AddGuildConfig(files.GuildConfig{
+			GuildID: guildID,
+			RuntimeConfig: files.RuntimeConfig{
+				DisableInteractiveEphemeral: false,
+			},
+		}); err != nil {
+			t.Fatalf("add guild config: %v", err)
+		}
 
-	if len(rec.responses) != 0 {
-		t.Fatalf("expected no interaction responses recorded when ephemeral messages are disabled, got %d", len(rec.responses))
-	}
+		if err := runRolePanelComponent(t, cm, session, interaction, handler); err != nil {
+			t.Fatalf("handle component: %v", err)
+		}
+
+		if len(rec.responses) == 0 {
+			t.Fatal("expected at least one response")
+		}
+
+		firstResp := rec.responses[0]
+		if firstResp.Type == discordgo.InteractionResponseDeferredMessageUpdate {
+			t.Fatalf("did not expect deferred message update when ephemeral is enabled, got %v", firstResp.Type)
+		}
+	})
+
+	t.Run("EphemeralDisabled", func(t *testing.T) {
+		rec.responses = nil
+
+		if err := cm.AddGuildConfig(files.GuildConfig{
+			GuildID: guildID,
+			RuntimeConfig: files.RuntimeConfig{
+				DisableInteractiveEphemeral: true,
+			},
+		}); err != nil {
+			t.Fatalf("add guild config: %v", err)
+		}
+
+		if err := runRolePanelComponent(t, cm, session, interaction, handler); err != nil {
+			t.Fatalf("handle component: %v", err)
+		}
+
+		if len(rec.responses) == 0 {
+			t.Fatal("expected at least one response")
+		}
+
+		firstResp := rec.responses[0]
+		if firstResp.Type != discordgo.InteractionResponseDeferredMessageUpdate {
+			t.Fatalf("expected deferred message update when ephemeral is disabled, got %v", firstResp.Type)
+		}
+	})
 }
