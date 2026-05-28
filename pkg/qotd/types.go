@@ -4,7 +4,11 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
+
+type QuestionRecord = storage.QOTDQuestionRecord
+type OfficialPostRecord = storage.QOTDOfficialPostRecord
 
 type QuestionStatus string
 

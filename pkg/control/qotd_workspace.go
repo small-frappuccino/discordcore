@@ -7,7 +7,6 @@ import (
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 type qotdQuestionResponse struct {
@@ -63,7 +62,7 @@ type qotdSummaryResponse struct {
 	PreviousPost            *qotdOfficialPostResponse `json:"previous_post,omitempty"`
 }
 
-func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQuestionResponse {
+func buildQOTDQuestionsResponse(records []qotd.QuestionRecord) []qotdQuestionResponse {
 	out := make([]qotdQuestionResponse, 0, len(records))
 	for _, record := range records {
 		record := record
@@ -84,7 +83,7 @@ func buildQOTDQuestionsResponse(records []storage.QOTDQuestionRecord) []qotdQues
 	return out
 }
 
-func buildQOTDOfficialPostResponse(guildID string, record *storage.QOTDOfficialPostRecord) *qotdOfficialPostResponse {
+func buildQOTDOfficialPostResponse(guildID string, record *qotd.OfficialPostRecord) *qotdOfficialPostResponse {
 	if record == nil {
 		return nil
 	}
@@ -164,7 +163,7 @@ func buildQOTDDeckSummaryResponse(decks []qotd.DeckSummary) []qotdDeckSummaryRes
 	return out
 }
 
-func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPostRecord) string {
+func buildQOTDOfficialPostJumpURL(guildID string, record *qotd.OfficialPostRecord) string {
 	if record == nil {
 		return ""
 	}
@@ -172,7 +171,7 @@ func buildQOTDOfficialPostJumpURL(guildID string, record *storage.QOTDOfficialPo
 	return qotd.OfficialPostJumpURL(resolved)
 }
 
-func resolveQOTDOfficialPost(guildID string, record *storage.QOTDOfficialPostRecord) storage.QOTDOfficialPostRecord {
+func resolveQOTDOfficialPost(guildID string, record *qotd.OfficialPostRecord) qotd.OfficialPostRecord {
 	resolved := *record
 	if strings.TrimSpace(resolved.GuildID) == "" {
 		resolved.GuildID = strings.TrimSpace(guildID)
@@ -180,10 +179,10 @@ func resolveQOTDOfficialPost(guildID string, record *storage.QOTDOfficialPostRec
 	return resolved
 }
 
-func buildQOTDOfficialThreadJumpURL(record storage.QOTDOfficialPostRecord) string {
+func buildQOTDOfficialThreadJumpURL(record qotd.OfficialPostRecord) string {
 	return discordqotd.BuildThreadJumpURL(record.GuildID, record.DiscordThreadID)
 }
 
-func buildQOTDAnswerChannelJumpURL(record storage.QOTDOfficialPostRecord, answerChannelID string) string {
+func buildQOTDAnswerChannelJumpURL(record qotd.OfficialPostRecord, answerChannelID string) string {
 	return discordqotd.BuildChannelJumpURL(record.GuildID, answerChannelID)
 }

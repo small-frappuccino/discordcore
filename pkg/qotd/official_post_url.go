@@ -4,11 +4,10 @@ import (
 	"strings"
 
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // OfficialPostJumpURL returns the canonical Discord jump URL for one official post.
-func OfficialPostJumpURL(post storage.QOTDOfficialPostRecord) string {
+func OfficialPostJumpURL(post OfficialPostRecord) string {
 	if channelID := strings.TrimSpace(post.ChannelID); channelID != "" {
 		if starterMessageID := strings.TrimSpace(post.DiscordStarterMessageID); starterMessageID != "" {
 			return discordqotd.BuildMessageJumpURL(post.GuildID, channelID, starterMessageID)

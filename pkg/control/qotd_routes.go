@@ -12,7 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 func (s *Server) handleGuildQOTDRoutes(w http.ResponseWriter, r *http.Request, guildID string, tail []string, auth requestAuthorization) {
@@ -186,7 +185,7 @@ func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"status":   "ok",
 		"guild_id": guildID,
-		"question": buildQOTDQuestionsResponse([]storage.QOTDQuestionRecord{*question})[0],
+		"question": buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
 	})
 }
 
@@ -260,7 +259,7 @@ func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":   "ok",
 		"guild_id": guildID,
-		"question": buildQOTDQuestionsResponse([]storage.QOTDQuestionRecord{*question})[0],
+		"question": buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
 	})
 }
 
@@ -343,7 +342,7 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 		"guild_id": guildID,
 		"result": map[string]any{
 			"post_url":      result.PostURL,
-			"question":      buildQOTDQuestionsResponse([]storage.QOTDQuestionRecord{result.Question})[0],
+			"question":      buildQOTDQuestionsResponse([]qotd.QuestionRecord{result.Question})[0],
 			"official_post": buildQOTDOfficialPostResponse(guildID, &result.OfficialPost),
 		},
 	})
