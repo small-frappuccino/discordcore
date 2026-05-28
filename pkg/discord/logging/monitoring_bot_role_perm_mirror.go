@@ -33,15 +33,17 @@ func (ms *MonitoringService) botPermMirrorEnabled(guildID string) bool {
 	return true
 }
 
+// botPermMirrorActorRoleID returns the configured actor role ID for the guild
+// or "" when no role is configured. An empty result intentionally disables the
+// mirror trigger at the call site, matching features.Safety.BotRolePermMirror=false
+// as the disable path.
 func (ms *MonitoringService) botPermMirrorActorRoleID(guildID string) string {
-	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
-		rc := scopedCfg.ResolveRuntimeConfig(guildID)
-		v := strings.TrimSpace(rc.BotRolePermMirrorActorRoleID)
-		if v != "" {
-			return v
-		}
+	scopedCfg := ms.scopedConfig()
+	if scopedCfg == nil {
+		return ""
 	}
-	return defaultBotPermMirrorActorRoleID
+	rc := scopedCfg.ResolveRuntimeConfig(guildID)
+	return strings.TrimSpace(rc.BotRolePermMirrorActorRoleID)
 }
 
 func (ms *MonitoringService) findGuildRole(guildID string, match func(*discordgo.Role) bool) (*discordgo.Role, bool) {

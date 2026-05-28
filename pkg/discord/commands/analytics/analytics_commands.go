@@ -8,6 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -642,16 +643,16 @@ func handleBackfillRun(ctx *core.Context) error {
 		if err != nil {
 			return respondError(s, i, "The backfill couldn't start because start_date must use YYYY-MM-DD. This reply stays private.")
 		}
-		taskType = "monitor.backfill_entry_exit_day"
-		payload = struct{ ChannelID, Day string }{ChannelID: channelID, Day: startDateRaw}
+		taskType = logging.TaskTypeMonitorBackfillEntryExitDay
+		payload = logging.BackfillEntryExitDayPayload{ChannelID: channelID, Day: startDateRaw}
 		desc = fmt.Sprintf("Scanning channel <#%s> for day `%s`.", channelID, startDateRaw)
 	} else {
 		// Range mode
 		now := time.Now().UTC()
 		start := now.AddDate(0, 0, -int(days)).Format(time.RFC3339)
 		end := now.Format(time.RFC3339)
-		taskType = "monitor.backfill_entry_exit_range"
-		payload = struct{ ChannelID, Start, End string }{ChannelID: channelID, Start: start, End: end}
+		taskType = logging.TaskTypeMonitorBackfillEntryExitRange
+		payload = logging.BackfillEntryExitRangePayload{ChannelID: channelID, Start: start, End: end}
 		desc = fmt.Sprintf("Scanning channel <#%s> for the last `%d` days.", channelID, days)
 	}
 

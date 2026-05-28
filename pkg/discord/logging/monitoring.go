@@ -24,7 +24,34 @@ const (
 	monitoringGuildMembersPageSize   = 1000
 	monitoringMaxConcurrentGuildScan = 4
 	taskTypeStartupWarmupMembers     = "monitor.startup_warmup_members"
+
+	// TaskTypeMonitorBackfillEntryExitDay names the task that scans a single UTC day
+	// of an entry/exit channel for join/leave events. Payload must be
+	// [BackfillEntryExitDayPayload]; dispatchers and the handler share that type so
+	// the type-assertion is a single point of contract.
+	TaskTypeMonitorBackfillEntryExitDay = "monitor.backfill_entry_exit_day"
+
+	// TaskTypeMonitorBackfillEntryExitRange names the task that scans an arbitrary
+	// UTC time range of an entry/exit channel. Payload must be
+	// [BackfillEntryExitRangePayload].
+	TaskTypeMonitorBackfillEntryExitRange = "monitor.backfill_entry_exit_range"
 )
+
+// BackfillEntryExitDayPayload carries the channel and target UTC day for a
+// [TaskTypeMonitorBackfillEntryExitDay] dispatch. Day uses the YYYY-MM-DD form.
+type BackfillEntryExitDayPayload struct {
+	ChannelID string
+	Day       string
+}
+
+// BackfillEntryExitRangePayload carries the channel and the inclusive UTC range
+// for a [TaskTypeMonitorBackfillEntryExitRange] dispatch. Start and End are
+// RFC3339 timestamps; End must be strictly after Start.
+type BackfillEntryExitRangePayload struct {
+	ChannelID string
+	Start     string
+	End       string
+}
 
 var monitoringWarmupTaskFn = cache.IntelligentWarmupContext
 
@@ -152,9 +179,6 @@ const (
 var heartbeatTickInterval = heartbeatInterval
 
 const (
-	// Defaults (can be overridden by env).
-	defaultBotPermMirrorActorRoleID = "1376361448942342164"
-
 	// persistent_cache types
 	persistentCacheTypeBotRolePermSnapshot = "bot_role_perm_snapshot"
 
@@ -304,6 +328,18 @@ func (ms *MonitoringService) IsRunning() bool {
 	ms.runMu.RLock()
 	defer ms.runMu.RUnlock()
 	return ms.isRunning
+}
+
+// currentRunCtx returns a snapshot of ms.runCtx taken under runMu. It returns
+// nil after Stop has cleared the lifecycle, so hot-path callers can skip work
+// that must not outlive the running monitoring service.
+func (ms *MonitoringService) currentRunCtx() context.Context {
+	if ms == nil {
+		return nil
+	}
+	ms.runMu.RLock()
+	defer ms.runMu.RUnlock()
+	return ms.runCtx
 }
 
 func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
@@ -734,14 +770,12 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 
 	if workload.backfill {
 		// Register one-shot entry/exit backfill handler (Option A).
-		ms.router.RegisterHandler("monitor.backfill_entry_exit_day", func(ctx context.Context, payload any) error {
-			// Payload is expected to be: struct{ ChannelID, Day string }
-			// Day format: YYYY-MM-DD (UTC)
-			type pld struct {
-				ChannelID string
-				Day       string
+		ms.router.RegisterHandler(TaskTypeMonitorBackfillEntryExitDay, func(ctx context.Context, payload any) error {
+			p, ok := payload.(BackfillEntryExitDayPayload)
+			if !ok {
+				log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitDay, "type", fmt.Sprintf("%T", payload))
+				return nil
 			}
-			p, _ := payload.(pld)
 			channelID := strings.TrimSpace(p.ChannelID)
 			day := strings.TrimSpace(p.Day)
 			if channelID == "" {
@@ -867,35 +901,11 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		})
 
 		// Register range-based entry/exit backfill handler (used for downtime recovery and historical scans)
-		ms.router.RegisterHandler("monitor.backfill_entry_exit_range", func(ctx context.Context, payload any) error {
-			p, ok := payload.(struct {
-				ChannelID string
-				Start     string
-				End       string
-			})
+		ms.router.RegisterHandler(TaskTypeMonitorBackfillEntryExitRange, func(ctx context.Context, payload any) error {
+			p, ok := payload.(BackfillEntryExitRangePayload)
 			if !ok {
-				// Try to handle map[string]interface{} as well, which is common if coming from JSON or some routers
-				if m, ok := payload.(map[string]any); ok {
-					p.ChannelID, _ = m["ChannelID"].(string)
-					p.Start, _ = m["Start"].(string)
-					p.End, _ = m["End"].(string)
-				} else {
-					// Try the other struct type just in case
-					type pld struct {
-						ChannelID string
-						Start     string
-						End       string
-					}
-					p2, ok2 := payload.(pld)
-					if ok2 {
-						p.ChannelID = p2.ChannelID
-						p.Start = p2.Start
-						p.End = p2.End
-					} else {
-						log.ErrorLoggerRaw().Error("Invalid payload type for monitor.backfill_entry_exit_range", "type", fmt.Sprintf("%T", payload))
-						return nil
-					}
-				}
+				log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitRange, "type", fmt.Sprintf("%T", payload))
+				return nil
 			}
 
 			channelID := strings.TrimSpace(p.ChannelID)
@@ -1101,8 +1111,8 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 					if day != "" {
 						dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
 						err := ms.router.Dispatch(dispatchCtx, task.Task{
-							Type:    "monitor.backfill_entry_exit_day",
-							Payload: struct{ ChannelID, Day string }{ChannelID: cid, Day: day},
+							Type:    TaskTypeMonitorBackfillEntryExitDay,
+							Payload: BackfillEntryExitDayPayload{ChannelID: cid, Day: day},
 							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 						})
 						cancel()
@@ -1143,8 +1153,8 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 						end := now.Format(time.RFC3339)
 						dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
 						err = ms.router.Dispatch(dispatchCtx, task.Task{
-							Type:    "monitor.backfill_entry_exit_range",
-							Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+							Type:    TaskTypeMonitorBackfillEntryExitRange,
+							Payload: BackfillEntryExitRangePayload{ChannelID: cid, Start: start, End: end},
 							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 						})
 						cancel()
@@ -1164,8 +1174,8 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 							end := now.Format(time.RFC3339)
 							dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
 							err := ms.router.Dispatch(dispatchCtx, task.Task{
-								Type:    "monitor.backfill_entry_exit_range",
-								Payload: struct{ ChannelID, Start, End string }{ChannelID: cid, Start: start, End: end},
+								Type:    TaskTypeMonitorBackfillEntryExitRange,
+								Payload: BackfillEntryExitRangePayload{ChannelID: cid, Start: start, End: end},
 								Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 							})
 							cancel()
@@ -1687,11 +1697,7 @@ func (ms *MonitoringService) ScheduleStartupMemberWarmup(config cache.WarmupConf
 		return false
 	}
 
-	ms.runMu.RLock()
-	runCtx := ms.runCtx
-	ms.runMu.RUnlock()
-
-	return ms.dispatchMonitorTaskWithPayloadLocked(runCtx, task.Task{
+	return ms.dispatchMonitorTaskWithPayloadLocked(ms.currentRunCtx(), task.Task{
 		Type:    taskTypeStartupWarmupMembers,
 		Payload: config,
 	})

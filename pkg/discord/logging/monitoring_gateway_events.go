@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -175,7 +174,9 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 	)
 	defer done()
 
-	ms.markEvent(context.TODO())
+	if runCtx := ms.currentRunCtx(); runCtx != nil {
+		ms.markEvent(runCtx)
+	}
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 	ms.handlePresenceWatch(m)
 }
