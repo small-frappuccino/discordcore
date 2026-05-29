@@ -12,7 +12,6 @@ import (
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
@@ -26,8 +25,6 @@ type CommandHandler struct {
 	catalogCapabilities  CommandCatalogCapabilities
 	catalogRegistrars    []CommandCatalogRegistrar
 	commandManager       *core.CommandManager
-	partnerBoardService  partners.BoardService
-	partnerSyncExecutor  partners.GuildSyncExecutor
 	qotdService          qotdcmd.QuestionCatalogService
 	moderationMetrics    moderation.Metrics
 	adminServiceManager  *service.ServiceManager
@@ -98,16 +95,6 @@ func (ch *CommandHandler) SetupCommands() error {
 // GetCommandManager returns the command manager (for tests or extensions)
 func (ch *CommandHandler) GetCommandManager() *core.CommandManager {
 	return ch.commandManager
-}
-
-// SetPartnerBoardService injects partner board application service for /partner commands.
-func (ch *CommandHandler) SetPartnerBoardService(service partners.BoardService) {
-	ch.partnerBoardService = service
-}
-
-// SetPartnerBoardSyncExecutor injects a sync executor used by /partner sync.
-func (ch *CommandHandler) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor) {
-	ch.partnerSyncExecutor = executor
 }
 
 // SetQOTDService injects the QOTD application service for interactive QOTD commands.

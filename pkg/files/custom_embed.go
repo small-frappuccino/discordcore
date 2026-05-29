@@ -38,12 +38,17 @@ type CustomEmbedFieldConfig struct {
 
 // CustomEmbedPostingConfig identifies one Discord message authored by the bot.
 type CustomEmbedPostingConfig struct {
-	ChannelID string `json:"channel_id"`
-	MessageID string `json:"message_id"`
+	ChannelID    string `json:"channel_id"`
+	MessageID    string `json:"message_id"`
+	WebhookID    string `json:"webhook_id,omitempty"`
+	WebhookToken string `json:"webhook_token,omitempty"`
 }
 
 func (p CustomEmbedPostingConfig) IsZero() bool {
-	return strings.TrimSpace(p.ChannelID) == "" && strings.TrimSpace(p.MessageID) == ""
+	return strings.TrimSpace(p.ChannelID) == "" &&
+		strings.TrimSpace(p.MessageID) == "" &&
+		strings.TrimSpace(p.WebhookID) == "" &&
+		strings.TrimSpace(p.WebhookToken) == ""
 }
 
 // CustomEmbedConfig captures one keyed custom embed for a guild.
@@ -204,8 +209,10 @@ func normalizeCustomEmbed(in CustomEmbedConfig) (CustomEmbedConfig, error) {
 				continue
 			}
 			out.Postings = append(out.Postings, CustomEmbedPostingConfig{
-				ChannelID: strings.TrimSpace(p.ChannelID),
-				MessageID: strings.TrimSpace(p.MessageID),
+				ChannelID:    strings.TrimSpace(p.ChannelID),
+				MessageID:    strings.TrimSpace(p.MessageID),
+				WebhookID:    strings.TrimSpace(p.WebhookID),
+				WebhookToken: strings.TrimSpace(p.WebhookToken),
 			})
 		}
 	} else {
@@ -416,8 +423,10 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 			embed.Postings = embed.Postings[1:]
 		}
 		embed.Postings = append(embed.Postings, CustomEmbedPostingConfig{
-			ChannelID: strings.TrimSpace(posting.ChannelID),
-			MessageID: strings.TrimSpace(posting.MessageID),
+			ChannelID:    strings.TrimSpace(posting.ChannelID),
+			MessageID:    strings.TrimSpace(posting.MessageID),
+			WebhookID:    strings.TrimSpace(posting.WebhookID),
+			WebhookToken: strings.TrimSpace(posting.WebhookToken),
 		})
 		return nil
 	})

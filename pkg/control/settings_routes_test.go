@@ -798,28 +798,6 @@ func TestStatusForSettingsMutationErrorTreatsWrappedValidationAsBadRequest(t *te
 	}
 }
 
-func TestGuildSettingsPutRejectsInvalidPartnerBoardTarget(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := newControlTestServer(t)
-	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
-
-	payload := updateGuildSettingsRequest{
-		PartnerBoard: &files.PartnerBoardConfig{
-			Target: files.EmbedUpdateTargetConfig{
-				Type:       files.EmbedUpdateTargetTypeWebhookMessage,
-				MessageID:  "123456789012345678",
-				WebhookURL: "https://example.com/not-a-discord-webhook",
-			},
-		},
-	}
-
-	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid partner board target, got %d body=%q", rec.Code, rec.Body.String())
-	}
-}
-
 func TestSettingsRoutesRequireAuthorization(t *testing.T) {
 	t.Parallel()
 

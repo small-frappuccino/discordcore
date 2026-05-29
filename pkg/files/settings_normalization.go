@@ -50,18 +50,13 @@ func NormalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 // NormalizePartnerBoardConfig canonicalizes the partner board config so broad
 // config writes share the same validation rules as the dedicated board service.
 func NormalizePartnerBoardConfig(in PartnerBoardConfig) (PartnerBoardConfig, error) {
-	target, err := normalizeEmbedUpdateTargetConfig(in.Target)
-	if err != nil {
-		return PartnerBoardConfig{}, fmt.Errorf("target: %w", err)
-	}
-
 	partners, err := canonicalizePartnerEntries(in.Partners)
 	if err != nil {
 		return PartnerBoardConfig{}, fmt.Errorf("partners: %w", err)
 	}
 
 	return PartnerBoardConfig{
-		Target:   target,
+		Postings: cloneCustomEmbedPostings(in.Postings),
 		Template: normalizePartnerBoardTemplate(in.Template),
 		Partners: clonePartnerEntries(partners),
 	}, nil

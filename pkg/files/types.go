@@ -396,9 +396,9 @@ type PartnerBoardTemplateConfig struct {
 
 // PartnerBoardConfig stores target, template, and partner records.
 type PartnerBoardConfig struct {
-	Target   EmbedUpdateTargetConfig    `json:"target,omitempty"`
 	Template PartnerBoardTemplateConfig `json:"template,omitempty"`
 	Partners []PartnerEntryConfig       `json:"partners,omitempty"`
+	Postings []CustomEmbedPostingConfig `json:"postings,omitempty"`
 }
 
 // QOTDDeckConfig stores one named QOTD deck plus its target delivery channel.
@@ -738,7 +738,6 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	if guildRC.DisableInteractiveEphemeral {
 		resolved.DisableInteractiveEphemeral = true
 	}
-
 	return resolved
 }
 

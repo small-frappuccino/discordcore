@@ -69,7 +69,7 @@ func TestControlServerStartWithTLS(t *testing.T) {
 		},
 	}
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://%s/v1/guilds/g1/partner-board", srv.listener.Addr().String()), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://%s/v1/features", srv.listener.Addr().String()), nil)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}

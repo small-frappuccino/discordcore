@@ -18,7 +18,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -329,20 +328,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}
 
-	partnerSyncService := partners.NewBoardSyncService(configManager)
-	partnerSyncDispatcher := newBotPartnerSyncDispatcher(configManager, partnerSyncService, runtimes, defaultBotInstanceID)
-	if err := partnerSyncDispatcher.Start(); err != nil {
-		return fmt.Errorf("start partner sync dispatcher: %w", err)
-	}
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := partnerSyncDispatcher.Stop(ctx); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to stop partner sync dispatcher cleanly", "err", err)
-		}
-	}()
-
-	partnerBoardAppService := partners.NewBoardApplicationService(configManager, partnerSyncDispatcher)
 	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
 	// expose. NopMetrics is a valid fallback (the service still works) but
 	// without a SnapshotProvider the route returns 503; production startup
@@ -363,8 +348,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
 		errorHandler:             errorHandler,
 		runtimeApplier:           runtimeApplier,
-		partnerBoardService:      partnerBoardAppService,
-		partnerSyncExecutor:      partnerSyncDispatcher,
 		qotdCommandService:       qotdService,
 		qotdLifecycleService:     qotdService,
 		moderationMetrics:        moderationMetrics,
@@ -383,8 +366,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		defaultBotInstanceID:  defaultBotInstanceID,
 		runtimeResolver:       runtimeResolver,
 		store:                 store,
-		partnerBoardService:   partnerBoardAppService,
-		partnerSyncExecutor:   partnerSyncDispatcher,
 		qotdService:           qotdService,
 		moderationMetrics:     moderationMetrics,
 		controlServerRegistry: controlServerRegistry,

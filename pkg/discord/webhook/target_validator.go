@@ -90,7 +90,7 @@ func ValidateMessageTarget(session *discordgo.Session, validation MessageTargetV
 		return errors.New("validate webhook target: missing message_id")
 	}
 
-	webhookID, webhookToken, err := parseWebhookURL(strings.TrimSpace(validation.WebhookURL))
+	webhookID, webhookToken, err := ParseWebhookURL(strings.TrimSpace(validation.WebhookURL))
 	if err != nil {
 		return fmt.Errorf("validate webhook target: %w", err)
 	}

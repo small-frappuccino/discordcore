@@ -50,7 +50,6 @@ func TestFeatureCatalogAndWorkspaceRoutes(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	srv.partnerBoardService = nil
 	handler := srv.httpServer.Handler
 
 	catalogRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/features/catalog", nil)

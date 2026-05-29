@@ -621,7 +621,7 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	}
 
 	// Session auth also unlocks control routes without bearer.
-	controlReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/partner-board", nil)
+	controlReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/settings", nil)
 	controlReq.AddCookie(sessionCookie)
 	controlRec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(controlRec, controlReq)
@@ -733,10 +733,10 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 		body   string
 	}{
 		{
-			name:   "partner board target put",
+			name:   "guild settings put",
 			method: http.MethodPut,
-			path:   "/v1/guilds/g1/partner-board/target",
-			body:   `{"type":"channel_message","message_id":"123456789012345678","channel_id":"223456789012345678"}`,
+			path:   "/v1/guilds/g1/settings",
+			body:   `{"roles":{"dashboard_read":[]}}`,
 		},
 		{
 			name:   "guild feature patch",
@@ -948,7 +948,7 @@ func TestGuildRoutesDenyOAuthSessionWithoutGuildAuthorization(t *testing.T) {
 		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
 	}
 
-	guildReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/partner-board", nil)
+	guildReq := httptest.NewRequest(http.MethodGet, "/v1/guilds/g1/settings", nil)
 	guildReq.AddCookie(sessionCookie)
 	guildRec := httptest.NewRecorder()
 	srv.httpServer.Handler.ServeHTTP(guildRec, guildReq)

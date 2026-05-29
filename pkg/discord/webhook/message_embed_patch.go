@@ -35,7 +35,7 @@ func PatchMessageEmbed(session *discordgo.Session, patch MessageEmbedPatch) (err
 		return errors.New("missing message_id")
 	}
 
-	webhookID, webhookToken, err := parseWebhookURL(strings.TrimSpace(patch.WebhookURL))
+	webhookID, webhookToken, err := ParseWebhookURL(strings.TrimSpace(patch.WebhookURL))
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,8 @@ func PatchMessageEmbed(session *discordgo.Session, patch MessageEmbedPatch) (err
 	return nil
 }
 
-func parseWebhookURL(rawURL string) (string, string, error) {
+// ParseWebhookURL extracts the webhook ID and token from a standard Discord webhook URL.
+func ParseWebhookURL(rawURL string) (string, string, error) {
 	if rawURL == "" {
 		return "", "", errors.New("missing webhook_url")
 	}

@@ -1,4 +1,4 @@
-package partners
+package partner
 
 import (
 	"errors"

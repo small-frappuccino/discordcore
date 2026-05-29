@@ -295,10 +295,19 @@ func cloneUserPruneConfig(in UserPruneConfig) UserPruneConfig {
 
 func clonePartnerBoardConfig(in PartnerBoardConfig) PartnerBoardConfig {
 	return PartnerBoardConfig{
-		Target:   in.Target,
+		Postings: cloneCustomEmbedPostings(in.Postings),
 		Template: in.Template,
 		Partners: clonePartnerEntries(in.Partners),
 	}
+}
+
+func cloneCustomEmbedPostings(in []CustomEmbedPostingConfig) []CustomEmbedPostingConfig {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]CustomEmbedPostingConfig, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneQOTDConfig(in QOTDConfig) QOTDConfig {

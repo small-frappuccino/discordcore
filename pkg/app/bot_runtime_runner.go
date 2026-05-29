@@ -14,7 +14,6 @@ import (
 	coreerrors "github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/partners"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -31,8 +30,6 @@ type botRuntimeOptions struct {
 	commandCatalogRegistrars []commands.CommandCatalogRegistrar
 	errorHandler             *coreerrors.ErrorHandler
 	runtimeApplier           *runtimeapply.Manager
-	partnerBoardService      partners.BoardService
-	partnerSyncExecutor      partners.GuildSyncExecutor
 	qotdCommandService       *applicationqotd.Service
 	qotdLifecycleService     discordqotd.GuildLifecycleService
 	moderationMetrics        moderation.Metrics
@@ -215,8 +212,6 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		}
 		commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{Admin: runtime.capabilities.admin})
 		commandHandler.SetSupportedDomains(runtime.capabilities.commandDomainList()...)
-		commandHandler.SetPartnerBoardService(opts.partnerBoardService)
-		commandHandler.SetPartnerBoardSyncExecutor(opts.partnerSyncExecutor)
 		commandHandler.SetQOTDService(opts.qotdCommandService)
 		commandHandler.SetModerationMetrics(opts.moderationMetrics)
 		// Cache observability flows through /v1/health/cache via the control

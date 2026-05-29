@@ -77,32 +77,6 @@ func TestUpdateRuntimeConfigRollsBackOnSaveError(t *testing.T) {
 	}
 }
 
-func TestSetPartnerBoardTargetRollsBackOnSaveError(t *testing.T) {
-	t.Parallel()
-
-	saveErr := errors.New("save failed")
-	mgr, _ := newTransactionalTestManager(t, &BotConfig{
-		Guilds: []GuildConfig{{GuildID: "g1"}},
-	}, saveErr)
-
-	err := mgr.SetPartnerBoardTarget("g1", EmbedUpdateTargetConfig{
-		Type:       EmbedUpdateTargetTypeWebhookMessage,
-		MessageID:  "123456789012345678",
-		WebhookURL: "https://discord.com/api/webhooks/123456789012345678/token",
-	})
-	if !errors.Is(err, saveErr) {
-		t.Fatalf("expected save error, got %v", err)
-	}
-
-	cfg := mgr.SnapshotConfig()
-	if len(cfg.Guilds) != 1 {
-		t.Fatalf("expected guild config to remain intact, got %+v", cfg.Guilds)
-	}
-	if !cfg.Guilds[0].PartnerBoard.Target.IsZero() {
-		t.Fatalf("expected partner board target rollback, got %+v", cfg.Guilds[0].PartnerBoard.Target)
-	}
-}
-
 func TestCreateWebhookEmbedUpdateRollsBackOnSaveError(t *testing.T) {
 	t.Parallel()
 

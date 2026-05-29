@@ -17,7 +17,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -79,8 +78,6 @@ type Server struct {
 	tlsKeyFile               string
 	configManager            *files.ConfigManager
 	knownBotInstanceIDs      []string
-	partnerBoardService      partners.BoardService
-	partnerBoardSyncer       partners.GuildSyncExecutor
 	qotdService              *qotd.Service
 	moderationMetrics        moderation.Metrics
 	cacheSnapshotResolve     CacheSnapshotResolver
@@ -113,11 +110,10 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 
 	mux := http.NewServeMux()
 	s := &Server{
-		addr:                addr,
-		startedAt:           time.Now().UTC(),
-		configManager:       configManager,
-		partnerBoardService: partners.NewBoardApplicationService(configManager, nil),
-		runtimeApplier:      runtimeApplier,
+		addr:           addr,
+		startedAt:      time.Now().UTC(),
+		configManager:  configManager,
+		runtimeApplier: runtimeApplier,
 	}
 	discordSessions := func(guildID string) (*discordgo.Session, error) {
 		return s.discordSessionForGuild(guildID)
@@ -146,22 +142,6 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	s.registerHTTPRoutes(mux)
 
 	return s
-}
-
-// SetPartnerBoardService overrides the board application service used by partner-board routes.
-func (s *Server) SetPartnerBoardService(service partners.BoardService) {
-	if s == nil || service == nil {
-		return
-	}
-	s.partnerBoardService = service
-}
-
-// SetPartnerBoardSyncExecutor overrides sync execution used by /partner-board/sync endpoint.
-func (s *Server) SetPartnerBoardSyncExecutor(executor partners.GuildSyncExecutor) {
-	if s == nil || executor == nil {
-		return
-	}
-	s.partnerBoardSyncer = executor
 }
 
 // SetQOTDService overrides the QOTD application service used by QOTD routes.

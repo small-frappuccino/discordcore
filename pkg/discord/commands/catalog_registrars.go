@@ -12,7 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/partners"
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate
@@ -48,15 +47,7 @@ func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 			configCommands.RegisterBaseCommands(router)
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
 			analytics.RegisterAnalyticsCommands(router)
-			if ch.partnerBoardService != nil || ch.partnerSyncExecutor != nil {
-				boardService := ch.partnerBoardService
-				if boardService == nil {
-					boardService = partners.NewBoardApplicationService(ch.configManager, nil)
-				}
-				partner.NewPartnerCommandsWithServices(boardService, ch.partnerSyncExecutor).RegisterCommands(router)
-			} else {
-				partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
-			}
+			partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
 			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
 			roles.NewRolePanelCommands(ch.configManager).RegisterCommands(router)
 			embeds.NewEmbedCommands(ch.configManager).RegisterCommands(router)

@@ -22,51 +22,87 @@ var (
 	ErrInvalidPartnerBoardInput = errors.New("invalid partner board input")
 )
 
-// PartnerBoardTarget returns the configured board target for a guild.
-func (mgr *ConfigManager) PartnerBoardTarget(guildID string) (EmbedUpdateTargetConfig, error) {
+// AddPartnerBoardPosting adds a new posting to the partner board config.
+func (mgr *ConfigManager) AddPartnerBoardPosting(guildID string, posting CustomEmbedPostingConfig) error {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
-		return EmbedUpdateTargetConfig{}, fmt.Errorf("get partner board target: %w", invalidPartnerBoardInput("guild_id is required"))
+		return fmt.Errorf("add partner board posting: %w", invalidPartnerBoardInput("guild_id is required"))
+	}
+	if posting.IsZero() {
+		return invalidPartnerBoardInput("posting cannot be empty")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
+		for _, p := range guildConfig.PartnerBoard.Postings {
+			if p.MessageID == posting.MessageID {
+				return nil
+			}
+		}
 
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return EmbedUpdateTargetConfig{}, err
-	}
-
-	target, err := normalizeEmbedUpdateTargetConfig(guildConfig.PartnerBoard.Target)
-	if err != nil {
-		return EmbedUpdateTargetConfig{}, fmt.Errorf("get partner board target: %w", err)
-	}
-	return target, nil
-}
-
-// GetPartnerBoardTarget returns the configured board target for a guild.
-func (mgr *ConfigManager) GetPartnerBoardTarget(guildID string) (EmbedUpdateTargetConfig, error) {
-	return mgr.PartnerBoardTarget(guildID)
-}
-
-// SetPartnerBoardTarget sets or clears the board update target for a guild.
-func (mgr *ConfigManager) SetPartnerBoardTarget(guildID string, target EmbedUpdateTargetConfig) error {
-	scope := strings.TrimSpace(guildID)
-	if scope == "" {
-		return fmt.Errorf("set partner board target: %w", invalidPartnerBoardInput("guild_id is required"))
-	}
-
-	normalized, err := normalizeEmbedUpdateTargetConfig(target)
-	if err != nil {
-		return fmt.Errorf("set partner board target: %w", err)
-	}
-	if err := mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
-		guildConfig.PartnerBoard.Target = normalized
+		if len(guildConfig.PartnerBoard.Postings) >= 50 {
+			guildConfig.PartnerBoard.Postings = guildConfig.PartnerBoard.Postings[1:]
+		}
+		guildConfig.PartnerBoard.Postings = append(guildConfig.PartnerBoard.Postings, CustomEmbedPostingConfig{
+			ChannelID:    strings.TrimSpace(posting.ChannelID),
+			MessageID:    strings.TrimSpace(posting.MessageID),
+			WebhookID:    strings.TrimSpace(posting.WebhookID),
+			WebhookToken: strings.TrimSpace(posting.WebhookToken),
+		})
 		return nil
-	}); err != nil {
-		return fmt.Errorf("set partner board target: %w", err)
+	})
+}
+
+// RemovePartnerBoardPosting removes a posting from the partner board config.
+func (mgr *ConfigManager) RemovePartnerBoardPosting(guildID, messageID string) error {
+	if guildID == "" {
+		return invalidPartnerBoardInput("guild_id is required")
 	}
-	return nil
+	msgID := strings.TrimSpace(messageID)
+	if msgID == "" {
+		return invalidPartnerBoardInput("message_id is required")
+	}
+
+	return mgr.updateGuildConfig(guildID, func(guildConfig *GuildConfig) error {
+		for i, p := range guildConfig.PartnerBoard.Postings {
+			if p.MessageID == msgID {
+				guildConfig.PartnerBoard.Postings = append(guildConfig.PartnerBoard.Postings[:i], guildConfig.PartnerBoard.Postings[i+1:]...)
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, msgID)
+	})
+}
+
+// RemovePartnerBoardPostings removes multiple postings from the partner board config.
+func (mgr *ConfigManager) RemovePartnerBoardPostings(guildID string, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	if guildID == "" {
+		return invalidPartnerBoardInput("guild_id is required")
+	}
+
+	idsToRemove := make(map[string]bool, len(messageIDs))
+	for _, id := range messageIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" {
+			idsToRemove[trimmed] = true
+		}
+	}
+	if len(idsToRemove) == 0 {
+		return nil
+	}
+
+	return mgr.updateGuildConfig(guildID, func(guildConfig *GuildConfig) error {
+		var kept []CustomEmbedPostingConfig
+		for _, p := range guildConfig.PartnerBoard.Postings {
+			if !idsToRemove[p.MessageID] {
+				kept = append(kept, p)
+			}
+		}
+		guildConfig.PartnerBoard.Postings = kept
+		return nil
+	})
 }
 
 // PartnerBoardTemplate returns the configured board template for a guild.
@@ -123,17 +159,19 @@ func (mgr *ConfigManager) PartnerBoard(guildID string) (PartnerBoardConfig, erro
 		return PartnerBoardConfig{}, err
 	}
 
-	target, err := normalizeEmbedUpdateTargetConfig(guildConfig.PartnerBoard.Target)
-	if err != nil {
-		return PartnerBoardConfig{}, fmt.Errorf("get partner board: %w", err)
+	var postings []CustomEmbedPostingConfig
+	if len(guildConfig.PartnerBoard.Postings) > 0 {
+		postings = make([]CustomEmbedPostingConfig, len(guildConfig.PartnerBoard.Postings))
+		copy(postings, guildConfig.PartnerBoard.Postings)
 	}
+
 	partners, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
 	if err != nil {
 		return PartnerBoardConfig{}, fmt.Errorf("get partner board: %w", err)
 	}
 
 	return PartnerBoardConfig{
-		Target:   target,
+		Postings: postings,
 		Template: normalizePartnerBoardTemplate(guildConfig.PartnerBoard.Template),
 		Partners: clonePartnerEntries(partners),
 	}, nil

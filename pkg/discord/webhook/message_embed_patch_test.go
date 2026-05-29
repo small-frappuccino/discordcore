@@ -49,7 +49,7 @@ func TestParseWebhookURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotID, gotToken, err := parseWebhookURL(tt.rawURL)
+			gotID, gotToken, err := ParseWebhookURL(tt.rawURL)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("parseWebhookURL error mismatch: got err=%v wantErr=%v", err, tt.wantErr)
 			}

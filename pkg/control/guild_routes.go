@@ -80,71 +80,8 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
-	case len(tail) >= 1 && tail[0] == "partner-board":
-		s.handleGuildPartnerBoardRoutes(w, r, guildID, tail)
-		return
 	case len(tail) >= 1 && tail[0] == "qotd":
 		s.handleGuildQOTDRoutes(w, r, guildID, tail, auth)
-		return
-	default:
-		http.NotFound(w, r)
-		return
-	}
-}
-
-func (s *Server) handleGuildPartnerBoardRoutes(w http.ResponseWriter, r *http.Request, guildID string, tail []string) {
-	if !s.requirePartnerBoardService(w) {
-		return
-	}
-
-	switch {
-	case len(tail) == 1:
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.handlePartnerBoardGet(w, r, guildID)
-		return
-	case len(tail) == 2 && tail[1] == "target":
-		switch r.Method {
-		case http.MethodGet:
-			s.handlePartnerBoardTargetGet(w, r, guildID)
-		case http.MethodPut:
-			s.handlePartnerBoardTargetPut(w, r, guildID)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-		return
-	case len(tail) == 2 && tail[1] == "template":
-		switch r.Method {
-		case http.MethodGet:
-			s.handlePartnerBoardTemplateGet(w, r, guildID)
-		case http.MethodPut:
-			s.handlePartnerBoardTemplatePut(w, r, guildID)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-		return
-	case len(tail) == 2 && tail[1] == "partners":
-		switch r.Method {
-		case http.MethodGet:
-			s.handlePartnerBoardPartnersList(w, r, guildID)
-		case http.MethodPost:
-			s.handlePartnerBoardPartnersCreate(w, r, guildID)
-		case http.MethodPut:
-			s.handlePartnerBoardPartnersUpdate(w, r, guildID)
-		case http.MethodDelete:
-			s.handlePartnerBoardPartnersDelete(w, r, guildID)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-		return
-	case len(tail) == 2 && tail[1] == "sync":
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		s.handlePartnerBoardSyncPost(w, r, guildID)
 		return
 	default:
 		http.NotFound(w, r)
@@ -173,15 +110,6 @@ func splitGuildRoute(path string) (string, []string, bool) {
 		tail = parts[1:]
 	}
 	return guildID, tail, true
-}
-
-func (s *Server) requirePartnerBoardService(w http.ResponseWriter) bool {
-	if s.partnerBoardService != nil {
-		return true
-	}
-
-	http.Error(w, "partner board service unavailable", http.StatusInternalServerError)
-	return false
 }
 
 func (s *Server) requireQOTDService(w http.ResponseWriter) bool {
