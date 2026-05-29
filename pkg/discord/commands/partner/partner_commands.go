@@ -14,6 +14,7 @@ const (
 	optionLink        = "link"
 	optionWebhookURL  = "webhook_url"
 	optionMessageID   = "message_id"
+	optionURL         = "url"
 )
 
 type PartnerCommands struct {
@@ -48,6 +49,8 @@ func (pc *PartnerCommands) RegisterCommands(router *core.CommandRouter) {
 	group.AddSubCommand(newPartnerPostSubCommand(pc.configManager))
 	group.AddSubCommand(newPartnerUnpostSubCommand(pc.configManager))
 	group.AddSubCommand(newPartnerRefreshSubCommand(pc.configManager, pc.syncer))
+	group.AddSubCommand(newPartnerImportTemplateSubCommand(pc.configManager))
+	group.AddSubCommand(newPartnerExportTemplateSubCommand(pc.configManager))
 
 	router.RegisterSlashCommand(group)
 }

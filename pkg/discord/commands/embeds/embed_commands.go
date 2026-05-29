@@ -1,11 +1,14 @@
 package embeds
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -19,6 +22,8 @@ const (
 	embedSubList        = "list"
 	embedSubRefresh     = "refresh"
 	embedSubUnpost      = "unpost"
+	embedSubImport      = "import"
+	embedSubExport      = "export"
 	embedFieldGroupName = "field"
 	embedSubFieldAdd    = "add"
 	embedSubFieldRemove = "remove"
@@ -40,6 +45,7 @@ const (
 	embedOptionFieldInline  = "inline"
 	embedOptionFieldIndex   = "index"
 	embedOptionChannel      = "channel"
+	embedOptionURL          = "url"
 )
 
 // EmbedCommands wires the /embed command tree into the router.
@@ -76,6 +82,8 @@ func (ec *EmbedCommands) RegisterCommands(router *core.CommandRouter) {
 	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedRefreshSubCommand(ec.configManager, ec.syncer))
 	embedGroup.AddSubCommand(newEmbedUnpostSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
 
 	fieldGroup := core.NewGroupCommand(
 		embedFieldGroupName,
@@ -751,3 +759,143 @@ func customEmbedResponseBuilder(session *discordgo.Session) *core.ResponseBuilde
 }
 
 func floatPtr(v float64) *float64 { return &v }
+
+type embedImportSubCommand struct {
+	configManager *files.ConfigManager
+}
+
+func newEmbedImportSubCommand(cm *files.ConfigManager) *embedImportSubCommand {
+	return &embedImportSubCommand{configManager: cm}
+}
+
+func (c *embedImportSubCommand) Name() string { return embedSubImport }
+
+func (c *embedImportSubCommand) Description() string {
+	return "Import a JSON embed from a Pastebin URL"
+}
+
+func (c *embedImportSubCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        embedOptionKey,
+			Description: "The unique key of the embed to update",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        embedOptionURL,
+			Description: "The URL of the Pastebin/Discohook JSON",
+			Required:    true,
+		},
+	}
+}
+
+func (c *embedImportSubCommand) RequiresGuild() bool       { return true }
+func (c *embedImportSubCommand) RequiresPermissions() bool { return true }
+func (c *embedImportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == embedOptionKey {
+		return handleEmbedKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
+
+func (c *embedImportSubCommand) Handle(ctx *core.Context) error {
+	builder := customEmbedResponseBuilder(ctx.Session)
+	guildID := ctx.GuildID
+
+	key, err := embedKeyFromOptions(ctx.Interaction)
+	if err != nil {
+		return err
+	}
+
+	var pasteURL string
+	opts := core.GetSubCommandOptions(ctx.Interaction)
+	for _, opt := range opts {
+		if opt.Name == embedOptionURL {
+			pasteURL = strings.TrimSpace(fmt.Sprint(opt.Value))
+		}
+	}
+
+	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
+	if err != nil {
+		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to fetch from pastebin: %v", err))
+	}
+
+	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
+	if err != nil {
+		return customEmbedDetailedCommandError(fmt.Sprintf("Invalid embed JSON: %v", err))
+	}
+
+	newEmbed := files.ToCustomEmbedConfig(discohookEmbed, key)
+	if err := c.configManager.SetCustomEmbedProperties(guildID, key, newEmbed); err != nil {
+		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to save imported embed properties: %v", err))
+	}
+	if err := c.configManager.SetCustomEmbedFields(guildID, key, newEmbed.Fields); err != nil {
+		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to save imported embed fields: %v", err))
+	}
+
+	return builder.Success(ctx.Interaction, fmt.Sprintf("Successfully imported JSON into embed `%s`.", key))
+}
+
+type embedExportSubCommand struct {
+	configManager *files.ConfigManager
+}
+
+func newEmbedExportSubCommand(cm *files.ConfigManager) *embedExportSubCommand {
+	return &embedExportSubCommand{configManager: cm}
+}
+
+func (c *embedExportSubCommand) Name() string { return embedSubExport }
+
+func (c *embedExportSubCommand) Description() string {
+	return "Export a JSON embed to a Pastebin provider"
+}
+
+func (c *embedExportSubCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        embedOptionKey,
+			Description: "The unique key of the embed to export",
+			Required:    true,
+		},
+	}
+}
+
+func (c *embedExportSubCommand) RequiresGuild() bool       { return true }
+func (c *embedExportSubCommand) RequiresPermissions() bool { return true }
+func (c *embedExportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == embedOptionKey {
+		return handleEmbedKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
+
+func (c *embedExportSubCommand) Handle(ctx *core.Context) error {
+	builder := customEmbedResponseBuilder(ctx.Session)
+	guildID := ctx.GuildID
+
+	key, err := embedKeyFromOptions(ctx.Interaction)
+	if err != nil {
+		return err
+	}
+
+	ce, err := loadCustomEmbed(c.configManager, guildID, key)
+	if err != nil {
+		return err
+	}
+
+	discohookJSON := files.FromCustomEmbedConfig(ce)
+	data, err := json.MarshalIndent(discohookJSON, "", "  ")
+	if err != nil {
+		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to format JSON: %v", err))
+	}
+
+	url, err := discord.UploadHastebinContent(context.Background(), data)
+	if err != nil {
+		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to upload to pastebin: %v", err))
+	}
+
+	return builder.Success(ctx.Interaction, fmt.Sprintf("Embed `%s` successfully exported: <%s>", key, url))
+}

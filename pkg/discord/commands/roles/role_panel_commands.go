@@ -10,12 +10,15 @@
 package roles
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -33,6 +36,8 @@ const (
 	rolePanelSubList         = "list"
 	rolePanelSubRefresh      = "refresh"
 	rolePanelSubUnpost       = "unpost"
+	rolePanelSubImport       = "import"
+	rolePanelSubExport       = "export"
 	rolePanelSubButtonAdd    = "add"
 	rolePanelSubButtonRemove = "remove"
 	rolePanelSubButtonList   = "list"
@@ -46,6 +51,7 @@ const (
 	rolePanelOptionLabel       = "label"
 	rolePanelOptionEmoji       = "emoji"
 	rolePanelOptionMessageID   = "message_id"
+	rolePanelOptionURL         = "url"
 
 	rolePanelOptionAuthorName   = "author_name"
 	rolePanelOptionAuthorIcon   = "author_icon_url"
@@ -102,6 +108,8 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 	rolesGroup.AddSubCommand(newRolePanelRefreshSubCommand(rc.configManager, rc.syncer))
 	rolesGroup.AddSubCommand(newRolePanelUnpostSubCommand(rc.configManager, rc.syncer))
 	rolesGroup.AddSubCommand(newRolePanelToggleSubCommand(rc.configManager))
+	rolesGroup.AddSubCommand(newRolePanelImportSubCommand(rc.configManager, rc.syncer))
+	rolesGroup.AddSubCommand(newRolePanelExportSubCommand(rc.configManager))
 
 	buttonGroup := core.NewGroupCommand(
 		rolePanelButtonGroupName,
@@ -1195,4 +1203,142 @@ func parseRolePanelWebhookURL(rawURL string) (webhookID, webhookToken string, er
 		return "", "", errors.New("invalid Discord webhook URL format")
 	}
 	return matches[1], matches[2], nil
+}
+
+type rolePanelImportSubCommand struct {
+	configManager *files.ConfigManager
+	syncer        *rolePanelPostingSyncer
+}
+
+func newRolePanelImportSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelImportSubCommand {
+	return &rolePanelImportSubCommand{configManager: cm, syncer: syncer}
+}
+
+func (c *rolePanelImportSubCommand) Name() string { return rolePanelSubImport }
+
+func (c *rolePanelImportSubCommand) Description() string {
+	return "Import a JSON embed from a Pastebin URL"
+}
+
+func (c *rolePanelImportSubCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        rolePanelOptionKey,
+			Description: "The unique key of the role panel to update",
+			Required:    true,
+		},
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        rolePanelOptionURL,
+			Description: "The URL of the Pastebin/Discohook JSON",
+			Required:    true,
+		},
+	}
+}
+
+func (c *rolePanelImportSubCommand) RequiresGuild() bool       { return true }
+func (c *rolePanelImportSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelImportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
+
+func (c *rolePanelImportSubCommand) Handle(ctx *core.Context) error {
+	builder := rolePanelConfigurationResponseBuilder(ctx.Session)
+	guildID := ctx.GuildID
+
+	key, err := rolePanelKeyFromOptions(ctx.Interaction)
+	if err != nil {
+		return err
+	}
+
+	var pasteURL string
+	opts := core.GetSubCommandOptions(ctx.Interaction)
+	for _, opt := range opts {
+		if opt.Name == rolePanelOptionURL {
+			pasteURL = strings.TrimSpace(fmt.Sprint(opt.Value))
+		}
+	}
+
+	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
+	if err != nil {
+		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to fetch from pastebin: %v", err))
+	}
+
+	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
+	if err != nil {
+		return rolePanelDetailedCommandError(fmt.Sprintf("Invalid embed JSON: %v", err))
+	}
+
+	newRP := files.ToRolePanelConfig(discohookEmbed, key)
+	if err := c.configManager.SetRolePanelEmbed(guildID, key, newRP); err != nil {
+		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to save imported role panel embed: %v", err))
+	}
+
+	return builder.Success(ctx.Interaction, fmt.Sprintf("Successfully imported JSON into role panel `%s`.", key))
+}
+
+type rolePanelExportSubCommand struct {
+	configManager *files.ConfigManager
+}
+
+func newRolePanelExportSubCommand(cm *files.ConfigManager) *rolePanelExportSubCommand {
+	return &rolePanelExportSubCommand{configManager: cm}
+}
+
+func (c *rolePanelExportSubCommand) Name() string { return rolePanelSubExport }
+
+func (c *rolePanelExportSubCommand) Description() string {
+	return "Export a role panel embed to a Pastebin provider"
+}
+
+func (c *rolePanelExportSubCommand) Options() []*discordgo.ApplicationCommandOption {
+	return []*discordgo.ApplicationCommandOption{
+		{
+			Type:        discordgo.ApplicationCommandOptionString,
+			Name:        rolePanelOptionKey,
+			Description: "The unique key of the role panel to export",
+			Required:    true,
+		},
+	}
+}
+
+func (c *rolePanelExportSubCommand) RequiresGuild() bool       { return true }
+func (c *rolePanelExportSubCommand) RequiresPermissions() bool { return true }
+func (c *rolePanelExportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	if focusedOption == rolePanelOptionKey {
+		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
+	}
+	return nil, nil
+}
+
+func (c *rolePanelExportSubCommand) Handle(ctx *core.Context) error {
+	builder := rolePanelConfigurationResponseBuilder(ctx.Session)
+	guildID := ctx.GuildID
+
+	key, err := rolePanelKeyFromOptions(ctx.Interaction)
+	if err != nil {
+		return err
+	}
+
+	rp, err := loadRolePanel(c.configManager, guildID, key)
+	if err != nil {
+		return err
+	}
+
+	discohookJSON := files.FromRolePanelConfig(rp)
+	data, err := json.MarshalIndent(discohookJSON, "", "  ")
+	if err != nil {
+		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to format JSON: %v", err))
+	}
+
+	url, err := discord.UploadHastebinContent(context.Background(), data)
+	if err != nil {
+		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to upload to pastebin: %v", err))
+	}
+
+	return builder.Success(ctx.Interaction, fmt.Sprintf("Role panel `%s` successfully exported: <%s>", key, url))
 }
