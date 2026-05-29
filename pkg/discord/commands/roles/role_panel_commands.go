@@ -12,6 +12,7 @@ package roles
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,6 +38,7 @@ const (
 	rolePanelSubButtonList   = "list"
 
 	rolePanelOptionKey         = "key"
+	rolePanelOptionWebhookURL  = "webhook_url"
 	rolePanelOptionTitle       = "title"
 	rolePanelOptionDescription = "description"
 	rolePanelOptionColor       = "color"
@@ -148,7 +150,10 @@ func (c *rolePanelPostSubCommand) Description() string {
 	return "Post one role panel publicly in this channel"
 }
 func (c *rolePanelPostSubCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{rolePanelKeyOption(true)}
+	return []*discordgo.ApplicationCommandOption{
+		rolePanelKeyOption(true),
+		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionWebhookURL, Description: "Discord Webhook URL to post the panel with a custom name and avatar", Required: false},
+	}
 }
 func (c *rolePanelPostSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelPostSubCommand) RequiresPermissions() bool { return true }
@@ -176,19 +181,50 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 
 	embed := renderRolePanelEmbed(panel)
 	components := renderRolePanelComponents(panel)
-	message, err := ctx.Session.ChannelMessageSendComplex(ctx.Interaction.ChannelID, &discordgo.MessageSend{
-		Embeds:     []*discordgo.MessageEmbed{embed},
-		Components: components,
-	})
-	if err != nil {
-		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to post the panel: %v", err))
+
+	var messageID, channelID, webhookID, webhookToken string
+	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+
+	if extractor.HasOption(rolePanelOptionWebhookURL) {
+		webhookURL := extractor.String(rolePanelOptionWebhookURL)
+		wID, wToken, parseErr := parseRolePanelWebhookURL(webhookURL)
+		if parseErr != nil {
+			return rolePanelDetailedCommandError(parseErr.Error())
+		}
+		msg, err := ctx.Session.WebhookExecute(wID, wToken, true, &discordgo.WebhookParams{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		})
+		if err != nil {
+			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to post the panel via webhook: %v", err))
+		}
+		if msg != nil {
+			messageID = msg.ID
+			channelID = msg.ChannelID
+			webhookID = wID
+			webhookToken = wToken
+		}
+	} else {
+		msg, err := ctx.Session.ChannelMessageSendComplex(ctx.Interaction.ChannelID, &discordgo.MessageSend{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		})
+		if err != nil {
+			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to post the panel: %v", err))
+		}
+		if msg != nil {
+			messageID = msg.ID
+			channelID = msg.ChannelID
+		}
 	}
 
 	postingNote := ""
-	if message != nil && message.ID != "" {
+	if messageID != "" && channelID != "" {
 		posting := files.RolePanelPostingConfig{
-			ChannelID: ctx.Interaction.ChannelID,
-			MessageID: message.ID,
+			ChannelID:    channelID,
+			MessageID:    messageID,
+			WebhookID:    webhookID,
+			WebhookToken: webhookToken,
 		}
 		if err := c.configManager.AddRolePanelPosting(ctx.GuildID, panel.Key, posting); err != nil {
 			postingNote = fmt.Sprintf("\nWarning: the posting could not be tracked for later cleanup: %v", err)
@@ -1107,3 +1143,12 @@ func ensureRolePanelEnabled(ctx *core.Context) error {
 }
 
 func floatPtr(v float64) *float64 { return &v }
+
+func parseRolePanelWebhookURL(rawURL string) (webhookID, webhookToken string, err error) {
+	rawURL = strings.TrimSpace(rawURL)
+	matches := regexp.MustCompile(`(?:discordapp\.com|discord\.com)/api/webhooks/(\d+)/([a-zA-Z0-9_-]+)`).FindStringSubmatch(rawURL)
+	if len(matches) != 3 {
+		return "", "", errors.New("invalid Discord webhook URL format")
+	}
+	return matches[1], matches[2], nil
+}

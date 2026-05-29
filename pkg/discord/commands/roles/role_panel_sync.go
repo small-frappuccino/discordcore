@@ -54,16 +54,18 @@ func (r rolePanelSyncResult) HasIssues() bool {
 // can substitute deterministic behavior without standing up an
 // httptest Discord.
 type rolePanelPostingSyncer struct {
-	configManager *files.ConfigManager
-	editMessage   func(s *discordgo.Session, edit *discordgo.MessageEdit) error
-	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
+	configManager      *files.ConfigManager
+	editMessage        func(s *discordgo.Session, edit *discordgo.MessageEdit) error
+	editWebhookMessage func(s *discordgo.Session, webhookID, webhookToken, messageID string, edit *discordgo.WebhookEdit) error
+	dropPostings       func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
 }
 
 func newRolePanelPostingSyncer(cm *files.ConfigManager) *rolePanelPostingSyncer {
 	return &rolePanelPostingSyncer{
-		configManager: cm,
-		editMessage:   defaultRolePanelEditMessage,
-		dropPostings:  defaultRolePanelDropPostings,
+		configManager:      cm,
+		editMessage:        defaultRolePanelEditMessage,
+		editWebhookMessage: defaultRolePanelEditWebhookMessage,
+		dropPostings:       defaultRolePanelDropPostings,
 	}
 }
 
@@ -95,13 +97,20 @@ func (s *rolePanelPostingSyncer) Sync(
 	componentsCopy := append([]discordgo.MessageComponent(nil), components...)
 
 	for _, posting := range postings {
-		edit := &discordgo.MessageEdit{
-			ID:         strings.TrimSpace(posting.MessageID),
-			Channel:    strings.TrimSpace(posting.ChannelID),
-			Embeds:     &embeds,
-			Components: &componentsCopy,
+		var err error
+		if posting.WebhookID != "" && posting.WebhookToken != "" {
+			err = s.editWebhookMessage(session, posting.WebhookID, posting.WebhookToken, posting.MessageID, &discordgo.WebhookEdit{
+				Embeds:     &embeds,
+				Components: &componentsCopy,
+			})
+		} else {
+			err = s.editMessage(session, &discordgo.MessageEdit{
+				ID:         strings.TrimSpace(posting.MessageID),
+				Channel:    strings.TrimSpace(posting.ChannelID),
+				Embeds:     &embeds,
+				Components: &componentsCopy,
+			})
 		}
-		err := s.editMessage(session, edit)
 		if err == nil {
 			result.Edited++
 			continue
@@ -179,6 +188,14 @@ func defaultRolePanelEditMessage(s *discordgo.Session, edit *discordgo.MessageEd
 		return errors.New("discord session is nil")
 	}
 	_, err := s.ChannelMessageEditComplex(edit)
+	return err
+}
+
+func defaultRolePanelEditWebhookMessage(s *discordgo.Session, webhookID, webhookToken, messageID string, edit *discordgo.WebhookEdit) error {
+	if s == nil {
+		return errors.New("discord session is nil")
+	}
+	_, err := s.WebhookMessageEdit(webhookID, webhookToken, messageID, edit)
 	return err
 }
 

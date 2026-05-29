@@ -78,13 +78,15 @@ type RolePanelButtonConfig struct {
 // embed+buttons on refresh) instead of leaving them frozen and
 // half-functional.
 type RolePanelPostingConfig struct {
-	ChannelID string `json:"channel_id"`
-	MessageID string `json:"message_id"`
+	ChannelID    string `json:"channel_id"`
+	MessageID    string `json:"message_id"`
+	WebhookID    string `json:"webhook_id,omitempty"`
+	WebhookToken string `json:"webhook_token,omitempty"`
 }
 
 // IsZero reports whether the posting carries no meaningful data.
 func (p RolePanelPostingConfig) IsZero() bool {
-	return strings.TrimSpace(p.ChannelID) == "" && strings.TrimSpace(p.MessageID) == ""
+	return strings.TrimSpace(p.ChannelID) == "" && strings.TrimSpace(p.MessageID) == "" && strings.TrimSpace(p.WebhookID) == "" && strings.TrimSpace(p.WebhookToken) == ""
 }
 
 // RolePanelConfig captures one keyed role panel for a guild.
@@ -271,8 +273,10 @@ func normalizeRolePanelEmbedField(in RolePanelEmbedFieldConfig) (RolePanelEmbedF
 
 func normalizeRolePanelPosting(in RolePanelPostingConfig) (RolePanelPostingConfig, error) {
 	out := RolePanelPostingConfig{
-		ChannelID: strings.TrimSpace(in.ChannelID),
-		MessageID: strings.TrimSpace(in.MessageID),
+		ChannelID:    strings.TrimSpace(in.ChannelID),
+		MessageID:    strings.TrimSpace(in.MessageID),
+		WebhookID:    strings.TrimSpace(in.WebhookID),
+		WebhookToken: strings.TrimSpace(in.WebhookToken),
 	}
 	if out.ChannelID == "" {
 		return RolePanelPostingConfig{}, invalidRolePanelInput("posting.channel_id is required")
@@ -285,6 +289,9 @@ func normalizeRolePanelPosting(in RolePanelPostingConfig) (RolePanelPostingConfi
 	}
 	if !isAllDigits(out.MessageID) {
 		return RolePanelPostingConfig{}, invalidRolePanelInput("posting.message_id must be numeric")
+	}
+	if out.WebhookID != "" && !isAllDigits(out.WebhookID) {
+		return RolePanelPostingConfig{}, invalidRolePanelInput("posting.webhook_id must be numeric")
 	}
 	return out, nil
 }
