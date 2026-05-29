@@ -61,7 +61,13 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		s.clearScheduledPublishSuppressionForDate(guildID, rollbackSuppressionDate)
 	}()
 	var existing *storage.QOTDOfficialPostRecord
-	if slotState.ScheduleConfigured {
+	if params.PublishDateOverride != nil {
+		publishDate = NormalizePublishDateUTC(*params.PublishDateOverride)
+		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
+		if err != nil {
+			return nil, err
+		}
+	} else if slotState.ScheduleConfigured {
 		if consumeAutomaticSlot {
 			publishDate = slotState.PublishDateUTC
 			existing = slotState.OfficialPost
@@ -84,7 +90,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	}
 
 	todayDate := NormalizePublishDateUTC(now)
-	if consumeAutomaticSlot && slotState.ScheduleConfigured && !todayDate.Equal(publishDate) {
+	if !params.IsReplacement && consumeAutomaticSlot && slotState.ScheduleConfigured && !todayDate.Equal(publishDate) {
 		if err := s.suppressScheduledPublishForDate(guildID, todayDate); err != nil {
 			log.ApplicationLogger().Warn(
 				"QOTD manual publish failed to suppress today's scheduled slot",

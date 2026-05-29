@@ -26,12 +26,19 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 	if err != nil {
 		return nil, err
 	}
-	slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
+	today := NormalizePublishDateUTC(now)
+	post, err := s.loadSlotOfficialPost(ctx, guildID, today)
 	if err != nil {
 		return nil, err
 	}
+	if post == nil {
+		yesterday := today.AddDate(0, 0, -1)
+		post, err = s.loadSlotOfficialPost(ctx, guildID, yesterday)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	post := slotState.OfficialPost
 	if post == nil {
 		return nil, ErrNoCurrentPublish
 	}
@@ -87,7 +94,10 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 		s.clearScheduledPublishSuppressionForDate(guildID, post.PublishDateUTC)
 	}
 
+	publishDate := post.PublishDateUTC
 	return s.PublishNowWithParams(ctx, guildID, session, PublishNowParams{
 		ConsumeAutomaticSlot: &post.ConsumeAutomaticSlot,
+		PublishDateOverride:  &publishDate,
+		IsReplacement:        true,
 	})
 }

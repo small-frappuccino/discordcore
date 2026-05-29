@@ -29,7 +29,9 @@ const (
 )
 
 type PublishNowParams struct {
-	ConsumeAutomaticSlot *bool `json:"consume_automatic_slot,omitempty"`
+	ConsumeAutomaticSlot *bool      `json:"consume_automatic_slot,omitempty"`
+	PublishDateOverride  *time.Time `json:"-"`
+	IsReplacement        bool       `json:"-"`
 }
 
 func (p PublishNowParams) ShouldConsumeAutomaticSlot() bool {
