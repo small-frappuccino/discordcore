@@ -191,9 +191,53 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 		if parseErr != nil {
 			return rolePanelDetailedCommandError(parseErr.Error())
 		}
-		msg, err := ctx.Session.WebhookExecute(wID, wToken, true, &discordgo.WebhookParams{
+
+		targetWebhook, err := ctx.Session.WebhookWithToken(wID, wToken)
+		if err != nil {
+			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to fetch the provided webhook: %v", err))
+		}
+
+		executionWebhookID := wID
+		executionWebhookToken := wToken
+		var overrideUsername, overrideAvatarURL string
+
+		// Discord strips components (like buttons) from webhooks that are not owned by the bot application.
+		// To fix this, if the provided webhook is user-owned, we find or create an application-owned webhook
+		// in the same channel and use it to impersonate the target webhook by overriding the username and avatar.
+		if targetWebhook.ApplicationID != ctx.Session.State.User.ID {
+			appWebhooks, err := ctx.Session.ChannelWebhooks(targetWebhook.ChannelID)
+			if err != nil {
+				return rolePanelDetailedCommandError(fmt.Sprintf("Failed to list channel webhooks (requires Manage Webhooks permission to preserve buttons): %v", err))
+			}
+
+			var appHook *discordgo.Webhook
+			for _, hw := range appWebhooks {
+				if hw.ApplicationID == ctx.Session.State.User.ID {
+					appHook = hw
+					break
+				}
+			}
+
+			if appHook == nil {
+				appHook, err = ctx.Session.WebhookCreate(targetWebhook.ChannelID, "Role Panel Webhook", "")
+				if err != nil {
+					return rolePanelDetailedCommandError(fmt.Sprintf("Failed to create bot-owned webhook to preserve buttons: %v", err))
+				}
+			}
+
+			executionWebhookID = appHook.ID
+			executionWebhookToken = appHook.Token
+			overrideUsername = targetWebhook.Name
+			if targetWebhook.Avatar != "" {
+				overrideAvatarURL = fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.png", targetWebhook.ID, targetWebhook.Avatar)
+			}
+		}
+
+		msg, err := ctx.Session.WebhookExecute(executionWebhookID, executionWebhookToken, true, &discordgo.WebhookParams{
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: components,
+			Username:   overrideUsername,
+			AvatarURL:  overrideAvatarURL,
 		})
 		if err != nil {
 			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to post the panel via webhook: %v", err))
@@ -201,8 +245,8 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 		if msg != nil {
 			messageID = msg.ID
 			channelID = msg.ChannelID
-			webhookID = wID
-			webhookToken = wToken
+			webhookID = executionWebhookID
+			webhookToken = executionWebhookToken
 		}
 	} else {
 		msg, err := ctx.Session.ChannelMessageSendComplex(ctx.Interaction.ChannelID, &discordgo.MessageSend{
