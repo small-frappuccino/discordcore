@@ -42,6 +42,10 @@ func (handlerQOTDServiceStub) PublishNowWithParams(context.Context, string, *dis
 	return nil, nil
 }
 
+func (handlerQOTDServiceStub) ReplaceCurrentPublish(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
+	return nil, nil
+}
+
 func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {
 	t.Helper()
 

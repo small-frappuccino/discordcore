@@ -75,6 +75,13 @@ func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guil
 	return s.publishResult, s.publishErr
 }
 
+func (s *publishCommandStubService) ReplaceCurrentPublish(_ context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error) {
+	s.publishCalls++
+	s.lastPublishGuild = guildID
+	s.lastPublishSession = session
+	return s.publishResult, s.publishErr
+}
+
 func (s *listCommandStubService) Settings(string) (files.QOTDConfig, error) {
 	return s.settings, nil
 }
@@ -112,11 +119,15 @@ func (s *listCommandStubService) MarkQuestionPublished(_ context.Context, guildI
 }
 
 func (s *listCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
-	panic("unexpected GetAutomaticQueueState call")
+	return applicationqotd.AutomaticQueueState{}, nil
 }
 
 func (s *listCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
-	panic("unexpected PublishNowWithParams call")
+	return nil, nil
+}
+
+func (s *listCommandStubService) ReplaceCurrentPublish(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
+	return nil, nil
 }
 
 type interactionRecorder struct {

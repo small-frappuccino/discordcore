@@ -53,6 +53,12 @@ type PublishCoordinator interface {
 	// the nonce + unique-constraint contract documented on
 	// QOTDOfficialPostRecord.
 	PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params PublishNowParams) (*PublishResult, error)
+
+	// ReplaceCurrentPublish replaces the currently active QOTD question.
+	// It unpublishes the current question (best-effort Discord deletion),
+	// removes it from the question bank, and immediately publishes the next
+	// question in the queue.
+	ReplaceCurrentPublish(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error)
 }
 
 // ReconcileCoordinator is the narrow surface the QOTD runtime loop drives.

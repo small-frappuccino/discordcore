@@ -1,6 +1,7 @@
 package qotd
 
 import (
+	"errors"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -66,6 +67,8 @@ const (
 	AnswerRecordStateMissingDiscord AnswerRecordState = "missing_discord"
 	AnswerRecordStateFailed         AnswerRecordState = "failed"
 )
+
+var ErrNoCurrentPublish = errors.New("no current qotd publish found to replace")
 
 type AnswerWindow struct {
 	IsOpen   bool

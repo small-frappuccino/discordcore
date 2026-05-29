@@ -24,6 +24,7 @@ const (
 	questionsAddSubCommand                = "add"
 	questionsListSubCommand               = "list"
 	questionsQueueSubCommand              = "queue"
+	questionsSkipSubCommand               = "skip"
 	questionsMarkPublishedSubCommand      = "mark_published"
 	publishConsumeAutomaticSlotOptionName = "consume_automatic_slot"
 	questionsRecoverSubCommand            = "recover"
@@ -79,6 +80,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	queueCommand := &questionsQueueCommand{catalog: catalog, publish: publisher}
 	markPublishedCommand := &questionsMarkPublishedCommand{service: catalog}
 	publishCommand := &qotdPublishCommand{publishCoordinator: publisher, catalog: catalog}
+	skipCommand := &qotdSkipCommand{publishCoordinator: publisher}
 	recoverCommand := &questionsRecoverCommand{service: catalog}
 	removeCommand := &questionsRemoveCommand{service: catalog}
 	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
@@ -99,6 +101,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 		group = core.NewGroupCommand(groupName, "Manage QOTD decks and questions", checker)
 	}
 	group.AddSubCommand(publishCommand)
+	group.AddSubCommand(skipCommand)
 	group.AddSubCommand(questionsGroup)
 	router.RegisterSlashCommandForDomain(files.BotDomainQOTD, group)
 
@@ -160,6 +163,10 @@ type qotdPublishCommand struct {
 	// (Settings) before deciding whether the publish is allowed.
 	publishCoordinator applicationqotd.PublishCoordinator
 	catalog            applicationqotd.QuestionCatalog
+}
+
+type qotdSkipCommand struct {
+	publishCoordinator applicationqotd.PublishCoordinator
 }
 
 type questionsListState struct {
@@ -423,6 +430,54 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 	if !consumeAutomaticSlot {
 		message = fmt.Sprintf("Published QOTD question ID %d manually from deck `%s` without consuming the automatic slot.", visibleQuestionID(result.Question), deck.Name)
 	}
+	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
+		message = fmt.Sprintf("%s %s", message, postURL)
+	}
+	return core.NewResponseBuilder(ctx.Session).
+		WithContext(ctx).
+		Success(ctx.Interaction, message)
+}
+
+func (c *qotdSkipCommand) Name() string { return questionsSkipSubCommand }
+
+func (c *qotdSkipCommand) Description() string {
+	return "Skip the current QOTD question, remove it from the deck, and publish the next one."
+}
+
+func (c *qotdSkipCommand) Options() []*discordgo.ApplicationCommandOption {
+	return nil
+}
+
+func (c *qotdSkipCommand) RequiresGuild() bool       { return true }
+func (c *qotdSkipCommand) RequiresPermissions() bool { return true }
+
+// InteractionAckPolicy defers the slash response so the replacement flow has the
+// 15-minute follow-up window, identical to manual publishing.
+func (c *qotdSkipCommand) InteractionAckPolicy() core.InteractionAckPolicy {
+	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+}
+
+func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
+	if err := requireQuestionsGuild(ctx); err != nil {
+		return err
+	}
+
+	if ctx.Interaction.Member == nil || (ctx.Interaction.Member.Permissions&discordgo.PermissionManageMessages) == 0 {
+		return core.NewCommandError("You need the Manage Messages permission to skip QOTD questions.", false)
+	}
+
+	result, err := c.publishCoordinator.ReplaceCurrentPublish(context.Background(), ctx.GuildID, ctx.Session)
+	if err != nil {
+		if errors.Is(err, applicationqotd.ErrNoCurrentPublish) {
+			return core.NewCommandError("There is no active QOTD question to skip.", false)
+		}
+		if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
+			return core.NewCommandError("There are no remaining questions in the active deck to publish instead.", false)
+		}
+		return translatePublishNowError(err)
+	}
+
+	message := fmt.Sprintf("Skipped the current QOTD question, removed it from the deck, and published ID %d instead.", visibleQuestionID(result.Question))
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
 	}
