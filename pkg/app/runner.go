@@ -128,46 +128,9 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	}
 	// PostgreSQL bootstrap comes from environment variables. The resolved value is
 	// mirrored into runtime_config after the config store is loaded.
-	dbCfg := databaseBootstrap.Config
-	dbc := persistence.Config{
-		Driver:              dbCfg.Driver,
-		DatabaseURL:         dbCfg.DatabaseURL,
-		MaxOpenConns:        dbCfg.MaxOpenConns,
-		MaxIdleConns:        dbCfg.MaxIdleConns,
-		ConnMaxLifetimeSecs: dbCfg.ConnMaxLifetimeSecs,
-		ConnMaxIdleTimeSecs: dbCfg.ConnMaxIdleTimeSecs,
-		PingTimeoutMS:       dbCfg.PingTimeoutMS,
-	}
-
-	openCtx, openCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer openCancel()
-	db, err := persistence.Open(openCtx, dbc)
+	store, configManager, err := setupStorage(databaseBootstrap)
 	if err != nil {
-		return fmt.Errorf("open postgres database: %w", err)
-	}
-	log.ApplicationLogger().Info("Database connection opened", "operation", "startup.database.open", "driver", "postgres")
-
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer pingCancel()
-	if err := persistence.Ping(pingCtx, db); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("postgres readiness check failed: %w", err)
-	}
-	log.ApplicationLogger().Info("Database readiness check passed", "operation", "startup.database.ping", "driver", "postgres")
-
-	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer migrateCancel()
-	migrator := persistence.NewPostgresMigrator(db)
-	if err := migrator.Up(migrateCtx); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("apply postgres migrations: %w", err)
-	}
-	log.ApplicationLogger().Info("Database migrations applied", "operation", "startup.database.migrate", "driver", "postgres")
-
-	store := storage.NewStore(db)
-	if err := store.Init(); err != nil {
-		_ = db.Close()
-		return fmt.Errorf("initialize postgres store: %w", err)
+		return err
 	}
 	closeStoreOnReturn := true
 	defer func() {
@@ -177,16 +140,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 			}
 		}
 	}()
-	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
-
-	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
-	configManager := files.NewConfigManagerWithStore(configStore)
-	if err := configManager.LoadConfig(); err != nil {
-		return fmt.Errorf("load config from postgres: %w", err)
-	}
-	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
-		return fmt.Errorf("sync runtime database bootstrap config: %w", err)
-	}
 
 	// Theme configuration (from persisted runtime_config)
 	{
@@ -575,4 +528,60 @@ func collectStartupWebhookEmbedUpdates(cfg *files.BotConfig) []startupWebhookEmb
 	}
 
 	return out
+}
+
+func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigManager, error) {
+	dbCfg := dbb.Config
+	dbc := persistence.Config{
+		Driver:              dbCfg.Driver,
+		DatabaseURL:         dbCfg.DatabaseURL,
+		MaxOpenConns:        dbCfg.MaxOpenConns,
+		MaxIdleConns:        dbCfg.MaxIdleConns,
+		ConnMaxLifetimeSecs: dbCfg.ConnMaxLifetimeSecs,
+		ConnMaxIdleTimeSecs: dbCfg.ConnMaxIdleTimeSecs,
+		PingTimeoutMS:       dbCfg.PingTimeoutMS,
+	}
+
+	openCtx, openCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer openCancel()
+	db, err := persistence.Open(openCtx, dbc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open postgres database: %w", err)
+	}
+	log.ApplicationLogger().Info("Database connection opened", "operation", "startup.database.open", "driver", "postgres")
+
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer pingCancel()
+	if err := persistence.Ping(pingCtx, db); err != nil {
+		_ = db.Close()
+		return nil, nil, fmt.Errorf("postgres readiness check failed: %w", err)
+	}
+	log.ApplicationLogger().Info("Database readiness check passed", "operation", "startup.database.ping", "driver", "postgres")
+
+	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer migrateCancel()
+	migrator := persistence.NewPostgresMigrator(db)
+	if err := migrator.Up(migrateCtx); err != nil {
+		_ = db.Close()
+		return nil, nil, fmt.Errorf("apply postgres migrations: %w", err)
+	}
+	log.ApplicationLogger().Info("Database migrations applied", "operation", "startup.database.migrate", "driver", "postgres")
+
+	store := storage.NewStore(db)
+	if err := store.Init(); err != nil {
+		_ = db.Close()
+		return nil, nil, fmt.Errorf("initialize postgres store: %w", err)
+	}
+	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
+
+	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
+	configManager := files.NewConfigManagerWithStore(configStore)
+	if err := configManager.LoadConfig(); err != nil {
+		return nil, nil, fmt.Errorf("load config from postgres: %w", err)
+	}
+	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
+		return nil, nil, fmt.Errorf("sync runtime database bootstrap config: %w", err)
+	}
+
+	return store, configManager, nil
 }
