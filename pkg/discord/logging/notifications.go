@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -20,11 +21,13 @@ const (
 
 type NotificationSender struct {
 	session *discordgo.Session
+	logger  *slog.Logger
 }
 
-func NewNotificationSender(session *discordgo.Session) *NotificationSender {
+func NewNotificationSender(session *discordgo.Session, logger *slog.Logger) *NotificationSender {
 	return &NotificationSender{
 		session: session,
+		logger:  logger,
 	}
 }
 

@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"log/slog"
+
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +66,7 @@ func TestSendMemberLeaveNotification_UnknownServerTimeRendersNA(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	})
 
-	sender := NewNotificationSender(session)
+	sender := NewNotificationSender(session, slog.Default())
 	err := sender.SendMemberLeaveNotification(
 		"c1",
 		&discordgo.GuildMemberRemove{

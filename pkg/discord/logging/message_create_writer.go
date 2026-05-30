@@ -76,9 +76,10 @@ type messageCreateWriter struct {
 	nextToken uint64
 	pending   map[string]pendingMessageState
 	stopOnce  sync.Once
+	logger    *slog.Logger
 }
 
-func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics) *messageCreateWriter {
+func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, logger *slog.Logger) *messageCreateWriter {
 	if metrics == nil {
 		metrics = NopMessageWriterMetrics{}
 	}
@@ -91,6 +92,7 @@ func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics) 
 		maxBatch:      messageCreateWriterMaxBatch,
 		metrics:       metrics,
 		pending:       make(map[string]pendingMessageState),
+		logger:        logger,
 	}
 	writer.producerCond = sync.NewCond(&writer.producerMu)
 	writer.state.Store(uint32(writerStateOpen))
@@ -427,7 +429,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	if len(upserts) > 0 {
 		if err := w.store.UpsertMessagesContext(context.Background(), upserts); err != nil {
 			w.metrics.RecordFlushFallback(MessageWriterFlushOpUpsert, len(upserts))
-			slog.Warn("MessageCreate writer: batch message upsert failed; falling back to sequential writes", "operation", "message_create_writer.flush_messages", "messages", len(upserts), "error", err)
+			w.logger.Warn("MessageCreate writer: batch message upsert failed; falling back to sequential writes", "operation", "message_create_writer.flush_messages", "messages", len(upserts), "error", err)
 			w.flushMessagesSequentially(upserts, upsertTokens)
 		} else {
 			w.metrics.RecordFlushSuccess(MessageWriterFlushOpUpsert, len(upserts))
@@ -438,7 +440,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	if len(deletes) > 0 {
 		if err := w.store.DeleteMessagesContext(context.Background(), deletes); err != nil {
 			w.metrics.RecordFlushFallback(MessageWriterFlushOpDelete, len(deletes))
-			slog.Warn("MessageCreate writer: batch message delete failed; falling back to sequential deletes", "operation", "message_create_writer.flush_deletes", "messages", len(deletes), "error", err)
+			w.logger.Warn("MessageCreate writer: batch message delete failed; falling back to sequential deletes", "operation", "message_create_writer.flush_deletes", "messages", len(deletes), "error", err)
 			w.flushDeletesSequentially(deletes, deleteTokens)
 		} else {
 			w.metrics.RecordFlushSuccess(MessageWriterFlushOpDelete, len(deletes))
@@ -449,7 +451,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	if len(versions) > 0 {
 		if err := w.store.InsertMessageVersionsMixedBatchContext(context.Background(), versions); err != nil {
 			w.metrics.RecordFlushFallback(MessageWriterFlushOpVersions, len(versions))
-			slog.Warn("MessageCreate writer: batch history insert failed; falling back to sequential writes", "operation", "message_create_writer.flush_versions", "versions", len(versions), "error", err)
+			w.logger.Warn("MessageCreate writer: batch history insert failed; falling back to sequential writes", "operation", "message_create_writer.flush_versions", "versions", len(versions), "error", err)
 			w.flushVersionsSequentially(versions, "message_create_writer.flush_versions_fallback")
 		} else {
 			w.metrics.RecordFlushSuccess(MessageWriterFlushOpVersions, len(versions))
@@ -463,10 +465,10 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 		}
 		if err := w.store.IncrementDailyMessageCountsContext(context.Background(), deltas); err != nil {
 			w.metrics.RecordFlushFallback(MessageWriterFlushOpMetricBuckets, len(deltas))
-			slog.Warn("MessageCreate writer: batch daily metric flush failed; falling back to sequential increments", "operation", "message_create_writer.flush_metrics", "buckets", len(deltas), "error", err)
+			w.logger.Warn("MessageCreate writer: batch daily metric flush failed; falling back to sequential increments", "operation", "message_create_writer.flush_metrics", "buckets", len(deltas), "error", err)
 			for _, delta := range deltas {
 				if err := w.store.IncrementDailyMessageCountsContext(context.Background(), []storage.DailyMessageCountDelta{delta}); err != nil {
-					slog.Warn("MessageCreate writer: sequential daily metric increment failed", "operation", "message_create_writer.flush_metrics_fallback", "guildID", delta.GuildID, "channelID", delta.ChannelID, "userID", delta.UserID, "error", err)
+					w.logger.Warn("MessageCreate writer: sequential daily metric increment failed", "operation", "message_create_writer.flush_metrics_fallback", "guildID", delta.GuildID, "channelID", delta.ChannelID, "userID", delta.UserID, "error", err)
 				} else {
 					w.metrics.RecordFlushSuccess(MessageWriterFlushOpMetricBuckets, 1)
 				}
@@ -480,7 +482,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 func (w *messageCreateWriter) flushMessagesSequentially(records []storage.MessageRecord, tokens []pendingMessageToken) {
 	for i, record := range records {
 		if err := w.store.UpsertMessage(record); err != nil {
-			slog.Warn("MessageCreate writer: sequential message upsert failed", "operation", "message_create_writer.flush_messages_fallback", "guildID", record.GuildID, "channelID", record.ChannelID, "messageID", record.MessageID, "userID", record.AuthorID, "error", err)
+			w.logger.Warn("MessageCreate writer: sequential message upsert failed", "operation", "message_create_writer.flush_messages_fallback", "guildID", record.GuildID, "channelID", record.ChannelID, "messageID", record.MessageID, "userID", record.AuthorID, "error", err)
 			continue
 		}
 		w.metrics.RecordFlushSuccess(MessageWriterFlushOpUpsert, 1)
@@ -493,7 +495,7 @@ func (w *messageCreateWriter) flushMessagesSequentially(records []storage.Messag
 func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDeleteKey, tokens []pendingMessageToken) {
 	for i, key := range keys {
 		if err := w.store.DeleteMessage(key.GuildID, key.MessageID); err != nil {
-			slog.Warn("MessageCreate writer: sequential message delete failed", "operation", "message_create_writer.flush_deletes_fallback", "guildID", key.GuildID, "messageID", key.MessageID, "error", err)
+			w.logger.Warn("MessageCreate writer: sequential message delete failed", "operation", "message_create_writer.flush_deletes_fallback", "guildID", key.GuildID, "messageID", key.MessageID, "error", err)
 			continue
 		}
 		w.metrics.RecordFlushSuccess(MessageWriterFlushOpDelete, 1)
@@ -506,7 +508,7 @@ func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDel
 func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.MessageVersion, operation string) {
 	for _, version := range versions {
 		if err := w.store.InsertMessageVersion(version); err != nil {
-			slog.Warn("MessageCreate writer: sequential history insert failed", "operation", operation, "guildID", version.GuildID, "channelID", version.ChannelID, "messageID", version.MessageID, "userID", version.AuthorID, "eventType", version.EventType, "error", err)
+			w.logger.Warn("MessageCreate writer: sequential history insert failed", "operation", operation, "guildID", version.GuildID, "channelID", version.ChannelID, "messageID", version.MessageID, "userID", version.AuthorID, "eventType", version.EventType, "error", err)
 			continue
 		}
 		w.metrics.RecordFlushSuccess(MessageWriterFlushOpVersions, 1)

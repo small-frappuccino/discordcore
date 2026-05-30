@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	stdErrors "errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -51,7 +52,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	session := &discordgo.Session{State: discordgo.NewState()}
 	session.State.User = &discordgo.User{ID: "bot-1"}
 
-	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", "default")
+	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", "default", slog.Default())
 	if err != nil {
 		t.Fatalf("new monitoring service: %v", err)
 	}

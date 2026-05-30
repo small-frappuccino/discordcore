@@ -33,6 +33,7 @@ type MemberEventService struct {
 	activity       *runtimeActivity
 	lifecycle      serviceLifecycle
 	handlerCancels []func()
+	logger         *slog.Logger
 
 	// Cache for join times (member and bot)
 
@@ -44,8 +45,8 @@ type MemberEventService struct {
 }
 
 // NewMemberEventService creates a new instance of the member events service
-func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MemberEventService {
-	return NewMemberEventServiceForBot(session, configManager, notifier, store, "", "")
+func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store, logger *slog.Logger) *MemberEventService {
+	return NewMemberEventServiceForBot(session, configManager, notifier, store, "", "", logger)
 }
 
 // NewMemberEventServiceForBot creates a member event service scoped to one bot instance.
@@ -56,6 +57,7 @@ func NewMemberEventServiceForBot(
 	store *storage.Store,
 	botInstanceID string,
 	defaultBotInstanceID string,
+	logger *slog.Logger,
 ) *MemberEventService {
 	return &MemberEventService{
 		session:       session,
@@ -64,6 +66,7 @@ func NewMemberEventServiceForBot(
 		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		notifier:      notifier,
 		store:         store,
+		logger:        logger,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
 			RunErr:        runErrWithTimeoutContext,
 			EventTimeout:  loggingDependencyTimeout,
@@ -97,7 +100,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 	// Store should be injected and already initialized
 	if mes.store != nil {
 		if err := runErrWithTimeoutContext(runCtx, loggingDependencyTimeout, func(context.Context) error { return mes.store.Init() }); err != nil {
-			slog.Warn(fmt.Sprintf("Member event service: failed to initialize store (continuing): %v", err))
+			mes.logger.Warn(fmt.Sprintf("Member event service: failed to initialize store (continuing): %v", err))
 		}
 	}
 
@@ -148,7 +151,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 		mes.cleanupLoop(cleanupCtx)
 	}()
 
-	slog.Info("Member event service started")
+	mes.logger.Info("Member event service started")
 	return nil
 }
 
@@ -169,7 +172,7 @@ func (mes *MemberEventService) Stop(ctx context.Context) error {
 		return err
 	}
 
-	slog.Info("Member event service stopped")
+	mes.logger.Info("Member event service stopped")
 	return nil
 }
 
@@ -227,9 +230,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 				roles := member.Roles
 				if evaluateAutoRoleDecision(roles, targetRoleID, required) == autoRoleAddTarget {
 					if err := mes.guildMemberRoleAdd(ctx, m.GuildID, m.User.ID, targetRoleID); err != nil {
-						slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+						mes.logger.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 					} else {
-						slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+						mes.logger.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
 					}
 				}
 			} else {
@@ -239,9 +242,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 					roles := mm.Roles
 					if evaluateAutoRoleDecision(roles, targetRoleID, required) == autoRoleAddTarget {
 						if err := mes.guildMemberRoleAdd(ctx, m.GuildID, m.User.ID, targetRoleID); err != nil {
-							slog.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+							mes.logger.Error(fmt.Sprintf("Failed to grant target role on join: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 						} else {
-							slog.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+							mes.logger.Info(fmt.Sprintf("Granted target role on join: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
 						}
 					}
 				}
@@ -252,9 +255,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMemberJoin, m.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
-			slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
+			mes.logger.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member join notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
 		} else {
-			slog.Debug(fmt.Sprintf("Member join notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
+			mes.logger.Debug(fmt.Sprintf("Member join notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
 		}
 		return
 	}
@@ -282,12 +285,12 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 		if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
 			return mes.store.UpsertMemberJoinContext(runCtx, m.GuildID, m.User.ID, joinedAt)
 		}); err != nil {
-			slog.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
+			mes.logger.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
 		if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
 			return mes.store.IncrementDailyMemberJoinContext(runCtx, m.GuildID, m.User.ID, joinedAt)
 		}); err != nil {
-			slog.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
+			mes.logger.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
 	}
 
@@ -301,21 +304,21 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 		mes.joinMu.Unlock()
 	}
 
-	slog.Info(fmt.Sprintf("Member joined guild: guildID=%s, userID=%s, username=%s, accountAge=%s", m.GuildID, m.User.ID, m.User.Username, accountAge.String()))
+	mes.logger.Info(fmt.Sprintf("Member joined guild: guildID=%s, userID=%s, username=%s, accountAge=%s", m.GuildID, m.User.ID, m.User.Username, accountAge.String()))
 
 	if mes.adapters != nil {
 		if err := mes.adapters.EnqueueMemberJoin(logChannelID, m, accountAge); err != nil {
-			slog.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
+			mes.logger.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
+			mes.logger.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
 	} else if mes.notifier != nil {
 		if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
 			return mes.notifier.SendMemberJoinNotification(logChannelID, m, accountAge)
 		}); err != nil {
-			slog.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
+			mes.logger.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
+			mes.logger.Info(fmt.Sprintf("Member join notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
 	}
 
@@ -351,9 +354,9 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, s *d
 	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMemberLeave, m.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
-			slog.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
+			mes.logger.Info(fmt.Sprintf("User entry/leave channel not configured for guild, member leave notification not sent: guildID=%s, userID=%s", m.GuildID, m.User.ID))
 		} else {
-			slog.Debug(fmt.Sprintf("Member leave notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
+			mes.logger.Debug(fmt.Sprintf("Member leave notification suppressed by policy: guildID=%s, userID=%s, reason=%s", m.GuildID, m.User.ID, emit.Reason))
 		}
 		return
 	}
@@ -378,25 +381,25 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, s *d
 		if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
 			return mes.store.IncrementDailyMemberLeaveContext(runCtx, m.GuildID, m.User.ID, time.Now().UTC())
 		}); err != nil {
-			slog.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
+			mes.logger.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
 		}
 	}
 
-	slog.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTimeForLog, botTime.String()))
+	mes.logger.Info(fmt.Sprintf("Member left guild: guildID=%s, userID=%s, username=%s, serverTime=%s, botTime=%s", m.GuildID, m.User.ID, m.User.Username, serverTimeForLog, botTime.String()))
 
 	if mes.adapters != nil {
 		if err := mes.adapters.EnqueueMemberLeave(logChannelID, m, serverTimeForNotification, botTime); err != nil {
-			slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
+			mes.logger.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
+			mes.logger.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
 	} else if mes.notifier != nil {
 		if err := runErrWithTimeout(ctx, loggingDependencyTimeout, func() error {
 			return mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTimeForNotification, botTime)
 		}); err != nil {
-			slog.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
+			mes.logger.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
+			mes.logger.Info(fmt.Sprintf("Member leave notification sent successfully: guildID=%s, userID=%s, channelID=%s", m.GuildID, m.User.ID, logChannelID))
 		}
 	}
 }
@@ -445,16 +448,16 @@ func (mes *MemberEventService) handleGuildMemberUpdate(ctx context.Context, s *d
 	switch evaluateAutoRoleDecision(m.Roles, targetRoleID, required) {
 	case autoRoleRemoveTarget:
 		if err := mes.guildMemberRoleRemove(ctx, m.GuildID, m.User.ID, targetRoleID); err != nil {
-			slog.Error(fmt.Sprintf("Failed to remove target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+			mes.logger.Error(fmt.Sprintf("Failed to remove target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Removed target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+			mes.logger.Info(fmt.Sprintf("Removed target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
 		}
 		return
 	case autoRoleAddTarget:
 		if err := mes.guildMemberRoleAdd(ctx, m.GuildID, m.User.ID, targetRoleID); err != nil {
-			slog.Error(fmt.Sprintf("Failed to grant target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
+			mes.logger.Error(fmt.Sprintf("Failed to grant target role on update: guildID=%s, userID=%s, roleID=%s, error=%v", m.GuildID, m.User.ID, targetRoleID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Granted target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
+			mes.logger.Info(fmt.Sprintf("Granted target role on update: guildID=%s, userID=%s, roleID=%s", m.GuildID, m.User.ID, targetRoleID))
 		}
 	}
 }
@@ -467,7 +470,7 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 	// Convert string ID to uint64
 	snowflake, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		slog.Warn(fmt.Sprintf("Failed to parse user ID for account age calculation: userID=%s, error=%v", userID, err))
+		mes.logger.Warn(fmt.Sprintf("Failed to parse user ID for account age calculation: userID=%s, error=%v", userID, err))
 		return 0
 	}
 
@@ -499,7 +502,7 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 			return joinLookup{at: at, ok: ok}, err
 		})
 		if err != nil {
-			slog.Warn("Failed to read member join timestamp from store; time on server unavailable", "guildID", guildID, "userID", userID, "error", err)
+			mes.logger.Warn("Failed to read member join timestamp from store; time on server unavailable", "guildID", guildID, "userID", userID, "error", err)
 			return 0, false, fmt.Errorf("get member join from store: %w", err)
 		}
 		if res.ok && !res.at.IsZero() {

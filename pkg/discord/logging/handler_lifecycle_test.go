@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -49,7 +50,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 		}
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
-	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 
 	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("start member event service: %v", err)
@@ -145,7 +146,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 
 	session := newLoggingLifecycleSession(t)
 	session.Identify.Intents = discordgo.IntentsGuildMessages
-	service := NewMessageEventService(session, cfgMgr, nil, store)
+	service := NewMessageEventService(session, cfgMgr, nil, store, slog.Default())
 
 	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("start message event service: %v", err)
@@ -228,7 +229,7 @@ func TestReactionEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{})
 
 	session := newLoggingLifecycleSession(t)
-	service := NewReactionEventService(session, cfgMgr, store)
+	service := NewReactionEventService(session, cfgMgr, store, slog.Default())
 
 	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("start reaction event service: %v", err)

@@ -30,11 +30,12 @@ type ReactionEventService struct {
 
 	// handlerCancels keeps unsubscribe functions for all registered handlers
 	handlerCancels []func()
+	logger         *slog.Logger
 }
 
 // NewReactionEventService creates a new ReactionEventService.
-func NewReactionEventService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *ReactionEventService {
-	return NewReactionEventServiceForBot(session, configManager, store, "", "")
+func NewReactionEventService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) *ReactionEventService {
+	return NewReactionEventServiceForBot(session, configManager, store, "", "", logger)
 }
 
 // NewReactionEventServiceForBot creates a ReactionEventService scoped to one bot instance.
@@ -44,6 +45,7 @@ func NewReactionEventServiceForBot(
 	store *storage.Store,
 	botInstanceID string,
 	defaultBotInstanceID string,
+	logger *slog.Logger,
 ) *ReactionEventService {
 	return &ReactionEventService{
 		session:       session,
@@ -51,6 +53,7 @@ func NewReactionEventServiceForBot(
 		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		store:         store,
+		logger:        logger,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
 			RunErr:        runErrWithTimeoutContext,
 			EventTimeout:  loggingDependencyTimeout,
@@ -86,7 +89,7 @@ func (rs *ReactionEventService) Start(ctx context.Context) error {
 	})
 	rs.handlerCancels = append(rs.handlerCancels, unsubAdd)
 
-	slog.Info("Reaction event service started")
+	rs.logger.Info("Reaction event service started")
 	return nil
 }
 
@@ -106,7 +109,7 @@ func (rs *ReactionEventService) Stop(ctx context.Context) error {
 		return err
 	}
 
-	slog.Info("Reaction event service stopped")
+	rs.logger.Info("Reaction event service stopped")
 	return nil
 }
 
@@ -138,7 +141,7 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 
 	// If still unknown, skip (likely a DM or insufficient cache state)
 	if guildID == "" {
-		slog.Debug("ReactionAdd: guildID missing; skipping metrics", "channelID", e.ChannelID, "userID", e.UserID)
+		rs.logger.Debug("ReactionAdd: guildID missing; skipping metrics", "channelID", e.ChannelID, "userID", e.UserID)
 		return
 	}
 	if !rs.handlesGuild(guildID) {
@@ -158,7 +161,7 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 
 	blocked, err := rs.enforceBlockedReaction(s, e, guildID)
 	if err != nil {
-		slog.Warn("ReactionAdd: failed to enforce blocked reaction", "guildID", guildID, "channelID", e.ChannelID, "messageID", e.MessageID, "userID", e.UserID, "err", err)
+		rs.logger.Warn("ReactionAdd: failed to enforce blocked reaction", "guildID", guildID, "channelID", e.ChannelID, "messageID", e.MessageID, "userID", e.UserID, "err", err)
 	}
 	if blocked {
 		return
@@ -171,7 +174,7 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 
 	emit := logpolicy.ShouldEmitLogEvent(rs.session, rs.configManager, logpolicy.LogEventReactionMetric, guildID)
 	if !emit.Enabled {
-		slog.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
+		rs.logger.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
 		return
 	}
 
@@ -179,11 +182,11 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 	if err := runErrWithTimeoutContext(ctx, loggingDependencyTimeout, func(runCtx context.Context) error {
 		return rs.store.IncrementDailyReactionCountContext(runCtx, guildID, e.ChannelID, e.UserID, time.Now().UTC())
 	}); err != nil {
-		slog.Error("Failed to increment daily reaction count", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "err", err)
+		rs.logger.Error("Failed to increment daily reaction count", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "err", err)
 		return
 	}
 
-	slog.Info("Reaction recorded for daily metrics", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "emoji", emojiName(e.Emoji))
+	rs.logger.Info("Reaction recorded for daily metrics", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "emoji", emojiName(e.Emoji))
 }
 
 func (rs *ReactionEventService) enforceBlockedReaction(
@@ -212,7 +215,7 @@ func (rs *ReactionEventService) enforceBlockedReaction(
 	if err := s.MessageReactionRemove(e.ChannelID, e.MessageID, reactionRemovalEmojiID(e.Emoji), e.UserID); err != nil {
 		return false, fmt.Errorf("remove blocked reaction: %w", err)
 	}
-	slog.Info("ReactionAdd: removed blocked reaction", "guildID", guildID, "channelID", e.ChannelID, "messageID", e.MessageID, "userID", e.UserID, "targetUserID", targetUserID, "emoji", emojiName(e.Emoji))
+	rs.logger.Info("ReactionAdd: removed blocked reaction", "guildID", guildID, "channelID", e.ChannelID, "messageID", e.MessageID, "userID", e.UserID, "targetUserID", targetUserID, "emoji", emojiName(e.Emoji))
 	return true, nil
 }
 

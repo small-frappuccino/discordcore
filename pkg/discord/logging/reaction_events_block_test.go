@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"log/slog"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -69,7 +71,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 		t.Fatalf("update config: %v", err)
 	}
 
-	service := NewReactionEventService(session, cfgMgr, nil)
+	service := NewReactionEventService(session, cfgMgr, nil, slog.Default())
 	service.handleReactionAdd(context.Background(), session, &discordgo.MessageReactionAdd{
 		MessageReaction: &discordgo.MessageReaction{
 			GuildID:   guildID,

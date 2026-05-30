@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,8 +51,8 @@ func newDiscordSessionWithAPI(t *testing.T, handler http.HandlerFunc) *discordgo
 func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 	failingStore := storagetest.NewFailingStore()
 
-	memberService := NewMemberEventService(nil, nil, nil, failingStore)
-	messageService := NewMessageEventService(nil, nil, nil, failingStore)
+	memberService := NewMemberEventService(nil, nil, nil, failingStore, slog.Default())
+	messageService := NewMessageEventService(nil, nil, nil, failingStore, slog.Default())
 	monitoringService := &MonitoringService{
 		store:    failingStore,
 		activity: newMonitoringRuntimeActivity(failingStore),

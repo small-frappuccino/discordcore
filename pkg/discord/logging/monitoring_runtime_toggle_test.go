@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"log/slog"
+
 	"context"
 	"testing"
 	"time"
@@ -58,9 +60,9 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	ms := &MonitoringService{
 		session:              session,
 		configManager:        cfgMgr,
-		memberEventService:   NewMemberEventService(session, cfgMgr, nil, nil),
-		messageEventService:  NewMessageEventService(session, cfgMgr, nil, nil),
-		reactionEventService: NewReactionEventService(session, cfgMgr, nil),
+		memberEventService:   NewMemberEventService(session, cfgMgr, nil, nil, slog.Default()),
+		messageEventService:  NewMessageEventService(session, cfgMgr, nil, nil, slog.Default()),
+		reactionEventService: NewReactionEventService(session, cfgMgr, nil, slog.Default()),
 		router:               router,
 		isRunning:            true,
 		runCtx:               runCtx,

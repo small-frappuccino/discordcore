@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +17,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
-
-
 
 const (
 	monitoringGuildMembersPageSize   = 1000
@@ -79,7 +78,6 @@ func startMonitoringSubService(ctx context.Context, operation, serviceName strin
 	}
 	return nil
 }
-
 
 const (
 	heartbeatInterval = 5 * time.Minute
@@ -163,6 +161,7 @@ type MonitoringService struct {
 	recentChanges        map[string]time.Time // Debounce to avoid duplicates
 	changesMutex         sync.RWMutex
 	cronCancel           func()
+	logger               *slog.Logger
 
 	// Unified cache for Discord API data (members, guilds, roles, channels)
 	unifiedCache *cache.UnifiedCache
@@ -438,8 +437,8 @@ type presenceSnapshot struct {
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
-func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) (*MonitoringService, error) {
-	return NewMonitoringServiceForBot(session, configManager, store, "", "")
+func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) (*MonitoringService, error) {
+	return NewMonitoringServiceForBot(session, configManager, store, "", "", logger)
 }
 
 // NewMonitoringServiceForBot creates a monitoring service scoped to the
@@ -453,8 +452,9 @@ func NewMonitoringServiceForBot(
 	store *storage.Store,
 	botInstanceID string,
 	defaultBotInstanceID string,
+	logger *slog.Logger,
 ) (*MonitoringService, error) {
-	return NewMonitoringServiceForBotWithMetrics(session, configManager, store, botInstanceID, defaultBotInstanceID, nil)
+	return NewMonitoringServiceForBotWithMetrics(session, configManager, store, botInstanceID, defaultBotInstanceID, nil, logger)
 }
 
 // NewMonitoringServiceForBotWithMetrics is the constructor production startup
@@ -471,6 +471,7 @@ func NewMonitoringServiceForBotWithMetrics(
 	botInstanceID string,
 	defaultBotInstanceID string,
 	metrics Metrics,
+	logger *slog.Logger,
 ) (*MonitoringService, error) {
 	if session == nil {
 		return nil, fmt.Errorf("discord session is nil")
@@ -481,7 +482,7 @@ func NewMonitoringServiceForBotWithMetrics(
 	if store == nil {
 		return nil, fmt.Errorf("store is nil")
 	}
-	n := NewNotificationSender(session)
+	n := NewNotificationSender(session, logger)
 
 	// Create unified cache with persistence enabled
 	cacheConfig := cache.DefaultCacheConfig()
@@ -499,8 +500,8 @@ func NewMonitoringServiceForBotWithMetrics(
 		notifier:                n,
 		unifiedCache:            unifiedCache,
 		userWatcher:             NewUserWatcher(session, configManager, store, n, unifiedCache),
-		memberEventService:      NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
-		messageEventService:     NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID),
+		memberEventService:      NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID, logger),
+		messageEventService:     NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID, logger),
 		stopChan:                make(chan struct{}),
 		recentChanges:           make(map[string]time.Time),
 		rolesCache:              make(map[string]cachedRoles),
@@ -513,6 +514,7 @@ func NewMonitoringServiceForBotWithMetrics(
 		statsLastRun:            make(map[string]time.Time),
 		statsGuilds:             make(map[string]*statsGuildState),
 		metrics:                 metrics,
+		logger:                  logger,
 	}
 	ms.rebuildTaskPipeline()
 	return ms, nil
@@ -643,7 +645,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	} else {
 		// Lazily initialize service if not yet created
 		if ms.reactionEventService == nil {
-			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID)
+			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID, ms.logger)
 		}
 		if err := startMonitoringSubService(ctx, "monitoring.start.reaction", "reaction_event_service", func() error {
 			return ms.reactionEventService.Start(ctx)
@@ -1105,7 +1107,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 		}
 	} else {
 		if ms.reactionEventService == nil {
-			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID)
+			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID, ms.logger)
 		}
 		if !ms.reactionEventService.IsRunning() {
 			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_reaction", "reaction_event_service", func() error {

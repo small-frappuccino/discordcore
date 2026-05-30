@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"log/slog"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -31,13 +33,13 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 	session := newMessageWriterTestSession(t, guildID, logChannelID)
 	session.Identify.Intents = discordgo.IntentsGuildMessages
 
-	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
 	service.versioningEnabled = true
 	service.cacheTTL = 24 * time.Hour
 
 	metrics := NewInMemoryMessageWriterMetrics()
-	writer := newMessageCreateWriter(store, metrics)
+	writer := newMessageCreateWriter(store, metrics, slog.Default())
 	writer.flushInterval = time.Hour
 	service.messageCreateWriter = writer
 	writer.Start()
@@ -147,13 +149,13 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 	session := newMessageWriterTestSession(t, guildID, logChannelID)
 	session.Identify.Intents = discordgo.IntentsGuildMessages
 
-	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
 	service.versioningEnabled = true
 	service.cacheTTL = 24 * time.Hour
 	service.deleteOnLog = true
 
-	writer := newMessageCreateWriter(store, nil)
+	writer := newMessageCreateWriter(store, nil, slog.Default())
 	writer.flushInterval = time.Hour
 	service.messageCreateWriter = writer
 	writer.Start()
@@ -246,13 +248,13 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMessages
 
-	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
 	service.versioningEnabled = true
 	service.cacheTTL = 24 * time.Hour
 	service.deleteOnLog = true
 
-	writer := newMessageCreateWriter(store, nil)
+	writer := newMessageCreateWriter(store, nil, slog.Default())
 	writer.flushInterval = time.Hour
 	service.messageCreateWriter = writer
 	writer.Start()
@@ -349,7 +351,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryWhenMessageProcessDis
 	session := newMessageWriterTestSession(t, guildID, "c-message-delete-log")
 	session.Identify.Intents = discordgo.IntentsGuildMessages
 
-	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
 	service.versioningEnabled = true
 
@@ -397,7 +399,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 		},
 	})
 
-	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
 	service.versioningEnabled = true
 
@@ -414,7 +416,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 }
 
 func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
-	writer := newMessageCreateWriter(nil, nil)
+	writer := newMessageCreateWriter(nil, nil, slog.Default())
 	writer.flushInterval = time.Hour
 	writer.Start()
 
@@ -450,7 +452,7 @@ func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
 }
 
 func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
-	writer := newMessageCreateWriter(nil, nil)
+	writer := newMessageCreateWriter(nil, nil, slog.Default())
 	writer.flushInterval = time.Hour
 	writer.Start()
 

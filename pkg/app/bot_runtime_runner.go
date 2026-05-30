@@ -95,6 +95,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 			runtime.instanceID,
 			opts.defaultBotInstanceID,
 			logging.NewInMemoryMetrics(),
+			log.DiscordLogger(),
 		)
 		if err != nil {
 			return fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
@@ -121,7 +122,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	} else {
 		automodService := logging.NewAutomodService(runtime.session, opts.configManager)
 		automodRouter := task.NewRouter(routerConfig)
-		notifier := logging.NewNotificationSender(runtime.session)
+		notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
 		if monitoringService != nil {
 			notifier = monitoringService.Notifier()
 		}

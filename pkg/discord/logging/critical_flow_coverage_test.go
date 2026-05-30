@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -51,7 +52,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 	session.State.User = &discordgo.User{ID: botID, Username: "alice-bot", Bot: true}
 
-	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 
 	joinedAt := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
 	service.handleGuildMemberAdd(context.Background(), session, &discordgo.GuildMemberAdd{
@@ -135,7 +136,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMessages
 
-	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session), store)
+	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
 	service.versioningEnabled = true
 	service.cacheTTL = 24 * time.Hour

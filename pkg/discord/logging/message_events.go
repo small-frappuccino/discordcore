@@ -50,6 +50,7 @@ type MessageEventService struct {
 	activity       *runtimeActivity
 	lifecycle      serviceLifecycle
 	handlerCancels []func()
+	logger         *slog.Logger
 
 	// Message cache configuration (populated from persisted runtime_config)
 	cacheEnabled   bool
@@ -92,8 +93,8 @@ type MessageDeleteTaskPayload struct {
 }
 
 // NewMessageEventService creates a new instance of the message events service
-func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store) *MessageEventService {
-	return NewMessageEventServiceForBot(session, configManager, notifier, store, "", "")
+func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store, logger *slog.Logger) *MessageEventService {
+	return NewMessageEventServiceForBot(session, configManager, notifier, store, "", "", logger)
 }
 
 // NewMessageEventServiceForBot creates a message event service scoped to a bot
@@ -105,6 +106,7 @@ func NewMessageEventServiceForBot(
 	store *storage.Store,
 	botInstanceID string,
 	defaultBotInstanceID string,
+	logger *slog.Logger,
 ) *MessageEventService {
 	return &MessageEventService{
 		session:       session,
@@ -113,6 +115,7 @@ func NewMessageEventServiceForBot(
 		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
 		notifier:      notifier,
 		store:         store,
+		logger:        logger,
 		activity: newRuntimeActivity(store, runtimeActivityOptions{
 			RunErr:        runErrWithTimeoutContext,
 			EventTimeout:  loggingDependencyTimeout,
@@ -168,11 +171,11 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 	// Cleanup is gated by env and disabled by default (do not delete by default)
 	if mes.store != nil && mes.cleanupEnabled {
 		if err := mes.store.CleanupExpiredMessages(); err != nil {
-			slog.Warn("MessageEventService: startup cleanup failed", "error", err)
+			mes.logger.Warn("MessageEventService: startup cleanup failed", "error", err)
 		}
 	}
 	if mes.store != nil {
-		mes.messageCreateWriter = newMessageCreateWriter(mes.store, mes.writerMetrics)
+		mes.messageCreateWriter = newMessageCreateWriter(mes.store, mes.writerMetrics, mes.logger)
 		mes.messageCreateWriter.Start()
 	}
 
@@ -214,7 +217,7 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 
 	// TTL cache handles cleanup internally
 
-	slog.Info("Message event service started")
+	mes.logger.Info("Message event service started")
 	return nil
 }
 
@@ -242,7 +245,7 @@ func (mes *MessageEventService) Stop(ctx context.Context) error {
 		return waitErr
 	}
 
-	slog.Info("Message event service stopped")
+	mes.logger.Info("Message event service stopped")
 	return nil
 }
 
@@ -254,15 +257,15 @@ func (mes *MessageEventService) IsRunning() bool {
 // handleMessageCreate stores messages for future comparisons
 func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m == nil {
-		slog.Debug("MessageCreate: nil event")
+		mes.logger.Debug("MessageCreate: nil event")
 		return
 	}
 	if m.Author == nil {
-		slog.Debug("MessageCreate: nil author; skipping", "channelID", m.ChannelID)
+		mes.logger.Debug("MessageCreate: nil author; skipping", "channelID", m.ChannelID)
 		return
 	}
 	if m.Author.Bot {
-		slog.Debug("MessageCreate: ignoring bot message", "channelID", m.ChannelID, "userID", m.Author.ID)
+		mes.logger.Debug("MessageCreate: ignoring bot message", "channelID", m.ChannelID, "userID", m.Author.ID)
 		return
 	}
 	if err := ctx.Err(); err != nil {
@@ -291,14 +294,14 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 			extra += fmt.Sprintf("[stickers: %d] ", len(m.StickerItems))
 		}
 		if extra == "" {
-			slog.Debug("MessageCreate: empty content; will not cache", "channelID", m.ChannelID, "userID", m.Author.ID)
+			mes.logger.Debug("MessageCreate: empty content; will not cache", "channelID", m.ChannelID, "userID", m.Author.ID)
 			return
 		}
 		// Use the summary as content for persistence
 		m.Content = extra
-		slog.Debug("MessageCreate: content empty; using summary for cache", "channelID", m.ChannelID, "userID", m.Author.ID)
+		mes.logger.Debug("MessageCreate: content empty; using summary for cache", "channelID", m.ChannelID, "userID", m.Author.ID)
 	}
-	slog.Debug("MessageCreate received", "channelID", m.ChannelID, "userID", m.Author.ID, "messageID", m.ID)
+	mes.logger.Debug("MessageCreate received", "channelID", m.ChannelID, "userID", m.Author.ID, "messageID", m.ID)
 
 	// Check if this is a guild message without fetching the channel when possible
 	guildID := m.GuildID
@@ -306,13 +309,13 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 		// Fallback: get via channel only if necessary (likely DM)
 		channel, err := s.Channel(m.ChannelID)
 		if err != nil {
-			slog.Debug("MessageCreate: failed to fetch channel; skipping cache", "channelID", m.ChannelID, "error", err)
+			mes.logger.Debug("MessageCreate: failed to fetch channel; skipping cache", "channelID", m.ChannelID, "error", err)
 			return
 		}
 		guildID = channel.GuildID
 	}
 	if guildID == "" {
-		slog.Debug("MessageCreate: DM detected; skipping cache", "channelID", m.ChannelID)
+		mes.logger.Debug("MessageCreate: DM detected; skipping cache", "channelID", m.ChannelID)
 		return
 	}
 	if !mes.handlesGuild(guildID) {
@@ -321,12 +324,12 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 
 	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
 	if !emit.Enabled {
-		slog.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
+		mes.logger.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
 		return
 	}
 
 	if guildConfig := mes.configManager.GuildConfig(guildID); guildConfig == nil {
-		slog.Debug("MessageCreate: no guild config; skipping cache", "guildID", guildID)
+		mes.logger.Debug("MessageCreate: no guild config; skipping cache", "guildID", guildID)
 		return
 	}
 
@@ -335,17 +338,17 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 	if mes.store != nil && m.Author != nil {
 		mes.persistMessageCreate(guildID, m)
 	}
-	slog.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
+	mes.logger.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
 }
 
 // handleMessageUpdate processes message edits
 func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageUpdate) {
 	if m == nil {
-		slog.Debug("MessageUpdate: nil event")
+		mes.logger.Debug("MessageUpdate: nil event")
 		return
 	}
 	if m.Author != nil && m.Author.Bot {
-		slog.Debug("MessageUpdate: ignoring bot edit", "messageID", m.ID, "userID", m.Author.ID, "channelID", m.ChannelID)
+		mes.logger.Debug("MessageUpdate: ignoring bot edit", "messageID", m.ID, "userID", m.Author.ID, "channelID", m.ChannelID)
 		return
 	}
 	if err := ctx.Err(); err != nil {
@@ -362,21 +365,21 @@ func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *disc
 	if m.Author != nil {
 		authorID = m.Author.ID
 	}
-	slog.Info("MessageUpdate received", "messageID", m.ID, "userID", authorID, "guildID", m.GuildID, "channelID", m.ChannelID)
+	mes.logger.Info("MessageUpdate received", "messageID", m.ID, "userID", authorID, "guildID", m.GuildID, "channelID", m.ChannelID)
 
 	if mes.taskRouter != nil {
 		if err := mes.dispatchMessageUpdateTask(m); err != nil {
 			if errors.Is(err, task.ErrDuplicateTask) {
-				slog.Debug("MessageUpdate: task already queued", "messageID", m.ID)
+				mes.logger.Debug("MessageUpdate: task already queued", "messageID", m.ID)
 			} else {
-				slog.Error("MessageUpdate: failed to enqueue task", "messageID", m.ID, "error", err)
+				mes.logger.Error("MessageUpdate: failed to enqueue task", "messageID", m.ID, "error", err)
 			}
 		}
 		return
 	}
 
 	if err := mes.processMessageUpdate(ctx, s, m, true); err != nil {
-		slog.Error("MessageUpdate: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
+		mes.logger.Error("MessageUpdate: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
 	}
 }
 
@@ -400,16 +403,16 @@ func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *disc
 	if mes.taskRouter != nil {
 		if err := mes.dispatchMessageDeleteTask(m); err != nil {
 			if errors.Is(err, task.ErrDuplicateTask) {
-				slog.Debug("MessageDelete: task already queued", "messageID", m.ID)
+				mes.logger.Debug("MessageDelete: task already queued", "messageID", m.ID)
 			} else {
-				slog.Error("MessageDelete: failed to enqueue task", "messageID", m.ID, "error", err)
+				mes.logger.Error("MessageDelete: failed to enqueue task", "messageID", m.ID, "error", err)
 			}
 		}
 		return
 	}
 
 	if err := mes.processMessageDelete(ctx, s, m, true); err != nil {
-		slog.Error("MessageDelete: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
+		mes.logger.Error("MessageDelete: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
 	}
 }
 
@@ -561,16 +564,16 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 		if !allowWait && mes.store != nil && guildID != "" {
 			return fmt.Errorf("%w: message update cache miss", task.ErrRetrySilent)
 		}
-		slog.Info("Message edit detected but original not in cache/persistence", "messageID", m.ID, "userID", authorID)
+		mes.logger.Info("Message edit detected but original not in cache/persistence", "messageID", m.ID, "userID", authorID)
 		return nil
 	}
 
 	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageEdit, cached.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
-			slog.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
+			mes.logger.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		} else {
-			slog.Debug("MessageUpdate: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
+			mes.logger.Debug("MessageUpdate: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
 		}
 		return nil
 	}
@@ -590,16 +593,16 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 		}
 	}
 	if !contentResolved {
-		slog.Debug("MessageUpdate: unable to resolve content; skipping notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID)
+		mes.logger.Debug("MessageUpdate: unable to resolve content; skipping notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID)
 		return nil
 	}
 	// Check that the content actually changed (compare effective strings)
 	if cached.Content == m.Content {
-		slog.Debug("MessageUpdate: content unchanged; skipping notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID)
+		mes.logger.Debug("MessageUpdate: content unchanged; skipping notification", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID)
 		return nil
 	}
 
-	slog.Info("Message edit detected", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "username", cached.Author.Username)
+	mes.logger.Info("Message edit detected", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "username", cached.Author.Username)
 
 	// Send edit notification
 	if mes.adapters != nil {
@@ -612,9 +615,9 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.adapters.EnqueueMessageEdit(logChannelID, tCached, m); err != nil {
-			slog.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
+			mes.logger.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
 		} else {
-			slog.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
+			mes.logger.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
 		}
 	} else {
 		tCached := &task.CachedMessage{
@@ -626,9 +629,9 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.notifier.SendMessageEditNotification(logChannelID, tCached, m); err != nil {
-			slog.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
+			mes.logger.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
 		} else {
-			slog.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
+			mes.logger.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
 		}
 	}
 
@@ -644,7 +647,7 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 	if contentResolved && mes.cacheEnabled && mes.store != nil && updated.Author != nil {
 		mes.persistMessageUpdate(updated, m.Content)
 	}
-	slog.Info("MessageUpdate: store updated with new content", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID)
+	mes.logger.Info("MessageUpdate: store updated with new content", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID)
 	return nil
 }
 
@@ -674,21 +677,21 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 	if cached == nil {
 		if !allowWait && mes.store != nil && guildID != "" {
 			if !mes.shouldRetryMessageDeleteCacheMiss(s, guildID, m) {
-				slog.Debug("MessageDelete: cache miss for uncached message; skipping retry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID)
+				mes.logger.Debug("MessageDelete: cache miss for uncached message; skipping retry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID)
 				return nil
 			}
 			return fmt.Errorf("%w: message delete cache miss", task.ErrRetrySilent)
 		}
-		slog.Info("Message delete detected but original not in cache/persistence", "messageID", m.ID, "channelID", m.ChannelID)
+		mes.logger.Info("Message delete detected but original not in cache/persistence", "messageID", m.ID, "channelID", m.ChannelID)
 		return nil
 	}
 
 	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageDelete, cached.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
-			slog.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
+			mes.logger.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		} else {
-			slog.Debug("MessageDelete: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
+			mes.logger.Debug("MessageDelete: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
 		}
 		// Deletion from store is disabled by default
 		if mes.deleteOnLogEnabled(cached.GuildID) && mes.store != nil {
@@ -707,7 +710,7 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 		return nil
 	}
 
-	slog.Info("Message delete detected", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "username", cached.Author.Username)
+	mes.logger.Info("Message delete detected", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "username", cached.Author.Username)
 
 	// Try to determine who deleted it (best effort via audit log)
 	deletedBy := mes.determineDeletedBy(s, cached.GuildID, cached.ChannelID, cached.Author.ID)
@@ -723,9 +726,9 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.adapters.EnqueueMessageDelete(logChannelID, tCached, deletedBy); err != nil {
-			slog.Error("Failed to send message delete notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
+			mes.logger.Error("Failed to send message delete notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
 		} else {
-			slog.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
+			mes.logger.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
 		}
 	} else {
 		tCached := &task.CachedMessage{
@@ -737,9 +740,9 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 			Timestamp: cached.Timestamp,
 		}
 		if err := mes.notifier.SendMessageDeleteNotification(logChannelID, tCached, deletedBy); err != nil {
-			slog.Error("Failed to send message delete notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
+			mes.logger.Error("Failed to send message delete notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
 		} else {
-			slog.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
+			mes.logger.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
 		}
 	}
 
@@ -856,20 +859,20 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordg
 		if err := mes.messageCreateWriter.Enqueue(record, version, metric); err == nil {
 			return
 		} else {
-			slog.Warn("MessageCreate: async writer enqueue failed; falling back to synchronous persistence", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+			mes.logger.Warn("MessageCreate: async writer enqueue failed; falling back to synchronous persistence", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 		}
 	}
 
 	if err := mes.store.UpsertMessage(record); err != nil {
-		slog.Warn("MessageCreate: failed to persist message cache entry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+		mes.logger.Warn("MessageCreate: failed to persist message cache entry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 	}
 	if version != nil {
 		if err := mes.store.InsertMessageVersion(*version); err != nil {
-			slog.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+			mes.logger.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 		}
 	}
 	if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, now); err != nil {
-		slog.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
+		mes.logger.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 	}
 }
 
@@ -909,16 +912,16 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 		if err := mes.messageCreateWriter.Enqueue(record, version, storage.DailyMessageCountDelta{}); err == nil {
 			return
 		} else {
-			slog.Warn("MessageUpdate: async writer enqueue failed; falling back to synchronous persistence", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+			mes.logger.Warn("MessageUpdate: async writer enqueue failed; falling back to synchronous persistence", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
 		}
 	}
 
 	if err := mes.store.UpsertMessage(record); err != nil {
-		slog.Warn("MessageUpdate: failed to persist updated message cache entry", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+		mes.logger.Warn("MessageUpdate: failed to persist updated message cache entry", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
 	}
 	if version != nil {
 		if err := mes.store.InsertMessageVersion(*version); err != nil {
-			slog.Warn("MessageUpdate: failed to persist message edit version", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
+			mes.logger.Warn("MessageUpdate: failed to persist message edit version", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
 		}
 	}
 }
@@ -954,17 +957,17 @@ func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, dele
 		if err == nil {
 			return
 		}
-		slog.Warn("MessageDelete: async writer enqueue failed; falling back to synchronous persistence", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
+		mes.logger.Warn("MessageDelete: async writer enqueue failed; falling back to synchronous persistence", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
 	}
 
 	if version != nil {
 		if err := mes.store.InsertMessageVersion(*version); err != nil {
-			slog.Warn("MessageDelete: failed to persist message delete version", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
+			mes.logger.Warn("MessageDelete: failed to persist message delete version", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
 		}
 	}
 	if deleteFromStore {
 		if err := mes.store.DeleteMessage(cached.GuildID, cached.ID); err != nil {
-			slog.Warn("MessageDelete: failed to delete message cache entry", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "error", err)
+			mes.logger.Warn("MessageDelete: failed to delete message cache entry", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "error", err)
 		}
 	}
 }
