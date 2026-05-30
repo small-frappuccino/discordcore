@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, progress QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
@@ -73,7 +71,11 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 }
 
 func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "list qotd official posts pending recovery") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list qotd official posts pending recovery: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil

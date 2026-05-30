@@ -7,8 +7,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 var (
@@ -184,7 +182,11 @@ func (mgr *ConfigManager) GetPartnerBoard(guildID string) (PartnerBoardConfig, e
 
 // ListPartners lists partner records for a guild in canonical deterministic order.
 func (mgr *ConfigManager) ListPartners(guildID string) (_ []PartnerEntryConfig, err error) {
-	defer func() { err = errutil.Wrap(err, "list partners") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list partners: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return nil, invalidPartnerBoardInput("guild_id is required")
@@ -207,7 +209,11 @@ func (mgr *ConfigManager) ListPartners(guildID string) (_ []PartnerEntryConfig, 
 
 // Partner retrieves one partner by name (case-insensitive).
 func (mgr *ConfigManager) Partner(guildID, name string) (_ PartnerEntryConfig, err error) {
-	defer func() { err = errutil.Wrap(err, "get partner") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("get partner: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return PartnerEntryConfig{}, invalidPartnerBoardInput("guild_id is required")
@@ -245,7 +251,11 @@ func (mgr *ConfigManager) GetPartner(guildID, name string) (PartnerEntryConfig, 
 
 // CreatePartner creates a new partner record (dedupe by name/link).
 func (mgr *ConfigManager) CreatePartner(guildID string, partner PartnerEntryConfig) (err error) {
-	defer func() { err = errutil.Wrap(err, "create partner") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("create partner: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidPartnerBoardInput("guild_id is required")
@@ -279,7 +289,11 @@ func (mgr *ConfigManager) CreatePartner(guildID string, partner PartnerEntryConf
 
 // UpdatePartner updates one existing partner selected by current name (case-insensitive).
 func (mgr *ConfigManager) UpdatePartner(guildID, currentName string, partner PartnerEntryConfig) (err error) {
-	defer func() { err = errutil.Wrap(err, "update partner") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("update partner: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidPartnerBoardInput("guild_id is required")
@@ -323,7 +337,11 @@ func (mgr *ConfigManager) UpdatePartner(guildID, currentName string, partner Par
 
 // DeletePartner deletes one partner by name (case-insensitive).
 func (mgr *ConfigManager) DeletePartner(guildID, name string) (err error) {
-	defer func() { err = errutil.Wrap(err, "delete partner") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("delete partner: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidPartnerBoardInput("guild_id is required")

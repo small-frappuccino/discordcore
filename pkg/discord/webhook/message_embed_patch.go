@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 // MessageEmbedPatch defines the payload for editing an existing webhook message.
@@ -25,7 +24,11 @@ type MessageEmbedPatch struct {
 // - an embeds array
 // - an object containing { "embeds": [...] }
 func PatchMessageEmbed(session *discordgo.Session, patch MessageEmbedPatch) (err error) {
-	defer func() { err = errutil.Wrap(err, "patch webhook message embed") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("patch webhook message embed: %w", err)
+		}
+	}()
 	if session == nil {
 		return errors.New("nil discord session")
 	}

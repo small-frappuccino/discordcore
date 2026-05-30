@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 const (
@@ -137,7 +135,11 @@ func NormalizeReactionBlockConfig(in ReactionBlockConfig) (ReactionBlockConfig, 
 }
 
 func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (_ ReactionBlockConfig, err error) {
-	defer func() { err = errutil.Wrap(err, "get reaction block config") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("get reaction block config: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return ReactionBlockConfig{}, invalidReactionBlockInput("guild_id is required")
@@ -163,7 +165,11 @@ func (mgr *ConfigManager) GetReactionBlockConfig(guildID string) (ReactionBlockC
 }
 
 func (mgr *ConfigManager) SetReactionBlockConfig(guildID string, cfg ReactionBlockConfig) (err error) {
-	defer func() { err = errutil.Wrap(err, "set reaction block config") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("set reaction block config: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidReactionBlockInput("guild_id is required")

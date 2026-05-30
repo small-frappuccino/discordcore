@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"log/slog"
-
-	"github.com/small-frappuccino/discordcore/pkg/errors"
 )
 
 // BaseService provides common functionality for all services. Services that
@@ -30,7 +28,7 @@ type BaseService struct {
 	stopTime     *time.Time
 	restartCount int
 	errorCount   int
-	lastError    *errors.ServiceError
+	lastError    error
 
 	// Health monitoring
 	lastHealthCheck time.Time
@@ -96,14 +94,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 		if err := bs.startHook(ctx); err != nil {
 			bs.state = StateError
 			bs.errorCount++
-			serviceErr := errors.NewServiceError(
-				errors.CategoryService,
-				errors.SeverityHigh,
-				bs.name,
-				"start",
-				"Service start hook failed",
-				err,
-			)
+			serviceErr := fmt.Errorf("service start hook failed: %w", err)
 			bs.lastError = serviceErr
 			slog.Error("Service start failed", "service", bs.name, "err", err)
 			return serviceErr
@@ -137,14 +128,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 	if bs.stopHook != nil {
 		if err := bs.stopHook(ctx); err != nil {
 			bs.errorCount++
-			serviceErr := errors.NewServiceError(
-				errors.CategoryService,
-				errors.SeverityMedium,
-				bs.name,
-				"stop",
-				"Service stop hook failed",
-				err,
-			)
+			serviceErr := fmt.Errorf("service stop hook failed: %w", err)
 			bs.lastError = serviceErr
 			bs.state = StateError
 			slog.Error("Service stop failed", "service", bs.name, "err", err)
@@ -216,7 +200,8 @@ func (bs *BaseService) Stats() ServiceStats {
 	}
 
 	if bs.lastError != nil {
-		stats.LastError = &bs.lastError.Timestamp
+		now := time.Now()
+		stats.LastError = &now
 	}
 
 	return stats
@@ -252,7 +237,7 @@ func (bs *BaseService) IncrementRestartCount() {
 }
 
 // RecordError records an error
-func (bs *BaseService) RecordError(err *errors.ServiceError) {
+func (bs *BaseService) RecordError(err error) {
 	bs.stateMutex.Lock()
 	defer bs.stateMutex.Unlock()
 	bs.errorCount++
@@ -268,7 +253,7 @@ func (bs *BaseService) getDefaultHealthMessage() string {
 		return "Service is stopped"
 	case StateError:
 		if bs.lastError != nil {
-			return fmt.Sprintf("Service error: %s", bs.lastError.Message)
+			return fmt.Sprintf("Service error: %v", bs.lastError)
 		}
 		return "Service is in error state"
 	case StateInitializing:
@@ -390,14 +375,7 @@ func (ms *ManagedService) SetAutoRestart(enabled bool, maxRestarts int, delay ti
 
 // HandleError processes service errors and potentially triggers restarts
 func (ms *ManagedService) HandleError(err error) {
-	serviceErr := errors.NewServiceError(
-		errors.CategoryService,
-		errors.SeverityMedium,
-		ms.name,
-		"runtime",
-		"Service encountered an error during operation",
-		err,
-	)
+	serviceErr := fmt.Errorf("service encountered an error during operation: %w", err)
 
 	ms.RecordError(serviceErr)
 

@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 type qotdRowScanner interface {
@@ -16,7 +14,11 @@ type qotdRowScanner interface {
 }
 
 func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (res *QOTDQuestionRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "create qotd question") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("create qotd question: %w", err)
+		}
+	}()
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
 		return nil, err
@@ -92,7 +94,11 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 }
 
 func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (_ *QOTDQuestionRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "update qotd question") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("update qotd question: %w", err)
+		}
+	}()
 	if rec.ID <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}
@@ -204,7 +210,11 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 }
 
 func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, questionID int64) (err error) {
-	defer func() { err = errutil.Wrap(err, "delete qotd question") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("delete qotd question: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || questionID <= 0 {
 		return nil
@@ -241,7 +251,11 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 }
 
 func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, deckIDs []string) (err error) {
-	defer func() { err = errutil.Wrap(err, "delete qotd questions by decks") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("delete qotd questions by decks: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil
@@ -274,7 +288,11 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 }
 
 func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ []QOTDQuestionRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "list qotd questions") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list qotd questions: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -360,7 +378,11 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 }
 
 func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) (err error) {
-	defer func() { err = errutil.Wrap(err, "reorder qotd questions") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("reorder qotd questions: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -449,7 +471,11 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 }
 
 func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time, selector QOTDQuestionSelector) (_ *QOTDQuestionRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "reserve qotd question") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("reserve qotd question: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -539,7 +565,11 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 }
 
 func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string, selector QOTDQuestionSelector) (_ *QOTDQuestionRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "reserve ready qotd question") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("reserve ready qotd question: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" {
@@ -630,7 +660,11 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 // currently running. Returns the freed question IDs in queue order so callers
 // can log or test the cleanup deterministically.
 func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) (_ []int64, err error) {
-	defer func() { err = errutil.Wrap(err, "reclaim orphan qotd reservations") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil

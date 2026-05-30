@@ -417,7 +417,7 @@ func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing
 	withoutCapability := NewCommandHandler(nil, cfgMgr)
 	withoutCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
 	withoutCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
-	withoutCapability.SetAdminCommandServices(service.NewServiceManager(nil))
+	withoutCapability.SetAdminCommandServices(service.NewServiceManager())
 	if err := withoutCapability.registerCommandCatalog(); err != nil {
 		t.Fatalf("register admin catalog without capability: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing
 	withCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
 	withCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
 	withCapability.SetCommandCatalogCapabilities(CommandCatalogCapabilities{Admin: true})
-	withCapability.SetAdminCommandServices(service.NewServiceManager(nil))
+	withCapability.SetAdminCommandServices(service.NewServiceManager())
 	if err := withCapability.registerCommandCatalog(); err != nil {
 		t.Fatalf("register admin catalog with capability: %v", err)
 	}

@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 var (
@@ -41,7 +39,11 @@ func (mgr *ConfigManager) ListWebhookEmbedUpdates(guildID string) ([]WebhookEmbe
 
 // GetWebhookEmbedUpdate fetches one entry by message_id from the target scope.
 func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (_ WebhookEmbedUpdateConfig, err error) {
-	defer func() { err = errutil.Wrap(err, "get webhook embed update") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("get webhook embed update: %w", err)
+		}
+	}()
 	targetID := strings.TrimSpace(messageID)
 	if targetID == "" {
 		return WebhookEmbedUpdateConfig{}, fmt.Errorf("message_id is required")
@@ -70,7 +72,11 @@ func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (_ We
 
 // CreateWebhookEmbedUpdate appends a new entry to the target scope.
 func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update WebhookEmbedUpdateConfig) (err error) {
-	defer func() { err = errutil.Wrap(err, "create webhook embed update") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("create webhook embed update: %w", err)
+		}
+	}()
 	scope := normalizeWebhookScope(guildID)
 
 	normalized, err := normalizeWebhookEmbedUpdateConfig(update)
@@ -91,7 +97,11 @@ func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update Webhoo
 
 // UpdateWebhookEmbedUpdate replaces an existing entry selected by message_id.
 func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, update WebhookEmbedUpdateConfig) (err error) {
-	defer func() { err = errutil.Wrap(err, "update webhook embed update") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("update webhook embed update: %w", err)
+		}
+	}()
 	scope := normalizeWebhookScope(guildID)
 	targetID := strings.TrimSpace(messageID)
 	if targetID == "" {
@@ -124,7 +134,11 @@ func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, up
 
 // DeleteWebhookEmbedUpdate removes an entry from the target scope.
 func (mgr *ConfigManager) DeleteWebhookEmbedUpdate(guildID, messageID string) (err error) {
-	defer func() { err = errutil.Wrap(err, "delete webhook embed update") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("delete webhook embed update: %w", err)
+		}
+	}()
 	scope := normalizeWebhookScope(guildID)
 	targetID := strings.TrimSpace(messageID)
 	if targetID == "" {

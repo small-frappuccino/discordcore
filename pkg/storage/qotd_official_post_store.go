@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (res *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	normalized, err := normalizeQOTDOfficialPostRecord(rec)
 	if err != nil {
 		return nil, err
@@ -112,7 +109,11 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 }
 
 func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, questionListThreadID, questionListEntryMessageID, discordThreadID, starterMessageID, answerChannelID string, publishedAt time.Time) (_ *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "finalize qotd official post") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("finalize qotd official post: %w", err)
+		}
+	}()
 	if id <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}
@@ -185,7 +186,6 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 }
 
 func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	if id <= 0 {
 		return nil, nil
 	}
@@ -232,7 +232,6 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOT
 }
 
 func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (res *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
@@ -296,7 +295,11 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 }
 
 func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "list qotd official posts by date") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list qotd official posts by date: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
@@ -370,7 +373,6 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 }
 
 func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (res *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
@@ -436,7 +438,6 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 }
 
 func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (res *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
@@ -500,7 +501,6 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 	return record, nil
 }
 func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (count int, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
@@ -523,7 +523,6 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 }
 
 func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) (err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	if id <= 0 {
 		return nil
 	}
@@ -535,7 +534,6 @@ func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) (err e
 }
 
 func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (count int, err error) {
-	defer func() { err = errutil.Wrap(err, "") }()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {

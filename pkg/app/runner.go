@@ -15,8 +15,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
-	"github.com/small-frappuccino/discordcore/pkg/errors"
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
@@ -102,14 +100,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// Runtime hot-apply manager (theme + ALICE_DISABLE_* toggles)
 	// NOTE: The /config runtime panel triggers Apply() after persisting config changes.
 	var runtimeApplier *runtimeapply.Manager
-
-	// Global error handler
-	if err := errutil.InitializeGlobalErrorHandler(log.GlobalLogger); err != nil {
-		return fmt.Errorf("initialize global error handler: %w", err)
-	}
-
-	// Error handler for service manager
-	errorHandler := errors.NewErrorHandler()
 
 	msg := formatStartupMessage(appName, AppVersion(), Version)
 	log.ApplicationLogger().Info(msg)
@@ -346,7 +336,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		configManager:            configManager,
 		store:                    store,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
-		errorHandler:             errorHandler,
 		runtimeApplier:           runtimeApplier,
 		qotdCommandService:       qotdService,
 		qotdLifecycleService:     qotdService,

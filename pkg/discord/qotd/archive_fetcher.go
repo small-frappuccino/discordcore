@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 type ArchivedMessage struct {
@@ -33,7 +33,11 @@ func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.
 }
 
 func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, threadID string) (collected []*discordgo.Message, err error) {
-	defer func() { err = errutil.Wrap(err, "fetch qotd thread messages") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("fetch qotd thread messages: %w", err)
+		}
+	}()
 	if session == nil {
 		return nil, errors.New("discord session is required")
 	}

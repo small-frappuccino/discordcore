@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (res *QOTDSurfaceRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "get qotd surface by deck") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("get qotd surface by deck: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
@@ -43,7 +45,11 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 }
 
 func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (res *QOTDSurfaceRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "upsert qotd surface") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("upsert qotd surface: %w", err)
+		}
+	}()
 	normalized, err := normalizeQOTDSurfaceRecord(rec)
 	if err != nil {
 		return nil, err
@@ -83,7 +89,11 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 }
 
 func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (err error) {
-	defer func() { err = errutil.Wrap(err, "delete qotd surface by deck") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("delete qotd surface by deck: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
 	if guildID == "" || deckID == "" {
@@ -101,7 +111,11 @@ func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID str
 }
 
 func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessageRecord) (res *QOTDAnswerMessageRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "create qotd answer message") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("create qotd answer message: %w", err)
+		}
+	}()
 	normalized, err := normalizeQOTDAnswerMessageRecord(rec)
 	if err != nil {
 		return nil, err
@@ -151,7 +165,11 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 }
 
 func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discordMessageID string) (_ *QOTDAnswerMessageRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "finalize qotd answer message") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("finalize qotd answer message: %w", err)
+		}
+	}()
 	if id <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}
@@ -190,7 +208,11 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 }
 
 func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, officialPostID int64, userID string) (res *QOTDAnswerMessageRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "get qotd answer message by official post and user") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("get qotd answer message by official post and user: %w", err)
+		}
+	}()
 	userID = strings.TrimSpace(userID)
 	if officialPostID <= 0 || userID == "" {
 		return nil, nil
@@ -226,7 +248,11 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 }
 
 func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ []QOTDAnswerMessageRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "list qotd answer messages by official post") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list qotd answer messages by official post: %w", err)
+		}
+	}()
 	if officialPostID <= 0 {
 		return nil, nil
 	}
@@ -270,7 +296,11 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 }
 
 func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (_ *QOTDAnswerMessageRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "update qotd answer message state") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("update qotd answer message state: %w", err)
+		}
+	}()
 	if id <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}

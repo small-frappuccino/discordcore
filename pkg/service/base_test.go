@@ -4,8 +4,6 @@ import (
 	"context"
 	stdErrors "errors"
 	"testing"
-
-	serviceerrors "github.com/small-frappuccino/discordcore/pkg/errors"
 )
 
 func TestBaseServiceStopReturnsErrorAndKeepsErrorState(t *testing.T) {
@@ -81,7 +79,7 @@ func TestServiceManagerStopFailureLeavesServiceInErrorState(t *testing.T) {
 		return stopErr
 	})
 
-	manager := NewServiceManager(serviceerrors.NewErrorHandler())
+	manager := NewServiceManager()
 	if err := manager.Register(svc); err != nil {
 		t.Fatalf("register service: %v", err)
 	}

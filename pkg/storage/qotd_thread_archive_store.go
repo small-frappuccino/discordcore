@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "list current and previous qotd posts") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list current and previous qotd posts: %w", err)
+		}
+	}()
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		return nil, nil
@@ -79,7 +81,11 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 }
 
 func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "list qotd official posts needing archive") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("list qotd official posts needing archive: %w", err)
+		}
+	}()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -141,7 +147,11 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 }
 
 func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (_ *QOTDOfficialPostRecord, err error) {
-	defer func() { err = errutil.Wrap(err, "update qotd official post state") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("update qotd official post state: %w", err)
+		}
+	}()
 	if id <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}

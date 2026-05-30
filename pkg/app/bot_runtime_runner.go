@@ -11,7 +11,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
-	coreerrors "github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -28,7 +27,6 @@ type botRuntimeOptions struct {
 	configManager            *files.ConfigManager
 	store                    *storage.Store
 	commandCatalogRegistrars []commands.CommandCatalogRegistrar
-	errorHandler             *coreerrors.ErrorHandler
 	runtimeApplier           *runtimeapply.Manager
 	qotdCommandService       *applicationqotd.Service
 	qotdLifecycleService     discordqotd.GuildLifecycleService
@@ -81,7 +79,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		"sharedLimiter", routerConfig.ExecutionLimiter != nil,
 	)
 
-	runtime.serviceManager = service.NewServiceManager(opts.errorHandler)
+	runtime.serviceManager = service.NewServiceManager()
 	var monitoringService *logging.MonitoringService
 	var unifiedCache *cache.UnifiedCache
 	if runtime.capabilities.monitoring {

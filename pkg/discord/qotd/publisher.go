@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 const (
@@ -290,7 +289,11 @@ func (post *PublishedOfficialPost) withPostURL(guildID, channelID string) *Publi
 }
 
 func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) (err error) {
-	defer func() { err = errutil.Wrap(err, "set qotd thread state") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("set qotd thread state: %w", err)
+		}
+	}()
 	if session == nil {
 		return errors.New("discord session is required")
 	}

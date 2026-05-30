@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -47,15 +46,9 @@ func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*disc
 	// Add detailed logging for session creation
 	log.DiscordLogger().Info("Creating Discord session (token redacted)")
 
-	if err := errutil.HandleDiscordError("create_session", func() error {
-		var sessionErr error
-		s, sessionErr = newSession("Bot " + token)
-		if sessionErr != nil {
-			log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to create Discord session: %v", sessionErr))
-		}
-		return sessionErr
-	}); err != nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("Error during session creation: %v", err))
+	s, err := newSession("Bot " + token)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to create Discord session: %v", err))
 		return nil, fmt.Errorf(ErrSessionCreationFailed, err)
 	}
 
@@ -67,13 +60,7 @@ func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*disc
 
 	// Add logging for connection
 	log.DiscordLogger().Info("Connecting to Discord...")
-	if err := errutil.HandleDiscordError("connect", func() error {
-		connectErr := openSession(s)
-		if connectErr != nil {
-			log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to connect to Discord: %v", connectErr))
-		}
-		return connectErr
-	}); err != nil {
+	if err := openSession(s); err != nil {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Error during connection: %v", err))
 		// Clean up session if connection failed
 		if s != nil {

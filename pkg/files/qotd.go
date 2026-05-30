@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 var (
@@ -396,7 +394,11 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 
 // QOTDConfig returns the canonical QOTD config for one guild.
 func (mgr *ConfigManager) QOTDConfig(guildID string) (_ QOTDConfig, err error) {
-	defer func() { err = errutil.Wrap(err, "get qotd config") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("get qotd config: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return QOTDConfig{}, invalidQOTDInput("guild_id is required")
@@ -424,7 +426,11 @@ func (mgr *ConfigManager) GetQOTDConfig(guildID string) (QOTDConfig, error) {
 
 // SetQOTDConfig validates and persists the QOTD config for one guild.
 func (mgr *ConfigManager) SetQOTDConfig(guildID string, cfg QOTDConfig) (err error) {
-	defer func() { err = errutil.Wrap(err, "set qotd config") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("set qotd config: %w", err)
+		}
+	}()
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidQOTDInput("guild_id is required")

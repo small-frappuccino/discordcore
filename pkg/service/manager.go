@@ -10,7 +10,6 @@ import (
 
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -119,26 +118,24 @@ type Service interface {
 
 // ServiceInfo holds metadata about a registered service
 type ServiceInfo struct {
-	Service       Service              `json:"-"`
-	State         ServiceState         `json:"state"`
-	LastStateTime time.Time            `json:"last_state_time"`
-	StartTime     *time.Time           `json:"start_time,omitempty"`
-	StopTime      *time.Time           `json:"stop_time,omitempty"`
-	RestartCount  int                  `json:"restart_count"`
-	ErrorCount    int                  `json:"error_count"`
-	LastError     *errors.ServiceError `json:"last_error,omitempty"`
+	Service       Service      `json:"-"`
+	State         ServiceState `json:"state"`
+	LastStateTime time.Time    `json:"last_state_time"`
+	StartTime     *time.Time   `json:"start_time,omitempty"`
+	StopTime      *time.Time   `json:"stop_time,omitempty"`
+	RestartCount  int          `json:"restart_count"`
+	ErrorCount    int          `json:"error_count"`
+	LastError     error        `json:"last_error,omitempty"`
 }
 
 // ServiceManager coordinates the lifecycle of all services
 type ServiceManager struct {
-	services     map[string]*ServiceInfo
-	dependsOn    map[string][]string // service -> dependencies
-	dependents   map[string][]string // service -> dependents
-	mu           sync.RWMutex
-	ctx          context.Context
-	cancel       context.CancelFunc
-	errorHandler *errors.ErrorHandler
-
+	services   map[string]*ServiceInfo
+	dependsOn  map[string][]string // service -> dependencies
+	dependents map[string][]string // service -> dependents
+	mu         sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
 	// Stop channel for health monitor
 	healthStop     chan struct{}
 	healthStopOnce sync.Once
@@ -151,7 +148,7 @@ type ServiceManager struct {
 }
 
 // NewServiceManager creates a new service manager
-func NewServiceManager(errorHandler *errors.ErrorHandler) *ServiceManager {
+func NewServiceManager() *ServiceManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &ServiceManager{
@@ -161,7 +158,6 @@ func NewServiceManager(errorHandler *errors.ErrorHandler) *ServiceManager {
 		ctx:             ctx,
 		cancel:          cancel,
 		healthStop:      make(chan struct{}),
-		errorHandler:    errorHandler,
 		shutdownTimeout: 30 * time.Second,
 		healthInterval:  5 * time.Minute,
 		maxRestarts:     3,
@@ -301,20 +297,11 @@ func (sm *ServiceManager) StartService(name string) error {
 
 	log.ApplicationLogger().Info("Starting service...", "service", name)
 
-	err := sm.errorHandler.HandleWithRetry(ctx, "start_service", name, func() error {
-		return info.Service.Start(ctx)
-	})
+	err := info.Service.Start(ctx)
 
 	sm.mu.Lock()
 	if err != nil {
-		serviceErr := errors.NewServiceError(
-			errors.CategoryService,
-			errors.SeverityHigh,
-			name,
-			"start",
-			"Service failed to start",
-			err,
-		)
+		serviceErr := fmt.Errorf("service failed to start: %w", err)
 		info.LastError = serviceErr
 		info.ErrorCount++
 		sm.updateServiceState(info, StateError)
@@ -365,14 +352,7 @@ func (sm *ServiceManager) StopService(name string) error {
 
 	sm.mu.Lock()
 	if err != nil {
-		serviceErr := errors.NewServiceError(
-			errors.CategoryService,
-			errors.SeverityMedium,
-			name,
-			"stop",
-			"Service failed to stop cleanly",
-			err,
-		)
+		serviceErr := fmt.Errorf("service failed to stop cleanly: %w", err)
 		info.LastError = serviceErr
 		info.ErrorCount++
 		sm.updateServiceState(info, StateError)

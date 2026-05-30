@@ -4,13 +4,12 @@ import (
 	"context"
 	"testing"
 
-	coreerrors "github.com/small-frappuccino/discordcore/pkg/errors"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
 func TestManagerApply_IgnoresAutomodServiceStartStopErrors(t *testing.T) {
-	serviceManager := service.NewServiceManager(coreerrors.NewErrorHandler())
+	serviceManager := service.NewServiceManager()
 	manager := New(serviceManager, nil)
 	manager.SetInitial(files.RuntimeConfig{DisableAutomodLogs: false})
 

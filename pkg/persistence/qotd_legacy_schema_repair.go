@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
-	"github.com/small-frappuccino/discordcore/pkg/errutil"
 )
 
 func repairQOTDLegacySchema(ctx context.Context, tx *sql.Tx) (err error) {
-	defer func() { err = errutil.Wrap(err, "repair qotd legacy schema") }()
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("repair qotd legacy schema: %w", err)
+		}
+	}()
 	if tx == nil {
 		return fmt.Errorf("transaction is required")
 	}
