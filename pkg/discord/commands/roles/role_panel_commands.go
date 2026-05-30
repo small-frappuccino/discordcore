@@ -1335,9 +1335,14 @@ func (c *rolePanelExportSubCommand) Handle(ctx *core.Context) error {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to format JSON: %v", err))
 	}
 
-	url, err := discord.UploadHastebinContent(context.Background(), data)
+	ownerID := ""
+	if g, err := ctx.Session.State.Guild(ctx.GuildID); err == nil {
+		ownerID = g.OwnerID
+	}
+
+	url, err := discord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
 	if err != nil {
-		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to upload to pastebin: %v", err))
+		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to upload: %v", err))
 	}
 
 	return builder.Success(ctx.Interaction, fmt.Sprintf("Role panel `%s` successfully exported: <%s>", key, url))

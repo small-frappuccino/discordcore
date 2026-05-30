@@ -186,7 +186,9 @@ func (c *partnerUnpostSubCommand) Handle(ctx *core.Context) error {
 					if posting.MessageID == messageID {
 						targetPosting = posting
 						foundPosting = true
-						bc.Postings = append(bc.Postings[:i], bc.Postings[i+1:]...)
+						copy(bc.Postings[i:], bc.Postings[i+1:])
+						bc.Postings[len(bc.Postings)-1] = files.CustomEmbedPostingConfig{}
+						bc.Postings = bc.Postings[:len(bc.Postings)-1]
 						break
 					}
 				}

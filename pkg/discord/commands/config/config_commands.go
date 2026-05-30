@@ -59,6 +59,7 @@ func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 	allowedRoleAddCmd := NewAllowedRoleAddSubCommand(cc.configManager)
 	allowedRoleRemoveCmd := NewAllowedRoleRemoveSubCommand(cc.configManager)
 	allowedRoleListCmd := NewAllowedRoleListSubCommand(cc.configManager)
+	pastebinCmd := NewPastebinConfigSubCommand(cc.configManager)
 	cc.registerConfigSubcommands(router, "",
 		setCmd,
 		getCmd,
@@ -69,6 +70,7 @@ func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 		allowedRoleAddCmd,
 		allowedRoleRemoveCmd,
 		allowedRoleListCmd,
+		pastebinCmd,
 	)
 
 	pingCmd := NewPingCommand()

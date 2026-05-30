@@ -1,0 +1,119 @@
+package files
+
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+// getEncryptionKey derives a 32-byte key from environment variables.
+func getEncryptionKey() []byte {
+	keys := []string{
+		"PASTEBIN_ENCRYPTION_KEY",
+		"ALICE_TOKEN",
+		"DISCORD_TOKEN",
+		"BOT_TOKEN",
+	}
+	var secret string
+	for _, k := range keys {
+		if val := os.Getenv(k); val != "" {
+			secret = val
+			break
+		}
+	}
+	if secret == "" {
+		// Fallback for testing/dev environments.
+		secret = "discordcore-default-fallback-salt-super-secret-key-12345"
+	}
+	hash := sha256.Sum256([]byte(secret))
+	return hash[:]
+}
+
+// Encrypt encrypts plainText using AES-GCM and returns a base64 encoded ciphertext.
+func Encrypt(plainText string) (string, error) {
+	if plainText == "" {
+		return "", nil
+	}
+	key := getEncryptionKey()
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+	cipherText := aesGCM.Seal(nonce, nonce, []byte(plainText), nil)
+	return base64.StdEncoding.EncodeToString(cipherText), nil
+}
+
+// Decrypt decrypts a base64 encoded ciphertext using AES-GCM.
+func Decrypt(cipherText string) (string, error) {
+	if cipherText == "" {
+		return "", nil
+	}
+	data, err := base64.StdEncoding.DecodeString(cipherText)
+	if err != nil {
+		return "", err
+	}
+	key := getEncryptionKey()
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonceSize := aesGCM.NonceSize()
+	if len(data) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+	nonce, actualCipherText := data[:nonceSize], data[nonceSize:]
+	plainText, err := aesGCM.Open(nil, nonce, actualCipherText, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(plainText), nil
+}
+
+// EncryptedString represents a string that is transparently encrypted/decrypted
+// when marshaling/unmarshaling JSON.
+type EncryptedString string
+
+// MarshalJSON encrypts the value before marshaling.
+func (es EncryptedString) MarshalJSON() ([]byte, error) {
+	enc, err := Encrypt(string(es))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(enc)
+}
+
+// UnmarshalJSON decrypts the base64 ciphertext during unmarshaling.
+// If decryption fails, it falls back to storing the raw string, ensuring backwards
+// compatibility and resilience against missing keys.
+func (es *EncryptedString) UnmarshalJSON(data []byte) error {
+	var val string
+	if err := json.Unmarshal(data, &val); err != nil {
+		return err
+	}
+	dec, err := Decrypt(val)
+	if err != nil {
+		// Decryption failed. Fallback to raw string value.
+		*es = EncryptedString(val)
+		return nil
+	}
+	*es = EncryptedString(dec)
+	return nil
+}

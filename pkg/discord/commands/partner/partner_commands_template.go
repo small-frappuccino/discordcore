@@ -45,6 +45,10 @@ func (c *partnerImportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, 
 
 func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
+	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
+		return err
+	}
+	ctx.Acknowledged = true
 	guildID := ctx.GuildID
 
 	var pasteURL string
@@ -57,12 +61,12 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
 
 	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to fetch from pastebin: %v", err), true)
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
 
 	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Invalid embed JSON: %v", err), true)
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Invalid embed JSON: %v", err))
 	}
 
 	var currentTemplate files.PartnerBoardTemplateConfig
@@ -71,10 +75,10 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
 
 	newTemplate := files.ToPartnerBoardTemplate(discohookEmbed, currentTemplate)
 	if err := c.configManager.SetPartnerBoardTemplate(guildID, newTemplate); err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to save imported partner board template: %v", err), true)
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to save imported partner board template: %v", err))
 	}
 
-	return builder.Success(ctx.Interaction, "Successfully imported JSON into partner board template.")
+	return builder.WithContext(ctx).Success(ctx.Interaction, "Successfully imported JSON into partner board template.")
 }
 
 type partnerExportTemplateSubCommand struct {
@@ -103,23 +107,32 @@ func (c *partnerExportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, 
 
 func (c *partnerExportTemplateSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
+	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
+		return err
+	}
+	ctx.Acknowledged = true
 	guildID := ctx.GuildID
 
 	boardCfg, err := c.configManager.PartnerBoard(guildID)
 	if err != nil {
-		return core.NewCommandError("No partner board configuration found for this guild.", true)
+		return builder.WithContext(ctx).Error(ctx.Interaction, "No partner board configuration found for this guild.")
 	}
 
 	discohookJSON := files.FromPartnerBoardTemplate(boardCfg.Template)
 	data, err := json.MarshalIndent(discohookJSON, "", "  ")
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to format JSON: %v", err), true)
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to format JSON: %v", err))
 	}
 
-	url, err := discord.UploadHastebinContent(context.Background(), data)
+	ownerID := ""
+	if g, err := ctx.Session.State.Guild(ctx.GuildID); err == nil {
+		ownerID = g.OwnerID
+	}
+
+	url, err := discord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to upload to pastebin: %v", err), true)
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to upload: %v", err))
 	}
 
-	return builder.Success(ctx.Interaction, fmt.Sprintf("Partner template successfully exported: <%s>", url))
+	return builder.WithContext(ctx).Success(ctx.Interaction, fmt.Sprintf("Partner template successfully exported: <%s>", url))
 }

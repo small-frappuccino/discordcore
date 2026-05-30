@@ -70,6 +70,11 @@ type RuntimeConfig struct {
 
 	// Toggle to disable ephemeral messages for interactive embeds per guild.
 	DisableInteractiveEphemeral bool `json:"disable_interactive_ephemeral,omitempty"`
+
+	// Global Pastebin Credentials (safely encrypted)
+	PastebinDevKey       EncryptedString `json:"pastebin_dev_key,omitempty"`
+	PastebinUserName     EncryptedString `json:"pastebin_user_name,omitempty"`
+	PastebinUserPassword EncryptedString `json:"pastebin_user_password,omitempty"`
 }
 
 // UnmarshalJSON decodes a RuntimeConfig and absorbs legacy persisted keys into
@@ -111,6 +116,9 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		LegacyWebhookEmbedUpdate     WebhookEmbedUpdateConfig     `json:"webhook_embed_update,omitempty"`
 		WebhookEmbedValidation       WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
 		DisableInteractiveEphemeral  bool                         `json:"disable_interactive_ephemeral,omitempty"`
+		PastebinDevKey               EncryptedString              `json:"pastebin_dev_key,omitempty"`
+		PastebinUserName             EncryptedString              `json:"pastebin_user_name,omitempty"`
+		PastebinUserPassword         EncryptedString              `json:"pastebin_user_password,omitempty"`
 	}
 
 	var raw rawRuntimeConfig
@@ -145,6 +153,9 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		WebhookEmbedUpdates:          raw.WebhookEmbedUpdates,
 		WebhookEmbedValidation:       raw.WebhookEmbedValidation,
 		DisableInteractiveEphemeral:  raw.DisableInteractiveEphemeral,
+		PastebinDevKey:               raw.PastebinDevKey,
+		PastebinUserName:             raw.PastebinUserName,
+		PastebinUserPassword:         raw.PastebinUserPassword,
 	}
 
 	if rc.ModerationLogging == nil && strings.TrimSpace(raw.LegacyModerationLogMode) != "" {

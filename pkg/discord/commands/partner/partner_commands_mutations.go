@@ -108,7 +108,9 @@ func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 				found := false
 				for i, p := range bc.Partners {
 					if strings.EqualFold(p.Name, name) {
-						bc.Partners = append(bc.Partners[:i], bc.Partners[i+1:]...)
+						copy(bc.Partners[i:], bc.Partners[i+1:])
+						bc.Partners[len(bc.Partners)-1] = files.PartnerEntryConfig{}
+						bc.Partners = bc.Partners[:len(bc.Partners)-1]
 						found = true
 						break
 					}
@@ -317,10 +319,16 @@ func (c *partnerRefreshSubCommand) Options() []*discordgo.ApplicationCommandOpti
 func (c *partnerRefreshSubCommand) RequiresGuild() bool                            { return true }
 func (c *partnerRefreshSubCommand) RequiresPermissions() bool                      { return true }
 func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
-	if err := c.syncer.SyncConfig(ctx.GuildID, ctx.Session); err != nil {
-		return partnerDetailedCommandError(fmt.Sprintf("Failed to sync partner board: %v", err))
+	builder := core.NewResponseBuilder(ctx.Session)
+	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
+		return err
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner board refreshed successfully.")
+	ctx.Acknowledged = true
+
+	if err := c.syncer.SyncConfig(ctx.GuildID, ctx.Session); err != nil {
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to sync partner board: %v", err))
+	}
+	return builder.WithContext(ctx).Success(ctx.Interaction, "Partner board refreshed successfully.")
 }
 
 func autocompletePartnerNameFocused(ctx *core.Context, cm *files.ConfigManager, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {

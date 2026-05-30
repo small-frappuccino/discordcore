@@ -415,6 +415,12 @@ func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
 		)
 	}
 
+	builder := customEmbedResponseBuilder(ctx.Session)
+	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
+		return err
+	}
+	ctx.Acknowledged = true
+
 	result := c.syncer.Sync(
 		ctx.Session,
 		ctx.GuildID,
@@ -426,7 +432,7 @@ func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
 	if summary == "" {
 		summary = "No postings needed updating."
 	}
-	return customEmbedResponseBuilder(ctx.Session).Success(ctx.Interaction, summary)
+	return builder.WithContext(ctx).Success(ctx.Interaction, summary)
 }
 
 type embedUnpostSubCommand struct {
@@ -817,25 +823,30 @@ func (c *embedImportSubCommand) Handle(ctx *core.Context) error {
 		}
 	}
 
+	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
+		return err
+	}
+	ctx.Acknowledged = true
+
 	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
 	if err != nil {
-		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to fetch from pastebin: %v", err))
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
 
 	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
 	if err != nil {
-		return customEmbedDetailedCommandError(fmt.Sprintf("Invalid embed JSON: %v", err))
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Invalid embed JSON: %v", err))
 	}
 
 	newEmbed := files.ToCustomEmbedConfig(discohookEmbed, key)
 	if err := c.configManager.SetCustomEmbedProperties(guildID, key, newEmbed); err != nil {
-		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to save imported embed properties: %v", err))
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to save imported embed properties: %v", err))
 	}
 	if err := c.configManager.SetCustomEmbedFields(guildID, key, newEmbed.Fields); err != nil {
-		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to save imported embed fields: %v", err))
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to save imported embed fields: %v", err))
 	}
 
-	return builder.Success(ctx.Interaction, fmt.Sprintf("Successfully imported JSON into embed `%s`.", key))
+	return builder.WithContext(ctx).Success(ctx.Interaction, fmt.Sprintf("Successfully imported JSON into embed `%s`.", key))
 }
 
 type embedExportSubCommand struct {
@@ -886,16 +897,26 @@ func (c *embedExportSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
+	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
+		return err
+	}
+	ctx.Acknowledged = true
+
 	discohookJSON := files.FromCustomEmbedConfig(ce)
 	data, err := json.MarshalIndent(discohookJSON, "", "  ")
 	if err != nil {
-		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to format JSON: %v", err))
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to format JSON: %v", err))
 	}
 
-	url, err := discord.UploadHastebinContent(context.Background(), data)
+	ownerID := ""
+	if g, err := ctx.Session.State.Guild(ctx.GuildID); err == nil {
+		ownerID = g.OwnerID
+	}
+
+	url, err := discord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
 	if err != nil {
-		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to upload to pastebin: %v", err))
+		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to upload: %v", err))
 	}
 
-	return builder.Success(ctx.Interaction, fmt.Sprintf("Embed `%s` successfully exported: <%s>", key, url))
+	return builder.WithContext(ctx).Success(ctx.Interaction, fmt.Sprintf("Embed `%s` successfully exported: <%s>", key, url))
 }

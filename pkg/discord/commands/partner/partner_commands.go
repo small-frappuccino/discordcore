@@ -63,9 +63,16 @@ func parseWebhookURL(url string) (string, string, bool) {
 	if len(parts) != 2 {
 		return "", "", false
 	}
-	creds := strings.Split(parts[1], "/")
+
+	pathOnly := parts[1]
+	if idx := strings.IndexAny(pathOnly, "?#"); idx != -1 {
+		pathOnly = pathOnly[:idx]
+	}
+
+	creds := strings.Split(strings.TrimRight(pathOnly, "/"), "/")
 	if len(creds) != 2 {
 		return "", "", false
 	}
+
 	return creds[0], creds[1], true
 }
