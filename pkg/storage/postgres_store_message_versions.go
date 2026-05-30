@@ -159,18 +159,18 @@ func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messa
 		return 0, nil
 	}
 
-	if _, err := tx.ExecContext(ctx, rebind(
+	if _, err := tx.ExecContext(ctx, 
 		`INSERT INTO message_version_counters (guild_id, message_id, last_version)
-         VALUES (?, ?, COALESCE((SELECT MAX(version) FROM messages_history WHERE guild_id=? AND message_id=?), 0))
+         VALUES ($1, $2, COALESCE((SELECT MAX(version) FROM messages_history WHERE guild_id=$3 AND message_id=$4), 0))
          ON CONFLICT (guild_id, message_id) DO NOTHING`,
-	), guildID, messageID, guildID, messageID); err != nil {
+	 guildID, messageID, guildID, messageID); err != nil {
 		return 0, fmt.Errorf("ensure message version counter: %w", err)
 	}
 
 	var lastVersion int64
-	if err := tx.QueryRowContext(ctx, rebind(
-		`SELECT last_version FROM message_version_counters WHERE guild_id=? AND message_id=? FOR UPDATE`,
-	), guildID, messageID).Scan(&lastVersion); err != nil {
+	if err := tx.QueryRowContext(ctx, 
+		`SELECT last_version FROM message_version_counters WHERE guild_id=$1 AND message_id=$2 FOR UPDATE`,
+	 guildID, messageID).Scan(&lastVersion); err != nil {
 		return 0, fmt.Errorf("lock message version counter: %w", err)
 	}
 	return int(lastVersion), nil
@@ -180,9 +180,9 @@ func updateMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, mes
 	if guildID == "" || messageID == "" {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, rebind(
-		`UPDATE message_version_counters SET last_version=? WHERE guild_id=? AND message_id=?`,
-	), lastVersion, guildID, messageID); err != nil {
+	if _, err := tx.ExecContext(ctx, 
+		`UPDATE message_version_counters SET last_version=$1 WHERE guild_id=$2 AND message_id=$3`,
+	 lastVersion, guildID, messageID); err != nil {
 		return fmt.Errorf("update message version counter: %w", err)
 	}
 	return nil
@@ -192,28 +192,38 @@ func insertMessageHistoryBatchTx(ctx context.Context, tx *sql.Tx, versions []Mes
 	if len(versions) == 0 {
 		return nil
 	}
-	return execValuesInChunks(ctx, tx,
+	guildIDs := make([]string, len(versions))
+	messageIDs := make([]string, len(versions))
+	channelIDs := make([]string, len(versions))
+	authorIDs := make([]string, len(versions))
+	versionNums := make([]int, len(versions))
+	eventTypes := make([]string, len(versions))
+	contents := make([]string, len(versions))
+	attachments := make([]int, len(versions))
+	embedsCounts := make([]int, len(versions))
+	stickers := make([]int, len(versions))
+	createdAts := make([]time.Time, len(versions))
+
+	for i, v := range versions {
+		guildIDs[i] = v.GuildID
+		messageIDs[i] = v.MessageID
+		channelIDs[i] = v.ChannelID
+		authorIDs[i] = v.AuthorID
+		versionNums[i] = v.Version
+		eventTypes[i] = v.EventType
+		contents[i] = v.Content
+		attachments[i] = v.Attachments
+		embedsCounts[i] = v.Embeds
+		stickers[i] = v.Stickers
+		createdAts[i] = v.CreatedAt.UTC()
+	}
+
+	_, err := tx.ExecContext(ctx,
 		`INSERT INTO messages_history
          (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
-         VALUES `,
-		` ON CONFLICT(guild_id, message_id, version) DO NOTHING`,
-		len(versions),
-		11,
-		func(args []any, rowIndex int) []any {
-			version := versions[rowIndex]
-			return append(args,
-				version.GuildID,
-				version.MessageID,
-				version.ChannelID,
-				version.AuthorID,
-				version.Version,
-				version.EventType,
-				version.Content,
-				version.Attachments,
-				version.Embeds,
-				version.Stickers,
-				version.CreatedAt.UTC(),
-			)
-		},
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::int[], $6::text[], $7::text[], $8::int[], $9::int[], $10::int[], $11::timestamptz[])
+         ON CONFLICT(guild_id, message_id, version) DO NOTHING`,
+		guildIDs, messageIDs, channelIDs, authorIDs, versionNums, eventTypes, contents, attachments, embedsCounts, stickers, createdAts,
 	)
+	return err
 }

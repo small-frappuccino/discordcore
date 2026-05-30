@@ -25,7 +25,7 @@ func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Tim
 	}
 	_, err := s.exec(
 		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
-         VALUES (?, ?, ?, ?, ?)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT(cache_key) DO UPDATE SET
            data=excluded.data,
            expires_at=excluded.expires_at,
@@ -49,24 +49,36 @@ func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEn
 	}
 
 	cachedAt := time.Now().UTC()
-	return execValuesContext(ctx, s.db,
-		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at) VALUES `,
-		` ON CONFLICT(cache_key) DO UPDATE SET
+	keys := make([]string, len(normalized))
+	cacheTypes := make([]string, len(normalized))
+	datas := make([]string, len(normalized))
+	expiresAts := make([]time.Time, len(normalized))
+	cachedAts := make([]time.Time, len(normalized))
+
+	for i, entry := range normalized {
+		keys[i] = entry.Key
+		cacheTypes[i] = entry.CacheType
+		datas[i] = entry.Data
+		expiresAts[i] = entry.ExpiresAt
+		cachedAts[i] = cachedAt
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[], $5::timestamptz[])
+         ON CONFLICT(cache_key) DO UPDATE SET
 			data=excluded.data,
 			expires_at=excluded.expires_at,
 			cached_at=excluded.cached_at`,
-		len(normalized), 5,
-		func(args []any, idx int) []any {
-			entry := normalized[idx]
-			return append(args, entry.Key, entry.CacheType, entry.Data, entry.ExpiresAt, cachedAt)
-		},
+		keys, cacheTypes, datas, expiresAts, cachedAts,
 	)
+	return err
 }
 
 // GetCacheEntry retrieves a cache entry from persistent storage
 func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt time.Time, ok bool, err error) {
 	row := s.queryRow(
-		`SELECT cache_type, data, expires_at FROM persistent_cache WHERE cache_key=?`,
+		`SELECT cache_type, data, expires_at FROM persistent_cache WHERE cache_key=$1`,
 		key,
 	)
 	err = row.Scan(&cacheType, &data, &expiresAt)
@@ -90,7 +102,7 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 }, error) {
 	rows, err := s.query(
 		`SELECT cache_key, data, expires_at FROM persistent_cache
-         WHERE cache_type=? AND expires_at > ?`,
+         WHERE cache_type=$1 AND expires_at > $2`,
 		cacheType, time.Now().UTC(),
 	)
 	if err != nil {
@@ -119,13 +131,13 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 
 // DeleteCacheEntry removes a cache entry from persistent storage
 func (s *Store) DeleteCacheEntry(key string) error {
-	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key=?`, key)
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key=$1`, key)
 	return err
 }
 
 // CleanupExpiredCacheEntries removes all expired cache entries
 func (s *Store) CleanupExpiredCacheEntries() error {
-	_, err := s.exec(`DELETE FROM persistent_cache WHERE expires_at <= ?`, time.Now().UTC())
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE expires_at <= $1`, time.Now().UTC())
 	return err
 }
 
@@ -134,7 +146,7 @@ func (s *Store) DeleteCacheEntriesByPrefix(prefix string) error {
 	if prefix == "" {
 		return nil
 	}
-	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key LIKE ?`, prefix+"%")
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_key LIKE $1`, prefix+"%")
 	return err
 }
 
@@ -143,7 +155,7 @@ func (s *Store) DeleteCacheEntriesByTypeAndPrefix(cacheType, keyPrefix string) e
 	if cacheType == "" || keyPrefix == "" {
 		return nil
 	}
-	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_type=? AND cache_key LIKE ?`, cacheType, keyPrefix+"%")
+	_, err := s.exec(`DELETE FROM persistent_cache WHERE cache_type=$1 AND cache_key LIKE $2`, cacheType, keyPrefix+"%")
 	return err
 }
 
@@ -160,10 +172,8 @@ type PersistentCacheStats struct {
 // the query so HTTP scrapers do not stall an unhealthy database connection
 // forever.
 func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats, error) {
-	rows, err := s.db.QueryContext(ctx, rebind(
-		`SELECT cache_type, COUNT(*) FROM persistent_cache
-         WHERE expires_at > ? GROUP BY cache_type`,
-	), time.Now().UTC())
+	rows, err := s.db.QueryContext(ctx, `SELECT cache_type, COUNT(*) FROM persistent_cache
+         WHERE expires_at > $1 GROUP BY cache_type`, time.Now().UTC())
 	if err != nil {
 		return PersistentCacheStats{}, err
 	}
@@ -205,7 +215,7 @@ func dailyMetricDay(at time.Time) string {
 func (s *Store) incrementDailyMetricByChannelAndUser(ctx context.Context, tableName, guildID, channelID, userID string, at time.Time) error {
 	query := fmt.Sprintf(
 		`INSERT INTO %s (guild_id, channel_id, user_id, day, count)
-         VALUES (?, ?, ?, ?, 1)
+         VALUES ($1, $2, $3, $4, 1)
          ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
            count = %s.count + 1`,
 		tableName,
@@ -218,7 +228,7 @@ func (s *Store) incrementDailyMetricByChannelAndUser(ctx context.Context, tableN
 func (s *Store) incrementDailyMetricByUser(ctx context.Context, tableName, guildID, userID string, at time.Time) error {
 	query := fmt.Sprintf(
 		`INSERT INTO %s (guild_id, user_id, day, count)
-         VALUES (?, ?, ?, 1)
+         VALUES ($1, $2, $3, 1)
          ON CONFLICT(guild_id, user_id, day) DO UPDATE SET
            count = %s.count + 1`,
 		tableName,
@@ -244,17 +254,28 @@ func (s *Store) IncrementDailyMessageCountsContext(ctx context.Context, deltas [
 		return nil
 	}
 
-	return execValuesContext(ctx, s.db,
-		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count) VALUES `,
-		` ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
+	guildIDs := make([]string, len(normalized))
+	channelIDs := make([]string, len(normalized))
+	userIDs := make([]string, len(normalized))
+	days := make([]string, len(normalized))
+	counts := make([]int64, len(normalized))
+
+	for i, delta := range normalized {
+		guildIDs[i] = delta.GuildID
+		channelIDs[i] = delta.ChannelID
+		userIDs[i] = delta.UserID
+		days[i] = delta.Day
+		counts[i] = delta.Count
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count)
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::date[], $5::bigint[])
+         ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
            count = daily_message_metrics.count + excluded.count`,
-		len(normalized),
-		5,
-		func(args []any, rowIndex int) []any {
-			delta := normalized[rowIndex]
-			return append(args, delta.GuildID, delta.ChannelID, delta.UserID, delta.Day, delta.Count)
-		},
+		guildIDs, channelIDs, userIDs, days, counts,
 	)
+	return err
 }
 
 func normalizeDailyMessageCountDeltas(deltas []DailyMessageCountDelta) []DailyMessageCountDelta {
@@ -344,17 +365,17 @@ func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimensio
 		return nil, nil
 	}
 	baseSQL := fmt.Sprintf(
-		"SELECT %s, SUM(count) FROM %s WHERE guild_id=? AND day>=?",
+		"SELECT %s, SUM(count) FROM %s WHERE guild_id=$1 AND day>=$2",
 		dimension, tableName,
 	)
 	args := []any{guildID, cutoffDay}
 	if channelID != "" {
-		baseSQL += " AND channel_id=?"
+		baseSQL += " AND channel_id=$1"
 		args = append(args, channelID)
 	}
 	baseSQL += fmt.Sprintf(" GROUP BY %s", dimension)
 
-	rows, err := s.db.QueryContext(ctx, rebind(baseSQL), args...)
+	rows, err := s.db.QueryContext(ctx, baseSQL, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +420,7 @@ func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (i
 		return 0, nil
 	}
 	var total sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, rebind(`SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=?`), guildID).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=$1`, guildID).Scan(&total); err != nil {
 		return 0, err
 	}
 	if total.Valid {
@@ -412,7 +433,7 @@ func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID strin
 	if guildID == "" {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, rebind(`SELECT DISTINCT user_id FROM member_joins WHERE guild_id=?`), guildID)
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM member_joins WHERE guild_id=$1`, guildID)
 	if err != nil {
 		return nil, err
 	}
@@ -431,11 +452,11 @@ func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID strin
 }
 
 func (s *Store) SumDailyMemberJoinsSince(ctx context.Context, guildID, cutoffDay string) (int64, error) {
-	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_joins WHERE guild_id=? AND day>=?`, guildID, cutoffDay)
+	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_joins WHERE guild_id=$1 AND day>=$2`, guildID, cutoffDay)
 }
 
 func (s *Store) SumDailyMemberLeavesSince(ctx context.Context, guildID, cutoffDay string) (int64, error) {
-	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=? AND day>=?`, guildID, cutoffDay)
+	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=$1 AND day>=$2`, guildID, cutoffDay)
 }
 
 func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay string) (int64, error) {
@@ -443,7 +464,7 @@ func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay st
 		return 0, nil
 	}
 	var total sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, rebind(query), guildID, cutoffDay).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, query, guildID, cutoffDay).Scan(&total); err != nil {
 		return 0, err
 	}
 	if total.Valid {

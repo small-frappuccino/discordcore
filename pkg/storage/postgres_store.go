@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -105,158 +104,46 @@ func (s *Store) resetQOTDQuestionSequenceWhenEmpty(ctx context.Context) error {
 }
 
 func (s *Store) exec(query string, args ...any) (sql.Result, error) {
-	return s.db.Exec(rebind(query), args...)
+	return s.db.Exec(query, args...)
 }
 
 func (s *Store) execContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return s.db.ExecContext(ctx, rebind(query), args...)
+	return s.db.ExecContext(ctx, query, args...)
 }
 
 func (s *Store) query(query string, args ...any) (*sql.Rows, error) {
-	return s.db.Query(rebind(query), args...)
+	return s.db.Query(query, args...)
 }
 
 func (s *Store) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	return s.db.QueryContext(ctx, rebind(query), args...)
+	return s.db.QueryContext(ctx, query, args...)
 }
 
 func (s *Store) queryRow(query string, args ...any) *sql.Row {
-	return s.db.QueryRow(rebind(query), args...)
+	return s.db.QueryRow(query, args...)
 }
 
 func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return s.db.QueryRowContext(ctx, rebind(query), args...)
+	return s.db.QueryRowContext(ctx, query, args...)
 }
 
 func txExec(tx *sql.Tx, query string, args ...any) (sql.Result, error) {
-	return tx.Exec(rebind(query), args...)
+	return tx.Exec(query, args...)
 }
 
 func txExecContext(ctx context.Context, tx *sql.Tx, query string, args ...any) (sql.Result, error) {
-	return tx.ExecContext(ctx, rebind(query), args...)
+	return tx.ExecContext(ctx, query, args...)
 }
 
 func txQueryRow(tx *sql.Tx, query string, args ...any) *sql.Row {
-	return tx.QueryRow(rebind(query), args...)
+	return tx.QueryRow(query, args...)
 }
 
 func txQueryContext(ctx context.Context, tx *sql.Tx, query string, args ...any) (*sql.Rows, error) {
-	return tx.QueryContext(ctx, rebind(query), args...)
-}
-
-// rebind converts question-mark placeholders to PostgreSQL-style numbered placeholders.
-func rebind(query string) string {
-	if query == "" {
-		return query
-	}
-	var b strings.Builder
-	b.Grow(len(query) + 8)
-	index := 1
-	for i := 0; i < len(query); i++ {
-		if query[i] == '?' {
-			b.WriteString(fmt.Sprintf("$%d", index))
-			index++
-			continue
-		}
-		b.WriteByte(query[i])
-	}
-	return b.String()
+	return tx.QueryContext(ctx, query, args...)
 }
 
 // Close closes the underlying database.
 func (s *Store) Close() error {
 	return s.db.Close()
-}
-
-func execValuesInChunks(ctx context.Context, tx *sql.Tx, prefix, suffix string, rowCount, columnCount int, appendArgs func([]any, int) []any) error {
-	if rowCount == 0 {
-		return nil
-	}
-	if columnCount <= 0 {
-		return fmt.Errorf("column count must be positive")
-	}
-	if appendArgs == nil {
-		return fmt.Errorf("append args callback is nil")
-	}
-
-	for start := 0; start < rowCount; start += storeBulkInsertMaxRows {
-		end := start + storeBulkInsertMaxRows
-		if end > rowCount {
-			end = rowCount
-		}
-
-		var b strings.Builder
-		b.Grow(len(prefix) + len(suffix) + (end-start)*(columnCount*2+4))
-		b.WriteString(prefix)
-
-		args := make([]any, 0, (end-start)*columnCount)
-		for rowIndex := start; rowIndex < end; rowIndex++ {
-			if rowIndex > start {
-				b.WriteByte(',')
-			}
-			b.WriteByte('(')
-			for columnIndex := 0; columnIndex < columnCount; columnIndex++ {
-				if columnIndex > 0 {
-					b.WriteByte(',')
-				}
-				b.WriteByte('?')
-			}
-			b.WriteByte(')')
-			args = appendArgs(args, rowIndex)
-		}
-		b.WriteString(suffix)
-
-		if _, err := txExecContext(ctx, tx, b.String(), args...); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func execValuesContext(ctx context.Context, db *sql.DB, prefix, suffix string, rowCount, columnCount int, appendArgs func([]any, int) []any) error {
-	if db == nil {
-		return fmt.Errorf("database handle is nil")
-	}
-	if rowCount == 0 {
-		return nil
-	}
-	if columnCount <= 0 {
-		return fmt.Errorf("column count must be positive")
-	}
-	if appendArgs == nil {
-		return fmt.Errorf("append args callback is nil")
-	}
-
-	for start := 0; start < rowCount; start += storeBulkInsertMaxRows {
-		end := start + storeBulkInsertMaxRows
-		if end > rowCount {
-			end = rowCount
-		}
-
-		var b strings.Builder
-		b.Grow(len(prefix) + len(suffix) + (end-start)*(columnCount*2+4))
-		b.WriteString(prefix)
-
-		args := make([]any, 0, (end-start)*columnCount)
-		for rowIndex := start; rowIndex < end; rowIndex++ {
-			if rowIndex > start {
-				b.WriteByte(',')
-			}
-			b.WriteByte('(')
-			for columnIndex := 0; columnIndex < columnCount; columnIndex++ {
-				if columnIndex > 0 {
-					b.WriteByte(',')
-				}
-				b.WriteByte('?')
-			}
-			b.WriteByte(')')
-			args = appendArgs(args, rowIndex)
-		}
-		b.WriteString(suffix)
-
-		if _, err := db.ExecContext(ctx, rebind(b.String()), args...); err != nil {
-			return err
-		}
-	}
-	return nil
 }

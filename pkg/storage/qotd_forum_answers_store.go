@@ -62,7 +62,7 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 			channel_id,
 			question_list_thread_id
 		)
-		VALUES (?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (guild_id, deck_id) DO UPDATE
 		SET
 			channel_id = EXCLUDED.channel_id,
@@ -101,7 +101,7 @@ func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID str
 	}
 
 	if _, err := s.execContext(ctx,
-		`DELETE FROM qotd_forum_surfaces WHERE guild_id = ? AND deck_id = ?`,
+		`DELETE FROM qotd_forum_surfaces WHERE guild_id = $1 AND deck_id = $2`,
 		guildID,
 		deckID,
 	); err != nil {
@@ -133,7 +133,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 			closed_at,
 			archived_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING
 			id,
 			guild_id,
@@ -181,9 +181,9 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_answer_messages
 		SET
-			discord_message_id = ?,
+			discord_message_id = $1,
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $2
 		RETURNING
 			id,
 			guild_id,
@@ -312,11 +312,11 @@ func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, stat
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_answer_messages
 		SET
-			state = ?,
-			closed_at = ?,
-			archived_at = ?,
+			state = $1,
+			closed_at = $2,
+			archived_at = $3,
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $4
 		RETURNING
 			id,
 			guild_id,

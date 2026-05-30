@@ -111,7 +111,7 @@ func TestTouchMemberJoin_UpdatesLastSeenWithoutCreatingMissingJoin(t *testing.T)
 		t.Fatalf("UpsertMemberJoin() failed: %v", err)
 	}
 	if _, err := store.db.Exec(
-		rebind(`UPDATE member_joins SET last_seen_at=? WHERE guild_id=? AND user_id=?`),
+		`UPDATE member_joins SET last_seen_at=$1 WHERE guild_id=$2 AND user_id=$3`,
 		staleSeen,
 		guildID,
 		userID,
@@ -204,7 +204,7 @@ func TestUpsertMemberPresenceAndMarkMemberLeftTracksActiveState(t *testing.T) {
 	}
 
 	row := store.db.QueryRow(
-		rebind(`SELECT left_at FROM member_joins WHERE guild_id=? AND user_id=?`),
+		`SELECT left_at FROM member_joins WHERE guild_id=$1 AND user_id=$2`,
 		guildID,
 		userID,
 	)
@@ -262,7 +262,7 @@ func TestUpsertGuildMemberSnapshotsContextPersistsBotFlagsAndReactivatesMembers(
 
 func readMemberLastSeen(store *Store, guildID, userID string) (time.Time, bool, error) {
 	row := store.db.QueryRow(
-		rebind(`SELECT last_seen_at FROM member_joins WHERE guild_id=? AND user_id=?`),
+		`SELECT last_seen_at FROM member_joins WHERE guild_id=$1 AND user_id=$2`,
 		guildID,
 		userID,
 	)

@@ -18,10 +18,10 @@ func (s *Store) SetBotSince(ctx context.Context, guildID string, t time.Time) er
 	_, err := s.execContext(
 		ctx,
 		`INSERT INTO guild_meta (guild_id, bot_since)
-         VALUES (?, ?)
+         VALUES ($1, $2)
          ON CONFLICT(guild_id) DO UPDATE SET
            bot_since = CASE
-             WHEN guild_meta.bot_since IS NULL OR ? < guild_meta.bot_since THEN ?
+             WHEN guild_meta.bot_since IS NULL OR $3 < guild_meta.bot_since THEN $4
              ELSE guild_meta.bot_since
            END`,
 		guildID, t, t, t,
@@ -31,7 +31,7 @@ func (s *Store) SetBotSince(ctx context.Context, guildID string, t time.Time) er
 
 // BotSince returns when the bot was first seen in a guild, if available.
 func (s *Store) BotSince(ctx context.Context, guildID string) (time.Time, bool, error) {
-	row := s.queryRowContext(ctx, `SELECT bot_since FROM guild_meta WHERE guild_id=?`, guildID)
+	row := s.queryRowContext(ctx, `SELECT bot_since FROM guild_meta WHERE guild_id=$1`, guildID)
 	var t sql.NullTime
 	if err := row.Scan(&t); err != nil {
 		if err == sql.ErrNoRows {
@@ -51,7 +51,7 @@ func (s *Store) setRuntimeTimestamp(ctx context.Context, key string, t time.Time
 	}
 	_, err := s.execContext(
 		ctx,
-		`INSERT INTO runtime_meta (key, ts) VALUES (?, ?)
+		`INSERT INTO runtime_meta (key, ts) VALUES ($1, $2)
          ON CONFLICT(key) DO UPDATE SET ts=excluded.ts`,
 		key, t.UTC(),
 	)
@@ -59,7 +59,7 @@ func (s *Store) setRuntimeTimestamp(ctx context.Context, key string, t time.Time
 }
 
 func (s *Store) getRuntimeTimestamp(ctx context.Context, key string) (time.Time, bool, error) {
-	row := s.queryRowContext(ctx, `SELECT ts FROM runtime_meta WHERE key=?`, key)
+	row := s.queryRowContext(ctx, `SELECT ts FROM runtime_meta WHERE key=$1`, key)
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {
 		if err == sql.ErrNoRows {

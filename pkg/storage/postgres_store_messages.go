@@ -39,7 +39,7 @@ func (s *Store) UpsertMessage(m MessageRecord) error {
 	}
 	_, err := s.exec(
 		`INSERT INTO messages (guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT(guild_id, message_id) DO UPDATE SET
            channel_id=excluded.channel_id,
            author_id=excluded.author_id,
@@ -61,9 +61,34 @@ func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageReco
 		return nil
 	}
 
-	return execValuesContext(ctx, s.db,
-		`INSERT INTO messages (guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at) VALUES `,
-		` ON CONFLICT(guild_id, message_id) DO UPDATE SET
+	guildIDs := make([]string, len(normalized))
+	messageIDs := make([]string, len(normalized))
+	channelIDs := make([]string, len(normalized))
+	authorIDs := make([]string, len(normalized))
+	authorUsernames := make([]string, len(normalized))
+	authorAvatars := make([]string, len(normalized))
+	contents := make([]string, len(normalized))
+	cachedAts := make([]time.Time, len(normalized))
+	expiresAts := make([]sql.NullTime, len(normalized))
+
+	for i, record := range normalized {
+		guildIDs[i] = record.GuildID
+		messageIDs[i] = record.MessageID
+		channelIDs[i] = record.ChannelID
+		authorIDs[i] = record.AuthorID
+		authorUsernames[i] = record.AuthorUsername
+		authorAvatars[i] = record.AuthorAvatar
+		contents[i] = record.Content
+		cachedAts[i] = record.CachedAt.UTC()
+		if record.HasExpiry {
+			expiresAts[i] = sql.NullTime{Time: record.ExpiresAt.UTC(), Valid: true}
+		}
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO messages (guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at)
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::timestamptz[])
+         ON CONFLICT(guild_id, message_id) DO UPDATE SET
            channel_id=excluded.channel_id,
            author_id=excluded.author_id,
            author_username=excluded.author_username,
@@ -71,27 +96,9 @@ func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageReco
            content=excluded.content,
            cached_at=excluded.cached_at,
            expires_at=excluded.expires_at`,
-		len(normalized),
-		9,
-		func(args []any, rowIndex int) []any {
-			record := normalized[rowIndex]
-			var expires any
-			if record.HasExpiry {
-				expires = record.ExpiresAt.UTC()
-			}
-			return append(args,
-				record.GuildID,
-				record.MessageID,
-				record.ChannelID,
-				record.AuthorID,
-				record.AuthorUsername,
-				record.AuthorAvatar,
-				record.Content,
-				record.CachedAt.UTC(),
-				expires,
-			)
-		},
+		guildIDs, messageIDs, channelIDs, authorIDs, authorUsernames, authorAvatars, contents, cachedAts, expiresAts,
 	)
+	return err
 }
 
 func normalizeMessageRecords(records []MessageRecord) []MessageRecord {
@@ -128,7 +135,7 @@ func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
 	row := s.queryRow(
 		`SELECT guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at
          FROM messages
-         WHERE guild_id=? AND message_id=? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
+         WHERE guild_id=$1 AND message_id=$2 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
 		guildID, messageID,
 	)
 
@@ -159,7 +166,7 @@ func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
 
 // DeleteMessage removes a message record (no error if absent).
 func (s *Store) DeleteMessage(guildID, messageID string) error {
-	_, err := s.exec(`DELETE FROM messages WHERE guild_id=? AND message_id=?`, guildID, messageID)
+	_, err := s.exec(`DELETE FROM messages WHERE guild_id=$1 AND message_id=$2`, guildID, messageID)
 	return err
 }
 
@@ -171,16 +178,21 @@ func (s *Store) DeleteMessagesContext(ctx context.Context, keys []MessageDeleteK
 		return nil
 	}
 
-	return execValuesContext(ctx, s.db,
-		`DELETE FROM messages USING (VALUES `,
-		`) AS doomed(guild_id, message_id) WHERE messages.guild_id = doomed.guild_id AND messages.message_id = doomed.message_id`,
-		len(normalized),
-		2,
-		func(args []any, rowIndex int) []any {
-			key := normalized[rowIndex]
-			return append(args, key.GuildID, key.MessageID)
-		},
+	guildIDs := make([]string, len(normalized))
+	messageIDs := make([]string, len(normalized))
+
+	for i, key := range normalized {
+		guildIDs[i] = key.GuildID
+		messageIDs[i] = key.MessageID
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM messages 
+         USING UNNEST($1::text[], $2::text[]) AS doomed(guild_id, message_id) 
+         WHERE messages.guild_id = doomed.guild_id AND messages.message_id = doomed.message_id`,
+		guildIDs, messageIDs,
 	)
+	return err
 }
 
 func normalizeMessageDeleteKeys(keys []MessageDeleteKey) []MessageDeleteKey {
@@ -233,7 +245,7 @@ func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
 		retentionDays = 30
 	}
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	result, err := s.exec(`DELETE FROM roles_current WHERE updated_at < ?`, cutoff)
+	result, err := s.exec(`DELETE FROM roles_current WHERE updated_at < $1`, cutoff)
 	if err != nil {
 		return 0, err
 	}
@@ -246,7 +258,7 @@ func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
 		retentionDays = 180
 	}
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	result, err := s.exec(`DELETE FROM avatars_history WHERE changed_at < ?`, cutoff)
+	result, err := s.exec(`DELETE FROM avatars_history WHERE changed_at < $1`, cutoff)
 	if err != nil {
 		return 0, err
 	}

@@ -43,19 +43,19 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			published_once_at
 		)
 		VALUES (
-			?,
-			?,
-			?,
-			?,
+			$1,
+			$2,
+			$3,
+			$4,
 			CASE
-				WHEN ? > 0 THEN ?
-				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
+				WHEN $5 > 0 THEN $6
+				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = $7 AND deck_id = $8), 1)
 			END,
-			COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1),
-			?,
-			?,
-			?,
-			?
+			COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = $9 AND deck_id = $10), 1),
+			$11,
+			$12,
+			$13,
+			$14
 		)
 		RETURNING
 			id,
@@ -116,7 +116,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	var currentDeckID string
 	var currentQueuePosition int64
 	if err := txQueryRow(tx,
-		`SELECT deck_id, queue_position FROM qotd_questions WHERE id = ? AND guild_id = ? FOR UPDATE`,
+		`SELECT deck_id, queue_position FROM qotd_questions WHERE id = $1 AND guild_id = $2 FOR UPDATE`,
 		normalized.ID,
 		normalized.GuildID,
 	).Scan(&currentDeckID, &currentQueuePosition); err != nil {
@@ -132,24 +132,24 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	row := txQueryRow(tx,
 		`UPDATE qotd_questions
 		SET
-			deck_id = ?,
-			body = ?,
-			status = ?,
+			deck_id = $1,
+			body = $2,
+			status = $3,
 			queue_position = CASE
-				WHEN ? > 0 THEN ?
-				WHEN ? THEN COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
+				WHEN $4 > 0 THEN $5
+				WHEN $6 THEN COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = $7 AND deck_id = $8), 1)
 				ELSE queue_position
 			END,
 			display_id = CASE
-				WHEN ? THEN COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = ? AND deck_id = ?), 1)
+				WHEN $9 THEN COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = $10 AND deck_id = $11), 1)
 				ELSE display_id
 			END,
-			created_by = ?,
-			scheduled_for_date_utc = ?,
-			used_at = ?,
-			published_once_at = ?,
+			created_by = $12,
+			scheduled_for_date_utc = $13,
+			used_at = $14,
+			published_once_at = $15,
 			updated_at = NOW()
-		WHERE id = ? AND guild_id = ?
+		WHERE id = $16 AND guild_id = $17
 		RETURNING
 			id,
 			display_id,
@@ -228,7 +228,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 
 	var deckID string
 	if err := txQueryRow(tx,
-		`SELECT deck_id FROM qotd_questions WHERE guild_id = ? AND id = ? FOR UPDATE`,
+		`SELECT deck_id FROM qotd_questions WHERE guild_id = $1 AND id = $2 FOR UPDATE`,
 		guildID,
 		questionID,
 	).Scan(&deckID); err != nil {
@@ -238,7 +238,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 		return err
 	}
 
-	if _, err := txExecContext(ctx, tx, `DELETE FROM qotd_questions WHERE guild_id = ? AND id = ?`, guildID, questionID); err != nil {
+	if _, err := txExecContext(ctx, tx, `DELETE FROM qotd_questions WHERE guild_id = $1 AND id = $2`, guildID, questionID); err != nil {
 		return err
 	}
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
@@ -273,7 +273,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 
 	for _, deckID := range normalizedDeckIDs {
 		if _, err := txExecContext(ctx, tx,
-			`DELETE FROM qotd_questions WHERE guild_id = ? AND deck_id = ?`,
+			`DELETE FROM qotd_questions WHERE guild_id = $1 AND deck_id = $2`,
 			guildID,
 			deckID,
 		); err != nil {
@@ -315,8 +315,8 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 			created_at,
 			updated_at
 		FROM qotd_questions
-		WHERE guild_id = ?
-		  AND (? = '' OR deck_id = ?)
+		WHERE guild_id = $1
+		  AND ($2 = '' OR deck_id = $3)
 		ORDER BY queue_position ASC, id ASC`,
 		guildID,
 		deckID,
@@ -405,8 +405,8 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	rows, err := txQueryContext(ctx, tx,
 		`SELECT id, queue_position
 		FROM qotd_questions
-		WHERE guild_id = ?
-		  AND deck_id = ?
+		WHERE guild_id = $1
+		  AND deck_id = $2
 		ORDER BY queue_position ASC, id ASC
 		FOR UPDATE`,
 		guildID,
@@ -441,7 +441,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	tempBase := maxQueuePosition + int64(len(normalizedIDs))
 	for idx, id := range normalizedIDs {
 		if _, err := txExecContext(ctx, tx,
-			`UPDATE qotd_questions SET queue_position = ?, updated_at = NOW() WHERE guild_id = ? AND deck_id = ? AND id = ?`,
+			`UPDATE qotd_questions SET queue_position = $1, updated_at = NOW() WHERE guild_id = $2 AND deck_id = $3 AND id = $4`,
 			tempBase+int64(idx)+1,
 			guildID,
 			deckID,
@@ -452,7 +452,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	}
 	for idx, id := range normalizedIDs {
 		if _, err := txExecContext(ctx, tx,
-			`UPDATE qotd_questions SET queue_position = ?, updated_at = NOW() WHERE guild_id = ? AND deck_id = ? AND id = ?`,
+			`UPDATE qotd_questions SET queue_position = $1, updated_at = NOW() WHERE guild_id = $2 AND deck_id = $3 AND id = $4`,
 			idx+1,
 			guildID,
 			deckID,
@@ -534,9 +534,9 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		`UPDATE qotd_questions
 		SET
 			status = 'reserved',
-			scheduled_for_date_utc = ?,
+			scheduled_for_date_utc = $1,
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $2
 		RETURNING
 			id,
 			display_id,
@@ -625,7 +625,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		SET
 			status = 'reserved',
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $1
 		RETURNING
 			id,
 			display_id,
@@ -680,10 +680,10 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 			status = 'ready',
 			scheduled_for_date_utc = NULL,
 			updated_at = NOW()
-		 WHERE q.guild_id = ?
+		 WHERE q.guild_id = $1
 		   AND q.status = 'reserved'
 		   AND q.scheduled_for_date_utc IS NOT NULL
-		   AND q.scheduled_for_date_utc < ?
+		   AND q.scheduled_for_date_utc < $2
 		   AND NOT EXISTS (
 		     SELECT 1
 		     FROM qotd_official_posts p
@@ -871,7 +871,7 @@ func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx *sql.Tx, guildID, d
 	if _, err := txExecContext(ctx, tx,
 		`UPDATE qotd_questions
 		SET display_id = -id
-		WHERE guild_id = ? AND deck_id = ?`,
+		WHERE guild_id = $1 AND deck_id = $2`,
 		guildID,
 		deckID,
 	); err != nil {
@@ -884,8 +884,8 @@ func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx *sql.Tx, guildID, d
 				id,
 				ROW_NUMBER() OVER (ORDER BY queue_position ASC, id ASC)::BIGINT AS next_display_id
 			FROM qotd_questions
-			WHERE guild_id = ?
-			  AND deck_id = ?
+			WHERE guild_id = $1
+			  AND deck_id = $2
 		)
 		UPDATE qotd_questions AS questions
 		SET display_id = ordered.next_display_id

@@ -44,9 +44,9 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			last_reconciled_at
 		)
 		VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-			COALESCE((SELECT MAX(publish_ordinal) FROM qotd_official_posts WHERE guild_id = ? AND deck_id = ?), 0) + 1,
-			?, ?, ?, ?, ?, ?
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+			COALESCE((SELECT MAX(publish_ordinal) FROM qotd_official_posts WHERE guild_id = $17 AND deck_id = $18), 0) + 1,
+			$19, $20, $21, $22, $23, $24
 		)
 		RETURNING
 			id,
@@ -135,14 +135,14 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_official_posts
 		SET
-			question_list_thread_id = ?,
-			question_list_entry_message_id = ?,
-			discord_thread_id = ?,
-			discord_starter_message_id = ?,
-			answer_channel_id = ?,
-			published_at = ?,
+			question_list_thread_id = $1,
+			question_list_entry_message_id = $2,
+			discord_thread_id = $3,
+			discord_starter_message_id = $4,
+			answer_channel_id = $5,
+			published_at = $6,
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $7
 		RETURNING
 			id,
 			guild_id,
@@ -508,7 +508,7 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 	}
 
 	result, err := s.execContext(ctx,
-		`DELETE FROM qotd_official_posts WHERE guild_id = ? AND deck_id = ?`,
+		`DELETE FROM qotd_official_posts WHERE guild_id = $1 AND deck_id = $2`,
 		guildID,
 		deckID,
 	)
@@ -527,7 +527,7 @@ func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) (err e
 		return nil
 	}
 
-	if _, err := s.execContext(ctx, `DELETE FROM qotd_official_posts WHERE id = ?`, id); err != nil {
+	if _, err := s.execContext(ctx, `DELETE FROM qotd_official_posts WHERE id = $1`, id); err != nil {
 		return err
 	}
 	return nil
@@ -542,8 +542,8 @@ func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, gu
 
 	result, err := s.execContext(ctx,
 		`DELETE FROM qotd_official_posts
-		 WHERE guild_id = ?
-		   AND deck_id = ?
+		 WHERE guild_id = $1
+		   AND deck_id = $2
 		   AND published_at IS NULL`,
 		guildID,
 		deckID,

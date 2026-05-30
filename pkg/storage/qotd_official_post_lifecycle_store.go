@@ -20,14 +20,14 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_official_posts
 		SET
-			question_list_thread_id = COALESCE(NULLIF(?, ''), question_list_thread_id),
-			question_list_entry_message_id = COALESCE(NULLIF(?, ''), question_list_entry_message_id),
-			discord_thread_id = COALESCE(NULLIF(?, ''), discord_thread_id),
-			discord_starter_message_id = COALESCE(NULLIF(?, ''), discord_starter_message_id),
-			answer_channel_id = COALESCE(NULLIF(?, ''), answer_channel_id),
-			published_at = COALESCE(?, published_at),
+			question_list_thread_id = COALESCE(NULLIF($1, ''), question_list_thread_id),
+			question_list_entry_message_id = COALESCE(NULLIF($2, ''), question_list_entry_message_id),
+			discord_thread_id = COALESCE(NULLIF($3, ''), discord_thread_id),
+			discord_starter_message_id = COALESCE(NULLIF($4, ''), discord_starter_message_id),
+			answer_channel_id = COALESCE(NULLIF($5, ''), answer_channel_id),
+			published_at = COALESCE($6, published_at),
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $7
 		RETURNING
 			id,
 			guild_id,

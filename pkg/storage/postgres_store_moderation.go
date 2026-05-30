@@ -17,7 +17,7 @@ func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 	var next int64
 	if err := s.queryRow(
 		`INSERT INTO moderation_cases (guild_id, last_case_number)
-         VALUES (?, 1)
+         VALUES ($1, 1)
          ON CONFLICT(guild_id) DO UPDATE
          SET last_case_number = moderation_cases.last_case_number + 1
          RETURNING last_case_number`,
@@ -74,7 +74,7 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 	if err := txQueryRow(
 		tx,
 		`INSERT INTO moderation_warnings (guild_id, user_id, case_number, moderator_id, reason, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, created_at`,
 		warning.GuildID,
 		warning.UserID,
@@ -109,9 +109,9 @@ func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]Mod
 	rows, err := s.query(
 		`SELECT id, guild_id, user_id, case_number, moderator_id, reason, created_at
          FROM moderation_warnings
-         WHERE guild_id=? AND user_id=?
+         WHERE guild_id=$1 AND user_id=$2
          ORDER BY case_number DESC
-         LIMIT ?`,
+         LIMIT $3`,
 		guildID,
 		userID,
 		limit,
@@ -149,7 +149,7 @@ func nextModerationCaseNumberTx(tx *sql.Tx, guildID string) (int64, error) {
 	if err := txQueryRow(
 		tx,
 		`INSERT INTO moderation_cases (guild_id, last_case_number)
-         VALUES (?, 1)
+         VALUES ($1, 1)
          ON CONFLICT(guild_id) DO UPDATE
          SET last_case_number = moderation_cases.last_case_number + 1
          RETURNING last_case_number`,
@@ -167,7 +167,7 @@ func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 	}
 	_, err := s.exec(
 		`INSERT INTO guild_meta (guild_id, owner_id)
-         VALUES (?, ?)
+         VALUES ($1, $2)
          ON CONFLICT(guild_id) DO UPDATE SET
            owner_id=excluded.owner_id`,
 		guildID, ownerID,
@@ -177,7 +177,7 @@ func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 
 // GetGuildOwnerID retrieves the cached owner ID for a guild, if any.
 func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
-	row := s.queryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=?`, guildID)
+	row := s.queryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=$1`, guildID)
 	var owner sql.NullString
 	if err := row.Scan(&owner); err != nil {
 		if err == sql.ErrNoRows {
@@ -206,7 +206,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := txExec(tx, `DELETE FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID); err != nil {
+	if _, err := txExec(tx, `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
 		return err
 	}
 	for _, rid := range roles {
@@ -214,7 +214,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 			continue
 		}
 		if _, err := txExec(tx,
-			`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at) VALUES (?, ?, ?, ?)`,
+			`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at) VALUES ($1, $2, $3, $4)`,
 			guildID, userID, rid, updatedAt,
 		); err != nil {
 			return err
@@ -225,7 +225,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 
 // GetMemberRoles returns the current cached roles for a member in a guild.
 func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
-	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=? AND user_id=?`, guildID, userID)
+	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID)
 	if err != nil {
 		return nil, err
 	}

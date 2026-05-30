@@ -163,12 +163,12 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 	row := s.queryRowContext(ctx,
 		`UPDATE qotd_official_posts
 		SET
-			state = ?,
-			closed_at = ?,
-			archived_at = ?,
+			state = $1,
+			closed_at = $2,
+			archived_at = $3,
 			last_reconciled_at = NOW(),
 			updated_at = NOW()
-		WHERE id = ?
+		WHERE id = $4
 		RETURNING
 			id,
 			guild_id,
