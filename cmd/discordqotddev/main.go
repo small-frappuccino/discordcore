@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	runtimecmd "github.com/small-frappuccino/discordcore/cmd/internal/runtimecmd"
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
+	runtimecmd "github.com/small-frappuccino/discordcore/pkg/app/runtimecmd"
 )
 
 var runDiscordQOTDDev = discordcoreapp.RunWithOptions

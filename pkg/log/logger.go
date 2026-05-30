@@ -10,7 +10,6 @@ import (
 
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/util"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -201,14 +200,7 @@ func (el *ErrorLogger) Fatalf(format string, v ...interface{}) {
 
 // --- Initialization & Helpers ---
 
-func getDefaultLogDir() string {
-	// Prefer the unified, OS-specific log location logic from util.
-	// This keeps Linux/macOS/Windows consistent with the rest of the app's filesystem layout.
-	if logPath := util.GetLogFilePath(); logPath != "" {
-		return filepath.Dir(logPath)
-	}
-	return filepath.Join(".", "logs")
-}
+// (Removed getDefaultLogDir)
 
 // rollingWriter creates a lumberjack-backed writer with sane defaults.
 func rollingWriter(path string) *lumberjack.Logger {
@@ -263,7 +255,7 @@ func (m *multiHandler) WithGroup(name string) slog.Handler {
 
 // buildCategoryLogger creates a slog.Logger that tees to file (JSON) and console (text)
 // and annotates every record with service and category attributes.
-func buildCategoryLogger(category string, fileWriter *lumberjack.Logger, consoleWriter *os.File, levelVar *slog.LevelVar) *slog.Logger {
+func buildCategoryLogger(category string, fileWriter *lumberjack.Logger, consoleWriter *os.File, levelVar *slog.LevelVar, botName string) *slog.Logger {
 	jsonHandler := slog.NewJSONHandler(fileWriter, &slog.HandlerOptions{
 		Level:     levelVar,
 		AddSource: true,
@@ -275,7 +267,7 @@ func buildCategoryLogger(category string, fileWriter *lumberjack.Logger, console
 
 	handler := &multiHandler{handlers: []slog.Handler{jsonHandler, textHandler}}
 	base := slog.New(handler).With(
-		slog.String("service", util.EffectiveBotName()),
+		slog.String("service", botName),
 		slog.String("category", category),
 	)
 	return base
@@ -284,8 +276,14 @@ func buildCategoryLogger(category string, fileWriter *lumberjack.Logger, console
 // SetupLogger configures category-separated slog loggers (application, discord, database, error)
 // writing to rotating files (via lumberjack) and to human-friendly console output.
 // It preserves the existing global variables and fluent API and also exposes raw slog loggers.
-func SetupLogger() error {
-	logDir := getDefaultLogDir()
+func SetupLogger(botName, logFilePath string) error {
+	var logDir string
+	if logFilePath != "" {
+		logDir = filepath.Dir(logFilePath)
+	} else {
+		logDir = filepath.Join(".", "logs")
+	}
+
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return err
 	}
@@ -301,10 +299,10 @@ func SetupLogger() error {
 	errFile := rollingWriter(filepath.Join(logDir, "error.log"))
 
 	// Console routing: stdout for most, stderr for errors
-	l.application = buildCategoryLogger("application", appFile, os.Stdout, &l.levelVar)
-	l.discord = buildCategoryLogger("discord", discordFile, os.Stdout, &l.levelVar)
-	l.database = buildCategoryLogger("database", dbFile, os.Stdout, &l.levelVar)
-	l.error = buildCategoryLogger("error", errFile, os.Stderr, &l.levelVar)
+	l.application = buildCategoryLogger("application", appFile, os.Stdout, &l.levelVar, botName)
+	l.discord = buildCategoryLogger("discord", discordFile, os.Stdout, &l.levelVar, botName)
+	l.database = buildCategoryLogger("database", dbFile, os.Stdout, &l.levelVar, botName)
+	l.error = buildCategoryLogger("error", errFile, os.Stderr, &l.levelVar, botName)
 
 	globalLogger = l
 	GlobalLogger = l

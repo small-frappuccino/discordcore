@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/app"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // RunOptions controls how the custom RPC runner selects a profile.
@@ -24,16 +24,16 @@ type RunOptions struct {
 
 // Run loads custom-rpc.json and applies the selected profile.
 func Run(appName string, opts RunOptions) error {
-	util.SetAppName(appName)
+	files.SetAppName(appName)
 
-	if err := log.SetupLogger(); err != nil {
+	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {
 		return fmt.Errorf("configure logger: %w", err)
 	}
 	defer log.GlobalLogger.Sync()
 
 	configPath := strings.TrimSpace(opts.ConfigPath)
 	if configPath == "" {
-		configPath = util.GetCustomRPCFilePath()
+		configPath = files.GetCustomRPCFilePath()
 	}
 
 	if err := files.EnsureCustomRPCFileAtPath(configPath); err != nil {
@@ -74,7 +74,7 @@ func Run(appName string, opts RunOptions) error {
 
 	interval := resolveUpdateInterval(profile)
 	if interval <= 0 {
-		util.WaitForInterrupt()
+		app.WaitForInterrupt()
 		return nil
 	}
 

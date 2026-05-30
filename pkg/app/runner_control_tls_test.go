@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func TestLoadControlTLSFilesFromEnv(t *testing.T) {
@@ -85,7 +85,7 @@ func TestResolveControlRuntimeUsesManagedLocalHTTPS(t *testing.T) {
 	t.Setenv(controlTLSKeyFileEnv, "")
 	t.Setenv(controlDiscordOAuthClientSecretEnv, "")
 	t.Setenv(controlDiscordOAuthRedirectURIEnv, "")
-	util.SetAppName("discordmain-run-options-test")
+	files.SetAppName("discordmain-run-options-test")
 
 	runtime, err := resolveControlRuntime(context.Background(), RunOptions{
 		Profile: RunProfileDiscordMain,
@@ -125,7 +125,7 @@ func TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin(t *testing.T)
 
 	tempAppData := t.TempDir()
 	t.Setenv("APPDATA", tempAppData)
-	util.SetAppName("discordmain-run-options-test")
+	files.SetAppName("discordmain-run-options-test")
 
 	runtime, err := resolveControlRuntime(context.Background(), RunOptions{
 		Profile: RunProfileDiscordMain,
@@ -142,7 +142,7 @@ func TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin(t *testing.T)
 	if runtime.oauthConfig.RedirectURI != "https://discordmain.localhost:8443/auth/discord/callback" {
 		t.Fatalf("unexpected derived redirect uri: %+v", runtime.oauthConfig)
 	}
-	wantStorePath := filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
+	wantStorePath := filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
 	if runtime.oauthConfig.SessionStorePath != wantStorePath {
 		t.Fatalf("unexpected oauth session store path: got=%q want=%q", runtime.oauthConfig.SessionStorePath, wantStorePath)
 	}

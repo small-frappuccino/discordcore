@@ -1,12 +1,6 @@
 # discordcore Agents Guide
 
-This document is the repository-wide contract for any coding agent working in `discordcore`, whether that agent is Claude, GPT, Gemini, Copilot, or another tool. It defines the durable repository facts, ownership boundaries, load-bearing invariants, and validation expectations that should not change from model to model.
-
-Agent-specific companions can add workflow or tool guidance, but they should not fork repository facts:
-
-- `CLAUDE.md` is the Claude-centric companion for Claude Code workflows, MCP usage, and reporting discipline.
-- `.github/copilot-instructions.md` biases GitHub Copilot toward local patterns and primitives.
-- keep durable architecture facts, product constraints, invariants, and release rules here in `AGENTS.md`.
+This document is the repository-wide contract for the Gemini coding agent working in `discordcore`. It defines the durable repository facts, ownership boundaries, load-bearing invariants, validation expectations, and our specific human-AI dynamic.
 
 ## Mission
 
@@ -120,6 +114,8 @@ Across both:
 Do exactly what the user requested. Nothing more, nothing less.
 
 - treat the user’s message as the contract; the deliverable is the smallest safe change that satisfies it
+- expect direct, task-focused instructions, occasionally in Portuguese (e.g., "Execute task M3", "Como isso fica..."). Acknowledge and proceed without conversational filler
+- leverage artifacts (`implementation_plan.md`, `task.md`) when a plan is required for complex tasks, but execute straightforward fixes immediately
 - do not bundle adjacent improvements, cleanup, renames, or reformatting with the requested change
 - do not refactor surrounding code unless the requested change cannot land safely without it
 - do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for
@@ -286,7 +282,7 @@ Additional caution:
 Keep reports factual and load-bearing.
 
 - lead with what changed and why when the work is substantial
+- use `walkthrough.md` to document changes and validation results instead of narrating edit history in the chat
 - include validation run and any skipped validation
 - mention remaining risk or follow-up drift only when it is real
 - keep unrelated findings separate from the requested work
-- do not use the final report to narrate the whole edit history

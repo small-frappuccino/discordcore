@@ -8,7 +8,7 @@ package theme
 // a seasonal, spooky flair without breaking semantic color expectations.
 //
 // To use:
-//   util.SetTheme("halloween")
+//   files.SetTheme("halloween")
 // or
 //   ALICE_BOT_THEME=halloween
 //

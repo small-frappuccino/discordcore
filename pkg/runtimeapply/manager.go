@@ -7,7 +7,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // Manager applies a subset of runtime configuration changes immediately (hot-apply)
@@ -144,7 +143,7 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 func applyTheme(name string) error {
 	// Theme is purely in-process state (theme.SetCurrent under the hood).
 	// Empty resets to default.
-	return util.ConfigureThemeFromConfig(name)
+	return files.ConfigureThemeFromConfig(name)
 }
 
 func monitoringTogglesChanged(prev, next files.RuntimeConfig) bool {

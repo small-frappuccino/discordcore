@@ -44,11 +44,12 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/app"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func main() {
-	token, err := util.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
+	token, err := files.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func main() {
 	defer monitor.Stop()
 	defer automod.Stop()
 
-	util.WaitForInterrupt()
+	app.WaitForInterrupt()
 }
 ```
 

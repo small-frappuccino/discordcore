@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const (
@@ -36,20 +35,20 @@ func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 }
 
 func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
-	url := util.EnvString(databaseURLEnv, "")
+	url := files.EnvString(databaseURLEnv, "")
 	if url == "" {
 		return files.DatabaseRuntimeConfig{}, false
 	}
 
-	driver := util.EnvString(databaseDriverEnv, "postgres")
+	driver := files.EnvString(databaseDriverEnv, "postgres")
 	return files.DatabaseRuntimeConfig{
 		Driver:              driver,
 		DatabaseURL:         url,
-		MaxOpenConns:        int(util.EnvInt64(databaseMaxOpenConnsEnv, 20)),
-		MaxIdleConns:        int(util.EnvInt64(databaseMaxIdleConnsEnv, 10)),
-		ConnMaxLifetimeSecs: int(util.EnvInt64(databaseConnMaxLifetimeSecsEnv, 1800)),
-		ConnMaxIdleTimeSecs: int(util.EnvInt64(databaseConnMaxIdleTimeSecsEnv, 300)),
-		PingTimeoutMS:       int(util.EnvInt64(databasePingTimeoutMSEnv, 5000)),
+		MaxOpenConns:        int(files.EnvInt64(databaseMaxOpenConnsEnv, 20)),
+		MaxIdleConns:        int(files.EnvInt64(databaseMaxIdleConnsEnv, 10)),
+		ConnMaxLifetimeSecs: int(files.EnvInt64(databaseConnMaxLifetimeSecsEnv, 1800)),
+		ConnMaxIdleTimeSecs: int(files.EnvInt64(databaseConnMaxIdleTimeSecsEnv, 300)),
+		PingTimeoutMS:       int(files.EnvInt64(databasePingTimeoutMSEnv, 5000)),
 	}, true
 }
 

@@ -10,7 +10,6 @@ import (
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const (
@@ -70,7 +69,7 @@ func SelectTokenEnv(testMode bool, spec Spec) string {
 		return env
 	}
 
-	_, _ = util.LoadEnvWithLocalBinFallback(spec.ProductionTokenEnv)
+	_, _ = files.LoadEnvWithLocalBinFallback(spec.ProductionTokenEnv)
 	if env := availableTokenEnv(spec); env != "" {
 		return env
 	}
@@ -150,10 +149,10 @@ func buildQOTDRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 }
 
 func availableTokenEnv(spec Spec) string {
-	if util.EnvString(spec.ProductionTokenEnv, "") != "" {
+	if files.EnvString(spec.ProductionTokenEnv, "") != "" {
 		return spec.ProductionTokenEnv
 	}
-	if util.EnvString(spec.DevelopmentTokenEnv, "") != "" {
+	if files.EnvString(spec.DevelopmentTokenEnv, "") != "" {
 		return spec.DevelopmentTokenEnv
 	}
 	return ""
@@ -164,7 +163,7 @@ func loadKnownTokenEnvs(tokenEnvs []string) {
 		if strings.TrimSpace(tokenEnv) == "" {
 			continue
 		}
-		_, _ = util.LoadEnvWithLocalBinFallback(tokenEnv)
+		_, _ = files.LoadEnvWithLocalBinFallback(tokenEnv)
 	}
 }
 

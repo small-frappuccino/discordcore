@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const (
@@ -22,7 +22,7 @@ var (
 
 func gatewayPerfThreshold() time.Duration {
 	gatewayThresholdOnce.Do(func() {
-		ms := util.EnvInt64(envGatewayPerfThresholdMs, defaultGatewayPerfThresholdMs)
+		ms := files.EnvInt64(envGatewayPerfThresholdMs, defaultGatewayPerfThresholdMs)
 		if ms <= 0 {
 			gatewayThreshold = 0
 			return

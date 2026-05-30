@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // LiveHealthSnapshot is the JSON payload /v1/health/live returns. It is
@@ -50,10 +50,10 @@ func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
 		}
 		return LiveHealthSnapshot{
 			Status:        "ok",
-			App:           strings.TrimSpace(util.ConfiguredAppName),
-			AppVersion:    strings.TrimSpace(util.AppVersion),
-			CoreVersion:   util.DiscordCoreVersion,
-			BotUser:       strings.TrimSpace(util.DiscordBotName),
+			App:           strings.TrimSpace(files.ConfiguredAppName),
+			AppVersion:    strings.TrimSpace(files.AppVersion),
+			CoreVersion:   files.DiscordCoreVersion,
+			BotUser:       strings.TrimSpace(files.DiscordBotName),
 			StartedAt:     startedAt.UTC().Format(time.RFC3339),
 			UptimeSeconds: int64(uptime.Seconds()),
 		}, ""

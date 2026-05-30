@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
@@ -22,7 +23,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 	shutdownCommandHandler       = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
 	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
 	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }
-	waitForInterrupt             = util.WaitForInterrupt
+	waitForInterrupt             = WaitForInterrupt
 	shutdownDelay                = time.Sleep
 )
 
@@ -67,10 +67,10 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	started := time.Now()
 
 	// App name first (affects paths)
-	util.SetAppName(appName)
+	files.SetAppName(appName)
 
 	// Logger first so subsequent steps can log meaningfully
-	if err := log.SetupLogger(); err != nil {
+	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {
 		return fmt.Errorf("configure logger: %w", err)
 	}
 	// Ensure logs are flushed on exit
@@ -130,10 +130,10 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	)
 
 	// Minimal on-disk structure
-	if err := util.EnsureCacheInitialized(); err != nil {
+	if err := files.EnsureCacheInitialized(); err != nil {
 		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to initialize cache structure: %v", err))
 	}
-	if err := util.EnsureCacheDirs(); err != nil {
+	if err := files.EnsureCacheDirs(); err != nil {
 		return fmt.Errorf("create cache directories: %w", err)
 	}
 	// PostgreSQL bootstrap comes from environment variables. The resolved value is
@@ -206,11 +206,11 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 			themeName = cfg.RuntimeConfig.BotTheme
 		}
 
-		if err := util.ConfigureThemeFromConfig(themeName); err != nil {
+		if err := files.ConfigureThemeFromConfig(themeName); err != nil {
 			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
 		}
 		if themeName == "" {
-			if err := util.SetTheme(""); err != nil {
+			if err := files.SetTheme(""); err != nil {
 				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
 			} else {
 				log.ApplicationLogger().Info("🌈 Default theme applied")
@@ -356,7 +356,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		return err
 	}
 
-	controlBearerToken := strings.TrimSpace(util.EnvString(controlBearerTokenEnv, ""))
+	controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
 	scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), defaultSession)
 	scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
 		runOptions:            opts,
@@ -434,11 +434,11 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 }
 
 func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
-	clientID := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
-	clientSecret := strings.TrimSpace(util.EnvString(controlDiscordOAuthClientSecretEnv, ""))
-	redirectURI := strings.TrimSpace(util.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
-	includeGuildMembersRead := util.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
-	sessionStorePath := strings.TrimSpace(util.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
+	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
+	clientSecret := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientSecretEnv, ""))
+	redirectURI := strings.TrimSpace(files.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
+	includeGuildMembersRead := files.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
+	sessionStorePath := strings.TrimSpace(files.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
 
 	if clientSecret == "" && redirectURI == "" {
 		if includeGuildMembersRead {
@@ -469,7 +469,7 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 		return nil, fmt.Errorf("incomplete Discord OAuth configuration: missing %s", strings.Join(missing, ", "))
 	}
 	if sessionStorePath == "" {
-		sessionStorePath = filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
+		sessionStorePath = filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
 	}
 
 	return &control.DiscordOAuthConfig{
@@ -482,8 +482,8 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 }
 
 func loadControlTLSFilesFromEnv() (certFile string, keyFile string, err error) {
-	certFile = strings.TrimSpace(util.EnvString(controlTLSCertFileEnv, ""))
-	keyFile = strings.TrimSpace(util.EnvString(controlTLSKeyFileEnv, ""))
+	certFile = strings.TrimSpace(files.EnvString(controlTLSCertFileEnv, ""))
+	keyFile = strings.TrimSpace(files.EnvString(controlTLSKeyFileEnv, ""))
 	if certFile == "" && keyFile == "" {
 		return "", "", nil
 	}

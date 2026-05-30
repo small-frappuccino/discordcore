@@ -10,9 +10,9 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // AdminCommands provides administrative commands for service management.
@@ -465,9 +465,9 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 	runningServices := cmd.adminCommands.serviceManager.GetRunningServices()
 
-	botName := util.EffectiveBotName()
-	if util.AppVersion != "" {
-		botName = fmt.Sprintf("%s %s", botName, util.AppVersion)
+	botName := files.EffectiveBotName()
+	if files.AppVersion != "" {
+		botName = fmt.Sprintf("%s %s", botName, files.AppVersion)
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -482,7 +482,7 @@ func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 			},
 			{
 				Name:   "Core",
-				Value:  fmt.Sprintf("discordcore %s", util.DiscordCoreVersion),
+				Value:  fmt.Sprintf("discordcore %s", files.DiscordCoreVersion),
 				Inline: true,
 			},
 			{

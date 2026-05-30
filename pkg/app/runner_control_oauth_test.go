@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
@@ -73,7 +73,7 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		if !cfg.IncludeGuildsMembersRead {
 			t.Fatalf("expected IncludeGuildsMembersRead=true, got %+v", cfg)
 		}
-		wantStorePath := filepath.Join(util.ApplicationCachesPath, "control", "oauth_sessions.json")
+		wantStorePath := filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
 		if cfg.SessionStorePath != wantStorePath {
 			t.Fatalf("unexpected default oauth session store path: got=%q want=%q", cfg.SessionStorePath, wantStorePath)
 		}

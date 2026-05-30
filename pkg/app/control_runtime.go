@@ -12,7 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/control/localtls"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 const (
@@ -110,7 +110,7 @@ func defaultLocalTLSCommonNameForProfile(profile RunProfile) string {
 func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedControlRuntime, error) {
 	profile := normalizeRunProfile(opts.Profile)
 	bindAddr := strings.TrimSpace(opts.Control.BindAddr)
-	publicOrigin := strings.TrimSpace(util.EnvString(controlPublicOriginEnv, opts.Control.PublicOrigin))
+	publicOrigin := strings.TrimSpace(files.EnvString(controlPublicOriginEnv, opts.Control.PublicOrigin))
 	if opts.Control.LocalHTTPS.Enabled {
 		if bindAddr == "" {
 			bindAddr = defaultLocalHTTPSControlAddr
@@ -157,7 +157,7 @@ func prepareManagedLocalTLS(ctx context.Context, profile RunProfile, publicOrigi
 	}
 
 	return localtls.EnsureReady(ctx, localtls.Config{
-		Directory:    filepath.Join(util.ApplicationCachesPath, "control", "tls"),
+		Directory:    filepath.Join(files.ApplicationCachesPath, "control", "tls"),
 		CommonName:   hostName,
 		DNSNames:     []string{hostName, "localhost"},
 		IPAddresses:  append(ipAddresses, net.ParseIP("127.0.0.1")),

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 // it from making API calls (e.g. token revoked). A plain HTTP POST
 // against the webhook URL needs no session state.
 func notifyLifecycleEvent(reason, detail string) {
-	webhookURL := strings.TrimSpace(util.EnvString(lifecycleWebhookEnv, ""))
+	webhookURL := strings.TrimSpace(files.EnvString(lifecycleWebhookEnv, ""))
 	if webhookURL == "" {
 		return
 	}
@@ -97,15 +97,15 @@ func notifyLifecycleEvent(reason, detail string) {
 // human-readable — operators see this in the alert channel and need
 // "what happened, which bot, which version" at a glance, not JSON.
 func buildLifecycleContent(reason, detail string) string {
-	app := strings.TrimSpace(util.ConfiguredAppName)
+	app := strings.TrimSpace(files.ConfiguredAppName)
 	if app == "" {
 		app = "discordcore"
 	}
-	version := strings.TrimSpace(util.AppVersion)
+	version := strings.TrimSpace(files.AppVersion)
 	if version == "" {
-		version = util.DiscordCoreVersion
+		version = files.DiscordCoreVersion
 	}
-	host := strings.TrimSpace(util.DiscordBotName)
+	host := strings.TrimSpace(files.DiscordBotName)
 
 	parts := []string{fmt.Sprintf("**%s** (%s)", app, version)}
 	if host != "" {

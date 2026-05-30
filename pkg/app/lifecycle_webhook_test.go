@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/util"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // TestNotifyLifecycleEventDoesNothingWithoutWebhookURL pins that the
@@ -28,17 +28,17 @@ func TestNotifyLifecycleEventDoesNothingWithoutWebhookURL(t *testing.T) {
 // silently disable the entire notification path and only be caught when
 // a real outage went unannounced.
 func TestNotifyLifecycleEventPostsToConfiguredURL(t *testing.T) {
-	origAppName := util.ConfiguredAppName
-	origAppVersion := util.AppVersion
-	origBotName := util.DiscordBotName
+	origAppName := files.ConfiguredAppName
+	origAppVersion := files.AppVersion
+	origBotName := files.DiscordBotName
 	t.Cleanup(func() {
-		util.ConfiguredAppName = origAppName
-		util.AppVersion = origAppVersion
-		util.DiscordBotName = origBotName
+		files.ConfiguredAppName = origAppName
+		files.AppVersion = origAppVersion
+		files.DiscordBotName = origBotName
 	})
-	util.ConfiguredAppName = "discordmain"
-	util.AppVersion = "v0.test"
-	util.DiscordBotName = "TestBot"
+	files.ConfiguredAppName = "discordmain"
+	files.AppVersion = "v0.test"
+	files.DiscordBotName = "TestBot"
 
 	var (
 		mu       sync.Mutex
@@ -91,17 +91,17 @@ func TestNotifyLifecycleEventPostsToConfiguredURL(t *testing.T) {
 // detail) because alert channels are skim-read; reshuffling the layout
 // is a real UX regression for the on-call human.
 func TestBuildLifecycleContentFormat(t *testing.T) {
-	origAppName := util.ConfiguredAppName
-	origAppVersion := util.AppVersion
-	origBotName := util.DiscordBotName
+	origAppName := files.ConfiguredAppName
+	origAppVersion := files.AppVersion
+	origBotName := files.DiscordBotName
 	t.Cleanup(func() {
-		util.ConfiguredAppName = origAppName
-		util.AppVersion = origAppVersion
-		util.DiscordBotName = origBotName
+		files.ConfiguredAppName = origAppName
+		files.AppVersion = origAppVersion
+		files.DiscordBotName = origBotName
 	})
-	util.ConfiguredAppName = "discordqotd"
-	util.AppVersion = "v0.42.0"
-	util.DiscordBotName = "QOTD"
+	files.ConfiguredAppName = "discordqotd"
+	files.AppVersion = "v0.42.0"
+	files.DiscordBotName = "QOTD"
 
 	got := buildLifecycleContent("stopping", "")
 	want := "**discordqotd** (v0.42.0) as `QOTD` → stopping"
@@ -124,24 +124,24 @@ func TestBuildLifecycleContentFormat(t *testing.T) {
 // would print as awkward empty parens / dangling backticks; the
 // fallbacks here mean an operator can still tell which deployment died.
 func TestBuildLifecycleContentFallsBackWhenIdentityUnset(t *testing.T) {
-	origAppName := util.ConfiguredAppName
-	origAppVersion := util.AppVersion
-	origBotName := util.DiscordBotName
+	origAppName := files.ConfiguredAppName
+	origAppVersion := files.AppVersion
+	origBotName := files.DiscordBotName
 	t.Cleanup(func() {
-		util.ConfiguredAppName = origAppName
-		util.AppVersion = origAppVersion
-		util.DiscordBotName = origBotName
+		files.ConfiguredAppName = origAppName
+		files.AppVersion = origAppVersion
+		files.DiscordBotName = origBotName
 	})
-	util.ConfiguredAppName = ""
-	util.AppVersion = ""
-	util.DiscordBotName = ""
+	files.ConfiguredAppName = ""
+	files.AppVersion = ""
+	files.DiscordBotName = ""
 
 	got := buildLifecycleContent("starting", "")
 	if !strings.Contains(got, "discordcore") {
 		t.Fatalf("expected fallback app name 'discordcore', got %q", got)
 	}
-	if !strings.Contains(got, util.DiscordCoreVersion) {
-		t.Fatalf("expected fallback to core version %q, got %q", util.DiscordCoreVersion, got)
+	if !strings.Contains(got, files.DiscordCoreVersion) {
+		t.Fatalf("expected fallback to core version %q, got %q", files.DiscordCoreVersion, got)
 	}
 	if strings.Contains(got, "``") {
 		t.Fatalf("empty bot name produced empty backticks: %q", got)

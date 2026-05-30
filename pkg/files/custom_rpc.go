@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 // EnsureCustomRPCFile ensures custom-rpc.json exists and has a valid shape.
 func EnsureCustomRPCFile() error {
-	return EnsureCustomRPCFileAtPath(util.GetCustomRPCFilePath())
+	return EnsureCustomRPCFileAtPath(GetCustomRPCFilePath())
 }
 
 // EnsureCustomRPCFileAtPath ensures custom-rpc.json exists at a custom location.
@@ -41,7 +39,7 @@ func EnsureCustomRPCFileAtPath(path string) error {
 
 // LoadCustomRPCFile loads custom-rpc.json from the default path.
 func LoadCustomRPCFile() (*CustomRPCConfig, error) {
-	return LoadCustomRPCFileFromPath(util.GetCustomRPCFilePath())
+	return LoadCustomRPCFileFromPath(GetCustomRPCFilePath())
 }
 
 // LoadCustomRPCFileFromPath loads custom-rpc.json from a custom path.
@@ -51,7 +49,7 @@ func LoadCustomRPCFileFromPath(path string) (*CustomRPCConfig, error) {
 		return cfg, fmt.Errorf("custom rpc path is empty")
 	}
 
-	jsonManager := util.NewJSONManager(path)
+	jsonManager := NewJSONManager(path)
 	if err := jsonManager.Load(cfg); err != nil {
 		return nil, fmt.Errorf("failed to load custom rpc config from %s: %w", path, err)
 	}
@@ -60,7 +58,7 @@ func LoadCustomRPCFileFromPath(path string) (*CustomRPCConfig, error) {
 
 // SaveCustomRPCFile saves custom-rpc.json to the default path.
 func SaveCustomRPCFile(config *CustomRPCConfig) error {
-	return SaveCustomRPCFileToPath(util.GetCustomRPCFilePath(), config)
+	return SaveCustomRPCFileToPath(GetCustomRPCFilePath(), config)
 }
 
 // SaveCustomRPCFileToPath saves custom-rpc.json to a custom path.
@@ -71,7 +69,7 @@ func SaveCustomRPCFileToPath(path string, config *CustomRPCConfig) error {
 	if path == "" {
 		return fmt.Errorf("custom rpc path is empty")
 	}
-	jsonManager := util.NewJSONManager(path)
+	jsonManager := NewJSONManager(path)
 	if err := jsonManager.Save(config); err != nil {
 		return fmt.Errorf("failed to save custom rpc config to %s: %w", path, err)
 	}

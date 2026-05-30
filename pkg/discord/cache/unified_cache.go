@@ -13,7 +13,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const unifiedCachePersistTimeout = 30 * time.Second
@@ -477,7 +476,7 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	if uc.members != nil {
 		prefix := uc.memberPrefix(guildID)
 		for _, key := range uc.members.Keys() {
-			if util.HasPrefix(key, prefix) {
+			if strings.HasPrefix(key, prefix) {
 				uc.members.Invalidate(key)
 			}
 		}

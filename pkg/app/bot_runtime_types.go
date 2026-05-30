@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
@@ -15,7 +16,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/util"
 )
 
 const DefaultBotInstanceID = "default"
@@ -160,16 +160,16 @@ func resolveBotToken(tokenEnv string) string {
 		return ""
 	}
 
-	token := strings.TrimSpace(util.EnvString(tokenEnv, ""))
+	token := strings.TrimSpace(files.EnvString(tokenEnv, ""))
 	if token != "" {
 		return token
 	}
 
-	if _, err := util.LoadEnvWithLocalBinFallback(tokenEnv); err != nil {
+	if _, err := files.LoadEnvWithLocalBinFallback(tokenEnv); err != nil {
 		return ""
 	}
 
-	return strings.TrimSpace(util.EnvString(tokenEnv, ""))
+	return strings.TrimSpace(files.EnvString(tokenEnv, ""))
 }
 
 func newBotRuntimeResolver(
