@@ -318,7 +318,9 @@ func (s *RuntimeService) operationContext() (context.Context, context.CancelFunc
 	if s == nil {
 		return ctx, cancel
 	}
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		select {
 		case <-s.stopCh:
 			cancel()

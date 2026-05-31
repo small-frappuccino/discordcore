@@ -48,6 +48,7 @@ type runtimeActivity struct {
 	mu       sync.Mutex
 	hbCancel context.CancelFunc
 	hbDone   chan struct{}
+	hbWg     sync.WaitGroup
 }
 
 func newRuntimeActivity(store *storage.Store, opts runtimeActivityOptions) *runtimeActivity {

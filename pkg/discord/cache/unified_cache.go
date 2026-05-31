@@ -60,6 +60,7 @@ type UnifiedCache struct {
 	// Cleanup
 	stopCleanup chan struct{}
 	cleanupOnce sync.Once
+	wg          sync.WaitGroup
 
 	// Last cleanup timestamp for stats reporting
 	lastCleanup time.Time
@@ -184,7 +185,11 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 	}
 
 	// Start background cleanup goroutine
-	go uc.cleanupLoop(cfg.CleanupInterval)
+	uc.wg.Add(1)
+	go func() {
+		defer uc.wg.Done()
+		uc.cleanupLoop(cfg.CleanupInterval)
+	}()
 
 	return uc
 }
@@ -524,13 +529,14 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	return nil
 }
 
-// Stop stops the background cleanup goroutine
+// Stop stops the background cleanup goroutine and waits for it to exit
 func (uc *UnifiedCache) Stop() {
 	uc.cleanupOnce.Do(func() {
 		if uc.stopCleanup != nil {
 			close(uc.stopCleanup)
 		}
 	})
+	uc.wg.Wait()
 }
 
 // cleanupLoop periodically removes expired entries
@@ -935,7 +941,9 @@ func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{}
 
 	stopChan := make(chan struct{})
 
+	uc.wg.Add(1)
 	go func() {
+		defer uc.wg.Done()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 

@@ -70,7 +70,9 @@ func (tr *TaskRouter) ScheduleEveryNDaysAtUTCWithSeconds(n int, hour, minute, se
 		})
 	}
 
+	tr.wg.Add(1)
 	go func() {
+		defer tr.wg.Done()
 		// Compute next target at UTC
 		now := time.Now().UTC()
 		target := nextUTCTimestamp(now, hour, minute, second)
@@ -92,7 +94,10 @@ func (tr *TaskRouter) ScheduleEveryNDaysAtUTCWithSeconds(n int, hour, minute, se
 			innerMu.Unlock()
 
 			// Wait for external cancellation
-			<-cancelCh
+			select {
+			case <-cancelCh:
+			case <-tr.stopCh:
+			}
 			innerMu.Lock()
 			if innerCancel != nil {
 				innerCancel()
@@ -103,6 +108,9 @@ func (tr *TaskRouter) ScheduleEveryNDaysAtUTCWithSeconds(n int, hour, minute, se
 
 		case <-cancelCh:
 			// Cancel before first run; nothing else to do
+			return
+		case <-tr.stopCh:
+			// Router stopped before first run
 			return
 		}
 	}()
