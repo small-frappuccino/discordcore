@@ -2,10 +2,11 @@ package app
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // WaitForInterrupt waits for an interrupt signal (SIGINT, SIGTERM)
@@ -26,7 +27,7 @@ func waitForInterruptContext(parent context.Context, callback func()) {
 	defer stop()
 
 	<-ctx.Done()
-	log.Printf("Received interrupt; executing shutdown callback")
+	log.ApplicationLogger().Info("Received interrupt; executing shutdown callback")
 
 	if callback != nil {
 		callback()

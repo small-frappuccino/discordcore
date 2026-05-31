@@ -55,7 +55,7 @@ type DiscohookField struct {
 func ParseAndValidateDiscohookJSON(data []byte) (DiscohookEmbed, error) {
 	var payload DiscohookJSON
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return DiscohookEmbed{}, fmt.Errorf("%w: invalid JSON format: %v", ErrEmbedJSONValidation, err)
+		return DiscohookEmbed{}, fmt.Errorf("%w: invalid JSON format: %w", ErrEmbedJSONValidation, err)
 	}
 
 	if len(payload.Embeds) == 0 {

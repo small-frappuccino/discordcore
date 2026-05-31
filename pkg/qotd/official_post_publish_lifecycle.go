@@ -115,7 +115,7 @@ func (s *Service) completeOfficialPostProvisioning(
 			failureState = OfficialPostStateAbandoned
 		}
 		if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(failureState), nil, nil); err != nil {
-			return nil, nil, "", fmt.Errorf("publish official qotd post: %w (mark %s: %v)", publishErr, failureState, err)
+			return nil, nil, "", fmt.Errorf("publish official qotd post: %w (mark %s: %w)", publishErr, failureState, err)
 		}
 		if failureState == OfficialPostStateAbandoned {
 			s.observability().RecordOfficialPostAbandoned()
@@ -132,7 +132,7 @@ func (s *Service) completeOfficialPostProvisioning(
 	if !isOfficialPostProvisioningComplete(post) {
 		incompleteErr := fmt.Errorf("publish official qotd post: incomplete provisioning state for official post %d", post.ID)
 		if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateFailed), nil, nil); err != nil {
-			return nil, nil, "", fmt.Errorf("%w (mark failed: %v)", incompleteErr, err)
+			return nil, nil, "", fmt.Errorf("%w (mark failed: %w)", incompleteErr, err)
 		}
 		return nil, nil, "", incompleteErr
 	}

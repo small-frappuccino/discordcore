@@ -220,7 +220,7 @@ func normalizePartners(partners []PartnerRecord, otherFandomLabel string) ([]nor
 
 		link, err := normalizeLink(p.Link)
 		if err != nil {
-			return nil, fmt.Errorf("%w: partner[%d] link: %v", ErrInvalidPartnerBoardEntry, i, err)
+			return nil, fmt.Errorf("%w: partner[%d] link: %w", ErrInvalidPartnerBoardEntry, i, err)
 		}
 
 		out = append(out, normalizedPartner{

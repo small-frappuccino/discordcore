@@ -88,7 +88,7 @@ func (t EmbedUpdateTarget) Normalize() (EmbedUpdateTarget, error) {
 			return EmbedUpdateTarget{}, fmt.Errorf("%w: webhook_url is required for type=%s", ErrInvalidTarget, out.Type)
 		}
 		if _, _, err := parseWebhookURL(out.WebhookURL); err != nil {
-			return EmbedUpdateTarget{}, fmt.Errorf("%w: webhook_url: %v", ErrInvalidTarget, err)
+			return EmbedUpdateTarget{}, fmt.Errorf("%w: webhook_url: %w", ErrInvalidTarget, err)
 		}
 		out.ChannelID = ""
 	case TargetTypeChannelMessage:
