@@ -48,10 +48,10 @@ const (
 
 // HealthStatus represents the health of a service
 type HealthStatus struct {
-	Healthy   bool                   `json:"healthy"`
-	Message   string                 `json:"message"`
-	LastCheck time.Time              `json:"last_check"`
-	Details   map[string]interface{} `json:"details,omitempty"`
+	Healthy   bool           `json:"healthy"`
+	Message   string         `json:"message"`
+	LastCheck time.Time      `json:"last_check"`
+	Details   map[string]any `json:"details,omitempty"`
 }
 
 // ServiceMetric is a single pre-formatted display row a service exposes via

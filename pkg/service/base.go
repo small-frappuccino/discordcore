@@ -170,7 +170,7 @@ func (bs *BaseService) HealthCheck(ctx context.Context) HealthStatus {
 			Healthy:   bs.IsRunning(),
 			Message:   bs.getDefaultHealthMessage(),
 			LastCheck: bs.lastHealthCheck,
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"state":         bs.GetState(),
 				"uptime":        bs.getUptime(),
 				"restart_count": bs.restartCount,
@@ -331,7 +331,7 @@ func NewServiceWrapper(
 			Healthy:   healthy,
 			Message:   message,
 			LastCheck: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"wrapped_service": name,
 			},
 		}

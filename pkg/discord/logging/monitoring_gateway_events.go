@@ -58,11 +58,8 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 // removeEventHandlers removes all registered event handlers
 func (ms *MonitoringService) removeEventHandlers() {
 	for _, h := range ms.eventHandlers {
-		if h == nil {
-			continue
-		}
-		if fn, ok := h.(func()); ok {
-			fn()
+		if h != nil {
+			h()
 		}
 	}
 	ms.eventHandlers = nil

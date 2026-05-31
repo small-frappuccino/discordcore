@@ -322,7 +322,7 @@ func atomicLoad(c *atomic.Int64) int64 {
 	return c.Load()
 }
 
-func collectPublishModes(maps ...interface{}) []PublishMode {
+func collectPublishModes(maps ...any) []PublishMode {
 	seen := make(map[PublishMode]struct{})
 	for _, m := range maps {
 		switch v := m.(type) {

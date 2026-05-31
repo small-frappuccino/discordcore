@@ -169,14 +169,14 @@ func isRecentRoleUpdateAuditEntry(entry *discordgo.AuditLogEntry) bool {
 	return time.Since(entryTime) <= monitoringRoleAuditEntryMaxAge
 }
 
-func extractAuditRolePartials(v interface{}) []auditRolePartial {
-	arr, ok := v.([]interface{})
+func extractAuditRolePartials(v any) []auditRolePartial {
+	arr, ok := v.([]any)
 	if !ok {
 		return nil
 	}
 	out := make([]auditRolePartial, 0, len(arr))
 	for _, item := range arr {
-		obj, ok := item.(map[string]interface{})
+		obj, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}

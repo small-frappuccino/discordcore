@@ -28,7 +28,7 @@ func TestMonitoringService_SetupAndRemoveEventHandlersFromRuntimeConfig(t *testi
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		eventHandlers: make([]interface{}, 0),
+		eventHandlers: make([]func(), 0),
 	}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{DisableUserLogs: true})
@@ -66,7 +66,7 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		router:               router,
 		isRunning:            true,
 		runCtx:               runCtx,
-		eventHandlers:        make([]interface{}, 0),
+		eventHandlers:        make([]func(), 0),
 	}
 
 	if err := ms.memberEventService.Start(context.Background()); err != nil {
@@ -248,7 +248,7 @@ func TestMonitoringService_SetupEventHandlersKeepsPresenceWatchWhenUserLogsDisab
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		eventHandlers: make([]interface{}, 0),
+		eventHandlers: make([]func(), 0),
 	}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{

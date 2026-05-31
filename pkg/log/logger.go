@@ -130,7 +130,7 @@ func GlobalLevelVar() *slog.LevelVar {
 
 // --- Fluent API Finalizers (kept for compatibility) ---
 
-func (cl *CategorizedLogger) Applicationf(format string, v ...interface{}) {
+func (cl *CategorizedLogger) Applicationf(format string, v ...any) {
 	if cl == nil || cl.logger == nil || cl.logger.application == nil {
 		stdlog.Printf(format, v...)
 		return
@@ -146,7 +146,7 @@ func (cl *CategorizedLogger) Applicationf(format string, v ...interface{}) {
 	}
 }
 
-func (cl *CategorizedLogger) Discordf(format string, v ...interface{}) {
+func (cl *CategorizedLogger) Discordf(format string, v ...any) {
 	if cl == nil || cl.logger == nil || cl.logger.discord == nil {
 		stdlog.Printf(format, v...)
 		return
@@ -162,7 +162,7 @@ func (cl *CategorizedLogger) Discordf(format string, v ...interface{}) {
 	}
 }
 
-func (cl *CategorizedLogger) Databasef(format string, v ...interface{}) {
+func (cl *CategorizedLogger) Databasef(format string, v ...any) {
 	if cl == nil || cl.logger == nil || cl.logger.database == nil {
 		stdlog.Printf(format, v...)
 		return
@@ -178,7 +178,7 @@ func (cl *CategorizedLogger) Databasef(format string, v ...interface{}) {
 	}
 }
 
-func (el *ErrorLogger) Errorf(format string, v ...interface{}) {
+func (el *ErrorLogger) Errorf(format string, v ...any) {
 	if el == nil || el.logger == nil || el.logger.error == nil {
 		stdlog.Printf("ERROR: "+format, v...)
 		return
@@ -187,7 +187,7 @@ func (el *ErrorLogger) Errorf(format string, v ...interface{}) {
 	el.logger.error.Error(msg)
 }
 
-func (el *ErrorLogger) Fatalf(format string, v ...interface{}) {
+func (el *ErrorLogger) Fatalf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	if el == nil || el.logger == nil || el.logger.error == nil {
 		stdlog.Fatalf("FATAL: %s", msg)

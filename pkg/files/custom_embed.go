@@ -83,7 +83,7 @@ func (cfg CustomEmbedConfig) IsZero() bool {
 		len(cfg.Postings) == 0
 }
 
-func invalidCustomEmbedInput(format string, args ...interface{}) error {
+func invalidCustomEmbedInput(format string, args ...any) error {
 	msg := fmt.Sprintf(format, args...)
 	return fmt.Errorf("%w: %s", ErrInvalidCustomEmbedInput, msg)
 }

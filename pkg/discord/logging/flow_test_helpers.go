@@ -57,7 +57,7 @@ func newLoggingConfigManager(t *testing.T, guildID string, channels files.Channe
 	return mgr
 }
 
-func queryIntFromStoreDB(t *testing.T, db *sql.DB, query string, args ...interface{}) int {
+func queryIntFromStoreDB(t *testing.T, db *sql.DB, query string, args ...any) int {
 	t.Helper()
 
 	var value int

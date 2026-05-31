@@ -7,9 +7,9 @@ import (
 )
 
 //go:linkname discordgoHandleEvent github.com/bwmarrin/discordgo.(*Session).handleEvent
-func discordgoHandleEvent(session *discordgo.Session, eventType string, payload interface{})
+func discordgoHandleEvent(session *discordgo.Session, eventType string, payload any)
 
-func dispatchDiscordEvent(session *discordgo.Session, eventType string, payload interface{}) {
+func dispatchDiscordEvent(session *discordgo.Session, eventType string, payload any) {
 	if session == nil {
 		return
 	}

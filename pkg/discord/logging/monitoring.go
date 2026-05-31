@@ -178,9 +178,8 @@ type MonitoringService struct {
 	roleUpdateAuditDebounce map[string]time.Time
 
 	// Event handler references for cleanup
-	eventHandlers []interface{}
 
-	// Presence watch tracking for targeted logs
+	eventHandlers   []func()
 	presenceWatchMu sync.Mutex
 	presenceWatch   map[string]presenceSnapshot
 
@@ -278,7 +277,7 @@ func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 		Healthy:   isRunning && runCtx != nil && runCtx.Err() == nil,
 		Message:   message,
 		LastCheck: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"router_ready": ms.TaskRouter() != nil,
 		},
 	}
@@ -509,7 +508,7 @@ func NewMonitoringServiceForBotWithMetrics(
 		rolesCacheCleanup:       make(chan struct{}),
 		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
 		roleUpdateAuditDebounce: make(map[string]time.Time),
-		eventHandlers:           make([]interface{}, 0),
+		eventHandlers:           make([]func(), 0),
 		presenceWatch:           make(map[string]presenceSnapshot),
 		statsLastRun:            make(map[string]time.Time),
 		statsGuilds:             make(map[string]*statsGuildState),
