@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -134,7 +135,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 	ctx, cancel := context.WithTimeout(r.Context(), defaultDiscordOAuthExchangeTimeout)
 	defer cancel()
 
-	tokenPayload, status, err := provider.exchangeCode(ctx, code)
+	tokenPayload, rawError, status, err := provider.exchangeCode(ctx, code)
 	if err != nil {
 		log.ApplicationLogger().Error("Discord OAuth token exchange failed", "operation", "control.oauth.callback.exchange_token", "status", status, "err", err)
 		if status < 400 {
@@ -145,8 +146,11 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 			"status":  "error",
 			"message": "discord oauth token exchange failed",
 		}
-		if len(tokenPayload) > 0 {
-			response["discord_error"] = tokenPayload
+		if len(rawError) > 0 {
+			var discordErr map[string]any
+			if jsonErr := json.Unmarshal(rawError, &discordErr); jsonErr == nil {
+				response["discord_error"] = discordErr
+			}
 		}
 
 		w.Header().Set("Cache-Control", "no-store")

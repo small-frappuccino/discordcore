@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,8 +17,8 @@ import (
 )
 
 type auditRolePartial struct {
-	ID   string
-	Name string
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func diffStringIDs(prev, cur []string) (added []string, removed []string) {
@@ -170,28 +171,20 @@ func isRecentRoleUpdateAuditEntry(entry *discordgo.AuditLogEntry) bool {
 }
 
 func extractAuditRolePartials(v any) []auditRolePartial {
-	arr, ok := v.([]any)
-	if !ok {
+	data, err := json.Marshal(v)
+	if err != nil {
 		return nil
 	}
-	out := make([]auditRolePartial, 0, len(arr))
-	for _, item := range arr {
-		obj, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		role := auditRolePartial{}
-		if value, ok := obj["id"].(string); ok {
-			role.ID = value
-		}
-		if value, ok := obj["name"].(string); ok {
-			role.Name = value
-		}
-		if role.ID != "" || role.Name != "" {
-			out = append(out, role)
+	var out []auditRolePartial
+	_ = json.Unmarshal(data, &out)
+
+	var filtered []auditRolePartial
+	for _, r := range out {
+		if r.ID != "" || r.Name != "" {
+			filtered = append(filtered, r)
 		}
 	}
-	return out
+	return filtered
 }
 
 func extractAuditRoleDelta(entry *discordgo.AuditLogEntry) (added []auditRolePartial, removed []auditRolePartial) {

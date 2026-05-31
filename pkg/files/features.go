@@ -175,7 +175,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 		guildPtr := guild.LookupToggle(spec.ID)
 		globalPtr := global.LookupToggle(spec.ID)
 		resolved := resolveFeatureBool(guildPtr, globalPtr, spec.Default)
-		resolvedToggleValue(&out, spec.Path).SetBool(resolved)
+		spec.SetResolved(&out, resolved)
 	}
 	return out
 }

@@ -12,10 +12,18 @@ import (
 	"time"
 )
 
-func (o *discordOAuthProvider) exchangeCode(ctx context.Context, code string) (map[string]any, int, error) {
+type discordOAuthTokenResponse struct {
+	AccessToken  string  `json:"access_token"`
+	RefreshToken string  `json:"refresh_token"`
+	TokenType    string  `json:"token_type"`
+	Scope        string  `json:"scope"`
+	ExpiresIn    float64 `json:"expires_in"`
+}
+
+func (o *discordOAuthProvider) exchangeCode(ctx context.Context, code string) (*discordOAuthTokenResponse, []byte, int, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("authorization code is required")
+		return nil, nil, http.StatusBadRequest, fmt.Errorf("authorization code is required")
 	}
 
 	form := url.Values{}
@@ -27,38 +35,38 @@ func (o *discordOAuthProvider) exchangeCode(ctx context.Context, code string) (m
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, 0, fmt.Errorf("build token exchange request: %w", err)
+		return nil, nil, 0, fmt.Errorf("build token exchange request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := o.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("execute token exchange request: %w", err)
+		return nil, nil, 0, fmt.Errorf("execute token exchange request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, defaultDiscordOAuthReadBodyLimit))
 	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("read token exchange response: %w", err)
-	}
-
-	payload, err := parseDiscordOAuthPayload(body)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("decode token exchange response: %w", err)
+		return nil, nil, resp.StatusCode, fmt.Errorf("read token exchange response: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return payload, resp.StatusCode, fmt.Errorf("discord token endpoint returned status %d", resp.StatusCode)
+		return nil, body, resp.StatusCode, fmt.Errorf("discord token endpoint returned status %d", resp.StatusCode)
 	}
 
-	return payload, resp.StatusCode, nil
+	var response discordOAuthTokenResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, body, resp.StatusCode, fmt.Errorf("decode token exchange response: %w", err)
+	}
+
+	return &response, body, resp.StatusCode, nil
 }
 
-func (o *discordOAuthProvider) refreshAccessToken(ctx context.Context, refreshToken string) (map[string]any, int, error) {
+func (o *discordOAuthProvider) refreshAccessToken(ctx context.Context, refreshToken string) (*discordOAuthTokenResponse, []byte, int, error) {
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("refresh token is required")
+		return nil, nil, http.StatusBadRequest, fmt.Errorf("refresh token is required")
 	}
 
 	form := url.Values{}
@@ -69,32 +77,32 @@ func (o *discordOAuthProvider) refreshAccessToken(ctx context.Context, refreshTo
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, 0, fmt.Errorf("build token refresh request: %w", err)
+		return nil, nil, 0, fmt.Errorf("build token refresh request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := o.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("execute token refresh request: %w", err)
+		return nil, nil, 0, fmt.Errorf("execute token refresh request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, defaultDiscordOAuthReadBodyLimit))
 	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("read token refresh response: %w", err)
-	}
-
-	payload, err := parseDiscordOAuthPayload(body)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("decode token refresh response: %w", err)
+		return nil, nil, resp.StatusCode, fmt.Errorf("read token refresh response: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return payload, resp.StatusCode, fmt.Errorf("discord refresh token endpoint returned status %d", resp.StatusCode)
+		return nil, body, resp.StatusCode, fmt.Errorf("discord refresh token endpoint returned status %d", resp.StatusCode)
 	}
 
-	return payload, resp.StatusCode, nil
+	var response discordOAuthTokenResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, body, resp.StatusCode, fmt.Errorf("decode token refresh response: %w", err)
+	}
+
+	return &response, body, resp.StatusCode, nil
 }
 
 func (o *discordOAuthProvider) fetchUser(ctx context.Context, accessToken, tokenType string) (discordOAuthUser, error) {
@@ -130,63 +138,35 @@ func (o *discordOAuthProvider) fetchUser(ctx context.Context, accessToken, token
 	return user, nil
 }
 
-func parseTokenResponse(payload map[string]any, fallbackScopes []string) (accessToken string, refreshToken string, tokenType string, scopes []string, tokenTTL time.Duration, err error) {
-	accessToken, _ = payload["access_token"].(string)
-	accessToken = strings.TrimSpace(accessToken)
+func parseTokenResponse(payload *discordOAuthTokenResponse, fallbackScopes []string) (accessToken string, refreshToken string, tokenType string, scopes []string, tokenTTL time.Duration, err error) {
+	if payload == nil {
+		err = fmt.Errorf("missing token payload")
+		return
+	}
+	accessToken = strings.TrimSpace(payload.AccessToken)
 	if accessToken == "" {
 		err = fmt.Errorf("missing access_token")
 		return
 	}
-	refreshToken, _ = payload["refresh_token"].(string)
-	refreshToken = strings.TrimSpace(refreshToken)
+	refreshToken = strings.TrimSpace(payload.RefreshToken)
 
-	tokenType, _ = payload["token_type"].(string)
-	tokenType = strings.TrimSpace(tokenType)
+	tokenType = strings.TrimSpace(payload.TokenType)
 	if tokenType == "" {
 		tokenType = "Bearer"
 	}
 
-	scopeRaw, _ := payload["scope"].(string)
-	scopeRaw = strings.TrimSpace(scopeRaw)
+	scopeRaw := strings.TrimSpace(payload.Scope)
 	if scopeRaw == "" {
 		scopes = slices.Clone(fallbackScopes)
 	} else {
 		scopes = uniqueSortedTokens(scopeRaw)
 	}
 
-	if seconds, ok := parseTokenExpirySeconds(payload["expires_in"]); ok && seconds > 0 {
-		tokenTTL = time.Duration(seconds) * time.Second
+	if payload.ExpiresIn > 0 {
+		tokenTTL = time.Duration(payload.ExpiresIn) * time.Second
 	}
 
 	return
-}
-
-func parseTokenExpirySeconds(raw any) (int64, bool) {
-	switch value := raw.(type) {
-	case float64:
-		if value <= 0 {
-			return 0, false
-		}
-		return int64(value), true
-	case int64:
-		if value <= 0 {
-			return 0, false
-		}
-		return value, true
-	case int:
-		if value <= 0 {
-			return 0, false
-		}
-		return int64(value), true
-	case json.Number:
-		v, err := value.Int64()
-		if err != nil || v <= 0 {
-			return 0, false
-		}
-		return v, true
-	default:
-		return 0, false
-	}
 }
 
 func resolveAccessTokenExpiry(now time.Time, tokenTTL time.Duration, sessionExpiresAt time.Time) time.Time {
@@ -205,21 +185,6 @@ func resolveAccessTokenExpiry(now time.Time, tokenTTL time.Duration, sessionExpi
 		return sessionExpiresAt.UTC()
 	}
 	return expiresAt
-}
-
-func parseDiscordOAuthPayload(raw []byte) (map[string]any, error) {
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		return map[string]any{}, nil
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, fmt.Errorf("parseDiscordOAuthPayload: %w", err)
-	}
-	if payload == nil {
-		return map[string]any{}, nil
-	}
-	return payload, nil
 }
 
 func (o *discordOAuthProvider) fetchUserGuilds(ctx context.Context, accessToken, tokenType string) ([]discordOAuthGuild, error) {

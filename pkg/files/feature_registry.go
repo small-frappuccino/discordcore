@@ -14,60 +14,261 @@
 // pkg/control/feature_contract_test.go.
 package files
 
-import (
-	"reflect"
-	"strings"
-)
 
 // toggleSpec describes one boolean feature toggle. It is the single
 // source of truth that drives resolve, clone, defaults, dashboard
 // binding, override detection and the per-command enabled check.
 //
-// Path is a dotted accessor that resolves to a *bool field on
-// FeatureToggles and to a bool field on ResolvedFeatureToggles. The
-// matching field names on both structs must be identical, e.g.
-// "Moderation.Clean" or single-segment "MuteRole".
+// Accessor functions replace reflection to ensure compile-time safety
+// when interacting with FeatureToggles and ResolvedFeatureToggles.
 type toggleSpec struct {
-	ID      string
-	Path    string
-	Default bool
+	ID          string
+	Default     bool
+	Get         func(ft *FeatureToggles) *bool
+	Set         func(ft *FeatureToggles, val *bool)
+	GetResolved func(rft *ResolvedFeatureToggles) bool
+	SetResolved func(rft *ResolvedFeatureToggles, val bool)
 }
 
 var featureRegistry = []toggleSpec{
-	{ID: "services.monitoring", Path: "Services.Monitoring", Default: true},
-	{ID: "services.automod", Path: "Services.Automod", Default: true},
-	{ID: "services.commands", Path: "Services.Commands", Default: true},
-	{ID: "services.admin_commands", Path: "Services.AdminCommands", Default: true},
-	{ID: "logging.avatar_logging", Path: "Logging.AvatarLogging", Default: true},
-	{ID: "logging.role_update", Path: "Logging.RoleUpdate", Default: true},
-	{ID: "logging.member_join", Path: "Logging.MemberJoin", Default: true},
-	{ID: "logging.member_leave", Path: "Logging.MemberLeave", Default: true},
-	{ID: "logging.message_process", Path: "Logging.MessageProcess", Default: true},
-	{ID: "logging.message_edit", Path: "Logging.MessageEdit", Default: true},
-	{ID: "logging.message_delete", Path: "Logging.MessageDelete", Default: true},
-	{ID: "logging.reaction_metric", Path: "Logging.ReactionMetric", Default: true},
-	{ID: "logging.automod_action", Path: "Logging.AutomodAction", Default: true},
-	{ID: "logging.moderation_case", Path: "Logging.ModerationCase", Default: true},
-	{ID: "logging.clean_action", Path: "Logging.CleanAction", Default: true},
-	{ID: "moderation.ban", Path: "Moderation.Ban", Default: true},
-	{ID: "moderation.massban", Path: "Moderation.MassBan", Default: true},
-	{ID: "moderation.kick", Path: "Moderation.Kick", Default: true},
-	{ID: "moderation.timeout", Path: "Moderation.Timeout", Default: true},
-	{ID: "moderation.warn", Path: "Moderation.Warn", Default: true},
-	{ID: "moderation.warnings", Path: "Moderation.Warnings", Default: true},
-	{ID: "moderation.clean", Path: "Moderation.Clean", Default: true},
-	{ID: "message_cache.cleanup_on_startup", Path: "MessageCache.CleanupOnStartup", Default: false},
-	{ID: "message_cache.delete_on_log", Path: "MessageCache.DeleteOnLog", Default: false},
-	{ID: "presence_watch.bot", Path: "PresenceWatch.Bot", Default: false},
-	{ID: "presence_watch.user", Path: "PresenceWatch.User", Default: false},
-	{ID: "maintenance.db_cleanup", Path: "Maintenance.DBCleanup", Default: true},
-	{ID: "safety.bot_role_perm_mirror", Path: "Safety.BotRolePermMirror", Default: true},
-	{ID: "backfill.enabled", Path: "Backfill.Enabled", Default: true},
-	{ID: "moderation.mute_role", Path: "MuteRole", Default: true},
-	{ID: "stats_channels", Path: "StatsChannels", Default: true},
-	{ID: "auto_role_assignment", Path: "AutoRoleAssign", Default: true},
-	{ID: "user_prune", Path: "UserPrune", Default: true},
-	{ID: "role_panels", Path: "RolePanels", Default: true},
+	{
+		ID: "services.monitoring", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Services.Monitoring },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Services.Monitoring = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.Monitoring },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Monitoring = val },
+	},
+	{
+		ID: "services.automod", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Services.Automod },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Services.Automod = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.Automod },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Automod = val },
+	},
+	{
+		ID: "services.commands", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Services.Commands },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Services.Commands = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.Commands },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Commands = val },
+	},
+	{
+		ID: "services.admin_commands", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Services.AdminCommands },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Services.AdminCommands = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.AdminCommands },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.AdminCommands = val },
+	},
+	{
+		ID: "logging.avatar_logging", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.AvatarLogging },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.AvatarLogging = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.AvatarLogging },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.AvatarLogging = val },
+	},
+	{
+		ID: "logging.role_update", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.RoleUpdate },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.RoleUpdate = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.RoleUpdate },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.RoleUpdate = val },
+	},
+	{
+		ID: "logging.member_join", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.MemberJoin },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.MemberJoin = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.MemberJoin },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.MemberJoin = val },
+	},
+	{
+		ID: "logging.member_leave", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.MemberLeave },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.MemberLeave = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.MemberLeave },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.MemberLeave = val },
+	},
+	{
+		ID: "logging.message_process", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.MessageProcess },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.MessageProcess = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.MessageProcess },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.MessageProcess = val },
+	},
+	{
+		ID: "logging.message_edit", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.MessageEdit },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.MessageEdit = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.MessageEdit },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.MessageEdit = val },
+	},
+	{
+		ID: "logging.message_delete", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.MessageDelete },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.MessageDelete = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.MessageDelete },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.MessageDelete = val },
+	},
+	{
+		ID: "logging.reaction_metric", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.ReactionMetric },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.ReactionMetric = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.ReactionMetric },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.ReactionMetric = val },
+	},
+	{
+		ID: "logging.automod_action", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.AutomodAction },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.AutomodAction = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.AutomodAction },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.AutomodAction = val },
+	},
+	{
+		ID: "logging.moderation_case", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.ModerationCase },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.ModerationCase = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.ModerationCase },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.ModerationCase = val },
+	},
+	{
+		ID: "logging.clean_action", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Logging.CleanAction },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Logging.CleanAction = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.CleanAction },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.CleanAction = val },
+	},
+	{
+		ID: "moderation.ban", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.Ban },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.Ban = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.Ban },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.Ban = val },
+	},
+	{
+		ID: "moderation.massban", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.MassBan },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.MassBan = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.MassBan },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.MassBan = val },
+	},
+	{
+		ID: "moderation.kick", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.Kick },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.Kick = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.Kick },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.Kick = val },
+	},
+	{
+		ID: "moderation.timeout", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.Timeout },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.Timeout = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.Timeout },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.Timeout = val },
+	},
+	{
+		ID: "moderation.warn", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.Warn },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.Warn = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.Warn },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.Warn = val },
+	},
+	{
+		ID: "moderation.warnings", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.Warnings },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.Warnings = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.Warnings },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.Warnings = val },
+	},
+	{
+		ID: "moderation.clean", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Moderation.Clean },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Moderation.Clean = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Moderation.Clean },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Moderation.Clean = val },
+	},
+	{
+		ID: "message_cache.cleanup_on_startup", Default: false,
+		Get: func(ft *FeatureToggles) *bool { return ft.MessageCache.CleanupOnStartup },
+		Set: func(ft *FeatureToggles, val *bool) { ft.MessageCache.CleanupOnStartup = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.MessageCache.CleanupOnStartup },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.MessageCache.CleanupOnStartup = val },
+	},
+	{
+		ID: "message_cache.delete_on_log", Default: false,
+		Get: func(ft *FeatureToggles) *bool { return ft.MessageCache.DeleteOnLog },
+		Set: func(ft *FeatureToggles, val *bool) { ft.MessageCache.DeleteOnLog = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.MessageCache.DeleteOnLog },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.MessageCache.DeleteOnLog = val },
+	},
+	{
+		ID: "presence_watch.bot", Default: false,
+		Get: func(ft *FeatureToggles) *bool { return ft.PresenceWatch.Bot },
+		Set: func(ft *FeatureToggles, val *bool) { ft.PresenceWatch.Bot = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.PresenceWatch.Bot },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.PresenceWatch.Bot = val },
+	},
+	{
+		ID: "presence_watch.user", Default: false,
+		Get: func(ft *FeatureToggles) *bool { return ft.PresenceWatch.User },
+		Set: func(ft *FeatureToggles, val *bool) { ft.PresenceWatch.User = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.PresenceWatch.User },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.PresenceWatch.User = val },
+	},
+	{
+		ID: "maintenance.db_cleanup", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Maintenance.DBCleanup },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Maintenance.DBCleanup = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Maintenance.DBCleanup },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Maintenance.DBCleanup = val },
+	},
+	{
+		ID: "safety.bot_role_perm_mirror", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Safety.BotRolePermMirror },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Safety.BotRolePermMirror = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Safety.BotRolePermMirror },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Safety.BotRolePermMirror = val },
+	},
+	{
+		ID: "backfill.enabled", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.Backfill.Enabled },
+		Set: func(ft *FeatureToggles, val *bool) { ft.Backfill.Enabled = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Backfill.Enabled },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Backfill.Enabled = val },
+	},
+	{
+		ID: "moderation.mute_role", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.MuteRole },
+		Set: func(ft *FeatureToggles, val *bool) { ft.MuteRole = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.MuteRole },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.MuteRole = val },
+	},
+	{
+		ID: "stats_channels", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.StatsChannels },
+		Set: func(ft *FeatureToggles, val *bool) { ft.StatsChannels = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.StatsChannels },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.StatsChannels = val },
+	},
+	{
+		ID: "auto_role_assignment", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.AutoRoleAssign },
+		Set: func(ft *FeatureToggles, val *bool) { ft.AutoRoleAssign = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.AutoRoleAssign },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.AutoRoleAssign = val },
+	},
+	{
+		ID: "user_prune", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.UserPrune },
+		Set: func(ft *FeatureToggles, val *bool) { ft.UserPrune = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.UserPrune },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.UserPrune = val },
+	},
+	{
+		ID: "role_panels", Default: true,
+		Get: func(ft *FeatureToggles) *bool { return ft.RolePanels },
+		Set: func(ft *FeatureToggles, val *bool) { ft.RolePanels = cloneBoolPtr(val) },
+		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.RolePanels },
+		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.RolePanels = val },
+	},
 }
 
 var featureSpecByID = func() map[string]toggleSpec {
@@ -77,30 +278,6 @@ var featureSpecByID = func() map[string]toggleSpec {
 	}
 	return out
 }()
-
-func walkFieldByPath(root reflect.Value, path string) reflect.Value {
-	current := root
-	for _, segment := range strings.Split(path, ".") {
-		current = current.FieldByName(segment)
-		if !current.IsValid() {
-			return reflect.Value{}
-		}
-	}
-	return current
-}
-
-// togglePtrValue returns the addressable *bool field on FeatureToggles
-// for the given dotted path. The returned reflect.Value has
-// Kind() == reflect.Pointer with elem kind bool.
-func togglePtrValue(ft *FeatureToggles, path string) reflect.Value {
-	return walkFieldByPath(reflect.ValueOf(ft).Elem(), path)
-}
-
-// resolvedToggleValue returns the addressable bool field on
-// ResolvedFeatureToggles for the given dotted path.
-func resolvedToggleValue(rft *ResolvedFeatureToggles, path string) reflect.Value {
-	return walkFieldByPath(reflect.ValueOf(rft).Elem(), path)
-}
 
 // FeatureToggleIDs returns the list of registered toggle IDs in
 // declaration order.
@@ -125,12 +302,7 @@ func (ft FeatureToggles) LookupToggle(id string) *bool {
 	if !ok {
 		return nil
 	}
-	field := togglePtrValue(&ft, spec.Path)
-	if !field.IsValid() || field.IsNil() {
-		return nil
-	}
-	v := field.Elem().Bool()
-	return &v
+	return cloneBoolPtr(spec.Get(&ft))
 }
 
 // SetToggle writes value into the registered toggle. Unknown IDs are
@@ -140,24 +312,15 @@ func (ft *FeatureToggles) SetToggle(id string, value *bool) {
 	if !ok {
 		return
 	}
-	field := togglePtrValue(ft, spec.Path)
-	if !field.IsValid() {
-		return
-	}
-	if value == nil {
-		field.Set(reflect.Zero(field.Type()))
-		return
-	}
-	copied := *value
-	field.Set(reflect.ValueOf(&copied))
+	spec.Set(ft, value)
 }
 
 // HasAnyOverride reports whether any registered toggle field is set.
 // Non-toggle fields on FeatureToggles are not considered.
 func (ft FeatureToggles) HasAnyOverride() bool {
 	for _, spec := range featureRegistry {
-		field := togglePtrValue(&ft, spec.Path)
-		if field.IsValid() && !field.IsNil() {
+		ptr := spec.Get(&ft)
+		if ptr != nil {
 			return true
 		}
 	}
@@ -171,9 +334,5 @@ func (rft ResolvedFeatureToggles) Lookup(id string) (bool, bool) {
 	if !ok {
 		return false, false
 	}
-	field := resolvedToggleValue(&rft, spec.Path)
-	if !field.IsValid() {
-		return false, false
-	}
-	return field.Bool(), true
+	return spec.GetResolved(&rft), true
 }

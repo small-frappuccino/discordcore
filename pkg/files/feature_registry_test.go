@@ -8,38 +8,6 @@ import (
 	"testing"
 )
 
-func TestFeatureRegistryPathsResolveOnFeatureToggles(t *testing.T) {
-	t.Parallel()
-
-	var ft FeatureToggles
-	for _, spec := range featureRegistry {
-		field := togglePtrValue(&ft, spec.Path)
-		if !field.IsValid() {
-			t.Fatalf("feature registry: spec %q path %q does not resolve on FeatureToggles", spec.ID, spec.Path)
-		}
-		if field.Kind() != reflect.Pointer {
-			t.Fatalf("feature registry: spec %q path %q resolves to kind %s on FeatureToggles, want pointer", spec.ID, spec.Path, field.Kind())
-		}
-		if field.Type().Elem().Kind() != reflect.Bool {
-			t.Fatalf("feature registry: spec %q path %q resolves to *%s on FeatureToggles, want *bool", spec.ID, spec.Path, field.Type().Elem().Kind())
-		}
-	}
-}
-
-func TestFeatureRegistryPathsResolveOnResolvedFeatureToggles(t *testing.T) {
-	t.Parallel()
-
-	var rft ResolvedFeatureToggles
-	for _, spec := range featureRegistry {
-		field := resolvedToggleValue(&rft, spec.Path)
-		if !field.IsValid() {
-			t.Fatalf("feature registry: spec %q path %q does not resolve on ResolvedFeatureToggles", spec.ID, spec.Path)
-		}
-		if field.Kind() != reflect.Bool {
-			t.Fatalf("feature registry: spec %q path %q resolves to kind %s on ResolvedFeatureToggles, want bool", spec.ID, spec.Path, field.Kind())
-		}
-	}
-}
 
 func TestFeatureRegistryIDsAreUnique(t *testing.T) {
 	t.Parallel()

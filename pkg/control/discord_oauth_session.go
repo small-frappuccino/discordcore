@@ -90,7 +90,7 @@ func (o *discordOAuthProvider) ensureFreshSessionAccessToken(ctx context.Context
 		return current, nil
 	}
 
-	payload, status, err := o.refreshAccessToken(ctx, current.RefreshToken)
+	payload, _, status, err := o.refreshAccessToken(ctx, current.RefreshToken)
 	if err != nil {
 		if status >= 400 && status < 500 {
 			if deleteErr := o.sessions.Delete(current.ID); deleteErr != nil {
