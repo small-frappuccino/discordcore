@@ -169,7 +169,7 @@ func sendOfficialStarterMessage(session *discordgo.Session, channelID string, em
 	endpoint := discordgo.EndpointChannelMessages(channelID)
 	body, err := session.RequestWithBucketID(http.MethodPost, endpoint, payload, endpoint)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sendOfficialStarterMessage: %w", err)
 	}
 	var message discordgo.Message
 	if err := json.Unmarshal(body, &message); err != nil {

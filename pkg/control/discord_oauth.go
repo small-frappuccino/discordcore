@@ -137,7 +137,7 @@ func (g *discordOAuthGuild) UnmarshalJSON(data []byte) error {
 
 	var raw rawDiscordOAuthGuild
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("discordOAuthGuild.UnmarshalJSON: %w", err)
 	}
 
 	permissions, err := parseDiscordOAuthPermissionBits(raw.Permissions)

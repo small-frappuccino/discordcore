@@ -62,7 +62,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 		now,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err)
 	}
 	defer rows.Close()
 
@@ -70,12 +70,12 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err)
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err)
 	}
 	return records, nil
 }
@@ -128,7 +128,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 		now,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err)
 	}
 	defer rows.Close()
 
@@ -136,12 +136,12 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err)
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err)
 	}
 	return records, nil
 }
@@ -203,7 +203,7 @@ func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDOfficialPostState: %w", err)
 	}
 	return record, nil
 }

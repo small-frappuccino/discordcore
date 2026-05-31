@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -271,7 +272,7 @@ func readMemberLastSeen(store *Store, guildID, userID string) (time.Time, bool, 
 		if err == sql.ErrNoRows {
 			return time.Time{}, false, nil
 		}
-		return time.Time{}, false, err
+		return time.Time{}, false, fmt.Errorf("readMemberLastSeen: %w", err)
 	}
 	if !lastSeen.Valid {
 		return time.Time{}, false, nil

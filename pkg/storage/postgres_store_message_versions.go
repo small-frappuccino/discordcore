@@ -45,10 +45,10 @@ func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, vers
 
 	assigned, err := reserveMessageVersionRangesTx(ctx, tx, normalized)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.InsertMessageVersionsMixedBatchContext: %w", err)
 	}
 	if err := insertMessageHistoryBatchTx(ctx, tx, assigned); err != nil {
-		return err
+		return fmt.Errorf("Store.InsertMessageVersionsMixedBatchContext: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit message versions tx: %w", err)
@@ -104,7 +104,7 @@ func reserveMessageVersionRangesTx(ctx context.Context, tx *sql.Tx, versions []M
 	for _, group := range groupMessageVersions(assigned) {
 		lastVersion, err := lockMessageVersionCounterTx(ctx, tx, group.GuildID, group.MessageID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("reserveMessageVersionRangesTx: %w", err)
 		}
 		nextVersion := lastVersion
 		for _, idx := range group.Indexes {
@@ -119,7 +119,7 @@ func reserveMessageVersionRangesTx(ctx context.Context, tx *sql.Tx, versions []M
 		}
 		if nextVersion != lastVersion {
 			if err := updateMessageVersionCounterTx(ctx, tx, group.GuildID, group.MessageID, nextVersion); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("reserveMessageVersionRangesTx: %w", err)
 			}
 		}
 	}
@@ -159,18 +159,18 @@ func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messa
 		return 0, nil
 	}
 
-	if _, err := tx.ExecContext(ctx, 
+	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO message_version_counters (guild_id, message_id, last_version)
          VALUES ($1, $2, COALESCE((SELECT MAX(version) FROM messages_history WHERE guild_id=$3 AND message_id=$4), 0))
          ON CONFLICT (guild_id, message_id) DO NOTHING`,
-	 guildID, messageID, guildID, messageID); err != nil {
+		guildID, messageID, guildID, messageID); err != nil {
 		return 0, fmt.Errorf("ensure message version counter: %w", err)
 	}
 
 	var lastVersion int64
-	if err := tx.QueryRowContext(ctx, 
+	if err := tx.QueryRowContext(ctx,
 		`SELECT last_version FROM message_version_counters WHERE guild_id=$1 AND message_id=$2 FOR UPDATE`,
-	 guildID, messageID).Scan(&lastVersion); err != nil {
+		guildID, messageID).Scan(&lastVersion); err != nil {
 		return 0, fmt.Errorf("lock message version counter: %w", err)
 	}
 	return int(lastVersion), nil
@@ -180,9 +180,9 @@ func updateMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, mes
 	if guildID == "" || messageID == "" {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, 
+	if _, err := tx.ExecContext(ctx,
 		`UPDATE message_version_counters SET last_version=$1 WHERE guild_id=$2 AND message_id=$3`,
-	 lastVersion, guildID, messageID); err != nil {
+		lastVersion, guildID, messageID); err != nil {
 		return fmt.Errorf("update message version counter: %w", err)
 	}
 	return nil

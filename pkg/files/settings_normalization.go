@@ -267,7 +267,7 @@ func normalizeRuntimeDatabaseConfig(in DatabaseRuntimeConfig) (DatabaseRuntimeCo
 
 	normalized := cfg.Normalized()
 	if err := normalized.Validate(); err != nil {
-		return DatabaseRuntimeConfig{}, false, err
+		return DatabaseRuntimeConfig{}, false, fmt.Errorf("normalizeRuntimeDatabaseConfig: %w", err)
 	}
 
 	return DatabaseRuntimeConfig{

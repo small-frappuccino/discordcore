@@ -71,7 +71,7 @@ func (rs *ReactionEventService) Start(ctx context.Context) error {
 		return fmt.Errorf("reaction event service discord session is nil")
 	}
 	if _, err := rs.lifecycle.Start(ctx); err != nil {
-		return err
+		return fmt.Errorf("ReactionEventService.Start: %w", err)
 	}
 
 	rs.handlerCancels = rs.handlerCancels[:0]
@@ -96,7 +96,7 @@ func (rs *ReactionEventService) Start(ctx context.Context) error {
 // Stop unregisters handlers and stops the service.
 func (rs *ReactionEventService) Stop(ctx context.Context) error {
 	if err := rs.lifecycle.Cancel(); err != nil {
-		return err
+		return fmt.Errorf("ReactionEventService.Stop: %w", err)
 	}
 	for _, cancel := range rs.handlerCancels {
 		if cancel != nil {
@@ -106,7 +106,7 @@ func (rs *ReactionEventService) Stop(ctx context.Context) error {
 	rs.handlerCancels = nil
 
 	if err := rs.lifecycle.Wait(ctx); err != nil {
-		return err
+		return fmt.Errorf("ReactionEventService.Stop: %w", err)
 	}
 
 	rs.logger.Info("Reaction event service stopped")
@@ -203,7 +203,7 @@ func (rs *ReactionEventService) enforceBlockedReaction(
 	}
 	targetUserID, found, err := resolveReactionMessageAuthorID(s, e)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("ReactionEventService.enforceBlockedReaction: %w", err)
 	}
 	if !found {
 		return false, nil

@@ -47,7 +47,7 @@ func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, r *http.Req
 func buildGuildChannelOptions(session *discordgo.Session, guildID string) ([]guildChannelOption, error) {
 	guild, err := resolveGuildFromDiscordSession(session, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("buildGuildChannelOptions: %w", err)
 	}
 
 	options := make([]guildChannelOption, 0, len(guild.Channels))

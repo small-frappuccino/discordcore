@@ -306,7 +306,7 @@ func (sm *ServiceManager) StartService(name string) error {
 		info.ErrorCount++
 		sm.updateServiceState(info, StateError)
 		sm.mu.Unlock()
-		return err
+		return fmt.Errorf("ServiceManager.StartService: %w", err)
 	}
 
 	now := time.Now()
@@ -358,7 +358,7 @@ func (sm *ServiceManager) StopService(name string) error {
 		sm.updateServiceState(info, StateError)
 		sm.mu.Unlock()
 		log.ErrorLoggerRaw().Error("Service stop failed", "service", name, "err", err)
-		return err
+		return fmt.Errorf("ServiceManager.StopService: %w", err)
 	}
 
 	now := time.Now()
@@ -452,7 +452,7 @@ func (sm *ServiceManager) calculateStartOrder() ([]string, error) {
 				return fmt.Errorf("service '%s' depends on unknown service '%s'", name, dep)
 			}
 			if err := visit(dep); err != nil {
-				return err
+				return fmt.Errorf("ServiceManager.calculateStartOrder: %w", err)
 			}
 		}
 		temp[name] = false
@@ -463,7 +463,7 @@ func (sm *ServiceManager) calculateStartOrder() ([]string, error) {
 
 	for name := range sm.services {
 		if err := visit(name); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ServiceManager.calculateStartOrder: %w", err)
 		}
 	}
 

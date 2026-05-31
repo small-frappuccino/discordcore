@@ -90,12 +90,12 @@ func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []Partner
 
 	normalizedPartners, err := normalizePartners(partners, tpl.OtherFandomLabel)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("BoardRenderer.Render: %w", err)
 	}
 
 	descriptions, totalFandoms, err := renderDescriptions(tpl, normalizedPartners, limits)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("BoardRenderer.Render: %w", err)
 	}
 
 	if len(descriptions) > limits.maxEmbeds {
@@ -253,7 +253,7 @@ func renderDescriptions(
 	if len(partners) == 0 {
 		next, carry, err := appendDescriptionChunk(descriptions, current, tpl.EmptyStateText, limits.maxDescriptionChars)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, fmt.Errorf("renderDescriptions: %w", err)
 		}
 		descriptions, current = next, carry
 		return finalizeDescriptions(descriptions, current, tpl.EmptyStateText), 0, nil
@@ -280,14 +280,14 @@ func renderDescriptions(
 
 		sectionFragments, nextGlobalIndex, err := renderSectionFragments(tpl, fandom, entries, globalIndex, limits.maxDescriptionChars)
 		if err != nil {
-			return nil, len(fandomOrder), err
+			return nil, len(fandomOrder), fmt.Errorf("renderDescriptions: %w", err)
 		}
 		globalIndex = nextGlobalIndex
 
 		for _, fragment := range sectionFragments {
 			next, carry, err := appendDescriptionChunk(descriptions, current, fragment, limits.maxDescriptionChars)
 			if err != nil {
-				return nil, len(fandomOrder), err
+				return nil, len(fandomOrder), fmt.Errorf("renderDescriptions: %w", err)
 			}
 			descriptions, current = next, carry
 		}
@@ -345,7 +345,7 @@ func renderSectionFragments(
 
 	fragments, err := splitSectionIntoChunks(header, continuationHeader, lines, maxDescriptionChars)
 	if err != nil {
-		return nil, globalStart, err
+		return nil, globalStart, fmt.Errorf("renderSectionFragments: %w", err)
 	}
 	return fragments, globalIndex, nil
 }

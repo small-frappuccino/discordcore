@@ -70,7 +70,7 @@ func certificateExistsInStore(store windows.Handle, raw []byte) (bool, error) {
 			if err == windows.Errno(windows.CRYPT_E_NOT_FOUND) {
 				return false, nil
 			}
-			return false, err
+			return false, fmt.Errorf("certificateExistsInStore: %w", err)
 		}
 		if current == nil {
 			return false, nil

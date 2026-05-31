@@ -26,7 +26,7 @@ func (o *discordOAuthProvider) sessionIDFromRequest(r *http.Request) (string, er
 func (o *discordOAuthProvider) sessionFromRequest(r *http.Request) (discordOAuthSession, error) {
 	sessionID, err := o.sessionIDFromRequest(r)
 	if err != nil {
-		return discordOAuthSession{}, err
+		return discordOAuthSession{}, fmt.Errorf("discordOAuthProvider.sessionFromRequest: %w", err)
 	}
 	session, ok, err := o.sessions.Get(sessionID, time.Now())
 	if err != nil {

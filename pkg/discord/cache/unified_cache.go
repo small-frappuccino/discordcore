@@ -899,7 +899,7 @@ func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channe
 func encodeEntity(v any) (string, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("encodeEntity: %w", err)
 	}
 	return string(data), nil
 }

@@ -73,7 +73,7 @@ func buildGuildMemberOptions(session *discordgo.Session, guildID, query, selecte
 
 	members, err := lookupGuildMembers(session, guildID, normalizedQuery, normalizedLimit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("buildGuildMemberOptions: %w", err)
 	}
 
 	for _, member := range members {

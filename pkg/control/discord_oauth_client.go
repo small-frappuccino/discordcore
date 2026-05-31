@@ -214,7 +214,7 @@ func parseDiscordOAuthPayload(raw []byte) (map[string]any, error) {
 
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parseDiscordOAuthPayload: %w", err)
 	}
 	if payload == nil {
 		return map[string]any{}, nil
@@ -324,7 +324,7 @@ func uniqueSortedTokens(raw string) []string {
 func parseAbsoluteURL(raw string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parseAbsoluteURL: %w", err)
 	}
 	if !parsed.IsAbs() || parsed.Host == "" {
 		return nil, fmt.Errorf("absolute URL is required")

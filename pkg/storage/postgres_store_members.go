@@ -27,12 +27,12 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	if err := upsertGuildMemberSnapshotBatch(ctx, tx, guildID, normalized, updatedAt); err != nil {
-		return err
+		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
 	}
 	return tx.Commit()
 }
@@ -161,11 +161,10 @@ func queryCurrentAvatarHashesByUserID(ctx context.Context, tx *sql.Tx, guildID s
 	if len(userIDs) == 0 {
 		return nil, nil
 	}
-	
 
 	rows, err := txQueryContext(ctx, tx, `SELECT user_id, avatar_hash FROM avatars_current WHERE guild_id=$1 AND user_id = ANY($2)`, guildID, userIDs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("queryCurrentAvatarHashesByUserID: %w", err)
 	}
 	defer rows.Close()
 
@@ -173,7 +172,7 @@ func queryCurrentAvatarHashesByUserID(ctx context.Context, tx *sql.Tx, guildID s
 	for rows.Next() {
 		var userID, avatarHash string
 		if err := rows.Scan(&userID, &avatarHash); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("queryCurrentAvatarHashesByUserID: %w", err)
 		}
 		hashes[userID] = avatarHash
 	}
@@ -252,7 +251,7 @@ func deleteRolesForUsersBatch(ctx context.Context, tx *sql.Tx, guildID string, u
 	if len(userIDs) == 0 {
 		return nil
 	}
-	
+
 	b := strings.Builder{}
 	b.WriteString("DELETE FROM roles_current WHERE guild_id=$1 AND user_id IN (")
 	args := []any{guildID}
@@ -306,14 +305,14 @@ func upsertMemberJoinsBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 
 	for i, row := range snapshots {
 		userIDs[i] = row.UserID
-		
+
 		joinedAt := seenAt
 		if !row.JoinedAt.IsZero() {
 			joinedAt = row.JoinedAt.UTC()
 		}
 		joinedAts[i] = joinedAt
 		seenAts[i] = seenAt
-		
+
 		var isBot sql.NullBool
 		if row.HasBot {
 			isBot = sql.NullBool{Valid: true, Bool: row.IsBot}
@@ -428,7 +427,7 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.MarkMemberLeftContext: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -450,7 +449,7 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 		return err
 	}
 	if _, err := txExecContext(ctx, tx, `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
-		return err
+		return fmt.Errorf("Store.MarkMemberLeftContext: %w", err)
 	}
 	return tx.Commit()
 }
@@ -463,7 +462,7 @@ func (s *Store) MemberJoin(ctx context.Context, guildID, userID string) (time.Ti
 		if err == sql.ErrNoRows {
 			return time.Time{}, false, nil
 		}
-		return time.Time{}, false, err
+		return time.Time{}, false, fmt.Errorf("Store.MemberJoin: %w", err)
 	}
 	return jt, true, nil
 }
@@ -486,7 +485,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 		 ORDER BY mj.user_id, rc.role_id
 	`, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err)
 	}
 	defer rows.Close()
 
@@ -501,7 +500,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 			roleID     sql.NullString
 		)
 		if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err)
 		}
 		idx, ok := indexByUser[userID]
 		if !ok {
@@ -526,7 +525,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err)
 	}
 	return states, nil
 }
@@ -544,7 +543,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 
 	tx, err := s.db.Begin()
 	if err != nil {
-		return false, "", err
+		return false, "", fmt.Errorf("Store.UpsertAvatar: %w", err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -586,7 +585,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 	}
 
 	if err := tx.Commit(); err != nil {
-		return false, "", err
+		return false, "", fmt.Errorf("Store.UpsertAvatar: %w", err)
 	}
 	return changed, curHash, nil
 }
@@ -612,7 +611,7 @@ func (s *Store) GetAvatar(guildID, userID string) (hash string, updatedAt time.T
 func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) {
 	rows, err := s.query(`SELECT user_id, joined_at FROM member_joins WHERE guild_id=$1`, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetAllMemberJoins: %w", err)
 	}
 	defer rows.Close()
 
@@ -621,7 +620,7 @@ func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) 
 		var userID string
 		var joinedAt time.Time
 		if err := rows.Scan(&userID, &joinedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.GetAllMemberJoins: %w", err)
 		}
 		members[userID] = joinedAt
 	}
@@ -632,7 +631,7 @@ func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) 
 func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, error) {
 	rows, err := s.query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=$1`, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetAllGuildMemberRoles: %w", err)
 	}
 	defer rows.Close()
 
@@ -640,7 +639,7 @@ func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, err
 	for rows.Next() {
 		var userID, roleID string
 		if err := rows.Scan(&userID, &roleID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.GetAllGuildMemberRoles: %w", err)
 		}
 		memberRoles[userID] = append(memberRoles[userID], roleID)
 	}

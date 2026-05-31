@@ -40,7 +40,7 @@ func isOfficialPostAbandoned(post storage.QOTDOfficialPostRecord) bool {
 func generatePublishNonce() (string, error) {
 	var raw [8]byte
 	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
+		return "", fmt.Errorf("generatePublishNonce: %w", err)
 	}
 	return hex.EncodeToString(raw[:]), nil
 }
@@ -59,7 +59,7 @@ func (s *Service) completeOfficialPostProvisioning(
 	// loaded it but before publish starts.
 	updated, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateProvisioning), nil, nil)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 	}
 	post = *updated
 
@@ -95,7 +95,7 @@ func (s *Service) completeOfficialPostProvisioning(
 			AnswerChannelID:            published.AnswerChannelID,
 		})
 		if err != nil {
-			return nil, nil, "", err
+			return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 		}
 		post = *progress
 		if strings.TrimSpace(post.QuestionListThreadID) != "" {
@@ -159,7 +159,7 @@ func (s *Service) completeOfficialPostProvisioning(
 		if _, markErr := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateFailed), nil, nil); markErr != nil {
 			return nil, nil, "", fmt.Errorf("finalize qotd official post: %w (mark failed: %v)", err, markErr)
 		}
-		return nil, nil, "", err
+		return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 	}
 	if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
 		GuildID:              finalized.GuildID,
@@ -176,7 +176,7 @@ func (s *Service) completeOfficialPostProvisioning(
 	finalState := StateWithinWindow(finalized.GraceUntil, finalized.ArchiveAt, now)
 	finalized, err = s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(finalState), nil, nil)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 	}
 
 	var updatedQuestion *storage.QOTDQuestionRecord
@@ -197,7 +197,7 @@ func (s *Service) completeOfficialPostProvisioning(
 		if needsQuestionUpdate {
 			updatedQuestion, err = s.store.UpdateQOTDQuestion(ctx, *question)
 			if err != nil {
-				return nil, nil, "", err
+				return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 			}
 		} else {
 			updatedQuestion = question
@@ -220,7 +220,7 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 	}
 	question, err := s.store.GetQOTDQuestion(ctx, post.GuildID, post.QuestionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.resumeOfficialPostProvisioning: %w", err)
 	}
 
 	availableQuestions := 0
@@ -244,7 +244,7 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 
 	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, post, question, availableQuestions, threadName, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.resumeOfficialPostProvisioning: %w", err)
 	}
 
 	result := &PublishResult{
@@ -260,7 +260,7 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 func (s *Service) resumeOldestPendingOfficialPost(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) (*PublishResult, error) {
 	pending, err := s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.resumeOldestPendingOfficialPost: %w", err)
 	}
 	if len(pending) == 0 {
 		return nil, nil
@@ -271,11 +271,11 @@ func (s *Service) resumeOldestPendingOfficialPost(ctx context.Context, guildID s
 func (s *Service) reconcilePendingOfficialPosts(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) error {
 	pending, err := s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
 	}
 	for _, post := range pending {
 		if _, err := s.resumeOfficialPostProvisioning(ctx, session, post, now); err != nil {
-			return err
+			return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
 		}
 	}
 	return nil

@@ -33,7 +33,7 @@ func (applier *featureMutationApplier) ApplyPatch(
 
 	payload, err := decodeFeaturePatchPayload(r)
 	if err != nil {
-		return files.BotConfig{}, err
+		return files.BotConfig{}, fmt.Errorf("featureMutationApplier.ApplyPatch: %w", err)
 	}
 	if len(payload) == 0 {
 		return files.BotConfig{}, featurePatchBadRequestError{message: "payload must contain at least one field"}
@@ -50,7 +50,7 @@ func (applier *featureMutationApplier) ApplyPatch(
 		return applier.applyGuildPatch(cfg, guild, def, payload)
 	})
 	if err != nil {
-		return files.BotConfig{}, err
+		return files.BotConfig{}, fmt.Errorf("featureMutationApplier.ApplyPatch: %w", err)
 	}
 	return updated, nil
 }
@@ -63,14 +63,14 @@ func (applier *featureMutationApplier) applyGlobalPatch(
 	remaining := cloneRawPayload(payload)
 
 	if present, enabled, err := consumeNullableBool(remaining, "enabled"); err != nil {
-		return err
+		return fmt.Errorf("featureMutationApplier.applyGlobalPatch: %w", err)
 	} else if present {
 		setGlobalFeatureToggle(&cfg.Features, def.ID, enabled)
 	}
 
 	if handler, ok := globalFeaturePatchHandlers[def.ID]; ok {
 		if err := handler(cfg, remaining); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGlobalPatch: %w", err)
 		}
 	}
 
@@ -79,7 +79,7 @@ func (applier *featureMutationApplier) applyGlobalPatch(
 	}
 	next, err := files.NormalizeRuntimeConfig(cfg.RuntimeConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("featureMutationApplier.applyGlobalPatch: %w", err)
 	}
 	cfg.RuntimeConfig = next
 	return nil
@@ -94,18 +94,18 @@ func (applier *featureMutationApplier) applyGuildPatch(
 	remaining := cloneRawPayload(payload)
 
 	if present, enabled, err := consumeNullableBool(remaining, "enabled"); err != nil {
-		return err
+		return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 	} else if present {
 		setGuildFeatureToggle(guild, def.ID, enabled)
 	}
 
 	if handler, ok := guildFeaturePatchHandlers[def.ID]; ok {
 		if err := handler(cfg, guild, remaining); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		}
 	} else if def.LogEvent != "" {
 		if present, value, err := consumeString(remaining, "channel_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			setLogFeatureChannelID(guild, def.LogEvent, value)
 		}
@@ -116,7 +116,7 @@ func (applier *featureMutationApplier) applyGuildPatch(
 	}
 	next, err := files.NormalizeRuntimeConfig(guild.RuntimeConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 	}
 	guild.RuntimeConfig = next
 	return nil
@@ -128,7 +128,7 @@ type guildFeaturePatchHandler func(*files.BotConfig, *files.GuildConfig, map[str
 var globalFeaturePatchHandlers = map[string]globalFeaturePatchHandler{
 	"presence_watch.bot": func(cfg *files.BotConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeBool(remaining, "watch_bot"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			cfg.RuntimeConfig.PresenceWatchBot = value
 		}
@@ -136,7 +136,7 @@ var globalFeaturePatchHandlers = map[string]globalFeaturePatchHandler{
 	},
 	"presence_watch.user": func(cfg *files.BotConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "user_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			cfg.RuntimeConfig.PresenceWatchUserID = value
 		}
@@ -144,7 +144,7 @@ var globalFeaturePatchHandlers = map[string]globalFeaturePatchHandler{
 	},
 	"safety.bot_role_perm_mirror": func(cfg *files.BotConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "actor_role_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			cfg.RuntimeConfig.BotRolePermMirrorActorRoleID = value
 		}
@@ -152,17 +152,17 @@ var globalFeaturePatchHandlers = map[string]globalFeaturePatchHandler{
 	},
 	"backfill.enabled": func(cfg *files.BotConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "channel_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			cfg.RuntimeConfig.BackfillChannelID = value
 		}
 		if present, value, err := consumeString(remaining, "start_day"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			cfg.RuntimeConfig.BackfillStartDay = value
 		}
 		if present, value, err := consumeString(remaining, "initial_date"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			cfg.RuntimeConfig.BackfillInitialDate = value
 		}
@@ -173,7 +173,7 @@ var globalFeaturePatchHandlers = map[string]globalFeaturePatchHandler{
 var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	"services.commands": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "channel_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Channels.Commands = value
 		}
@@ -181,7 +181,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"services.admin_commands": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeStringSlice(remaining, "allowed_role_ids"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Roles.Allowed = normalizeStringList(value)
 		}
@@ -189,7 +189,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"moderation.mute_role": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "role_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Roles.MuteRole = value
 		}
@@ -197,7 +197,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"presence_watch.bot": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeBool(remaining, "watch_bot"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.RuntimeConfig.PresenceWatchBot = value
 		}
@@ -205,7 +205,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"presence_watch.user": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "user_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.RuntimeConfig.PresenceWatchUserID = value
 		}
@@ -213,7 +213,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"safety.bot_role_perm_mirror": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "actor_role_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.RuntimeConfig.BotRolePermMirrorActorRoleID = value
 		}
@@ -221,17 +221,17 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"backfill.enabled": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "channel_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Channels.EntryBackfill = value
 		}
 		if present, value, err := consumeString(remaining, "start_day"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.RuntimeConfig.BackfillStartDay = value
 		}
 		if present, value, err := consumeString(remaining, "initial_date"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.RuntimeConfig.BackfillInitialDate = value
 		}
@@ -239,12 +239,12 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"stats_channels": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeBool(remaining, "config_enabled"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Stats.Enabled = value
 		}
 		if present, value, err := consumeInt(remaining, "update_interval_mins"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Stats.UpdateIntervalMins = value
 		}
@@ -252,17 +252,17 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"auto_role_assignment": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeBool(remaining, "config_enabled"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Roles.AutoAssignment.Enabled = value
 		}
 		if present, value, err := consumeString(remaining, "target_role_id"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Roles.AutoAssignment.TargetRoleID = value
 		}
 		if present, value, err := consumeStringSlice(remaining, "required_role_ids"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.Roles.AutoAssignment.RequiredRoles = normalizeStringList(value)
 			if len(guild.Roles.AutoAssignment.RequiredRoles) >= 2 {
@@ -273,7 +273,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 	},
 	"user_prune": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeBool(remaining, "config_enabled"); err != nil {
-			return err
+			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
 		} else if present {
 			guild.UserPrune.Enabled = value
 		}

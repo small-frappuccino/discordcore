@@ -11,7 +11,7 @@ import (
 func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files.QOTDConfig, error) {
 	normalized, err := files.NormalizeQOTDConfig(next)
 	if err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("PrepareSettingsUpdate: %w", err)
 	}
 	// Clear suppression only on the ON -> OFF transition: disabling auto
 	// publish means the slot the suppression was guarding no longer exists
@@ -44,26 +44,26 @@ func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files
 func (s *Service) updateSettingsLocked(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
 	current, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.updateSettingsLocked: %w", err)
 	}
 	normalized, err := PrepareSettingsUpdate(current, cfg, s.clock())
 	if err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.updateSettingsLocked: %w", err)
 	}
 	currentDashboard := files.DashboardQOTDConfig(current)
 	nextDashboard := files.DashboardQOTDConfig(normalized)
 	if err := s.configManager.SetQOTDConfig(guildID, normalized); err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.updateSettingsLocked: %w", err)
 	}
 	if err := s.deleteRemovedDeckQuestions(context.Background(), guildID, currentDashboard, nextDashboard); err != nil {
 		if rollbackErr := s.configManager.SetQOTDConfig(guildID, current); rollbackErr != nil {
 			return files.QOTDConfig{}, fmt.Errorf("delete removed qotd deck questions: %w (rollback qotd config: %v)", err, rollbackErr)
 		}
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.updateSettingsLocked: %w", err)
 	}
 	updated, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.updateSettingsLocked: %w", err)
 	}
 	return files.DashboardQOTDConfig(updated), nil
 }

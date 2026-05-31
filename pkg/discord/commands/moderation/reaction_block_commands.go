@@ -97,11 +97,11 @@ func (c *reactionBlockCommand) DefaultMemberPermissions() int64 {
 func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
 	action, err := parseReactionBlockAction(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.Handle: %w", err)
 	}
 	request, err := parseReactionBlockRequest(ctx, reactionBlockActionRequiresEmojis(action))
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.Handle: %w", err)
 	}
 	switch action {
 	case reactionBlockActionSet:
@@ -124,7 +124,7 @@ func (c *reactionBlockCommand) handleSet(ctx *core.Context, request reactionBloc
 		return setReactionBlockPair(current, request.reactorUserID, request.targetUserID, request.emojis), nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleSet: %w", err)
 	}
 	return core.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
@@ -142,7 +142,7 @@ func (c *reactionBlockCommand) handleAdd(ctx *core.Context, request reactionBloc
 		return addReactionBlockPairEmojis(current, request.reactorUserID, request.targetUserID, request.emojis), nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleAdd: %w", err)
 	}
 	return core.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
@@ -158,7 +158,7 @@ func (c *reactionBlockCommand) handleAdd(ctx *core.Context, request reactionBloc
 func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleRemove: %w", err)
 	}
 	updated := removeReactionBlockPairEmojis(current, request.reactorUserID, request.targetUserID, request.emojis)
 	if sameReactionBlockEmojiList(current.EmojisForPair(request.reactorUserID, request.targetUserID), updated.EmojisForPair(request.reactorUserID, request.targetUserID)) {
@@ -168,7 +168,7 @@ func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionB
 		)
 	}
 	if err := saveReactionBlockConfig(ctx, c.configManager, updated); err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleRemove: %w", err)
 	}
 	remaining := updated.EmojisForPair(request.reactorUserID, request.targetUserID)
 	if len(remaining) == 0 {
@@ -191,7 +191,7 @@ func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionB
 func (c *reactionBlockCommand) handleList(ctx *core.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleList: %w", err)
 	}
 	emojis := current.EmojisForPair(request.reactorUserID, request.targetUserID)
 	if len(emojis) == 0 {
@@ -214,7 +214,7 @@ func (c *reactionBlockCommand) handleList(ctx *core.Context, request reactionBlo
 func (c *reactionBlockCommand) handleClear(ctx *core.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleClear: %w", err)
 	}
 	updated := clearReactionBlockPair(current, request.reactorUserID, request.targetUserID)
 	if sameReactionBlockEmojiList(current.EmojisForPair(request.reactorUserID, request.targetUserID), updated.EmojisForPair(request.reactorUserID, request.targetUserID)) {
@@ -224,7 +224,7 @@ func (c *reactionBlockCommand) handleClear(ctx *core.Context, request reactionBl
 		)
 	}
 	if err := saveReactionBlockConfig(ctx, c.configManager, updated); err != nil {
-		return err
+		return fmt.Errorf("reactionBlockCommand.handleClear: %w", err)
 	}
 	return core.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
@@ -252,7 +252,7 @@ func reactionBlockActionRequiresEmojis(action string) bool {
 
 func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionBlockRequest, error) {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
-		return reactionBlockRequest{}, err
+		return reactionBlockRequest{}, fmt.Errorf("parseReactionBlockRequest: %w", err)
 	}
 	options := core.GetSubCommandOptions(ctx.Interaction)
 	reactorUserID := userOptionID(options, reactionBlockReactorOptionName)
@@ -379,18 +379,18 @@ func updateReactionBlockConfig(
 ) (files.ReactionBlockConfig, error) {
 	current, err := loadReactionBlockConfig(configManager, ctx.GuildID)
 	if err != nil {
-		return files.ReactionBlockConfig{}, err
+		return files.ReactionBlockConfig{}, fmt.Errorf("updateReactionBlockConfig: %w", err)
 	}
 	next, err := mutate(current)
 	if err != nil {
-		return files.ReactionBlockConfig{}, err
+		return files.ReactionBlockConfig{}, fmt.Errorf("updateReactionBlockConfig: %w", err)
 	}
 	if err := saveReactionBlockConfig(ctx, configManager, next); err != nil {
-		return files.ReactionBlockConfig{}, err
+		return files.ReactionBlockConfig{}, fmt.Errorf("updateReactionBlockConfig: %w", err)
 	}
 	updated, err := loadReactionBlockConfig(configManager, ctx.GuildID)
 	if err != nil {
-		return files.ReactionBlockConfig{}, err
+		return files.ReactionBlockConfig{}, fmt.Errorf("updateReactionBlockConfig: %w", err)
 	}
 	return updated, nil
 }

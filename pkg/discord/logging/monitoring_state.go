@@ -275,18 +275,18 @@ func paginateGuildMembersContext(
 	after := ""
 	for {
 		if err := ctx.Err(); err != nil {
-			return total, err
+			return total, fmt.Errorf("paginateGuildMembersContext: %w", err)
 		}
 		members, err := fetch(ctx, guildID, after, pageSize)
 		if err != nil {
-			return total, err
+			return total, fmt.Errorf("paginateGuildMembersContext: %w", err)
 		}
 		if len(members) == 0 {
 			return total, nil
 		}
 		if handle != nil {
 			if err := handle(members); err != nil {
-				return total, err
+				return total, fmt.Errorf("paginateGuildMembersContext: %w", err)
 			}
 		}
 		total += len(members)
@@ -317,7 +317,7 @@ func (ms *MonitoringService) forEachGuildMemberPageContext(ctx context.Context, 
 	total, err := paginateGuildMembersContext(ctx, guildID, monitoringGuildMembersPageSize, ms.fetchGuildMemberPageContext, handle)
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Failed to paginate guild members", "guildID", guildID, "fetched_so_far", total, "err", err)
-		return total, err
+		return total, fmt.Errorf("MonitoringService.forEachGuildMemberPageContext: %w", err)
 	}
 	log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
 	return total, nil
@@ -335,7 +335,7 @@ func (ms *MonitoringService) fetchAllGuildMembersContext(ctx context.Context, gu
 		return nil
 	})
 	if err != nil {
-		return all, err
+		return all, fmt.Errorf("MonitoringService.fetchAllGuildMembersContext: %w", err)
 	}
 	return all, nil
 }
@@ -349,13 +349,13 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 	}
 	for _, gcfg := range cfg.Guilds {
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
 		}
 		_, err := ms.forEachGuildMemberPageContext(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
 			joinSnapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
 			for _, member := range members {
 				if err := ctx.Err(); err != nil {
-					return err
+					return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
 				}
 				if member == nil || member.User == nil {
 					continue
@@ -383,7 +383,7 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 
 			for _, member := range members {
 				if err := ctx.Err(); err != nil {
-					return err
+					return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
 				}
 				if member == nil || member.User == nil {
 					continue

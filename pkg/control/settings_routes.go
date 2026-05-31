@@ -139,7 +139,7 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		if payload.Runtime != nil {
 			next, err := files.NormalizeRuntimeConfig(flattenRuntimeSettingsSections(*payload.Runtime))
 			if err != nil {
-				return err
+				return fmt.Errorf("Server.handleGlobalSettingsPut: %w", err)
 			}
 			cfg.RuntimeConfig = next
 		}
@@ -372,14 +372,14 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		if payload.PartnerBoard != nil {
 			next, err := files.NormalizePartnerBoardConfig(*payload.PartnerBoard)
 			if err != nil {
-				return err
+				return fmt.Errorf("Server.handleGuildSettingsPut: %w", err)
 			}
 			guild.PartnerBoard = next
 		}
 		if payload.Runtime != nil {
 			next, err := files.NormalizeRuntimeConfig(flattenRuntimeSettingsSections(*payload.Runtime))
 			if err != nil {
-				return err
+				return fmt.Errorf("Server.handleGuildSettingsPut: %w", err)
 			}
 			guild.RuntimeConfig = next
 		}
@@ -456,7 +456,7 @@ func (s *Server) resolveGuildRegistrySources(
 
 		bindings, err := s.resolveBotGuildBindings(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("Server.resolveGuildRegistrySources: %w", err)
 		}
 		return guildRegistrySourcesFromBindings(bindings), nil, nil
 	case requestAuthModeDiscordOAuthSession:
@@ -465,11 +465,11 @@ func (s *Server) resolveGuildRegistrySources(
 
 		accessible, err := s.resolveAccessibleGuilds(ctx, auth.oauthSession)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("Server.resolveGuildRegistrySources: %w", err)
 		}
 		bindings, err := s.resolveBotGuildBindings(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("Server.resolveGuildRegistrySources: %w", err)
 		}
 		botInstanceIDsByGuild := groupBotInstanceIDsByGuild(bindings)
 
@@ -673,7 +673,7 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 
 	bindings, err := s.resolveBotGuildBindings(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Server.resolveAvailableBotInstanceIDsForGuild: %w", err)
 	}
 	if !guildIDPresentInBindings(bindings, guildID) {
 		return nil, fmt.Errorf("%w: guild_id=%s", errGuildDiscoveryRequired, guildID)

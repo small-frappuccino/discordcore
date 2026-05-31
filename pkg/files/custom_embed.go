@@ -178,11 +178,11 @@ func normalizeCustomEmbedField(in CustomEmbedFieldConfig) (CustomEmbedFieldConfi
 func normalizeCustomEmbed(in CustomEmbedConfig) (CustomEmbedConfig, error) {
 	key, err := validateCustomEmbedKey(in.Key)
 	if err != nil {
-		return CustomEmbedConfig{}, err
+		return CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
 	}
 	out, err := validateCustomEmbedFields(in)
 	if err != nil {
-		return CustomEmbedConfig{}, err
+		return CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
 	}
 	out.Key = key
 
@@ -285,7 +285,7 @@ func (mgr *ConfigManager) CustomEmbed(guildID, key string) (CustomEmbedConfig, e
 	}
 	target, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return CustomEmbedConfig{}, err
+		return CustomEmbedConfig{}, fmt.Errorf("ConfigManager.CustomEmbed: %w", err)
 	}
 
 	gcfg := mgr.GuildConfig(guildID)
@@ -307,17 +307,17 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 	}
 	targetKey, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
 	}
 	validated, err := validateCustomEmbedFields(embed)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
 	}
 
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
 		}
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
@@ -367,14 +367,14 @@ func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedCon
 	}
 	target, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return CustomEmbedConfig{}, err
+		return CustomEmbedConfig{}, fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
 	}
 
 	var deleted CustomEmbedConfig
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
 		}
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
@@ -398,13 +398,13 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 	}
 	targetKey, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
 	}
 
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
 		}
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
@@ -443,13 +443,13 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 	}
 	targetKey, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
 	}
 
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
 		}
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
@@ -478,7 +478,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 	}
 	targetKey, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
 	}
 
 	idsToRemove := make(map[string]bool, len(messageIDs))
@@ -495,7 +495,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
 		}
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
@@ -522,7 +522,7 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 	}
 	targetKey, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
 	}
 
 	if len(fields) > CustomEmbedMaxFields {
@@ -541,7 +541,7 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
 		}
 
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
@@ -581,7 +581,7 @@ func (mgr *ConfigManager) FindCustomEmbedPosting(guildID, messageID string) (str
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return "", CustomEmbedPostingConfig{}, err
+		return "", CustomEmbedPostingConfig{}, fmt.Errorf("ConfigManager.FindCustomEmbedPosting: %w", err)
 	}
 	for _, ce := range guildConfig.CustomEmbeds {
 		pIdx := findCustomEmbedPostingIndex(ce.Postings, mid)
@@ -609,17 +609,17 @@ func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomE
 	}
 	target, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
 	}
 	nf, err := normalizeCustomEmbedField(field)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
 	}
 
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, scope)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
 		}
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
 		if idx < 0 {
@@ -650,13 +650,13 @@ func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex
 	}
 	target, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
 	}
 
 	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, scope)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
 		}
 		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
 		if idx < 0 {

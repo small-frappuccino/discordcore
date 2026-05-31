@@ -85,7 +85,7 @@ func (s *Store) Init() error {
 func (s *Store) resetQOTDQuestionSequenceWhenEmpty(ctx context.Context) error {
 	var hasRows bool
 	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM qotd_questions LIMIT 1)`).Scan(&hasRows); err != nil {
-		return err
+		return fmt.Errorf("Store.resetQOTDQuestionSequenceWhenEmpty: %w", err)
 	}
 	if hasRows {
 		return nil

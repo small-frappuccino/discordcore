@@ -11,7 +11,7 @@ import (
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (res *QOTDOfficialPostRecord, err error) {
 	normalized, err := normalizeQOTDOfficialPostRecord(rec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.CreateQOTDOfficialPostProvisioning: %w", err)
 	}
 	if normalized.State == "" {
 		normalized.State = "provisioning"
@@ -103,7 +103,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 	)
 	created, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.CreateQOTDOfficialPostProvisioning: %w", err)
 	}
 	return created, nil
 }
@@ -180,7 +180,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 	)
 	updated, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.FinalizeQOTDOfficialPost: %w", err)
 	}
 	return updated, nil
 }
@@ -226,7 +226,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOT
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetQOTDOfficialPostByID: %w", err)
 	}
 	return record, nil
 }
@@ -289,7 +289,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetQOTDOfficialPostByDate: %w", err)
 	}
 	return record, nil
 }
@@ -354,7 +354,7 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 		publishDateUTC,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsByDate: %w", err)
 	}
 	defer rows.Close()
 
@@ -362,12 +362,12 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ListQOTDOfficialPostsByDate: %w", err)
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsByDate: %w", err)
 	}
 	return records, nil
 }
@@ -432,7 +432,7 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetAutomaticSlotQOTDOfficialPostByDate: %w", err)
 	}
 	return record, nil
 }
@@ -496,7 +496,7 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetScheduledQOTDOfficialPostByDate: %w", err)
 	}
 	return record, nil
 }
@@ -513,11 +513,11 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 		deckID,
 	)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.DeleteQOTDOfficialPostsByDeck: %w", err)
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.DeleteQOTDOfficialPostsByDeck: %w", err)
 	}
 	return int(deleted), nil
 }
@@ -528,7 +528,7 @@ func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) (err e
 	}
 
 	if _, err := s.execContext(ctx, `DELETE FROM qotd_official_posts WHERE id = $1`, id); err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDOfficialPostByID: %w", err)
 	}
 	return nil
 }
@@ -549,11 +549,11 @@ func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, gu
 		deckID,
 	)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.DeleteQOTDUnpublishedOfficialPostsByDeck: %w", err)
 	}
 	deleted, err := result.RowsAffected()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.DeleteQOTDUnpublishedOfficialPostsByDeck: %w", err)
 	}
 	return int(deleted), nil
 }

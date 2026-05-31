@@ -83,7 +83,7 @@ func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*sql.DB, 
 	testDSN, err := withSearchPath(baseDSN, schemaName)
 	if err != nil {
 		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
-		return nil, "", nil, err
+		return nil, "", nil, fmt.Errorf("OpenIsolatedDatabaseWithDSN: %w", err)
 	}
 
 	testDB, err := sql.Open("pgx", testDSN)

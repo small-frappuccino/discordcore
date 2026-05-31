@@ -6,7 +6,7 @@ func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig
 	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		guildConfig, err := guildConfigByID(cfg, guildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.updateGuildConfig: %w", err)
 		}
 		if fn == nil {
 			return nil
@@ -20,7 +20,7 @@ func (mgr *ConfigManager) updateRuntimeConfigScope(scopeGuildID string, fn func(
 	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		runtimeConfig, err := runtimeConfigForScope(cfg, scopeGuildID)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.updateRuntimeConfigScope: %w", err)
 		}
 		if runtimeConfig == nil || fn == nil {
 			return nil

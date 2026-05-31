@@ -137,7 +137,7 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 	}
 
 	if _, err := mes.lifecycle.Start(ctx); err != nil {
-		return err
+		return fmt.Errorf("MessageEventService.Start: %w", err)
 	}
 
 	// Load message cache configuration from persisted runtime_config,
@@ -224,7 +224,7 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 // Stop stops the service
 func (mes *MessageEventService) Stop(ctx context.Context) error {
 	if err := mes.lifecycle.Cancel(); err != nil {
-		return err
+		return fmt.Errorf("MessageEventService.Stop: %w", err)
 	}
 
 	for _, cancel := range mes.handlerCancels {
@@ -237,7 +237,7 @@ func (mes *MessageEventService) Stop(ctx context.Context) error {
 	waitErr := mes.lifecycle.Wait(ctx)
 	if mes.messageCreateWriter != nil {
 		if err := mes.messageCreateWriter.Stop(ctx); err != nil {
-			return err
+			return fmt.Errorf("MessageEventService.Stop: %w", err)
 		}
 		mes.messageCreateWriter = nil
 	}

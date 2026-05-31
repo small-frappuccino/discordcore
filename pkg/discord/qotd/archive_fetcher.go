@@ -26,7 +26,7 @@ type ArchivedMessage struct {
 func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]ArchivedMessage, error) {
 	collected, err := fetchThreadMessagesRaw(ctx, session, threadID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Publisher.FetchThreadMessages: %w", err)
 	}
 
 	return archiveMessagesAscending(collected), nil
@@ -50,7 +50,7 @@ func fetchThreadMessagesRaw(ctx context.Context, session *discordgo.Session, thr
 	before := ""
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetchThreadMessagesRaw: %w", err)
 		}
 
 		page, fetchErr := session.ChannelMessages(threadID, 100, before, "", "")

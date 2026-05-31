@@ -173,15 +173,15 @@ func (c *rolePanelPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedO
 }
 func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelPostSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelPostSubCommand.Handle: %w", err)
 	}
 	panel, err := loadRolePanel(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelPostSubCommand.Handle: %w", err)
 	}
 	if len(panel.Buttons) == 0 {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Panel `%s` has no buttons configured yet. Add at least one with /roles button add.", panel.Key))
@@ -314,15 +314,15 @@ func (c *rolePanelPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focus
 }
 func (c *rolePanelPreviewSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
 	}
 	panel, err := loadRolePanel(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
 	}
 
 	embed := renderRolePanelEmbed(panel)
@@ -369,11 +369,11 @@ func (c *rolePanelSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOp
 }
 func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelSetSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelSetSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
@@ -448,11 +448,11 @@ func (c *rolePanelDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 }
 func (c *rolePanelDeleteSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelDeleteSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelDeleteSubCommand.Handle: %w", err)
 	}
 
 	panel, fetchErr := c.configManager.RolePanel(ctx.GuildID, key)
@@ -501,7 +501,7 @@ func (c *rolePanelListSubCommand) RequiresGuild() bool                          
 func (c *rolePanelListSubCommand) RequiresPermissions() bool                      { return true }
 func (c *rolePanelListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelListSubCommand.Handle: %w", err)
 	}
 	panels, err := c.configManager.RolePanels(ctx.GuildID)
 	if err != nil {
@@ -555,11 +555,11 @@ func (c *rolePanelButtonAddSubCommand) HandleAutocomplete(ctx *core.Context, foc
 }
 func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonAddSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonAddSubCommand.Handle: %w", err)
 	}
 	opts := core.GetSubCommandOptions(ctx.Interaction)
 	extractor := core.NewOptionExtractor(opts)
@@ -624,11 +624,11 @@ func (c *rolePanelButtonRemoveSubCommand) HandleAutocomplete(ctx *core.Context, 
 }
 func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonRemoveSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonRemoveSubCommand.Handle: %w", err)
 	}
 	roleID := strings.TrimSpace(roleOptionID(core.GetSubCommandOptions(ctx.Interaction), rolePanelOptionRole))
 	if roleID == "" {
@@ -676,15 +676,15 @@ func (c *rolePanelButtonListSubCommand) HandleAutocomplete(ctx *core.Context, fo
 }
 func (c *rolePanelButtonListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonListSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonListSubCommand.Handle: %w", err)
 	}
 	panel, err := loadRolePanel(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelButtonListSubCommand.Handle: %w", err)
 	}
 	if len(panel.Buttons) == 0 {
 		return rolePanelConfigurationResponseBuilder(ctx.Session).Info(
@@ -734,11 +734,11 @@ func (c *rolePanelFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focu
 }
 func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldAddSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldAddSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
@@ -799,11 +799,11 @@ func (c *rolePanelFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, f
 }
 func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldRemoveSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldRemoveSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	if !extractor.HasOption(rolePanelOptionFieldIndex) {
@@ -852,15 +852,15 @@ func (c *rolePanelFieldListSubCommand) HandleAutocomplete(ctx *core.Context, foc
 }
 func (c *rolePanelFieldListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldListSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldListSubCommand.Handle: %w", err)
 	}
 	panel, err := loadRolePanel(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelFieldListSubCommand.Handle: %w", err)
 	}
 	if len(panel.Fields) == 0 {
 		return rolePanelConfigurationResponseBuilder(ctx.Session).Info(
@@ -909,15 +909,15 @@ func (c *rolePanelRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focus
 }
 func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelRefreshSubCommand.Handle: %w", err)
 	}
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelRefreshSubCommand.Handle: %w", err)
 	}
 	panel, err := loadRolePanel(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelRefreshSubCommand.Handle: %w", err)
 	}
 	if len(panel.Postings) == 0 {
 		return rolePanelConfigurationResponseBuilder(ctx.Session).Info(
@@ -972,7 +972,7 @@ func (c *rolePanelUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 }
 func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
-		return err
+		return fmt.Errorf("rolePanelUnpostSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	messageID, err := extractor.StringRequired(rolePanelOptionMessageID)
@@ -1252,7 +1252,7 @@ func (c *rolePanelImportSubCommand) Handle(ctx *core.Context) error {
 
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelImportSubCommand.Handle: %w", err)
 	}
 
 	var pasteURL string
@@ -1321,12 +1321,12 @@ func (c *rolePanelExportSubCommand) Handle(ctx *core.Context) error {
 
 	key, err := rolePanelKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelExportSubCommand.Handle: %w", err)
 	}
 
 	rp, err := loadRolePanel(c.configManager, guildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("rolePanelExportSubCommand.Handle: %w", err)
 	}
 
 	discohookJSON := files.FromRolePanelConfig(rp)

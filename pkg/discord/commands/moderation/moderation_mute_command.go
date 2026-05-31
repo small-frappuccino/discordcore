@@ -55,12 +55,12 @@ func (c *muteCommand) Handle(ctx *core.Context) error {
 
 	muteCtx, err := prepareMuteContext(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("muteCommand.Handle: %w", err)
 	}
 
 	muteRole, roleID, err := resolveConfiguredMuteRole(ctx, muteCtx)
 	if err != nil {
-		return err
+		return fmt.Errorf("muteCommand.Handle: %w", err)
 	}
 
 	if ok, reasonText := canMuteTarget(ctx, muteCtx, userID); !ok {

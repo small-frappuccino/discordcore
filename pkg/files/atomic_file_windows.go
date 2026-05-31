@@ -2,16 +2,20 @@
 
 package files
 
-import "golang.org/x/sys/windows"
+import (
+	"fmt"
+
+	"golang.org/x/sys/windows"
+)
 
 func replaceFile(sourcePath, targetPath string) error {
 	sourcePtr, err := windows.UTF16PtrFromString(sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("replaceFile: %w", err)
 	}
 	targetPtr, err := windows.UTF16PtrFromString(targetPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("replaceFile: %w", err)
 	}
 	return windows.MoveFileEx(
 		sourcePtr,

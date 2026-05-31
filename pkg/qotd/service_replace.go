@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -10,7 +11,7 @@ import (
 
 func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error) {
 	if err := s.validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 	}
 	if session == nil {
 		return nil, ErrDiscordUnavailable
@@ -24,18 +25,18 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 	now := s.clock()
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 	}
 	today := NormalizePublishDateUTC(now)
 	post, err := s.loadSlotOfficialPost(ctx, guildID, today)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 	}
 	if post == nil {
 		yesterday := today.AddDate(0, 0, -1)
 		post, err = s.loadSlotOfficialPost(ctx, guildID, yesterday)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 		}
 	}
 
@@ -51,7 +52,7 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 	// Guarantee that we can publish a new question before deleting the current one.
 	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 	}
 	if counts.Ready+counts.Draft == 0 {
 		return nil, ErrNoQuestionsAvailable
@@ -79,13 +80,13 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 
 	// Delete from DB
 	if err := s.store.DeleteQOTDOfficialPostByID(ctx, post.ID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 	}
 
 	// We delete the question. The service layer normally checks for immutability,
 	// but calling the store directly bypasses it which is intentional here.
 	if err := s.store.DeleteQOTDQuestion(ctx, guildID, post.QuestionID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
 	}
 
 	// If this post was consuming the automatic slot, we need to clear the suppression

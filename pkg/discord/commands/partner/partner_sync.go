@@ -137,7 +137,7 @@ func (s *partnerPostingSyncer) SyncConfig(guildID string, session *discordgo.Ses
 	renderer := NewBoardRenderer()
 	embeds, err := renderer.Render(template, partners)
 	if err != nil {
-		return err
+		return fmt.Errorf("partnerPostingSyncer.SyncConfig: %w", err)
 	}
 
 	s.Sync(session, guildID, boardCfg.Postings, embeds)

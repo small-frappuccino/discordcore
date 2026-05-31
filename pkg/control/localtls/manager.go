@@ -65,7 +65,7 @@ type Config struct {
 func EnsureReady(ctx context.Context, cfg Config) (ReadyResult, error) {
 	now := cfg.now()
 	if err := cfg.validate(); err != nil {
-		return ReadyResult{}, err
+		return ReadyResult{}, fmt.Errorf("EnsureReady: %w", err)
 	}
 	if err := os.MkdirAll(cfg.Directory, 0o755); err != nil {
 		return ReadyResult{}, fmt.Errorf("create local tls directory: %w", err)
@@ -128,16 +128,16 @@ func ensureCAPair(certPath string, keyPath string, cfg Config, now time.Time) (c
 		if err := validateCAPair(pair, cfg, now); err == nil {
 			return pair, false, nil
 		}
-	} else if !os.IsNotExist(err) && !isInvalidMaterialError(err) {
+	} else if !errors.Is(err, os.ErrNotExist) && !isInvalidMaterialError(err) {
 		return certificatePair{}, false, err
 	}
 
 	pair, err := generateCAPair(cfg, now)
 	if err != nil {
-		return certificatePair{}, false, err
+		return certificatePair{}, false, fmt.Errorf("ensureCAPair: %w", err)
 	}
 	if err := persistCertificatePair(certPath, keyPath, pair); err != nil {
-		return certificatePair{}, false, err
+		return certificatePair{}, false, fmt.Errorf("ensureCAPair: %w", err)
 	}
 	return pair, true, nil
 }
@@ -148,17 +148,17 @@ func ensureServerPair(certPath string, keyPath string, cfg Config, ca certificat
 			if err := validateServerPair(pair, ca.cert, cfg, now); err == nil {
 				return pair, nil
 			}
-		} else if !os.IsNotExist(err) && !isInvalidMaterialError(err) {
+		} else if !errors.Is(err, os.ErrNotExist) && !isInvalidMaterialError(err) {
 			return certificatePair{}, err
 		}
 	}
 
 	pair, err := generateServerPair(cfg, ca, now)
 	if err != nil {
-		return certificatePair{}, err
+		return certificatePair{}, fmt.Errorf("ensureServerPair: %w", err)
 	}
 	if err := persistCertificatePair(certPath, keyPath, pair); err != nil {
-		return certificatePair{}, err
+		return certificatePair{}, fmt.Errorf("ensureServerPair: %w", err)
 	}
 	return pair, nil
 }
@@ -166,11 +166,11 @@ func ensureServerPair(certPath string, keyPath string, cfg Config, ca certificat
 func loadCertificatePair(certPath string, keyPath string) (certificatePair, error) {
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
-		return certificatePair{}, err
+		return certificatePair{}, fmt.Errorf("loadCertificatePair: %w", err)
 	}
 	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
-		return certificatePair{}, err
+		return certificatePair{}, fmt.Errorf("loadCertificatePair: %w", err)
 	}
 
 	cert, err := decodeCertificatePEM(certPEM)
@@ -211,7 +211,7 @@ func validateCAPair(pair certificatePair, cfg Config, now time.Time) error {
 		return fmt.Errorf("ca certificate is not marked as a certificate authority")
 	}
 	if err := validateCertificateWindow(pair.cert, now, cfg.caRotationWindow()); err != nil {
-		return err
+		return fmt.Errorf("validateCAPair: %w", err)
 	}
 	if !publicKeysMatch(pair.cert.PublicKey, &pair.key.PublicKey) {
 		return fmt.Errorf("ca certificate and key do not match")
@@ -224,7 +224,7 @@ func validateServerPair(pair certificatePair, ca *x509.Certificate, cfg Config, 
 		return fmt.Errorf("server pair is incomplete")
 	}
 	if err := validateCertificateWindow(pair.cert, now, cfg.certRotationWindow()); err != nil {
-		return err
+		return fmt.Errorf("validateServerPair: %w", err)
 	}
 	if !publicKeysMatch(pair.cert.PublicKey, &pair.key.PublicKey) {
 		return fmt.Errorf("server certificate and key do not match")
@@ -323,7 +323,7 @@ func decodeCertificatePEM(raw []byte) (*x509.Certificate, error) {
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decodeCertificatePEM: %w", err)
 	}
 	return cert, nil
 }
@@ -339,7 +339,7 @@ func decodeRSAPrivateKeyPEM(raw []byte) (*rsa.PrivateKey, error) {
 	case "PRIVATE KEY":
 		key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decodeRSAPrivateKeyPEM: %w", err)
 		}
 		rsaKey, ok := key.(*rsa.PrivateKey)
 		if !ok {

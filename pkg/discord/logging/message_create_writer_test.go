@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"log/slog"
 
 	"context"
@@ -464,7 +465,7 @@ func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
 		GuildID:   "guild",
 		MessageID: "message",
 	}, nil, storage.DailyMessageCountDelta{})
-	if err != errMessageCreateWriterStopped {
+	if !errors.Is(err, errMessageCreateWriterStopped) {
 		t.Fatalf("expected stopped error after shutdown, got %v", err)
 	}
 }

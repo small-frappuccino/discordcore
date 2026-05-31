@@ -32,7 +32,7 @@ func (src *botGuildBindingSource) SetIDsProvider(provider botGuildIDsProvider) {
 	src.bindingsProvider = func(ctx context.Context) ([]BotGuildBinding, error) {
 		ids, err := provider(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("botGuildBindingSource.SetIDsProvider: %w", err)
 		}
 		out := make([]BotGuildBinding, 0, len(ids))
 		for _, guildID := range ids {
@@ -54,7 +54,7 @@ func (src *botGuildBindingSource) SetBindingsProvider(provider botGuildBindingsP
 	src.idsProvider = func(ctx context.Context) ([]string, error) {
 		bindings, err := provider(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("botGuildBindingSource.SetBindingsProvider: %w", err)
 		}
 		ids := make([]string, 0, len(bindings))
 		seen := make(map[string]struct{}, len(bindings))
@@ -95,7 +95,7 @@ func (src *botGuildBindingSource) Bindings(ctx context.Context) ([]BotGuildBindi
 func (src *botGuildBindingSource) GuildIDSet(ctx context.Context) (map[string]struct{}, error) {
 	bindings, err := src.Bindings(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("botGuildBindingSource.GuildIDSet: %w", err)
 	}
 
 	set := make(map[string]struct{}, len(bindings))

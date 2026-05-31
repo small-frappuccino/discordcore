@@ -31,7 +31,7 @@ func (c *SmokeTestSubCommand) RequiresPermissions() bool                      { 
 
 func (c *SmokeTestSubCommand) Handle(ctx *core.Context) error {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
-		return err
+		return fmt.Errorf("SmokeTestSubCommand.Handle: %w", err)
 	}
 
 	lines := []string{

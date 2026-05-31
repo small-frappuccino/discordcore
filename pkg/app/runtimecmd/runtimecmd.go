@@ -48,7 +48,7 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 		),
 	)
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("Run: %w", err)
 	}
 
 	primaryTokenEnv := SelectTokenEnv(*testMode, spec)

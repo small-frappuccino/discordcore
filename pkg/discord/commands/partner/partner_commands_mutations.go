@@ -321,7 +321,7 @@ func (c *partnerRefreshSubCommand) RequiresPermissions() bool                   
 func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session)
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
-		return err
+		return fmt.Errorf("partnerRefreshSubCommand.Handle: %w", err)
 	}
 	ctx.Acknowledged = true
 

@@ -97,7 +97,7 @@ func (c *EchoCommand) Handle(ctx *Context) error {
 
 	message, err := extractor.StringRequired("message")
 	if err != nil {
-		return err
+		return fmt.Errorf("EchoCommand.Handle: %w", err)
 	}
 
 	ephemeral := extractor.Bool("ephemeral")
@@ -246,12 +246,12 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 
 	key, err := extractor.StringRequired("key")
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigSetSubCommand.Handle: %w", err)
 	}
 
 	value, err := extractor.StringRequired("value")
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigSetSubCommand.Handle: %w", err)
 	}
 
 	// Use SafeGuildAccess for safe configuration manipulation
@@ -270,7 +270,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 	})
 
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigSetSubCommand.Handle: %w", err)
 	}
 
 	// Persist configuration
@@ -314,7 +314,7 @@ func (c *ConfigGetSubCommand) RequiresPermissions() bool {
 
 func (c *ConfigGetSubCommand) Handle(ctx *Context) error {
 	if err := RequiresGuildConfig(ctx); err != nil {
-		return err
+		return fmt.Errorf("ConfigGetSubCommand.Handle: %w", err)
 	}
 
 	var config strings.Builder
@@ -503,13 +503,13 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 
 	input, err := extractor.StringRequired("input")
 	if err != nil {
-		return err // Validation error will be handled automatically
+		return fmt.Errorf("AdvancedCommand.Handle: %w", err) // Validation error will be handled automatically
 	}
 
 	// Custom validations
 	stringUtils := StringUtils{}
 	if err := stringUtils.ValidateStringLength(input, 1, 100, "input"); err != nil {
-		return err
+		return fmt.Errorf("AdvancedCommand.Handle: %w", err)
 	}
 
 	// Operation that may fail

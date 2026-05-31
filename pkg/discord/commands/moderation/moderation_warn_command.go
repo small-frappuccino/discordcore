@@ -59,7 +59,7 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 
 	warnCtx, err := prepareWarnContext(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("warnCommand.Handle: %w", err)
 	}
 
 	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {

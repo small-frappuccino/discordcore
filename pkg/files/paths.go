@@ -198,12 +198,12 @@ func EnsureCacheDirs() error {
 func removeDirIfEmpty(dir string) error {
 	f, err := os.Open(dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("removeDirIfEmpty: %w", err)
 	}
 	defer f.Close()
 	entries, err := f.ReadDir(1)
 	if err != nil && err != io.EOF {
-		return err
+		return fmt.Errorf("removeDirIfEmpty: %w", err)
 	}
 	// If we got at least one entry, it's not empty.
 	if len(entries) > 0 {

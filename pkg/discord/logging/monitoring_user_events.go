@@ -80,7 +80,7 @@ func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, propo
 func (ms *MonitoringService) persistMemberRoleSnapshot(guildID, userID string, roles []string) error {
 	if ms.store != nil {
 		if err := ms.store.UpsertMemberRoles(guildID, userID, roles, time.Now()); err != nil {
-			return err
+			return fmt.Errorf("MonitoringService.persistMemberRoleSnapshot: %w", err)
 		}
 	}
 	ms.cacheRolesSet(guildID, userID, roles)
@@ -105,7 +105,7 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 	audit, err := ms.session.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMemberRoleUpdate), 10)
 	ms.observability().RecordAuditLogCall()
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("MonitoringService.getRoleUpdateAuditEntries: %w", err)
 	}
 	if audit == nil {
 		return nil, false, nil

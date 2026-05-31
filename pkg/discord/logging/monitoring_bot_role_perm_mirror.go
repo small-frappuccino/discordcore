@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -313,7 +314,7 @@ func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID,
 		return ms.session.GuildMember(guildID, userID)
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MonitoringService.getGuildMemberContext: %w", err)
 	}
 
 	if ms.unifiedCache != nil {
@@ -347,7 +348,7 @@ func (ms *MonitoringService) getGuildContext(ctx context.Context, guildID string
 		return ms.session.Guild(guildID)
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MonitoringService.getGuildContext: %w", err)
 	}
 
 	if ms.unifiedCache != nil {

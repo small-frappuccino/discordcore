@@ -21,7 +21,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	}()
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.CreateQOTDQuestion: %w", err)
 	}
 
 	position := normalized.QueuePosition
@@ -88,7 +88,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	)
 	created, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.CreateQOTDQuestion: %w", err)
 	}
 	return created, nil
 }
@@ -104,12 +104,12 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	}
 	normalized, err := normalizeQOTDQuestionRecord(rec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -184,27 +184,27 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	)
 	updated, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 
 	needsReindex := movingDeck || (position > 0 && position != currentQueuePosition)
 	if needsReindex {
 		if movingDeck {
 			if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, normalized.GuildID, currentDeckID); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 			}
 		}
 		if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, normalized.GuildID, normalized.DeckID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 		}
 		updated, err = getQOTDQuestionTx(ctx, tx, normalized.GuildID, normalized.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 	return updated, nil
 }
@@ -222,7 +222,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -239,13 +239,13 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	}
 
 	if _, err := txExecContext(ctx, tx, `DELETE FROM qotd_questions WHERE guild_id = $1 AND id = $2`, guildID, questionID); err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
 	return nil
 }
@@ -267,7 +267,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDQuestionsByDecks: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -282,7 +282,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 	}
 
 	if err := tx.Commit(); err != nil {
-		return err
+		return fmt.Errorf("Store.DeleteQOTDQuestionsByDecks: %w", err)
 	}
 	return nil
 }
@@ -323,7 +323,7 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 		deckID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
 	}
 	defer rows.Close()
 
@@ -331,12 +331,12 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 	for rows.Next() {
 		record, err := scanQOTDQuestionRecord(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
 	}
 	return records, nil
 }
@@ -372,7 +372,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetQOTDQuestion: %w", err)
 	}
 	return record, nil
 }
@@ -393,12 +393,12 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	}
 	normalizedIDs, err := normalizeQOTDOrderedIDs(orderedIDs)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -413,7 +413,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		deckID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	defer rows.Close()
 
@@ -423,7 +423,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		var id int64
 		var queuePosition int64
 		if err := rows.Scan(&id, &queuePosition); err != nil {
-			return err
+			return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 		}
 		currentIDs = append(currentIDs, id)
 		if queuePosition > maxQueuePosition {
@@ -431,7 +431,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	if !sameQOTDIDSet(currentIDs, normalizedIDs) {
 		return fmt.Errorf("ordered ids must match the full guild question set")
@@ -462,10 +462,10 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		}
 	}
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
-		return err
+		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	return nil
 }
@@ -491,7 +491,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -527,7 +527,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
 
 	row = txQueryRow(tx,
@@ -556,10 +556,10 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	)
 	record, err = scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
 	return record, nil
 }
@@ -581,7 +581,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -617,7 +617,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
 
 	row = txQueryRow(tx,
@@ -644,10 +644,10 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	)
 	record, err = scanQOTDQuestionRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
 	return record, nil
 }
@@ -695,7 +695,7 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 		todayUTC,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReclaimOrphanReservedQOTDQuestions: %w", err)
 	}
 	defer rows.Close()
 
@@ -703,12 +703,12 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ReclaimOrphanReservedQOTDQuestions: %w", err)
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ReclaimOrphanReservedQOTDQuestions: %w", err)
 	}
 	return ids, nil
 }
@@ -853,7 +853,7 @@ func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, question
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("getQOTDQuestionTx: %w", err)
 	}
 	return record, nil
 }

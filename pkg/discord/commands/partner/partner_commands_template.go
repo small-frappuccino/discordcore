@@ -46,7 +46,7 @@ func (c *partnerImportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, 
 func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
-		return err
+		return fmt.Errorf("partnerImportTemplateSubCommand.Handle: %w", err)
 	}
 	ctx.Acknowledged = true
 	guildID := ctx.GuildID
@@ -108,7 +108,7 @@ func (c *partnerExportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, 
 func (c *partnerExportTemplateSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
-		return err
+		return fmt.Errorf("partnerExportTemplateSubCommand.Handle: %w", err)
 	}
 	ctx.Acknowledged = true
 	guildID := ctx.GuildID

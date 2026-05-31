@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -83,7 +84,7 @@ func (s *Service) loadDueSlotState(ctx context.Context, guildID string, cfg file
 	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
 	state.OfficialPost, err = s.loadSlotOfficialPost(ctx, guildID, state.PublishDateUTC)
 	if err != nil {
-		return currentSlotState{}, err
+		return currentSlotState{}, fmt.Errorf("Service.loadDueSlotState: %w", err)
 	}
 	return state, nil
 }
@@ -101,7 +102,7 @@ func (s *Service) loadSlotState(ctx context.Context, guildID string, cfg files.Q
 	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
 	state.OfficialPost, err = s.loadAutomaticSlotOfficialPost(ctx, guildID, state.PublishDateUTC)
 	if err != nil {
-		return currentSlotState{}, err
+		return currentSlotState{}, fmt.Errorf("Service.loadSlotState: %w", err)
 	}
 	return state, nil
 }

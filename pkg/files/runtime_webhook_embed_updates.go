@@ -29,7 +29,7 @@ func (mgr *ConfigManager) ListWebhookEmbedUpdates(guildID string) ([]WebhookEmbe
 
 	rc, err := mgr.runtimeConfigForScopeLocked(scope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ConfigManager.ListWebhookEmbedUpdates: %w", err)
 	}
 	if rc == nil {
 		return nil, nil
@@ -56,7 +56,7 @@ func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (_ We
 
 	rc, err := mgr.runtimeConfigForScopeLocked(scope)
 	if err != nil {
-		return WebhookEmbedUpdateConfig{}, err
+		return WebhookEmbedUpdateConfig{}, fmt.Errorf("ConfigManager.GetWebhookEmbedUpdate: %w", err)
 	}
 	if rc == nil {
 		return WebhookEmbedUpdateConfig{}, fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateNotFound, targetID)
@@ -81,7 +81,7 @@ func (mgr *ConfigManager) CreateWebhookEmbedUpdate(guildID string, update Webhoo
 
 	normalized, err := normalizeWebhookEmbedUpdateConfig(update)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.CreateWebhookEmbedUpdate: %w", err)
 	}
 	return mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
 		updates := rc.NormalizedWebhookEmbedUpdates()
@@ -110,7 +110,7 @@ func (mgr *ConfigManager) UpdateWebhookEmbedUpdate(guildID, messageID string, up
 
 	normalized, err := normalizeWebhookEmbedUpdateConfig(update)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.UpdateWebhookEmbedUpdate: %w", err)
 	}
 	return mgr.updateRuntimeConfigScope(scope, func(rc *RuntimeConfig) error {
 		updates := rc.NormalizedWebhookEmbedUpdates()

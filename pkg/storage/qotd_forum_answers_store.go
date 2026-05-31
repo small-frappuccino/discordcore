@@ -39,7 +39,7 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetQOTDSurfaceByDeck: %w", err)
 	}
 	return record, nil
 }
@@ -52,7 +52,7 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 	}()
 	normalized, err := normalizeQOTDSurfaceRecord(rec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpsertQOTDSurface: %w", err)
 	}
 
 	row := s.queryRowContext(ctx,
@@ -83,7 +83,7 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 	)
 	updated, err := scanQOTDSurfaceRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpsertQOTDSurface: %w", err)
 	}
 	return updated, nil
 }
@@ -118,7 +118,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 	}()
 	normalized, err := normalizeQOTDAnswerMessageRecord(rec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.CreateQOTDAnswerMessage: %w", err)
 	}
 
 	row := s.queryRowContext(ctx,
@@ -159,7 +159,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 	)
 	created, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.CreateQOTDAnswerMessage: %w", err)
 	}
 	return created, nil
 }
@@ -202,7 +202,7 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 	)
 	record, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.FinalizeQOTDAnswerMessage: %w", err)
 	}
 	return record, nil
 }
@@ -242,7 +242,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("Store.GetQOTDAnswerMessageByOfficialPostAndUser: %w", err)
 	}
 	return record, nil
 }
@@ -277,7 +277,7 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 		officialPostID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
 	}
 	defer rows.Close()
 
@@ -285,12 +285,12 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 	for rows.Next() {
 		record, err := scanQOTDAnswerMessageRecord(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
 	}
 	return records, nil
 }
@@ -337,7 +337,7 @@ func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, stat
 	)
 	record, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDAnswerMessageState: %w", err)
 	}
 	return record, nil
 }

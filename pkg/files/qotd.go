@@ -261,7 +261,7 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 
 	var raw rawQOTDDeckConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("QOTDDeckConfig.UnmarshalJSON: %w", err)
 	}
 
 	channelID := strings.TrimSpace(raw.ChannelID)
@@ -318,7 +318,7 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 
 	var raw rawQOTDConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("QOTDConfig.UnmarshalJSON: %w", err)
 	}
 
 	schedule := QOTDPublishScheduleConfig{
@@ -409,12 +409,12 @@ func (mgr *ConfigManager) QOTDConfig(guildID string) (_ QOTDConfig, err error) {
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return QOTDConfig{}, err
+		return QOTDConfig{}, fmt.Errorf("ConfigManager.QOTDConfig: %w", err)
 	}
 
 	normalized, err := NormalizeQOTDConfig(guildConfig.QOTD)
 	if err != nil {
-		return QOTDConfig{}, err
+		return QOTDConfig{}, fmt.Errorf("ConfigManager.QOTDConfig: %w", err)
 	}
 	return normalized, nil
 }
@@ -438,7 +438,7 @@ func (mgr *ConfigManager) SetQOTDConfig(guildID string, cfg QOTDConfig) (err err
 
 	normalized, err := NormalizeQOTDConfig(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetQOTDConfig: %w", err)
 	}
 	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		guildConfig.QOTD = normalized

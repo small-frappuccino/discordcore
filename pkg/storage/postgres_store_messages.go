@@ -247,7 +247,7 @@ func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 	result, err := s.exec(`DELETE FROM roles_current WHERE updated_at < $1`, cutoff)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.CleanupObsoleteMemberRoles: %w", err)
 	}
 	return result.RowsAffected()
 }
@@ -260,7 +260,7 @@ func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 	result, err := s.exec(`DELETE FROM avatars_history WHERE changed_at < $1`, cutoff)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.CleanupObsoleteAvatars: %w", err)
 	}
 	return result.RowsAffected()
 }

@@ -188,7 +188,7 @@ func validateRequiredBeforeOptional(
 		if len(opt.Options) > 0 {
 			nextPath := path + "/" + opt.Name
 			if err := validateRequiredBeforeOptional(opt.Options, nextPath); err != nil {
-				return err
+				return fmt.Errorf("validateRequiredBeforeOptional: %w", err)
 			}
 		}
 	}

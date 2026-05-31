@@ -52,7 +52,7 @@ func (c *CommandsEnabledSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
-		return err
+		return fmt.Errorf("CommandsEnabledSubCommand.Handle: %w", err)
 	}
 	state := "disabled"
 	if enabled {
@@ -96,7 +96,7 @@ func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
-		return err
+		return fmt.Errorf("CommandChannelSubCommand.Handle: %w", err)
 	}
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Command references will now point people to <#%s>.", channelID))
 }
@@ -138,7 +138,7 @@ func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
-		return err
+		return fmt.Errorf("AllowedRoleAddSubCommand.Handle: %w", err)
 	}
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can now use the admin slash commands.", roleID))
 }
@@ -177,7 +177,7 @@ func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if err := persistGuildConfig(ctx, c.configManager); err != nil {
-		return err
+		return fmt.Errorf("AllowedRoleRemoveSubCommand.Handle: %w", err)
 	}
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can no longer use the admin slash commands.", roleID))
 }
@@ -199,7 +199,7 @@ func (c *AllowedRoleListSubCommand) RequiresGuild() bool                        
 func (c *AllowedRoleListSubCommand) RequiresPermissions() bool                      { return true }
 func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
-		return err
+		return fmt.Errorf("AllowedRoleListSubCommand.Handle: %w", err)
 	}
 	if len(ctx.GuildConfig.Roles.Allowed) == 0 {
 		return serviceConfigSetupStateResponseBuilder(ctx.Session).Info(ctx.Interaction, "No roles have admin slash command access yet. This reply stays private because it reflects the current server setup.")

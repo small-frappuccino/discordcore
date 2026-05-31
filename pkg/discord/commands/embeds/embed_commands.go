@@ -134,11 +134,11 @@ func (c *embedPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOptio
 func (c *embedPostSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedPostSubCommand.Handle: %w", err)
 	}
 	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedPostSubCommand.Handle: %w", err)
 	}
 
 	channelID := ctx.Interaction.ChannelID
@@ -202,11 +202,11 @@ func (c *embedPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focusedOp
 func (c *embedPreviewSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedPreviewSubCommand.Handle: %w", err)
 	}
 	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedPreviewSubCommand.Handle: %w", err)
 	}
 
 	embed := renderCustomEmbed(ce)
@@ -251,7 +251,7 @@ func (c *embedSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption
 func (c *embedSetSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedSetSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
@@ -326,7 +326,7 @@ func (c *embedDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focusedOpt
 func (c *embedDeleteSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedDeleteSubCommand.Handle: %w", err)
 	}
 
 	if _, err := c.configManager.DeleteCustomEmbed(ctx.GuildID, key); err != nil {
@@ -402,11 +402,11 @@ func (c *embedRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focusedOp
 func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedRefreshSubCommand.Handle: %w", err)
 	}
 	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedRefreshSubCommand.Handle: %w", err)
 	}
 	if len(ce.Postings) == 0 {
 		return customEmbedResponseBuilder(ctx.Session).Info(
@@ -417,7 +417,7 @@ func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
 
 	builder := customEmbedResponseBuilder(ctx.Session)
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
-		return err
+		return fmt.Errorf("embedRefreshSubCommand.Handle: %w", err)
 	}
 	ctx.Acknowledged = true
 
@@ -526,7 +526,7 @@ func (c *embedFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedO
 func (c *embedFieldAddSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedFieldAddSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 
@@ -588,7 +588,7 @@ func (c *embedFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focus
 func (c *embedFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedFieldRemoveSubCommand.Handle: %w", err)
 	}
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	if !extractor.HasOption(embedOptionFieldIndex) {
@@ -638,11 +638,11 @@ func (c *embedFieldListSubCommand) HandleAutocomplete(ctx *core.Context, focused
 func (c *embedFieldListSubCommand) Handle(ctx *core.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedFieldListSubCommand.Handle: %w", err)
 	}
 	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedFieldListSubCommand.Handle: %w", err)
 	}
 	if len(ce.Fields) == 0 {
 		return customEmbedResponseBuilder(ctx.Session).Info(
@@ -812,7 +812,7 @@ func (c *embedImportSubCommand) Handle(ctx *core.Context) error {
 
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedImportSubCommand.Handle: %w", err)
 	}
 
 	var pasteURL string
@@ -824,7 +824,7 @@ func (c *embedImportSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
-		return err
+		return fmt.Errorf("embedImportSubCommand.Handle: %w", err)
 	}
 	ctx.Acknowledged = true
 
@@ -889,16 +889,16 @@ func (c *embedExportSubCommand) Handle(ctx *core.Context) error {
 
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedExportSubCommand.Handle: %w", err)
 	}
 
 	ce, err := loadCustomEmbed(c.configManager, guildID, key)
 	if err != nil {
-		return err
+		return fmt.Errorf("embedExportSubCommand.Handle: %w", err)
 	}
 
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
-		return err
+		return fmt.Errorf("embedExportSubCommand.Handle: %w", err)
 	}
 	ctx.Acknowledged = true
 

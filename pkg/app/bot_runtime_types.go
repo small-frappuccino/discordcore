@@ -267,7 +267,7 @@ func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session
 func (r *botRuntimeResolver) sessionForGuildDomain(guildID, domain string) (*discordgo.Session, error) {
 	runtime, botInstanceID, err := r.runtimeForGuildDomain(guildID, domain)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("botRuntimeResolver.sessionForGuildDomain: %w", err)
 	}
 	if runtime.session == nil {
 		guildID = strings.TrimSpace(guildID)
@@ -306,7 +306,7 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 		}
 		bindings, err := listBotGuildBindingsFromSessionState(botInstanceID, runtime.session)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("botRuntimeResolver.guildBindings: %w", err)
 		}
 		out = append(out, bindings...)
 	}
@@ -323,7 +323,7 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 func listBotGuildBindingsFromSessionState(botInstanceID string, session *discordgo.Session) ([]control.BotGuildBinding, error) {
 	ids, err := listBotGuildIDsFromSessionState(session)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listBotGuildBindingsFromSessionState: %w", err)
 	}
 
 	out := make([]control.BotGuildBinding, 0, len(ids))

@@ -39,7 +39,7 @@ func (builder *featureWorkspaceBuilder) Workspace(guildID string) (featureWorksp
 
 	session, err := builder.discordSessionForGuild(guildID)
 	if err != nil {
-		return featureWorkspace{}, err
+		return featureWorkspace{}, fmt.Errorf("featureWorkspaceBuilder.Workspace: %w", err)
 	}
 	return builder.buildWorkspace(cfg, guildID, session)
 }
@@ -66,7 +66,7 @@ func (builder *featureWorkspaceBuilder) FeatureFromConfig(
 
 	session, err := builder.discordSessionForGuild(guildID)
 	if err != nil {
-		return featureRecord{}, err
+		return featureRecord{}, fmt.Errorf("featureWorkspaceBuilder.FeatureFromConfig: %w", err)
 	}
 	return builder.buildSingleFeatureRecord(cfg, guildID, featureID, session)
 }
@@ -87,7 +87,7 @@ func (builder *featureWorkspaceBuilder) buildWorkspace(
 	for _, def := range featureDefinitions {
 		record, err := builder.buildFeatureRecord(cfg, guildID, def, session)
 		if err != nil {
-			return featureWorkspace{}, err
+			return featureWorkspace{}, fmt.Errorf("featureWorkspaceBuilder.buildWorkspace: %w", err)
 		}
 		records = append(records, record)
 	}

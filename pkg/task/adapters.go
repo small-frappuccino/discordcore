@@ -394,7 +394,7 @@ func (a *NotificationAdapters) handleSendMemberJoin(ctx context.Context, payload
 	}
 	err := a.Notifier.SendMemberJoinNotification(p.ChannelID, p.Member, p.AccountAge)
 	if err != nil {
-		return err
+		return fmt.Errorf("NotificationAdapters.handleSendMemberJoin: %w", err)
 	}
 	return nil
 }
@@ -409,7 +409,7 @@ func (a *NotificationAdapters) handleSendMemberLeave(ctx context.Context, payloa
 	}
 	err := a.Notifier.SendMemberLeaveNotification(p.ChannelID, p.Member, p.ServerTime, p.BotTime)
 	if err != nil {
-		return err
+		return fmt.Errorf("NotificationAdapters.handleSendMemberLeave: %w", err)
 	}
 	return nil
 }
@@ -424,7 +424,7 @@ func (a *NotificationAdapters) handleSendMessageEdit(ctx context.Context, payloa
 	}
 	err := a.Notifier.SendMessageEditNotification(p.ChannelID, p.Original, p.Edited)
 	if err != nil {
-		return err
+		return fmt.Errorf("NotificationAdapters.handleSendMessageEdit: %w", err)
 	}
 	return nil
 }
@@ -439,7 +439,7 @@ func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payl
 	}
 	err := a.Notifier.SendMessageDeleteNotification(p.ChannelID, p.Deleted, p.DeletedBy)
 	if err != nil {
-		return err
+		return fmt.Errorf("NotificationAdapters.handleSendMessageDelete: %w", err)
 	}
 	return nil
 }

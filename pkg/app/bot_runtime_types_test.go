@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -109,7 +110,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
 
 	if got, err := resolver.sessionForGuild("missing"); err == nil {
 		t.Fatalf("expected missing guild lookup to fail, got session %p", got)
-	} else if gotErr := err.Error(); gotErr != "guild missing is not configured" {
+	} else if gotErr := err.Error(); !strings.Contains(gotErr, "guild missing is not configured") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -126,7 +127,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T
 
 	if got, err := resolver.sessionForGuild("g1"); err == nil {
 		t.Fatalf("expected unavailable runtime to fail, got session %p", got)
-	} else if gotErr := err.Error(); gotErr != `bot instance "main" is unavailable for guild g1` {
+	} else if gotErr := err.Error(); !strings.Contains(gotErr, `bot instance "main" is unavailable for guild g1`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -145,7 +146,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingSession(t *testing.T) {
 
 	if got, err := resolver.sessionForGuild("g1"); err == nil {
 		t.Fatalf("expected missing session to fail, got session %p", got)
-	} else if gotErr := err.Error(); gotErr != `discord session for guild g1 (bot instance "main") is unavailable` {
+	} else if gotErr := err.Error(); !strings.Contains(gotErr, `discord session for guild g1 (bot instance "main") is unavailable`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

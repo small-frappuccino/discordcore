@@ -137,7 +137,7 @@ func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
 	rm := rolePanelToggleResponseBuilder(ctx).WithContext(ctx).Build()
 	if err := rm.Custom(ctx.Interaction, message, nil); err != nil {
 		slog.Error("Role panel toggle response failed", "err", err)
-		return err
+		return fmt.Errorf("rolePanelToggleEphemeralError: %w", err)
 	}
 	return nil
 }
@@ -190,7 +190,7 @@ func defaultRolePanelMemberHasRole(s *discordgo.Session, i *discordgo.Interactio
 	}
 	member, err := s.GuildMember(i.GuildID, userID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("defaultRolePanelMemberHasRole: %w", err)
 	}
 	for _, r := range member.Roles {
 		if r == roleID {

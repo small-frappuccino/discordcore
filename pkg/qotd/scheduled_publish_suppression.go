@@ -1,6 +1,7 @@
 package qotd
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -133,7 +134,7 @@ func (s *Service) updateScheduledPublishSuppression(guildID string, mutate func(
 	}
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.updateScheduledPublishSuppression: %w", err)
 	}
 	updated, changed := mutate(cfg)
 	if !changed {

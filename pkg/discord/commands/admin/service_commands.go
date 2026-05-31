@@ -332,7 +332,7 @@ func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	// Send initial response
 	rm := core.NewResponseManager(ctx.Session).WithConfig(core.ResponseConfig{Ephemeral: true})
 	if err := rm.Info(ctx.Interaction, fmt.Sprintf("Restarting service %s now. This reply stays private while the restart runs.", serviceName)); err != nil {
-		return err
+		return fmt.Errorf("ServiceRestartCommand.Handle: %w", err)
 	}
 
 	// Restart service in background

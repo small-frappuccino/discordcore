@@ -173,7 +173,7 @@ func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 	activeGuilds := make(map[string]struct{}, len(cfg.Guilds))
 	for _, gcfg := range cfg.Guilds {
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("MonitoringService.updateStatsChannels: %w", err)
 		}
 		features := cfg.ResolveFeatures(gcfg.GuildID)
 		if !features.Services.Monitoring || !features.StatsChannels || !statsEnabled(gcfg.Stats) {
@@ -280,7 +280,7 @@ func (ms *MonitoringService) reconcileStatsForGuild(ctx context.Context, gcfg fi
 	if _, err := ms.forEachGuildMemberPageContext(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
 		for _, member := range members {
 			if err := ctx.Err(); err != nil {
-				return err
+				return fmt.Errorf("MonitoringService.reconcileStatsForGuild: %w", err)
 			}
 			userID, snapshot, ok := statsSnapshotFromMember(member, trackedRoles)
 			if !ok {
@@ -324,7 +324,7 @@ func (ms *MonitoringService) prepareStatsState(ctx context.Context, gcfg files.G
 
 	hydrated, err := ms.hydrateStatsForGuildFromStore(ctx, gcfg)
 	if err != nil {
-		return true, err
+		return true, fmt.Errorf("MonitoringService.prepareStatsState: %w", err)
 	}
 	if !hydrated {
 		return true, nil
@@ -446,7 +446,7 @@ func (ms *MonitoringService) publishStatsForGuild(ctx context.Context, gcfg file
 
 	for _, sc := range gcfg.Stats.Channels {
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("MonitoringService.publishStatsForGuild: %w", err)
 		}
 		count := statsCountForChannel(snapshot, sc)
 		if err := ms.updateStatsChannelName(ctx, gcfg.GuildID, sc, count); err != nil {

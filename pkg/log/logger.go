@@ -285,7 +285,7 @@ func SetupLogger(botName, logFilePath string) error {
 	}
 
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return err
+		return fmt.Errorf("SetupLogger: %w", err)
 	}
 
 	// Initialize global logger and default level

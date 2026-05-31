@@ -41,7 +41,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	}()
 
 	if err = s.validate(); err != nil {
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	if session == nil {
 		err = ErrDiscordUnavailable
@@ -56,12 +56,12 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	now := s.clock()
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
 	slotState, err := s.loadDueSlotState(ctx, guildID, cfg, now)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	if !slotState.ScheduleConfigured {
 		return false, ErrQOTDDisabled
@@ -83,12 +83,12 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 				return false, err
 			}
 			if err = s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-				return false, err
+				return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 			}
 			return true, nil
 		}
 		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, slotState.OfficialPost.ID); err != nil {
-			return false, err
+			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 		}
 		return false, nil
 	}
@@ -117,7 +117,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 
 	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	if question == nil {
 		err = ErrNoQuestionsAvailable
@@ -128,7 +128,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	availableQuestions := counts.Ready + counts.Draft
 
@@ -174,7 +174,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 				return false, recoverErr
 			}
 			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-				return false, err
+				return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 			}
 			return true, nil
 		}
@@ -191,14 +191,14 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 		now,
 	)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	if updatedQuestion != nil {
 		question = updatedQuestion
 	}
 
 	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
-		return false, err
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 
 	return true, nil
@@ -272,7 +272,7 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	}()
 
 	if err = s.validate(); err != nil {
-		return err
+		return fmt.Errorf("Service.ReconcileGuild: %w", err)
 	}
 	if session == nil {
 		err = ErrDiscordUnavailable
@@ -287,14 +287,14 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	now := s.clock()
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.ReconcileGuild: %w", err)
 	}
 	s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
 	if err := s.reconcilePendingOfficialPosts(ctx, guildID, session, now); err != nil {
-		return err
+		return fmt.Errorf("Service.ReconcileGuild: %w", err)
 	}
 	if err := s.reclaimOrphanReservedQuestions(ctx, guildID, now); err != nil {
-		return err
+		return fmt.Errorf("Service.ReconcileGuild: %w", err)
 	}
 	return s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
 }
@@ -312,7 +312,7 @@ func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID st
 	}
 	ids, err := s.store.ReclaimOrphanReservedQOTDQuestions(ctx, guildID, todayUTC)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.reclaimOrphanReservedQuestions: %w", err)
 	}
 	if len(ids) > 0 {
 		s.observability().RecordOrphanReclaim(len(ids))
@@ -358,16 +358,16 @@ func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.S
 
 func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, archivedAt time.Time) error {
 	if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchiving), nil, nil); err != nil {
-		return err
+		return fmt.Errorf("Service.archiveOfficialPost: %w", err)
 	}
 
 	answerRecords, err := s.store.ListQOTDAnswerMessagesByOfficialPost(ctx, post.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.archiveOfficialPost: %w", err)
 	}
 	for _, answerRecord := range answerRecords {
 		if err := s.archiveAnswerRecord(ctx, answerRecord, archivedAt); err != nil {
-			return err
+			return fmt.Errorf("Service.archiveOfficialPost: %w", err)
 		}
 	}
 
@@ -404,7 +404,7 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 
 func (s *Service) archiveAnswerRecord(ctx context.Context, answerRecord storage.QOTDAnswerMessageRecord, archivedAt time.Time) error {
 	if _, err := s.store.UpdateQOTDAnswerMessageState(ctx, answerRecord.ID, string(AnswerRecordStateArchiving), nil, nil); err != nil {
-		return err
+		return fmt.Errorf("Service.archiveAnswerRecord: %w", err)
 	}
 	_, err := s.store.UpdateQOTDAnswerMessageState(ctx, answerRecord.ID, string(AnswerRecordStateArchived), &archivedAt, &archivedAt)
 	return err
@@ -431,7 +431,7 @@ func (s *Service) setThreadState(ctx context.Context, session *discordgo.Session
 			s.logUnmanageableThreadOnce(threadID, state, err)
 			return false, nil
 		}
-		return false, err
+		return false, fmt.Errorf("Service.setThreadState: %w", err)
 	}
 	return false, nil
 }

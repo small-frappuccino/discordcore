@@ -39,11 +39,11 @@ func (m *postgresMigrator) Up(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	if err := m.ensureVersionTable(ctx); err != nil {
-		return err
+		return fmt.Errorf("postgresMigrator.Up: %w", err)
 	}
 	current, err := m.Version(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("postgresMigrator.Up: %w", err)
 	}
 
 	for _, mig := range m.migrations {
@@ -72,7 +72,7 @@ func (m *postgresMigrator) Up(ctx context.Context) error {
 	}
 
 	if err := m.repairLegacySchemas(ctx); err != nil {
-		return err
+		return fmt.Errorf("postgresMigrator.Up: %w", err)
 	}
 
 	return nil
@@ -89,11 +89,11 @@ func (m *postgresMigrator) Down(ctx context.Context, steps int) error {
 		ctx = context.Background()
 	}
 	if err := m.ensureVersionTable(ctx); err != nil {
-		return err
+		return fmt.Errorf("postgresMigrator.Down: %w", err)
 	}
 	current, err := m.Version(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("postgresMigrator.Down: %w", err)
 	}
 	if current == 0 {
 		return nil
@@ -138,7 +138,7 @@ func (m *postgresMigrator) Version(ctx context.Context) (int64, error) {
 		ctx = context.Background()
 	}
 	if err := m.ensureVersionTable(ctx); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("postgresMigrator.Version: %w", err)
 	}
 
 	var version sql.NullInt64
@@ -179,7 +179,7 @@ func (m *postgresMigrator) repairLegacySchemas(ctx context.Context) error {
 	}
 	if err := repairQOTDLegacySchema(ctx, tx); err != nil {
 		_ = tx.Rollback()
-		return err
+		return fmt.Errorf("postgresMigrator.repairLegacySchemas: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		_ = tx.Rollback()

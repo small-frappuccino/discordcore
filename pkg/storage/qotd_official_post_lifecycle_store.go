@@ -65,7 +65,7 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.UpdateQOTDOfficialPostProgress: %w", err)
 	}
 	return record, nil
 }
@@ -117,7 +117,7 @@ func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildI
 		guildID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err)
 	}
 	defer rows.Close()
 
@@ -125,12 +125,12 @@ func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildI
 	for rows.Next() {
 		record, err := scanQOTDOfficialPostRecord(rows)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err)
 		}
 		records = append(records, *record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err)
 	}
 	return records, nil
 }

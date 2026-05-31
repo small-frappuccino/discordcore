@@ -641,7 +641,7 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 	case vtBool:
 		b, err := parseBool(raw)
 		if err != nil {
-			return rc, err
+			return rc, fmt.Errorf("setValue: %w", err)
 		}
 		return setBool(rc, sp.Key, b)
 	case vtInt:
@@ -651,7 +651,7 @@ func setValue(rc files.RuntimeConfig, sp spec, raw string) (files.RuntimeConfig,
 		}
 		v, err := parseNonNegativeInt(raw)
 		if err != nil {
-			return rc, err
+			return rc, fmt.Errorf("setValue: %w", err)
 		}
 		return setInt(rc, sp.Key, v)
 	case vtDate:
@@ -1562,7 +1562,7 @@ func applyRuntimeConfigWithLog(
 		}
 		fields = append(fields, interactionLogFields(i)...)
 		slog.Error("Runtime config hot-apply failed", fields...)
-		return err
+		return fmt.Errorf("applyRuntimeConfigWithLog: %w", err)
 	}
 	return nil
 }

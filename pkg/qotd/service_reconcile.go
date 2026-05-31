@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -11,26 +12,26 @@ import (
 func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {
 	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 	}
 
 	for _, post := range posts {
 		lifecycle := EvaluateOfficialPostWindow(post.PublishDateUTC, derefTime(post.PublishedAt), post.GraceUntil, post.ArchiveAt, now)
 		if err := s.syncLiveOfficialPost(ctx, session, post, lifecycle); err != nil {
-			return err
+			return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 		}
 	}
 
 	candidates, err := s.store.ListQOTDOfficialPostsNeedingArchive(ctx, now)
 	if err != nil {
-		return err
+		return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 	}
 	for _, post := range candidates {
 		if post.GuildID != guildID || post.ID == currentOfficialPostID {
 			continue
 		}
 		if err := s.archiveOfficialPost(ctx, session, post, now.UTC()); err != nil {
-			return err
+			return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 		}
 	}
 

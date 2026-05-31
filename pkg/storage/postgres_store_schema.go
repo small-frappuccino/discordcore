@@ -33,7 +33,7 @@ var requiredSchemaColumns = map[string][]string{
 func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {
 	missingColumns, err := s.missingColumns(ctx, "member_joins", requiredSchemaColumns["member_joins"])
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.ensureMemberJoinColumns: %w", err)
 	}
 	if len(missingColumns) == 0 {
 		return nil

@@ -32,12 +32,12 @@ const maxPostgresMessageBodyBytes = 64 * 1024 * 1024
 func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 	normalized := cfg.Normalized()
 	if err := normalized.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Open: %w", err)
 	}
 
 	connStr, err := registerSafeConnConfig(normalized.DatabaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Open: %w", err)
 	}
 
 	db, err := sql.Open("pgx", connStr)

@@ -112,7 +112,7 @@ func scheduleStartupWebhookEmbedUpdates(
 	run := func(ctx context.Context) error {
 		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
 			if err := ctx.Err(); err != nil {
-				return err
+				return fmt.Errorf("scheduleStartupWebhookEmbedUpdates: %w", err)
 			}
 
 			operation := fmt.Sprintf(
@@ -253,7 +253,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	}
 
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}
 
 	if err := controlServer.Start(); err != nil {
@@ -272,7 +272,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		stopCtx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		_ = controlServer.Stop(stopCtx)
-		return err
+		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}
 
 	if opts.controlServerRegistry != nil {

@@ -62,7 +62,7 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 
 	banCtx, err := prepareBanContext(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("massBanCommand.Handle: %w", err)
 	}
 
 	bannedCount := 0

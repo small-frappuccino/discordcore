@@ -72,7 +72,7 @@ func openBotRuntimes(botInstances []resolvedBotInstance, runtimeCapabilities map
 		group.Go(func() error {
 			runtime, err := openBotRuntimeFn(instance, capabilities)
 			if err != nil {
-				return err
+				return fmt.Errorf("openBotRuntimes: %w", err)
 			}
 			opened[i] = runtime
 			return nil
@@ -269,7 +269,7 @@ func (w *runtimeStartupBackgroundWorker) dispatch() {
 					if w.ctx.Err() != nil {
 						return nil
 					}
-					return err
+					return fmt.Errorf("runtimeStartupBackgroundWorker.dispatch: %w", err)
 				}
 				return nil
 			})

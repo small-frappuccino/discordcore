@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
@@ -55,7 +56,7 @@ func (cs *CachedSession) GuildMember(guildID, userID string) (*discordgo.Member,
 	// Fallback to API
 	member, err := cs.session.GuildMember(guildID, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("CachedSession.GuildMember: %w", err)
 	}
 
 	cs.cache.SetMember(guildID, userID, member)
@@ -80,7 +81,7 @@ func (cs *CachedSession) Guild(guildID string) (*discordgo.Guild, error) {
 	// Fallback to API
 	guild, err := cs.session.Guild(guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("CachedSession.Guild: %w", err)
 	}
 
 	cs.cache.SetGuild(guildID, guild)
@@ -97,7 +98,7 @@ func (cs *CachedSession) GuildRoles(guildID string) ([]*discordgo.Role, error) {
 	// Fallback to API
 	roles, err := cs.session.GuildRoles(guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("CachedSession.GuildRoles: %w", err)
 	}
 
 	cs.cache.SetRoles(guildID, roles)
@@ -122,7 +123,7 @@ func (cs *CachedSession) Channel(channelID string) (*discordgo.Channel, error) {
 	// Fallback to API
 	channel, err := cs.session.Channel(channelID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("CachedSession.Channel: %w", err)
 	}
 
 	cs.cache.SetChannel(channelID, channel)

@@ -65,7 +65,7 @@ func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context
 
 		for {
 			if err := serviceCtx.Err(); err != nil {
-				return err
+				return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
 			}
 			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
 				return ms.session.ChannelMessages(channelID, 100, before, "", "")
@@ -82,7 +82,7 @@ func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context
 			stop := false
 			for _, m := range msgs {
 				if err := serviceCtx.Err(); err != nil {
-					return err
+					return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
 				}
 				t := m.Timestamp.UTC()
 				// Stop if we've paged past the target day
@@ -212,7 +212,7 @@ func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context
 
 		for {
 			if err := serviceCtx.Err(); err != nil {
-				return err
+				return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
 			}
 			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
 				return ms.session.ChannelMessages(channelID, 100, before, "", "")
@@ -229,7 +229,7 @@ func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context
 			stop := false
 			for _, m := range msgs {
 				if err := serviceCtx.Err(); err != nil {
-					return err
+					return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
 				}
 				t := m.Timestamp.UTC()
 				// Stop if we've paged past the target window

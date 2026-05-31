@@ -83,7 +83,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 	defer mgr.mu.Unlock()
 
 	if err := mgr.saveConfigLocked(); err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SaveConfig: %w", err)
 	}
 	mgr.publishSnapshotLocked()
 	return nil
@@ -117,7 +117,7 @@ func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (Ru
 		return fn(&cfg.RuntimeConfig)
 	})
 	if err != nil {
-		return RuntimeConfig{}, err
+		return RuntimeConfig{}, fmt.Errorf("ConfigManager.UpdateRuntimeConfig: %w", err)
 	}
 	return snapshot.RuntimeConfig, nil
 }
@@ -518,7 +518,7 @@ func TextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Chan
 	}
 	channels, err := session.GuildChannels(guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("TextChannels: %w", err)
 	}
 	var textChannels []*discordgo.Channel
 	for _, channel := range channels {

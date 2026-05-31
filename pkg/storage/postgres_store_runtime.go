@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -37,7 +38,7 @@ func (s *Store) BotSince(ctx context.Context, guildID string) (time.Time, bool, 
 		if err == sql.ErrNoRows {
 			return time.Time{}, false, nil
 		}
-		return time.Time{}, false, err
+		return time.Time{}, false, fmt.Errorf("Store.BotSince: %w", err)
 	}
 	if !t.Valid {
 		return time.Time{}, false, nil
@@ -65,7 +66,7 @@ func (s *Store) getRuntimeTimestamp(ctx context.Context, key string) (time.Time,
 		if err == sql.ErrNoRows {
 			return time.Time{}, false, nil
 		}
-		return time.Time{}, false, err
+		return time.Time{}, false, fmt.Errorf("Store.getRuntimeTimestamp: %w", err)
 	}
 	return ts, true, nil
 }

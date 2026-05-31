@@ -89,7 +89,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("IntelligentWarmupContext: %w", err)
 	}
 
 	startTime := time.Now()
@@ -115,7 +115,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 
 	// Step 2: Determine which guilds to warmup
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("IntelligentWarmupContext: %w", err)
 	}
 	guildIDs := config.GuildIDs
 	if len(guildIDs) == 0 {
@@ -136,7 +136,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 	var totalMembers, totalRoles, totalChannels, totalGuilds int
 	for _, guildID := range guildIDs {
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("IntelligentWarmupContext: %w", err)
 		}
 		// Fetch missing guild data
 		if config.FetchMissingGuilds {
@@ -279,7 +279,7 @@ func warmupGuildMembersContext(ctx context.Context, session warmupSession, cache
 
 	for {
 		if err := ctx.Err(); err != nil {
-			return cachedCount, err
+			return cachedCount, fmt.Errorf("warmupGuildMembersContext: %w", err)
 		}
 		if maxMembers > 0 && fetchedCount >= maxMembers {
 			break
@@ -303,7 +303,7 @@ func warmupGuildMembersContext(ctx context.Context, session warmupSession, cache
 		// Process each member
 		for _, member := range members {
 			if err := ctx.Err(); err != nil {
-				return cachedCount, err
+				return cachedCount, fmt.Errorf("warmupGuildMembersContext: %w", err)
 			}
 			fetchedCount++
 

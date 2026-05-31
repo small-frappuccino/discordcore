@@ -142,16 +142,16 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 	request, err := parseCleanRequest(ctx)
 	if err != nil {
 		c.recordEarlyFailure(ctx, "", CleanFailureCauseInvalidRequest, start, err)
-		return err
+		return fmt.Errorf("cleanCommand.Handle: %w", err)
 	}
 	if err := validateCleanPermissions(ctx, request.channelID); err != nil {
 		c.recordEarlyFailure(ctx, request.channelID, CleanFailureCausePermissionDenied, start, err)
-		return err
+		return fmt.Errorf("cleanCommand.Handle: %w", err)
 	}
 
 	result, err := c.executeClean(ctx, request, start)
 	if err != nil {
-		return err
+		return fmt.Errorf("cleanCommand.Handle: %w", err)
 	}
 	duration := c.now().Sub(start)
 	c.metrics.RecordCleanSuccess(duration, result.deleted)
@@ -235,11 +235,11 @@ func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
 	}
 	fromID, err := normalizeCleanMessageID(extractor.String(cleanFromOptionName), cleanFromOptionName)
 	if err != nil {
-		return cleanRequest{}, err
+		return cleanRequest{}, fmt.Errorf("parseCleanRequest: %w", err)
 	}
 	toID, err := normalizeCleanMessageID(extractor.String(cleanToOptionName), cleanToOptionName)
 	if err != nil {
-		return cleanRequest{}, err
+		return cleanRequest{}, fmt.Errorf("parseCleanRequest: %w", err)
 	}
 	if fromID != "" && toID != "" && compareSnowflakeIDs(fromID, toID) >= 0 {
 		return cleanRequest{}, core.NewCommandError("The `from` message ID must be older than the `to` message ID.", true)
@@ -286,11 +286,11 @@ func validateCleanPermissions(ctx *core.Context, channelID string) error {
 	botID := ctx.Session.State.User.ID
 
 	if err := requireChannelPermissions(ctx.Session, ctx.UserID, channelID, discordgo.PermissionManageMessages, "You need the Manage Messages permission in this channel to use /clean."); err != nil {
-		return err
+		return fmt.Errorf("validateCleanPermissions: %w", err)
 	}
 	botRequired := int64(discordgo.PermissionViewChannel | discordgo.PermissionReadMessageHistory | discordgo.PermissionManageMessages)
 	if err := requireChannelPermissions(ctx.Session, botID, channelID, botRequired, "I need View Channel, Read Message History, and Manage Messages in this channel to use /clean."); err != nil {
-		return err
+		return fmt.Errorf("validateCleanPermissions: %w", err)
 	}
 	return nil
 }
@@ -317,7 +317,7 @@ func requireChannelPermissions(session *discordgo.Session, userID, channelID str
 func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, start time.Time) (cleanResult, error) {
 	matched, result, err := c.collectCleanTargets(ctx, request, start)
 	if err != nil {
-		return cleanResult{}, err
+		return cleanResult{}, fmt.Errorf("cleanCommand.executeClean: %w", err)
 	}
 	result.matched = len(matched)
 	if len(matched) == 0 {

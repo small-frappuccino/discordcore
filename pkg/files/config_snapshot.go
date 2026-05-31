@@ -100,7 +100,7 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 
 	if fn != nil {
 		if err := fn(next); err != nil {
-			return BotConfig{}, err
+			return BotConfig{}, fmt.Errorf("ConfigManager.UpdateConfig: %w", err)
 		}
 	}
 
@@ -114,7 +114,7 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 		mgr.config = previous
 		mgr.guildIndex = previousIndex
 		mgr.publishSnapshotLocked()
-		return BotConfig{}, err
+		return BotConfig{}, fmt.Errorf("ConfigManager.UpdateConfig: %w", err)
 	}
 
 	snapshot := mgr.publishSnapshotLocked()

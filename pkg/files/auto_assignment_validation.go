@@ -65,14 +65,14 @@ func validateBotConfig(cfg *BotConfig) error {
 	normalizeGuildBotInstanceBindings(cfg)
 
 	if _, err := normalizeDomainBotInstanceBindings(cfg); err != nil {
-		return err
+		return fmt.Errorf("validateBotConfig: %w", err)
 	}
 
 	for idx := range cfg.Guilds {
 		cfg.Guilds[idx].BotInstanceID = NormalizeBotInstanceID(cfg.Guilds[idx].BotInstanceID)
 
 		if err := validateGuildAutoAssignmentOrder(&cfg.Guilds[idx], idx); err != nil {
-			return err
+			return fmt.Errorf("validateBotConfig: %w", err)
 		}
 	}
 
@@ -88,7 +88,7 @@ func normalizeDomainBotInstanceBindings(cfg *BotConfig) (bool, error) {
 	for idx := range cfg.Guilds {
 		normalized, guildChanged, err := normalizeGuildDomainBotInstanceBindings(cfg.Guilds[idx].DomainBotInstanceIDs, idx)
 		if err != nil {
-			return changed, err
+			return changed, fmt.Errorf("normalizeDomainBotInstanceBindings: %w", err)
 		}
 		cfg.Guilds[idx].DomainBotInstanceIDs = normalized
 		if guildChanged {

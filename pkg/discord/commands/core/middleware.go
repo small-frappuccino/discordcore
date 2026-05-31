@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -133,7 +134,7 @@ func applyInteractionAckPolicy(ctx *Context, routeKey InteractionRouteKey, polic
 	switch routeKey.Kind {
 	case InteractionKindSlash:
 		if err := NewResponseManager(ctx.Session).DeferResponse(ctx.Interaction, policy.Ephemeral); err != nil {
-			return err
+			return fmt.Errorf("applyInteractionAckPolicy: %w", err)
 		}
 		ctx.Acknowledged = true
 		ctx.AckEphemeral = policy.Ephemeral
@@ -157,7 +158,8 @@ func respondToSlashError(ctx *Context, err error) {
 		return
 	}
 
-	if cmdErr, ok := err.(*CommandError); ok {
+	var cmdErr *CommandError
+	if errors.As(err, &cmdErr) {
 		builder := NewResponseBuilder(ctx.Session).WithContext(ctx)
 		if cmdErr.Ephemeral {
 			builder = builder.Ephemeral()

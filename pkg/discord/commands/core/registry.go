@@ -252,14 +252,14 @@ func (cm *CommandManager) syncGuildScopedCommands() error {
 	summary := commandSyncSummary{}
 	globalSummary, err := cm.syncCommandScope("", map[string]*discordgo.ApplicationCommand{})
 	if err != nil {
-		return err
+		return fmt.Errorf("CommandManager.syncGuildScopedCommands: %w", err)
 	}
 	summary.add(globalSummary)
 
 	for _, guildID := range cm.guildScopedSyncTargets() {
 		guildSummary, err := cm.syncCommandScope(guildID, cm.guildDesiredCommands(guildID))
 		if err != nil {
-			return err
+			return fmt.Errorf("CommandManager.syncGuildScopedCommands: %w", err)
 		}
 		summary.add(guildSummary)
 	}

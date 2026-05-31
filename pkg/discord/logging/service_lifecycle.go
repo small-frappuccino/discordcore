@@ -114,7 +114,7 @@ func (sl *serviceLifecycle) Wait(ctx context.Context) error {
 
 func (sl *serviceLifecycle) Stop(ctx context.Context) error {
 	if err := sl.Cancel(); err != nil {
-		return err
+		return fmt.Errorf("serviceLifecycle.Stop: %w", err)
 	}
 	return sl.Wait(ctx)
 }

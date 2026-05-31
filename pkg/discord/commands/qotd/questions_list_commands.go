@@ -246,17 +246,17 @@ func (c *questionsAddCommand) RequiresPermissions() bool { return true }
 
 func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	body, err := extractor.StringRequired(questionsBodyOptionName)
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
 	}
 
 	created, err := c.service.CreateQuestion(context.Background(), ctx.GuildID, ctx.UserID, applicationqotd.QuestionMutation{
@@ -351,13 +351,13 @@ func (c *questionsRecoverCommand) RequiresPermissions() bool { return true }
 
 func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	deck, err := loadCommandDeck(ctx, c.catalog, extractor.String(questionsDeckOptionName))
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
 	}
 	state, err := c.publish.GetAutomaticQueueState(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
@@ -396,12 +396,12 @@ func (c *qotdPublishCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 
 func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("qotdPublishCommand.Handle: %w", err)
 	}
 
 	deck, err := loadCommandDeck(ctx, c.catalog, "")
 	if err != nil {
-		return err
+		return fmt.Errorf("qotdPublishCommand.Handle: %w", err)
 	}
 	if !deck.Enabled {
 		return core.NewCommandError("Enable QOTD publishing for the active deck before publishing manually.", false)
@@ -459,7 +459,7 @@ func (c *qotdSkipCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 
 func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("qotdSkipCommand.Handle: %w", err)
 	}
 
 	if ctx.Interaction.Member == nil || (ctx.Interaction.Member.Permissions&discordgo.PermissionManageMessages) == 0 {
@@ -488,7 +488,7 @@ func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 
 func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("questionsRemoveCommand.Handle: %w", err)
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -498,11 +498,11 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsRemoveCommand.Handle: %w", err)
 	}
 	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsRemoveCommand.Handle: %w", err)
 	}
 	question := findQuestionByDisplayID(questions, displayID)
 	if question == nil {
@@ -519,7 +519,7 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 
 func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("questionsRecoverCommand.Handle: %w", err)
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -529,11 +529,11 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsRecoverCommand.Handle: %w", err)
 	}
 	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsRecoverCommand.Handle: %w", err)
 	}
 	question := findQuestionByDisplayID(questions, displayID)
 	if question == nil {
@@ -558,7 +558,7 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 
 func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("questionsMarkPublishedCommand.Handle: %w", err)
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
@@ -568,11 +568,11 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsMarkPublishedCommand.Handle: %w", err)
 	}
 	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsMarkPublishedCommand.Handle: %w", err)
 	}
 	question := findQuestionByDisplayID(questions, displayID)
 	if question == nil {
@@ -593,14 +593,14 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
-		return err
+		return fmt.Errorf("questionsListCommand.Handle: %w", err)
 	}
 
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	requestedDeck := extractor.String(questionsDeckOptionName)
 	view, err := c.loadView(ctx, requestedDeck)
 	if err != nil {
-		return err
+		return fmt.Errorf("questionsListCommand.Handle: %w", err)
 	}
 
 	state := questionsListState{
@@ -609,7 +609,7 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 		Page:   0,
 	}
 	if err := respondQuestionsList(ctx, view, state, false, true); err != nil {
-		return err
+		return fmt.Errorf("questionsListCommand.Handle: %w", err)
 	}
 	c.armQuestionsListIdleTimeoutForOriginalResponse(ctx)
 	return nil
@@ -635,7 +635,7 @@ func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
 	totalPages := discordqotdBuildPageCount(len(view.questions))
 	state.Page = nextQuestionsListPage(action, state.Page, totalPages)
 	if err := respondQuestionsList(ctx, view, state, false, false); err != nil {
-		return err
+		return fmt.Errorf("questionsListCommand.HandleComponent: %w", err)
 	}
 	c.armQuestionsListIdleTimeoutForMessage(ctx)
 	return nil
@@ -649,11 +649,11 @@ type questionsListView struct {
 func (c *questionsListCommand) loadView(ctx *core.Context, requestedDeck string) (questionsListView, error) {
 	deck, err := loadCommandDeck(ctx, c.service, requestedDeck)
 	if err != nil {
-		return questionsListView{}, err
+		return questionsListView{}, fmt.Errorf("questionsListCommand.loadView: %w", err)
 	}
 	questions, err := c.service.ListQuestions(context.Background(), ctx.GuildID, deck.ID)
 	if err != nil {
-		return questionsListView{}, err
+		return questionsListView{}, fmt.Errorf("questionsListCommand.loadView: %w", err)
 	}
 	return questionsListView{deck: deck, questions: questions}, nil
 }
@@ -674,7 +674,7 @@ func requireQuestionsGuild(ctx *core.Context) error {
 func loadCommandDeck(ctx *core.Context, catalog applicationqotd.QuestionCatalog, requestedDeck string) (files.QOTDDeckConfig, error) {
 	settings, err := catalog.Settings(ctx.GuildID)
 	if err != nil {
-		return files.QOTDDeckConfig{}, err
+		return files.QOTDDeckConfig{}, fmt.Errorf("loadCommandDeck: %w", err)
 	}
 	return resolveDeck(settings, requestedDeck)
 }

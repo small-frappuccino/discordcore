@@ -1,6 +1,9 @@
 package files
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // FeatureServiceToggles holds optional overrides for runtime behavior.
 // When unset, defaults preserve current behavior.
@@ -77,7 +80,7 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 	type alias FeatureToggles
 	var parsed alias
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
+		return fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
 	}
 	*ft = FeatureToggles(parsed)
 	return nil

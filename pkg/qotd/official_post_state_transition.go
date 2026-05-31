@@ -139,14 +139,14 @@ func (s *Service) applyOfficialPostThreadTransition(
 		// rows) skip Discord entirely; there is no divergence to manage.
 		updated, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(targetDBState), closedAt, archivedAt)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Service.applyOfficialPostThreadTransition: %w", err)
 		}
 		return updated, nil
 	}
 
 	missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, threadState)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.applyOfficialPostThreadTransition: %w", err)
 	}
 
 	finalState := targetDBState

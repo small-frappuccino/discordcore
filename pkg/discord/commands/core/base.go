@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -203,7 +204,7 @@ func CreateLogFields(ctx *Context, additionalFields map[string]any) map[string]a
 // RequiresGuildConfig checks if the command requires server configuration
 func RequiresGuildConfig(ctx *Context) error {
 	if err := ValidateGuildContext(ctx); err != nil {
-		return err
+		return fmt.Errorf("RequiresGuildConfig: %w", err)
 	}
 
 	if ctx.GuildConfig == nil {
@@ -216,7 +217,7 @@ func RequiresGuildConfig(ctx *Context) error {
 // SafeGuildAccess provides safe access to server information
 func SafeGuildAccess(ctx *Context, fn func(*files.GuildConfig) error) error {
 	if err := RequiresGuildConfig(ctx); err != nil {
-		return err
+		return fmt.Errorf("SafeGuildAccess: %w", err)
 	}
 
 	return fn(ctx.GuildConfig)

@@ -58,7 +58,7 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 
 	kickCtx, err := prepareKickContext(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("kickCommand.Handle: %w", err)
 	}
 
 	if ok, reasonText := canKickTarget(ctx, kickCtx, userID); !ok {

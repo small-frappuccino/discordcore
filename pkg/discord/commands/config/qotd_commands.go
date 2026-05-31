@@ -49,7 +49,7 @@ func (c *QOTDGetSubCommand) RequiresPermissions() bool { return true }
 
 func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
-		return err
+		return fmt.Errorf("QOTDGetSubCommand.Handle: %w", err)
 	}
 
 	settings := files.DashboardQOTDConfig(ctx.GuildConfig.QOTD)
@@ -118,7 +118,7 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("QOTDEnabledSubCommand.Handle: %w", err)
 	}
 
 	state := "disabled"
@@ -169,7 +169,7 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("QOTDChannelSubCommand.Handle: %w", err)
 	}
 
 	state := "disabled"
@@ -225,7 +225,7 @@ func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("QOTDScheduleSubCommand.Handle: %w", err)
 	}
 
 	deckLabel := activeDeckDisplayLabel(updatedConfig)
@@ -240,7 +240,7 @@ func updateQOTDConfig(
 	mutate func(*files.QOTDConfig) error,
 ) (files.QOTDConfig, error) {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("updateQOTDConfig: %w", err)
 	}
 
 	var updatedConfig files.QOTDConfig
@@ -248,7 +248,7 @@ func updateQOTDConfig(
 		current := files.DashboardQOTDConfig(guildConfig.QOTD)
 		next := files.CloneQOTDConfig(current)
 		if err := mutate(&next); err != nil {
-			return err
+			return fmt.Errorf("updateQOTDConfig: %w", err)
 		}
 
 		normalized, err := qotdservice.PrepareSettingsUpdate(current, next, now())
@@ -260,7 +260,7 @@ func updateQOTDConfig(
 		return nil
 	})
 	if err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("updateQOTDConfig: %w", err)
 	}
 
 	persister := core.NewConfigPersister(configManager)
@@ -286,7 +286,7 @@ func updateActiveQOTDDeck(
 		return mutate(&cfg.Decks[deckIndex])
 	})
 	if err != nil {
-		return files.QOTDDeckConfig{}, err
+		return files.QOTDDeckConfig{}, fmt.Errorf("updateActiveQOTDDeck: %w", err)
 	}
 	deckIndex := activeQOTDDeckIndex(updatedConfig)
 	if deckIndex < 0 {
@@ -354,14 +354,21 @@ func translateQOTDConfigError(err error) error {
 		return nil
 	}
 	if errors.Is(err, files.ErrInvalidQOTDInput) {
-		message := strings.TrimSpace(strings.TrimPrefix(err.Error(), files.ErrInvalidQOTDInput.Error()+":"))
-		if message == "" {
-			message = "That QOTD setup couldn't be applied because part of the configuration is invalid. This reply stays private."
+		if strings.Contains(err.Error(), "schedule.hour_utc and schedule.minute_utc are required when enabled") {
+			return qotdConfigDetailedCommandError("QOTD publishing couldn't be turned on yet because the schedule is incomplete. This reply stays private so the setup can be finished first.")
 		}
-		if message == "schedule.hour_utc and schedule.minute_utc are required when enabled" {
-			message = "QOTD publishing couldn't be turned on yet because the schedule is incomplete. This reply stays private so the setup can be finished first."
+		
+		// Attempt to extract the innermost message if possible
+		errMsg := err.Error()
+		idx := strings.LastIndex(errMsg, files.ErrInvalidQOTDInput.Error()+":")
+		if idx != -1 {
+			msg := strings.TrimSpace(errMsg[idx+len(files.ErrInvalidQOTDInput.Error())+1:])
+			if msg != "" {
+				return qotdConfigDetailedCommandError(msg)
+			}
 		}
-		return qotdConfigDetailedCommandError(message)
+		
+		return qotdConfigDetailedCommandError("That QOTD setup couldn't be applied because part of the configuration is invalid. This reply stays private.")
 	}
 	return err
 }

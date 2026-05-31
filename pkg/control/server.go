@@ -525,7 +525,7 @@ func (s *Server) applyRuntimePatch(patch map[string]json.RawMessage) (files.Runt
 		return nil
 	})
 	if err != nil {
-		return files.RuntimeConfig{}, err
+		return files.RuntimeConfig{}, fmt.Errorf("Server.applyRuntimePatch: %w", err)
 	}
 
 	if s.runtimeApplier != nil {
@@ -571,7 +571,7 @@ func stringSetter(assign func(*files.RuntimeConfig, string)) setterFunc {
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeString(raw)
 		if err != nil {
-			return err
+			return fmt.Errorf("stringSetter: %w", err)
 		}
 		assign(rc, v)
 		return nil
@@ -582,7 +582,7 @@ func boolSetter(assign func(*files.RuntimeConfig, bool)) setterFunc {
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeBool(raw)
 		if err != nil {
-			return err
+			return fmt.Errorf("boolSetter: %w", err)
 		}
 		assign(rc, v)
 		return nil
@@ -593,7 +593,7 @@ func intSetter(assign func(*files.RuntimeConfig, int)) setterFunc {
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeInt(raw)
 		if err != nil {
-			return err
+			return fmt.Errorf("intSetter: %w", err)
 		}
 		assign(rc, v)
 		return nil
@@ -604,7 +604,7 @@ func nonNegativeIntSetter(field string, assign func(*files.RuntimeConfig, int)) 
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeInt(raw)
 		if err != nil {
-			return err
+			return fmt.Errorf("nonNegativeIntSetter: %w", err)
 		}
 		if v < 0 {
 			return fmt.Errorf("%s must be >= 0", field)
@@ -639,7 +639,7 @@ func decodeString(raw json.RawMessage) (string, error) {
 
 	var v string
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return "", err
+		return "", fmt.Errorf("decodeString: %w", err)
 	}
 	return v, nil
 }
@@ -654,7 +654,7 @@ func decodeBool(raw json.RawMessage) (bool, error) {
 
 	var v bool
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return false, err
+		return false, fmt.Errorf("decodeBool: %w", err)
 	}
 	return v, nil
 }
@@ -669,14 +669,14 @@ func decodeInt(raw json.RawMessage) (int, error) {
 
 	var n json.Number
 	if err := json.Unmarshal(raw, &n); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("decodeInt: %w", err)
 	}
 	if i, err := n.Int64(); err == nil {
 		return int(i), nil
 	}
 	f, err := n.Float64()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("decodeInt: %w", err)
 	}
 	return int(f), nil
 }

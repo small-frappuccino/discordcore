@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -56,15 +58,15 @@ func (c *PastebinConfigSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
 	devKey, err := extractor.StringRequired("api_dev_key")
 	if err != nil {
-		return err
+		return fmt.Errorf("PastebinConfigSubCommand.Handle: %w", err)
 	}
 	userName, err := extractor.StringRequired("api_user_name")
 	if err != nil {
-		return err
+		return fmt.Errorf("PastebinConfigSubCommand.Handle: %w", err)
 	}
 	password, err := extractor.StringRequired("api_user_password")
 	if err != nil {
-		return err
+		return fmt.Errorf("PastebinConfigSubCommand.Handle: %w", err)
 	}
 
 	// Update global RuntimeConfig

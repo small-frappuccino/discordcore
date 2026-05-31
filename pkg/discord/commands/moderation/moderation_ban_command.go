@@ -58,7 +58,7 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 
 	banCtx, err := prepareBanContext(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("banCommand.Handle: %w", err)
 	}
 
 	if ok, reasonText := canBanTarget(ctx, banCtx, userID); !ok {

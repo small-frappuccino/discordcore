@@ -106,12 +106,12 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	botInstances, defaultBotInstanceID, err := resolveBotInstances(tokenEnv, opts)
 	if err != nil {
-		return err
+		return fmt.Errorf("RunWithOptions: %w", err)
 	}
 
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
-		return err
+		return fmt.Errorf("RunWithOptions: %w", err)
 	}
 	log.ApplicationLogger().Info(
 		"Resolved postgres bootstrap configuration",
@@ -130,7 +130,7 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// mirrored into runtime_config after the config store is loaded.
 	store, configManager, err := setupStorage(databaseBootstrap)
 	if err != nil {
-		return err
+		return fmt.Errorf("RunWithOptions: %w", err)
 	}
 	closeStoreOnReturn := true
 	defer func() {

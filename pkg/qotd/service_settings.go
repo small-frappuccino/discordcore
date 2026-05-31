@@ -11,11 +11,11 @@ import (
 
 func (s *Service) Settings(guildID string) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.Settings: %w", err)
 	}
 	settings, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.Settings: %w", err)
 	}
 	return files.DashboardQOTDConfig(settings), nil
 }
@@ -26,7 +26,7 @@ func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
 
 func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
-		return files.QOTDConfig{}, err
+		return files.QOTDConfig{}, fmt.Errorf("Service.UpdateSettings: %w", err)
 	}
 	guildID = strings.TrimSpace(guildID)
 	lifecycleLock := s.guildLifecycleLock(guildID)
@@ -38,7 +38,7 @@ func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QO
 func (s *Service) resolveDashboardDeck(guildID, deckID string) (files.QOTDDeckConfig, error) {
 	settings, err := s.Settings(guildID)
 	if err != nil {
-		return files.QOTDDeckConfig{}, err
+		return files.QOTDDeckConfig{}, fmt.Errorf("Service.resolveDashboardDeck: %w", err)
 	}
 	deckID = strings.TrimSpace(deckID)
 	if deckID != "" {

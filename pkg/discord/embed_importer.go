@@ -47,7 +47,7 @@ func FetchPastebinContent(ctx context.Context, pasteURL string) ([]byte, error) 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pasteURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("FetchPastebinContent: %w", err)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -74,7 +74,7 @@ func FetchPastebinContent(ctx context.Context, pasteURL string) ([]byte, error) 
 func UploadHastebinContent(ctx context.Context, data []byte) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, DefaultPasteProviderURL+"/documents", bytes.NewReader(data))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("UploadHastebinContent: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -113,7 +113,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://pastebin.com/api/api_login.php", strings.NewReader(loginVals.Encode()))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("UploadPastebinContent: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -146,7 +146,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 
 	postReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://pastebin.com/api/api_post.php", strings.NewReader(postVals.Encode()))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("UploadPastebinContent: %w", err)
 	}
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 

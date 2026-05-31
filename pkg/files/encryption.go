@@ -43,15 +43,15 @@ func Encrypt(plainText string) (string, error) {
 	key := getEncryptionKey()
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Encrypt: %w", err)
 	}
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Encrypt: %w", err)
 	}
 	nonce := make([]byte, aesGCM.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
+		return "", fmt.Errorf("Encrypt: %w", err)
 	}
 	cipherText := aesGCM.Seal(nonce, nonce, []byte(plainText), nil)
 	return base64.StdEncoding.EncodeToString(cipherText), nil
@@ -64,16 +64,16 @@ func Decrypt(cipherText string) (string, error) {
 	}
 	data, err := base64.StdEncoding.DecodeString(cipherText)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Decrypt: %w", err)
 	}
 	key := getEncryptionKey()
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Decrypt: %w", err)
 	}
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Decrypt: %w", err)
 	}
 	nonceSize := aesGCM.NonceSize()
 	if len(data) < nonceSize {
@@ -82,7 +82,7 @@ func Decrypt(cipherText string) (string, error) {
 	nonce, actualCipherText := data[:nonceSize], data[nonceSize:]
 	plainText, err := aesGCM.Open(nil, nonce, actualCipherText, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Decrypt: %w", err)
 	}
 	return string(plainText), nil
 }
@@ -95,7 +95,7 @@ type EncryptedString string
 func (es EncryptedString) MarshalJSON() ([]byte, error) {
 	enc, err := Encrypt(string(es))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("EncryptedString.MarshalJSON: %w", err)
 	}
 	return json.Marshal(enc)
 }
@@ -106,7 +106,7 @@ func (es EncryptedString) MarshalJSON() ([]byte, error) {
 func (es *EncryptedString) UnmarshalJSON(data []byte) error {
 	var val string
 	if err := json.Unmarshal(data, &val); err != nil {
-		return err
+		return fmt.Errorf("EncryptedString.UnmarshalJSON: %w", err)
 	}
 	dec, err := Decrypt(val)
 	if err != nil {

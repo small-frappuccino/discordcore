@@ -40,7 +40,7 @@ func (s *Server) handleGuildRoleOptionsGet(w http.ResponseWriter, guildID string
 func buildGuildRoleOptions(session *discordgo.Session, guildID string) ([]guildRoleOption, error) {
 	guild, err := resolveGuildFromDiscordSession(session, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("buildGuildRoleOptions: %w", err)
 	}
 
 	options := make([]guildRoleOption, 0, len(guild.Roles))
@@ -64,7 +64,7 @@ func buildGuildRoleOptions(session *discordgo.Session, guildID string) ([]guildR
 func guildRoleOptionIndex(session *discordgo.Session, guildID string) (map[string]guildRoleOption, error) {
 	options, err := buildGuildRoleOptions(session, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("guildRoleOptionIndex: %w", err)
 	}
 
 	index := make(map[string]guildRoleOption, len(options))

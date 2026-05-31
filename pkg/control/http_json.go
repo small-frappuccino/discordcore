@@ -14,7 +14,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) error {
 
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		http.Error(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
-		return err
+		return fmt.Errorf("decodeJSONBody: %w", err)
 	}
 	return nil
 }

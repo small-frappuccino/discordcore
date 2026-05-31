@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"math/rand"
 	"slices"
@@ -336,7 +337,7 @@ func (tr *TaskRouter) RegisterHandler(taskType string, handler TaskHandler) {
 func (tr *TaskRouter) Dispatch(ctx context.Context, t Task) error {
 	groupKey, eff, err := tr.prepareDispatch(t)
 	if err != nil {
-		return err
+		return fmt.Errorf("TaskRouter.Dispatch: %w", err)
 	}
 
 	enq := &enqueuedTask{task: t, attempt: 1}

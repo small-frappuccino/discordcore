@@ -86,7 +86,7 @@ func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt tim
 		if err == sql.ErrNoRows {
 			return "", "", time.Time{}, false, nil
 		}
-		return "", "", time.Time{}, false, err
+		return "", "", time.Time{}, false, fmt.Errorf("Store.GetCacheEntry: %w", err)
 	}
 	if time.Now().After(expiresAt) {
 		return "", "", time.Time{}, false, nil
@@ -106,7 +106,7 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 		cacheType, time.Now().UTC(),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetCacheEntriesByType: %w", err)
 	}
 	defer rows.Close()
 
@@ -122,7 +122,7 @@ func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
 			ExpiresAt time.Time
 		}
 		if err := rows.Scan(&entry.Key, &entry.Data, &entry.ExpiresAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.GetCacheEntriesByType: %w", err)
 		}
 		entries = append(entries, entry)
 	}
@@ -175,7 +175,7 @@ func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats,
 	rows, err := s.db.QueryContext(ctx, `SELECT cache_type, COUNT(*) FROM persistent_cache
          WHERE expires_at > $1 GROUP BY cache_type`, time.Now().UTC())
 	if err != nil {
-		return PersistentCacheStats{}, err
+		return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
 	}
 	defer rows.Close()
 
@@ -184,13 +184,13 @@ func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats,
 		var cacheType string
 		var count int
 		if err := rows.Scan(&cacheType, &count); err != nil {
-			return PersistentCacheStats{}, err
+			return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
 		}
 		stats.ByType[cacheType] = count
 		stats.Total += count
 	}
 	if err := rows.Err(); err != nil {
-		return PersistentCacheStats{}, err
+		return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
 	}
 	if len(stats.ByType) == 0 {
 		stats.ByType = nil
@@ -377,7 +377,7 @@ func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimensio
 
 	rows, err := s.db.QueryContext(ctx, baseSQL, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.metricTotalsByDimension: %w", err)
 	}
 	defer rows.Close()
 
@@ -386,14 +386,14 @@ func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimensio
 		var key string
 		var total sql.NullInt64
 		if err := rows.Scan(&key, &total); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.metricTotalsByDimension: %w", err)
 		}
 		if total.Valid {
 			out = append(out, MetricTotal{Key: key, Total: total.Int64})
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.metricTotalsByDimension: %w", err)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Total > out[j].Total })
 	return out, nil
@@ -421,7 +421,7 @@ func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (i
 	}
 	var total sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=$1`, guildID).Scan(&total); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.CountDistinctMemberJoins: %w", err)
 	}
 	if total.Valid {
 		return total.Int64, nil
@@ -435,14 +435,14 @@ func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID strin
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM member_joins WHERE guild_id=$1`, guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err)
 	}
 	defer rows.Close()
 	out := make([]string, 0, 128)
 	for rows.Next() {
 		var userID string
 		if err := rows.Scan(&userID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err)
 		}
 		if strings.TrimSpace(userID) != "" {
 			out = append(out, userID)
@@ -465,7 +465,7 @@ func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay st
 	}
 	var total sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, query, guildID, cutoffDay).Scan(&total); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.sumMetricSince: %w", err)
 	}
 	if total.Valid {
 		return total.Int64, nil
@@ -476,7 +476,7 @@ func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay st
 func (s *Store) DatabaseSizeBytes(ctx context.Context) (int64, error) {
 	var size sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("Store.DatabaseSizeBytes: %w", err)
 	}
 	if size.Valid {
 		return size.Int64, nil

@@ -204,7 +204,7 @@ func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *sto
 	}
 	if err := w.enqueueRequest(req); err != nil {
 		w.clearPendingToken(key, token)
-		return err
+		return fmt.Errorf("messageCreateWriter.Enqueue: %w", err)
 	}
 	return nil
 }
@@ -227,7 +227,7 @@ func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *
 	}
 	if err := w.enqueueRequest(req); err != nil {
 		w.clearPendingToken(key, token)
-		return err
+		return fmt.Errorf("messageCreateWriter.EnqueueDelete: %w", err)
 	}
 	return nil
 }
@@ -255,7 +255,7 @@ func (w *messageCreateWriter) enqueueRequest(req messageWriteRequest) error {
 	sent, err := w.trySendRequest(req)
 	if err != nil {
 		w.metrics.RecordEnqueueFailure(MessageWriterEnqueueFailureStopped)
-		return err
+		return fmt.Errorf("messageCreateWriter.enqueueRequest: %w", err)
 	}
 	if !sent {
 		w.metrics.RecordEnqueueFailure(MessageWriterEnqueueFailureQueueFull)

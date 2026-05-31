@@ -54,13 +54,13 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 
 	tx, err := s.db.Begin()
 	if err != nil {
-		return ModerationWarning{}, err
+		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	caseNumber, err := nextModerationCaseNumberTx(tx, guildID)
 	if err != nil {
-		return ModerationWarning{}, err
+		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 
 	warning := ModerationWarning{
@@ -87,7 +87,7 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 	}
 
 	if err := tx.Commit(); err != nil {
-		return ModerationWarning{}, err
+		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 	return warning, nil
 }
@@ -117,7 +117,7 @@ func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]Mod
 		limit,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListModerationWarnings: %w", err)
 	}
 	defer rows.Close()
 
@@ -139,7 +139,7 @@ func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]Mod
 		warnings = append(warnings, warning)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.ListModerationWarnings: %w", err)
 	}
 	return warnings, nil
 }
@@ -183,7 +183,7 @@ func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
 		if err == sql.ErrNoRows {
 			return "", false, nil
 		}
-		return "", false, err
+		return "", false, fmt.Errorf("Store.GetGuildOwnerID: %w", err)
 	}
 	if !owner.Valid || owner.String == "" {
 		return "", false, nil
@@ -202,12 +202,12 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("Store.UpsertMemberRoles: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	if _, err := txExec(tx, `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
-		return err
+		return fmt.Errorf("Store.UpsertMemberRoles: %w", err)
 	}
 	for _, rid := range roles {
 		if rid == "" {
@@ -227,7 +227,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
 	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Store.GetMemberRoles: %w", err)
 	}
 	defer rows.Close()
 
@@ -235,7 +235,7 @@ func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
 	for rows.Next() {
 		var rid string
 		if err := rows.Scan(&rid); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Store.GetMemberRoles: %w", err)
 		}
 		if rid != "" {
 			roles = append(roles, rid)
@@ -248,7 +248,7 @@ func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
 func (s *Store) DiffMemberRoles(guildID, userID string, current []string) (added []string, removed []string, err error) {
 	cached, err := s.GetMemberRoles(guildID, userID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("Store.DiffMemberRoles: %w", err)
 	}
 	curSet := make(map[string]struct{}, len(current))
 	for _, r := range current {

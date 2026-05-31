@@ -150,12 +150,12 @@ func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (_ ReactionBlockCo
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return ReactionBlockConfig{}, err
+		return ReactionBlockConfig{}, fmt.Errorf("ConfigManager.ReactionBlockConfig: %w", err)
 	}
 
 	normalized, err := NormalizeReactionBlockConfig(guildConfig.ReactionBlocks)
 	if err != nil {
-		return ReactionBlockConfig{}, err
+		return ReactionBlockConfig{}, fmt.Errorf("ConfigManager.ReactionBlockConfig: %w", err)
 	}
 	return normalized, nil
 }
@@ -177,7 +177,7 @@ func (mgr *ConfigManager) SetReactionBlockConfig(guildID string, cfg ReactionBlo
 
 	normalized, err := NormalizeReactionBlockConfig(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetReactionBlockConfig: %w", err)
 	}
 	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		guildConfig.ReactionBlocks = normalized
@@ -208,7 +208,7 @@ func normalizeReactionBlockRuleConfig(in ReactionBlockRuleConfig) (ReactionBlock
 
 	emojis, err := normalizeReactionBlockEmojiConfigs(in.Emojis)
 	if err != nil {
-		return ReactionBlockRuleConfig{}, err
+		return ReactionBlockRuleConfig{}, fmt.Errorf("normalizeReactionBlockRuleConfig: %w", err)
 	}
 	if len(emojis) == 0 {
 		return ReactionBlockRuleConfig{}, fmt.Errorf("emojis must contain at least one blocked emoji")

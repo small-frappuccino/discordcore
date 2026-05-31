@@ -123,7 +123,7 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 
 	var raw rawRuntimeConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("RuntimeConfig.UnmarshalJSON: %w", err)
 	}
 
 	*rc = RuntimeConfig{
@@ -297,7 +297,7 @@ func (cc *ChannelsConfig) UnmarshalJSON(data []byte) error {
 
 	var raw rawChannelsConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("ChannelsConfig.UnmarshalJSON: %w", err)
 	}
 
 	*cc = ChannelsConfig(raw.alias)
@@ -350,7 +350,7 @@ func (rc *RolesConfig) UnmarshalJSON(data []byte) error {
 
 	var raw rawRolesConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("RolesConfig.UnmarshalJSON: %w", err)
 	}
 
 	*rc = RolesConfig(raw.alias)
@@ -472,7 +472,7 @@ func (upc *UserPruneConfig) UnmarshalJSON(data []byte) error {
 
 	var raw rawUserPruneConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("UserPruneConfig.UnmarshalJSON: %w", err)
 	}
 
 	*upc = UserPruneConfig(raw.alias)
@@ -539,7 +539,7 @@ func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 	type alias GuildConfig
 	var parsed alias
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
+		return fmt.Errorf("GuildConfig.UnmarshalJSON: %w", err)
 	}
 	*gc = GuildConfig(parsed)
 	return nil

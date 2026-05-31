@@ -29,7 +29,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	}()
 
 	if err = s.validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if session == nil {
 		err = ErrDiscordUnavailable
@@ -44,11 +44,11 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	now := s.clock()
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	consumeAutomaticSlot := params.ShouldConsumeAutomaticSlot()
 	publishDate := NormalizePublishDateUTC(now)
@@ -65,7 +65,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		publishDate = NormalizePublishDateUTC(*params.PublishDateOverride)
 		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 		}
 	} else if slotState.ScheduleConfigured {
 		if consumeAutomaticSlot {
@@ -75,7 +75,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	} else {
 		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 		}
 	}
 	deck, ok := cfg.ActiveDeck()
@@ -105,7 +105,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 
 	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID, storage.QOTDQuestionSelectorQueue)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if question == nil {
 		return nil, ErrNoQuestionsAvailable
@@ -115,7 +115,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
 			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
 		}
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	availableQuestions := counts.Ready + counts.Draft
 
@@ -159,14 +159,14 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 		now,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if updatedQuestion != nil {
 		question = updatedQuestion
 	}
 
 	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if consumeAutomaticSlot {
 		s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
@@ -195,7 +195,7 @@ func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string,
 func (s *Service) publishResultFromOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord) (*PublishResult, error) {
 	question, err := s.store.GetQOTDQuestion(ctx, post.GuildID, post.QuestionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Service.publishResultFromOfficialPost: %w", err)
 	}
 
 	resultQuestion := storage.QOTDQuestionRecord{

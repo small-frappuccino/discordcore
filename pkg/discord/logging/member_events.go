@@ -89,7 +89,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 	}
 	runCtx, err := mes.lifecycle.Start(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("MemberEventService.Start: %w", err)
 	}
 
 	// Ensure join map is initialized
@@ -158,7 +158,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 // Stop the service
 func (mes *MemberEventService) Stop(ctx context.Context) error {
 	if err := mes.lifecycle.Cancel(); err != nil {
-		return err
+		return fmt.Errorf("MemberEventService.Stop: %w", err)
 	}
 
 	for _, cancel := range mes.handlerCancels {
@@ -169,7 +169,7 @@ func (mes *MemberEventService) Stop(ctx context.Context) error {
 	mes.handlerCancels = nil
 
 	if err := mes.lifecycle.Wait(ctx); err != nil {
-		return err
+		return fmt.Errorf("MemberEventService.Stop: %w", err)
 	}
 
 	mes.logger.Info("Member event service stopped")

@@ -68,7 +68,7 @@ func (svc *featureControlService) patch(r *http.Request, guildID, featureID stri
 
 	updated, err := svc.applier.ApplyPatch(r, guildID, featureID)
 	if err != nil {
-		return featureRecord{}, err
+		return featureRecord{}, fmt.Errorf("featureControlService.patch: %w", err)
 	}
 	return svc.builder.FeatureFromConfig(updated, guildID, featureID)
 }

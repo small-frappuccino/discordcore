@@ -177,7 +177,7 @@ func (c *echoCommand) Handle(ctx *core.Context) error {
 
 	message, err := extractor.StringRequired("message")
 	if err != nil {
-		return err
+		return fmt.Errorf("echoCommand.Handle: %w", err)
 	}
 	ephemeral := extractor.Bool("ephemeral")
 
@@ -241,11 +241,11 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 
 	key, err := extractor.StringRequired("key")
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigSetSubCommand.Handle: %w", err)
 	}
 	value, err := extractor.StringRequired("value")
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigSetSubCommand.Handle: %w", err)
 	}
 
 	// Safely mutate guild config
@@ -307,7 +307,7 @@ func (c *ConfigGetSubCommand) RequiresGuild() bool       { return true }
 func (c *ConfigGetSubCommand) RequiresPermissions() bool { return true }
 func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	if err := core.RequiresGuildConfig(ctx); err != nil {
-		return err
+		return fmt.Errorf("ConfigGetSubCommand.Handle: %w", err)
 	}
 
 	var b strings.Builder

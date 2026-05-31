@@ -932,7 +932,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 	guild, err := ms.getGuildContext(ctx, guildID)
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Error getting guild", "guildID", guildID, "err", err)
-		return err
+		return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
 	}
 	log.ApplicationLogger().Info("Initializing cache for guild", "guildName", guild.Name, "guildID", guild.ID)
 	if err := ms.store.SetGuildOwnerID(guildID, guild.OwnerID); err != nil {
@@ -979,7 +979,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 		snapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
 		for _, member := range members {
 			if err := ctx.Err(); err != nil {
-				return err
+				return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
 			}
 			if member == nil || member.User == nil {
 				continue
@@ -1019,7 +1019,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 	})
 	if err != nil {
 		log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", guildID, "err", err)
-		return err
+		return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
 	}
 	log.ApplicationLogger().Info("Guild cache initialization member scan completed", "guildID", guildID, "members", totalMembers)
 	return nil
@@ -1136,7 +1136,7 @@ func (ms *MonitoringService) registerStartupWarmupHandler(runCtx context.Context
 
 	ms.router.RegisterHandler(taskTypeStartupWarmupMembers, func(ctx context.Context, payload any) error {
 		if err := runCtx.Err(); err != nil {
-			return err
+			return fmt.Errorf("MonitoringService.registerStartupWarmupHandler: %w", err)
 		}
 
 		config, ok := payload.(cache.WarmupConfig)
@@ -1202,7 +1202,7 @@ func (ms *MonitoringService) runAvatarScanTask(runCtx context.Context) error {
 		return nil
 	}
 	if err := runCtx.Err(); err != nil {
-		return err
+		return fmt.Errorf("MonitoringService.runAvatarScanTask: %w", err)
 	}
 	return ms.performPeriodicCheck(runCtx)
 }
@@ -1212,7 +1212,7 @@ func (ms *MonitoringService) runStatsUpdateTask(runCtx context.Context) error {
 		return nil
 	}
 	if err := runCtx.Err(); err != nil {
-		return err
+		return fmt.Errorf("MonitoringService.runStatsUpdateTask: %w", err)
 	}
 	return ms.updateStatsChannels(runCtx)
 }
@@ -1222,7 +1222,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 		return nil
 	}
 	if err := runCtx.Err(); err != nil {
-		return err
+		return fmt.Errorf("MonitoringService.runRolesRefreshTask: %w", err)
 	}
 	cfg := ms.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 || ms.store == nil {
@@ -1234,7 +1234,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 	botUsersByGuild := make(map[string]map[string]struct{}, len(cfg.Guilds))
 	for _, gcfg := range cfg.Guilds {
 		if err := runCtx.Err(); err != nil {
-			return err
+			return fmt.Errorf("MonitoringService.runRolesRefreshTask: %w", err)
 		}
 		botUsers := make(map[string]struct{})
 		guildUpdates := 0

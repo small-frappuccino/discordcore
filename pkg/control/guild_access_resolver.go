@@ -56,7 +56,7 @@ func (resolver *accessibleGuildResolver) ResolveManageableGuilds(
 ) ([]accessibleGuildResponse, error) {
 	accessible, err := resolver.ResolveAccessibleGuilds(ctx, session)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("accessibleGuildResolver.ResolveManageableGuilds: %w", err)
 	}
 	return filterAccessibleGuildsByLevel(accessible, guildAccessLevelWrite), nil
 }
@@ -88,7 +88,7 @@ func (resolver *accessibleGuildResolver) resolveWithOptions(
 	botGuildSet, err := resolver.resolveBotGuildIDSet(ctx)
 	if err != nil {
 		if !errors.Is(err, errBotGuildIDsProviderUnavailable) {
-			return nil, err
+			return nil, fmt.Errorf("accessibleGuildResolver.resolveWithOptions: %w", err)
 		}
 		botGuildSet = map[string]struct{}{}
 	}

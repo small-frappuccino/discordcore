@@ -40,12 +40,12 @@ func PatchMessageEmbed(session *discordgo.Session, patch MessageEmbedPatch) (err
 
 	webhookID, webhookToken, err := ParseWebhookURL(strings.TrimSpace(patch.WebhookURL))
 	if err != nil {
-		return err
+		return fmt.Errorf("PatchMessageEmbed: %w", err)
 	}
 
 	embeds, err := decodeEmbeds(patch.Embed)
 	if err != nil {
-		return err
+		return fmt.Errorf("PatchMessageEmbed: %w", err)
 	}
 
 	_, err = session.WebhookMessageEdit(webhookID, webhookToken, messageID, &discordgo.WebhookEdit{

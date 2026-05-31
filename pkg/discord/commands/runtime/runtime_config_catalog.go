@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"fmt"
+
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -74,7 +76,7 @@ func (catalog runtimeInteractionCatalog) componentHandler() core.ComponentHandle
 		ackPolicy := runtimeComponentAckPolicy(ctx.RouteKey.Path)
 		handled, err := authorizeRuntimeComponentInteraction(ctx, ackPolicy)
 		if err != nil {
-			return err
+			return fmt.Errorf("runtimeInteractionCatalog.componentHandler: %w", err)
 		}
 		if handled {
 			return nil
@@ -97,7 +99,7 @@ func (catalog runtimeInteractionCatalog) modalHandler() core.ModalHandler {
 		ackPolicy := core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
 		handled, err := authorizeRuntimeModalInteraction(ctx, ackPolicy)
 		if err != nil {
-			return err
+			return fmt.Errorf("runtimeInteractionCatalog.modalHandler: %w", err)
 		}
 		if handled {
 			return nil

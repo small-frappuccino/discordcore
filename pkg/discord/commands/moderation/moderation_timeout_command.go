@@ -77,7 +77,7 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 
 	timeoutCtx, err := prepareTimeoutContext(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("timeoutCommand.Handle: %w", err)
 	}
 
 	if ok, reasonText := canTimeoutTarget(ctx, timeoutCtx, userID); !ok {

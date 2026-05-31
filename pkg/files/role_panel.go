@@ -299,11 +299,11 @@ func normalizeRolePanelPosting(in RolePanelPostingConfig) (RolePanelPostingConfi
 func normalizeRolePanel(in RolePanelConfig) (RolePanelConfig, error) {
 	key, err := validateRolePanelKey(in.Key)
 	if err != nil {
-		return RolePanelConfig{}, err
+		return RolePanelConfig{}, fmt.Errorf("normalizeRolePanel: %w", err)
 	}
 	embedFields, err := validateRolePanelEmbedFields(in)
 	if err != nil {
-		return RolePanelConfig{}, err
+		return RolePanelConfig{}, fmt.Errorf("normalizeRolePanel: %w", err)
 	}
 
 	fields := make([]RolePanelEmbedFieldConfig, 0, len(in.Fields))
@@ -337,7 +337,7 @@ func normalizeRolePanel(in RolePanelConfig) (RolePanelConfig, error) {
 
 	postings, err := normalizeRolePanelPostingList(in.Postings)
 	if err != nil {
-		return RolePanelConfig{}, err
+		return RolePanelConfig{}, fmt.Errorf("normalizeRolePanel: %w", err)
 	}
 
 	return RolePanelConfig{
@@ -502,7 +502,7 @@ func (mgr *ConfigManager) RolePanels(guildID string) ([]RolePanelConfig, error) 
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ConfigManager.RolePanels: %w", err)
 	}
 	out := cloneRolePanels(guildConfig.RolePanels)
 	sortRolePanels(out)
@@ -518,7 +518,7 @@ func (mgr *ConfigManager) RolePanel(guildID, key string) (RolePanelConfig, error
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return RolePanelConfig{}, err
+		return RolePanelConfig{}, fmt.Errorf("ConfigManager.RolePanel: %w", err)
 	}
 
 	mgr.mu.RLock()
@@ -526,7 +526,7 @@ func (mgr *ConfigManager) RolePanel(guildID, key string) (RolePanelConfig, error
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return RolePanelConfig{}, err
+		return RolePanelConfig{}, fmt.Errorf("ConfigManager.RolePanel: %w", err)
 	}
 	idx := findRolePanelIndex(guildConfig.RolePanels, target)
 	if idx < 0 {
@@ -545,12 +545,12 @@ func (mgr *ConfigManager) SetRolePanelEmbed(guildID, key string, embed RolePanel
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetRolePanelEmbed: %w", err)
 	}
 
 	validated, err := validateRolePanelEmbedFields(embed)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.SetRolePanelEmbed: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -593,11 +593,11 @@ func (mgr *ConfigManager) AddRolePanelField(guildID, key string, field RolePanel
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddRolePanelField: %w", err)
 	}
 	validated, err := normalizeRolePanelEmbedField(field)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddRolePanelField: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -629,7 +629,7 @@ func (mgr *ConfigManager) RemoveRolePanelField(guildID, key string, fieldIndex i
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.RemoveRolePanelField: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -665,11 +665,11 @@ func (mgr *ConfigManager) UpsertRolePanelButton(guildID, key string, button Role
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.UpsertRolePanelButton: %w", err)
 	}
 	normalized, err := normalizeRolePanelButton(button)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.UpsertRolePanelButton: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -707,7 +707,7 @@ func (mgr *ConfigManager) DeleteRolePanelButton(guildID, key, roleID string) err
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.DeleteRolePanelButton: %w", err)
 	}
 	rid := strings.TrimSpace(roleID)
 	if rid == "" {
@@ -737,7 +737,7 @@ func (mgr *ConfigManager) DeleteRolePanel(guildID, key string) error {
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.DeleteRolePanel: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -759,7 +759,7 @@ func (mgr *ConfigManager) ListRolePanelPostings(guildID, key string) ([]RolePane
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ConfigManager.ListRolePanelPostings: %w", err)
 	}
 
 	mgr.mu.RLock()
@@ -767,7 +767,7 @@ func (mgr *ConfigManager) ListRolePanelPostings(guildID, key string) ([]RolePane
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ConfigManager.ListRolePanelPostings: %w", err)
 	}
 	idx := findRolePanelIndex(guildConfig.RolePanels, target)
 	if idx < 0 {
@@ -792,11 +792,11 @@ func (mgr *ConfigManager) AddRolePanelPosting(guildID, key string, posting RoleP
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddRolePanelPosting: %w", err)
 	}
 	normalized, err := normalizeRolePanelPosting(posting)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.AddRolePanelPosting: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -822,7 +822,7 @@ func (mgr *ConfigManager) RemoveRolePanelPosting(guildID, key, messageID string)
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.RemoveRolePanelPosting: %w", err)
 	}
 	mid := strings.TrimSpace(messageID)
 	if mid == "" {
@@ -855,7 +855,7 @@ func (mgr *ConfigManager) RemoveRolePanelPostings(guildID, key string, messageID
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.RemoveRolePanelPostings: %w", err)
 	}
 
 	idsToRemove := make(map[string]bool, len(messageIDs))
@@ -896,7 +896,7 @@ func (mgr *ConfigManager) ClearRolePanelPostings(guildID, key string) error {
 	}
 	target, err := validateRolePanelKey(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.ClearRolePanelPostings: %w", err)
 	}
 
 	return mgr.updateGuildConfig(scope, func(gc *GuildConfig) error {
@@ -928,7 +928,7 @@ func (mgr *ConfigManager) FindRolePanelPosting(guildID, messageID string) (strin
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return "", RolePanelPostingConfig{}, err
+		return "", RolePanelPostingConfig{}, fmt.Errorf("ConfigManager.FindRolePanelPosting: %w", err)
 	}
 	for _, panel := range guildConfig.RolePanels {
 		pIdx := findRolePanelPostingIndex(panel.Postings, mid)
@@ -958,7 +958,7 @@ func (mgr *ConfigManager) RolePanelButtonByRoleID(guildID, roleID string) (RoleP
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return RolePanelConfig{}, RolePanelButtonConfig{}, err
+		return RolePanelConfig{}, RolePanelButtonConfig{}, fmt.Errorf("ConfigManager.RolePanelButtonByRoleID: %w", err)
 	}
 	for _, panel := range guildConfig.RolePanels {
 		btnIdx := findRolePanelButtonIndex(panel.Buttons, rid)

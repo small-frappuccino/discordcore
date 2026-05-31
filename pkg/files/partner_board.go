@@ -115,7 +115,7 @@ func (mgr *ConfigManager) PartnerBoardTemplate(guildID string) (PartnerBoardTemp
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return PartnerBoardTemplateConfig{}, err
+		return PartnerBoardTemplateConfig{}, fmt.Errorf("ConfigManager.PartnerBoardTemplate: %w", err)
 	}
 	return normalizePartnerBoardTemplate(guildConfig.PartnerBoard.Template), nil
 }
@@ -154,7 +154,7 @@ func (mgr *ConfigManager) PartnerBoard(guildID string) (PartnerBoardConfig, erro
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return PartnerBoardConfig{}, err
+		return PartnerBoardConfig{}, fmt.Errorf("ConfigManager.PartnerBoard: %w", err)
 	}
 
 	var postings []CustomEmbedPostingConfig
@@ -197,12 +197,12 @@ func (mgr *ConfigManager) ListPartners(guildID string) (_ []PartnerEntryConfig, 
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ConfigManager.ListPartners: %w", err)
 	}
 
 	partners, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ConfigManager.ListPartners: %w", err)
 	}
 	return clonePartnerEntries(partners), nil
 }
@@ -229,12 +229,12 @@ func (mgr *ConfigManager) Partner(guildID, name string) (_ PartnerEntryConfig, e
 
 	guildConfig, err := mgr.guildConfigByIDLocked(scope)
 	if err != nil {
-		return PartnerEntryConfig{}, err
+		return PartnerEntryConfig{}, fmt.Errorf("ConfigManager.Partner: %w", err)
 	}
 
 	partners, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
 	if err != nil {
-		return PartnerEntryConfig{}, err
+		return PartnerEntryConfig{}, fmt.Errorf("ConfigManager.Partner: %w", err)
 	}
 
 	idx := findPartnerIndexByNameKey(partners, targetName)
@@ -263,12 +263,12 @@ func (mgr *ConfigManager) CreatePartner(guildID string, partner PartnerEntryConf
 
 	normalized, err := normalizePartnerEntry(partner)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.CreatePartner: %w", err)
 	}
 	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.CreatePartner: %w", err)
 		}
 
 		nameKey := normalizeNameKey(normalized.Name)
@@ -306,12 +306,12 @@ func (mgr *ConfigManager) UpdatePartner(guildID, currentName string, partner Par
 
 	normalized, err := normalizePartnerEntry(partner)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConfigManager.UpdatePartner: %w", err)
 	}
 	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.UpdatePartner: %w", err)
 		}
 
 		idx := findPartnerIndexByNameKey(current, targetNameKey)
@@ -355,7 +355,7 @@ func (mgr *ConfigManager) DeletePartner(guildID, name string) (err error) {
 	return mgr.updateGuildConfig(scope, func(guildConfig *GuildConfig) error {
 		current, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
 		if err != nil {
-			return err
+			return fmt.Errorf("ConfigManager.DeletePartner: %w", err)
 		}
 
 		idx := findPartnerIndexByNameKey(current, targetNameKey)
@@ -534,7 +534,7 @@ func normalizeDiscordInviteURL(raw string) (string, error) {
 
 	code, err := extractDiscordInviteCode(u)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("normalizeDiscordInviteURL: %w", err)
 	}
 
 	// Canonical persisted format for deterministic comparison/output.

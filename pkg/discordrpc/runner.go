@@ -42,7 +42,7 @@ func Run(appName string, opts RunOptions) error {
 
 	cfg, err := files.LoadCustomRPCFileFromPath(configPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("Run: %w", err)
 	}
 	if cfg == nil {
 		cfg = &files.CustomRPCConfig{}
@@ -50,7 +50,7 @@ func Run(appName string, opts RunOptions) error {
 
 	profile, source, err := selectProfile(cfg, opts.ProfileName, opts.UserName)
 	if err != nil {
-		return err
+		return fmt.Errorf("Run: %w", err)
 	}
 	if profile == nil {
 		return fmt.Errorf("no custom rpc profile selected")
@@ -69,7 +69,7 @@ func Run(appName string, opts RunOptions) error {
 
 	startedAt := time.Now()
 	if err := updateActivity(&rpc, profile, startedAt, time.Now()); err != nil {
-		return err
+		return fmt.Errorf("Run: %w", err)
 	}
 
 	interval := resolveUpdateInterval(profile)
@@ -98,7 +98,7 @@ func Run(appName string, opts RunOptions) error {
 func updateActivity(rpc *rpcClient, profile *files.CustomRPCProfile, startedAt, now time.Time) error {
 	activity, err := buildActivityPayload(profile, startedAt, now)
 	if err != nil {
-		return err
+		return fmt.Errorf("updateActivity: %w", err)
 	}
 	if err := rpc.SetActivity(activity); err != nil {
 		return fmt.Errorf("set activity: %w", err)
@@ -196,7 +196,7 @@ func buildActivityPayload(profile *files.CustomRPCProfile, startedAt, now time.T
 		activity.Party = party
 	}
 	if timestamps, err := buildTimestamps(profile, startedAt, now); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("buildActivityPayload: %w", err)
 	} else if timestamps != nil {
 		activity.Timestamps = timestamps
 	}
@@ -274,7 +274,7 @@ func buildTimestamps(profile *files.CustomRPCProfile, startedAt, now time.Time) 
 	case "custom":
 		start, end, err := parseCustomTimestamps(profile.Timestamp)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("buildTimestamps: %w", err)
 		}
 		if start == nil && end == nil {
 			return nil, nil
@@ -295,7 +295,7 @@ func parseCustomTimestamps(cfg files.RPCTimestampConfig) (*uint64, *uint64, erro
 	} else if strings.TrimSpace(cfg.Start) != "" {
 		t, err := parseTime(cfg.Start)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("parseCustomTimestamps: %w", err)
 		}
 		v := toUnixMillis(t)
 		start = &v
@@ -307,7 +307,7 @@ func parseCustomTimestamps(cfg files.RPCTimestampConfig) (*uint64, *uint64, erro
 	} else if strings.TrimSpace(cfg.End) != "" {
 		t, err := parseTime(cfg.End)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("parseCustomTimestamps: %w", err)
 		}
 		v := toUnixMillis(t)
 		end = &v

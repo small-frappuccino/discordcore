@@ -25,7 +25,7 @@ func newDiscordOAuthSessionStore(path string) (discordOAuthSessionStore, error) 
 		sessions: map[string]discordOAuthSession{},
 	}
 	if err := store.loadFromDisk(time.Now().UTC()); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("newDiscordOAuthSessionStore: %w", err)
 	}
 	return store, nil
 }
@@ -70,7 +70,7 @@ func (s *discordOAuthSessionDiskStore) Create(
 	s.sessions[sessionID] = session
 	if err := s.persistLocked(); err != nil {
 		delete(s.sessions, sessionID)
-		return discordOAuthSession{}, err
+		return discordOAuthSession{}, fmt.Errorf("discordOAuthSessionDiskStore.Create: %w", err)
 	}
 	return cloneDiscordOAuthSession(session), nil
 }
@@ -91,7 +91,7 @@ func (s *discordOAuthSessionDiskStore) Get(sessionID string, now time.Time) (dis
 	if now.After(session.ExpiresAt) {
 		delete(s.sessions, sessionID)
 		if err := s.persistLocked(); err != nil {
-			return discordOAuthSession{}, false, err
+			return discordOAuthSession{}, false, fmt.Errorf("discordOAuthSessionDiskStore.Get: %w", err)
 		}
 		return discordOAuthSession{}, false, nil
 	}
@@ -270,7 +270,7 @@ func generateRandomToken(length int) (string, error) {
 	}
 	buf := make([]byte, length)
 	if _, err := rand.Read(buf); err != nil {
-		return "", err
+		return "", fmt.Errorf("generateRandomToken: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
