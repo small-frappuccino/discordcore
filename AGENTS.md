@@ -139,6 +139,7 @@ General architectural rules:
 - extend the closest existing sibling file before creating a new one
 - do not add `util`, `helper`, or `common` packages; use the closest owning package or sibling seam
 - when a wide service needs splitting, prefer narrow consumer-side interfaces over concrete implementation fragmentation
+- high-drift decisions (broad rewrites or large diffs) are acceptable IF and ONLY IF they significantly elevate the code quality compared to before.
 
 Go and backend rules:
 

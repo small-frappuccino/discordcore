@@ -18,6 +18,7 @@ import (
 )
 
 type publishCommandStubService struct {
+	t                  *testing.T
 	settings           files.QOTDConfig
 	publishResult      *applicationqotd.PublishResult
 	publishErr         error
@@ -28,6 +29,7 @@ type publishCommandStubService struct {
 }
 
 type listCommandStubService struct {
+	t                       *testing.T
 	settings                files.QOTDConfig
 	views                   [][]storage.QOTDQuestionRecord
 	listCalls               int
@@ -44,27 +46,33 @@ func (s *publishCommandStubService) Settings(string) (files.QOTDConfig, error) {
 }
 
 func (s *publishCommandStubService) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
-	panic("unexpected ListQuestions call")
+	s.t.Fatal("unexpected ListQuestions call")
+	return nil, nil
 }
 
 func (s *publishCommandStubService) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected CreateQuestion call")
+	s.t.Fatal("unexpected CreateQuestion call")
+	return nil, nil
 }
 
 func (s *publishCommandStubService) DeleteQuestion(context.Context, string, int64) error {
-	panic("unexpected DeleteQuestion call")
+	s.t.Fatal("unexpected DeleteQuestion call")
+	return nil
 }
 
 func (s *publishCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected RestoreUsedQuestion call")
+	s.t.Fatal("unexpected RestoreUsedQuestion call")
+	return nil, nil
 }
 
 func (s *publishCommandStubService) MarkQuestionPublished(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected MarkQuestionPublished call")
+	s.t.Fatal("unexpected MarkQuestionPublished call")
+	return nil, nil
 }
 
 func (s *publishCommandStubService) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
-	panic("unexpected GetAutomaticQueueState call")
+	s.t.Fatal("unexpected GetAutomaticQueueState call")
+	return applicationqotd.AutomaticQueueState{}, nil
 }
 
 func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
@@ -99,15 +107,18 @@ func (s *listCommandStubService) ListQuestions(context.Context, string, string) 
 }
 
 func (s *listCommandStubService) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected CreateQuestion call")
+	s.t.Fatal("unexpected CreateQuestion call")
+	return nil, nil
 }
 
 func (s *listCommandStubService) DeleteQuestion(context.Context, string, int64) error {
-	panic("unexpected DeleteQuestion call")
+	s.t.Fatal("unexpected DeleteQuestion call")
+	return nil
 }
 
 func (s *listCommandStubService) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	panic("unexpected RestoreUsedQuestion call")
+	s.t.Fatal("unexpected RestoreUsedQuestion call")
+	return nil, nil
 }
 
 func (s *listCommandStubService) MarkQuestionPublished(_ context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {

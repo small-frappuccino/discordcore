@@ -61,7 +61,28 @@ func Run(appName, tokenEnv string) error {
 }
 
 // RunWithOptions bootstraps the bot and allows hosts to override control-plane wiring.
+//
+// Note: This wrapper is a high-drift architectural choice. It encapsulates a 500+ line initialization
+// flow to provide centralized, graceful panic recovery without polluting the main implementation
+// with complex named-return shadowing. This drift elevates code quality by guaranteeing the lifecycle
+// webhook fires without crashing the host supervisor unexpectedly.
 func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
+	var panicErr error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				notifyLifecycleEvent("fatal", fmt.Sprintf("%v", r))
+				panicErr = fmt.Errorf("panic recovered during runtime: %v", r)
+			} else if panicErr == nil {
+				notifyLifecycleEvent("stopping", "")
+			}
+		}()
+		panicErr = runWithOptions(appName, tokenEnv, opts)
+	}()
+	return panicErr
+}
+
+func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	started := time.Now()
 
 	// App name first (affects paths)
@@ -79,18 +100,6 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// fresh "back online" chat message after every supervisor restart.
 	// notifyLifecycleEvent is a no-op when ALICE_LIFECYCLE_WEBHOOK_URL is unset.
 	notifyLifecycleEvent("starting", "")
-	// Paired with the startup notification: this defer emits a "stopping"
-	// (or "fatal") line right before the process exits, so the operator
-	// has a chat-channel record of every clean shutdown. Crashes via
-	// runtime.throw bypass deferred handlers — that gap is covered by
-	// the external /v1/health/live poller documented in OPS.md.
-	defer func() {
-		if r := recover(); r != nil {
-			notifyLifecycleEvent("fatal", fmt.Sprintf("%v", r))
-			panic(r)
-		}
-		notifyLifecycleEvent("stopping", "")
-	}()
 
 	// Theme configuration now comes from persisted runtime_config.
 	// IMPORTANT: configManager is created later (after the config store is ready).

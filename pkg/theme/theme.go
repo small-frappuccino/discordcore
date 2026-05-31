@@ -186,12 +186,7 @@ func Register(t *Theme) error {
 	return nil
 }
 
-// MustRegister is like Register but panics on error.
-func MustRegister(t *Theme) {
-	if err := Register(t); err != nil {
-		panic(err)
-	}
-}
+
 
 // SetCurrent switches the active theme by name.
 func SetCurrent(name string) error {

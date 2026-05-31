@@ -16,7 +16,7 @@ import (
 
 func TestQOTDCommandsRegisterRoutesUnderQOTDDomain(t *testing.T) {
 	session, _ := newQOTDCommandTestSession(t)
-	service := &publishCommandStubService{}
+	service := &publishCommandStubService{t: t}
 	router, _ := newQOTDCommandTestRouterWithService(t, session, "guild-1", "owner-1", service)
 
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
@@ -64,6 +64,7 @@ func TestQuestionsListPaginationStillUpdatesAfterUnderlyingStateChanges(t *testi
 
 	usedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service := &listCommandStubService{
+		t: t,
 		settings: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -125,6 +126,7 @@ func TestQuestionsMarkPublishedCommandMarksVisibleIDWithoutTouchingDayState(t *t
 	)
 
 	service := &listCommandStubService{
+		t: t,
 		settings: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -183,6 +185,7 @@ func TestQuestionsListFirstRouteUpdatesExistingMessage(t *testing.T) {
 	)
 
 	service := &listCommandStubService{
+		t: t,
 		settings: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -310,6 +313,7 @@ func TestQOTDPublishCommandTreatsRecoveredPublishedResultAsSuccess(t *testing.T)
 
 	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service := &publishCommandStubService{
+		t: t,
 		settings: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -379,6 +383,7 @@ func TestQOTDPublishCommandCanSkipAutomaticSlotConsumption(t *testing.T) {
 
 	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service := &publishCommandStubService{
+		t: t,
 		settings: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
