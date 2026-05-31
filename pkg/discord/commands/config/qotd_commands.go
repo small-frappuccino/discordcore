@@ -357,7 +357,7 @@ func translateQOTDConfigError(err error) error {
 		if strings.Contains(err.Error(), "schedule.hour_utc and schedule.minute_utc are required when enabled") {
 			return qotdConfigDetailedCommandError("QOTD publishing couldn't be turned on yet because the schedule is incomplete. This reply stays private so the setup can be finished first.")
 		}
-		
+
 		// Attempt to extract the innermost message if possible
 		errMsg := err.Error()
 		idx := strings.LastIndex(errMsg, files.ErrInvalidQOTDInput.Error()+":")
@@ -367,7 +367,7 @@ func translateQOTDConfigError(err error) error {
 				return qotdConfigDetailedCommandError(msg)
 			}
 		}
-		
+
 		return qotdConfigDetailedCommandError("That QOTD setup couldn't be applied because part of the configuration is invalid. This reply stays private.")
 	}
 	return err

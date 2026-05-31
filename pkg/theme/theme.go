@@ -186,8 +186,6 @@ func Register(t *Theme) error {
 	return nil
 }
 
-
-
 // SetCurrent switches the active theme by name.
 func SetCurrent(name string) error {
 	mu.Lock()
