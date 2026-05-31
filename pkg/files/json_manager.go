@@ -52,7 +52,7 @@ func (m *JSONManager) Load(data any) error {
 }
 
 // Save marshals the provided data structure and writes it to the JSON file.
-func (m *JSONManager) Save(data any) error {
+func (m *JSONManager) Save(data any) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -90,21 +90,36 @@ func (m *JSONManager) Save(data any) error {
 	cleanupTmp := true
 	defer func() {
 		if cleanupTmp {
-			_ = os.Remove(tmpPath)
+			if rmErr := os.Remove(tmpPath); rmErr != nil && !os.IsNotExist(rmErr) {
+				if err != nil {
+					err = errors.Join(err, fmt.Errorf("remove stale temp file %q: %w", tmpPath, rmErr))
+				} else {
+					err = fmt.Errorf("remove stale temp file %q: %w", tmpPath, rmErr)
+				}
+			}
 		}
 	}()
 
 	if err := tmpFile.Chmod(fileMode); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("failed to set temp file permissions: %w", err)
+		retErr := fmt.Errorf("failed to set temp file permissions: %w", err)
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close temp file after chmod failure: %w", closeErr))
+		}
+		return retErr
 	}
 	if _, err := tmpFile.Write(fileData); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("failed to write temp file: %w", err)
+		retErr := fmt.Errorf("failed to write temp file: %w", err)
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close temp file after write failure: %w", closeErr))
+		}
+		return retErr
 	}
 	if err := tmpFile.Sync(); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("failed to sync temp file: %w", err)
+		retErr := fmt.Errorf("failed to sync temp file: %w", err)
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close temp file after sync failure: %w", closeErr))
+		}
+		return retErr
 	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)

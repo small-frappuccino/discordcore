@@ -37,12 +37,15 @@ func (c *rpcClient) Login(appID string) error {
 	return nil
 }
 
-func (c *rpcClient) Logout() {
+func (c *rpcClient) Logout() error {
 	if !c.logged {
-		return
+		return nil
 	}
-	_ = ipc.CloseSocket()
+	if err := ipc.CloseSocket(); err != nil {
+		return fmt.Errorf("close rpc socket: %w", err)
+	}
 	c.logged = false
+	return nil
 }
 
 func (c *rpcClient) SetActivity(activity *rpcActivity) error {

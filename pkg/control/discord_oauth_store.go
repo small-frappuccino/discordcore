@@ -181,7 +181,7 @@ func (s *discordOAuthSessionDiskStore) loadFromDisk(now time.Time) error {
 	return nil
 }
 
-func (s *discordOAuthSessionDiskStore) persistLocked() error {
+func (s *discordOAuthSessionDiskStore) persistLocked() (err error) {
 	dir := filepath.Dir(s.path)
 	if dir == "" {
 		dir = "."
@@ -210,17 +210,29 @@ func (s *discordOAuthSessionDiskStore) persistLocked() error {
 	cleanupTmp := true
 	defer func() {
 		if cleanupTmp {
-			_ = os.Remove(tmpPath)
+			if rmErr := os.Remove(tmpPath); rmErr != nil && !os.IsNotExist(rmErr) {
+				if err != nil {
+					err = errors.Join(err, fmt.Errorf("remove stale temp oauth session store file %q: %w", tmpPath, rmErr))
+				} else {
+					err = fmt.Errorf("remove stale temp oauth session store file %q: %w", tmpPath, rmErr)
+				}
+			}
 		}
 	}()
 
 	if _, err := tmpFile.Write(raw); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("write temp oauth session store file %q: %w", tmpPath, err)
+		retErr := fmt.Errorf("write temp oauth session store file %q: %w", tmpPath, err)
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close temp oauth session store file after write failure: %w", closeErr))
+		}
+		return retErr
 	}
 	if err := tmpFile.Sync(); err != nil {
-		_ = tmpFile.Close()
-		return fmt.Errorf("sync temp oauth session store file %q: %w", tmpPath, err)
+		retErr := fmt.Errorf("sync temp oauth session store file %q: %w", tmpPath, err)
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close temp oauth session store file after sync failure: %w", closeErr))
+		}
+		return retErr
 	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("close temp oauth session store file %q: %w", tmpPath, err)

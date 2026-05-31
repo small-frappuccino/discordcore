@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -59,7 +60,9 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 	defer cancel()
 
 	if err := Ping(pingCtx, db); err != nil {
-		_ = db.Close()
+		if closeErr := db.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close postgres connection after ping failure: %w", closeErr))
+		}
 		return nil, fmt.Errorf("ping postgres connection: %w", err)
 	}
 	return db, nil
