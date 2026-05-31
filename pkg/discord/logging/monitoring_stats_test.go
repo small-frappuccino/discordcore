@@ -24,7 +24,7 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 	metrics.RecordRolesCacheStoreHit()
 	metrics.RecordRolesAuditCacheHit()
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		rolesCache:              make(map[string]cachedRoles),
 		rolesTTL:                5 * time.Minute,
 		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
@@ -73,7 +73,7 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 		metrics.RecordMessageSent()
 	}
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		rolesCache:              make(map[string]cachedRoles),
 		rolesTTL:                5 * time.Minute,
 		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
@@ -104,7 +104,7 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 	t.Parallel()
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		rolesCache:              make(map[string]cachedRoles),
 		rolesTTL:                5 * time.Minute,
 		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
@@ -138,7 +138,7 @@ func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 func TestMonitoringServiceStatsReturnsTypedMetrics(t *testing.T) {
 	t.Parallel()
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		rolesCache:              make(map[string]cachedRoles),
 		rolesTTL:                5 * time.Minute,
 		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),

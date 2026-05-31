@@ -8,7 +8,6 @@ import (
 	"testing"
 )
 
-
 func TestFeatureRegistryIDsAreUnique(t *testing.T) {
 	t.Parallel()
 

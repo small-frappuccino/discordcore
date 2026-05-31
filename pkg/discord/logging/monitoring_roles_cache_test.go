@@ -6,7 +6,7 @@ import (
 )
 
 func TestMonitoringService_CacheRolesSetClearsEntryOnEmptySnapshot(t *testing.T) {
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		rolesCache: make(map[string]cachedRoles),
 		rolesTTL:   time.Minute,
 	}

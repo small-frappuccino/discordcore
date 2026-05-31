@@ -27,7 +27,7 @@ func TestScheduleStartupMemberWarmupDispatchesToTaskRouter(t *testing.T) {
 	router := task.NewRouter(task.Defaults())
 	t.Cleanup(router.Close)
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		router:       router,
 		runCtx:       context.Background(),
 		isRunning:    true,

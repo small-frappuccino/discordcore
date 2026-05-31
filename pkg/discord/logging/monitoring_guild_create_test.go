@@ -14,7 +14,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 
 	cfgMgr := files.NewMemoryConfigManager()
 	session := newLoggingLifecycleSession(t)
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		botInstanceID: "companion",

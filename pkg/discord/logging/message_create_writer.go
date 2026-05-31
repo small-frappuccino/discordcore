@@ -67,7 +67,7 @@ type messageCreateWriter struct {
 	maxBatch      int
 	metrics       MessageWriterMetrics
 
-	state        atomic.Uint32
+	state atomic.Uint32
 
 	mu        sync.RWMutex
 	nextToken uint64

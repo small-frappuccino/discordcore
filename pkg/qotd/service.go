@@ -88,11 +88,11 @@ type AutomaticQueueState struct {
 }
 
 type Service struct {
-	configManager       *files.ConfigManager
-	store               *storage.Store
-	publisher           Publisher
-	metrics             Metrics
-	now                 func() time.Time
+	configManager          *files.ConfigManager
+	store                  *storage.Store
+	publisher              Publisher
+	metrics                Metrics
+	now                    func() time.Time
 	unmanageableThreadLogs sync.Map
 
 	guildActorsMu sync.Mutex

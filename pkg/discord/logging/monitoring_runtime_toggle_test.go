@@ -25,7 +25,7 @@ func TestMonitoringService_SetupAndRemoveEventHandlersFromRuntimeConfig(t *testi
 	session := newLoggingLifecycleSession(t)
 	cfgMgr := newMonitoringTestConfigManager(t)
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		eventHandlers: make([]func(), 0),
@@ -57,7 +57,7 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	t.Cleanup(cancelRun)
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:              session,
 		configManager:        cfgMgr,
 		memberEventService:   NewMemberEventService(session, cfgMgr, nil, nil, slog.Default()),
@@ -177,7 +177,7 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	t.Cleanup(cancelRun)
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		router:        router,
@@ -245,7 +245,7 @@ func TestMonitoringService_SetupEventHandlersKeepsPresenceWatchWhenUserLogsDisab
 		t.Fatalf("update config: %v", err)
 	}
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		eventHandlers: make([]func(), 0),

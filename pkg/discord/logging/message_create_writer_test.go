@@ -416,8 +416,6 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 	}
 }
 
-
-
 func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
 	writer := newMessageCreateWriter(nil, nil, slog.Default())
 	writer.flushInterval = time.Hour

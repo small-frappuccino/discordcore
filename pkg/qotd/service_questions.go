@@ -354,7 +354,7 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
 	}
 	guildID = strings.TrimSpace(guildID)
-	
+
 	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
 		deck, err := s.resolveDashboardDeck(guildID, deckID)
 		if err != nil {

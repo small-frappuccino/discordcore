@@ -139,12 +139,15 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		t.Fatalf("add guild config: %v", err)
 	}
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		statsLastRun:  make(map[string]time.Time),
 		statsGuilds:   make(map[string]*statsGuildState),
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ms.statsLoop(ctx)
 
 	if err := ms.updateStatsChannels(context.Background()); err != nil {
 		t.Fatalf("first updateStatsChannels error: %v", err)
@@ -213,7 +216,7 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 		t.Fatalf("expected initial member seed to succeed")
 	}
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       newLoggingLifecycleSession(t),
 		configManager: cfgMgr,
 		recentChanges: map[string]time.Time{
@@ -223,6 +226,9 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 			guildID: state,
 		},
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ms.statsLoop(ctx)
 
 	ms.handleMemberUpdate(ms.session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -234,6 +240,10 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 			Roles: []string{roleID},
 		},
 	})
+
+	waitCh := make(chan struct{})
+	ms.statsActorCh <- func() { close(waitCh) }
+	<-waitCh
 
 	bucket := ms.statsGuilds[guildID].roleTotals[roleID]
 	if got := bucket.total("all"); got != 1 {
@@ -318,13 +328,16 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 		t.Fatalf("add guild config: %v", err)
 	}
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
 		statsLastRun:  make(map[string]time.Time),
 		statsGuilds:   make(map[string]*statsGuildState),
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go ms.statsLoop(ctx)
 	now := time.Now().UTC()
 	if err := store.SetHeartbeat(context.Background(), now); err != nil {
 		t.Fatalf("set heartbeat: %v", err)

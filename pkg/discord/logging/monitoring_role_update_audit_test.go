@@ -45,7 +45,7 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:                 session,
 		configManager:           cfgMgr,
 		store:                   store,
@@ -109,7 +109,7 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:                 session,
 		configManager:           cfgMgr,
 		store:                   store,
@@ -219,7 +219,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
 	metrics := NewInMemoryMetrics()
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
@@ -301,7 +301,7 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:                 session,
 		configManager:           cfgMgr,
 		store:                   store,

@@ -274,7 +274,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		t.Fatalf("add bot member to state: %v", err)
 	}
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
@@ -381,7 +381,7 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,

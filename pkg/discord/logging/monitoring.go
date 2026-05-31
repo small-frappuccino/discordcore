@@ -188,7 +188,7 @@ type MonitoringService struct {
 	rolesRefreshCronCancel func()
 	statsLastRun           map[string]time.Time
 	statsGuilds            map[string]*statsGuildState
-	statsMu                sync.Mutex
+	statsActorCh           chan func()
 
 	// Observability sink. When nil, observability() returns NopMetrics
 	// so call-sites can issue Record* without nil checks. This mirrors
@@ -512,6 +512,7 @@ func NewMonitoringServiceForBotWithMetrics(
 		presenceWatch:           make(map[string]presenceSnapshot),
 		statsLastRun:            make(map[string]time.Time),
 		statsGuilds:             make(map[string]*statsGuildState),
+		statsActorCh:            make(chan func(), 1024),
 		metrics:                 metrics,
 		logger:                  logger,
 	}
@@ -683,6 +684,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 
 	ms.startHeartbeat(lifecycleCtx)
 	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
+	ms.startOwnedWorker(lifecycleCtx, ms.statsLoop)
 	serviceCtx := lifecycleCtx
 
 	ms.registerStartupWarmupHandler(serviceCtx)
@@ -1323,4 +1325,15 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 
 	log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
 	return nil
+}
+
+func (ms *MonitoringService) statsLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case fn := <-ms.statsActorCh:
+			fn()
+		}
+	}
 }

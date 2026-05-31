@@ -54,7 +54,7 @@ func TestMonitoringRoleLookupFunctions(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	})
 
-	ms := &MonitoringService{session: session}
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024), session: session}
 
 	if ms.isBotManagedRole("g1", "r1") {
 		t.Fatalf("expected r1 to be non-managed")

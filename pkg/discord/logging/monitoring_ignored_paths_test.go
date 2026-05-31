@@ -35,7 +35,7 @@ func TestMonitoringService_HandleGuildUpdatePersistsOwnerID(t *testing.T) {
 	if err := store.SetGuildOwnerID(guildID, "owner-old"); err != nil {
 		t.Fatalf("seed old owner id: %v", err)
 	}
-	ms := &MonitoringService{store: store}
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024), store: store}
 
 	ms.handleGuildUpdate(nil, &discordgo.GuildUpdate{
 		Guild: &discordgo.Guild{
@@ -107,7 +107,7 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
@@ -176,7 +176,7 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
@@ -238,7 +238,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		OnHeartbeatTick: ticks.Hook,
 	})
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		store:    store,
 		stopChan: make(chan struct{}),
 		activity: activity,

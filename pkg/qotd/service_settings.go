@@ -28,7 +28,7 @@ func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QO
 		return files.QOTDConfig{}, fmt.Errorf("Service.UpdateSettings: %w", err)
 	}
 	guildID = strings.TrimSpace(guildID)
-	
+
 	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
 		return s.updateSettingsLocked(guildID, cfg)
 	})
@@ -88,5 +88,3 @@ func missingDeckIDs(current, next []files.QOTDDeckConfig) []string {
 	}
 	return removed
 }
-
-

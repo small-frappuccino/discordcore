@@ -53,7 +53,7 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 
 	memberService := NewMemberEventService(nil, nil, nil, failingStore, slog.Default())
 	messageService := NewMessageEventService(nil, nil, nil, failingStore, slog.Default())
-	monitoringService := &MonitoringService{
+	monitoringService := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		store:    failingStore,
 		activity: newMonitoringRuntimeActivity(failingStore),
 	}
@@ -65,7 +65,7 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 
 func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 	failingStore := storagetest.NewFailingStore()
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		store:    failingStore,
 		stopChan: make(chan struct{}),
 		activity: newMonitoringRuntimeActivity(failingStore),
@@ -149,7 +149,7 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 		_ = store.Close()
 	})
 
-	ms := &MonitoringService{
+	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
 		session: session,
 		store:   store,
 	}

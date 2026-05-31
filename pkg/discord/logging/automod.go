@@ -296,7 +296,7 @@ func (as *AutomodService) runDedupActor() {
 				req.reply <- false
 				continue
 			}
-			
+
 			if len(cache) > automodFallbackDedupCleanupThreshold {
 				for k, expiry := range cache {
 					if req.now.After(expiry) {
