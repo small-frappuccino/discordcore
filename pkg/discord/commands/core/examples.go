@@ -507,8 +507,7 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 	}
 
 	// Custom validations
-	stringUtils := StringUtils{}
-	if err := stringUtils.ValidateStringLength(input, 1, 100, "input"); err != nil {
+	if err := ValidateStringLength(input, 1, 100, "input"); err != nil {
 		return fmt.Errorf("AdvancedCommand.Handle: %w", err)
 	}
 

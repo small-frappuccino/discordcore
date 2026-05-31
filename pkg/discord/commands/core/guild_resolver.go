@@ -4,10 +4,187 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
+
+// PermissionChecker manages user permission checks
+type PermissionChecker struct {
+	session *discordgo.Session
+	config  *files.ConfigManager
+	store   *storage.Store
+	cache   *cache.UnifiedCache
+}
+
+func NewPermissionChecker(session *discordgo.Session, config *files.ConfigManager) *PermissionChecker {
+	return &PermissionChecker{session: session, config: config}
+}
+
+func (pc *PermissionChecker) SetStore(store *storage.Store) {
+	pc.store = store
+}
+
+func (pc *PermissionChecker) SetCache(unifiedCache *cache.UnifiedCache) {
+	pc.cache = unifiedCache
+}
+
+// HasPermission checks whether the user has permission to use commands
+func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
+	if guildID == "" {
+		return false
+	}
+	if pc.hasAdministrativeAccess(guildID, userID) {
+		return true
+	}
+	guildConfig := pc.config.GuildConfig(guildID)
+	if guildConfig == nil || len(guildConfig.Roles.Allowed) == 0 {
+		return false
+	}
+
+	member, memberFound, err := pc.ResolveMember(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild member",
+			"operation", "commands.permission.has_permission.resolve_member",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	if !memberFound || member == nil {
+		return false
+	}
+
+	for _, userRole := range member.Roles {
+		if slices.Contains(guildConfig.Roles.Allowed, userRole) {
+			return true
+		}
+	}
+	return false
+}
+
+func (pc *PermissionChecker) hasAdministrativeAccess(guildID, userID string) bool {
+	ownerID, ownerFound, err := pc.ResolveOwnerID(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild owner",
+			"operation", "commands.permission.has_permission.resolve_owner",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+	}
+	if err == nil && ownerFound && ownerID == userID {
+		return true
+	}
+
+	member, memberFound, err := pc.ResolveMember(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild member for admin access",
+			"operation", "commands.permission.has_permission.resolve_member_admin",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	if !memberFound || member == nil {
+		return false
+	}
+
+	roles, err := pc.ResolveRoles(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild roles for admin access",
+			"operation", "commands.permission.has_permission.resolve_roles_admin",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	permissions := memberPermissionBits(member, roles, guildID)
+	if permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		return true
+	}
+	if permissions&discordgo.PermissionManageGuild == discordgo.PermissionManageGuild {
+		return true
+	}
+	return false
+}
+
+func memberPermissionBits(member *discordgo.Member, roles []*discordgo.Role, guildID string) int64 {
+	if member == nil {
+		return 0
+	}
+	rolesByID := make(map[string]*discordgo.Role, len(roles))
+	for _, role := range roles {
+		if role == nil {
+			continue
+		}
+		rolesByID[role.ID] = role
+	}
+
+	var permissions int64
+	if role, ok := rolesByID[guildID]; ok && role != nil {
+		permissions |= role.Permissions
+	}
+	for _, roleID := range member.Roles {
+		if role, ok := rolesByID[roleID]; ok && role != nil {
+			permissions |= role.Permissions
+		}
+	}
+	return permissions
+}
+
+// HasRole checks whether the user has a specific role
+func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
+	member, ok, err := pc.ResolveMember(guildID, userID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild member for role check",
+			"operation", "commands.permission.has_role.resolve_member",
+			"guildID", guildID,
+			"userID", userID,
+			"roleID", roleID,
+			"err", err,
+		)
+		return false
+	}
+	if !ok || member == nil {
+		return false
+	}
+	return slices.Contains(member.Roles, roleID)
+}
+
+// IsOwner checks whether the user is the server owner
+func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
+	if guildID == "" {
+		return false
+	}
+	ownerID, ok, err := pc.ResolveOwnerID(guildID)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Permission checker failed to resolve guild owner for owner check",
+			"operation", "commands.permission.is_owner.resolve_owner",
+			"guildID", guildID,
+			"userID", userID,
+			"err", err,
+		)
+		return false
+	}
+	if !ok {
+		return false
+	}
+	return ownerID == userID
+}
 
 // ResolveOwnerID resolves a guild owner ID using cache -> state -> store -> REST.
 // It returns (ownerID, true, nil) when found, ("", false, nil) when not found,
