@@ -141,6 +141,17 @@ General architectural rules:
 - when a wide service needs splitting, prefer narrow consumer-side interfaces over concrete implementation fragmentation
 - high-drift decisions (broad rewrites or large diffs) are acceptable IF and ONLY IF they significantly elevate the code quality compared to before.
 
+Go proverbs and core idioms (treat these as strict code-review rules, not philosophy):
+
+- **Clear is better than clever**: do not write overly clever, dense, or heavily abstracted code; avoid `reflect`, `unsafe`, and complex generics; write straightforward, top-to-bottom code that is easy to read
+- **The bigger the interface, the weaker the abstraction**: define small interfaces (1-3 methods) at the consumer site, not where types are implemented; do not proactively create interfaces for single implementations
+- **Make the zero value useful**: design structs so they are safe and useful without explicit initialization; avoid `New...()` functions if a zero value suffices
+- **interface{} says nothing**: avoid `any` or `interface{}`; use strong, explicit typing everywhere; if forced to use `any`, document exactly why compile-time safety was impossible
+- **A little copying is better than a little dependency**: duplicate small snippets instead of introducing shared `util` packages that tangle unrelated domains (reinforces the "no util packages" rule)
+- **Don't panic**: never use `panic` in business logic; always return `error`; reserve `panic` exclusively for unreachable states or `init()` failures where the application absolutely cannot start
+- **Don't communicate by sharing memory, share memory by communicating**: prefer passing data over channels or using dedicated single-threaded event loops; if using `sync.Mutex`, keep the critical section small and never perform I/O while holding a lock
+- **Errors are values**: don't just check errors, handle them gracefully; never discard errors (`_ = err`); always provide context when bubbling them up
+
 Go and backend rules:
 
 - put `context.Context` first when present
