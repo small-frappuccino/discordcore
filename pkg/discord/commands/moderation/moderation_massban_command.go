@@ -43,7 +43,7 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.massban"); !enabled {
 		return core.NewCommandError("Mass ban command is disabled for this server.", true)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	membersInput, err := extractor.StringRequired("members")
 	if err != nil {

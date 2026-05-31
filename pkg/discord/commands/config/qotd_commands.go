@@ -107,7 +107,7 @@ func (c *QOTDEnabledSubCommand) RequiresGuild() bool       { return true }
 func (c *QOTDEnabledSubCommand) RequiresPermissions() bool { return true }
 
 func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	enabled := extractor.Bool(qotdEnabledOptionName)
 
 	updatedDeck, err := updateActiveQOTDDeck(ctx, c.configManager, c.now, func(deck *files.QOTDDeckConfig) error {
@@ -213,7 +213,7 @@ func (c *QOTDScheduleSubCommand) Options() []*discordgo.ApplicationCommandOption
 func (c *QOTDScheduleSubCommand) RequiresGuild() bool       { return true }
 func (c *QOTDScheduleSubCommand) RequiresPermissions() bool { return true }
 func (c *QOTDScheduleSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	hourUTC := int(extractor.Int(qotdScheduleHourOptionName))
 	minuteUTC := int(extractor.Int(qotdScheduleMinuteOptionName))
 
@@ -263,8 +263,7 @@ func updateQOTDConfig(
 		return files.QOTDConfig{}, fmt.Errorf("updateQOTDConfig: %w", err)
 	}
 
-	persister := core.NewConfigPersister(configManager)
-	if err := persister.Save(ctx.GuildConfig); err != nil {
+	if err := configManager.SaveGuildConfig(*ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save QOTD config: %v", err)
 		return files.QOTDConfig{}, qotdConfigDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}

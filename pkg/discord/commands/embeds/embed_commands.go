@@ -253,7 +253,7 @@ func (c *embedSetSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("embedSetSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	current, fetchErr := c.configManager.CustomEmbed(ctx.GuildID, key)
 	if fetchErr != nil && !errors.Is(fetchErr, files.ErrCustomEmbedNotFound) {
@@ -464,7 +464,7 @@ func (c *embedUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOpt
 	return nil, nil
 }
 func (c *embedUnpostSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	messageID, err := extractor.StringRequired(embedOptionMessageID)
 	if err != nil {
 		return customEmbedDetailedCommandError("A message ID is required.")
@@ -528,7 +528,7 @@ func (c *embedFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("embedFieldAddSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(embedOptionFieldName)
 	if err != nil {
@@ -590,7 +590,7 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("embedFieldRemoveSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	if !extractor.HasOption(embedOptionFieldIndex) {
 		return customEmbedDetailedCommandError("A field index is required.")
 	}
@@ -733,7 +733,7 @@ func handleEmbedKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) ([]*
 
 func embedKeyFromOptions(interaction *discordgo.InteractionCreate) (string, error) {
 	opts := core.GetSubCommandOptions(interaction)
-	extractor := core.NewOptionExtractor(opts)
+	extractor := core.OptionList(opts)
 	key, err := extractor.StringRequired(embedOptionKey)
 	if err != nil {
 		return "", customEmbedDetailedCommandError(err.Error())

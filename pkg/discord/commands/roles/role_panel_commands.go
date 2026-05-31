@@ -191,7 +191,7 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 	components := renderRolePanelComponents(panel)
 
 	var messageID, channelID, webhookID, webhookToken string
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	if extractor.HasOption(rolePanelOptionWebhookURL) {
 		webhookURL := extractor.String(rolePanelOptionWebhookURL)
@@ -375,7 +375,7 @@ func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelSetSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	current, fetchErr := c.configManager.RolePanel(ctx.GuildID, key)
 	if fetchErr != nil && !errors.Is(fetchErr, files.ErrRolePanelNotFound) {
@@ -562,7 +562,7 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("rolePanelButtonAddSubCommand.Handle: %w", err)
 	}
 	opts := core.GetSubCommandOptions(ctx.Interaction)
-	extractor := core.NewOptionExtractor(opts)
+	extractor := core.OptionList(opts)
 
 	roleID := strings.TrimSpace(roleOptionID(opts, rolePanelOptionRole))
 	if roleID == "" {
@@ -740,7 +740,7 @@ func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelFieldAddSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(rolePanelOptionFieldName)
 	if err != nil {
@@ -805,7 +805,7 @@ func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelFieldRemoveSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	if !extractor.HasOption(rolePanelOptionFieldIndex) {
 		return rolePanelDetailedCommandError("A field index is required.")
 	}
@@ -974,7 +974,7 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelUnpostSubCommand.Handle: %w", err)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	messageID, err := extractor.StringRequired(rolePanelOptionMessageID)
 	if err != nil {
 		return rolePanelDetailedCommandError("A message ID is required.")
@@ -1146,7 +1146,7 @@ func handleRolePanelKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) 
 }
 
 func rolePanelKeyFromOptions(i *discordgo.InteractionCreate) (string, error) {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(i))
+	extractor := core.OptionList(core.GetSubCommandOptions(i))
 	raw, err := extractor.StringRequired(rolePanelOptionKey)
 	if err != nil {
 		return "", rolePanelDetailedCommandError("A panel key is required.")

@@ -228,7 +228,7 @@ func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
 	}
 
 	options := core.GetSubCommandOptions(ctx.Interaction)
-	extractor := core.NewOptionExtractor(options)
+	extractor := core.OptionList(options)
 	count := int(extractor.Int(cleanCountOptionName))
 	if count <= 0 || count > cleanMaxDeleteCount {
 		return cleanRequest{}, core.NewCommandError("Count must be between 1 and 100.", true)

@@ -44,7 +44,7 @@ func (c *CommandsEnabledSubCommand) Options() []*discordgo.ApplicationCommandOpt
 func (c *CommandsEnabledSubCommand) RequiresGuild() bool       { return true }
 func (c *CommandsEnabledSubCommand) RequiresPermissions() bool { return true }
 func (c *CommandsEnabledSubCommand) Handle(ctx *core.Context) error {
-	enabled := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction)).Bool(commandEnabledOptionName)
+	enabled := core.OptionList(core.GetSubCommandOptions(ctx.Interaction)).Bool(commandEnabledOptionName)
 	if err := core.SafeGuildAccess(ctx, func(guildConfig *files.GuildConfig) error {
 		guildConfig.Features.Services.Commands = boolPtr(enabled)
 		return nil
@@ -220,8 +220,7 @@ func (c *AllowedRoleListSubCommand) Handle(ctx *core.Context) error {
 }
 
 func persistGuildConfig(ctx *core.Context, configManager *files.ConfigManager) error {
-	persister := core.NewConfigPersister(configManager)
-	if err := persister.Save(ctx.GuildConfig); err != nil {
+	if err := configManager.SaveGuildConfig(*ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
 		return serviceConfigDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}

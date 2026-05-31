@@ -89,6 +89,17 @@ func (mgr *ConfigManager) SaveConfig() error {
 	return nil
 }
 
+// SaveGuildConfig updates a single guild configuration and immediately saves the changes to storage.
+func (mgr *ConfigManager) SaveGuildConfig(cfg GuildConfig) error {
+	if err := mgr.AddGuildConfig(cfg); err != nil {
+		return fmt.Errorf("failed to update config in memory: %w", err)
+	}
+	if err := mgr.SaveConfig(); err != nil {
+		return fmt.Errorf("failed to persist config: %w", err)
+	}
+	return nil
+}
+
 func (mgr *ConfigManager) saveConfigLocked() error {
 	if mgr.config == nil {
 		return errors.New(ErrCannotSaveNilConfig)

@@ -173,7 +173,7 @@ func (c *echoCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *echoCommand) RequiresGuild() bool       { return false }
 func (c *echoCommand) RequiresPermissions() bool { return false }
 func (c *echoCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(ctx.Interaction.ApplicationCommandData().Options)
+	extractor := core.OptionList(ctx.Interaction.ApplicationCommandData().Options)
 
 	message, err := extractor.StringRequired("message")
 	if err != nil {
@@ -237,7 +237,7 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *ConfigSetSubCommand) RequiresGuild() bool       { return true }
 func (c *ConfigSetSubCommand) RequiresPermissions() bool { return true }
 func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	key, err := extractor.StringRequired("key")
 	if err != nil {
@@ -280,8 +280,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	// Persist changes
-	persister := core.NewConfigPersister(c.configManager)
-	if err := persister.Save(ctx.GuildConfig); err != nil {
+	if err := c.configManager.SaveGuildConfig(*ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
 		return configCommandDetailedCommandError("That change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.")
 	}

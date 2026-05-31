@@ -35,7 +35,7 @@ func (c *partnerAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 func (c *partnerAddSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerAddSubCommand) RequiresPermissions() bool { return true }
 func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	fandom, _ := extractor.StringRequired(optionFandom)
 	name, _ := extractor.StringRequired(optionName)
 	link, _ := extractor.StringRequired(optionLink)
@@ -98,7 +98,7 @@ func (c *partnerRemoveSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.
 	return autocompletePartnerName(ctx, c.configManager)
 }
 func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
 
 	if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
@@ -156,7 +156,7 @@ func (c *partnerLinkSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.Ap
 	return autocompletePartnerName(ctx, c.configManager)
 }
 func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
 	link, _ := extractor.StringRequired(optionLink)
 
@@ -219,7 +219,7 @@ func (c *partnerRenameSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.
 	return nil, nil
 }
 func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	currentName, _ := extractor.StringRequired(optionCurrentName)
 	newName, _ := extractor.StringRequired(optionName)
 	fandom := extractor.String(optionFandom)
@@ -332,7 +332,7 @@ func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
 }
 
 func autocompletePartnerNameFocused(ctx *core.Context, cm *files.ConfigManager, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	query := extractor.String(focusedOption)
 
 	cfg := cm.GuildConfig(ctx.GuildID)

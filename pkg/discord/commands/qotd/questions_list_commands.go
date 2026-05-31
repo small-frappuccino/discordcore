@@ -249,7 +249,7 @@ func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	body, err := extractor.StringRequired(questionsBodyOptionName)
 	if err != nil {
 		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
@@ -354,7 +354,7 @@ func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	deck, err := loadCommandDeck(ctx, c.catalog, extractor.String(questionsDeckOptionName))
 	if err != nil {
 		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
@@ -415,7 +415,7 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		if option == nil || option.Name != publishConsumeAutomaticSlotOptionName {
 			continue
 		}
-		consumeAutomaticSlot = core.NewOptionExtractor(options).Bool(publishConsumeAutomaticSlotOptionName)
+		consumeAutomaticSlot = core.OptionList(options).Bool(publishConsumeAutomaticSlotOptionName)
 		break
 	}
 
@@ -491,7 +491,7 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("questionsRemoveCommand.Handle: %w", err)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
 		return core.NewCommandError("Question ID must be greater than zero.", false)
@@ -522,7 +522,7 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("questionsRecoverCommand.Handle: %w", err)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
 		return core.NewCommandError("Question ID must be greater than zero.", false)
@@ -561,7 +561,7 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("questionsMarkPublishedCommand.Handle: %w", err)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
 		return core.NewCommandError("Question ID must be greater than zero.", false)
@@ -596,7 +596,7 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("questionsListCommand.Handle: %w", err)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	requestedDeck := extractor.String(questionsDeckOptionName)
 	view, err := c.loadView(ctx, requestedDeck)
 	if err != nil {

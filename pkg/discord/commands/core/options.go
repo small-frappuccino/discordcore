@@ -7,19 +7,12 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// OptionExtractor simplifies extraction of options for Discord commands
-type OptionExtractor struct {
-	options []*discordgo.ApplicationCommandInteractionDataOption
-}
-
-// NewOptionExtractor creates a new option extractor
-func NewOptionExtractor(options []*discordgo.ApplicationCommandInteractionDataOption) *OptionExtractor {
-	return &OptionExtractor{options: options}
-}
+// OptionList simplifies extraction of options for Discord commands
+type OptionList []*discordgo.ApplicationCommandInteractionDataOption
 
 // String extracts a string option by name
-func (e *OptionExtractor) String(name string) string {
-	for _, opt := range e.options {
+func (e OptionList) String(name string) string {
+	for _, opt := range e {
 		if opt.Name == name {
 			return strings.TrimSpace(opt.StringValue())
 		}
@@ -28,7 +21,7 @@ func (e *OptionExtractor) String(name string) string {
 }
 
 // StringRequired extracts a required string option
-func (e *OptionExtractor) StringRequired(name string) (string, error) {
+func (e OptionList) StringRequired(name string) (string, error) {
 	value := e.String(name)
 	if value == "" {
 		return "", NewValidationError(name, fmt.Sprintf("Option '%s' is required", name))
@@ -37,8 +30,8 @@ func (e *OptionExtractor) StringRequired(name string) (string, error) {
 }
 
 // Bool extracts a boolean option by name
-func (e *OptionExtractor) Bool(name string) bool {
-	for _, opt := range e.options {
+func (e OptionList) Bool(name string) bool {
+	for _, opt := range e {
 		if opt.Name == name {
 			return opt.BoolValue()
 		}
@@ -47,8 +40,8 @@ func (e *OptionExtractor) Bool(name string) bool {
 }
 
 // Int extracts an integer option by name
-func (e *OptionExtractor) Int(name string) int64 {
-	for _, opt := range e.options {
+func (e OptionList) Int(name string) int64 {
+	for _, opt := range e {
 		if opt.Name == name {
 			return opt.IntValue()
 		}
@@ -57,8 +50,8 @@ func (e *OptionExtractor) Int(name string) int64 {
 }
 
 // Float extracts a float option by name
-func (e *OptionExtractor) Float(name string) float64 {
-	for _, opt := range e.options {
+func (e OptionList) Float(name string) float64 {
+	for _, opt := range e {
 		if opt.Name == name {
 			return opt.FloatValue()
 		}
@@ -67,8 +60,8 @@ func (e *OptionExtractor) Float(name string) float64 {
 }
 
 // HasOption checks whether an option exists
-func (e *OptionExtractor) HasOption(name string) bool {
-	for _, opt := range e.options {
+func (e OptionList) HasOption(name string) bool {
+	for _, opt := range e {
 		if opt.Name == name {
 			return true
 		}
@@ -77,9 +70,9 @@ func (e *OptionExtractor) HasOption(name string) bool {
 }
 
 // GetAllOptions returns all options as a map
-func (e *OptionExtractor) GetAllOptions() map[string]any {
+func (e OptionList) GetAllOptions() map[string]any {
 	result := make(map[string]any)
-	for _, opt := range e.options {
+	for _, opt := range e {
 		switch opt.Type {
 		case discordgo.ApplicationCommandOptionString:
 			result[opt.Name] = opt.StringValue()

@@ -32,7 +32,7 @@ func (c *partnerPostSubCommand) Options() []*discordgo.ApplicationCommandOption 
 func (c *partnerPostSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerPostSubCommand) RequiresPermissions() bool { return true }
 func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	channelID := ""
 	for _, opt := range core.GetSubCommandOptions(ctx.Interaction) {
@@ -167,7 +167,7 @@ func (c *partnerUnpostSubCommand) Options() []*discordgo.ApplicationCommandOptio
 func (c *partnerUnpostSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerUnpostSubCommand) RequiresPermissions() bool { return true }
 func (c *partnerUnpostSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	messageID, _ := extractor.StringRequired(optionMessageID)
 
 	cfg := c.configManager.GuildConfig(ctx.GuildID)

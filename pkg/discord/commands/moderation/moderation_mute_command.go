@@ -39,7 +39,7 @@ func (c *muteCommand) RequiresPermissions() bool { return true }
 func (c *muteCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageRoles }
 
 func (c *muteCommand) Handle(ctx *core.Context) error {
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {

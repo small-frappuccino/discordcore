@@ -53,7 +53,7 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.timeout"); !enabled {
 		return core.NewCommandError("Timeout command is disabled for this server.", true)
 	}
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {

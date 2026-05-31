@@ -55,7 +55,7 @@ func (c *PastebinConfigSubCommand) Handle(ctx *core.Context) error {
 		return core.NewCommandError("You must have administrative permissions (Administrator or Manage Server) to run this command.", true)
 	}
 
-	extractor := core.NewOptionExtractor(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	devKey, err := extractor.StringRequired("api_dev_key")
 	if err != nil {
 		return fmt.Errorf("PastebinConfigSubCommand.Handle: %w", err)

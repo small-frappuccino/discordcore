@@ -93,7 +93,7 @@ func (c *EchoCommand) RequiresPermissions() bool {
 
 func (c *EchoCommand) Handle(ctx *Context) error {
 	// Extract command options
-	extractor := NewOptionExtractor(ctx.Interaction.ApplicationCommandData().Options)
+	extractor := OptionList(ctx.Interaction.ApplicationCommandData().Options)
 
 	message, err := extractor.StringRequired("message")
 	if err != nil {
@@ -150,7 +150,7 @@ func (c *UserInfoSubCommand) RequiresPermissions() bool {
 }
 
 func (c *UserInfoSubCommand) Handle(ctx *Context) error {
-	extractor := NewOptionExtractor(GetSubCommandOptions(ctx.Interaction))
+	extractor := OptionList(GetSubCommandOptions(ctx.Interaction))
 
 	// If no user is specified, use the command author
 	var targetUser *discordgo.User
@@ -242,7 +242,7 @@ func (c *ConfigSetSubCommand) RequiresPermissions() bool {
 }
 
 func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
-	extractor := NewOptionExtractor(GetSubCommandOptions(ctx.Interaction))
+	extractor := OptionList(GetSubCommandOptions(ctx.Interaction))
 
 	key, err := extractor.StringRequired("key")
 	if err != nil {
@@ -274,8 +274,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 	}
 
 	// Persist configuration
-	persister := NewConfigPersister(c.configManager)
-	if err := persister.Save(ctx.GuildConfig); err != nil {
+	if err := c.configManager.SaveGuildConfig(*ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
 		return NewCommandError("Failed to save configuration", true)
 	}
@@ -499,7 +498,7 @@ func (c *AdvancedCommand) RequiresPermissions() bool {
 }
 
 func (c *AdvancedCommand) Handle(ctx *Context) error {
-	extractor := NewOptionExtractor(ctx.Interaction.ApplicationCommandData().Options)
+	extractor := OptionList(ctx.Interaction.ApplicationCommandData().Options)
 
 	input, err := extractor.StringRequired("input")
 	if err != nil {

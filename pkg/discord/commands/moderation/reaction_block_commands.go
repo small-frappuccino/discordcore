@@ -234,7 +234,7 @@ func (c *reactionBlockCommand) handleClear(ctx *core.Context, request reactionBl
 
 func parseReactionBlockAction(ctx *core.Context) (string, error) {
 	options := core.GetSubCommandOptions(ctx.Interaction)
-	action := strings.ToLower(strings.TrimSpace(core.NewOptionExtractor(options).String(reactionBlockActionOptionName)))
+	action := strings.ToLower(strings.TrimSpace(core.OptionList(options).String(reactionBlockActionOptionName)))
 	if action == "" {
 		return "", core.NewCommandError("An action is required.", true)
 	}
@@ -271,7 +271,7 @@ func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionB
 		return request, nil
 	}
 
-	emojis, err := parseReactionBlockEmojiList(core.NewOptionExtractor(options).String(reactionBlockEmojisOptionName))
+	emojis, err := parseReactionBlockEmojiList(core.OptionList(options).String(reactionBlockEmojisOptionName))
 	if err != nil {
 		return reactionBlockRequest{}, core.NewCommandError(err.Error(), true)
 	}
