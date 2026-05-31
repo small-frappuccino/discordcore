@@ -13,10 +13,6 @@ type PastebinConfigSubCommand struct {
 	configManager *files.ConfigManager
 }
 
-func NewPastebinConfigSubCommand(configManager *files.ConfigManager) *PastebinConfigSubCommand {
-	return &PastebinConfigSubCommand{configManager: configManager}
-}
-
 func (c *PastebinConfigSubCommand) Name() string { return "pastebin" }
 
 func (c *PastebinConfigSubCommand) Description() string {

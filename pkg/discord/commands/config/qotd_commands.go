@@ -28,14 +28,6 @@ type QOTDGetSubCommand struct {
 	now           func() time.Time
 }
 
-func NewQOTDGetSubCommand(configManager *files.ConfigManager) *QOTDGetSubCommand {
-	return &QOTDGetSubCommand{configManager: configManager, now: qotdConfigClock(nil)}
-}
-
-func NewQOTDGetSubCommandWithClock(configManager *files.ConfigManager, now func() time.Time) *QOTDGetSubCommand {
-	return &QOTDGetSubCommand{configManager: configManager, now: qotdConfigClock(now)}
-}
-
 func (c *QOTDGetSubCommand) Name() string { return qotdGetSubCommandName }
 
 func (c *QOTDGetSubCommand) Description() string {
@@ -82,10 +74,6 @@ func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 type QOTDEnabledSubCommand struct {
 	configManager *files.ConfigManager
 	now           func() time.Time
-}
-
-func NewQOTDEnabledSubCommand(configManager *files.ConfigManager, now func() time.Time) *QOTDEnabledSubCommand {
-	return &QOTDEnabledSubCommand{configManager: configManager, now: qotdConfigClock(now)}
 }
 
 func (c *QOTDEnabledSubCommand) Name() string { return qotdEnabledSubCommandName }
@@ -135,10 +123,6 @@ type QOTDChannelSubCommand struct {
 	now           func() time.Time
 }
 
-func NewQOTDChannelSubCommand(configManager *files.ConfigManager, now func() time.Time) *QOTDChannelSubCommand {
-	return &QOTDChannelSubCommand{configManager: configManager, now: qotdConfigClock(now)}
-}
-
 func (c *QOTDChannelSubCommand) Name() string { return qotdChannelSubCommandName }
 
 func (c *QOTDChannelSubCommand) Description() string {
@@ -184,10 +168,6 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 type QOTDScheduleSubCommand struct {
 	configManager *files.ConfigManager
 	now           func() time.Time
-}
-
-func NewQOTDScheduleSubCommand(configManager *files.ConfigManager, now func() time.Time) *QOTDScheduleSubCommand {
-	return &QOTDScheduleSubCommand{configManager: configManager, now: qotdConfigClock(now)}
 }
 
 func (c *QOTDScheduleSubCommand) Name() string { return qotdScheduleSubCommandName }

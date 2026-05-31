@@ -15,10 +15,6 @@ type SmokeTestSubCommand struct {
 	configManager *files.ConfigManager
 }
 
-func NewSmokeTestSubCommand(configManager *files.ConfigManager) *SmokeTestSubCommand {
-	return &SmokeTestSubCommand{configManager: configManager}
-}
-
 func (c *SmokeTestSubCommand) Name() string { return smokeTestSubCommandName }
 
 func (c *SmokeTestSubCommand) Description() string {

@@ -19,10 +19,6 @@ import (
 // PingCommand is a simple command example
 type PingCommand struct{}
 
-func NewPingCommand() *PingCommand {
-	return &PingCommand{}
-}
-
 func (c *PingCommand) Name() string {
 	return "ping"
 }
@@ -53,10 +49,6 @@ func (c *PingCommand) Handle(ctx *Context) error {
 
 // EchoCommand demonstrates how to use options and data extraction
 type EchoCommand struct{}
-
-func NewEchoCommand() *EchoCommand {
-	return &EchoCommand{}
-}
 
 func (c *EchoCommand) Name() string {
 	return "echo"
@@ -117,10 +109,6 @@ func (c *EchoCommand) Handle(ctx *Context) error {
 
 // UserInfoSubCommand demonstrates a subcommand implementation
 type UserInfoSubCommand struct{}
-
-func NewUserInfoSubCommand() *UserInfoSubCommand {
-	return &UserInfoSubCommand{}
-}
 
 func (c *UserInfoSubCommand) Name() string {
 	return "info"
@@ -187,9 +175,9 @@ func NewConfigGroupCommand(session *discordgo.Session, configManager *files.Conf
 	group := NewGroupCommand("config", "Manage server configuration", checker)
 
 	// Add subcommands
-	group.AddSubCommand(NewConfigSetSubCommand(configManager))
-	group.AddSubCommand(NewConfigGetSubCommand(configManager))
-	group.AddSubCommand(NewConfigListSubCommand(configManager))
+	group.AddSubCommand(&ConfigSetSubCommand{configManager: configManager})
+	group.AddSubCommand(&ConfigGetSubCommand{configManager: configManager})
+	group.AddSubCommand(&ConfigListSubCommand{configManager: configManager})
 
 	return &ConfigGroupCommand{GroupCommand: group}
 }
@@ -197,10 +185,6 @@ func NewConfigGroupCommand(session *discordgo.Session, configManager *files.Conf
 // ConfigSetSubCommand - subcommand to set configuration values
 type ConfigSetSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewConfigSetSubCommand(configManager *files.ConfigManager) *ConfigSetSubCommand {
-	return &ConfigSetSubCommand{configManager: configManager}
 }
 
 func (c *ConfigSetSubCommand) Name() string {
@@ -287,10 +271,6 @@ type ConfigGetSubCommand struct {
 	configManager *files.ConfigManager
 }
 
-func NewConfigGetSubCommand(configManager *files.ConfigManager) *ConfigGetSubCommand {
-	return &ConfigGetSubCommand{configManager: configManager}
-}
-
 func (c *ConfigGetSubCommand) Name() string {
 	return "get"
 }
@@ -334,10 +314,6 @@ func (c *ConfigGetSubCommand) Handle(ctx *Context) error {
 // ConfigListSubCommand - subcommand to list all configurations
 type ConfigListSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewConfigListSubCommand(configManager *files.ConfigManager) *ConfigListSubCommand {
-	return &ConfigListSubCommand{configManager: configManager}
 }
 
 func (c *ConfigListSubCommand) Name() string {
@@ -385,10 +361,6 @@ func (c *ConfigListSubCommand) Handle(ctx *Context) error {
 // ConfigAutocompleteHandler demonstrates an autocomplete implementation
 type ConfigAutocompleteHandler struct {
 	configManager *files.ConfigManager
-}
-
-func NewConfigAutocompleteHandler(configManager *files.ConfigManager) *ConfigAutocompleteHandler {
-	return &ConfigAutocompleteHandler{configManager: configManager}
 }
 
 func (h *ConfigAutocompleteHandler) HandleAutocomplete(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
@@ -445,15 +417,15 @@ func ExampleCommandSetup(
 	router := manager.GetRouter()
 
 	// Register simple commands
-	router.RegisterCommand(NewPingCommand())
-	router.RegisterCommand(NewEchoCommand())
+	router.RegisterCommand(&PingCommand{})
+	router.RegisterCommand(&EchoCommand{})
 
 	// Register group command
 	configCmd := NewConfigGroupCommand(session, configManager)
 	router.RegisterCommand(configCmd)
 
 	// Register autocomplete
-	router.RegisterAutocomplete("config", NewConfigAutocompleteHandler(configManager))
+	router.RegisterAutocomplete("config", &ConfigAutocompleteHandler{configManager: configManager})
 
 	// Sync commands with Discord
 	return manager.SetupCommands()
@@ -465,10 +437,6 @@ func ExampleCommandSetup(
 
 // AdvancedCommand demonstrates robust error handling
 type AdvancedCommand struct{}
-
-func NewAdvancedCommand() *AdvancedCommand {
-	return &AdvancedCommand{}
-}
 
 func (c *AdvancedCommand) Name() string {
 	return "advanced"

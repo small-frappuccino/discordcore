@@ -25,10 +25,6 @@ type CommandsEnabledSubCommand struct {
 	configManager *files.ConfigManager
 }
 
-func NewCommandsEnabledSubCommand(configManager *files.ConfigManager) *CommandsEnabledSubCommand {
-	return &CommandsEnabledSubCommand{configManager: configManager}
-}
-
 func (c *CommandsEnabledSubCommand) Name() string { return commandsEnabledSubCommandName }
 func (c *CommandsEnabledSubCommand) Description() string {
 	return "Enable or disable slash command handling for this guild"
@@ -65,10 +61,6 @@ type CommandChannelSubCommand struct {
 	configManager *files.ConfigManager
 }
 
-func NewCommandChannelSubCommand(configManager *files.ConfigManager) *CommandChannelSubCommand {
-	return &CommandChannelSubCommand{configManager: configManager}
-}
-
 func (c *CommandChannelSubCommand) Name() string { return commandChannelSubCommandName }
 func (c *CommandChannelSubCommand) Description() string {
 	return "Set the command channel for this guild"
@@ -103,10 +95,6 @@ func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 
 type AllowedRoleAddSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewAllowedRoleAddSubCommand(configManager *files.ConfigManager) *AllowedRoleAddSubCommand {
-	return &AllowedRoleAddSubCommand{configManager: configManager}
 }
 
 func (c *AllowedRoleAddSubCommand) Name() string { return allowedRoleAddSubCommandName }
@@ -147,10 +135,6 @@ type AllowedRoleRemoveSubCommand struct {
 	configManager *files.ConfigManager
 }
 
-func NewAllowedRoleRemoveSubCommand(configManager *files.ConfigManager) *AllowedRoleRemoveSubCommand {
-	return &AllowedRoleRemoveSubCommand{configManager: configManager}
-}
-
 func (c *AllowedRoleRemoveSubCommand) Name() string { return allowedRoleRemoveSubCommandName }
 func (c *AllowedRoleRemoveSubCommand) Description() string {
 	return "Remove one allowed admin role"
@@ -184,10 +168,6 @@ func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 
 type AllowedRoleListSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewAllowedRoleListSubCommand(configManager *files.ConfigManager) *AllowedRoleListSubCommand {
-	return &AllowedRoleListSubCommand{configManager: configManager}
 }
 
 func (c *AllowedRoleListSubCommand) Name() string { return allowedRoleListSubCommandName }

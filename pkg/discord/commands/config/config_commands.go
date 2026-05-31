@@ -50,16 +50,16 @@ func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 		return
 	}
 
-	setCmd := NewConfigSetSubCommand(cc.configManager)
-	getCmd := NewConfigGetSubCommand(cc.configManager)
-	listCmd := NewConfigListSubCommand(cc.configManager)
-	smokeTestCmd := NewSmokeTestSubCommand(cc.configManager)
-	commandsEnabledCmd := NewCommandsEnabledSubCommand(cc.configManager)
-	commandChannelCmd := NewCommandChannelSubCommand(cc.configManager)
-	allowedRoleAddCmd := NewAllowedRoleAddSubCommand(cc.configManager)
-	allowedRoleRemoveCmd := NewAllowedRoleRemoveSubCommand(cc.configManager)
-	allowedRoleListCmd := NewAllowedRoleListSubCommand(cc.configManager)
-	pastebinCmd := NewPastebinConfigSubCommand(cc.configManager)
+	setCmd := &ConfigSetSubCommand{configManager: cc.configManager}
+	getCmd := &ConfigGetSubCommand{configManager: cc.configManager}
+	listCmd := &ConfigListSubCommand{configManager: cc.configManager}
+	smokeTestCmd := &SmokeTestSubCommand{configManager: cc.configManager}
+	commandsEnabledCmd := &CommandsEnabledSubCommand{configManager: cc.configManager}
+	commandChannelCmd := &CommandChannelSubCommand{configManager: cc.configManager}
+	allowedRoleAddCmd := &AllowedRoleAddSubCommand{configManager: cc.configManager}
+	allowedRoleRemoveCmd := &AllowedRoleRemoveSubCommand{configManager: cc.configManager}
+	allowedRoleListCmd := &AllowedRoleListSubCommand{configManager: cc.configManager}
+	pastebinCmd := &PastebinConfigSubCommand{configManager: cc.configManager}
 	cc.registerConfigSubcommands(router, "",
 		setCmd,
 		getCmd,
@@ -73,8 +73,8 @@ func (cc *ConfigCommands) RegisterBaseCommands(router *core.CommandRouter) {
 		pastebinCmd,
 	)
 
-	pingCmd := NewPingCommand()
-	echoCmd := NewEchoCommand()
+	pingCmd := &pingCommand{}
+	echoCmd := &echoCommand{}
 
 	// Optionally register simple commands (useful for quick health checks of the routing stack)
 	router.RegisterSlashCommand(pingCmd)
@@ -88,10 +88,10 @@ func (cc *ConfigCommands) RegisterQOTDCommands(router *core.CommandRouter) {
 	}
 
 	cc.registerConfigSubcommands(router, files.BotDomainQOTD,
-		NewQOTDGetSubCommand(cc.configManager),
-		NewQOTDEnabledSubCommand(cc.configManager, cc.now),
-		NewQOTDChannelSubCommand(cc.configManager, cc.now),
-		NewQOTDScheduleSubCommand(cc.configManager, cc.now),
+		&QOTDGetSubCommand{configManager: cc.configManager, now: cc.now},
+		&QOTDEnabledSubCommand{configManager: cc.configManager, now: cc.now},
+		&QOTDChannelSubCommand{configManager: cc.configManager, now: cc.now},
+		&QOTDScheduleSubCommand{configManager: cc.configManager, now: cc.now},
 	)
 }
 
@@ -135,8 +135,6 @@ func (cc *ConfigCommands) registerConfigSubcommands(router *core.CommandRouter, 
 
 type pingCommand struct{}
 
-func NewPingCommand() *pingCommand { return &pingCommand{} }
-
 func (c *pingCommand) Name() string        { return "ping" }
 func (c *pingCommand) Description() string { return "Check if the bot is responding" }
 func (c *pingCommand) Options() []*discordgo.ApplicationCommandOption {
@@ -149,8 +147,6 @@ func (c *pingCommand) Handle(ctx *core.Context) error {
 }
 
 type echoCommand struct{}
-
-func NewEchoCommand() *echoCommand { return &echoCommand{} }
 
 func (c *echoCommand) Name() string        { return "echo" }
 func (c *echoCommand) Description() string { return "Echo back a message" }
@@ -195,13 +191,8 @@ func (c *echoCommand) Handle(ctx *core.Context) error {
 // Config Group SubCommands: set / get / list
 // -----------------------------------------
 
-// ConfigSetSubCommand - subcommand to set configuration values
 type ConfigSetSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewConfigSetSubCommand(configManager *files.ConfigManager) *ConfigSetSubCommand {
-	return &ConfigSetSubCommand{configManager: configManager}
 }
 
 func (c *ConfigSetSubCommand) Name() string        { return "set" }
@@ -288,13 +279,8 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	return configCommandShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` is now set to `%s`.", key, value))
 }
 
-// ConfigGetSubCommand - subcommand to get configuration values
 type ConfigGetSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewConfigGetSubCommand(configManager *files.ConfigManager) *ConfigGetSubCommand {
-	return &ConfigGetSubCommand{configManager: configManager}
 }
 
 func (c *ConfigGetSubCommand) Name() string        { return "get" }
@@ -347,13 +333,8 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	return builder.Info(ctx.Interaction, b.String())
 }
 
-// ConfigListSubCommand - subcommand to list available configuration options
 type ConfigListSubCommand struct {
 	configManager *files.ConfigManager
-}
-
-func NewConfigListSubCommand(configManager *files.ConfigManager) *ConfigListSubCommand {
-	return &ConfigListSubCommand{configManager: configManager}
 }
 
 func (c *ConfigListSubCommand) Name() string { return "list" }
