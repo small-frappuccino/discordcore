@@ -37,147 +37,151 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 	}
 
 	guildID = strings.TrimSpace(guildID)
-	lifecycleLock := s.guildLifecycleLock(guildID)
-	lifecycleLock.Lock()
-	defer lifecycleLock.Unlock()
 
-	now := s.clock()
-	cfg, err := s.configManager.QOTDConfig(guildID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
-	if err != nil {
-		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	consumeAutomaticSlot := params.ShouldConsumeAutomaticSlot()
-	publishDate := NormalizePublishDateUTC(now)
-	rollbackSuppressionDate := time.Time{}
-	keepSuppression := false
-	defer func() {
-		if keepSuppression || rollbackSuppressionDate.IsZero() {
-			return
-		}
-		s.clearScheduledPublishSuppressionForDate(guildID, rollbackSuppressionDate)
-	}()
-	var existing *storage.QOTDOfficialPostRecord
-	if params.PublishDateOverride != nil {
-		publishDate = NormalizePublishDateUTC(*params.PublishDateOverride)
-		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		now := s.clock()
+		cfg, err := s.configManager.QOTDConfig(guildID)
 		if err != nil {
 			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 		}
-	} else if slotState.ScheduleConfigured {
-		if consumeAutomaticSlot {
-			publishDate = slotState.PublishDateUTC
-			existing = slotState.OfficialPost
-		}
-	} else {
-		existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
+		slotState, err := s.loadCurrentSlotState(ctx, guildID, cfg, now)
 		if err != nil {
 			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 		}
-	}
-	deck, ok := cfg.ActiveDeck()
-	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
-		return nil, ErrQOTDDisabled
-	}
-	if existing != nil {
-		if isOfficialPostPublished(*existing) {
-			return nil, ErrAlreadyPublished
-		}
-		return nil, ErrPublishInProgress
-	}
-
-	todayDate := NormalizePublishDateUTC(now)
-	if !params.IsReplacement && consumeAutomaticSlot && slotState.ScheduleConfigured && !todayDate.Equal(publishDate) {
-		if err := s.suppressScheduledPublishForDate(guildID, todayDate); err != nil {
-			log.ApplicationLogger().Warn(
-				"QOTD manual publish failed to suppress today's scheduled slot",
-				"guildID", guildID,
-				"todayDateUTC", todayDate,
-				"err", err,
-			)
+		consumeAutomaticSlot := params.ShouldConsumeAutomaticSlot()
+		publishDate := NormalizePublishDateUTC(now)
+		rollbackSuppressionDate := time.Time{}
+		keepSuppression := false
+		defer func() {
+			if keepSuppression || rollbackSuppressionDate.IsZero() {
+				return
+			}
+			s.clearScheduledPublishSuppressionForDate(guildID, rollbackSuppressionDate)
+		}()
+		var existing *storage.QOTDOfficialPostRecord
+		if params.PublishDateOverride != nil {
+			publishDate = NormalizePublishDateUTC(*params.PublishDateOverride)
+			existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
+			if err != nil {
+				return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
+			}
+		} else if slotState.ScheduleConfigured {
+			if consumeAutomaticSlot {
+				publishDate = slotState.PublishDateUTC
+				existing = slotState.OfficialPost
+			}
 		} else {
-			rollbackSuppressionDate = todayDate
+			existing, err = s.loadSlotOfficialPost(ctx, guildID, publishDate)
+			if err != nil {
+				return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
+			}
 		}
-	}
+		deck, ok := cfg.ActiveDeck()
+		if !ok || !deck.Enabled || !canPublishQOTD(deck) {
+			return nil, ErrQOTDDisabled
+		}
+		if existing != nil {
+			if isOfficialPostPublished(*existing) {
+				return nil, ErrAlreadyPublished
+			}
+			return nil, ErrPublishInProgress
+		}
 
-	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID, storage.QOTDQuestionSelectorQueue)
-	if err != nil {
-		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	if question == nil {
-		return nil, ErrNoQuestionsAvailable
-	}
-	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
-	if err != nil {
-		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+		todayDate := NormalizePublishDateUTC(now)
+		if !params.IsReplacement && consumeAutomaticSlot && slotState.ScheduleConfigured && !todayDate.Equal(publishDate) {
+			if err := s.suppressScheduledPublishForDate(guildID, todayDate); err != nil {
+				log.ApplicationLogger().Warn(
+					"QOTD manual publish failed to suppress today's scheduled slot",
+					"guildID", guildID,
+					"todayDateUTC", todayDate,
+					"err", err,
+				)
+			} else {
+				rollbackSuppressionDate = todayDate
+			}
 		}
-		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	availableQuestions := counts.Ready + counts.Draft
 
-	lifecycle := EvaluateManualOfficialPost(now, now)
-	nonce, err := generatePublishNonce()
-	if err != nil {
-		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+		question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID, storage.QOTDQuestionSelectorQueue)
+		if err != nil {
+			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 		}
-		return nil, fmt.Errorf("generate qotd publish nonce: %w", err)
-	}
-	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
-		GuildID:              guildID,
-		DeckID:               deck.ID,
-		DeckNameSnapshot:     deck.Name,
-		QuestionID:           question.ID,
-		PublishMode:          string(PublishModeManual),
-		ConsumeAutomaticSlot: consumeAutomaticSlot,
-		PublishDateUTC:       publishDate,
-		State:                string(OfficialPostStateProvisioning),
-		ChannelID:            strings.TrimSpace(deck.ChannelID),
-		QuestionTextSnapshot: question.Body,
-		Nonce:                nonce,
-		GraceUntil:           lifecycle.BecomesPreviousAt,
-		ArchiveAt:            lifecycle.ArchiveAt,
+		if question == nil {
+			return nil, ErrNoQuestionsAvailable
+		}
+		counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
+		if err != nil {
+			if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+				log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+			}
+			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
+		}
+		availableQuestions := counts.Ready + counts.Draft
+
+		lifecycle := EvaluateManualOfficialPost(now, now)
+		nonce, err := generatePublishNonce()
+		if err != nil {
+			if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+				log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+			}
+			return nil, fmt.Errorf("generate qotd publish nonce: %w", err)
+		}
+		provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
+			GuildID:              guildID,
+			DeckID:               deck.ID,
+			DeckNameSnapshot:     deck.Name,
+			QuestionID:           question.ID,
+			PublishMode:          string(PublishModeManual),
+			ConsumeAutomaticSlot: consumeAutomaticSlot,
+			PublishDateUTC:       publishDate,
+			State:                string(OfficialPostStateProvisioning),
+			ChannelID:            strings.TrimSpace(deck.ChannelID),
+			QuestionTextSnapshot: question.Body,
+			Nonce:                nonce,
+			GraceUntil:           lifecycle.BecomesPreviousAt,
+			ArchiveAt:            lifecycle.ArchiveAt,
+		})
+		if err != nil {
+			if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
+				log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+			}
+			return s.resolvePublishNowConflict(ctx, guildID, publishDate, err)
+		}
+
+		finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(
+			ctx,
+			session,
+			*provisioned,
+			question,
+			availableQuestions,
+			buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
+			now,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
+		}
+		if updatedQuestion != nil {
+			question = updatedQuestion
+		}
+
+		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
+			return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
+		}
+		if consumeAutomaticSlot {
+			s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
+		}
+		keepSuppression = true
+
+		return &PublishResult{
+			Question:     *question,
+			OfficialPost: *finalized,
+			PostURL:      postURL,
+		}, nil
 	})
+
 	if err != nil {
-		if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-			log.ApplicationLogger().Warn("QOTD question reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
-		}
-		return s.resolvePublishNowConflict(ctx, guildID, publishDate, err)
+		return nil, err
 	}
-
-	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(
-		ctx,
-		session,
-		*provisioned,
-		question,
-		availableQuestions,
-		buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
-		now,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	if updatedQuestion != nil {
-		question = updatedQuestion
-	}
-
-	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
-		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	if consumeAutomaticSlot {
-		s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
-	}
-	keepSuppression = true
-
-	return &PublishResult{
-		Question:     *question,
-		OfficialPost: *finalized,
-		PostURL:      postURL,
-	}, nil
+	return val.(*PublishResult), nil
 }
 
 func (s *Service) resolvePublishNowConflict(ctx context.Context, guildID string, publishDate time.Time, err error) (*PublishResult, error) {

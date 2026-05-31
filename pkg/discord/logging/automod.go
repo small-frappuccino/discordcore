@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -114,11 +113,16 @@ type AutomodService struct {
 	// unsubscribe function for the registered handler
 	handlerCancel func()
 
-	// fallbackDedup guards re-deliveries when the synchronous fallback path is
-	// taken (router unavailable or non-duplicate enqueue error). Mirrors the
-	// router's inflight map at process scope.
-	fallbackDedupMu sync.Mutex
-	fallbackDedup   map[string]time.Time
+	// dedupChan routes fallback-dedup queries to the actor loop.
+	dedupChan chan fallbackDedupReq
+	dedupStop chan struct{}
+	dedupDone chan struct{}
+}
+
+type fallbackDedupReq struct {
+	key   string
+	now   time.Time
+	reply chan bool
 }
 
 func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager) *AutomodService {
@@ -140,12 +144,14 @@ func (as *AutomodService) Start() {
 	}
 	as.isRunning = true
 
-	// Register the raw *discordgo.Event handler so the gateway sequence number
-	// is available for idempotency. The typed AutoModerationActionExecution
-	// dispatch is intentionally NOT registered: discordgo dispatches every
-	// event twice (typed at wsapi.go:671 then raw at wsapi.go:677), and we
-	// only want to process AutoMod actions once.
-	as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
+	as.dedupChan = make(chan fallbackDedupReq)
+	as.dedupStop = make(chan struct{})
+	as.dedupDone = make(chan struct{})
+	go as.runDedupActor()
+
+	if as.session != nil {
+		as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
+	}
 }
 
 // Stop stops the service (no-op for now).
@@ -157,6 +163,8 @@ func (as *AutomodService) Stop() {
 		as.handlerCancel()
 		as.handlerCancel = nil
 	}
+	close(as.dedupStop)
+	<-as.dedupDone
 	as.isRunning = false
 }
 
@@ -262,26 +270,49 @@ func (as *AutomodService) fallbackShouldDedup(key string) bool {
 }
 
 func (as *AutomodService) fallbackShouldDedupAt(key string, now time.Time) bool {
-	if key == "" {
+	if !as.isRunning {
 		return false
 	}
-	as.fallbackDedupMu.Lock()
-	defer as.fallbackDedupMu.Unlock()
-	if as.fallbackDedup == nil {
-		as.fallbackDedup = make(map[string]time.Time)
+	reply := make(chan bool, 1)
+	req := fallbackDedupReq{key: key, now: now, reply: reply}
+	select {
+	case as.dedupChan <- req:
+		return <-reply
+	case <-as.dedupStop:
+		return false
 	}
-	if len(as.fallbackDedup) > automodFallbackDedupCleanupThreshold {
-		for k, expiry := range as.fallbackDedup {
-			if now.After(expiry) {
-				delete(as.fallbackDedup, k)
+}
+
+func (as *AutomodService) runDedupActor() {
+	defer close(as.dedupDone)
+	cache := make(map[string]time.Time)
+
+	for {
+		select {
+		case <-as.dedupStop:
+			return
+		case req := <-as.dedupChan:
+			if req.key == "" {
+				req.reply <- false
+				continue
+			}
+			
+			if len(cache) > automodFallbackDedupCleanupThreshold {
+				for k, expiry := range cache {
+					if req.now.After(expiry) {
+						delete(cache, k)
+					}
+				}
+			}
+
+			if expiry, exists := cache[req.key]; exists && req.now.Before(expiry) {
+				req.reply <- true
+			} else {
+				cache[req.key] = req.now.Add(automodFallbackDedupTTL)
+				req.reply <- false
 			}
 		}
 	}
-	if expiry, exists := as.fallbackDedup[key]; exists && now.Before(expiry) {
-		return true
-	}
-	as.fallbackDedup[key] = now.Add(automodFallbackDedupTTL)
-	return false
 }
 
 // buildAutomodEmbed dispatches to the trigger-specific embed builder.

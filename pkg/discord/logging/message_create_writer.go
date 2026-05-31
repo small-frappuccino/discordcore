@@ -68,9 +68,6 @@ type messageCreateWriter struct {
 	metrics       MessageWriterMetrics
 
 	state        atomic.Uint32
-	producers    atomic.Int32
-	producerMu   sync.Mutex
-	producerCond *sync.Cond
 
 	mu        sync.RWMutex
 	nextToken uint64
@@ -94,7 +91,6 @@ func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, 
 		pending:       make(map[string]pendingMessageState),
 		logger:        logger,
 	}
-	writer.producerCond = sync.NewCond(&writer.producerMu)
 	writer.state.Store(uint32(writerStateOpen))
 	return writer
 }
@@ -112,7 +108,6 @@ func (w *messageCreateWriter) Stop(ctx context.Context) error {
 	}
 	w.stopOnce.Do(func() {
 		w.beginStop()
-		w.waitForProducers()
 		close(w.stopCh)
 	})
 	if ctx == nil {
@@ -133,55 +128,11 @@ func (w *messageCreateWriter) stateValue() writerState {
 	return writerState(w.state.Load())
 }
 
-func (w *messageCreateWriter) tryAcquireProducer() bool {
-	if w == nil {
-		return false
-	}
-	for {
-		if w.stateValue() != writerStateOpen {
-			return false
-		}
-		current := w.producers.Load()
-		if !w.producers.CompareAndSwap(current, current+1) {
-			continue
-		}
-		if w.stateValue() == writerStateOpen {
-			return true
-		}
-		w.releaseProducer()
-		return false
-	}
-}
-
-func (w *messageCreateWriter) releaseProducer() {
-	if w == nil {
-		return
-	}
-	if w.producers.Add(-1) == 0 && w.stateValue() != writerStateOpen {
-		w.producerMu.Lock()
-		if w.producerCond != nil {
-			w.producerCond.Broadcast()
-		}
-		w.producerMu.Unlock()
-	}
-}
-
 func (w *messageCreateWriter) beginStop() {
 	if w == nil {
 		return
 	}
 	w.state.CompareAndSwap(uint32(writerStateOpen), uint32(writerStateStopping))
-}
-
-func (w *messageCreateWriter) waitForProducers() {
-	if w == nil {
-		return
-	}
-	w.producerMu.Lock()
-	for w.producers.Load() > 0 {
-		w.producerCond.Wait()
-	}
-	w.producerMu.Unlock()
 }
 
 func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *storage.MessageVersion, metric storage.DailyMessageCountDelta) error {
@@ -266,20 +217,13 @@ func (w *messageCreateWriter) enqueueRequest(req messageWriteRequest) error {
 }
 
 func (w *messageCreateWriter) trySendRequest(req messageWriteRequest) (sent bool, err error) {
-	if !w.tryAcquireProducer() {
+	if w.stateValue() != writerStateOpen {
 		return false, errMessageCreateWriterStopped
 	}
-	defer w.releaseProducer()
-
 	select {
-	case <-w.stopCh:
-		return false, errMessageCreateWriterStopped
 	case w.queue <- req:
 		return true, nil
 	default:
-		if w.stateValue() != writerStateOpen {
-			return false, errMessageCreateWriterStopped
-		}
 		return false, nil
 	}
 }

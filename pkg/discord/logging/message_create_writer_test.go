@@ -416,41 +416,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 	}
 }
 
-func TestMessageCreateWriterStopWaitsForInFlightProducer(t *testing.T) {
-	writer := newMessageCreateWriter(nil, nil, slog.Default())
-	writer.flushInterval = time.Hour
-	writer.Start()
 
-	if !writer.tryAcquireProducer() {
-		t.Fatalf("expected to acquire in-flight producer")
-	}
-
-	stopDone := make(chan error, 1)
-	go func() {
-		stopDone <- writer.Stop(context.Background())
-	}()
-
-	select {
-	case err := <-stopDone:
-		t.Fatalf("writer stop returned before producer release: %v", err)
-	case <-time.After(20 * time.Millisecond):
-	}
-
-	writer.releaseProducer()
-
-	select {
-	case err := <-stopDone:
-		if err != nil {
-			t.Fatalf("stop writer: %v", err)
-		}
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("writer stop did not finish after producer release")
-	}
-
-	if got := writer.stateValue(); got != writerStateClosed {
-		t.Fatalf("expected writer to be closed after stop, got %v", got)
-	}
-}
 
 func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
 	writer := newMessageCreateWriter(nil, nil, slog.Default())

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -29,10 +28,15 @@ func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QO
 		return files.QOTDConfig{}, fmt.Errorf("Service.UpdateSettings: %w", err)
 	}
 	guildID = strings.TrimSpace(guildID)
-	lifecycleLock := s.guildLifecycleLock(guildID)
-	lifecycleLock.Lock()
-	defer lifecycleLock.Unlock()
-	return s.updateSettingsLocked(guildID, cfg)
+	
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		return s.updateSettingsLocked(guildID, cfg)
+	})
+
+	if err != nil {
+		return files.QOTDConfig{}, err
+	}
+	return val.(files.QOTDConfig), nil
 }
 
 func (s *Service) resolveDashboardDeck(guildID, deckID string) (files.QOTDDeckConfig, error) {
@@ -85,8 +89,4 @@ func missingDeckIDs(current, next []files.QOTDDeckConfig) []string {
 	return removed
 }
 
-func (s *Service) guildLifecycleLock(guildID string) *sync.Mutex {
-	key := strings.TrimSpace(guildID)
-	lock, _ := s.guildLifecycleLocks.LoadOrStore(key, &sync.Mutex{})
-	return lock.(*sync.Mutex)
-}
+

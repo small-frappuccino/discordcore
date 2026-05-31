@@ -133,66 +133,70 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 	}
 
 	guildID = strings.TrimSpace(guildID)
-	lifecycleLock := s.guildLifecycleLock(guildID)
-	lifecycleLock.Lock()
-	defer lifecycleLock.Unlock()
 
-	deck, err := s.resolveDashboardDeck(guildID, deckID)
-	if err != nil {
-		return AutomaticQueueState{}, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
-	}
-
-	state := AutomaticQueueState{Deck: deck}
-	now := s.clock()
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
-	if err != nil {
-		return AutomaticQueueState{}, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
-	}
-	state.NextReadyQuestion = firstReadyUnscheduledQuestion(questions)
-
-	settings, err := s.configManager.QOTDConfig(guildID)
-	if err != nil {
-		return AutomaticQueueState{}, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
-	}
-	slotState, err := s.loadUpcomingSlotState(ctx, guildID, settings, now)
-	if err != nil {
-		return AutomaticQueueState{}, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
-	}
-	if slotState.ScheduleConfigured {
-		state.ScheduleConfigured = true
-		state.Schedule = slotState.Schedule
-		state.SlotDateUTC = slotState.PublishDateUTC
-		state.SlotPublishAtUTC = slotState.PublishAtUTC
-		state.CanPublish = deck.Enabled && canPublishQOTD(deck)
-		state.SlotOfficialPost = slotState.OfficialPost
-		if slotState.OfficialPost != nil {
-			state.SlotQuestion = questionByID(questions, slotState.OfficialPost.QuestionID)
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		deck, err := s.resolveDashboardDeck(guildID, deckID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
 		}
-		if state.SlotQuestion == nil {
-			state.SlotQuestion = reservedQuestionForDate(questions, state.SlotDateUTC)
-		}
-	} else {
-		state.CanPublish = false
-	}
 
-	switch {
-	case !state.ScheduleConfigured || !state.CanPublish:
-		state.SlotStatus = AutomaticQueueSlotStatusDisabled
-	case state.SlotOfficialPost != nil:
-		if hasPublishedOfficialPostTarget(state.SlotOfficialPost) {
-			state.SlotStatus = AutomaticQueueSlotStatusPublished
+		state := AutomaticQueueState{Deck: deck}
+		now := s.clock()
+		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
+		}
+		state.NextReadyQuestion = firstReadyUnscheduledQuestion(questions)
+
+		settings, err := s.configManager.QOTDConfig(guildID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
+		}
+		slotState, err := s.loadUpcomingSlotState(ctx, guildID, settings, now)
+		if err != nil {
+			return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
+		}
+		if slotState.ScheduleConfigured {
+			state.ScheduleConfigured = true
+			state.Schedule = slotState.Schedule
+			state.SlotDateUTC = slotState.PublishDateUTC
+			state.SlotPublishAtUTC = slotState.PublishAtUTC
+			state.CanPublish = deck.Enabled && canPublishQOTD(deck)
+			state.SlotOfficialPost = slotState.OfficialPost
+			if slotState.OfficialPost != nil {
+				state.SlotQuestion = questionByID(questions, slotState.OfficialPost.QuestionID)
+			}
+			if state.SlotQuestion == nil {
+				state.SlotQuestion = reservedQuestionForDate(questions, state.SlotDateUTC)
+			}
 		} else {
-			state.SlotStatus = AutomaticQueueSlotStatusRecovering
+			state.CanPublish = false
 		}
-	case state.SlotQuestion != nil:
-		state.SlotStatus = AutomaticQueueSlotStatusReserved
-	case now.Before(state.SlotPublishAtUTC):
-		state.SlotStatus = AutomaticQueueSlotStatusWaiting
-	default:
-		state.SlotStatus = AutomaticQueueSlotStatusDue
-	}
 
-	return state, nil
+		switch {
+		case !state.ScheduleConfigured || !state.CanPublish:
+			state.SlotStatus = AutomaticQueueSlotStatusDisabled
+		case state.SlotOfficialPost != nil:
+			if hasPublishedOfficialPostTarget(state.SlotOfficialPost) {
+				state.SlotStatus = AutomaticQueueSlotStatusPublished
+			} else {
+				state.SlotStatus = AutomaticQueueSlotStatusRecovering
+			}
+		case state.SlotQuestion != nil:
+			state.SlotStatus = AutomaticQueueSlotStatusReserved
+		case now.Before(state.SlotPublishAtUTC):
+			state.SlotStatus = AutomaticQueueSlotStatusWaiting
+		default:
+			state.SlotStatus = AutomaticQueueSlotStatusDue
+		}
+
+		return state, nil
+	})
+
+	if err != nil {
+		return AutomaticQueueState{}, err
+	}
+	return val.(AutomaticQueueState), nil
 }
 
 func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
@@ -205,71 +209,75 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 	}
 
 	guildID = strings.TrimSpace(guildID)
-	lifecycleLock := s.guildLifecycleLock(guildID)
-	lifecycleLock.Lock()
-	defer lifecycleLock.Unlock()
 
-	deck, err := s.resolveDashboardDeck(guildID, deckID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
-	}
-
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
-	}
-	if len(questions) == 0 {
-		return nil, ErrQuestionNotFound
-	}
-
-	movedIndex := -1
-	firstMutableIndex := -1
-	for idx, question := range questions {
-		if firstMutableIndex < 0 && !isImmutableQuestion(question) {
-			firstMutableIndex = idx
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		deck, err := s.resolveDashboardDeck(guildID, deckID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
 		}
-		if question.ID == questionID {
-			movedIndex = idx
+
+		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
 		}
-	}
-	if movedIndex < 0 {
-		return nil, ErrQuestionNotFound
-	}
+		if len(questions) == 0 {
+			return nil, ErrQuestionNotFound
+		}
 
-	question := &questions[movedIndex]
-	if question.DeckID != deck.ID {
-		return nil, ErrQuestionNotFound
-	}
-	if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusUsed {
-		return nil, ErrQuestionNotUsed
-	}
-
-	question.Status = string(QuestionStatusReady)
-	question.UsedAt = nil
-	question.ScheduledForDateUTC = nil
-	question.PublishedOnceAt = nil
-
-	if _, err := s.store.UpdateQOTDQuestion(ctx, *question); err != nil {
-		return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
-	}
-
-	if firstMutableIndex >= 0 && movedIndex > firstMutableIndex {
-		orderedIDs := reorderQuestionIDsToIndex(questions, movedIndex, firstMutableIndex)
-		if len(orderedIDs) > 0 {
-			if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, orderedIDs); err != nil {
-				return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
+		movedIndex := -1
+		firstMutableIndex := -1
+		for idx, question := range questions {
+			if firstMutableIndex < 0 && !isImmutableQuestion(question) {
+				firstMutableIndex = idx
+			}
+			if question.ID == questionID {
+				movedIndex = idx
 			}
 		}
-	}
+		if movedIndex < 0 {
+			return nil, ErrQuestionNotFound
+		}
 
-	updated, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+		question := &questions[movedIndex]
+		if question.DeckID != deck.ID {
+			return nil, ErrQuestionNotFound
+		}
+		if QuestionStatus(strings.TrimSpace(question.Status)) != QuestionStatusUsed {
+			return nil, ErrQuestionNotUsed
+		}
+
+		question.Status = string(QuestionStatusReady)
+		question.UsedAt = nil
+		question.ScheduledForDateUTC = nil
+		question.PublishedOnceAt = nil
+
+		if _, err := s.store.UpdateQOTDQuestion(ctx, *question); err != nil {
+			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
+		}
+
+		if firstMutableIndex >= 0 && movedIndex > firstMutableIndex {
+			orderedIDs := reorderQuestionIDsToIndex(questions, movedIndex, firstMutableIndex)
+			if len(orderedIDs) > 0 {
+				if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, orderedIDs); err != nil {
+					return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
+				}
+			}
+		}
+
+		updated, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
+		}
+		if updated == nil {
+			return nil, ErrQuestionNotFound
+		}
+		return updated, nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
+		return nil, err
 	}
-	if updated == nil {
-		return nil, ErrQuestionNotFound
-	}
-	return updated, nil
+	return val.(*storage.QOTDQuestionRecord), nil
 }
 
 func (s *Service) MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
@@ -282,59 +290,63 @@ func (s *Service) MarkQuestionPublished(ctx context.Context, guildID, deckID str
 	}
 
 	guildID = strings.TrimSpace(guildID)
-	lifecycleLock := s.guildLifecycleLock(guildID)
-	lifecycleLock.Lock()
-	defer lifecycleLock.Unlock()
 
-	deck, err := s.resolveDashboardDeck(guildID, deckID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.MarkQuestionPublished: %w", err)
-	}
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		deck, err := s.resolveDashboardDeck(guildID, deckID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.MarkQuestionPublished: %w", err)
+		}
 
-	question, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.MarkQuestionPublished: %w", err)
-	}
-	if question == nil || question.DeckID != deck.ID {
-		return nil, ErrQuestionNotFound
-	}
+		question, err := s.store.GetQOTDQuestion(ctx, guildID, questionID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.MarkQuestionPublished: %w", err)
+		}
+		if question == nil || question.DeckID != deck.ID {
+			return nil, ErrQuestionNotFound
+		}
 
-	status := QuestionStatus(strings.TrimSpace(question.Status))
-	if status == QuestionStatusUsed {
-		changed := false
+		status := QuestionStatus(strings.TrimSpace(question.Status))
+		if status == QuestionStatusUsed {
+			changed := false
+			publishedAt := s.clock()
+			if question.UsedAt == nil || question.UsedAt.IsZero() {
+				question.UsedAt = &publishedAt
+				changed = true
+			}
+			if question.PublishedOnceAt == nil || question.PublishedOnceAt.IsZero() {
+				question.PublishedOnceAt = &publishedAt
+				changed = true
+			}
+			if question.ScheduledForDateUTC != nil {
+				question.ScheduledForDateUTC = nil
+				changed = true
+			}
+			if !changed {
+				return question, nil
+			}
+			return s.store.UpdateQOTDQuestion(ctx, *question)
+		}
+
+		if isImmutableQuestion(*question) {
+			return nil, ErrImmutableQuestion
+		}
+		if status != QuestionStatusReady {
+			return nil, ErrQuestionNotReady
+		}
+
 		publishedAt := s.clock()
-		if question.UsedAt == nil || question.UsedAt.IsZero() {
-			question.UsedAt = &publishedAt
-			changed = true
-		}
-		if question.PublishedOnceAt == nil || question.PublishedOnceAt.IsZero() {
-			question.PublishedOnceAt = &publishedAt
-			changed = true
-		}
-		if question.ScheduledForDateUTC != nil {
-			question.ScheduledForDateUTC = nil
-			changed = true
-		}
-		if !changed {
-			return question, nil
-		}
+		question.Status = string(QuestionStatusUsed)
+		question.UsedAt = &publishedAt
+		question.PublishedOnceAt = &publishedAt
+		question.ScheduledForDateUTC = nil
+
 		return s.store.UpdateQOTDQuestion(ctx, *question)
-	}
+	})
 
-	if isImmutableQuestion(*question) {
-		return nil, ErrImmutableQuestion
+	if err != nil {
+		return nil, err
 	}
-	if status != QuestionStatusReady {
-		return nil, ErrQuestionNotReady
-	}
-
-	publishedAt := s.clock()
-	question.Status = string(QuestionStatusUsed)
-	question.UsedAt = &publishedAt
-	question.PublishedOnceAt = &publishedAt
-	question.ScheduledForDateUTC = nil
-
-	return s.store.UpdateQOTDQuestion(ctx, *question)
+	return val.(*storage.QOTDQuestionRecord), nil
 }
 
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
@@ -342,31 +354,38 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
 	}
 	guildID = strings.TrimSpace(guildID)
-	lifecycleLock := s.guildLifecycleLock(guildID)
-	lifecycleLock.Lock()
-	defer lifecycleLock.Unlock()
+	
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		deck, err := s.resolveDashboardDeck(guildID, deckID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
+		}
 
-	deck, err := s.resolveDashboardDeck(guildID, deckID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
-	}
+		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		if err != nil {
+			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
+		}
+		if len(questions) == 0 {
+			return nil, nil
+		}
 
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		fullOrder, err := normalizeReorderInput(questions, orderedIDs)
+		if err != nil {
+			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
+		}
+		if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, fullOrder); err != nil {
+			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
+		}
+		return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
+		return nil, err
 	}
-	if len(questions) == 0 {
+	if val == nil {
 		return nil, nil
 	}
-
-	fullOrder, err := normalizeReorderInput(questions, orderedIDs)
-	if err != nil {
-		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
-	}
-	if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, fullOrder); err != nil {
-		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
-	}
-	return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	return val.([]storage.QOTDQuestionRecord), nil
 }
 
 func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, error) {
