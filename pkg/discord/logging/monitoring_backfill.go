@@ -12,439 +12,385 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
+// registerBackfillHandlers wires the entry/exit backfill task handlers and, once at
+// startup, dispatches any backfill work implied by the current runtime config.
 func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context, workload monitoringWorkloadState) {
-	// Register one-shot entry/exit backfill handler (Option A).
-	ms.router.RegisterHandler(TaskTypeMonitorBackfillEntryExitDay, func(ctx context.Context, payload any) error {
-		p, ok := payload.(BackfillEntryExitDayPayload)
-		if !ok {
-			log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitDay, "type", fmt.Sprintf("%T", payload))
-			return nil
-		}
-		channelID := strings.TrimSpace(p.ChannelID)
-		day := strings.TrimSpace(p.Day)
-		if channelID == "" {
-			return nil
-		}
-		if day == "" {
-			day = time.Now().UTC().Format("2006-01-02")
-		}
-
-		start, err := time.Parse("2006-01-02", day)
-		if err != nil {
-			return nil
-		}
-		end := start.Add(24 * time.Hour)
-
-		// Resolve guild ID from channel
-		var guildID string
-		if ms.session != nil && ms.session.State != nil {
-			if ch, _ := ms.session.State.Channel(channelID); ch != nil {
-				guildID = ch.GuildID
-			}
-		}
-		if guildID == "" && ms.session != nil {
-			if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
-				guildID = ch.GuildID
-			}
-		}
-		if guildID == "" {
-			return nil
-		}
-
-		log.ApplicationLogger().Info("📥 Starting entry/exit backfill (day)", "channelID", channelID, "guildID", guildID, "day", day)
-
-		botID := ""
-		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
-			botID = ms.session.State.User.ID
-		}
-
-		var before string
-		processedCount := 0
-		eventsFound := 0
-		startTime := time.Now()
-
-		for {
-			if err := serviceCtx.Err(); err != nil {
-				return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
-			}
-			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
-				return ms.session.ChannelMessages(channelID, 100, before, "", "")
-			})
-			if err != nil {
-				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "channelID", channelID, "err", err)
-				break
-			}
-			if len(msgs) == 0 {
-				break
-			}
-
-			// Messages come newest -> oldest
-			stop := false
-			for _, m := range msgs {
-				if err := serviceCtx.Err(); err != nil {
-					return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
-				}
-				t := m.Timestamp.UTC()
-				// Stop if we've paged past the target day
-				if t.Before(start) {
-					stop = true
-					break
-				}
-				// Only consider messages within the day
-				if t.Before(end) && !t.Before(start) {
-					var rc files.RuntimeConfig
-					if cfg := ms.configManager.Config(); cfg != nil {
-						rc = cfg.ResolveRuntimeConfig(guildID)
-					}
-					evt, userID, ok := parseEntryExitBackfillMessage(m, botID, rc)
-					if ok && ms.store != nil {
-						eventsFound++
-						if evt == "join" {
-							if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(day): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-							if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-						} else if evt == "leave" {
-							// If name was not in message, check if still in server via code
-							stillInServer := false
-							if ms.session != nil {
-								mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
-									return ms.session.GuildMember(guildID, userID)
-								})
-								if err == nil && mem != nil {
-									stillInServer = true
-								}
-							}
-
-							if !stillInServer {
-								if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
-									log.ApplicationLogger().Warn("Backfill(day): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-								}
-							}
-						}
-						// Record the oldest processed timestamp for this channel
-						if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+channelID, t); err != nil {
-							log.ApplicationLogger().Warn("Backfill(day): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
-						}
-					}
-				}
-				processedCount++
-			}
-
-			if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
-				log.ApplicationLogger().Info("⏳ Backfill in progress (day)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
-			}
-
-			// Prepare next page or stop
-			before = msgs[len(msgs)-1].ID
-			if stop {
-				break
-			}
-		}
-
-		log.ApplicationLogger().Info("✅ Backfill completed (day)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
-		return nil
+	ms.router.RegisterHandler(TaskTypeMonitorBackfillEntryExitDay, func(_ context.Context, payload any) error {
+		return ms.handleBackfillEntryExitDay(serviceCtx, payload)
+	})
+	ms.router.RegisterHandler(TaskTypeMonitorBackfillEntryExitRange, func(_ context.Context, payload any) error {
+		return ms.handleBackfillEntryExitRange(serviceCtx, payload)
 	})
 
-	// Register range-based entry/exit backfill handler (used for downtime recovery and historical scans)
-	ms.router.RegisterHandler(TaskTypeMonitorBackfillEntryExitRange, func(ctx context.Context, payload any) error {
-		p, ok := payload.(BackfillEntryExitRangePayload)
-		if !ok {
-			log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitRange, "type", fmt.Sprintf("%T", payload))
-			return nil
-		}
+	ms.dispatchStartupBackfills(serviceCtx)
+}
 
-		channelID := strings.TrimSpace(p.ChannelID)
-		startRaw := strings.TrimSpace(p.Start)
-		endRaw := strings.TrimSpace(p.End)
-		if channelID == "" || startRaw == "" || endRaw == "" {
-			log.ErrorLoggerRaw().Warn("Missing required fields for backfill range", "channelID", channelID, "start", startRaw, "end", endRaw)
-			return nil
-		}
-
-		start, err := time.Parse(time.RFC3339, startRaw)
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to parse start date for backfill range", "err", err, "start", startRaw)
-			return nil
-		}
-		end, err := time.Parse(time.RFC3339, endRaw)
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to parse end date for backfill range", "err", err, "end", endRaw)
-			return nil
-		}
-		start = start.UTC()
-		end = end.UTC()
-		if !end.After(start) {
-			log.ErrorLoggerRaw().Warn("End date must be after start date for backfill range", "start", start, "end", end)
-			return nil
-		}
-
-		// Resolve guild ID from channel
-		var guildID string
-		if ms.session != nil && ms.session.State != nil {
-			if ch, _ := ms.session.State.Channel(channelID); ch != nil {
-				guildID = ch.GuildID
-			}
-		}
-		if guildID == "" && ms.session != nil {
-			if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
-				guildID = ch.GuildID
-			}
-		}
-		if guildID == "" {
-			log.ErrorLoggerRaw().Warn("Could not resolve guild ID for channel during backfill", "channelID", channelID)
-			return nil
-		}
-
-		log.ApplicationLogger().Info("📥 Starting entry/exit backfill (range)", "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
-
-		botID := ""
-		if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
-			botID = ms.session.State.User.ID
-		}
-
-		var before string
-		processedCount := 0
-		eventsFound := 0
-		startTime := time.Now()
-
-		for {
-			if err := serviceCtx.Err(); err != nil {
-				return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
-			}
-			msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
-				return ms.session.ChannelMessages(channelID, 100, before, "", "")
-			})
-			if err != nil {
-				log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill range", "channelID", channelID, "err", err)
-				break
-			}
-			if len(msgs) == 0 {
-				break
-			}
-
-			// Messages come newest -> oldest
-			stop := false
-			for _, m := range msgs {
-				if err := serviceCtx.Err(); err != nil {
-					return fmt.Errorf("MonitoringService.registerBackfillHandlers: %w", err)
-				}
-				t := m.Timestamp.UTC()
-				// Stop if we've paged past the target window
-				if t.Before(start) {
-					stop = true
-					break
-				}
-				// Only consider messages within the window
-				if t.Before(end) && !t.Before(start) {
-					var rc files.RuntimeConfig
-					if cfg := ms.configManager.Config(); cfg != nil {
-						rc = cfg.ResolveRuntimeConfig(guildID)
-					}
-					evt, userID, ok := parseEntryExitBackfillMessage(m, botID, rc)
-					if ok && ms.store != nil {
-						eventsFound++
-						if evt == "join" {
-							if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(range): failed to persist member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-							if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
-								log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member join", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-							}
-						} else if evt == "leave" {
-							// If name was not in message, check if still in server via code
-							stillInServer := false
-							if ms.session != nil {
-								mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
-									return ms.session.GuildMember(guildID, userID)
-								})
-								if err == nil && mem != nil {
-									stillInServer = true
-								}
-							}
-
-							if !stillInServer {
-								if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
-									log.ApplicationLogger().Warn("Backfill(range): failed to increment daily member leave", "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
-								}
-							}
-						}
-						// Record the oldest processed timestamp for this channel
-						if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+channelID, t); err != nil {
-							log.ApplicationLogger().Warn("Backfill(range): failed to persist progress metadata", "guildID", guildID, "channelID", channelID, "at", t, "err", err)
-						}
-					}
-				}
-				processedCount++
-			}
-
-			if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
-				log.ApplicationLogger().Info("⏳ Backfill in progress (range)...", "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
-			}
-
-			before = msgs[len(msgs)-1].ID
-			if stop {
-				break
-			}
-		}
-
-		log.ApplicationLogger().Info("✅ Backfill completed (range)", "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
+// handleBackfillEntryExitDay scans a single UTC day. An empty day defaults to today.
+func (ms *MonitoringService) handleBackfillEntryExitDay(serviceCtx context.Context, payload any) error {
+	p, ok := payload.(BackfillEntryExitDayPayload)
+	if !ok {
+		log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitDay, "type", fmt.Sprintf("%T", payload))
 		return nil
-	})
-
-	// Optionally auto-dispatch backfill tasks right after startup based on runtime config.
-	//
-	// Behavior:
-	// - If `BackfillStartDay` is set: run day-based scan.
-	// - Otherwise: if downtime is detected via the persisted last event timestamp and exceeds threshold, run a range scan to recover.
-	//
-	// New Condition: Backfill only runs if a channel is configured AND an initial start date is provided in config.
-	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
-		cfg := scopedCfg
-		globalRC := cfg.RuntimeConfig
-
-		// Get all potential channels and their resolved configs
-		type backfillTarget struct {
-			ChannelID      string
-			RC             files.RuntimeConfig
-			FeatureEnabled bool
-		}
-		targets := make([]backfillTarget, 0)
-
-		// Global target if configured
-		if globalRC.BackfillChannelID != "" {
-			targets = append(targets, backfillTarget{
-				ChannelID:      strings.TrimSpace(globalRC.BackfillChannelID),
-				RC:             globalRC,
-				FeatureEnabled: cfg.ResolveFeatures("").Backfill.Enabled,
-			})
-		}
-
-		// Guild targets
-		for _, g := range cfg.Guilds {
-			cid := g.Channels.BackfillChannelID()
-			if cid != "" {
-				featureEnabled := cfg.ResolveFeatures(g.GuildID).Backfill.Enabled
-				targets = append(targets, backfillTarget{
-					ChannelID:      cid,
-					RC:             cfg.ResolveRuntimeConfig(g.GuildID),
-					FeatureEnabled: featureEnabled,
-				})
-			}
-		}
-
-		if len(targets) == 0 {
-			log.ApplicationLogger().Debug("No target channels for backfill check")
-		} else {
-			lastEvent, hasLastEvent, err := ms.getLastEvent(serviceCtx)
-			if err != nil {
-				lastEvent = time.Time{}
-				hasLastEvent = false
-				log.ErrorLoggerRaw().Error(
-					"Failed to read last event for backfill recovery; downtime recovery disabled for this startup",
-					"operation", "monitoring.start.backfill.get_last_event",
-					"err", err,
-				)
-			}
-			now := time.Now().UTC()
-
-			for _, target := range targets {
-				cid := target.ChannelID
-				rc := target.RC
-				if !target.FeatureEnabled {
-					log.ApplicationLogger().Debug("Backfill disabled by features.backfill.enabled", "channelID", cid)
-					continue
-				}
-				day := strings.TrimSpace(rc.BackfillStartDay)
-				initialDate := strings.TrimSpace(rc.BackfillInitialDate)
-
-				if day != "" {
-					dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
-					err := ms.router.Dispatch(dispatchCtx, task.Task{
-						Type:    TaskTypeMonitorBackfillEntryExitDay,
-						Payload: BackfillEntryExitDayPayload{ChannelID: cid, Day: day},
-						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					})
-					cancel()
-					if err != nil {
-						log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
-					} else {
-						log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
-					}
-					continue
-				}
-
-				// If no specific day, check for initial scan or recovery
-				if initialDate == "" {
-					log.ApplicationLogger().Debug("Backfill skip for channel: no day set and initial_date is empty", "channelID", cid)
-					continue
-				}
-
-				// Check progress for this channel
-				_, hasProgress, err := ms.store.Metadata(serviceCtx, "backfill_progress:"+cid)
-				if err != nil {
-					log.ErrorLoggerRaw().Error(
-						"Failed to read backfill progress; skipping backfill dispatch for channel",
-						"operation", "monitoring.start.backfill.get_progress",
-						"channelID", cid,
-						"err", err,
-					)
-					continue
-				}
-
-				if !hasProgress {
-					// Use initialDate to calculate start date
-					parsedDate, err := time.Parse("2006-01-02", initialDate)
-					if err != nil {
-						log.ApplicationLogger().Error("Failed to parse backfill_initial_date", "date", initialDate, "err", err)
-						continue
-					}
-					start := parsedDate.Format(time.RFC3339)
-					end := now.Format(time.RFC3339)
-					dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
-					err = ms.router.Dispatch(dispatchCtx, task.Task{
-						Type:    TaskTypeMonitorBackfillEntryExitRange,
-						Payload: BackfillEntryExitRangePayload{ChannelID: cid, Start: start, End: end},
-						Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-					})
-					cancel()
-					if err != nil {
-						log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
-					} else {
-						log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
-					}
-					continue
-				}
-
-				// If we have progress, check if we need downtime recovery
-				if hasLastEvent {
-					downtime := now.Sub(lastEvent)
-					if downtime > downtimeThreshold {
-						start := lastEvent.UTC().Format(time.RFC3339)
-						end := now.Format(time.RFC3339)
-						dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
-						err := ms.router.Dispatch(dispatchCtx, task.Task{
-							Type:    TaskTypeMonitorBackfillEntryExitRange,
-							Payload: BackfillEntryExitRangePayload{ChannelID: cid, Start: start, End: end},
-							Options: task.TaskOptions{GroupKey: "backfill:" + cid},
-						})
-						cancel()
-						if err != nil {
-							log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
-						} else {
-							log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
-						}
-					} else {
-						log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
-					}
-				} else {
-					log.ApplicationLogger().Debug("No last event recorded, skipping downtime recovery", "channelID", cid)
-				}
-			}
-		}
-	} else {
-		log.ApplicationLogger().Info("Backfill skip: config manager or config is nil")
 	}
+	channelID := strings.TrimSpace(p.ChannelID)
+	if channelID == "" {
+		return nil
+	}
+	day := strings.TrimSpace(p.Day)
+	if day == "" {
+		day = time.Now().UTC().Format("2006-01-02")
+	}
+	start, err := time.Parse("2006-01-02", day)
+	if err != nil {
+		return nil
+	}
+	return ms.runEntryExitBackfill(serviceCtx, channelID, start, start.Add(24*time.Hour), "day")
+}
+
+// handleBackfillEntryExitRange scans an explicit RFC3339 [start, end) window; it is
+// used for downtime recovery and historical scans.
+func (ms *MonitoringService) handleBackfillEntryExitRange(serviceCtx context.Context, payload any) error {
+	p, ok := payload.(BackfillEntryExitRangePayload)
+	if !ok {
+		log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitRange, "type", fmt.Sprintf("%T", payload))
+		return nil
+	}
+
+	channelID := strings.TrimSpace(p.ChannelID)
+	startRaw := strings.TrimSpace(p.Start)
+	endRaw := strings.TrimSpace(p.End)
+	if channelID == "" || startRaw == "" || endRaw == "" {
+		log.ErrorLoggerRaw().Warn("Missing required fields for backfill range", "channelID", channelID, "start", startRaw, "end", endRaw)
+		return nil
+	}
+
+	start, err := time.Parse(time.RFC3339, startRaw)
+	if err != nil {
+		log.ErrorLoggerRaw().Error("Failed to parse start date for backfill range", "err", err, "start", startRaw)
+		return nil
+	}
+	end, err := time.Parse(time.RFC3339, endRaw)
+	if err != nil {
+		log.ErrorLoggerRaw().Error("Failed to parse end date for backfill range", "err", err, "end", endRaw)
+		return nil
+	}
+	start = start.UTC()
+	end = end.UTC()
+	if !end.After(start) {
+		log.ErrorLoggerRaw().Warn("End date must be after start date for backfill range", "start", start, "end", end)
+		return nil
+	}
+	return ms.runEntryExitBackfill(serviceCtx, channelID, start, end, "range")
+}
+
+// runEntryExitBackfill pages channelID newest-to-oldest and persists the member
+// join/leave counters derived from log messages whose timestamp falls in [start, end).
+// mode distinguishes the originating handler ("day" or "range") in operational logs.
+func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, channelID string, start, end time.Time, mode string) error {
+	guildID := ms.resolveGuildIDForChannel(channelID)
+	if guildID == "" {
+		log.ErrorLoggerRaw().Warn("Could not resolve guild ID for channel during backfill", "mode", mode, "channelID", channelID)
+		return nil
+	}
+
+	log.ApplicationLogger().Info("📥 Starting entry/exit backfill", "mode", mode, "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
+
+	botID := ""
+	if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
+		botID = ms.session.State.User.ID
+	}
+
+	var before string
+	processedCount := 0
+	eventsFound := 0
+	startTime := time.Now()
+
+	for {
+		if err := serviceCtx.Err(); err != nil {
+			return fmt.Errorf("MonitoringService.runEntryExitBackfill: %w", err)
+		}
+		msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
+			return ms.session.ChannelMessages(channelID, 100, before, "", "")
+		})
+		if err != nil {
+			log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "mode", mode, "channelID", channelID, "err", err)
+			break
+		}
+		if len(msgs) == 0 {
+			break
+		}
+
+		// Messages come newest -> oldest; stop once we page past the window start.
+		stop := false
+		for _, m := range msgs {
+			if err := serviceCtx.Err(); err != nil {
+				return fmt.Errorf("MonitoringService.runEntryExitBackfill: %w", err)
+			}
+			t := m.Timestamp.UTC()
+			if t.Before(start) {
+				stop = true
+				break
+			}
+			if !t.Before(end) {
+				processedCount++
+				continue
+			}
+			if ms.persistBackfillMessage(serviceCtx, guildID, channelID, botID, mode, m, t) {
+				eventsFound++
+			}
+			processedCount++
+		}
+
+		if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
+			log.ApplicationLogger().Info("⏳ Backfill in progress...", "mode", mode, "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
+		}
+
+		before = msgs[len(msgs)-1].ID
+		if stop {
+			break
+		}
+	}
+
+	log.ApplicationLogger().Info("✅ Backfill completed", "mode", mode, "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
+	return nil
+}
+
+// persistBackfillMessage parses a single backfilled log message and, when it encodes
+// a member join or leave, updates the corresponding counters and the per-channel
+// progress marker. It reports whether the message yielded a recognized event.
+func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, guildID, channelID, botID, mode string, m *discordgo.Message, t time.Time) bool {
+	if ms.store == nil {
+		return false
+	}
+	var rc files.RuntimeConfig
+	if cfg := ms.configManager.Config(); cfg != nil {
+		rc = cfg.ResolveRuntimeConfig(guildID)
+	}
+	evt, userID, ok := parseEntryExitBackfillMessage(m, botID, rc)
+	if !ok {
+		return false
+	}
+
+	switch evt {
+	case "join":
+		if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
+			log.ApplicationLogger().Warn("Backfill: failed to persist member join", "mode", mode, "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+		}
+		if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
+			log.ApplicationLogger().Warn("Backfill: failed to increment daily member join", "mode", mode, "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+		}
+	case "leave":
+		// If the member is no longer in the guild, count the leave for the day.
+		if !ms.memberStillInGuild(serviceCtx, guildID, userID) {
+			if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
+				log.ApplicationLogger().Warn("Backfill: failed to increment daily member leave", "mode", mode, "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+			}
+		}
+	}
+
+	if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+channelID, t); err != nil {
+		log.ApplicationLogger().Warn("Backfill: failed to persist progress metadata", "mode", mode, "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+	}
+	return true
+}
+
+// memberStillInGuild reports whether userID is currently a member of guildID,
+// treating any lookup failure as "not present".
+func (ms *MonitoringService) memberStillInGuild(serviceCtx context.Context, guildID, userID string) bool {
+	if ms.session == nil {
+		return false
+	}
+	mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+		return ms.session.GuildMember(guildID, userID)
+	})
+	return err == nil && mem != nil
+}
+
+// resolveGuildIDForChannel resolves the guild that owns channelID, preferring the
+// session state cache and falling back to a REST lookup. It returns "" when the
+// channel cannot be resolved.
+func (ms *MonitoringService) resolveGuildIDForChannel(channelID string) string {
+	if ms.session == nil {
+		return ""
+	}
+	if ms.session.State != nil {
+		if ch, _ := ms.session.State.Channel(channelID); ch != nil && ch.GuildID != "" {
+			return ch.GuildID
+		}
+	}
+	if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
+		return ch.GuildID
+	}
+	return ""
+}
+
+// backfillTarget is a channel the startup scan may dispatch backfill work for,
+// paired with its resolved runtime config and feature-gate state.
+type backfillTarget struct {
+	ChannelID      string
+	RC             files.RuntimeConfig
+	FeatureEnabled bool
+}
+
+// dispatchStartupBackfills inspects the runtime config once at startup and dispatches
+// the appropriate backfill task per configured channel: a day scan when a start day is
+// set, an initial range scan on first run, or a downtime-recovery range scan otherwise.
+func (ms *MonitoringService) dispatchStartupBackfills(serviceCtx context.Context) {
+	cfg := ms.scopedConfig()
+	if cfg == nil {
+		log.ApplicationLogger().Info("Backfill skip: config manager or config is nil")
+		return
+	}
+
+	targets := ms.collectBackfillTargets(cfg)
+	if len(targets) == 0 {
+		log.ApplicationLogger().Debug("No target channels for backfill check")
+		return
+	}
+
+	lastEvent, hasLastEvent, err := ms.getLastEvent(serviceCtx)
+	if err != nil {
+		lastEvent = time.Time{}
+		hasLastEvent = false
+		log.ErrorLoggerRaw().Error(
+			"Failed to read last event for backfill recovery; downtime recovery disabled for this startup",
+			"operation", "monitoring.start.backfill.get_last_event",
+			"err", err,
+		)
+	}
+	now := time.Now().UTC()
+
+	for _, target := range targets {
+		ms.dispatchBackfillForTarget(serviceCtx, target, lastEvent, hasLastEvent, now)
+	}
+}
+
+// collectBackfillTargets gathers the global backfill channel (if configured) and every
+// guild-scoped backfill channel into a single target list.
+func (ms *MonitoringService) collectBackfillTargets(cfg *files.BotConfig) []backfillTarget {
+	globalRC := cfg.RuntimeConfig
+	targets := make([]backfillTarget, 0)
+
+	if globalRC.BackfillChannelID != "" {
+		targets = append(targets, backfillTarget{
+			ChannelID:      strings.TrimSpace(globalRC.BackfillChannelID),
+			RC:             globalRC,
+			FeatureEnabled: cfg.ResolveFeatures("").Backfill.Enabled,
+		})
+	}
+
+	for _, g := range cfg.Guilds {
+		cid := g.Channels.BackfillChannelID()
+		if cid == "" {
+			continue
+		}
+		targets = append(targets, backfillTarget{
+			ChannelID:      cid,
+			RC:             cfg.ResolveRuntimeConfig(g.GuildID),
+			FeatureEnabled: cfg.ResolveFeatures(g.GuildID).Backfill.Enabled,
+		})
+	}
+
+	return targets
+}
+
+// dispatchBackfillForTarget decides and dispatches the backfill work for a single
+// target channel based on its config, persisted progress, and observed downtime.
+func (ms *MonitoringService) dispatchBackfillForTarget(serviceCtx context.Context, target backfillTarget, lastEvent time.Time, hasLastEvent bool, now time.Time) {
+	cid := target.ChannelID
+	rc := target.RC
+
+	if !target.FeatureEnabled {
+		log.ApplicationLogger().Debug("Backfill disabled by features.backfill.enabled", "channelID", cid)
+		return
+	}
+
+	day := strings.TrimSpace(rc.BackfillStartDay)
+	if day != "" {
+		err := ms.dispatchBackfillTask(serviceCtx, task.Task{
+			Type:    TaskTypeMonitorBackfillEntryExitDay,
+			Payload: BackfillEntryExitDayPayload{ChannelID: cid, Day: day},
+			Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+		})
+		if err != nil {
+			log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
+		} else {
+			log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
+		}
+		return
+	}
+
+	initialDate := strings.TrimSpace(rc.BackfillInitialDate)
+	if initialDate == "" {
+		log.ApplicationLogger().Debug("Backfill skip for channel: no day set and initial_date is empty", "channelID", cid)
+		return
+	}
+
+	_, hasProgress, err := ms.store.Metadata(serviceCtx, "backfill_progress:"+cid)
+	if err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Failed to read backfill progress; skipping backfill dispatch for channel",
+			"operation", "monitoring.start.backfill.get_progress",
+			"channelID", cid,
+			"err", err,
+		)
+		return
+	}
+
+	if !hasProgress {
+		ms.dispatchInitialBackfill(serviceCtx, cid, initialDate, now)
+		return
+	}
+
+	if !hasLastEvent {
+		log.ApplicationLogger().Debug("No last event recorded, skipping downtime recovery", "channelID", cid)
+		return
+	}
+
+	downtime := now.Sub(lastEvent)
+	if downtime <= downtimeThreshold {
+		log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
+		return
+	}
+
+	start := lastEvent.UTC().Format(time.RFC3339)
+	end := now.Format(time.RFC3339)
+	err = ms.dispatchBackfillTask(serviceCtx, task.Task{
+		Type:    TaskTypeMonitorBackfillEntryExitRange,
+		Payload: BackfillEntryExitRangePayload{ChannelID: cid, Start: start, End: end},
+		Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+	})
+	if err != nil {
+		log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
+	} else {
+		log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+	}
+}
+
+// dispatchInitialBackfill dispatches the first-run range scan from initialDate to now.
+func (ms *MonitoringService) dispatchInitialBackfill(serviceCtx context.Context, cid, initialDate string, now time.Time) {
+	parsedDate, err := time.Parse("2006-01-02", initialDate)
+	if err != nil {
+		log.ApplicationLogger().Error("Failed to parse backfill_initial_date", "date", initialDate, "err", err)
+		return
+	}
+	start := parsedDate.Format(time.RFC3339)
+	end := now.Format(time.RFC3339)
+	err = ms.dispatchBackfillTask(serviceCtx, task.Task{
+		Type:    TaskTypeMonitorBackfillEntryExitRange,
+		Payload: BackfillEntryExitRangePayload{ChannelID: cid, Start: start, End: end},
+		Options: task.TaskOptions{GroupKey: "backfill:" + cid},
+	})
+	if err != nil {
+		log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
+	} else {
+		log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
+	}
+}
+
+// dispatchBackfillTask dispatches t under a bounded startup timeout.
+func (ms *MonitoringService) dispatchBackfillTask(serviceCtx context.Context, t task.Task) error {
+	dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
+	defer cancel()
+	return ms.router.Dispatch(dispatchCtx, t)
 }

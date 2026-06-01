@@ -27,6 +27,30 @@ func repairQOTDLegacySchema(ctx context.Context, tx *sql.Tx) (err error) {
 		return nil
 	}
 
+	if err := repairOfficialPostsChannelColumns(ctx, tx); err != nil {
+		return err
+	}
+	if err := repairForumSurfacesChannelColumn(ctx, tx); err != nil {
+		return err
+	}
+	// Migrate legacy reply threads before dropping the table they live in.
+	if err := migrateLegacyReplyThreads(ctx, tx); err != nil {
+		return err
+	}
+	if err := dropLegacyReplyThreadArtifacts(ctx, tx); err != nil {
+		return err
+	}
+	if err := dropOfficialPostsLegacyColumns(ctx, tx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// repairOfficialPostsChannelColumns backfills answer_channel_id on qotd_official_posts
+// from the best available legacy source, then renames a lingering forum_channel_id
+// column to channel_id.
+func repairOfficialPostsChannelColumns(ctx context.Context, tx *sql.Tx) error {
 	hasLegacyChannelColumn, err := columnExists(ctx, tx, "qotd_official_posts", "forum_channel_id")
 	if err != nil {
 		return fmt.Errorf("check official posts legacy channel column: %w", err)
@@ -82,44 +106,58 @@ SET answer_channel_id = COALESCE(
 		if _, err := tx.ExecContext(ctx, `ALTER TABLE qotd_official_posts RENAME COLUMN forum_channel_id TO channel_id`); err != nil {
 			return fmt.Errorf("rename official posts legacy channel column: %w", err)
 		}
-		hasChannelID = true
 	}
 
+	return nil
+}
+
+// repairForumSurfacesChannelColumn reconciles the legacy forum_channel_id column on
+// qotd_forum_surfaces into channel_id, backfilling then dropping it when both columns
+// exist, or renaming it when only the legacy column remains.
+func repairForumSurfacesChannelColumn(ctx context.Context, tx *sql.Tx) error {
 	hasForumSurfaces, err := tableExists(ctx, tx, "qotd_forum_surfaces")
 	if err != nil {
 		return fmt.Errorf("check qotd surfaces table: %w", err)
 	}
-	if hasForumSurfaces {
-		hasLegacySurfaceChannelColumn, err := columnExists(ctx, tx, "qotd_forum_surfaces", "forum_channel_id")
-		if err != nil {
-			return fmt.Errorf("check qotd surfaces legacy channel column: %w", err)
-		}
-		hasSurfaceChannelID, err := columnExists(ctx, tx, "qotd_forum_surfaces", "channel_id")
-		if err != nil {
-			return fmt.Errorf("check qotd surfaces channel column: %w", err)
-		}
-		switch {
-		case hasLegacySurfaceChannelColumn && hasSurfaceChannelID:
-			if _, err := tx.ExecContext(ctx, `
+	if !hasForumSurfaces {
+		return nil
+	}
+
+	hasLegacySurfaceChannelColumn, err := columnExists(ctx, tx, "qotd_forum_surfaces", "forum_channel_id")
+	if err != nil {
+		return fmt.Errorf("check qotd surfaces legacy channel column: %w", err)
+	}
+	hasSurfaceChannelID, err := columnExists(ctx, tx, "qotd_forum_surfaces", "channel_id")
+	if err != nil {
+		return fmt.Errorf("check qotd surfaces channel column: %w", err)
+	}
+	switch {
+	case hasLegacySurfaceChannelColumn && hasSurfaceChannelID:
+		if _, err := tx.ExecContext(ctx, `
 UPDATE qotd_forum_surfaces
 SET channel_id = COALESCE(NULLIF(channel_id, ''), forum_channel_id)
 WHERE channel_id IS NULL OR channel_id = ''
 `); err != nil {
-				return fmt.Errorf("backfill qotd surfaces channel column: %w", err)
-			}
-			if _, err := tx.ExecContext(ctx, `
+			return fmt.Errorf("backfill qotd surfaces channel column: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
 ALTER TABLE qotd_forum_surfaces
 DROP COLUMN forum_channel_id
 `); err != nil {
-				return fmt.Errorf("drop qotd surfaces legacy channel column: %w", err)
-			}
-		case hasLegacySurfaceChannelColumn:
-			if _, err := tx.ExecContext(ctx, `ALTER TABLE qotd_forum_surfaces RENAME COLUMN forum_channel_id TO channel_id`); err != nil {
-				return fmt.Errorf("rename qotd surfaces legacy channel column: %w", err)
-			}
+			return fmt.Errorf("drop qotd surfaces legacy channel column: %w", err)
+		}
+	case hasLegacySurfaceChannelColumn:
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE qotd_forum_surfaces RENAME COLUMN forum_channel_id TO channel_id`); err != nil {
+			return fmt.Errorf("rename qotd surfaces legacy channel column: %w", err)
 		}
 	}
 
+	return nil
+}
+
+// migrateLegacyReplyThreads copies rows from the legacy qotd_reply_threads table into
+// qotd_answer_messages when both tables exist, skipping rows that already migrated.
+func migrateLegacyReplyThreads(ctx context.Context, tx *sql.Tx) error {
 	hasLegacyReplyThreads, err := tableExists(ctx, tx, "qotd_reply_threads")
 	if err != nil {
 		return fmt.Errorf("check legacy reply threads table: %w", err)
@@ -128,26 +166,29 @@ DROP COLUMN forum_channel_id
 	if err != nil {
 		return fmt.Errorf("check answer messages table: %w", err)
 	}
-	if hasLegacyReplyThreads && hasAnswerMessages {
-		hasLegacyReplyThreadChannel, err := columnExists(ctx, tx, "qotd_reply_threads", "forum_channel_id")
-		if err != nil {
-			return fmt.Errorf("check legacy reply thread forum channel column: %w", err)
-		}
-		hasReplyThreadChannelID, err := columnExists(ctx, tx, "qotd_reply_threads", "channel_id")
-		if err != nil {
-			return fmt.Errorf("check legacy reply thread channel column: %w", err)
-		}
+	if !hasLegacyReplyThreads || !hasAnswerMessages {
+		return nil
+	}
 
-		replyThreadChannelColumn := ""
-		switch {
-		case hasReplyThreadChannelID:
-			replyThreadChannelColumn = "channel_id"
-		case hasLegacyReplyThreadChannel:
-			replyThreadChannelColumn = "forum_channel_id"
-		default:
-			return fmt.Errorf("qotd_reply_threads missing channel column")
-		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
+	hasLegacyReplyThreadChannel, err := columnExists(ctx, tx, "qotd_reply_threads", "forum_channel_id")
+	if err != nil {
+		return fmt.Errorf("check legacy reply thread forum channel column: %w", err)
+	}
+	hasReplyThreadChannelID, err := columnExists(ctx, tx, "qotd_reply_threads", "channel_id")
+	if err != nil {
+		return fmt.Errorf("check legacy reply thread channel column: %w", err)
+	}
+
+	replyThreadChannelColumn := ""
+	switch {
+	case hasReplyThreadChannelID:
+		replyThreadChannelColumn = "channel_id"
+	case hasLegacyReplyThreadChannel:
+		replyThreadChannelColumn = "forum_channel_id"
+	default:
+		return fmt.Errorf("qotd_reply_threads missing channel column")
+	}
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
 INSERT INTO qotd_answer_messages (
 	guild_id,
 	official_post_id,
@@ -176,10 +217,14 @@ SELECT
 FROM qotd_reply_threads
 ON CONFLICT (official_post_id, user_id) DO NOTHING
 `, replyThreadChannelColumn)); err != nil {
-			return fmt.Errorf("migrate legacy reply threads: %w", err)
-		}
+		return fmt.Errorf("migrate legacy reply threads: %w", err)
 	}
 
+	return nil
+}
+
+// dropLegacyReplyThreadArtifacts removes the legacy qotd_reply_threads indexes and table.
+func dropLegacyReplyThreadArtifacts(ctx context.Context, tx *sql.Tx) error {
 	for _, indexName := range []string{
 		"idx_qotd_reply_threads_provisioning_recovery",
 		"idx_qotd_reply_threads_state",
@@ -193,7 +238,16 @@ ON CONFLICT (official_post_id, user_id) DO NOTHING
 	if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS qotd_reply_threads`); err != nil {
 		return fmt.Errorf("drop legacy reply threads table: %w", err)
 	}
+	return nil
+}
 
+// dropOfficialPostsLegacyColumns drops the obsolete response_channel_id_snapshot and
+// is_pinned columns from qotd_official_posts when present.
+func dropOfficialPostsLegacyColumns(ctx context.Context, tx *sql.Tx) error {
+	hasResponseChannelSnapshot, err := columnExists(ctx, tx, "qotd_official_posts", "response_channel_id_snapshot")
+	if err != nil {
+		return fmt.Errorf("check response channel snapshot column: %w", err)
+	}
 	if hasResponseChannelSnapshot {
 		if _, err := tx.ExecContext(ctx, `
 ALTER TABLE qotd_official_posts

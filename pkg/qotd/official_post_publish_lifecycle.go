@@ -87,47 +87,13 @@ func (s *Service) completeOfficialPostProvisioning(
 		Nonce:                      post.Nonce,
 	})
 	if published != nil {
-		progress, err := s.store.UpdateQOTDOfficialPostProgress(ctx, post.ID, storage.QOTDOfficialPostRecord{
-			QuestionListThreadID:       published.QuestionListThreadID,
-			QuestionListEntryMessageID: published.QuestionListEntryMessageID,
-			DiscordThreadID:            published.ThreadID,
-			DiscordStarterMessageID:    published.StarterMessageID,
-			AnswerChannelID:            published.AnswerChannelID,
-		})
+		post, err = s.persistPublishedProgress(ctx, post, published)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
-		}
-		post = *progress
-		if strings.TrimSpace(post.QuestionListThreadID) != "" {
-			if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
-				GuildID:              post.GuildID,
-				DeckID:               post.DeckID,
-				ChannelID:            post.ChannelID,
-				QuestionListThreadID: post.QuestionListThreadID,
-			}); err != nil {
-				return nil, nil, "", err
-			}
+			return nil, nil, "", err
 		}
 	}
 	if publishErr != nil {
-		failureState := OfficialPostStateFailed
-		if isUnrecoverableDiscordPublishError(publishErr) {
-			failureState = OfficialPostStateAbandoned
-		}
-		if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(failureState), nil, nil); err != nil {
-			return nil, nil, "", fmt.Errorf("publish official qotd post: %w (mark %s: %w)", publishErr, failureState, err)
-		}
-		if failureState == OfficialPostStateAbandoned {
-			s.observability().RecordOfficialPostAbandoned()
-			log.ApplicationLogger().Warn(
-				"QOTD publish abandoned (unrecoverable Discord error)",
-				"officialPostID", post.ID,
-				"guildID", post.GuildID,
-				"channelID", strings.TrimSpace(post.ChannelID),
-				"err", publishErr,
-			)
-		}
-		return nil, nil, "", publishErr
+		return nil, nil, "", s.handlePublishFailure(ctx, post, publishErr)
 	}
 	if !isOfficialPostProvisioningComplete(post) {
 		incompleteErr := fmt.Errorf("publish official qotd post: incomplete provisioning state for official post %d", post.ID)
@@ -145,6 +111,84 @@ func (s *Service) completeOfficialPostProvisioning(
 		publishedAt = now.UTC()
 	}
 
+	finalized, err := s.finalizeOfficialPost(ctx, post, publishedAt)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	finalState := StateWithinWindow(finalized.GraceUntil, finalized.ArchiveAt, now)
+	finalized, err = s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(finalState), nil, nil)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
+	}
+
+	updatedQuestion, err := s.updateQuestionAfterPublish(ctx, question, publishedAt)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	postURL := OfficialPostJumpURL(*finalized)
+	if published != nil && strings.TrimSpace(published.PostURL) != "" {
+		postURL = published.PostURL
+	}
+	return finalized, updatedQuestion, postURL, nil
+}
+
+// persistPublishedProgress records the Discord IDs returned by a successful publish and,
+// when a question-list thread exists, upserts the corresponding surface. It returns the
+// progressed post record.
+func (s *Service) persistPublishedProgress(ctx context.Context, post storage.QOTDOfficialPostRecord, published *discordqotd.PublishedOfficialPost) (storage.QOTDOfficialPostRecord, error) {
+	progress, err := s.store.UpdateQOTDOfficialPostProgress(ctx, post.ID, storage.QOTDOfficialPostRecord{
+		QuestionListThreadID:       published.QuestionListThreadID,
+		QuestionListEntryMessageID: published.QuestionListEntryMessageID,
+		DiscordThreadID:            published.ThreadID,
+		DiscordStarterMessageID:    published.StarterMessageID,
+		AnswerChannelID:            published.AnswerChannelID,
+	})
+	if err != nil {
+		return post, fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
+	}
+	post = *progress
+	if strings.TrimSpace(post.QuestionListThreadID) != "" {
+		if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
+			GuildID:              post.GuildID,
+			DeckID:               post.DeckID,
+			ChannelID:            post.ChannelID,
+			QuestionListThreadID: post.QuestionListThreadID,
+		}); err != nil {
+			return post, err
+		}
+	}
+	return post, nil
+}
+
+// handlePublishFailure marks the official post failed, or abandoned for an unrecoverable
+// Discord error, then returns the publish error to propagate. The failed/abandoned split is
+// load-bearing: abandoned is terminal, failed is retried by the reconcile loop.
+func (s *Service) handlePublishFailure(ctx context.Context, post storage.QOTDOfficialPostRecord, publishErr error) error {
+	failureState := OfficialPostStateFailed
+	if isUnrecoverableDiscordPublishError(publishErr) {
+		failureState = OfficialPostStateAbandoned
+	}
+	if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(failureState), nil, nil); err != nil {
+		return fmt.Errorf("publish official qotd post: %w (mark %s: %w)", publishErr, failureState, err)
+	}
+	if failureState == OfficialPostStateAbandoned {
+		s.observability().RecordOfficialPostAbandoned()
+		log.ApplicationLogger().Warn(
+			"QOTD publish abandoned (unrecoverable Discord error)",
+			"officialPostID", post.ID,
+			"guildID", post.GuildID,
+			"channelID", strings.TrimSpace(post.ChannelID),
+			"err", publishErr,
+		)
+	}
+	return publishErr
+}
+
+// finalizeOfficialPost writes the finalized official-post record and upserts its surface,
+// marking the post failed if either step errors.
+func (s *Service) finalizeOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord, publishedAt time.Time) (*storage.QOTDOfficialPostRecord, error) {
 	finalized, err := s.store.FinalizeQOTDOfficialPost(
 		ctx,
 		post.ID,
@@ -157,9 +201,9 @@ func (s *Service) completeOfficialPostProvisioning(
 	)
 	if err != nil {
 		if _, markErr := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateFailed), nil, nil); markErr != nil {
-			return nil, nil, "", fmt.Errorf("finalize qotd official post: %w (mark failed: %v)", err, markErr)
+			return nil, fmt.Errorf("finalize qotd official post: %w (mark failed: %v)", err, markErr)
 		}
-		return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
+		return nil, fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 	}
 	if _, err := s.store.UpsertQOTDSurface(ctx, storage.QOTDSurfaceRecord{
 		GuildID:              finalized.GuildID,
@@ -168,47 +212,40 @@ func (s *Service) completeOfficialPostProvisioning(
 		QuestionListThreadID: finalized.QuestionListThreadID,
 	}); err != nil {
 		if _, markErr := s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(OfficialPostStateFailed), nil, nil); markErr != nil {
-			return nil, nil, "", fmt.Errorf("upsert qotd surface: %w (mark failed: %v)", err, markErr)
+			return nil, fmt.Errorf("upsert qotd surface: %w (mark failed: %v)", err, markErr)
 		}
-		return nil, nil, "", err
+		return nil, err
 	}
+	return finalized, nil
+}
 
-	finalState := StateWithinWindow(finalized.GraceUntil, finalized.ArchiveAt, now)
-	finalized, err = s.store.UpdateQOTDOfficialPostState(ctx, finalized.ID, string(finalState), nil, nil)
+// updateQuestionAfterPublish marks the published question used and stamps its first-publish
+// timestamps, persisting only when something changed. A nil question is a no-op.
+func (s *Service) updateQuestionAfterPublish(ctx context.Context, question *storage.QOTDQuestionRecord, publishedAt time.Time) (*storage.QOTDQuestionRecord, error) {
+	if question == nil {
+		return nil, nil
+	}
+	needsQuestionUpdate := false
+	if question.Status != string(QuestionStatusUsed) {
+		question.Status = string(QuestionStatusUsed)
+		needsQuestionUpdate = true
+	}
+	if question.UsedAt == nil || question.UsedAt.IsZero() {
+		question.UsedAt = &publishedAt
+		needsQuestionUpdate = true
+	}
+	if question.PublishedOnceAt == nil || question.PublishedOnceAt.IsZero() {
+		question.PublishedOnceAt = &publishedAt
+		needsQuestionUpdate = true
+	}
+	if !needsQuestionUpdate {
+		return question, nil
+	}
+	updated, err := s.store.UpdateQOTDQuestion(ctx, *question)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
+		return nil, fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
 	}
-
-	var updatedQuestion *storage.QOTDQuestionRecord
-	if question != nil {
-		needsQuestionUpdate := false
-		if question.Status != string(QuestionStatusUsed) {
-			question.Status = string(QuestionStatusUsed)
-			needsQuestionUpdate = true
-		}
-		if question.UsedAt == nil || question.UsedAt.IsZero() {
-			question.UsedAt = &publishedAt
-			needsQuestionUpdate = true
-		}
-		if question.PublishedOnceAt == nil || question.PublishedOnceAt.IsZero() {
-			question.PublishedOnceAt = &publishedAt
-			needsQuestionUpdate = true
-		}
-		if needsQuestionUpdate {
-			updatedQuestion, err = s.store.UpdateQOTDQuestion(ctx, *question)
-			if err != nil {
-				return nil, nil, "", fmt.Errorf("Service.completeOfficialPostProvisioning: %w", err)
-			}
-		} else {
-			updatedQuestion = question
-		}
-	}
-
-	postURL := OfficialPostJumpURL(*finalized)
-	if published != nil && strings.TrimSpace(published.PostURL) != "" {
-		postURL = published.PostURL
-	}
-	return finalized, updatedQuestion, postURL, nil
+	return updated, nil
 }
 
 func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, now time.Time) (*PublishResult, error) {

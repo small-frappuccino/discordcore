@@ -142,52 +142,13 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		return fmt.Errorf("RunWithOptions: %w", err)
 	}
 	closeStoreOnReturn := true
-	defer func() {
-		if closeStoreOnReturn && store != nil {
-			if err := closeStore(store); err != nil {
-				log.ErrorLoggerRaw().Error("Store close failed during startup cleanup", "err", err)
-			}
-		}
-	}()
+	defer func() { rollbackStoreClose(closeStoreOnReturn, store) }()
 
 	// Theme configuration (from persisted runtime_config)
-	{
-		cfg := configManager.Config()
-		themeName := ""
-		if cfg != nil {
-			themeName = cfg.RuntimeConfig.BotTheme
-		}
-
-		if err := files.ConfigureThemeFromConfig(themeName); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
-		}
-		if themeName == "" {
-			if err := files.SetTheme(""); err != nil {
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
-			} else {
-				log.ApplicationLogger().Info("🌈 Default theme applied")
-			}
-		}
-	}
+	applyConfiguredTheme(configManager)
 
 	// Periodic cleanup (every 6 hours), can be disabled via runtime config
-	var cleanupStop chan struct{}
-	disableCleanup := false
-	features := (&files.BotConfig{}).ResolveFeatures("")
-	if cfg := configManager.Config(); cfg != nil {
-		features = cfg.ResolveFeatures("")
-		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
-	}
-	cleanupEnabled := features.Maintenance.DBCleanup
-	if cleanupEnabled && !disableCleanup {
-		cleanupStop = cache.SchedulePeriodicCleanup(store, 6*time.Hour)
-	} else {
-		if !cleanupEnabled {
-			log.ApplicationLogger().Info("🛑 DB cleanup disabled by features.maintenance.db_cleanup")
-		} else {
-			log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
-		}
-	}
+	cleanupStop := scheduleDBCleanup(store, configManager)
 	defer func() {
 		if cleanupStop != nil {
 			close(cleanupStop)
@@ -202,60 +163,17 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	}
 
 	runtimes := make(map[string]*botRuntime, len(botInstances))
-	runtimeCapabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
 	controlServerRegistry := &controlServerHolder{}
 	domainSupport := newRuntimeDomainSupport(opts.SupportedDomains)
 	cleanupRuntimesOnReturn := true
-	defer func() {
-		if !cleanupRuntimesOnReturn {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		for i := len(runtimeOrder) - 1; i >= 0; i-- {
-			runtime := runtimeOrder[i]
-			for _, err := range shutdownBotRuntimeFn(runtime, ctx) {
-				log.ErrorLoggerRaw().Error("Bot runtime cleanup failed during startup rollback", "botInstanceID", runtime.instanceID, "err", err)
-			}
-		}
-	}()
+	defer func() { rollbackBotRuntimes(cleanupRuntimesOnReturn, runtimeOrder) }()
 	closeDiscordSessionsOnReturn := true
-	defer func() {
-		if !closeDiscordSessionsOnReturn {
-			return
-		}
-		for i := len(runtimeOrder) - 1; i >= 0; i-- {
-			runtime := runtimeOrder[i]
-			if runtime == nil || runtime.session == nil {
-				continue
-			}
-			if err := closeDiscordSession(runtime.session); err != nil {
-				log.ErrorLoggerRaw().Error("Discord session close failed during startup cleanup", "botInstanceID", runtime.instanceID, "err", err)
-			}
-		}
-	}()
+	defer func() { rollbackDiscordSessions(closeDiscordSessionsOnReturn, runtimeOrder) }()
 	startupTasks := newStartupTaskOrchestrator(len(botInstances))
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-			log.ApplicationLogger().Warn("Startup background tasks did not finish cleanly", "err", err)
-		}
-		if err := controlServerRegistry.Stop(ctx); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
-		}
-	}()
+	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
-	configSnapshot := configManager.Config()
-	for _, instance := range botInstances {
-		runtimeCapabilities[instance.ID] = resolveBotRuntimeCapabilitiesForDomains(
-			configSnapshot,
-			instance.ID,
-			defaultBotInstanceID,
-			domainSupport,
-		)
-	}
+	runtimeCapabilities := resolveRuntimeCapabilities(configManager.Config(), botInstances, defaultBotInstanceID, domainSupport)
 
 	var openErr error
 	runtimes, runtimeOrder, openErr = openBotRuntimes(botInstances, runtimeCapabilities)
@@ -331,16 +249,137 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	log.ApplicationLogger().Info(fmt.Sprintf("🛑 Stopping %s...", appName))
 	log.GlobalLogger.Sync()
 
-	backgroundShutdownCtx, backgroundShutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if err := startupTasks.Shutdown(backgroundShutdownCtx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-		log.ApplicationLogger().Warn("Startup background tasks did not finish before shutdown", "err", err)
+	shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish before shutdown")
+
+	// Steady state reached: take over explicit, ordered shutdown and disable the
+	// rollback defers so resources are not closed twice.
+	cleanupRuntimesOnReturn = false
+	closeStoreOnReturn = false
+	closeDiscordSessionsOnReturn = false
+	if errs := gracefulShutdown(runtimeOrder, store); len(errs) > 0 {
+		return fmt.Errorf("shutdown: %w", stdErrors.Join(errs...))
 	}
-	if err := controlServerRegistry.Stop(backgroundShutdownCtx); err != nil {
+	return nil
+}
+
+// applyConfiguredTheme applies the persisted bot_theme, falling back to the default
+// theme when none is configured. Theme failures are logged but never fatal.
+func applyConfiguredTheme(configManager *files.ConfigManager) {
+	cfg := configManager.Config()
+	themeName := ""
+	if cfg != nil {
+		themeName = cfg.RuntimeConfig.BotTheme
+	}
+
+	if err := files.ConfigureThemeFromConfig(themeName); err != nil {
+		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
+	}
+	if themeName == "" {
+		if err := files.SetTheme(""); err != nil {
+			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
+		} else {
+			log.ApplicationLogger().Info("🌈 Default theme applied")
+		}
+	}
+}
+
+// scheduleDBCleanup starts the periodic DB cleanup loop unless disabled by the
+// maintenance feature gate or the disable_db_cleanup runtime toggle. It returns the
+// stop channel (nil when cleanup is disabled) for the caller to close on shutdown.
+func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager) chan struct{} {
+	disableCleanup := false
+	features := (&files.BotConfig{}).ResolveFeatures("")
+	if cfg := configManager.Config(); cfg != nil {
+		features = cfg.ResolveFeatures("")
+		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
+	}
+	cleanupEnabled := features.Maintenance.DBCleanup
+	if cleanupEnabled && !disableCleanup {
+		return cache.SchedulePeriodicCleanup(store, 6*time.Hour)
+	}
+	if !cleanupEnabled {
+		log.ApplicationLogger().Info("🛑 DB cleanup disabled by features.maintenance.db_cleanup")
+	} else {
+		log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
+	}
+	return nil
+}
+
+// resolveRuntimeCapabilities resolves the per-instance runtime capabilities for the
+// given config snapshot and supported domains.
+func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string, domainSupport runtimeDomainSupport) map[string]botRuntimeCapabilities {
+	capabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
+	for _, instance := range botInstances {
+		capabilities[instance.ID] = resolveBotRuntimeCapabilitiesForDomains(
+			configSnapshot,
+			instance.ID,
+			defaultBotInstanceID,
+			domainSupport,
+		)
+	}
+	return capabilities
+}
+
+// rollbackStoreClose closes store during a failed-startup rollback when enabled.
+func rollbackStoreClose(enabled bool, store *storage.Store) {
+	if !enabled || store == nil {
+		return
+	}
+	if err := closeStore(store); err != nil {
+		log.ErrorLoggerRaw().Error("Store close failed during startup cleanup", "err", err)
+	}
+}
+
+// rollbackBotRuntimes shuts down already-started runtimes (reverse order) during a
+// failed-startup rollback when enabled.
+func rollbackBotRuntimes(enabled bool, runtimeOrder []*botRuntime) {
+	if !enabled {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for i := len(runtimeOrder) - 1; i >= 0; i-- {
+		runtime := runtimeOrder[i]
+		for _, err := range shutdownBotRuntimeFn(runtime, ctx) {
+			log.ErrorLoggerRaw().Error("Bot runtime cleanup failed during startup rollback", "botInstanceID", runtime.instanceID, "err", err)
+		}
+	}
+}
+
+// rollbackDiscordSessions closes runtime Discord sessions (reverse order) during a
+// failed-startup rollback when enabled.
+func rollbackDiscordSessions(enabled bool, runtimeOrder []*botRuntime) {
+	if !enabled {
+		return
+	}
+	for i := len(runtimeOrder) - 1; i >= 0; i-- {
+		runtime := runtimeOrder[i]
+		if runtime == nil || runtime.session == nil {
+			continue
+		}
+		if err := closeDiscordSession(runtime.session); err != nil {
+			log.ErrorLoggerRaw().Error("Discord session close failed during startup cleanup", "botInstanceID", runtime.instanceID, "err", err)
+		}
+	}
+}
+
+// shutdownStartupServices stops the background startup tasks and the control server
+// under a bounded timeout. tasksWarn is logged when the tasks do not finish in time.
+func shutdownStartupServices(startupTasks *startupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+		log.ApplicationLogger().Warn(tasksWarn, "err", err)
+	}
+	if err := controlServerRegistry.Stop(ctx); err != nil {
 		log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
 	}
-	backgroundShutdownCancel()
+}
 
-	// Graceful shutdown
+// gracefulShutdown shuts down each bot runtime (reverse order), closes the store, and
+// closes the Discord sessions, collecting any errors. The caller must disable the
+// rollback defers before calling so resources are not closed twice.
+func gracefulShutdown(runtimeOrder []*botRuntime, store *storage.Store) []error {
 	shutdownCtx, shutdownCancel := context.WithTimeoutCause(context.Background(), 30*time.Second, fmt.Errorf("application shutdown"))
 	defer shutdownCancel()
 	var shutdownErrs []error
@@ -356,7 +395,6 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// Allow services to finish final writes before closing store
 	shutdownDelay(100 * time.Millisecond)
 
-	closeStoreOnReturn = false
 	if store != nil {
 		if err := closeStore(store); err != nil {
 			log.ErrorLoggerRaw().Error("Store close failed during shutdown", "err", err)
@@ -364,8 +402,6 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}
 
-	closeDiscordSessionsOnReturn = false
-	cleanupRuntimesOnReturn = false
 	for i := len(runtimeOrder) - 1; i >= 0; i-- {
 		runtime := runtimeOrder[i]
 		if runtime == nil || runtime.session == nil {
@@ -377,11 +413,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		}
 	}
 
-	_ = shutdownCtx
-	if len(shutdownErrs) > 0 {
-		return fmt.Errorf("shutdown: %w", stdErrors.Join(shutdownErrs...))
-	}
-	return nil
+	return shutdownErrs
 }
 
 func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {

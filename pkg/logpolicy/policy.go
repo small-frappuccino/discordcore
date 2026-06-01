@@ -246,145 +246,155 @@ func ShouldEmitLogEvent(session *discordgo.Session, configManager *files.ConfigM
 	rc := cfg.ResolveRuntimeConfig(guildID)
 	features := cfg.ResolveFeatures(guildID)
 
-	switch eventType {
-	case LogEventAvatarChange:
-		if rc.DisableUserLogs {
-			decision.Reason = EmitReasonRuntimeDisableUserLogs
-			return decision
-		}
-		if !features.Logging.AvatarLogging {
-			decision.Reason = EmitReasonFeatureLoggingUserDisabled
-			return decision
-		}
-	case LogEventRoleChange:
-		if rc.DisableUserLogs {
-			decision.Reason = EmitReasonRuntimeDisableUserLogs
-			return decision
-		}
-		if !features.Logging.RoleUpdate {
-			decision.Reason = EmitReasonFeatureLoggingUserDisabled
-			return decision
-		}
-	case LogEventMemberJoin:
-		if rc.DisableEntryExitLogs {
-			decision.Reason = EmitReasonRuntimeDisableEntryExitLogs
-			return decision
-		}
-		if !features.Logging.MemberJoin {
-			decision.Reason = EmitReasonFeatureLoggingEntryExitDisabled
-			return decision
-		}
-	case LogEventMemberLeave:
-		if rc.DisableEntryExitLogs {
-			decision.Reason = EmitReasonRuntimeDisableEntryExitLogs
-			return decision
-		}
-		if !features.Logging.MemberLeave {
-			decision.Reason = EmitReasonFeatureLoggingEntryExitDisabled
-			return decision
-		}
-	case LogEventMessageProcess:
-		if rc.DisableMessageLogs {
-			decision.Reason = EmitReasonRuntimeDisableMessageLogs
-			return decision
-		}
-		if !features.Logging.MessageProcess {
-			decision.Reason = EmitReasonFeatureLoggingMessageDisabled
-			return decision
-		}
-	case LogEventMessageEdit:
-		if rc.DisableMessageLogs {
-			decision.Reason = EmitReasonRuntimeDisableMessageLogs
-			return decision
-		}
-		if !features.Logging.MessageEdit {
-			decision.Reason = EmitReasonFeatureLoggingMessageDisabled
-			return decision
-		}
-	case LogEventMessageDelete:
-		if rc.DisableMessageLogs {
-			decision.Reason = EmitReasonRuntimeDisableMessageLogs
-			return decision
-		}
-		if !features.Logging.MessageDelete {
-			decision.Reason = EmitReasonFeatureLoggingMessageDisabled
-			return decision
-		}
-	case LogEventReactionMetric:
-		if rc.DisableReactionLogs {
-			decision.Reason = EmitReasonRuntimeDisableReactionLogs
-			return decision
-		}
-		if !features.Logging.ReactionMetric {
-			decision.Reason = EmitReasonFeatureLoggingReactionDisabled
-			return decision
-		}
-	case LogEventAutomodAction:
-		if rc.DisableAutomodLogs {
-			decision.Reason = EmitReasonRuntimeDisableAutomodLogs
-			return decision
-		}
-		if !features.Logging.AutomodAction {
-			decision.Reason = EmitReasonFeatureLoggingAutomodDisabled
-			return decision
-		}
-	case LogEventModerationCase:
-		if !rc.ModerationLoggingEnabled() {
-			decision.Reason = EmitReasonRuntimeModerationLoggingOff
-			return decision
-		}
-		if !features.Logging.ModerationCase {
-			decision.Reason = EmitReasonFeatureLoggingModerationDisabled
-			return decision
-		}
-	case LogEventCleanAction:
-		if rc.DisableCleanLog {
-			decision.Reason = EmitReasonRuntimeDisableCleanLog
-			return decision
-		}
-		if !features.Logging.CleanAction {
-			decision.Reason = EmitReasonFeatureLoggingCleanDisabled
-			return decision
-		}
+	if reason, disabled := evaluateEventToggle(eventType, rc, features); disabled {
+		decision.Reason = reason
+		return decision
 	}
 
 	if capability.RequiresChannel {
-		channelID := resolveLogChannelForGuild(eventType, gcfg)
-		if channelID == "" {
-			decision.Reason = EmitReasonNoChannelConfigured
-			return decision
+		channelID, reason, ok := resolveValidatedLogChannel(session, capability, eventType, guildID, gcfg)
+		if channelID != "" {
+			decision.ChannelID = channelID
 		}
-		decision.ChannelID = channelID
-
-		if capability.ValidateChannelPerms {
-			if capability.RequireExclusiveModeration && IsSharedModerationChannel(channelID, gcfg) {
-				decision.Reason = EmitReasonChannelInvalid
-				return decision
-			}
-			botID := ""
-			if session != nil && session.State != nil && session.State.User != nil {
-				botID = session.State.User.ID
-			}
-			if err := ValidateModerationLogChannel(session, guildID, channelID, botID); err != nil {
-				decision.Reason = EmitReasonChannelInvalid
-				return decision
-			}
+		if !ok {
+			decision.Reason = reason
+			return decision
 		}
 	}
 
-	if capability.RequiredIntentsMask != 0 && session != nil {
-		currentMask := int(session.Identify.Intents)
-		missing := capability.RequiredIntentsMask &^ currentMask
-		if missing != 0 {
-			decision.Reason = EmitReasonMissingIntent
-			decision.MissingMask = missing
-			return decision
-		}
+	if reason, mask, gated := evaluateIntentRequirements(capability, session); gated {
+		decision.Reason = reason
+		decision.MissingMask = mask
+		return decision
 	}
 
 	decision.Enabled = true
 	decision.Reason = EmitReasonEnabled
 	return decision
+}
+
+// evaluateEventToggle applies the per-event runtime kill switch and feature toggle in
+// that precedence order. It returns the disabling reason and true when the event is
+// gated off, or ("", false) when neither toggle blocks emission.
+func evaluateEventToggle(eventType LogEventType, rc files.RuntimeConfig, features files.ResolvedFeatureToggles) (EmitReason, bool) {
+	switch eventType {
+	case LogEventAvatarChange:
+		if rc.DisableUserLogs {
+			return EmitReasonRuntimeDisableUserLogs, true
+		}
+		if !features.Logging.AvatarLogging {
+			return EmitReasonFeatureLoggingUserDisabled, true
+		}
+	case LogEventRoleChange:
+		if rc.DisableUserLogs {
+			return EmitReasonRuntimeDisableUserLogs, true
+		}
+		if !features.Logging.RoleUpdate {
+			return EmitReasonFeatureLoggingUserDisabled, true
+		}
+	case LogEventMemberJoin:
+		if rc.DisableEntryExitLogs {
+			return EmitReasonRuntimeDisableEntryExitLogs, true
+		}
+		if !features.Logging.MemberJoin {
+			return EmitReasonFeatureLoggingEntryExitDisabled, true
+		}
+	case LogEventMemberLeave:
+		if rc.DisableEntryExitLogs {
+			return EmitReasonRuntimeDisableEntryExitLogs, true
+		}
+		if !features.Logging.MemberLeave {
+			return EmitReasonFeatureLoggingEntryExitDisabled, true
+		}
+	case LogEventMessageProcess:
+		if rc.DisableMessageLogs {
+			return EmitReasonRuntimeDisableMessageLogs, true
+		}
+		if !features.Logging.MessageProcess {
+			return EmitReasonFeatureLoggingMessageDisabled, true
+		}
+	case LogEventMessageEdit:
+		if rc.DisableMessageLogs {
+			return EmitReasonRuntimeDisableMessageLogs, true
+		}
+		if !features.Logging.MessageEdit {
+			return EmitReasonFeatureLoggingMessageDisabled, true
+		}
+	case LogEventMessageDelete:
+		if rc.DisableMessageLogs {
+			return EmitReasonRuntimeDisableMessageLogs, true
+		}
+		if !features.Logging.MessageDelete {
+			return EmitReasonFeatureLoggingMessageDisabled, true
+		}
+	case LogEventReactionMetric:
+		if rc.DisableReactionLogs {
+			return EmitReasonRuntimeDisableReactionLogs, true
+		}
+		if !features.Logging.ReactionMetric {
+			return EmitReasonFeatureLoggingReactionDisabled, true
+		}
+	case LogEventAutomodAction:
+		if rc.DisableAutomodLogs {
+			return EmitReasonRuntimeDisableAutomodLogs, true
+		}
+		if !features.Logging.AutomodAction {
+			return EmitReasonFeatureLoggingAutomodDisabled, true
+		}
+	case LogEventModerationCase:
+		if !rc.ModerationLoggingEnabled() {
+			return EmitReasonRuntimeModerationLoggingOff, true
+		}
+		if !features.Logging.ModerationCase {
+			return EmitReasonFeatureLoggingModerationDisabled, true
+		}
+	case LogEventCleanAction:
+		if rc.DisableCleanLog {
+			return EmitReasonRuntimeDisableCleanLog, true
+		}
+		if !features.Logging.CleanAction {
+			return EmitReasonFeatureLoggingCleanDisabled, true
+		}
+	}
+	return "", false
+}
+
+// resolveValidatedLogChannel resolves the destination channel for eventType and, when the
+// capability requires it, validates exclusivity and bot permissions. The resolved channel
+// is returned even on a validation failure so the caller can still surface it; ok reports
+// whether the channel is usable.
+func resolveValidatedLogChannel(session *discordgo.Session, capability LogEventCapability, eventType LogEventType, guildID string, gcfg *files.GuildConfig) (string, EmitReason, bool) {
+	channelID := resolveLogChannelForGuild(eventType, gcfg)
+	if channelID == "" {
+		return "", EmitReasonNoChannelConfigured, false
+	}
+	if capability.ValidateChannelPerms {
+		if capability.RequireExclusiveModeration && IsSharedModerationChannel(channelID, gcfg) {
+			return channelID, EmitReasonChannelInvalid, false
+		}
+		botID := ""
+		if session != nil && session.State != nil && session.State.User != nil {
+			botID = session.State.User.ID
+		}
+		if err := ValidateModerationLogChannel(session, guildID, channelID, botID); err != nil {
+			return channelID, EmitReasonChannelInvalid, false
+		}
+	}
+	return channelID, EmitReasonEnabled, true
+}
+
+// evaluateIntentRequirements reports whether the capability's required gateway intents are
+// missing from the active session, returning the missing-bit mask when they are.
+func evaluateIntentRequirements(capability LogEventCapability, session *discordgo.Session) (EmitReason, int, bool) {
+	if capability.RequiredIntentsMask == 0 || session == nil {
+		return "", 0, false
+	}
+	currentMask := int(session.Identify.Intents)
+	missing := capability.RequiredIntentsMask &^ currentMask
+	if missing != 0 {
+		return EmitReasonMissingIntent, missing, true
+	}
+	return "", 0, false
 }
 
 func resolveLogChannelForGuild(eventType LogEventType, gcfg *files.GuildConfig) string {

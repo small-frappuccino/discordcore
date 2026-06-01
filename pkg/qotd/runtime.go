@@ -50,160 +50,197 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 
 	guildID = strings.TrimSpace(guildID)
 
-	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
-		now := s.clock()
-		cfg, err := s.configManager.QOTDConfig(guildID)
-		if err != nil {
-			return nil, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-		}
-		s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
-		slotState, err := s.loadDueSlotState(ctx, guildID, cfg, now)
-		if err != nil {
-			return nil, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-		}
-		if !slotState.ScheduleConfigured {
-			return false, ErrQOTDDisabled
-		}
-		if !slotState.BoundaryPassed(now) {
-			return false, nil
-		}
-
-		if slotState.HasOfficialPostRecord() {
-			if slotState.HasProvisioningOfficialPost() {
-				// Resuming a half-provisioned record IS a publish attempt
-				// from the metrics perspective: we are about to talk to
-				// Discord and may transition the post to current.
-				publishAttempted = true
-				s.observability().RecordPublishAttempt(PublishModeScheduled)
-				recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, session, *slotState.OfficialPost, now)
-				if resumeErr != nil {
-					return false, resumeErr
-				}
-				if err = s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-					return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-				}
-				return true, nil
-			}
-			if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, slotState.OfficialPost.ID); err != nil {
-				return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-			}
-			return false, nil
-		}
-		deck, ok := cfg.ActiveDeck()
-		if !ok || !deck.Enabled || !canPublishQOTD(deck) {
-			return false, ErrQOTDDisabled
-		}
-		if isScheduledPublishSuppressed(cfg, slotState.PublishDateUTC) {
-			return false, nil
-		}
-		// Also honor suppressions whose target is the forward-looking projection
-		// (tomorrow once today's boundary has passed). Manual publish suppression
-		// records the projection's date because that matches the manual post being
-		// claimed; without this check, today's late publish would re-fire even
-		// though the user just paused autopublishing.
-		if projected := CurrentPublishDateUTC(slotState.Schedule, now); !projected.Equal(slotState.PublishDateUTC) && isScheduledPublishSuppressed(cfg, projected) {
-			return false, nil
-		}
-
-		// Past every gate — this cycle is committing to a publish attempt.
-		// publishAttempted flips here so the defer accounting captures the
-		// reservation/provisioning/Discord path even when an early DB error
-		// short-circuits before completeOfficialPostProvisioning runs.
+	// recordAttempt commits this cycle to publish accounting: it flips the local
+	// flag the metrics defer reads and emits the attempt counter. It is invoked
+	// only past the gates, on the fresh-provision and resume-provision paths.
+	recordAttempt := func() {
 		publishAttempted = true
 		s.observability().RecordPublishAttempt(PublishModeScheduled)
+	}
 
-		question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
-		if err != nil {
-			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-		}
-		if question == nil {
-			return false, ErrNoQuestionsAvailable
-		}
-		counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
-		if err != nil {
-			if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-				log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
-			}
-			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-		}
-		availableQuestions := counts.Ready + counts.Draft
-
-		lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, now)
-		nonce, err := generatePublishNonce()
-		if err != nil {
-			if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-				log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
-			}
-			return false, fmt.Errorf("generate qotd publish nonce: %w", err)
-		}
-		provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
-			GuildID:              guildID,
-			DeckID:               deck.ID,
-			DeckNameSnapshot:     deck.Name,
-			QuestionID:           question.ID,
-			PublishMode:          string(PublishModeScheduled),
-			PublishDateUTC:       slotState.PublishDateUTC,
-			State:                string(OfficialPostStateProvisioning),
-			ChannelID:            strings.TrimSpace(deck.ChannelID),
-			QuestionTextSnapshot: question.Body,
-			Nonce:                nonce,
-			GraceUntil:           lifecycle.BecomesPreviousAt,
-			ArchiveAt:            lifecycle.ArchiveAt,
-		})
-		if err != nil {
-			if releaseErr := s.releaseReservedQuestion(ctx, *question); releaseErr != nil {
-				log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
-			}
-			existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, slotState.PublishDateUTC, err)
-			if conflictErr != nil {
-				return false, conflictErr
-			}
-			if isOfficialPostAbandoned(*existing) {
-				// Existing record was permanently abandoned by a previous
-				// attempt (unrecoverable Discord error). Don't resume it —
-				// admin must intervene. Just keep the window state coherent.
-				return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
-			}
-			if !isOfficialPostPublished(*existing) {
-				recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
-				if recoverErr != nil {
-					return false, recoverErr
-				}
-				if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
-					return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-				}
-				return true, nil
-			}
-			return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
-		}
-
-		finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(
-			ctx,
-			session,
-			*provisioned,
-			question,
-			availableQuestions,
-			buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
-			now,
-		)
-		if err != nil {
-			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-		}
-		if updatedQuestion != nil {
-			question = updatedQuestion
-		}
-
-		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
-			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
-		}
-
-		return true, nil
+	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
+		return s.publishScheduledInActor(ctx, guildID, session, recordAttempt)
 	})
-
 	if err != nil {
 		return false, err
 	}
 	return val.(bool), nil
+}
+
+// publishScheduledInActor runs the gated scheduled-publish decision inside the guild
+// actor: it loads config and the due slot, applies the schedule/boundary gates, and
+// dispatches to the existing-record or fresh-provision path. recordAttempt is invoked
+// once a path commits to talking to Discord.
+func (s *Service) publishScheduledInActor(ctx context.Context, guildID string, session *discordgo.Session, recordAttempt func()) (bool, error) {
+	now := s.clock()
+	cfg, err := s.configManager.QOTDConfig(guildID)
+	if err != nil {
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+	s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
+	slotState, err := s.loadDueSlotState(ctx, guildID, cfg, now)
+	if err != nil {
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+	if !slotState.ScheduleConfigured {
+		return false, ErrQOTDDisabled
+	}
+	if !slotState.BoundaryPassed(now) {
+		return false, nil
+	}
+
+	if slotState.HasOfficialPostRecord() {
+		return s.resumeOrReconcileExistingPost(ctx, guildID, session, slotState, now, recordAttempt)
+	}
+	return s.provisionScheduledOfficialPost(ctx, guildID, session, cfg, slotState, now, recordAttempt)
+}
+
+// resumeOrReconcileExistingPost handles a due slot that already has an official-post
+// record: resume it if still provisioning (a publish attempt), otherwise just realign
+// the window.
+func (s *Service) resumeOrReconcileExistingPost(ctx context.Context, guildID string, session *discordgo.Session, slotState currentSlotState, now time.Time, recordAttempt func()) (bool, error) {
+	if slotState.HasProvisioningOfficialPost() {
+		// Resuming a half-provisioned record IS a publish attempt from the
+		// metrics perspective: we are about to talk to Discord and may
+		// transition the post to current.
+		recordAttempt()
+		recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, session, *slotState.OfficialPost, now)
+		if resumeErr != nil {
+			return false, resumeErr
+		}
+		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+		}
+		return true, nil
+	}
+	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, slotState.OfficialPost.ID); err != nil {
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+	return false, nil
+}
+
+// provisionScheduledOfficialPost applies the deck/suppression gates and, once committed,
+// reserves a question and provisions a fresh official post, recovering through
+// handleProvisioningConflict when the provisioning insert conflicts.
+func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID string, session *discordgo.Session, cfg files.QOTDConfig, slotState currentSlotState, now time.Time, recordAttempt func()) (bool, error) {
+	deck, ok := cfg.ActiveDeck()
+	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
+		return false, ErrQOTDDisabled
+	}
+	if isScheduledPublishSuppressed(cfg, slotState.PublishDateUTC) {
+		return false, nil
+	}
+	// Also honor suppressions whose target is the forward-looking projection
+	// (tomorrow once today's boundary has passed). Manual publish suppression
+	// records the projection's date because that matches the manual post being
+	// claimed; without this check, today's late publish would re-fire even
+	// though the user just paused autopublishing.
+	if projected := CurrentPublishDateUTC(slotState.Schedule, now); !projected.Equal(slotState.PublishDateUTC) && isScheduledPublishSuppressed(cfg, projected) {
+		return false, nil
+	}
+
+	// Past every gate — this cycle is committing to a publish attempt. recordAttempt
+	// flips the metrics flag so the defer accounting captures the
+	// reservation/provisioning/Discord path even when an early DB error
+	// short-circuits before completeOfficialPostProvisioning runs.
+	recordAttempt()
+
+	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
+	if err != nil {
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+	if question == nil {
+		return false, ErrNoQuestionsAvailable
+	}
+	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
+	if err != nil {
+		s.releaseReservedQuestionBestEffort(ctx, guildID, *question)
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+	availableQuestions := counts.Ready + counts.Draft
+
+	lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, now)
+	nonce, err := generatePublishNonce()
+	if err != nil {
+		s.releaseReservedQuestionBestEffort(ctx, guildID, *question)
+		return false, fmt.Errorf("generate qotd publish nonce: %w", err)
+	}
+	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
+		GuildID:              guildID,
+		DeckID:               deck.ID,
+		DeckNameSnapshot:     deck.Name,
+		QuestionID:           question.ID,
+		PublishMode:          string(PublishModeScheduled),
+		PublishDateUTC:       slotState.PublishDateUTC,
+		State:                string(OfficialPostStateProvisioning),
+		ChannelID:            strings.TrimSpace(deck.ChannelID),
+		QuestionTextSnapshot: question.Body,
+		Nonce:                nonce,
+		GraceUntil:           lifecycle.BecomesPreviousAt,
+		ArchiveAt:            lifecycle.ArchiveAt,
+	})
+	if err != nil {
+		s.releaseReservedQuestionBestEffort(ctx, guildID, *question)
+		return s.handleProvisioningConflict(ctx, guildID, session, slotState.PublishDateUTC, now, err)
+	}
+
+	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(
+		ctx,
+		session,
+		*provisioned,
+		question,
+		availableQuestions,
+		buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
+		now,
+	)
+	if err != nil {
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+	if updatedQuestion != nil {
+		question = updatedQuestion
+	}
+
+	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
+		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+	}
+
+	return true, nil
+}
+
+// handleProvisioningConflict recovers when CreateQOTDOfficialPostProvisioning fails,
+// typically due to a unique-index conflict with a concurrently created record. It
+// resumes a still-unpublished record, defers a permanently abandoned one to admin
+// action, or simply realigns the window for an already-published record.
+func (s *Service) handleProvisioningConflict(ctx context.Context, guildID string, session *discordgo.Session, publishDateUTC time.Time, now time.Time, createErr error) (bool, error) {
+	existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, publishDateUTC, createErr)
+	if conflictErr != nil {
+		return false, conflictErr
+	}
+	if isOfficialPostAbandoned(*existing) {
+		// Existing record was permanently abandoned by a previous attempt
+		// (unrecoverable Discord error). Don't resume it — admin must
+		// intervene. Just keep the window state coherent.
+		return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+	}
+	if !isOfficialPostPublished(*existing) {
+		recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+		if recoverErr != nil {
+			return false, recoverErr
+		}
+		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
+		}
+		return true, nil
+	}
+	return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+}
+
+// releaseReservedQuestionBestEffort returns a reserved question to the pool, logging but
+// not failing on release errors — callers invoke it while already on an error path.
+func (s *Service) releaseReservedQuestionBestEffort(ctx context.Context, guildID string, question storage.QOTDQuestionRecord) {
+	if releaseErr := s.releaseReservedQuestion(ctx, question); releaseErr != nil {
+		log.ApplicationLogger().Warn("QOTD scheduled reservation release failed", "guildID", guildID, "questionID", question.ID, "err", releaseErr)
+	}
 }
 
 // NextScheduledPublishTime returns the next eligible scheduled publish moment

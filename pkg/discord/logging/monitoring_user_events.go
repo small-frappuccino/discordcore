@@ -323,98 +323,15 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	}
 
 	if len(verifiedAdded) == 0 && len(verifiedRemoved) == 0 {
-		if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
-			log.ApplicationLogger().Warn(
-				"Failed to persist role snapshot after empty local diff",
-				"guildID", m.GuildID,
-				"userID", m.User.ID,
-				"roleCount", len(curRoles),
-				"err", err,
-			)
-		}
+		ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after empty local diff")
 		return
-	}
-
-	tryNotifyFromEntries := func(entries []*discordgo.AuditLogEntry) bool {
-		verifiedAddedSet := toIDSet(verifiedAdded)
-		verifiedRemovedSet := toIDSet(verifiedRemoved)
-
-		for _, entry := range entries {
-			if entry == nil || entry.TargetID != m.User.ID || !isRecentRoleUpdateAuditEntry(entry) {
-				continue
-			}
-
-			auditAdded, auditRemoved := extractAuditRoleDelta(entry)
-			if len(auditAdded) == 0 && len(auditRemoved) == 0 {
-				continue
-			}
-
-			filteredAdded := make([]auditRolePartial, 0, len(auditAdded))
-			for _, role := range auditAdded {
-				if _, ok := verifiedAddedSet[role.ID]; ok {
-					filteredAdded = append(filteredAdded, role)
-				}
-			}
-			filteredRemoved := make([]auditRolePartial, 0, len(auditRemoved))
-			for _, role := range auditRemoved {
-				if _, ok := verifiedRemovedSet[role.ID]; ok {
-					filteredRemoved = append(filteredRemoved, role)
-				}
-			}
-
-			if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
-				log.ApplicationLogger().Debug(
-					"Role update skipped after verification produced empty delta",
-					"guildID", m.GuildID,
-					"userID", m.User.ID,
-					"auditAddedCount", len(auditAdded),
-					"auditRemovedCount", len(auditRemoved),
-					"verifiedAddedCount", len(verifiedAdded),
-					"verifiedRemovedCount", len(verifiedRemoved),
-				)
-				if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
-					log.ApplicationLogger().Warn(
-						"Failed to persist role snapshot after verification skip",
-						"guildID", m.GuildID,
-						"userID", m.User.ID,
-						"roleCount", len(curRoles),
-						"err", err,
-					)
-				}
-				return true
-			}
-
-			if err := ms.sendRoleUpdateNotification(
-				channelID,
-				m.User,
-				entry.UserID,
-				buildAuditRoleList(filteredAdded),
-				buildAuditRoleList(filteredRemoved),
-				"Source: Audit Log",
-			); err != nil {
-				log.ErrorLoggerRaw().Error("Failed to send role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", err)
-			} else {
-				log.ApplicationLogger().Info("Role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
-				if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
-					log.ApplicationLogger().Warn(
-						"Failed to persist role snapshot after role update notification",
-						"guildID", m.GuildID,
-						"userID", m.User.ID,
-						"roleCount", len(curRoles),
-						"err", err,
-					)
-				}
-			}
-			return true
-		}
-		return false
 	}
 
 	auditLookupDebounced := ms.shouldDebounceRoleUpdateAuditRefresh(m.GuildID, m.User.ID)
 	entries, fromCache, err := ms.getRoleUpdateAuditEntries(m.GuildID, false)
 	if err != nil {
 		log.ApplicationLogger().Warn("Failed to fetch audit logs for role update", "guildID", m.GuildID, "userID", m.User.ID, "err", err)
-	} else if tryNotifyFromEntries(entries) {
+	} else if ms.tryNotifyRoleUpdateFromAudit(m, channelID, verifiedAdded, verifiedRemoved, curRoles, entries) {
 		return
 	}
 
@@ -423,11 +340,89 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		refreshedEntries, _, refreshErr := ms.getRoleUpdateAuditEntries(m.GuildID, true)
 		if refreshErr != nil {
 			log.ApplicationLogger().Warn("Failed to refresh audit logs for role update", "guildID", m.GuildID, "userID", m.User.ID, "err", refreshErr)
-		} else if tryNotifyFromEntries(refreshedEntries) {
+		} else if ms.tryNotifyRoleUpdateFromAudit(m, channelID, verifiedAdded, verifiedRemoved, curRoles, refreshedEntries) {
 			return
 		}
 	}
 
+	ms.sendFallbackRoleUpdateNotification(m, channelID, verifiedAdded, verifiedRemoved, curRoles)
+}
+
+// persistRoleSnapshotOrWarn persists the member's current role set, logging warnMsg on
+// failure without interrupting the handler.
+func (ms *MonitoringService) persistRoleSnapshotOrWarn(guildID, userID string, curRoles []string, warnMsg string) {
+	if err := ms.persistMemberRoleSnapshot(guildID, userID, curRoles); err != nil {
+		log.ApplicationLogger().Warn(warnMsg, "guildID", guildID, "userID", userID, "roleCount", len(curRoles), "err", err)
+	}
+}
+
+// tryNotifyRoleUpdateFromAudit scans audit-log entries for a recent role change targeting
+// the updated member, cross-checks it against the locally verified delta, and on a match
+// sends the role-update notification (or persists a snapshot when verification empties the
+// delta). It reports whether a matching entry was handled.
+func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(m *discordgo.GuildMemberUpdate, channelID string, verifiedAdded, verifiedRemoved, curRoles []string, entries []*discordgo.AuditLogEntry) bool {
+	verifiedAddedSet := toIDSet(verifiedAdded)
+	verifiedRemovedSet := toIDSet(verifiedRemoved)
+
+	for _, entry := range entries {
+		if entry == nil || entry.TargetID != m.User.ID || !isRecentRoleUpdateAuditEntry(entry) {
+			continue
+		}
+
+		auditAdded, auditRemoved := extractAuditRoleDelta(entry)
+		if len(auditAdded) == 0 && len(auditRemoved) == 0 {
+			continue
+		}
+
+		filteredAdded := make([]auditRolePartial, 0, len(auditAdded))
+		for _, role := range auditAdded {
+			if _, ok := verifiedAddedSet[role.ID]; ok {
+				filteredAdded = append(filteredAdded, role)
+			}
+		}
+		filteredRemoved := make([]auditRolePartial, 0, len(auditRemoved))
+		for _, role := range auditRemoved {
+			if _, ok := verifiedRemovedSet[role.ID]; ok {
+				filteredRemoved = append(filteredRemoved, role)
+			}
+		}
+
+		if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
+			log.ApplicationLogger().Debug(
+				"Role update skipped after verification produced empty delta",
+				"guildID", m.GuildID,
+				"userID", m.User.ID,
+				"auditAddedCount", len(auditAdded),
+				"auditRemovedCount", len(auditRemoved),
+				"verifiedAddedCount", len(verifiedAdded),
+				"verifiedRemovedCount", len(verifiedRemoved),
+			)
+			ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after verification skip")
+			return true
+		}
+
+		if err := ms.sendRoleUpdateNotification(
+			channelID,
+			m.User,
+			entry.UserID,
+			buildAuditRoleList(filteredAdded),
+			buildAuditRoleList(filteredRemoved),
+			"Source: Audit Log",
+		); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to send role update notification", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID, "err", err)
+		} else {
+			log.ApplicationLogger().Info("Role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
+			ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after role update notification")
+		}
+		return true
+	}
+	return false
+}
+
+// sendFallbackRoleUpdateNotification sends the role-update notification derived purely from
+// the locally verified diff when no audit-log entry confirmed the change, persisting the
+// role snapshot on success.
+func (ms *MonitoringService) sendFallbackRoleUpdateNotification(m *discordgo.GuildMemberUpdate, channelID string, verifiedAdded, verifiedRemoved, curRoles []string) {
 	if err := ms.sendRoleUpdateNotification(
 		channelID,
 		m.User,
@@ -441,15 +436,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	}
 
 	log.ApplicationLogger().Info("Fallback role update notification sent successfully", "guildID", m.GuildID, "userID", m.User.ID, "channelID", channelID)
-	if err := ms.persistMemberRoleSnapshot(m.GuildID, m.User.ID, curRoles); err != nil {
-		log.ApplicationLogger().Warn(
-			"Failed to persist role snapshot after fallback role update notification",
-			"guildID", m.GuildID,
-			"userID", m.User.ID,
-			"roleCount", len(curRoles),
-			"err", err,
-		)
-	}
+	ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after fallback role update notification")
 }
 
 // handleUserUpdate processes user updates across all configured guilds.

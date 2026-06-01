@@ -80,69 +80,16 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	)
 
 	runtime.serviceManager = service.NewServiceManager()
-	var monitoringService *logging.MonitoringService
-	var unifiedCache *cache.UnifiedCache
-	if runtime.capabilities.monitoring {
-		var err error
-		// Per-runtime metrics: each bot's monitoring service writes to its
-		// own InMemoryMetrics. The control plane reads via the default
-		// runtime's MonitoringMetricsResolver, mirroring the cache
-		// observability resolver pattern.
-		monitoringService, err = logging.NewMonitoringServiceForBotWithMetrics(
-			runtime.session,
-			opts.configManager,
-			opts.store,
-			runtime.instanceID,
-			opts.defaultBotInstanceID,
-			logging.NewInMemoryMetrics(),
-			log.DiscordLogger(),
-		)
-		if err != nil {
-			return fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
-		}
-		monitoringService.SetTaskRouterConfig(routerConfig)
-		runtime.monitoringService = monitoringService
-		unifiedCache = monitoringService.GetUnifiedCache()
-		if unifiedCache != nil {
-			runtime.persistStop = unifiedCache.SetPersistInterval(time.Hour)
-		}
-	} else {
-		log.ApplicationLogger().Info("Monitoring runtime skipped; no effective monitoring workload is enabled", "botInstanceID", runtime.instanceID)
+
+	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
+	if err != nil {
+		return err
 	}
 	if opts.runtimeApplier != nil {
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, monitoringService)
 	}
 
-	disableAutomod := runtimeConfig.DisableAutomodLogs
-	var automodWrapper *service.ServiceWrapper
-	if !runtime.capabilities.automod {
-		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
-	} else if disableAutomod {
-		log.ApplicationLogger().Info("Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start", "botInstanceID", runtime.instanceID)
-	} else {
-		automodService := logging.NewAutomodService(runtime.session, opts.configManager)
-		automodRouter := task.NewRouter(routerConfig)
-		notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
-		if monitoringService != nil {
-			notifier = monitoringService.Notifier()
-		}
-		automodAdapters := task.NewNotificationAdapters(automodRouter, runtime.session, opts.configManager, opts.store, notifier)
-		automodService.SetAdapters(automodAdapters)
-
-		automodWrapper = service.NewServiceWrapper(
-			"automod",
-			service.TypeAutomod,
-			service.PriorityNormal,
-			[]string{},
-			func(context.Context) error { automodService.Start(); return nil },
-			func(context.Context) error {
-				automodRouter.Close()
-				automodService.Stop()
-				return nil
-			},
-			func() bool { return true },
-		)
-	}
+	automodWrapper := buildAutomodWrapper(runtime, opts, routerConfig, runtimeConfig, monitoringService)
 
 	if monitoringService != nil {
 		if err := runtime.serviceManager.Register(monitoringService); err != nil {
@@ -155,48 +102,11 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		}
 	}
 
-	if runtime.capabilities.userPrune {
-		userPruneService := maintenance.NewUserPruneServiceForBot(runtime.session, opts.configManager, opts.store, runtime.instanceID, opts.defaultBotInstanceID)
-		userPruneDependencies := []string{}
-		if monitoringService != nil {
-			userPruneDependencies = []string{"monitoring"}
-		}
-		userPruneWrapper := service.NewServiceWrapper(
-			"user-prune",
-			service.TypeMonitoring,
-			service.PriorityNormal,
-			userPruneDependencies,
-			func(context.Context) error { userPruneService.Start(); return nil },
-			func(context.Context) error { userPruneService.Stop(); return nil },
-			func() bool { return userPruneService.IsRunning() },
-		)
-		if err := runtime.serviceManager.Register(userPruneWrapper); err != nil {
-			return fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
-		}
-		log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
+	if err := registerUserPruneService(runtime, opts, monitoringService); err != nil {
+		return err
 	}
-
-	if runtime.capabilities.qotdRuntime && opts.qotdLifecycleService != nil {
-		qotdRuntimeService := discordqotd.NewRuntimeServiceForBot(
-			runtime.session,
-			opts.configManager,
-			opts.qotdLifecycleService,
-			runtime.instanceID,
-			opts.defaultBotInstanceID,
-		)
-		qotdWrapper := service.NewServiceWrapper(
-			"qotd",
-			service.TypeMonitoring,
-			service.PriorityNormal,
-			[]string{},
-			func(context.Context) error { qotdRuntimeService.Start(); return nil },
-			func(context.Context) error { qotdRuntimeService.Stop(); return nil },
-			func() bool { return qotdRuntimeService.IsRunning() },
-		)
-		if err := runtime.serviceManager.Register(qotdWrapper); err != nil {
-			return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
-		}
-		log.ApplicationLogger().Info("QOTD runtime enabled", "botInstanceID", runtime.instanceID)
+	if err := registerQOTDRuntimeService(runtime, opts); err != nil {
+		return err
 	}
 
 	log.ApplicationLogger().Info("Starting runtime services", "botInstanceID", runtime.instanceID)
@@ -204,54 +114,195 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
 	}
 
-	if runtime.capabilities.hasCommands() {
-		commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
-		if len(opts.commandCatalogRegistrars) > 0 {
-			commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
-		}
-		commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{Admin: runtime.capabilities.admin})
-		commandHandler.SetSupportedDomains(runtime.capabilities.commandDomainList()...)
-		commandHandler.SetQOTDService(opts.qotdCommandService)
-		commandHandler.SetModerationMetrics(opts.moderationMetrics)
-		// Cache observability flows through /v1/health/cache via the control
-		// server's runtime resolver, not the admin command catalog; the local
-		// unifiedCache variable is still used above for SetPersistInterval.
-		commandHandler.SetAdminCommandServices(runtime.serviceManager)
-		if err := setupCommandHandler(commandHandler); err != nil {
-			return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
-		}
-		if cm := commandHandler.GetCommandManager(); cm != nil {
-			if router := cm.GetRouter(); router != nil {
-				router.SetStore(opts.store)
-				if monitoringService != nil {
-					router.SetCache(monitoringService.GetUnifiedCache())
-					router.SetTaskRouter(monitoringService.TaskRouter())
-				}
-				router.SetRuntimeApplier(opts.runtimeApplier)
-			}
-		}
-		runtime.commandHandler = commandHandler
-	} else {
-		domainSupport := newRuntimeDomainSupport(opts.supportedDomains)
-		if domainSupport.supports(files.BotDomainQOTD) && !domainSupport.supportsDefaultDomain() {
-			qotdGuildCount := 0
-			if cfg != nil {
-				qotdGuildCount = len(cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, runtime.instanceID, opts.defaultBotInstanceID))
-			}
-			log.ApplicationLogger().Warn(
-				"Commands skipped; no guild routes the qotd domain to this runtime",
-				"botInstanceID", runtime.instanceID,
-				"qotdGuilds", qotdGuildCount,
-				"hint", "configure Bot Routing -> QOTD for at least one guild before expecting QOTD slash commands on this app",
-			)
-		} else {
-			log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
-		}
+	if err := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService); err != nil {
+		return err
 	}
 
 	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.supportedDomains, opts.startupTasks)
 	scheduleRuntimeWarmup(runtime, opts.store, opts.startupTasks)
 	return nil
+}
+
+// setupMonitoringService creates and wires the per-runtime monitoring service when the
+// runtime has the monitoring capability, configuring its task-router budget and cache
+// persistence interval. It returns (nil, nil) when monitoring is not enabled.
+func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (*logging.MonitoringService, error) {
+	if !runtime.capabilities.monitoring {
+		log.ApplicationLogger().Info("Monitoring runtime skipped; no effective monitoring workload is enabled", "botInstanceID", runtime.instanceID)
+		return nil, nil
+	}
+
+	// Per-runtime metrics: each bot's monitoring service writes to its
+	// own InMemoryMetrics. The control plane reads via the default
+	// runtime's MonitoringMetricsResolver, mirroring the cache
+	// observability resolver pattern.
+	monitoringService, err := logging.NewMonitoringServiceForBotWithMetrics(
+		runtime.session,
+		opts.configManager,
+		opts.store,
+		runtime.instanceID,
+		opts.defaultBotInstanceID,
+		logging.NewInMemoryMetrics(),
+		log.DiscordLogger(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
+	}
+	monitoringService.SetTaskRouterConfig(routerConfig)
+	runtime.monitoringService = monitoringService
+	if unifiedCache := monitoringService.GetUnifiedCache(); unifiedCache != nil {
+		runtime.persistStop = unifiedCache.SetPersistInterval(time.Hour)
+	}
+	return monitoringService, nil
+}
+
+// buildAutomodWrapper constructs the automod logging service wrapper when the runtime
+// has the automod capability and automod logs are not disabled, sharing the monitoring
+// notifier when available. It returns nil when automod should not run.
+func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *logging.MonitoringService) *service.ServiceWrapper {
+	if !runtime.capabilities.automod {
+		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
+		return nil
+	}
+	if runtimeConfig.DisableAutomodLogs {
+		log.ApplicationLogger().Info("Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start", "botInstanceID", runtime.instanceID)
+		return nil
+	}
+
+	automodService := logging.NewAutomodService(runtime.session, opts.configManager)
+	automodRouter := task.NewRouter(routerConfig)
+	notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
+	if monitoringService != nil {
+		notifier = monitoringService.Notifier()
+	}
+	automodAdapters := task.NewNotificationAdapters(automodRouter, runtime.session, opts.configManager, opts.store, notifier)
+	automodService.SetAdapters(automodAdapters)
+
+	return service.NewServiceWrapper(
+		"automod",
+		service.TypeAutomod,
+		service.PriorityNormal,
+		[]string{},
+		func(context.Context) error { automodService.Start(); return nil },
+		func(context.Context) error {
+			automodRouter.Close()
+			automodService.Stop()
+			return nil
+		},
+		func() bool { return true },
+	)
+}
+
+// registerUserPruneService registers the Discord-native user prune maintenance service
+// when the runtime has the userPrune capability.
+func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monitoringService *logging.MonitoringService) error {
+	if !runtime.capabilities.userPrune {
+		return nil
+	}
+	userPruneService := maintenance.NewUserPruneServiceForBot(runtime.session, opts.configManager, opts.store, runtime.instanceID, opts.defaultBotInstanceID)
+	userPruneDependencies := []string{}
+	if monitoringService != nil {
+		userPruneDependencies = []string{"monitoring"}
+	}
+	userPruneWrapper := service.NewServiceWrapper(
+		"user-prune",
+		service.TypeMonitoring,
+		service.PriorityNormal,
+		userPruneDependencies,
+		func(context.Context) error { userPruneService.Start(); return nil },
+		func(context.Context) error { userPruneService.Stop(); return nil },
+		func() bool { return userPruneService.IsRunning() },
+	)
+	if err := runtime.serviceManager.Register(userPruneWrapper); err != nil {
+		return fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
+	}
+	log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
+	return nil
+}
+
+// registerQOTDRuntimeService registers the QOTD runtime service when the runtime has the
+// qotdRuntime capability and a lifecycle service is wired.
+func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) error {
+	if !runtime.capabilities.qotdRuntime || opts.qotdLifecycleService == nil {
+		return nil
+	}
+	qotdRuntimeService := discordqotd.NewRuntimeServiceForBot(
+		runtime.session,
+		opts.configManager,
+		opts.qotdLifecycleService,
+		runtime.instanceID,
+		opts.defaultBotInstanceID,
+	)
+	qotdWrapper := service.NewServiceWrapper(
+		"qotd",
+		service.TypeMonitoring,
+		service.PriorityNormal,
+		[]string{},
+		func(context.Context) error { qotdRuntimeService.Start(); return nil },
+		func(context.Context) error { qotdRuntimeService.Stop(); return nil },
+		func() bool { return qotdRuntimeService.IsRunning() },
+	)
+	if err := runtime.serviceManager.Register(qotdWrapper); err != nil {
+		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
+	}
+	log.ApplicationLogger().Info("QOTD runtime enabled", "botInstanceID", runtime.instanceID)
+	return nil
+}
+
+// setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
+// that expose commands; otherwise it logs why commands were skipped.
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) error {
+	if !runtime.capabilities.hasCommands() {
+		logRuntimeCommandsSkipped(runtime, opts, cfg)
+		return nil
+	}
+
+	commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+	if len(opts.commandCatalogRegistrars) > 0 {
+		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
+	}
+	commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{Admin: runtime.capabilities.admin})
+	commandHandler.SetSupportedDomains(runtime.capabilities.commandDomainList()...)
+	commandHandler.SetQOTDService(opts.qotdCommandService)
+	commandHandler.SetModerationMetrics(opts.moderationMetrics)
+	// Cache observability flows through /v1/health/cache via the control server's
+	// runtime resolver, not the admin command catalog.
+	commandHandler.SetAdminCommandServices(runtime.serviceManager)
+	if err := setupCommandHandler(commandHandler); err != nil {
+		return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
+	}
+	if cm := commandHandler.GetCommandManager(); cm != nil {
+		if router := cm.GetRouter(); router != nil {
+			router.SetStore(opts.store)
+			if monitoringService != nil {
+				router.SetCache(monitoringService.GetUnifiedCache())
+				router.SetTaskRouter(monitoringService.TaskRouter())
+			}
+			router.SetRuntimeApplier(opts.runtimeApplier)
+		}
+	}
+	runtime.commandHandler = commandHandler
+	return nil
+}
+
+// logRuntimeCommandsSkipped explains why a runtime exposes no slash commands,
+// distinguishing a QOTD-domain routing gap from a runtime with no command-enabled guilds.
+func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig) {
+	domainSupport := newRuntimeDomainSupport(opts.supportedDomains)
+	if domainSupport.supports(files.BotDomainQOTD) && !domainSupport.supportsDefaultDomain() {
+		qotdGuildCount := 0
+		if cfg != nil {
+			qotdGuildCount = len(cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, runtime.instanceID, opts.defaultBotInstanceID))
+		}
+		log.ApplicationLogger().Warn(
+			"Commands skipped; no guild routes the qotd domain to this runtime",
+			"botInstanceID", runtime.instanceID,
+			"qotdGuilds", qotdGuildCount,
+			"hint", "configure Bot Routing -> QOTD for at least one guild before expecting QOTD slash commands on this app",
+		)
+		return
+	}
+	log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext

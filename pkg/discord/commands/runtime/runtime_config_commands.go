@@ -191,7 +191,20 @@ const (
 )
 
 func allSpecs() []spec {
-	// Keep groups stable and short (helps readability in embed fields)
+	// Keep groups stable and short (helps readability in embed fields). Order is
+	// load-bearing: allGroups derives the group display order from this sequence.
+	var specs []spec
+	specs = append(specs, themeSpecs()...)
+	specs = append(specs, loggingServiceSpecs()...)
+	specs = append(specs, moderationSpecs()...)
+	specs = append(specs, presenceWatchSpecs()...)
+	specs = append(specs, messageCacheSpecs()...)
+	specs = append(specs, backfillSpecs()...)
+	specs = append(specs, safetySpecs()...)
+	return specs
+}
+
+func themeSpecs() []spec {
 	return []spec{
 		{
 			Key:         runtimeKeyBotTheme,
@@ -202,6 +215,11 @@ func allSpecs() []spec {
 			RestartHint: restartRecommended,
 			MaxInputLen: 60,
 		},
+	}
+}
+
+func loggingServiceSpecs() []spec {
+	return []spec{
 		{
 			Key:         runtimeKeyDisableDBCleanup,
 			Group:       "SERVICES (LOGGING)",
@@ -250,6 +268,11 @@ func allSpecs() []spec {
 			ShortHelp:   "Disable user log handlers (avatars/roles)",
 			RestartHint: restartRecommended,
 		},
+	}
+}
+
+func moderationSpecs() []spec {
+	return []spec{
 		{
 			Key:         runtimeKeyModerationLogging,
 			Group:       "MODERATION",
@@ -258,6 +281,11 @@ func allSpecs() []spec {
 			ShortHelp:   "Enable/disable moderation case embeds",
 			RestartHint: restartRecommended,
 		},
+	}
+}
+
+func presenceWatchSpecs() []spec {
+	return []spec{
 		{
 			Key:         runtimeKeyPresenceWatchUserID,
 			Group:       "PRESENCE WATCH",
@@ -275,6 +303,11 @@ func allSpecs() []spec {
 			ShortHelp:   "Log presence updates for the bot user",
 			RestartHint: restartRecommended,
 		},
+	}
+}
+
+func messageCacheSpecs() []spec {
+	return []spec{
 		{
 			Key:         runtimeKeyMessageCacheTTLHours,
 			Group:       "MESSAGE CACHE",
@@ -300,6 +333,11 @@ func allSpecs() []spec {
 			ShortHelp:   "Cleanup expired cached messages on startup",
 			RestartHint: restartRecommended,
 		},
+	}
+}
+
+func backfillSpecs() []spec {
+	return []spec{
 		{
 			Key:         runtimeKeyBackfillChannelID,
 			Group:       "BACKFILL",
@@ -328,6 +366,11 @@ func allSpecs() []spec {
 			MaxInputLen: 16,
 			GuildOnly:   true,
 		},
+	}
+}
+
+func safetySpecs() []spec {
+	return []spec{
 		{
 			Key:         runtimeKeyDisableBotRolePermMirror,
 			Group:       "SAFETY",
@@ -1195,43 +1238,15 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 
 	action, st := parseActionAndState(cc.CustomID)
 	if action == "" {
-		if ackPolicy.Mode == core.InteractionAckModeNone {
-			respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags:  discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{errorEmbed("Invalid interaction state")},
-				},
-			}, routeID+".invalid_state.respond_error")
-			return
-		}
-
-		editInteractionMessageWithLog(s, i, errorEmbed("Invalid interaction state"), nil, routeID+".invalid_state.render_error")
+		handleInvalidComponentState(s, i, ackPolicy, routeID)
 		return
 	}
 
-	respond := func(resp *discordgo.InteractionResponse, stage string) {
-		respondInteractionWithLog(s, i, resp, action+"."+stage)
-	}
-	edit := func(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent, stage string) {
-		editInteractionMessageWithLog(s, i, embed, components, action+"."+stage)
-	}
+	c := runtimeComponentContext{s: s, i: i, configManager: configManager, applier: applier, action: action}
 
 	rc, err := loadRuntimeConfig(configManager, st.Scope)
 	if err != nil {
-		if ackPolicy.Mode == core.InteractionAckModeNone {
-			respond(&discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags: discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)),
-					},
-				},
-			}, "load_runtime_config_error")
-			return
-		}
-		edit(errorEmbed(fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)), nil, "load_runtime_config_error")
+		c.respondConfigLoadError(ackPolicy, err)
 		return
 	}
 
@@ -1240,7 +1255,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 		if sp.GuildOnly && st.Scope == "global" {
 			// Skip editing if global
 			if action == cidButtonEdit || action == cidButtonToggle || action == cidButtonReset {
-				edit(errorEmbed("This setting can only be configured per-guild."), renderMainComponents(rc, st), "guild_only_restriction")
+				c.edit(errorEmbed("This setting can only be configured per-guild."), renderMainComponents(rc, st), "guild_only_restriction")
 				return
 			}
 		}
@@ -1248,188 +1263,253 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, confi
 
 	switch action {
 	case cidSelectGroup, cidSelectKey:
-		if len(cc.Values) == 0 {
-			embed := renderMainEmbed(rc, st.withMode(pageMain))
-			edit(embed, renderMainComponents(rc, st.withMode(pageMain)), "select.empty_values")
-			return
-		}
-		// The value in the select menu options is the full encoded state.
-		st = decodeState(cc.Values[0])
-		if refreshed, loadErr := loadRuntimeConfig(configManager, st.Scope); loadErr == nil {
-			rc = refreshed
-		} else {
-			slog.Warn("Runtime config panel failed to refresh state after selection",
-				"action", action,
-				"scope", st.Scope,
-				"key", string(st.Key),
-				"err", loadErr,
-			)
-		}
-		st = ensureKeyInGroup(st.withMode(pageMain))
-		embed := renderMainEmbed(rc, st)
-		edit(embed, renderMainComponents(rc, st), "select.apply_state")
-		return
-
+		c.handleSelect(rc, st, cc.Values)
 	case cidButtonMain, cidButtonBack:
-		st = st.withMode(pageMain)
-		st = ensureKeyInGroup(st)
-		embed := renderMainEmbed(rc, st)
-		edit(embed, renderMainComponents(rc, st), "nav.main")
-		return
-
+		c.handleNavMain(rc, st)
 	case cidButtonHelp:
-		st = st.withMode(pageHelp)
-		embed := renderHelpEmbed()
-		edit(embed, renderHelpComponents(st), "nav.help")
-		return
-
+		c.handleNavHelp(st)
 	case cidButtonDetail:
-		st = st.withMode(pageDetail)
-		embed := renderDetailsEmbed(rc, st)
-		edit(embed, renderDetailComponents(st), "nav.detail")
-		return
-
+		c.handleNavDetail(rc, st)
 	case cidButtonReload:
-		if refreshed, loadErr := loadRuntimeConfig(configManager, st.Scope); loadErr == nil {
-			rc = refreshed
-		} else {
-			slog.Warn("Runtime config panel failed to reload from storage",
-				"action", action,
-				"scope", st.Scope,
-				"key", string(st.Key),
-				"err", loadErr,
-			)
-		}
-		st = ensureKeyInGroup(st)
-		switch st.Mode {
-		case pageHelp:
-			embed := renderHelpEmbed()
-			edit(embed, renderHelpComponents(st), "reload.help")
-		case pageDetail:
-			embed := renderDetailsEmbed(rc, st)
-			edit(embed, renderDetailComponents(st), "reload.detail")
-		default:
-			embed := renderMainEmbed(rc, st.withMode(pageMain))
-			edit(embed, renderMainComponents(rc, st.withMode(pageMain)), "reload.main")
-		}
-		return
-
+		c.handleReload(rc, st)
 	case cidButtonReset:
-		st = st.withMode(pageMain)
-		rc2, ok := resetValue(rc, st.Key)
-		if !ok {
-			edit(errorEmbed("Unknown key"), nil, "reset.unknown_key")
-			return
-		}
-		if err := saveRuntimeConfig(configManager, rc2, st.Scope); err != nil {
-			edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "reset.save_error")
-			return
-		}
-		applyErr := applyRuntimeConfigWithLog(applier, rc2, i, action+".reset.hot_apply", st)
-		embed := renderMainEmbed(rc2, st)
-		embed = withHotApplyWarning(embed, applyErr)
-		edit(embed, renderMainComponents(rc2, st), "reset.render")
-		return
-
+		c.handleReset(rc, st)
 	case cidButtonToggle:
-		st = st.withMode(pageMain)
-		sp, ok := specByKey(st.Key)
-		if !ok {
-			edit(errorEmbed("Unknown key"), nil, "toggle.unknown_key")
-			return
-		}
-		if sp.Type != vtBool {
-			edit(errorEmbed("TOGGLE is only valid for boolean keys"), renderMainComponents(rc, st), "toggle.invalid_type")
-			return
-		}
-		rc2, err := toggleBool(rc, st.Key)
-		if err != nil {
-			edit(errorEmbed(fmt.Sprintf("Toggle failed: %v", err)), renderMainComponents(rc, st), "toggle.failed")
-			return
-		}
-		if err := saveRuntimeConfig(configManager, rc2, st.Scope); err != nil {
-			edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "toggle.save_error")
-			return
-		}
-		applyErr := applyRuntimeConfigWithLog(applier, rc2, i, action+".toggle.hot_apply", st)
-		embed := renderMainEmbed(rc2, st)
-		embed = withHotApplyWarning(embed, applyErr)
-		edit(embed, renderMainComponents(rc2, st), "toggle.render")
-		return
-
+		c.handleToggle(rc, st)
 	case cidButtonEdit:
-		sp, ok := specByKey(st.Key)
-		if !ok {
-			// This interaction path normally opens a modal, so we intentionally do NOT
-			// ack with a message update earlier. If we hit an error, we must still
-			// respond once to avoid an "interaction failed" on the client.
-			respond(&discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags: discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed("Unknown key"),
-					},
-				},
-			}, "edit.unknown_key")
-			return
-		}
-		if sp.Type == vtBool {
-			respond(&discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags: discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{
-						errorEmbed("EDIT is not valid for boolean keys (use TOGGLE)"),
-					},
-				},
-			}, "edit.invalid_type")
-			return
-		}
+		c.handleEdit(rc, st)
+	default:
+		c.edit(errorEmbed("Unknown action"), nil, "unknown_action")
+	}
+}
 
-		cur, _ := getValue(rc, st.Key)
-		if strings.TrimSpace(cur) == "" {
-			cur = ""
-		}
-		if sp.Type == vtInt && strings.TrimSpace(cur) == "0" {
-			cur = ""
-		}
+// runtimeComponentContext threads the interaction and config dependencies through the
+// per-action handlers of handleComponent and provides the shared respond/edit logging
+// wrappers, which stamp each interaction stage with the active action.
+type runtimeComponentContext struct {
+	s             *discordgo.Session
+	i             *discordgo.InteractionCreate
+	configManager *files.ConfigManager
+	applier       runtimeConfigApplier
+	action        string
+}
 
-		maxLen := sp.MaxInputLen
-		if maxLen <= 0 {
-			maxLen = 200
-		}
-		label := fmt.Sprintf("%s (%s)", sp.Key, sp.Type)
+func (c runtimeComponentContext) respond(resp *discordgo.InteractionResponse, stage string) {
+	respondInteractionWithLog(c.s, c.i, resp, c.action+"."+stage)
+}
 
-		respond(&discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseModal,
+func (c runtimeComponentContext) edit(embed *discordgo.MessageEmbed, components []discordgo.MessageComponent, stage string) {
+	editInteractionMessageWithLog(c.s, c.i, embed, components, c.action+"."+stage)
+}
+
+// handleInvalidComponentState replies when a component custom ID cannot be parsed into
+// an action. The action is unknown here, so the route ID stamps the log stage.
+func handleInvalidComponentState(s *discordgo.Session, i *discordgo.InteractionCreate, ackPolicy core.InteractionAckPolicy, routeID string) {
+	if ackPolicy.Mode == core.InteractionAckModeNone {
+		respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				CustomID: encodeRuntimeModalState(st, runtimeInteractionUserID(i)),
-				Title:    string(sp.Key),
-				Components: []discordgo.MessageComponent{
-					discordgo.ActionsRow{
-						Components: []discordgo.MessageComponent{
-							discordgo.TextInput{
-								CustomID:    modalFieldValue,
-								Label:       label,
-								Style:       discordgo.TextInputShort,
-								Placeholder: sp.DefaultHint,
-								Value:       cur,
-								Required:    false,
-								MinLength:   0,
-								MaxLength:   maxLen,
-							},
+				Flags:  discordgo.MessageFlagsEphemeral,
+				Embeds: []*discordgo.MessageEmbed{errorEmbed("Invalid interaction state")},
+			},
+		}, routeID+".invalid_state.respond_error")
+		return
+	}
+	editInteractionMessageWithLog(s, i, errorEmbed("Invalid interaction state"), nil, routeID+".invalid_state.render_error")
+}
+
+func (c runtimeComponentContext) respondConfigLoadError(ackPolicy core.InteractionAckPolicy, err error) {
+	msg := fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)
+	if ackPolicy.Mode == core.InteractionAckModeNone {
+		c.respond(&discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Flags:  discordgo.MessageFlagsEphemeral,
+				Embeds: []*discordgo.MessageEmbed{errorEmbed(msg)},
+			},
+		}, "load_runtime_config_error")
+		return
+	}
+	c.edit(errorEmbed(msg), nil, "load_runtime_config_error")
+}
+
+func (c runtimeComponentContext) handleSelect(rc files.RuntimeConfig, st panelState, values []string) {
+	if len(values) == 0 {
+		embed := renderMainEmbed(rc, st.withMode(pageMain))
+		c.edit(embed, renderMainComponents(rc, st.withMode(pageMain)), "select.empty_values")
+		return
+	}
+	// The value in the select menu options is the full encoded state.
+	st = decodeState(values[0])
+	if refreshed, loadErr := loadRuntimeConfig(c.configManager, st.Scope); loadErr == nil {
+		rc = refreshed
+	} else {
+		slog.Warn("Runtime config panel failed to refresh state after selection",
+			"action", c.action,
+			"scope", st.Scope,
+			"key", string(st.Key),
+			"err", loadErr,
+		)
+	}
+	st = ensureKeyInGroup(st.withMode(pageMain))
+	embed := renderMainEmbed(rc, st)
+	c.edit(embed, renderMainComponents(rc, st), "select.apply_state")
+}
+
+func (c runtimeComponentContext) handleNavMain(rc files.RuntimeConfig, st panelState) {
+	st = st.withMode(pageMain)
+	st = ensureKeyInGroup(st)
+	embed := renderMainEmbed(rc, st)
+	c.edit(embed, renderMainComponents(rc, st), "nav.main")
+}
+
+func (c runtimeComponentContext) handleNavHelp(st panelState) {
+	st = st.withMode(pageHelp)
+	embed := renderHelpEmbed()
+	c.edit(embed, renderHelpComponents(st), "nav.help")
+}
+
+func (c runtimeComponentContext) handleNavDetail(rc files.RuntimeConfig, st panelState) {
+	st = st.withMode(pageDetail)
+	embed := renderDetailsEmbed(rc, st)
+	c.edit(embed, renderDetailComponents(st), "nav.detail")
+}
+
+func (c runtimeComponentContext) handleReload(rc files.RuntimeConfig, st panelState) {
+	if refreshed, loadErr := loadRuntimeConfig(c.configManager, st.Scope); loadErr == nil {
+		rc = refreshed
+	} else {
+		slog.Warn("Runtime config panel failed to reload from storage",
+			"action", c.action,
+			"scope", st.Scope,
+			"key", string(st.Key),
+			"err", loadErr,
+		)
+	}
+	st = ensureKeyInGroup(st)
+	switch st.Mode {
+	case pageHelp:
+		embed := renderHelpEmbed()
+		c.edit(embed, renderHelpComponents(st), "reload.help")
+	case pageDetail:
+		embed := renderDetailsEmbed(rc, st)
+		c.edit(embed, renderDetailComponents(st), "reload.detail")
+	default:
+		embed := renderMainEmbed(rc, st.withMode(pageMain))
+		c.edit(embed, renderMainComponents(rc, st.withMode(pageMain)), "reload.main")
+	}
+}
+
+func (c runtimeComponentContext) handleReset(rc files.RuntimeConfig, st panelState) {
+	st = st.withMode(pageMain)
+	rc2, ok := resetValue(rc, st.Key)
+	if !ok {
+		c.edit(errorEmbed("Unknown key"), nil, "reset.unknown_key")
+		return
+	}
+	if err := saveRuntimeConfig(c.configManager, rc2, st.Scope); err != nil {
+		c.edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "reset.save_error")
+		return
+	}
+	applyErr := applyRuntimeConfigWithLog(c.applier, rc2, c.i, c.action+".reset.hot_apply", st)
+	embed := renderMainEmbed(rc2, st)
+	embed = withHotApplyWarning(embed, applyErr)
+	c.edit(embed, renderMainComponents(rc2, st), "reset.render")
+}
+
+func (c runtimeComponentContext) handleToggle(rc files.RuntimeConfig, st panelState) {
+	st = st.withMode(pageMain)
+	sp, ok := specByKey(st.Key)
+	if !ok {
+		c.edit(errorEmbed("Unknown key"), nil, "toggle.unknown_key")
+		return
+	}
+	if sp.Type != vtBool {
+		c.edit(errorEmbed("TOGGLE is only valid for boolean keys"), renderMainComponents(rc, st), "toggle.invalid_type")
+		return
+	}
+	rc2, err := toggleBool(rc, st.Key)
+	if err != nil {
+		c.edit(errorEmbed(fmt.Sprintf("Toggle failed: %v", err)), renderMainComponents(rc, st), "toggle.failed")
+		return
+	}
+	if err := saveRuntimeConfig(c.configManager, rc2, st.Scope); err != nil {
+		c.edit(errorEmbed(fmt.Sprintf("Failed to save: %v", err)), nil, "toggle.save_error")
+		return
+	}
+	applyErr := applyRuntimeConfigWithLog(c.applier, rc2, c.i, c.action+".toggle.hot_apply", st)
+	embed := renderMainEmbed(rc2, st)
+	embed = withHotApplyWarning(embed, applyErr)
+	c.edit(embed, renderMainComponents(rc2, st), "toggle.render")
+}
+
+func (c runtimeComponentContext) handleEdit(rc files.RuntimeConfig, st panelState) {
+	sp, ok := specByKey(st.Key)
+	if !ok {
+		// This interaction path normally opens a modal, so we intentionally do NOT
+		// ack with a message update earlier. If we hit an error, we must still
+		// respond once to avoid an "interaction failed" on the client.
+		c.respond(&discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Flags: discordgo.MessageFlagsEphemeral,
+				Embeds: []*discordgo.MessageEmbed{
+					errorEmbed("Unknown key"),
+				},
+			},
+		}, "edit.unknown_key")
+		return
+	}
+	if sp.Type == vtBool {
+		c.respond(&discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Flags: discordgo.MessageFlagsEphemeral,
+				Embeds: []*discordgo.MessageEmbed{
+					errorEmbed("EDIT is not valid for boolean keys (use TOGGLE)"),
+				},
+			},
+		}, "edit.invalid_type")
+		return
+	}
+
+	cur, _ := getValue(rc, st.Key)
+	if strings.TrimSpace(cur) == "" {
+		cur = ""
+	}
+	if sp.Type == vtInt && strings.TrimSpace(cur) == "0" {
+		cur = ""
+	}
+
+	maxLen := sp.MaxInputLen
+	if maxLen <= 0 {
+		maxLen = 200
+	}
+	label := fmt.Sprintf("%s (%s)", sp.Key, sp.Type)
+
+	c.respond(&discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: encodeRuntimeModalState(st, runtimeInteractionUserID(c.i)),
+			Title:    string(sp.Key),
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.TextInput{
+							CustomID:    modalFieldValue,
+							Label:       label,
+							Style:       discordgo.TextInputShort,
+							Placeholder: sp.DefaultHint,
+							Value:       cur,
+							Required:    false,
+							MinLength:   0,
+							MaxLength:   maxLen,
 						},
 					},
 				},
 			},
-		}, "edit.open_modal")
-		return
-
-	default:
-		edit(errorEmbed("Unknown action"), nil, "unknown_action")
-		return
-	}
+		},
+	}, "edit.open_modal")
 }
 
 func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
