@@ -57,6 +57,8 @@ type QuestionCatalogService interface {
 	applicationqotd.PublishCoordinator
 }
 
+// Commands registers and backs the QOTD question-management slash commands,
+// delegating catalog and publish operations to the injected service.
 type Commands struct {
 	service QuestionCatalogService
 }

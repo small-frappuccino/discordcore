@@ -82,11 +82,17 @@ const (
 	taskTypeMessageDeleteProcess = "message_event.process_delete"
 )
 
+// MessageUpdateTaskPayload is the task payload for a deferred message-edit
+// event. ReceivedAt records when the gateway event arrived, so latency can be
+// measured against task execution time.
 type MessageUpdateTaskPayload struct {
 	Update     *discordgo.MessageUpdate
 	ReceivedAt time.Time
 }
 
+// MessageDeleteTaskPayload is the task payload for a deferred message-delete
+// event. ReceivedAt records when the gateway event arrived, so latency can be
+// measured against task execution time.
 type MessageDeleteTaskPayload struct {
 	Delete     *discordgo.MessageDelete
 	ReceivedAt time.Time

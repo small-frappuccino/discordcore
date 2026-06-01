@@ -10,6 +10,10 @@ import (
 
 // Message Versioning (history)
 
+// MessageVersion is one persisted revision of a Discord message. Version is the
+// monotonic per-message revision counter; EventType records what produced the
+// revision (create, edit, delete). The attachment/embed/sticker fields store
+// counts, not the payloads themselves.
 type MessageVersion struct {
 	GuildID     string
 	MessageID   string

@@ -85,11 +85,11 @@ type AutomodActionPayload struct {
 	Event     *discordgo.AutoModerationActionExecution
 }
 
-// AvatarChangePayload holds information to process an avatar change.
-
 // FlushAvatarCachePayload holds information for flushing the avatar cache.
 type FlushAvatarCachePayload struct{}
 
+// AvatarChangePayload holds information to process an avatar change. Username is
+// optional; the handler looks it up when empty.
 type AvatarChangePayload struct {
 	GuildID   string
 	UserID    string

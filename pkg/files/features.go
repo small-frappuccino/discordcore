@@ -14,6 +14,8 @@ type FeatureServiceToggles struct {
 	AdminCommands *bool `json:"admin_commands,omitempty"`
 }
 
+// FeatureLoggingToggles overrides individual log-event categories. A nil field
+// leaves that category at its default; false disables emitting that event.
 type FeatureLoggingToggles struct {
 	AvatarLogging  *bool `json:"avatar_logging,omitempty"`
 	RoleUpdate     *bool `json:"role_update,omitempty"`
@@ -28,6 +30,8 @@ type FeatureLoggingToggles struct {
 	CleanAction    *bool `json:"clean_action,omitempty"`
 }
 
+// FeatureModerationToggles enables or disables individual moderation commands.
+// A nil field leaves that command at its default availability.
 type FeatureModerationToggles struct {
 	Ban      *bool `json:"ban,omitempty"`
 	MassBan  *bool `json:"massban,omitempty"`
@@ -38,28 +42,42 @@ type FeatureModerationToggles struct {
 	Clean    *bool `json:"clean,omitempty"`
 }
 
+// FeatureMessageCacheToggles controls message-cache maintenance behavior. A nil
+// field leaves that behavior at its default.
 type FeatureMessageCacheToggles struct {
 	CleanupOnStartup *bool `json:"cleanup_on_startup,omitempty"`
 	DeleteOnLog      *bool `json:"delete_on_log,omitempty"`
 }
 
+// FeaturePresenceWatchToggles selects which presences are watched. A nil field
+// leaves that target at its default.
 type FeaturePresenceWatchToggles struct {
 	Bot  *bool `json:"bot,omitempty"`
 	User *bool `json:"user,omitempty"`
 }
 
+// FeatureMaintenanceToggles controls background maintenance jobs. A nil field
+// leaves the job at its default.
 type FeatureMaintenanceToggles struct {
 	DBCleanup *bool `json:"db_cleanup,omitempty"`
 }
 
+// FeatureSafetyToggles controls safety mechanisms such as mirroring bot role
+// permissions. A nil field leaves the mechanism at its default.
 type FeatureSafetyToggles struct {
 	BotRolePermMirror *bool `json:"bot_role_perm_mirror,omitempty"`
 }
 
+// FeatureBackfillToggles controls the historical backfill subsystem. A nil
+// Enabled leaves backfill at its default.
 type FeatureBackfillToggles struct {
 	Enabled *bool `json:"enabled,omitempty"`
 }
 
+// FeatureToggles is the per-guild override surface for optional behavior,
+// grouped by domain. Pointer fields are tri-state: nil means inherit the
+// default, while a non-nil value forces the feature on or off. Resolve to
+// concrete booleans via ResolvedFeatureToggles.
 type FeatureToggles struct {
 	Services       FeatureServiceToggles       `json:"services,omitempty"`
 	Logging        FeatureLoggingToggles       `json:"logging,omitempty"`
@@ -86,6 +104,9 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ResolvedFeatureToggles is FeatureToggles with every tri-state pointer
+// collapsed to a concrete boolean by applying defaults. It is the form consumed
+// by runtime code that must not deal with nil-means-default semantics.
 type ResolvedFeatureToggles struct {
 	Services struct {
 		Monitoring    bool

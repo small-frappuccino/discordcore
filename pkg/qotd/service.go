@@ -27,17 +27,23 @@ var (
 	ErrDiscordUnavailable   = errors.New("discord session unavailable")
 )
 
+// Publisher abstracts the Discord-side official-post operations the Service
+// depends on, so publish flows can be exercised without a live session.
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
 	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
 }
 
+// QuestionMutation carries the fields accepted when creating or updating a
+// question; an empty Status leaves the existing status unchanged.
 type QuestionMutation struct {
 	DeckID string
 	Body   string
 	Status QuestionStatus
 }
 
+// QuestionCounts breaks down a deck's questions by status. Total is the sum of
+// the per-status fields.
 type QuestionCounts struct {
 	Total    int `json:"total"`
 	Draft    int `json:"draft"`
@@ -47,6 +53,9 @@ type QuestionCounts struct {
 	Disabled int `json:"disabled"`
 }
 
+// Summary is the aggregated QOTD state for a guild: effective settings,
+// per-deck question counts, and the current/previous official posts for the
+// active publish slot.
 type Summary struct {
 	Settings                files.QOTDConfig
 	Counts                  QuestionCounts
@@ -57,12 +66,16 @@ type Summary struct {
 	PreviousPost            *OfficialPostRecord
 }
 
+// PublishResult reports the outcome of a successful publish: the question that
+// was consumed, the resulting official-post record, and the jump URL to it.
 type PublishResult struct {
 	Question     QuestionRecord
 	OfficialPost OfficialPostRecord
 	PostURL      string
 }
 
+// AutomaticQueueSlotStatus describes where the current scheduled slot stands in
+// the automatic publish pipeline. See the AutomaticQueueSlotStatus* constants.
 type AutomaticQueueSlotStatus string
 
 const (
@@ -74,6 +87,9 @@ const (
 	AutomaticQueueSlotStatusPublished  AutomaticQueueSlotStatus = "published"
 )
 
+// AutomaticQueueState is a snapshot of one deck's automatic-publish slot: the
+// resolved schedule, whether publishing is currently possible, and the records
+// involved in the slot (existing post, reserved question, next ready question).
 type AutomaticQueueState struct {
 	Deck               files.QOTDDeckConfig
 	Schedule           PublishSchedule
@@ -87,6 +103,11 @@ type AutomaticQueueState struct {
 	NextReadyQuestion  *storage.QOTDQuestionRecord
 }
 
+// Service is the QOTD domain coordinator: it owns question mutations, publish
+// flows, and lifecycle reconciliation on top of the config manager, storage,
+// and a Publisher. Per-guild work is serialized through guild actor goroutines
+// (see ExecuteInGuildActor), so handlers must not assume concurrent access to a
+// single guild's state.
 type Service struct {
 	configManager          *files.ConfigManager
 	store                  *storage.Store

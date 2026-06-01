@@ -23,6 +23,9 @@ const (
 	QOTDDevelopmentTokenEnv = "QOTD_BOT_DEVELOPMENT_TOKEN"
 )
 
+// Spec describes a runtime entrypoint command: its name, the token environment
+// variables for production and development (test) modes, and a factory that
+// builds the RunOptions once the primary token env has been selected.
 type Spec struct {
 	CommandName         string
 	RuntimeAppName      string
@@ -32,6 +35,8 @@ type Spec struct {
 	BuildRunOptions     func(primaryTokenEnv string) discordcoreapp.RunOptions
 }
 
+// Runner starts a runtime app with the resolved name, token env, and options.
+// It is the injection seam that lets Run be tested without a live runtime.
 type Runner func(appName, tokenEnv string, opts discordcoreapp.RunOptions) error
 
 func Run(args []string, output io.Writer, spec Spec, runner Runner) error {

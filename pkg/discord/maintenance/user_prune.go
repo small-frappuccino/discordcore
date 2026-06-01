@@ -27,6 +27,11 @@ type pruneResponse struct {
 	Pruned *uint32 `json:"pruned"`
 }
 
+// UserPruneService runs the scheduled background job that prunes members
+// inactive beyond the configured threshold. Start launches the loop once; Stop
+// closes the stop channel and waits for it to drain. Unlike qotd.RuntimeService,
+// Start does not reinitialize the stop channel, so the service is single-use and
+// must not be restarted after Stop.
 type UserPruneService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager

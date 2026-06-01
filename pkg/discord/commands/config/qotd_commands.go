@@ -23,6 +23,8 @@ const (
 	qotdScheduleMinuteOptionName = "minute"
 )
 
+// QOTDGetSubCommand implements "/config qotd_get", which shows the current QOTD
+// configuration for the guild's active deck.
 type QOTDGetSubCommand struct {
 	configManager *files.ConfigManager
 	now           func() time.Time
@@ -71,6 +73,8 @@ func (c *QOTDGetSubCommand) Handle(ctx *core.Context) error {
 	return builder.Info(ctx.Interaction, strings.Join(lines, "\n"))
 }
 
+// QOTDEnabledSubCommand implements "/config qotd_enabled", which toggles QOTD
+// publishing for the guild's active deck.
 type QOTDEnabledSubCommand struct {
 	configManager *files.ConfigManager
 	now           func() time.Time
@@ -118,6 +122,8 @@ func (c *QOTDEnabledSubCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, fmt.Sprintf("QOTD publishing is now %s for deck `%s`.", state, updatedDeck.Name))
 }
 
+// QOTDChannelSubCommand implements "/config qotd_channel", which sets the
+// delivery channel for the guild's active deck.
 type QOTDChannelSubCommand struct {
 	configManager *files.ConfigManager
 	now           func() time.Time
@@ -165,6 +171,8 @@ func (c *QOTDChannelSubCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, fmt.Sprintf("QOTD posts for deck `%s` will now go to <#%s>. Publishing stays %s.", updatedDeck.Name, channelID, state))
 }
 
+// QOTDScheduleSubCommand implements "/config qotd_schedule", which sets the
+// daily QOTD publish time (UTC) for the guild's active deck.
 type QOTDScheduleSubCommand struct {
 	configManager *files.ConfigManager
 	now           func() time.Time

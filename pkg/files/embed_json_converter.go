@@ -19,6 +19,8 @@ type DiscohookJSON struct {
 	Embeds  []DiscohookEmbed `json:"embeds,omitempty"`
 }
 
+// DiscohookEmbed mirrors a single Discord embed in the Discohook JSON schema.
+// Color is the Discord decimal color value; pointer fields are absent when nil.
 type DiscohookEmbed struct {
 	Title       string           `json:"title,omitempty"`
 	Description string           `json:"description,omitempty"`
@@ -30,20 +32,25 @@ type DiscohookEmbed struct {
 	Fields      []DiscohookField `json:"fields,omitempty"`
 }
 
+// DiscohookAuthor is the author block of a DiscohookEmbed.
 type DiscohookAuthor struct {
 	Name    string `json:"name,omitempty"`
 	IconURL string `json:"icon_url,omitempty"`
 }
 
+// DiscohookFooter is the footer block of a DiscohookEmbed.
 type DiscohookFooter struct {
 	Text    string `json:"text,omitempty"`
 	IconURL string `json:"icon_url,omitempty"`
 }
 
+// DiscohookImage is an image or thumbnail reference in a DiscohookEmbed.
 type DiscohookImage struct {
 	URL string `json:"url,omitempty"`
 }
 
+// DiscohookField is a single name/value field of a DiscohookEmbed; Inline lays
+// the field alongside adjacent inline fields.
 type DiscohookField struct {
 	Name   string `json:"name,omitempty"`
 	Value  string `json:"value,omitempty"`

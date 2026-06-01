@@ -21,6 +21,8 @@ const (
 	allowedRoleOptionName           = "role"
 )
 
+// CommandsEnabledSubCommand toggles whether slash commands are handled for the
+// guild by setting the Features.Services.Commands override.
 type CommandsEnabledSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -57,6 +59,8 @@ func (c *CommandsEnabledSubCommand) Handle(ctx *core.Context) error {
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Slash commands are now %s in this server.", state))
 }
 
+// CommandChannelSubCommand sets the guild's command-reference channel
+// (Channels.Commands) to an existing text channel.
 type CommandChannelSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -93,6 +97,8 @@ func (c *CommandChannelSubCommand) Handle(ctx *core.Context) error {
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Command references will now point people to <#%s>.", channelID))
 }
 
+// AllowedRoleAddSubCommand adds a role to Roles.Allowed, granting it access to
+// admin-level slash commands. Adding an already-allowed role is a no-op.
 type AllowedRoleAddSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -131,6 +137,8 @@ func (c *AllowedRoleAddSubCommand) Handle(ctx *core.Context) error {
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can now use the admin slash commands.", roleID))
 }
 
+// AllowedRoleRemoveSubCommand removes a role from Roles.Allowed, revoking its
+// access to admin-level slash commands.
 type AllowedRoleRemoveSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -166,6 +174,8 @@ func (c *AllowedRoleRemoveSubCommand) Handle(ctx *core.Context) error {
 	return serviceConfigShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("<@&%s> can no longer use the admin slash commands.", roleID))
 }
 
+// AllowedRoleListSubCommand lists the roles currently in Roles.Allowed that may
+// use admin-level slash commands.
 type AllowedRoleListSubCommand struct {
 	configManager *files.ConfigManager
 }

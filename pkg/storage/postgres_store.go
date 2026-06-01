@@ -28,6 +28,9 @@ type GuildMemberSnapshot struct {
 	HasBot     bool
 }
 
+// GuildMemberCurrentState is the persisted current membership state for a user
+// in a guild, including join/leave timestamps and the last known role set.
+// LeftAt is the zero time while Active is true.
 type GuildMemberCurrentState struct {
 	UserID     string
 	JoinedAt   time.Time
@@ -39,6 +42,9 @@ type GuildMemberCurrentState struct {
 	Roles      []string
 }
 
+// CacheEntryRecord is a single persisted cache row keyed by Key within a
+// CacheType namespace; Data is the serialized payload and ExpiresAt bounds its
+// validity.
 type CacheEntryRecord struct {
 	Key       string
 	CacheType string
@@ -46,6 +52,8 @@ type CacheEntryRecord struct {
 	ExpiresAt time.Time
 }
 
+// ModerationWarning is a stored warning against a user in a guild. CaseNumber is
+// the per-guild sequential case identifier surfaced to moderators.
 type ModerationWarning struct {
 	ID          int64
 	GuildID     string

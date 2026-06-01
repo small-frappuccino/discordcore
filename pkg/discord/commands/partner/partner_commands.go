@@ -17,6 +17,8 @@ const (
 	optionURL         = "url"
 )
 
+// PartnerCommands registers and backs the "/partner" command group, which
+// manages partner-board records and syncs them to their posting channel.
 type PartnerCommands struct {
 	configManager *files.ConfigManager
 	syncer        *partnerPostingSyncer

@@ -404,6 +404,8 @@ func specsForGroup(group string) []spec {
 
 // --- Command wiring ---
 
+// ConfigCommands registers and backs the "/config runtime" command surface,
+// which edits runtime configuration interactively through the config manager.
 type ConfigCommands struct {
 	configManager *files.ConfigManager
 }

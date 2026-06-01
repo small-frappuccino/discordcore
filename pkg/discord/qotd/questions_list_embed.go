@@ -10,6 +10,10 @@ import (
 
 const questionsListEmbedTitle = "☆ questions list! ☆"
 
+// QuestionsListEmbedParams holds the inputs for rendering a paginated
+// questions-list embed. Questions is the slice for the current page; Page and
+// PageSize drive pagination (PageSize defaults to 10 when non-positive), and
+// TotalQuestions sizes the page footer independently of the page slice.
 type QuestionsListEmbedParams struct {
 	DeckName       string
 	Questions      []storage.QOTDQuestionRecord

@@ -35,6 +35,9 @@ const (
 	runtimePublishMinSleep = time.Millisecond
 )
 
+// GuildLifecycleService is the per-guild QOTD lifecycle work that RuntimeService
+// drives on its publish and reconcile timers. NextScheduledPublishTime is only a
+// wake-up hint; PublishScheduledIfDue remains the authoritative due check.
 type GuildLifecycleService interface {
 	PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (bool, error)
 	ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) error
@@ -47,6 +50,10 @@ type GuildLifecycleService interface {
 	NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool)
 }
 
+// RuntimeService runs the background publish and reconcile loops for QOTD,
+// invoking a GuildLifecycleService on timers. It is safe to Start after a prior
+// Stop: Start reinitializes stopCh and stopOnce so the loops resume rather than
+// exiting immediately.
 type RuntimeService struct {
 	session          *discordgo.Session
 	configManager    *files.ConfigManager

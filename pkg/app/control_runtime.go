@@ -25,6 +25,8 @@ const (
 
 var errControlLocalTLSUnavailable = errors.New("control local tls unavailable")
 
+// RunProfile selects which runtime a process drives: the primary main runtime
+// or the QOTD-specialized runtime. See the RunProfile* constants.
 type RunProfile string
 
 const (
@@ -32,6 +34,9 @@ const (
 	RunProfileDiscordQOTD RunProfile = "discordqotd"
 )
 
+// RunOptions is the full configuration for a runtime process: which profile it
+// drives, which bot instances and domains it hosts, and how its optional control
+// plane is exposed. The zero value is not runnable; Profile must be set.
 type RunOptions struct {
 	// Profile identifies the runtime profile driving this process, such as the
 	// primary main runtime or the qotd-specialized runtime.
@@ -55,12 +60,18 @@ type RunOptions struct {
 	DisableControl bool
 }
 
+// ControlOptions configures the local control plane. BindAddr and PublicOrigin
+// default to profile-specific values when empty; LocalHTTPS opts into serving
+// over TLS on loopback.
 type ControlOptions struct {
 	BindAddr     string
 	PublicOrigin string
 	LocalHTTPS   ControlLocalHTTPSOptions
 }
 
+// ControlLocalHTTPSOptions enables serving the control plane over local HTTPS.
+// AutoTrust additionally installs the generated certificate into the OS trust
+// store and is honored only when Enabled is true.
 type ControlLocalHTTPSOptions struct {
 	Enabled   bool
 	AutoTrust bool

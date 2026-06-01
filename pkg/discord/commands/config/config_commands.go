@@ -191,6 +191,8 @@ func (c *echoCommand) Handle(ctx *core.Context) error {
 // Config Group SubCommands: set / get / list
 // -----------------------------------------
 
+// ConfigSetSubCommand implements "/config set", which writes a single guild
+// channel-mapping value selected from a fixed key allowlist and persists it.
 type ConfigSetSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -279,6 +281,8 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 	return configCommandShortConfirmationResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` is now set to `%s`.", key, value))
 }
 
+// ConfigGetSubCommand implements "/config get", which renders the guild's
+// current channel mappings, command, and QOTD settings as a private embed.
 type ConfigGetSubCommand struct {
 	configManager *files.ConfigManager
 }
@@ -333,6 +337,8 @@ func (c *ConfigGetSubCommand) Handle(ctx *core.Context) error {
 	return builder.Info(ctx.Interaction, b.String())
 }
 
+// ConfigListSubCommand implements "/config list", which enumerates the
+// configuration keys settable via "/config set".
 type ConfigListSubCommand struct {
 	configManager *files.ConfigManager
 }

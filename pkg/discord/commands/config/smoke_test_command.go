@@ -11,6 +11,8 @@ import (
 
 const smokeTestSubCommandName = "smoke_test"
 
+// SmokeTestSubCommand implements "/config smoke_test", which reports bootstrap
+// readiness for the guild's general configuration and QOTD setup.
 type SmokeTestSubCommand struct {
 	configManager *files.ConfigManager
 }

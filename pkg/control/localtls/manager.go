@@ -31,12 +31,17 @@ const (
 	defaultCertValidity       = 397 * 24 * time.Hour
 )
 
+// TrustResult reports the outcome of attempting to trust the local CA: whether
+// it is now trusted, whether this call installed it, and which OS trust store
+// was used.
 type TrustResult struct {
 	Trusted   bool
 	Installed bool
 	Store     string
 }
 
+// ReadyResult is the result of EnsureReady: the paths to the usable server
+// certificate and key, the certificate fingerprint, and the trust outcome.
 type ReadyResult struct {
 	CertFile    string
 	KeyFile     string
@@ -44,10 +49,16 @@ type ReadyResult struct {
 	Trust       TrustResult
 }
 
+// TrustInstaller installs the local CA certificate into an OS trust store. It is
+// the consumer-side seam for the platform-specific trust implementations.
 type TrustInstaller interface {
 	EnsureTrusted(context.Context, *x509.Certificate) (TrustResult, error)
 }
 
+// Config configures EnsureReady: where to store the CA and server material, the
+// certificate subject and SANs, rotation windows, and the optional auto-trust
+// installer. The unexported now and validate helpers supply defaults, so a zero
+// Now uses the wall clock.
 type Config struct {
 	Directory       string
 	CommonName      string

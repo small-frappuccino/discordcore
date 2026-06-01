@@ -15,6 +15,9 @@ import (
 
 // --- Fluent Interface (kept for compatibility) ---
 
+// Level is the severity selector for the fluent logging interface. See the
+// InfoLevel and WarnLevel constants; Error-level messages use ErrorLogger
+// directly rather than a Level value.
 type Level int
 
 const (

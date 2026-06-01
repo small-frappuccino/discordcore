@@ -12,6 +12,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// ArchivedMessage is a single thread message captured for archival, with author
+// metadata snapshotted at fetch time and embeds/attachments retained as raw JSON
+// so they can be re-rendered without re-fetching from Discord.
 type ArchivedMessage struct {
 	MessageID          string
 	AuthorID           string

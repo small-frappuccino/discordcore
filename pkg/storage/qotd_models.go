@@ -37,6 +37,10 @@ func (s QOTDQuestionSelector) orderByClause() string {
 	return "ORDER BY queue_position ASC, id ASC"
 }
 
+// QOTDQuestionRecord is a stored QOTD question. ID is the global primary key;
+// DisplayID is the stable per-guild identifier shown to users. Status holds a
+// qotd.QuestionStatus value, and the *time.Time fields are nil until the
+// corresponding lifecycle event (scheduled, used, first published) occurs.
 type QOTDQuestionRecord struct {
 	ID                  int64
 	DisplayID           int64
@@ -53,6 +57,11 @@ type QOTDQuestionRecord struct {
 	UpdatedAt           time.Time
 }
 
+// QOTDOfficialPostRecord is the durable state of one official QOTD post and the
+// source of truth the reconcile loop drives toward Discord. State holds a
+// qotd.OfficialPostState value. Two of its fields anchor publish idempotency
+// (see the PublishOrdinal and Nonce field comments); changing publish paths
+// must preserve both.
 type QOTDOfficialPostRecord struct {
 	ID               int64
 	GuildID          string
@@ -93,6 +102,8 @@ type QOTDOfficialPostRecord struct {
 	UpdatedAt        time.Time
 }
 
+// QOTDSurfaceRecord maps a guild deck to its Discord surface: the channel and
+// the question-list thread used to render the deck's published questions.
 type QOTDSurfaceRecord struct {
 	ID                   int64
 	GuildID              string
@@ -103,6 +114,9 @@ type QOTDSurfaceRecord struct {
 	UpdatedAt            time.Time
 }
 
+// QOTDAnswerMessageRecord is a stored answer posted against an official post.
+// State holds a qotd.AnswerRecordState value; ClosedAt and ArchivedAt are nil
+// until the answer surface closes or is archived.
 type QOTDAnswerMessageRecord struct {
 	ID                      int64
 	GuildID                 string

@@ -19,6 +19,8 @@ const (
 	ErrSuccessTitle = "Success"
 )
 
+// NotificationSender renders and sends operational log notifications (such as
+// avatar-change embeds) to configured guild channels over a Discord session.
 type NotificationSender struct {
 	session *discordgo.Session
 	logger  *slog.Logger

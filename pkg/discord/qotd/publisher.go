@@ -33,6 +33,11 @@ const (
 	officialQuestionEmbedColor       = 0xF48FB1
 )
 
+// PublishOfficialPostParams is the full set of inputs needed to publish (or
+// idempotently re-publish) an official QOTD post to Discord. The Discord ID
+// fields may be empty on a first publish and are populated when adopting an
+// existing thread during recovery. See the Nonce field for crash-retry
+// deduplication.
 type PublishOfficialPostParams struct {
 	GuildID                    string
 	OfficialPostID             int64
@@ -56,6 +61,9 @@ type PublishOfficialPostParams struct {
 	Nonce string
 }
 
+// PublishedOfficialPost reports the Discord-side identifiers produced by a
+// successful publish, which the caller persists back onto the official-post
+// record. PostURL is the jump link to the published post.
 type PublishedOfficialPost struct {
 	QuestionListThreadID       string
 	QuestionListEntryMessageID string
@@ -66,6 +74,8 @@ type PublishedOfficialPost struct {
 	PostURL                    string
 }
 
+// ThreadState is the desired pin/lock/archive state applied to a QOTD thread by
+// SetThreadState. Archiving an official post should only flip Locked.
 type ThreadState struct {
 	Pinned   bool
 	Locked   bool
