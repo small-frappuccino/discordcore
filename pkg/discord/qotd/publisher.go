@@ -298,26 +298,16 @@ func (post *PublishedOfficialPost) withPostURL(guildID, channelID string) *Publi
 	return post
 }
 
-func (p *Publisher) SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state ThreadState) (err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("set qotd thread state: %w", err)
-		}
-	}()
-	if session == nil {
-		return errors.New("discord session is required")
-	}
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return errors.New("thread id is required")
-	}
-
-	if _, err := session.ChannelEditComplex(
-		threadID,
-		buildThreadStateChannelEdit(state),
-	); err != nil {
-		return err
-	}
+// SetThreadState is intentionally a no-op. Grooming a QOTD thread's
+// lock/archive/pin flags requires MANAGE_THREADS on that specific thread,
+// which Discord rejects with 403 Missing Access for our bot even when it can
+// otherwise post there. Every grooming/archive edit therefore failed and the
+// reconcile loop re-emitted the same WARN for the post's whole 48h lifecycle.
+// Discord's auto_archive_duration already closes the thread at the answer
+// window, so we skip the channel edit entirely and let the DB lifecycle
+// advance to the intended state — the model describes intended state, not a
+// guaranteed Discord mutation.
+func (p *Publisher) SetThreadState(_ context.Context, _ *discordgo.Session, _ string, _ ThreadState) error {
 	return nil
 }
 
