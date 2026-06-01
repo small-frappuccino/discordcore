@@ -218,7 +218,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOT
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE id = ?`,
+		WHERE id = $1`,
 		id,
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
@@ -266,8 +266,8 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ?
-		  AND publish_date_utc = ?
+		WHERE guild_id = $1
+		  AND publish_date_utc = $2
 		ORDER BY
 		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
 		  CASE
@@ -335,8 +335,8 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ?
-		  AND publish_date_utc = ?
+		WHERE guild_id = $1
+		  AND publish_date_utc = $2
 		ORDER BY
 		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
 		  CASE
@@ -407,8 +407,8 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ?
-		  AND publish_date_utc = ?
+		WHERE guild_id = $1
+		  AND publish_date_utc = $2
 		  AND (publish_mode = 'scheduled' OR consume_automatic_slot = TRUE)
 		ORDER BY
 		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
@@ -473,9 +473,9 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ?
+		WHERE guild_id = $1
 		  AND publish_mode = 'scheduled'
-		  AND publish_date_utc = ?
+		  AND publish_date_utc = $2
 		ORDER BY
 		  CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
 		  CASE

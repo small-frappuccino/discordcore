@@ -363,7 +363,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 			created_at,
 			updated_at
 		FROM qotd_questions
-		WHERE guild_id = ? AND id = ?`,
+		WHERE guild_id = $1 AND id = $2`,
 		guildID,
 		questionID,
 	)
@@ -511,8 +511,8 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 			created_at,
 			updated_at
 		FROM qotd_questions
-		WHERE guild_id = ?
-		  AND deck_id = ?
+		WHERE guild_id = $1
+		  AND deck_id = $2
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
 		  AND published_once_at IS NULL
@@ -601,8 +601,8 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 			created_at,
 			updated_at
 		FROM qotd_questions
-		WHERE guild_id = ?
-		  AND deck_id = ?
+		WHERE guild_id = $1
+		  AND deck_id = $2
 		  AND status = 'ready'
 		  AND scheduled_for_date_utc IS NULL
 		  AND published_once_at IS NULL
@@ -844,7 +844,7 @@ func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, question
 			created_at,
 			updated_at
 		FROM qotd_questions
-		WHERE guild_id = ? AND id = ?`,
+		WHERE guild_id = $1 AND id = $2`,
 		guildID,
 		questionID,
 	)

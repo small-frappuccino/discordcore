@@ -30,7 +30,7 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 			created_at,
 			updated_at
 		FROM qotd_forum_surfaces
-		WHERE guild_id = ? AND deck_id = ?`,
+		WHERE guild_id = $1 AND deck_id = $2`,
 		guildID,
 		deckID,
 	)
@@ -233,7 +233,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 			closed_at,
 			archived_at
 		FROM qotd_answer_messages
-		WHERE official_post_id = ? AND user_id = ?`,
+		WHERE official_post_id = $1 AND user_id = $2`,
 		officialPostID,
 		userID,
 	)
@@ -272,7 +272,7 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 			closed_at,
 			archived_at
 		FROM qotd_answer_messages
-		WHERE official_post_id = ?
+		WHERE official_post_id = $1
 		ORDER BY id ASC`,
 		officialPostID,
 	)

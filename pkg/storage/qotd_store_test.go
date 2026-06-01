@@ -706,6 +706,68 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 	}
 }
 
+// TestGetQOTDOfficialPostByDateRoundTrip writes a provisioned official post and
+// reads it back by (guild, publish date), exercising the scheduled-publish
+// lookup path end-to-end against Postgres. It is the behavioral counterpart to
+// the static placeholder guard in query_placeholders_test.go: this query
+// previously used "?" binds and failed under the pgx driver with SQLSTATE 42601
+// ("syntax error at or near \"AND\"").
+func TestGetQOTDOfficialPostByDateRoundTrip(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Round-trip question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	created, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		PublishDateUTC:       publishDate,
+		State:                "provisioning",
+		ChannelID:            "forum-1",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC),
+		ArchiveAt:            time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
+	}
+
+	got, err := store.GetQOTDOfficialPostByDate(ctx, "g1", publishDate)
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate() failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetQOTDOfficialPostByDate() returned no record for the inserted publish date")
+	}
+	if got.ID != created.ID {
+		t.Fatalf("GetQOTDOfficialPostByDate() returned id %d, want %d", got.ID, created.ID)
+	}
+	if got.GuildID != "g1" || got.DeckID != "default" || !got.PublishDateUTC.Equal(created.PublishDateUTC) {
+		t.Fatalf("GetQOTDOfficialPostByDate() returned mismatched record: %+v", got)
+	}
+
+	// A date with no official post must miss cleanly (nil, nil) rather than error.
+	missing, err := store.GetQOTDOfficialPostByDate(ctx, "g1", publishDate.AddDate(0, 0, 1))
+	if err != nil {
+		t.Fatalf("GetQOTDOfficialPostByDate(unused date) failed: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("expected no record for an unused date, got %+v", missing)
+	}
+}
+
 func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()

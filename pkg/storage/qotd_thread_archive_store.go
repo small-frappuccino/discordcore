@@ -52,10 +52,10 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ?
+		WHERE guild_id = $1
 		  AND published_at IS NOT NULL
 		  AND archived_at IS NULL
-		  AND archive_at > ?
+		  AND archive_at > $2
 		ORDER BY publish_date_utc DESC, published_at DESC, id DESC
 		LIMIT 2`,
 		guildID,
@@ -123,7 +123,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 		FROM qotd_official_posts
 		WHERE published_at IS NOT NULL
 		  AND archived_at IS NULL
-		  AND archive_at <= ?
+		  AND archive_at <= $1
 		ORDER BY archive_at ASC, id ASC`,
 		now,
 	)

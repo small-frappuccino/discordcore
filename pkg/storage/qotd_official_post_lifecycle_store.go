@@ -110,7 +110,7 @@ func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildI
 			created_at,
 			updated_at
 		FROM qotd_official_posts
-		WHERE guild_id = ?
+		WHERE guild_id = $1
 		  AND archived_at IS NULL
 		  AND state IN ('provisioning', 'failed')
 		ORDER BY updated_at ASC, id ASC`,
