@@ -1,7 +1,9 @@
 package logging
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -97,5 +99,78 @@ func TestParseEntryExitBackfillMessage_IgnoresNonMatching(t *testing.T) {
 	_, _, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if ok {
 		t.Fatalf("expected ok=false")
+	}
+}
+
+// TestApplyBackfillPage_WindowsAndStopsAtStart verifies that a page ordered
+// newest-to-oldest counts messages at/after the window end, processes messages inside
+// [start, end), and halts mid-page (reachedStart) the moment it sees a message older
+// than start, leaving trailing messages untouched.
+func TestApplyBackfillPage_WindowsAndStopsAtStart(t *testing.T) {
+	ms := &MonitoringService{}
+	start := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 1, 11, 0, 0, 0, 0, time.UTC)
+
+	msgs := []*discordgo.Message{
+		{ID: "1", Timestamp: time.Date(2024, 1, 12, 0, 0, 0, 0, time.UTC)},  // at/after end: counted, not persisted
+		{ID: "2", Timestamp: time.Date(2024, 1, 10, 12, 0, 0, 0, time.UTC)}, // in window: counted
+		{ID: "3", Timestamp: time.Date(2024, 1, 10, 1, 0, 0, 0, time.UTC)},  // in window: counted
+		{ID: "4", Timestamp: time.Date(2024, 1, 9, 0, 0, 0, 0, time.UTC)},   // before start: stop here
+		{ID: "5", Timestamp: time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC)},   // never reached
+	}
+
+	res, err := ms.applyBackfillPage(context.Background(), "g", "c", "bot", "range", msgs, start, end)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.reachedStart {
+		t.Fatalf("expected reachedStart=true once a message older than start is seen")
+	}
+	if res.processed != 3 {
+		t.Fatalf("expected processed=3 (messages 1-3, message 5 never reached), got %d", res.processed)
+	}
+	if res.eventsFound != 0 {
+		t.Fatalf("expected eventsFound=0 with nil store, got %d", res.eventsFound)
+	}
+}
+
+// TestApplyBackfillPage_NoStartReachedProcessesAll verifies that when no message is
+// older than start, the whole page is counted and reachedStart stays false so the
+// caller keeps paging.
+func TestApplyBackfillPage_NoStartReachedProcessesAll(t *testing.T) {
+	ms := &MonitoringService{}
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC)
+
+	msgs := []*discordgo.Message{
+		{ID: "1", Timestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "2", Timestamp: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	res, err := ms.applyBackfillPage(context.Background(), "g", "c", "bot", "day", msgs, start, end)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.reachedStart {
+		t.Fatalf("expected reachedStart=false when no message predates start")
+	}
+	if res.processed != 2 {
+		t.Fatalf("expected processed=2, got %d", res.processed)
+	}
+}
+
+// TestApplyBackfillPage_CanceledContextReturnsError verifies the per-message context
+// check aborts the page and surfaces a wrapped error.
+func TestApplyBackfillPage_CanceledContextReturnsError(t *testing.T) {
+	ms := &MonitoringService{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	msgs := []*discordgo.Message{
+		{ID: "1", Timestamp: time.Now().UTC()},
+	}
+
+	if _, err := ms.applyBackfillPage(ctx, "g", "c", "bot", "day", msgs, time.Time{}, time.Now().Add(time.Hour)); err == nil {
+		t.Fatalf("expected error from canceled context")
 	}
 }

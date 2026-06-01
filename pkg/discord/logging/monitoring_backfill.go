@@ -120,39 +120,62 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 			break
 		}
 
-		// Messages come newest -> oldest; stop once we page past the window start.
-		stop := false
-		for _, m := range msgs {
-			if err := serviceCtx.Err(); err != nil {
-				return fmt.Errorf("MonitoringService.runEntryExitBackfill: %w", err)
-			}
-			t := m.Timestamp.UTC()
-			if t.Before(start) {
-				stop = true
-				break
-			}
-			if !t.Before(end) {
-				processedCount++
-				continue
-			}
-			if ms.persistBackfillMessage(serviceCtx, guildID, channelID, botID, mode, m, t) {
-				eventsFound++
-			}
-			processedCount++
+		page, err := ms.applyBackfillPage(serviceCtx, guildID, channelID, botID, mode, msgs, start, end)
+		if err != nil {
+			return err
 		}
+		processedCount += page.processed
+		eventsFound += page.eventsFound
 
 		if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
 			log.ApplicationLogger().Info("⏳ Backfill in progress...", "mode", mode, "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
 		}
 
 		before = msgs[len(msgs)-1].ID
-		if stop {
+		if page.reachedStart {
 			break
 		}
 	}
 
 	log.ApplicationLogger().Info("✅ Backfill completed", "mode", mode, "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
 	return nil
+}
+
+// backfillPageResult summarizes one processed page of channel messages: the messages
+// counted toward progress, the recognized join/leave events persisted, and whether a
+// message older than the window start was seen — the signal for the caller to stop paging.
+type backfillPageResult struct {
+	processed    int
+	eventsFound  int
+	reachedStart bool
+}
+
+// applyBackfillPage processes a single page of messages ordered newest-to-oldest,
+// persisting the member join/leave events whose timestamp falls in [start, end). It
+// returns as soon as it encounters a message older than start, with reachedStart set,
+// so the caller can stop paging without a separate loop-control flag. A canceled
+// serviceCtx aborts mid-page and surfaces the wrapped context error.
+func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, guildID, channelID, botID, mode string, msgs []*discordgo.Message, start, end time.Time) (backfillPageResult, error) {
+	var res backfillPageResult
+	for _, m := range msgs {
+		if err := serviceCtx.Err(); err != nil {
+			return res, fmt.Errorf("MonitoringService.applyBackfillPage: %w", err)
+		}
+		t := m.Timestamp.UTC()
+		if t.Before(start) {
+			res.reachedStart = true
+			return res, nil
+		}
+		if !t.Before(end) {
+			res.processed++
+			continue
+		}
+		if ms.persistBackfillMessage(serviceCtx, guildID, channelID, botID, mode, m, t) {
+			res.eventsFound++
+		}
+		res.processed++
+	}
+	return res, nil
 }
 
 // persistBackfillMessage parses a single backfilled log message and, when it encodes
