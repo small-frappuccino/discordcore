@@ -405,9 +405,9 @@ func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 // Enqueued tasks that are not yet picked up may be dropped.
 func (tr *TaskRouter) Close() {
 	tr.stopOnce.Do(func() {
-		groups := make([]*groupWorker, 0, len(tr.groups))
 		tr.mu.Lock()
 		tr.closed = true
+		groups := make([]*groupWorker, 0, len(tr.groups))
 		for _, gw := range tr.groups {
 			if gw == nil {
 				continue
