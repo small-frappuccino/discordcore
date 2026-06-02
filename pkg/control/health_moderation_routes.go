@@ -20,10 +20,10 @@ import (
 // NewInMemoryMetrics in app startup, not hunting a missing route.
 func (s *Server) handleModerationHealthRoute(w http.ResponseWriter, r *http.Request) {
 	s.serveHealthRoute(w, r, func() (any, string) {
-		if s.moderationMetrics == nil {
+		if s.health.moderationMetrics == nil {
 			return nil, "moderation metrics not enabled"
 		}
-		provider, ok := s.moderationMetrics.(moderation.SnapshotProvider)
+		provider, ok := s.health.moderationMetrics.(moderation.SnapshotProvider)
 		if !ok {
 			return nil, "moderation metrics not enabled (no SnapshotProvider attached)"
 		}

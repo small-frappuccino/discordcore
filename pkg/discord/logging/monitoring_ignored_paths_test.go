@@ -35,7 +35,7 @@ func TestMonitoringService_HandleGuildUpdatePersistsOwnerID(t *testing.T) {
 	if err := store.SetGuildOwnerID(guildID, "owner-old"); err != nil {
 		t.Fatalf("seed old owner id: %v", err)
 	}
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024), store: store}
+	ms := &MonitoringService{store: store, stats: newStatsCoordinator()}
 
 	ms.handleGuildUpdate(nil, &discordgo.GuildUpdate{
 		Guild: &discordgo.Guild{
@@ -107,15 +107,17 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
-		recentChanges: map[string]time.Time{
-			guildID + ":" + userID + ":default": time.Now().UTC(),
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{
+				guildID + ":" + userID + ":default": time.Now().UTC(),
+			},
 		},
-		rolesCache: make(map[string]cachedRoles),
-		rolesTTL:   time.Minute,
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		stats:      newStatsCoordinator(),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -176,15 +178,17 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
-		recentChanges: map[string]time.Time{
-			guildID + ":" + userID + ":default": time.Now().UTC(),
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{
+				guildID + ":" + userID + ":default": time.Now().UTC(),
+			},
 		},
-		rolesCache: make(map[string]cachedRoles),
-		rolesTTL:   time.Minute,
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		stats:      newStatsCoordinator(),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -238,10 +242,11 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		OnHeartbeatTick: ticks.Hook,
 	})
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		store:    store,
-		stopChan: make(chan struct{}),
+		run:      monitoringRunState{stopChan: make(chan struct{})},
 		activity: activity,
+		stats:    newStatsCoordinator(),
 	}
 
 	origInterval := heartbeatTickInterval
@@ -253,7 +258,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	heartbeatTickInterval = 25 * time.Millisecond
 	t.Cleanup(func() {
 		heartbeatTickInterval = origInterval
-		close(ms.stopChan)
+		close(ms.run.stopChan)
 		if err := ms.stopHeartbeat(context.Background()); err != nil {
 			t.Fatalf("stop heartbeat cleanup: %v", err)
 		}

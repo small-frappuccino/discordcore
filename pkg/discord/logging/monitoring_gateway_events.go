@@ -220,14 +220,10 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 		ClientStatus: normalizeClientStatus(m.ClientStatus),
 	}
 
-	ms.presenceWatchMu.Lock()
-	prev, hasPrev := ms.presenceWatch[userID]
-	if hasPrev && presenceSnapshotEqual(prev, snap) {
-		ms.presenceWatchMu.Unlock()
+	prev, hasPrev, changed := ms.presence.observe(userID, snap)
+	if !changed {
 		return
 	}
-	ms.presenceWatch[userID] = snap
-	ms.presenceWatchMu.Unlock()
 
 	statusChange := ""
 	if hasPrev {

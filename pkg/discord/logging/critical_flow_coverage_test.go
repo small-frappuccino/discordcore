@@ -274,13 +274,13 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		t.Fatalf("add bot member to state: %v", err)
 	}
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		session:       session,
-		configManager: cfgMgr,
-		store:         store,
-		recentChanges: make(map[string]time.Time),
-		rolesCache:    make(map[string]cachedRoles),
-		rolesTTL:      time.Minute,
+	ms := &MonitoringService{
+		session:        session,
+		configManager:  cfgMgr,
+		store:          store,
+		changeDebounce: changeDebouncer{},
+		rolesCache:     rolesCacheStore{ttl: time.Minute},
+		stats:          newStatsCoordinator(),
 	}
 
 	ms.initializeGuildCache(guildID)
@@ -381,15 +381,17 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
-		recentChanges: map[string]time.Time{
-			guildID + ":" + userID + ":default": time.Now().UTC(),
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{
+				guildID + ":" + userID + ":default": time.Now().UTC(),
+			},
 		},
-		rolesCache: make(map[string]cachedRoles),
-		rolesTTL:   time.Minute,
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		stats:      newStatsCoordinator(),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{

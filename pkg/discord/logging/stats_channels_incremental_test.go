@@ -139,15 +139,14 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		t.Fatalf("add guild config: %v", err)
 	}
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		statsLastRun:  make(map[string]time.Time),
-		statsGuilds:   make(map[string]*statsGuildState),
+		stats:         newStatsCoordinator(),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go ms.statsLoop(ctx)
+	go ms.stats.loop(ctx)
 
 	if err := ms.updateStatsChannels(context.Background()); err != nil {
 		t.Fatalf("first updateStatsChannels error: %v", err)
@@ -162,7 +161,14 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		t.Fatalf("expected one channel edit on first publish, got %d", got)
 	}
 
-	ms.statsLastRun[guildID] = time.Time{}
+	// Reset through the actor so the write is serialized with the loop's own
+	// access to lastRun instead of racing it.
+	resetDone := make(chan struct{})
+	ms.stats.actorCh <- func() {
+		ms.stats.lastRun[guildID] = time.Time{}
+		close(resetDone)
+	}
+	<-resetDone
 	if err := ms.updateStatsChannels(context.Background()); err != nil {
 		t.Fatalf("second updateStatsChannels error: %v", err)
 	}
@@ -216,19 +222,25 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 		t.Fatalf("expected initial member seed to succeed")
 	}
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       newLoggingLifecycleSession(t),
 		configManager: cfgMgr,
-		recentChanges: map[string]time.Time{
-			guildID + ":" + userID + ":default": time.Now().UTC(),
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{
+				guildID + ":" + userID + ":default": time.Now().UTC(),
+			},
 		},
-		statsGuilds: map[string]*statsGuildState{
-			guildID: state,
+		stats: &statsCoordinator{
+			actorCh: make(chan func(), 1024),
+			guilds: map[string]*statsGuildState{
+				guildID: state,
+			},
+			lastRun: make(map[string]time.Time),
 		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go ms.statsLoop(ctx)
+	go ms.stats.loop(ctx)
 
 	ms.handleMemberUpdate(ms.session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -242,14 +254,14 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 	})
 
 	waitCh := make(chan struct{})
-	ms.statsActorCh <- func() { close(waitCh) }
+	ms.stats.actorCh <- func() { close(waitCh) }
 	<-waitCh
 
-	bucket := ms.statsGuilds[guildID].roleTotals[roleID]
+	bucket := ms.stats.guilds[guildID].roleTotals[roleID]
 	if got := bucket.total("all"); got != 1 {
 		t.Fatalf("expected stats role count to update even when role log emission is suppressed, got %d", got)
 	}
-	if ms.statsGuilds[guildID].dirty {
+	if ms.stats.guilds[guildID].dirty {
 		t.Fatalf("expected stats state to remain clean after in-band member update")
 	}
 }
@@ -328,16 +340,15 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 		t.Fatalf("add guild config: %v", err)
 	}
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
-		statsLastRun:  make(map[string]time.Time),
-		statsGuilds:   make(map[string]*statsGuildState),
+		stats:         newStatsCoordinator(),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go ms.statsLoop(ctx)
+	go ms.stats.loop(ctx)
 	now := time.Now().UTC()
 	if err := store.SetHeartbeat(context.Background(), now); err != nil {
 		t.Fatalf("set heartbeat: %v", err)

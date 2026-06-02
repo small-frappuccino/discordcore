@@ -5,7 +5,6 @@ import (
 
 	"context"
 	"testing"
-	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -25,10 +24,11 @@ func TestMonitoringService_SetupAndRemoveEventHandlersFromRuntimeConfig(t *testi
 	session := newLoggingLifecycleSession(t)
 	cfgMgr := newMonitoringTestConfigManager(t)
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		eventHandlers: make([]func(), 0),
+		stats:         newStatsCoordinator(),
 	}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{DisableUserLogs: true})
@@ -57,16 +57,16 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	t.Cleanup(cancelRun)
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:              session,
 		configManager:        cfgMgr,
 		memberEventService:   NewMemberEventService(session, cfgMgr, nil, nil, slog.Default()),
 		messageEventService:  NewMessageEventService(session, cfgMgr, nil, nil, slog.Default()),
 		reactionEventService: NewReactionEventService(session, cfgMgr, nil, slog.Default()),
 		router:               router,
-		isRunning:            true,
-		runCtx:               runCtx,
+		run:                  monitoringRunState{running: true, ctx: runCtx},
 		eventHandlers:        make([]func(), 0),
+		stats:                newStatsCoordinator(),
 	}
 
 	if err := ms.memberEventService.Start(context.Background()); err != nil {
@@ -98,10 +98,10 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	if ms.reactionEventService.IsRunning() {
 		t.Fatalf("reaction service should be stopped after disable toggles")
 	}
-	if ms.cronCancel != nil {
+	if ms.run.cronCancel != nil {
 		t.Fatalf("avatar scan schedule should be stopped after disable toggles")
 	}
-	if ms.rolesRefreshCronCancel != nil {
+	if ms.run.rolesRefreshCronCancel != nil {
 		t.Fatalf("roles refresh schedule should be stopped after disable toggles")
 	}
 	if got := len(ms.eventHandlers); got != 4 {
@@ -121,13 +121,13 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	if !ms.reactionEventService.IsRunning() {
 		t.Fatalf("reaction service should be running after enable toggles")
 	}
-	if ms.cronCancel == nil {
+	if ms.run.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be active after enable toggles")
 	}
-	if ms.rolesRefreshCronCancel == nil {
+	if ms.run.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be active after enable toggles")
 	}
-	if ms.statsCronCancel != nil {
+	if ms.run.statsCronCancel != nil {
 		t.Fatalf("stats schedule should remain inactive without stats config")
 	}
 	if got := len(ms.eventHandlers); got != 7 {
@@ -177,12 +177,12 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	t.Cleanup(cancelRun)
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		router:        router,
-		runCtx:        runCtx,
-		statsLastRun:  make(map[string]time.Time),
+		run:           monitoringRunState{ctx: runCtx},
+		stats:         newStatsCoordinator(),
 	}
 
 	state := monitoringWorkloadState{
@@ -192,13 +192,13 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	}
 
 	ms.syncSchedulesLocked(runCtx, state)
-	if ms.cronCancel == nil {
+	if ms.run.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be created")
 	}
-	if ms.statsCronCancel == nil {
+	if ms.run.statsCronCancel == nil {
 		t.Fatalf("stats schedule should be created")
 	}
-	if ms.rolesRefreshCronCancel == nil {
+	if ms.run.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be created")
 	}
 	if got := router.Stats().RegisteredTypes; got != 3 {
@@ -206,24 +206,24 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	}
 
 	ms.syncSchedulesLocked(runCtx, monitoringWorkloadState{})
-	if ms.cronCancel != nil {
+	if ms.run.cronCancel != nil {
 		t.Fatalf("avatar scan schedule should be removed")
 	}
-	if ms.statsCronCancel != nil {
+	if ms.run.statsCronCancel != nil {
 		t.Fatalf("stats schedule should be removed")
 	}
-	if ms.rolesRefreshCronCancel != nil {
+	if ms.run.rolesRefreshCronCancel != nil {
 		t.Fatalf("roles refresh schedule should be removed")
 	}
 
 	ms.syncSchedulesLocked(runCtx, state)
-	if ms.cronCancel == nil {
+	if ms.run.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be recreated")
 	}
-	if ms.statsCronCancel == nil {
+	if ms.run.statsCronCancel == nil {
 		t.Fatalf("stats schedule should be recreated")
 	}
-	if ms.rolesRefreshCronCancel == nil {
+	if ms.run.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be recreated")
 	}
 
@@ -245,10 +245,11 @@ func TestMonitoringService_SetupEventHandlersKeepsPresenceWatchWhenUserLogsDisab
 		t.Fatalf("update config: %v", err)
 	}
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		eventHandlers: make([]func(), 0),
+		stats:         newStatsCoordinator(),
 	}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{

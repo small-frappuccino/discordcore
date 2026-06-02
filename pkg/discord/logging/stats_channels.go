@@ -20,6 +20,37 @@ const (
 	statsSeedMetadataPrefix       = "stats_channels.seeded:"
 )
 
+// statsCoordinator owns the stats-channel actor goroutine and the state it
+// serializes. guilds and lastRun are mutated only from within funcs delivered
+// on actorCh and executed by loop, so they require no additional locking.
+// Construct with newStatsCoordinator; the zero value has nil maps and channel.
+type statsCoordinator struct {
+	actorCh chan func()
+	guilds  map[string]*statsGuildState
+	lastRun map[string]time.Time
+}
+
+func newStatsCoordinator() *statsCoordinator {
+	return &statsCoordinator{
+		actorCh: make(chan func(), 1024),
+		guilds:  make(map[string]*statsGuildState),
+		lastRun: make(map[string]time.Time),
+	}
+}
+
+// loop runs the stats actor until ctx is canceled, executing each enqueued
+// closure serially so the maps above are only ever touched by one goroutine.
+func (sc *statsCoordinator) loop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case fn := <-sc.actorCh:
+			fn()
+		}
+	}
+}
+
 type statsCounterBucket struct {
 	all    int
 	humans int
@@ -255,16 +286,16 @@ func (ms *MonitoringService) shouldRunStatsUpdate(guildID string, interval time.
 	}
 	now := time.Now()
 	replyCh := make(chan bool, 1)
-	ms.statsActorCh <- func() {
-		if ms.statsLastRun == nil {
-			ms.statsLastRun = make(map[string]time.Time)
+	ms.stats.actorCh <- func() {
+		if ms.stats.lastRun == nil {
+			ms.stats.lastRun = make(map[string]time.Time)
 		}
-		last, ok := ms.statsLastRun[guildID]
+		last, ok := ms.stats.lastRun[guildID]
 		if ok && now.Sub(last) < interval {
 			replyCh <- false
 			return
 		}
-		ms.statsLastRun[guildID] = now
+		ms.stats.lastRun[guildID] = now
 		replyCh <- true
 	}
 	return <-replyCh
@@ -319,7 +350,7 @@ func (ms *MonitoringService) prepareStatsState(ctx context.Context, gcfg files.G
 		needsReconcile bool
 		skipRest       bool
 	}, 1)
-	ms.statsActorCh <- func() {
+	ms.stats.actorCh <- func() {
 		state := ms.ensureStatsGuildState(gcfg.GuildID)
 		keysMatch := state.trackedRolesKey == trackedRolesKey
 		if state.initialized && keysMatch && !state.dirty {
@@ -732,7 +763,7 @@ func (ms *MonitoringService) applyStatsMemberAdd(member *discordgo.Member) {
 		trackedRoles: filterTrackedRoles(member.Roles, trackedRoles),
 	}
 
-	ms.statsActorCh <- func() {
+	ms.stats.actorCh <- func() {
 		state := ms.ensureStatsGuildState(guildID)
 		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 			state.dirty = true
@@ -761,7 +792,7 @@ func (ms *MonitoringService) applyStatsMemberUpdate(guildID, userID string, isBo
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
 	}
 
-	ms.statsActorCh <- func() {
+	ms.stats.actorCh <- func() {
 		state := ms.ensureStatsGuildState(guildID)
 		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 			state.dirty = true
@@ -786,7 +817,7 @@ func (ms *MonitoringService) applyStatsMemberRemove(guildID, userID string) {
 	}
 	ms.persistStatsMemberLeft(guildID, userID)
 
-	ms.statsActorCh <- func() {
+	ms.stats.actorCh <- func() {
 		state := ms.ensureStatsGuildState(guildID)
 		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 			state.dirty = true
@@ -872,35 +903,35 @@ func (ms *MonitoringService) statsGuildConfig(guildID string) (files.GuildConfig
 }
 
 func (ms *MonitoringService) ensureStatsGuildState(guildID string) *statsGuildState {
-	if ms.statsGuilds == nil {
-		ms.statsGuilds = make(map[string]*statsGuildState)
+	if ms.stats.guilds == nil {
+		ms.stats.guilds = make(map[string]*statsGuildState)
 	}
-	state := ms.statsGuilds[guildID]
+	state := ms.stats.guilds[guildID]
 	if state != nil {
 		return state
 	}
 	state = newStatsGuildState("", nil)
-	ms.statsGuilds[guildID] = state
+	ms.stats.guilds[guildID] = state
 	return state
 }
 
 func (ms *MonitoringService) replaceStatsGuildState(guildID string, state *statsGuildState) {
-	ms.statsActorCh <- func() {
-		if ms.statsGuilds == nil {
-			ms.statsGuilds = make(map[string]*statsGuildState)
+	ms.stats.actorCh <- func() {
+		if ms.stats.guilds == nil {
+			ms.stats.guilds = make(map[string]*statsGuildState)
 		}
-		ms.statsGuilds[guildID] = state
+		ms.stats.guilds[guildID] = state
 	}
 }
 
 func (ms *MonitoringService) statsPublishedChannels(guildID string) map[string]statsPublishedChannel {
 	replyCh := make(chan map[string]statsPublishedChannel, 1)
-	ms.statsActorCh <- func() {
-		if ms.statsGuilds == nil {
+	ms.stats.actorCh <- func() {
+		if ms.stats.guilds == nil {
 			replyCh <- nil
 			return
 		}
-		state := ms.statsGuilds[guildID]
+		state := ms.stats.guilds[guildID]
 		if state == nil {
 			replyCh <- nil
 			return
@@ -915,15 +946,15 @@ func (ms *MonitoringService) statsPublishedChannel(guildID, channelID string) (s
 		published statsPublishedChannel
 		ok        bool
 	}, 1)
-	ms.statsActorCh <- func() {
-		if ms.statsGuilds == nil {
+	ms.stats.actorCh <- func() {
+		if ms.stats.guilds == nil {
 			replyCh <- struct {
 				published statsPublishedChannel
 				ok        bool
 			}{statsPublishedChannel{}, false}
 			return
 		}
-		state := ms.statsGuilds[guildID]
+		state := ms.stats.guilds[guildID]
 		if state == nil || state.published == nil {
 			replyCh <- struct {
 				published statsPublishedChannel
@@ -942,7 +973,7 @@ func (ms *MonitoringService) statsPublishedChannel(guildID, channelID string) (s
 }
 
 func (ms *MonitoringService) recordStatsPublishedChannel(guildID, channelID string, published statsPublishedChannel) {
-	ms.statsActorCh <- func() {
+	ms.stats.actorCh <- func() {
 		state := ms.ensureStatsGuildState(guildID)
 		if state.published == nil {
 			state.published = make(map[string]statsPublishedChannel)
@@ -956,15 +987,15 @@ func (ms *MonitoringService) statsSnapshot(guildID string) (statsGuildSnapshot, 
 		snapshot statsGuildSnapshot
 		ok       bool
 	}, 1)
-	ms.statsActorCh <- func() {
-		if ms.statsGuilds == nil {
+	ms.stats.actorCh <- func() {
+		if ms.stats.guilds == nil {
 			replyCh <- struct {
 				snapshot statsGuildSnapshot
 				ok       bool
 			}{statsGuildSnapshot{}, false}
 			return
 		}
-		state := ms.statsGuilds[guildID]
+		state := ms.stats.guilds[guildID]
 		if state == nil || !state.initialized {
 			replyCh <- struct {
 				snapshot statsGuildSnapshot
@@ -993,18 +1024,18 @@ func (ms *MonitoringService) statsSnapshot(guildID string) (statsGuildSnapshot, 
 }
 
 func (ms *MonitoringService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
-	ms.statsActorCh <- func() {
-		for guildID := range ms.statsLastRun {
+	ms.stats.actorCh <- func() {
+		for guildID := range ms.stats.lastRun {
 			if _, ok := activeGuilds[guildID]; ok {
 				continue
 			}
-			delete(ms.statsLastRun, guildID)
+			delete(ms.stats.lastRun, guildID)
 		}
-		for guildID := range ms.statsGuilds {
+		for guildID := range ms.stats.guilds {
 			if _, ok := activeGuilds[guildID]; ok {
 				continue
 			}
-			delete(ms.statsGuilds, guildID)
+			delete(ms.stats.guilds, guildID)
 		}
 	}
 }

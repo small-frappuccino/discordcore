@@ -91,17 +91,12 @@ func (ms *MonitoringService) persistMemberRoleSnapshot(guildID, userID string, r
 func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefresh bool) ([]*discordgo.AuditLogEntry, bool, error) {
 	now := time.Now()
 
-	ms.roleUpdateAuditMu.Lock()
-	ms.ensureRoleUpdateAuditStateLocked()
 	if !forceRefresh {
-		if entry, ok := ms.roleUpdateAuditCache[guildID]; ok && now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
-			entries := append([]*discordgo.AuditLogEntry(nil), entry.entries...)
+		if entries, ok := ms.roleAudit.cachedEntries(guildID, now); ok {
 			ms.observability().RecordRolesAuditCacheHit()
-			ms.roleUpdateAuditMu.Unlock()
 			return entries, true, nil
 		}
 	}
-	ms.roleUpdateAuditMu.Unlock()
 
 	audit, err := ms.session.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMemberRoleUpdate), 10)
 	ms.observability().RecordAuditLogCall()
@@ -120,43 +115,13 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 		entries = append(entries, entry)
 	}
 
-	ms.roleUpdateAuditMu.Lock()
-	ms.roleUpdateAuditCache[guildID] = cachedRoleUpdateAudit{
-		fetchedAt: now,
-		entries:   append([]*discordgo.AuditLogEntry(nil), entries...),
-	}
-	if len(ms.roleUpdateAuditCache) > 100 {
-		for key, entry := range ms.roleUpdateAuditCache {
-			if now.Sub(entry.fetchedAt) > 5*time.Minute {
-				delete(ms.roleUpdateAuditCache, key)
-			}
-		}
-	}
-	ms.roleUpdateAuditMu.Unlock()
+	ms.roleAudit.storeEntries(guildID, now, entries)
 
 	return entries, false, nil
 }
 
 func (ms *MonitoringService) shouldDebounceRoleUpdateAuditRefresh(guildID, userID string) bool {
-	now := time.Now()
-	key := guildID + ":" + userID
-
-	ms.roleUpdateAuditMu.Lock()
-	defer ms.roleUpdateAuditMu.Unlock()
-	ms.ensureRoleUpdateAuditStateLocked()
-
-	if last, ok := ms.roleUpdateAuditDebounce[key]; ok && now.Sub(last) < monitoringRoleAuditDebounceTTL {
-		return true
-	}
-	ms.roleUpdateAuditDebounce[key] = now
-	if len(ms.roleUpdateAuditDebounce) > 200 {
-		for debounceKey, last := range ms.roleUpdateAuditDebounce {
-			if now.Sub(last) > 5*time.Minute {
-				delete(ms.roleUpdateAuditDebounce, debounceKey)
-			}
-		}
-	}
-	return false
+	return ms.roleAudit.shouldDebounce(guildID, userID, time.Now())
 }
 
 func isRecentRoleUpdateAuditEntry(entry *discordgo.AuditLogEntry) bool {
@@ -473,14 +438,9 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 		currentAvatar = "default"
 	}
 	changeKey := fmt.Sprintf("%s:%s:%s", guildID, userID, currentAvatar)
-	ms.changesMutex.RLock()
-	if lastChange, exists := ms.recentChanges[changeKey]; exists {
-		if time.Since(lastChange) < 65*time.Second {
-			ms.changesMutex.RUnlock()
-			return
-		}
+	if ms.changeDebounce.recentlyChanged(changeKey, 65*time.Second) {
+		return
 	}
-	ms.changesMutex.RUnlock()
 
 	changed := true
 	if ms.unifiedCache != nil {
@@ -492,16 +452,7 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	}
 
 	if changed {
-		ms.changesMutex.Lock()
-		ms.recentChanges[changeKey] = time.Now()
-		if len(ms.recentChanges) > 100 {
-			for key, timestamp := range ms.recentChanges {
-				if time.Since(timestamp) > 5*time.Minute {
-					delete(ms.recentChanges, key)
-				}
-			}
-		}
-		ms.changesMutex.Unlock()
+		ms.changeDebounce.record(changeKey, 100, 5*time.Minute)
 
 		if ms.adapters != nil {
 			if err := ms.adapters.EnqueueProcessAvatarChange(guildID, userID, username, currentAvatar); err != nil {

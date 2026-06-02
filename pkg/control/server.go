@@ -69,36 +69,40 @@ type requestAuthorization struct {
 	oauthSession discordOAuthSession
 }
 
-// Server exposes operational controls for a running Discordcore instance.
-type Server struct {
-	addr                     string
-	startedAt                time.Time
-	authBearerToken          string
-	tlsCertFile              string
-	tlsKeyFile               string
-	configManager            *files.ConfigManager
-	knownBotInstanceIDs      []string
-	qotdService              *qotd.Service
+// healthSources holds the observability sinks the /v1/health/* routes read.
+// Each is wired post-construction via the Server.Set* methods and may be nil
+// while the corresponding subsystem is still booting, in which case the route
+// surfaces 503 rather than panicking.
+type healthSources struct {
 	moderationMetrics        moderation.Metrics
 	cacheSnapshotResolve     CacheSnapshotResolver
 	cacheSnapshotStore       *storage.Store
 	monitoringMetricsResolve MonitoringMetricsResolver
-	guildRegistration        guildRegistrationFunc
-	discordSession           discordSessionDomainResolver
-	defaultBotInstanceID     string
-	discordOAuth             *discordOAuthProvider
-	publicOrigin             controlPublicOrigin
-	runtimeApplier           *runtimeapply.Manager
-	botGuildSource           *botGuildBindingSource
-	accessibleGuildCache     *accessibleGuildCache
-	guildAccessEvaluator     *guildAccessEvaluator
-	guildAccessResolver      *accessibleGuildResolver
-	featureBuilder           *featureWorkspaceBuilder
-	featureApplier           *featureMutationApplier
-	featureControlSvc        *featureControlService
-	discordOAuthSvc          *discordOAuthControlService
-	httpServer               *http.Server
-	listener                 net.Listener
+}
+
+// Server exposes operational controls for a running Discordcore instance.
+type Server struct {
+	addr                 string
+	startedAt            time.Time
+	authBearerToken      string
+	tlsCertFile          string
+	tlsKeyFile           string
+	configManager        *files.ConfigManager
+	knownBotInstanceIDs  []string
+	qotdService          *qotd.Service
+	health               healthSources
+	guildRegistration    guildRegistrationFunc
+	discordSession       discordSessionDomainResolver
+	defaultBotInstanceID string
+	discordOAuth         *discordOAuthProvider
+	publicOrigin         controlPublicOrigin
+	runtimeApplier       *runtimeapply.Manager
+	botGuildSource       *botGuildBindingSource
+	accessibleGuildCache *accessibleGuildCache
+	featureControlSvc    *featureControlService
+	discordOAuthSvc      *discordOAuthControlService
+	httpServer           *http.Server
+	listener             net.Listener
 }
 
 // NewServer returns nil if addr is empty.
@@ -123,14 +127,14 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	}
 	s.botGuildSource = newBotGuildBindingSource()
 	s.accessibleGuildCache = newAccessibleGuildCache(defaultAccessibleGuildsCache, time.Now)
-	s.guildAccessEvaluator = newGuildAccessEvaluator(configManager, discordSessions)
-	s.guildAccessResolver = newAccessibleGuildResolver(providerSource, s.botGuildSource, s.accessibleGuildCache, s.guildAccessEvaluator)
-	s.featureBuilder = newFeatureWorkspaceBuilder(configManager, discordSessions)
-	s.featureApplier = newFeatureMutationApplier(configManager)
-	s.featureControlSvc = newFeatureControlService(s.featureBuilder, s.featureApplier)
+	guildAccessEvaluator := newGuildAccessEvaluator(configManager, discordSessions)
+	guildAccessResolver := newAccessibleGuildResolver(providerSource, s.botGuildSource, s.accessibleGuildCache, guildAccessEvaluator)
+	featureBuilder := newFeatureWorkspaceBuilder(configManager, discordSessions)
+	featureApplier := newFeatureMutationApplier(configManager)
+	s.featureControlSvc = newFeatureControlService(featureBuilder, featureApplier)
 	s.discordOAuthSvc = newDiscordOAuthControlService(
 		providerSource,
-		s.guildAccessResolver,
+		guildAccessResolver,
 		s.publicDashboardURL,
 		s.publicDiscordOAuthLoginURL,
 	)
@@ -160,7 +164,7 @@ func (s *Server) SetModerationMetrics(metrics moderation.Metrics) {
 	if s == nil || metrics == nil {
 		return
 	}
-	s.moderationMetrics = metrics
+	s.health.moderationMetrics = metrics
 }
 
 // SetCacheObservability wires the inputs /v1/health/cache scrapes. resolver is
@@ -173,8 +177,8 @@ func (s *Server) SetCacheObservability(resolver CacheSnapshotResolver, store *st
 	if s == nil {
 		return
 	}
-	s.cacheSnapshotResolve = resolver
-	s.cacheSnapshotStore = store
+	s.health.cacheSnapshotResolve = resolver
+	s.health.cacheSnapshotStore = store
 }
 
 // SetMonitoringMetricsResolver wires the late-binding accessor /v1/health/monitoring
@@ -188,7 +192,7 @@ func (s *Server) SetMonitoringMetricsResolver(resolver MonitoringMetricsResolver
 	if s == nil {
 		return
 	}
-	s.monitoringMetricsResolve = resolver
+	s.health.monitoringMetricsResolve = resolver
 }
 
 // SetBearerToken configures bearer token authentication for control routes.

@@ -24,12 +24,11 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 	metrics.RecordRolesCacheStoreHit()
 	metrics.RecordRolesAuditCacheHit()
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                5 * time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
-		metrics:                 metrics,
+	ms := &MonitoringService{
+		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
+		metrics:    metrics,
 	}
 
 	rows := ms.metricsRows()
@@ -73,12 +72,11 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 		metrics.RecordMessageSent()
 	}
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                5 * time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
-		metrics:                 metrics,
+	ms := &MonitoringService{
+		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
+		metrics:    metrics,
 	}
 
 	rows := ms.metricsRows()
@@ -104,11 +102,10 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 	t.Parallel()
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                5 * time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
+	ms := &MonitoringService{
+		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
 		// metrics intentionally nil — observability() yields NopMetrics.
 	}
 
@@ -138,12 +135,11 @@ func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 func TestMonitoringServiceStatsReturnsTypedMetrics(t *testing.T) {
 	t.Parallel()
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                5 * time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
-		metrics:                 NewInMemoryMetrics(),
+	ms := &MonitoringService{
+		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
+		metrics:    NewInMemoryMetrics(),
 	}
 
 	stats := ms.Stats()

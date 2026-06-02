@@ -14,10 +14,11 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 
 	cfgMgr := files.NewMemoryConfigManager()
 	session := newLoggingLifecycleSession(t)
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		botInstanceID: "companion",
+		stats:         newStatsCoordinator(),
 	}
 
 	ms.handleGuildCreate(session, &discordgo.GuildCreate{

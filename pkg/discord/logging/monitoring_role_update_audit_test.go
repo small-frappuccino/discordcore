@@ -45,15 +45,16 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		session:                 session,
-		configManager:           cfgMgr,
-		store:                   store,
-		recentChanges:           map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
+	ms := &MonitoringService{
+		session:       session,
+		configManager: cfgMgr,
+		store:         store,
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
+		},
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -109,15 +110,16 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		session:                 session,
-		configManager:           cfgMgr,
-		store:                   store,
-		recentChanges:           map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
+	ms := &MonitoringService{
+		session:       session,
+		configManager: cfgMgr,
+		store:         store,
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
+		},
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -219,19 +221,20 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
 	metrics := NewInMemoryMetrics()
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
+	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
 		store:         store,
-		recentChanges: map[string]time.Time{
-			guildID + ":" + userOne + ":default": time.Now().UTC(),
-			guildID + ":" + userTwo + ":default": time.Now().UTC(),
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{
+				guildID + ":" + userOne + ":default": time.Now().UTC(),
+				guildID + ":" + userTwo + ":default": time.Now().UTC(),
+			},
 		},
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
-		metrics:                 metrics,
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
+		metrics:    metrics,
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -301,15 +304,16 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	ms := &MonitoringService{statsActorCh: make(chan func(), 1024),
-		session:                 session,
-		configManager:           cfgMgr,
-		store:                   store,
-		recentChanges:           map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                time.Minute,
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
+	ms := &MonitoringService{
+		session:       session,
+		configManager: cfgMgr,
+		store:         store,
+		changeDebounce: changeDebouncer{
+			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
+		},
+		rolesCache: rolesCacheStore{ttl: time.Minute},
+		roleAudit:  roleUpdateAuditStore{},
+		stats:      newStatsCoordinator(),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{

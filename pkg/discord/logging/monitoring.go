@@ -146,49 +146,27 @@ type MonitoringService struct {
 	memberEventService   *MemberEventService   // Service for member events
 	messageEventService  *MessageEventService  // Service for message events
 	reactionEventService *ReactionEventService // Service for reaction event handling
-	isRunning            bool
-	startTime            *time.Time
-	stopTime             *time.Time
-	restartCount         int
-	errorCount           int
-	lastErrorAt          *time.Time
-	stopChan             chan struct{}
-	stopOnce             sync.Once
-	runMu                sync.RWMutex
-	runCtx               context.Context
-	cancelRun            context.CancelFunc
-	runWG                sync.WaitGroup
-	recentChanges        map[string]time.Time // Debounce to avoid duplicates
-	changesMutex         sync.RWMutex
-	cronCancel           func()
+	runMu                sync.RWMutex          // serializes Start/Stop and guards run
+	run                  monitoringRunState
+	changeDebounce       changeDebouncer
 	logger               *slog.Logger
 
 	// Unified cache for Discord API data (members, guilds, roles, channels)
 	unifiedCache *cache.UnifiedCache
 
 	// In-memory roles cache with TTL to reduce REST/DB lookups
-	rolesCache        map[string]cachedRoles
-	rolesCacheMu      sync.RWMutex
-	rolesTTL          time.Duration
-	rolesCacheCleanup chan struct{}
+	rolesCache rolesCacheStore
 
 	// Short-lived audit cache for member role updates.
-	roleUpdateAuditMu       sync.Mutex
-	roleUpdateAuditCache    map[string]cachedRoleUpdateAudit
-	roleUpdateAuditDebounce map[string]time.Time
+	roleAudit roleUpdateAuditStore
 
 	// Event handler references for cleanup
 
-	eventHandlers   []func()
-	presenceWatchMu sync.Mutex
-	presenceWatch   map[string]presenceSnapshot
+	eventHandlers []func()
+	presence      presenceWatcher
 
 	// Stats channel updates
-	statsCronCancel        func()
-	rolesRefreshCronCancel func()
-	statsLastRun           map[string]time.Time
-	statsGuilds            map[string]*statsGuildState
-	statsActorCh           chan func()
+	stats *statsCoordinator
 
 	// Observability sink. When nil, observability() returns NopMetrics
 	// so call-sites can issue Record* without nil checks. This mirrors
@@ -244,10 +222,10 @@ func (ms *MonitoringService) Dependencies() []string {
 func (ms *MonitoringService) IsRunning() bool {
 	ms.runMu.RLock()
 	defer ms.runMu.RUnlock()
-	return ms.isRunning
+	return ms.run.running
 }
 
-// currentRunCtx returns a snapshot of ms.runCtx taken under runMu. It returns
+// currentRunCtx returns a snapshot of ms.run.ctx taken under runMu. It returns
 // nil after Stop has cleared the lifecycle, so hot-path callers can skip work
 // that must not outlive the running monitoring service.
 func (ms *MonitoringService) currentRunCtx() context.Context {
@@ -256,13 +234,13 @@ func (ms *MonitoringService) currentRunCtx() context.Context {
 	}
 	ms.runMu.RLock()
 	defer ms.runMu.RUnlock()
-	return ms.runCtx
+	return ms.run.ctx
 }
 
 func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 	ms.runMu.RLock()
-	isRunning := ms.isRunning
-	runCtx := ms.runCtx
+	isRunning := ms.run.running
+	runCtx := ms.run.ctx
 	ms.runMu.RUnlock()
 
 	message := "Monitoring service is stopped"
@@ -285,11 +263,11 @@ func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 
 func (ms *MonitoringService) Stats() svc.ServiceStats {
 	ms.runMu.RLock()
-	startTime := ms.startTime
-	stopTime := ms.stopTime
-	restartCount := ms.restartCount
-	errorCount := ms.errorCount
-	lastErrorAt := ms.lastErrorAt
+	startTime := ms.run.startTime
+	stopTime := ms.run.stopTime
+	restartCount := ms.run.restartCount
+	errorCount := ms.run.errorCount
+	lastErrorAt := ms.run.lastErrorAt
 	ms.runMu.RUnlock()
 
 	stats := svc.ServiceStats{
@@ -321,9 +299,9 @@ func (ms *MonitoringService) startLifecycle(ctx context.Context) (context.Contex
 }
 
 func (ms *MonitoringService) startOwnedWorker(ctx context.Context, fn func(context.Context)) {
-	ms.runWG.Add(1)
+	ms.run.wg.Add(1)
 	go func() {
-		defer ms.runWG.Done()
+		defer ms.run.wg.Done()
 		fn(ctx)
 	}()
 }
@@ -332,7 +310,7 @@ func (ms *MonitoringService) waitForOwnedWorkers(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ms.runWG.Wait()
+		ms.run.wg.Wait()
 	}()
 
 	select {
@@ -345,8 +323,8 @@ func (ms *MonitoringService) waitForOwnedWorkers(ctx context.Context) error {
 
 func (ms *MonitoringService) recordLifecycleErrorLocked() {
 	now := time.Now()
-	ms.errorCount++
-	ms.lastErrorAt = &now
+	ms.run.errorCount++
+	ms.run.lastErrorAt = &now
 }
 
 func monitoringRunWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func() (T, error)) (T, error) {
@@ -421,15 +399,6 @@ type cachedRoleUpdateAudit struct {
 	entries   []*discordgo.AuditLogEntry
 }
 
-func (ms *MonitoringService) ensureRoleUpdateAuditStateLocked() {
-	if ms.roleUpdateAuditCache == nil {
-		ms.roleUpdateAuditCache = make(map[string]cachedRoleUpdateAudit)
-	}
-	if ms.roleUpdateAuditDebounce == nil {
-		ms.roleUpdateAuditDebounce = make(map[string]time.Time)
-	}
-}
-
 type presenceSnapshot struct {
 	Status       discordgo.Status
 	ClientStatus discordgo.ClientStatus
@@ -490,31 +459,23 @@ func NewMonitoringServiceForBotWithMetrics(
 	unifiedCache := cache.NewUnifiedCache(cacheConfig)
 
 	ms := &MonitoringService{
-		session:                 session,
-		configManager:           configManager,
-		botInstanceID:           files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotInstanceID:    files.NormalizeBotInstanceID(defaultBotInstanceID),
-		store:                   store,
-		activity:                newMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
-		notifier:                n,
-		unifiedCache:            unifiedCache,
-		userWatcher:             NewUserWatcher(session, configManager, store, n, unifiedCache),
-		memberEventService:      NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID, logger),
-		messageEventService:     NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID, logger),
-		stopChan:                make(chan struct{}),
-		recentChanges:           make(map[string]time.Time),
-		rolesCache:              make(map[string]cachedRoles),
-		rolesTTL:                5 * time.Minute,
-		rolesCacheCleanup:       make(chan struct{}),
-		roleUpdateAuditCache:    make(map[string]cachedRoleUpdateAudit),
-		roleUpdateAuditDebounce: make(map[string]time.Time),
-		eventHandlers:           make([]func(), 0),
-		presenceWatch:           make(map[string]presenceSnapshot),
-		statsLastRun:            make(map[string]time.Time),
-		statsGuilds:             make(map[string]*statsGuildState),
-		statsActorCh:            make(chan func(), 1024),
-		metrics:                 metrics,
-		logger:                  logger,
+		session:              session,
+		configManager:        configManager,
+		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
+		store:                store,
+		activity:             newMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
+		notifier:             n,
+		unifiedCache:         unifiedCache,
+		userWatcher:          NewUserWatcher(session, configManager, store, n, unifiedCache),
+		memberEventService:   NewMemberEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID, logger),
+		messageEventService:  NewMessageEventServiceForBot(session, configManager, n, store, botInstanceID, defaultBotInstanceID, logger),
+		run:                  monitoringRunState{stopChan: make(chan struct{})},
+		rolesCache:           rolesCacheStore{ttl: 5 * time.Minute},
+		eventHandlers:        make([]func(), 0),
+		stats:                newStatsCoordinator(),
+		metrics:              metrics,
+		logger:               logger,
 	}
 	ms.rebuildTaskPipeline()
 	return ms, nil
@@ -559,15 +520,14 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 
 	ms.runMu.Lock()
 	defer ms.runMu.Unlock()
-	if ms.isRunning {
+	if ms.run.running {
 		log.ErrorLoggerRaw().Error("Monitoring service is already running")
 		return fmt.Errorf("monitoring service is already running")
 	}
 
 	lifecycleCtx, cancelLifecycle := ms.startLifecycle(ctx)
-	ms.stopChan = make(chan struct{})
-	ms.stopOnce = sync.Once{}
-	ms.rolesCacheCleanup = make(chan struct{})
+	ms.run.stopChan = make(chan struct{})
+	ms.run.stopOnce = sync.Once{}
 	if ms.router == nil {
 		ms.rebuildTaskPipeline()
 	}
@@ -684,7 +644,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 
 	ms.startHeartbeat(lifecycleCtx)
 	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
-	ms.startOwnedWorker(lifecycleCtx, ms.statsLoop)
+	ms.startOwnedWorker(lifecycleCtx, ms.stats.loop)
 	serviceCtx := lifecycleCtx
 
 	ms.registerStartupWarmupHandler(serviceCtx)
@@ -693,14 +653,14 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	ms.registerBackfillHandlers(serviceCtx, workload)
 
 	now := time.Now()
-	if ms.startTime != nil {
-		ms.restartCount++
+	if ms.run.startTime != nil {
+		ms.run.restartCount++
 	}
-	ms.runCtx = serviceCtx
-	ms.cancelRun = cancelLifecycle
-	ms.isRunning = true
-	ms.startTime = &now
-	ms.stopTime = nil
+	ms.run.ctx = serviceCtx
+	ms.run.cancel = cancelLifecycle
+	ms.run.running = true
+	ms.run.startTime = &now
+	ms.run.stopTime = nil
 
 	ms.scheduleEnsureGuildsListed(serviceCtx)
 	log.ApplicationLogger().Info("All monitoring services started successfully")
@@ -800,29 +760,25 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	}
 
 	ms.runMu.Lock()
-	if !ms.isRunning {
+	if !ms.run.running {
 		ms.runMu.Unlock()
 		log.ErrorLoggerRaw().Error("Monitoring service is not running")
 		return fmt.Errorf("monitoring service is not running")
 	}
 
-	cancelLifecycle := ms.cancelRun
-	ms.cancelRun = nil
-	ms.runCtx = nil
-	ms.isRunning = false
-	ms.stopOnce.Do(func() {
-		close(ms.stopChan)
+	cancelLifecycle := ms.run.cancel
+	ms.run.cancel = nil
+	ms.run.ctx = nil
+	ms.run.running = false
+	ms.run.stopOnce.Do(func() {
+		close(ms.run.stopChan)
 	})
-	if ms.rolesCacheCleanup != nil {
-		close(ms.rolesCacheCleanup)
-		ms.rolesCacheCleanup = nil
-	}
-	cronCancel := ms.cronCancel
-	ms.cronCancel = nil
-	statsCronCancel := ms.statsCronCancel
-	ms.statsCronCancel = nil
-	rolesRefreshCronCancel := ms.rolesRefreshCronCancel
-	ms.rolesRefreshCronCancel = nil
+	cronCancel := ms.run.cronCancel
+	ms.run.cronCancel = nil
+	statsCronCancel := ms.run.statsCronCancel
+	ms.run.statsCronCancel = nil
+	rolesRefreshCronCancel := ms.run.rolesRefreshCronCancel
+	ms.run.rolesRefreshCronCancel = nil
 	router := ms.router
 	ms.router = nil
 	ms.adapters = nil
@@ -906,7 +862,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 
 	ms.runMu.Lock()
 	now := time.Now()
-	ms.stopTime = &now
+	ms.run.stopTime = &now
 	if len(stopErrs) > 0 {
 		ms.recordLifecycleErrorLocked()
 		ms.runMu.Unlock()
@@ -1043,7 +999,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	ms.runMu.Lock()
 	defer ms.runMu.Unlock()
 
-	if !ms.isRunning {
+	if !ms.run.running {
 		return nil
 	}
 
@@ -1122,7 +1078,7 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	// User logs -> re-register handlers (presence/member/user updates)
 	ms.removeEventHandlers()
 	ms.setupEventHandlersFromRuntimeConfig(rc)
-	ms.syncSchedulesLocked(ms.runCtx, workload)
+	ms.syncSchedulesLocked(ms.run.ctx, workload)
 
 	if len(stopErrs) > 0 {
 		return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
@@ -1325,15 +1281,4 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 
 	log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
 	return nil
-}
-
-func (ms *MonitoringService) statsLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case fn := <-ms.statsActorCh:
-			fn()
-		}
-	}
 }

@@ -45,46 +45,15 @@ func (ms *MonitoringService) rolesCacheCleanupLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			ms.cleanupRolesCache()
+			ms.rolesCache.evictExpired()
 		case <-ctx.Done():
 			return
-		case <-ms.rolesCacheCleanup:
-			return
 		}
-	}
-}
-
-func (ms *MonitoringService) cleanupRolesCache() {
-	now := time.Now()
-	var toDelete []string
-
-	ms.rolesCacheMu.RLock()
-	for key, entry := range ms.rolesCache {
-		if now.After(entry.expiresAt) {
-			toDelete = append(toDelete, key)
-		}
-	}
-	ms.rolesCacheMu.RUnlock()
-
-	if len(toDelete) > 0 {
-		ms.rolesCacheMu.Lock()
-		for _, key := range toDelete {
-			delete(ms.rolesCache, key)
-		}
-		ms.rolesCacheMu.Unlock()
-		log.ApplicationLogger().Info("Cleaned up expired roles cache entries", "count", len(toDelete))
 	}
 }
 
 func (ms *MonitoringService) cacheRolesSet(guildID, userID string, roles []string) {
-	key := guildID + ":" + userID
-	if len(roles) == 0 {
-		ms.rolesCacheMu.Lock()
-		delete(ms.rolesCache, key)
-		ms.rolesCacheMu.Unlock()
-		return
-	}
-	ttl := ms.rolesTTL
+	ttl := ms.rolesCache.ttl
 	if ms.configManager != nil {
 		if gcfg := ms.configManager.GuildConfig(guildID); gcfg != nil {
 			if d := gcfg.RolesCacheTTLDuration(); d > 0 {
@@ -92,32 +61,11 @@ func (ms *MonitoringService) cacheRolesSet(guildID, userID string, roles []strin
 			}
 		}
 	}
-	if ttl <= 0 {
-		ttl = 5 * time.Minute
-	}
-	ms.rolesCacheMu.Lock()
-	ms.rolesCache[key] = cachedRoles{
-		roles:     append([]string(nil), roles...),
-		expiresAt: time.Now().Add(ttl),
-	}
-	ms.rolesCacheMu.Unlock()
+	ms.rolesCache.set(guildID, userID, roles, ttl)
 }
 
 func (ms *MonitoringService) cacheRolesGet(guildID, userID string) ([]string, bool) {
-	key := guildID + ":" + userID
-	ms.rolesCacheMu.RLock()
-	entry, ok := ms.rolesCache[key]
-	ms.rolesCacheMu.RUnlock()
-	if !ok || time.Now().After(entry.expiresAt) {
-		if ok {
-			ms.rolesCacheMu.Lock()
-			delete(ms.rolesCache, key)
-			ms.rolesCacheMu.Unlock()
-		}
-		return nil, false
-	}
-	out := append([]string(nil), entry.roles...)
-	return out, true
+	return ms.rolesCache.get(guildID, userID)
 }
 
 // metricsRows returns the monitoring-local display rows surfaced via
@@ -132,18 +80,13 @@ func (ms *MonitoringService) cacheRolesGet(guildID, userID string) ([]string, bo
 // Rows are appended in display order; callers MUST iterate in slice order
 // (the consumer contract on ServiceMetric).
 func (ms *MonitoringService) metricsRows() []svc.ServiceMetric {
-	ms.rolesCacheMu.RLock()
-	size := len(ms.rolesCache)
-	ms.rolesCacheMu.RUnlock()
-	ms.roleUpdateAuditMu.Lock()
-	roleAuditCacheSize := len(ms.roleUpdateAuditCache)
-	roleAuditDebounceSize := len(ms.roleUpdateAuditDebounce)
-	ms.roleUpdateAuditMu.Unlock()
+	size := ms.rolesCache.size()
+	roleAuditCacheSize, roleAuditDebounceSize := ms.roleAudit.sizes()
 
 	rows := []svc.ServiceMetric{
 		{Label: "Running", Value: formatBoolYesNo(ms.IsRunning())},
 		{Label: "Roles cache size", Value: strconv.Itoa(size)},
-		{Label: "Roles cache TTL", Value: ms.rolesTTL.String()},
+		{Label: "Roles cache TTL", Value: ms.rolesCache.ttl.String()},
 		{Label: "Role update audit cache size", Value: strconv.Itoa(roleAuditCacheSize)},
 		{Label: "Role update audit debounce size", Value: strconv.Itoa(roleAuditDebounceSize)},
 	}

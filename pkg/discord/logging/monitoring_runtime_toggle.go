@@ -92,17 +92,17 @@ func (ms *MonitoringService) workloadState(globalRC files.RuntimeConfig) monitor
 }
 
 func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state monitoringWorkloadState) {
-	if !state.avatarScan && ms.cronCancel != nil {
-		ms.cronCancel()
-		ms.cronCancel = nil
+	if !state.avatarScan && ms.run.cronCancel != nil {
+		ms.run.cronCancel()
+		ms.run.cronCancel = nil
 	}
-	if !state.statsUpdates && ms.statsCronCancel != nil {
-		ms.statsCronCancel()
-		ms.statsCronCancel = nil
+	if !state.statsUpdates && ms.run.statsCronCancel != nil {
+		ms.run.statsCronCancel()
+		ms.run.statsCronCancel = nil
 	}
-	if !state.rolesRefresh && ms.rolesRefreshCronCancel != nil {
-		ms.rolesRefreshCronCancel()
-		ms.rolesRefreshCronCancel = nil
+	if !state.rolesRefresh && ms.run.rolesRefreshCronCancel != nil {
+		ms.run.rolesRefreshCronCancel()
+		ms.run.rolesRefreshCronCancel = nil
 	}
 
 	if ms.router == nil || runCtx == nil {
@@ -116,8 +116,8 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 			}
 			return ms.runAvatarScanTask(runCtx)
 		})
-		if ms.cronCancel == nil {
-			ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars", Payload: task.EmptyPayload{}})
+		if ms.run.cronCancel == nil {
+			ms.run.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars", Payload: task.EmptyPayload{}})
 		}
 	}
 
@@ -128,8 +128,8 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 			}
 			return ms.runStatsUpdateTask(runCtx)
 		})
-		if ms.statsCronCancel == nil {
-			ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels", Payload: task.EmptyPayload{}})
+		if ms.run.statsCronCancel == nil {
+			ms.run.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels", Payload: task.EmptyPayload{}})
 			ms.dispatchMonitorTaskLocked(runCtx, "monitor.update_stats_channels")
 		}
 	}
@@ -141,8 +141,8 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 			}
 			return ms.runRolesRefreshTask(runCtx)
 		})
-		if ms.rolesRefreshCronCancel == nil {
-			ms.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles", Payload: task.EmptyPayload{}})
+		if ms.run.rolesRefreshCronCancel == nil {
+			ms.run.rolesRefreshCronCancel = ms.router.ScheduleDailyAtUTC(3, 0, task.Task{Type: "monitor.refresh_roles", Payload: task.EmptyPayload{}})
 			ms.dispatchMonitorTaskLocked(runCtx, "monitor.refresh_roles")
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"log/slog"
+	"net/http"
 	"testing"
 	"time"
 
@@ -49,21 +50,28 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		t.Fatalf("add guild config: %v", err)
 	}
 
-	session := &discordgo.Session{State: discordgo.NewState()}
+	// A bare session has no Ratelimiter/Client, so any REST call panics. The
+	// stats reconcile path can issue GuildMembers during startup (the in-memory
+	// pre-seed only skips reconcile when the actor wins the race), so back the
+	// session with a local test server that returns empty member pages.
+	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	})
 	session.State.User = &discordgo.User{ID: "bot-1"}
 
 	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", "default", slog.Default())
 	if err != nil {
 		t.Fatalf("new monitoring service: %v", err)
 	}
-	ms.statsLastRun = map[string]time.Time{
+	ms.stats.lastRun = map[string]time.Time{
 		"g-restart": time.Now().UTC(),
 	}
 	preseeded := newStatsGuildState("", nil)
 	preseeded.initialized = true
 	preseeded.dirty = false
 	preseeded.lastReconciled = time.Now().UTC()
-	ms.statsGuilds = map[string]*statsGuildState{
+	ms.stats.guilds = map[string]*statsGuildState{
 		"g-restart": preseeded,
 	}
 
@@ -93,7 +101,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		t.Fatalf("restart monitoring service: %v", err)
 	}
 	t.Cleanup(func() {
-		if ms.isRunning {
+		if ms.run.running {
 			_ = ms.Stop(context.Background())
 		}
 	})

@@ -22,10 +22,10 @@ import (
 // hunting a missing route.
 func (s *Server) handleMonitoringHealthRoute(w http.ResponseWriter, r *http.Request) {
 	s.serveHealthRoute(w, r, func() (any, string) {
-		if s.monitoringMetricsResolve == nil {
+		if s.health.monitoringMetricsResolve == nil {
 			return nil, "monitoring metrics not wired"
 		}
-		metrics := s.monitoringMetricsResolve()
+		metrics := s.health.monitoringMetricsResolve()
 		if metrics == nil {
 			return nil, "monitoring metrics not available"
 		}

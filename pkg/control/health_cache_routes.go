@@ -18,13 +18,13 @@ import "net/http"
 // zeroed counters that would look like a healthy idle bot.
 func (s *Server) handleCacheHealthRoute(w http.ResponseWriter, r *http.Request) {
 	s.serveHealthRoute(w, r, func() (any, string) {
-		if s.cacheSnapshotResolve == nil {
+		if s.health.cacheSnapshotResolve == nil {
 			return nil, "cache observability not wired"
 		}
-		uc := s.cacheSnapshotResolve()
+		uc := s.health.cacheSnapshotResolve()
 		if uc == nil {
 			return nil, "cache observability not available"
 		}
-		return uc.Snapshot(r.Context(), s.cacheSnapshotStore), ""
+		return uc.Snapshot(r.Context(), s.health.cacheSnapshotStore), ""
 	})
 }
