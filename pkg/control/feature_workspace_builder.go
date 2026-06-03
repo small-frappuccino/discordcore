@@ -155,9 +155,6 @@ func (builder *featureWorkspaceBuilder) buildFeatureRecord(
 	if len(record.Blockers) == 0 {
 		record.Blockers = nil
 	}
-	if len(record.Details) == 0 {
-		record.Details = nil
-	}
 	if len(record.EditableFields) == 0 {
 		record.EditableFields = nil
 	}
@@ -168,129 +165,127 @@ func (builder *featureWorkspaceBuilder) buildFeatureDetails(
 	cfg *files.BotConfig,
 	guildID string,
 	def featureDefinition,
-) map[string]any {
+) *featureDetails {
 	if def.LogEvent != "" {
 		return buildLogFeatureDetails(cfg, guildID, def.LogEvent)
 	}
 
 	handler, ok := featureDetailBuilders[def.ID]
 	if !ok {
-		return map[string]any{}
+		return nil
 	}
 	return handler(cfg, guildID)
 }
 
-var featureDetailBuilders = map[string]func(*files.BotConfig, string) map[string]any{
-	"services.automod": func(_ *files.BotConfig, _ string) map[string]any {
-		return map[string]any{"mode": "logging_only"}
+var featureDetailBuilders = map[string]func(*files.BotConfig, string) *featureDetails{
+	"services.automod": func(_ *files.BotConfig, _ string) *featureDetails {
+		return &featureDetails{Mode: "logging_only"}
 	},
-	"moderation.mute_role": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"moderation.mute_role": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
-			return map[string]any{}
+			return nil
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			return map[string]any{"role_id": strings.TrimSpace(guild.Roles.MuteRole)}
+			return &featureDetails{RoleID: strings.TrimSpace(guild.Roles.MuteRole)}
 		}
-		return map[string]any{}
+		return nil
 	},
-	"services.commands": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"services.commands": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
-			return map[string]any{}
+			return nil
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok && strings.TrimSpace(guild.Channels.Commands) != "" {
-			return map[string]any{"channel_id": strings.TrimSpace(guild.Channels.Commands)}
+			return &featureDetails{ChannelID: strings.TrimSpace(guild.Channels.Commands)}
 		}
-		return map[string]any{}
+		return nil
 	},
-	"services.admin_commands": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"services.admin_commands": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
-			return map[string]any{}
+			return nil
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			return map[string]any{
-				"allowed_role_ids":   slices.Clone(guild.Roles.Allowed),
-				"allowed_role_count": len(guild.Roles.Allowed),
+			return &featureDetails{
+				AllowedRoleIDs:   slices.Clone(guild.Roles.Allowed),
+				AllowedRoleCount: len(guild.Roles.Allowed),
 			}
 		}
-		return map[string]any{}
+		return nil
 	},
-	"message_cache.cleanup_on_startup": func(cfg *files.BotConfig, guildID string) map[string]any {
-		return map[string]any{"runtime_enabled": cfg.ResolveRuntimeConfig(guildID).MessageCacheCleanup}
+	"message_cache.cleanup_on_startup": func(cfg *files.BotConfig, guildID string) *featureDetails {
+		return &featureDetails{RuntimeEnabled: cfg.ResolveRuntimeConfig(guildID).MessageCacheCleanup}
 	},
-	"message_cache.delete_on_log": func(cfg *files.BotConfig, guildID string) map[string]any {
-		return map[string]any{"runtime_enabled": cfg.ResolveRuntimeConfig(guildID).MessageDeleteOnLog}
+	"message_cache.delete_on_log": func(cfg *files.BotConfig, guildID string) *featureDetails {
+		return &featureDetails{RuntimeEnabled: cfg.ResolveRuntimeConfig(guildID).MessageDeleteOnLog}
 	},
-	"presence_watch.bot": func(cfg *files.BotConfig, guildID string) map[string]any {
-		return map[string]any{"watch_bot": cfg.ResolveRuntimeConfig(guildID).PresenceWatchBot}
+	"presence_watch.bot": func(cfg *files.BotConfig, guildID string) *featureDetails {
+		return &featureDetails{WatchBot: cfg.ResolveRuntimeConfig(guildID).PresenceWatchBot}
 	},
-	"presence_watch.user": func(cfg *files.BotConfig, guildID string) map[string]any {
-		return map[string]any{"user_id": strings.TrimSpace(cfg.ResolveRuntimeConfig(guildID).PresenceWatchUserID)}
+	"presence_watch.user": func(cfg *files.BotConfig, guildID string) *featureDetails {
+		return &featureDetails{UserID: strings.TrimSpace(cfg.ResolveRuntimeConfig(guildID).PresenceWatchUserID)}
 	},
-	"safety.bot_role_perm_mirror": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"safety.bot_role_perm_mirror": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		rc := cfg.ResolveRuntimeConfig(guildID)
-		return map[string]any{
-			"actor_role_id":    strings.TrimSpace(rc.BotRolePermMirrorActorRoleID),
-			"runtime_disabled": rc.DisableBotRolePermMirror,
+		return &featureDetails{
+			ActorRoleID:     strings.TrimSpace(rc.BotRolePermMirrorActorRoleID),
+			RuntimeDisabled: rc.DisableBotRolePermMirror,
 		}
 	},
-	"backfill.enabled": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"backfill.enabled": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		rc := cfg.ResolveRuntimeConfig(guildID)
-		out := map[string]any{
-			"start_day":    strings.TrimSpace(rc.BackfillStartDay),
-			"initial_date": strings.TrimSpace(rc.BackfillInitialDate),
+		out := &featureDetails{
+			StartDay:    strings.TrimSpace(rc.BackfillStartDay),
+			InitialDate: strings.TrimSpace(rc.BackfillInitialDate),
 		}
 		if guildID == "" {
-			out["channel_id"] = strings.TrimSpace(cfg.RuntimeConfig.BackfillChannelID)
+			out.ChannelID = strings.TrimSpace(cfg.RuntimeConfig.BackfillChannelID)
 			return out
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			out["channel_id"] = strings.TrimSpace(guild.Channels.BackfillChannelID())
+			out.ChannelID = strings.TrimSpace(guild.Channels.BackfillChannelID())
 		}
 		return out
 	},
-	"stats_channels": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"stats_channels": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
-			return map[string]any{}
+			return nil
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			return map[string]any{
-				"config_enabled":           guild.Stats.Enabled,
-				"update_interval_mins":     guild.Stats.UpdateIntervalMins,
-				"configured_channel_count": len(guild.Stats.Channels),
-				"channels":                 buildStatsChannelDetails(guild.Stats.Channels),
+			return &featureDetails{
+				ConfigEnabled:          guild.Stats.Enabled,
+				UpdateIntervalMins:     guild.Stats.UpdateIntervalMins,
+				ConfiguredChannelCount: len(guild.Stats.Channels),
+				Channels:               buildStatsChannelDetails(guild.Stats.Channels),
 			}
 		}
-		return map[string]any{}
+		return nil
 	},
-	"auto_role_assignment": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"auto_role_assignment": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
-			return map[string]any{}
+			return nil
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			out := map[string]any{
-				"config_enabled":      guild.Roles.AutoAssignment.Enabled,
-				"target_role_id":      strings.TrimSpace(guild.Roles.AutoAssignment.TargetRoleID),
-				"required_role_ids":   slices.Clone(guild.Roles.AutoAssignment.RequiredRoles),
-				"required_role_count": len(guild.Roles.AutoAssignment.RequiredRoles),
-				"booster_role_id":     strings.TrimSpace(guild.Roles.BoosterRole),
+			out := &featureDetails{
+				ConfigEnabled:     guild.Roles.AutoAssignment.Enabled,
+				TargetRoleID:      strings.TrimSpace(guild.Roles.AutoAssignment.TargetRoleID),
+				RequiredRoleIDs:   slices.Clone(guild.Roles.AutoAssignment.RequiredRoles),
+				RequiredRoleCount: len(guild.Roles.AutoAssignment.RequiredRoles),
+				BoosterRoleID:     strings.TrimSpace(guild.Roles.BoosterRole),
 			}
 			if len(guild.Roles.AutoAssignment.RequiredRoles) > 0 {
-				out["level_role_id"] = strings.TrimSpace(guild.Roles.AutoAssignment.RequiredRoles[0])
+				out.LevelRoleID = strings.TrimSpace(guild.Roles.AutoAssignment.RequiredRoles[0])
 			}
 			return out
 		}
-		return map[string]any{}
+		return nil
 	},
-	"user_prune": func(cfg *files.BotConfig, guildID string) map[string]any {
+	"user_prune": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
-			return map[string]any{}
+			return nil
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			return map[string]any{
-				"config_enabled": guild.UserPrune.Enabled,
-			}
+			return &featureDetails{ConfigEnabled: guild.UserPrune.Enabled}
 		}
-		return map[string]any{}
+		return nil
 	},
 }
 
@@ -298,26 +293,26 @@ func buildLogFeatureDetails(
 	cfg *files.BotConfig,
 	guildID string,
 	logEvent logpolicy.LogEventType,
-) map[string]any {
-	out := map[string]any{}
-
+) *featureDetails {
 	capability, ok := logpolicy.LogEventCapabilities()[logEvent]
 	if !ok {
-		return out
+		return nil
 	}
 
-	out["requires_channel"] = capability.RequiresChannel
-	out["required_intents_mask"] = capability.RequiredIntentsMask
-	out["required_permissions_mask"] = capability.RequiredPermsMask
-	out["validate_channel_permissions"] = capability.ValidateChannelPerms
-	out["exclusive_moderation_channel"] = capability.RequireExclusiveModeration
+	out := &featureDetails{
+		RequiresChannel:         capability.RequiresChannel,
+		RequiredIntentsMask:     capability.RequiredIntentsMask,
+		RequiredPermissionsMask: capability.RequiredPermsMask,
+		ValidateChannelPerms:    capability.ValidateChannelPerms,
+		ExclusiveModeration:     capability.RequireExclusiveModeration,
+	}
 	if len(capability.Toggles) > 0 {
-		out["runtime_toggle_path"] = capability.Toggles[0]
+		out.RuntimeTogglePath = capability.Toggles[0]
 	}
 	if guildID != "" {
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
 			if channelID := logFeatureChannelID(&guild, logEvent); channelID != "" {
-				out["channel_id"] = channelID
+				out.ChannelID = channelID
 			}
 		}
 	}

@@ -203,6 +203,51 @@ export interface FeatureBlocker {
   field?: string;
 }
 
+export interface FeatureStatsChannelDetail {
+  channel_id?: string;
+  label?: string;
+  name_template?: string;
+  member_type?: string;
+  role_id?: string;
+}
+
+/**
+ * Typed mirror of the backend featureDetails struct. Every field is optional:
+ * the backend drops empty values via omitempty, so consumers must default on
+ * absence. The index signature keeps the defensive reads in the feature
+ * adapters (keys the backend may not currently emit) type-checkable.
+ */
+export interface FeatureDetails {
+  mode?: string;
+  role_id?: string;
+  channel_id?: string;
+  allowed_role_ids?: string[];
+  allowed_role_count?: number;
+  runtime_enabled?: boolean;
+  watch_bot?: boolean;
+  user_id?: string;
+  actor_role_id?: string;
+  runtime_disabled?: boolean;
+  start_day?: string;
+  initial_date?: string;
+  config_enabled?: boolean;
+  update_interval_mins?: number;
+  configured_channel_count?: number;
+  channels?: FeatureStatsChannelDetail[];
+  target_role_id?: string;
+  required_role_ids?: string[];
+  required_role_count?: number;
+  booster_role_id?: string;
+  level_role_id?: string;
+  requires_channel?: boolean;
+  required_intents_mask?: number;
+  required_permissions_mask?: number;
+  validate_channel_permissions?: boolean;
+  exclusive_moderation_channel?: boolean;
+  runtime_toggle_path?: string;
+  [key: string]: unknown;
+}
+
 export interface FeatureRecord {
   id: string;
   category: string;
@@ -217,7 +262,7 @@ export interface FeatureRecord {
   effective_source: string;
   readiness: string;
   blockers?: FeatureBlocker[];
-  details?: Record<string, unknown>;
+  details?: FeatureDetails;
   editable_fields?: string[];
 }
 

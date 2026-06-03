@@ -430,7 +430,7 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "runtime_kill_switch" {
 			t.Fatalf("expected runtime_kill_switch blocker, got %+v", response.Feature.Blockers)
 		}
-		if response.Feature.Details["channel_id"] != "clean-log" {
+		if response.Feature.Details == nil || response.Feature.Details.ChannelID != "clean-log" {
 			t.Fatalf("expected clean_action channel detail, got %+v", response.Feature.Details)
 		}
 	})
@@ -749,7 +749,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		if response.Feature.Readiness != "ready" || len(response.Feature.Blockers) != 0 {
 			t.Fatalf("expected ready mute role feature, got %+v", response.Feature)
 		}
-		if response.Feature.Details["role_id"] != "mute-role" {
+		if response.Feature.Details == nil || response.Feature.Details.RoleID != "mute-role" {
 			t.Fatalf("expected role_id detail, got %+v", response.Feature.Details)
 		}
 	})
@@ -790,29 +790,29 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		if response.Feature.Readiness != "ready" || len(response.Feature.Blockers) != 0 {
 			t.Fatalf("expected ready stats feature, got %+v", response.Feature)
 		}
-		if response.Feature.Details["config_enabled"] != true {
+		if response.Feature.Details == nil {
+			t.Fatalf("expected stats details, got nil")
+		}
+		if !response.Feature.Details.ConfigEnabled {
 			t.Fatalf("expected config_enabled detail, got %+v", response.Feature.Details)
 		}
-		if response.Feature.Details["update_interval_mins"] != float64(45) {
+		if response.Feature.Details.UpdateIntervalMins != 45 {
 			t.Fatalf("expected update_interval_mins detail, got %+v", response.Feature.Details)
 		}
-		if response.Feature.Details["configured_channel_count"] != float64(2) {
+		if response.Feature.Details.ConfiguredChannelCount != 2 {
 			t.Fatalf("expected configured_channel_count detail, got %+v", response.Feature.Details)
 		}
 
-		channels, ok := response.Feature.Details["channels"].([]any)
-		if !ok || len(channels) != 2 {
-			t.Fatalf("expected two stats channel details, got %+v", response.Feature.Details["channels"])
+		channels := response.Feature.Details.Channels
+		if len(channels) != 2 {
+			t.Fatalf("expected two stats channel details, got %+v", channels)
 		}
 
-		firstChannel, ok := channels[0].(map[string]any)
-		if !ok {
-			t.Fatalf("expected first stats channel as map, got %+v", channels[0])
-		}
-		if firstChannel["channel_id"] != "stats-total" || firstChannel["label"] != "Total members" || firstChannel["name_template"] != "{label} | {count}" {
+		firstChannel := channels[0]
+		if firstChannel.ChannelID != "stats-total" || firstChannel.Label != "Total members" || firstChannel.NameTemplate != "{label} | {count}" {
 			t.Fatalf("unexpected first stats channel detail: %+v", firstChannel)
 		}
-		if firstChannel["member_type"] != "all" {
+		if firstChannel.MemberType != "all" {
 			t.Fatalf("expected first stats channel member_type, got %+v", firstChannel)
 		}
 	})
@@ -850,10 +850,13 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		if len(response.Feature.Blockers) != 1 || response.Feature.Blockers[0].Code != "invalid_target_role" {
 			t.Fatalf("expected invalid_target_role blocker, got %+v", response.Feature.Blockers)
 		}
-		if response.Feature.Details["booster_role_id"] != "booster-role" {
+		if response.Feature.Details == nil {
+			t.Fatalf("expected auto role details, got nil")
+		}
+		if response.Feature.Details.BoosterRoleID != "booster-role" {
 			t.Fatalf("expected booster_role_id detail, got %+v", response.Feature.Details)
 		}
-		if response.Feature.Details["level_role_id"] != "level-role" {
+		if response.Feature.Details.LevelRoleID != "level-role" {
 			t.Fatalf("expected level_role_id detail, got %+v", response.Feature.Details)
 		}
 	})

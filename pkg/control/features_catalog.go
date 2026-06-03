@@ -61,7 +61,7 @@ type featureRecord struct {
 	EffectiveSource       string           `json:"effective_source"`
 	Readiness             string           `json:"readiness"`
 	Blockers              []featureBlocker `json:"blockers,omitempty"`
-	Details               map[string]any   `json:"details,omitempty"`
+	Details               *featureDetails  `json:"details,omitempty"`
 	EditableFields        []string         `json:"editable_fields,omitempty"`
 }
 
@@ -69,6 +69,40 @@ type featureBlocker struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Field   string `json:"field,omitempty"`
+}
+
+// featureDetails is the typed payload previously carried as map[string]any. Each
+// builder populates only the fields relevant to its feature; empty fields are
+// dropped from the JSON via omitempty, so consumers must treat every field as
+// optional.
+type featureDetails struct {
+	Mode                    string                      `json:"mode,omitempty"`
+	RoleID                  string                      `json:"role_id,omitempty"`
+	ChannelID               string                      `json:"channel_id,omitempty"`
+	AllowedRoleIDs          []string                    `json:"allowed_role_ids,omitempty"`
+	AllowedRoleCount        int                         `json:"allowed_role_count,omitempty"`
+	RuntimeEnabled          bool                        `json:"runtime_enabled,omitempty"`
+	WatchBot                bool                        `json:"watch_bot,omitempty"`
+	UserID                  string                      `json:"user_id,omitempty"`
+	ActorRoleID             string                      `json:"actor_role_id,omitempty"`
+	RuntimeDisabled         bool                        `json:"runtime_disabled,omitempty"`
+	StartDay                string                      `json:"start_day,omitempty"`
+	InitialDate             string                      `json:"initial_date,omitempty"`
+	ConfigEnabled           bool                        `json:"config_enabled,omitempty"`
+	UpdateIntervalMins      int                         `json:"update_interval_mins,omitempty"`
+	ConfiguredChannelCount  int                         `json:"configured_channel_count,omitempty"`
+	Channels                []featureStatsChannelDetail `json:"channels,omitempty"`
+	TargetRoleID            string                      `json:"target_role_id,omitempty"`
+	RequiredRoleIDs         []string                    `json:"required_role_ids,omitempty"`
+	RequiredRoleCount       int                         `json:"required_role_count,omitempty"`
+	BoosterRoleID           string                      `json:"booster_role_id,omitempty"`
+	LevelRoleID             string                      `json:"level_role_id,omitempty"`
+	RequiresChannel         bool                        `json:"requires_channel,omitempty"`
+	RequiredIntentsMask     int                         `json:"required_intents_mask,omitempty"`
+	RequiredPermissionsMask int64                       `json:"required_permissions_mask,omitempty"`
+	ValidateChannelPerms    bool                        `json:"validate_channel_permissions,omitempty"`
+	ExclusiveModeration     bool                        `json:"exclusive_moderation_channel,omitempty"`
+	RuntimeTogglePath       string                      `json:"runtime_toggle_path,omitempty"`
 }
 
 type featureStatsChannelDetail struct {
