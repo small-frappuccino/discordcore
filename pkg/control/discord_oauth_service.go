@@ -173,15 +173,15 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 		return
 	}
 
-	session, err := provider.sessions.Create(
-		user,
-		scopes,
-		accessToken,
-		refreshToken,
-		tokenType,
-		tokenTTL,
-		provider.sessionTTL,
-	)
+	session, err := provider.sessions.Create(discordOAuthSessionCreateParams{
+		User:         user,
+		Scopes:       scopes,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    tokenType,
+		TokenTTL:     tokenTTL,
+		TTL:          provider.sessionTTL,
+	})
 	if err != nil {
 		log.ApplicationLogger().Error("Discord OAuth session creation failed", "operation", "control.oauth.callback.create_session", "err", err)
 		http.Error(w, "failed to create oauth session", http.StatusInternalServerError)

@@ -383,7 +383,15 @@ func TestQOTDRoutesReconcileArchivesExpiredScheduledPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
-	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "questions-list-entry-route", "route-thread", "route-message", "route-thread", publishedAt)
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), storage.FinalizeQOTDOfficialPostParams{
+		ID:                         official.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-route",
+		DiscordThreadID:            "route-thread",
+		StarterMessageID:           "route-message",
+		AnswerChannelID:            "route-thread",
+		PublishedAt:                publishedAt,
+	})
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}

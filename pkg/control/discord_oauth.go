@@ -93,16 +93,21 @@ type discordOAuthSession struct {
 	ExpiresAt            time.Time
 }
 
+// discordOAuthSessionCreateParams carries the inputs for minting a new
+// dashboard OAuth session. TokenTTL is the lifetime of the Discord access
+// token; TTL is the lifetime of the dashboard session itself.
+type discordOAuthSessionCreateParams struct {
+	User         discordOAuthUser
+	Scopes       []string
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	TokenTTL     time.Duration
+	TTL          time.Duration
+}
+
 type discordOAuthSessionStore interface {
-	Create(
-		user discordOAuthUser,
-		scopes []string,
-		accessToken string,
-		refreshToken string,
-		tokenType string,
-		tokenTTL time.Duration,
-		ttl time.Duration,
-	) (discordOAuthSession, error)
+	Create(params discordOAuthSessionCreateParams) (discordOAuthSession, error)
 	Get(sessionID string, now time.Time) (discordOAuthSession, bool, error)
 	Save(session discordOAuthSession) error
 	Delete(sessionID string) error

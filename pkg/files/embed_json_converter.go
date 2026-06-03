@@ -164,7 +164,17 @@ func ToCustomEmbedConfig(embed DiscohookEmbed, key string) CustomEmbedConfig {
 
 // FromCustomEmbedConfig exports a CustomEmbedConfig into a DiscohookJSON object.
 func FromCustomEmbedConfig(ce CustomEmbedConfig) DiscohookJSON {
-	embed := buildDiscohookEmbedBase(ce.Title, ce.Description, ce.Color, ce.AuthorName, ce.AuthorIconURL, ce.FooterText, ce.FooterIconURL, ce.ImageURL, ce.ThumbnailURL)
+	embed := buildDiscohookEmbedBase(discohookEmbedBase{
+		Title:       ce.Title,
+		Description: ce.Description,
+		Color:       ce.Color,
+		AuthorName:  ce.AuthorName,
+		AuthorIcon:  ce.AuthorIconURL,
+		FooterText:  ce.FooterText,
+		FooterIcon:  ce.FooterIconURL,
+		ImageURL:    ce.ImageURL,
+		ThumbURL:    ce.ThumbnailURL,
+	})
 
 	if len(ce.Fields) > 0 {
 		embed.Fields = make([]DiscohookField, 0, len(ce.Fields))
@@ -222,7 +232,17 @@ func ToRolePanelConfig(embed DiscohookEmbed, key string) RolePanelConfig {
 
 // FromRolePanelConfig exports a RolePanelConfig into a DiscohookJSON object.
 func FromRolePanelConfig(rp RolePanelConfig) DiscohookJSON {
-	embed := buildDiscohookEmbedBase(rp.Title, rp.Description, rp.Color, rp.AuthorName, rp.AuthorIconURL, rp.FooterText, rp.FooterIconURL, rp.ImageURL, rp.ThumbnailURL)
+	embed := buildDiscohookEmbedBase(discohookEmbedBase{
+		Title:       rp.Title,
+		Description: rp.Description,
+		Color:       rp.Color,
+		AuthorName:  rp.AuthorName,
+		AuthorIcon:  rp.AuthorIconURL,
+		FooterText:  rp.FooterText,
+		FooterIcon:  rp.FooterIconURL,
+		ImageURL:    rp.ImageURL,
+		ThumbURL:    rp.ThumbnailURL,
+	})
 
 	if len(rp.Fields) > 0 {
 		embed.Fields = make([]DiscohookField, 0, len(rp.Fields))
@@ -257,36 +277,57 @@ func ToPartnerBoardTemplate(embed DiscohookEmbed, current PartnerBoardTemplateCo
 
 // FromPartnerBoardTemplate exports a PartnerBoardTemplateConfig into a mock DiscohookJSON object.
 func FromPartnerBoardTemplate(tmpl PartnerBoardTemplateConfig) DiscohookJSON {
-	embed := buildDiscohookEmbedBase(tmpl.Title, tmpl.Intro, tmpl.Color, "", "", tmpl.FooterTemplate, "", "", "")
+	embed := buildDiscohookEmbedBase(discohookEmbedBase{
+		Title:       tmpl.Title,
+		Description: tmpl.Intro,
+		Color:       tmpl.Color,
+		FooterText:  tmpl.FooterTemplate,
+	})
 	return DiscohookJSON{
 		Embeds: []DiscohookEmbed{embed},
 	}
 }
 
-func buildDiscohookEmbedBase(title, desc string, color int, authorName, authorIcon, footerText, footerIcon, imageURL, thumbURL string) DiscohookEmbed {
+// discohookEmbedBase carries the flat embed fields shared by the
+// CustomEmbedConfig, RolePanelConfig, and PartnerBoardTemplateConfig
+// exporters. buildDiscohookEmbedBase promotes the non-empty author, footer,
+// image, and thumbnail values into their nested embed blocks.
+type discohookEmbedBase struct {
+	Title       string
+	Description string
+	Color       int
+	AuthorName  string
+	AuthorIcon  string
+	FooterText  string
+	FooterIcon  string
+	ImageURL    string
+	ThumbURL    string
+}
+
+func buildDiscohookEmbedBase(base discohookEmbedBase) DiscohookEmbed {
 	embed := DiscohookEmbed{
-		Title:       title,
-		Description: desc,
-		Color:       color,
+		Title:       base.Title,
+		Description: base.Description,
+		Color:       base.Color,
 	}
 
-	if authorName != "" || authorIcon != "" {
+	if base.AuthorName != "" || base.AuthorIcon != "" {
 		embed.Author = &DiscohookAuthor{
-			Name:    authorName,
-			IconURL: authorIcon,
+			Name:    base.AuthorName,
+			IconURL: base.AuthorIcon,
 		}
 	}
-	if footerText != "" || footerIcon != "" {
+	if base.FooterText != "" || base.FooterIcon != "" {
 		embed.Footer = &DiscohookFooter{
-			Text:    footerText,
-			IconURL: footerIcon,
+			Text:    base.FooterText,
+			IconURL: base.FooterIcon,
 		}
 	}
-	if imageURL != "" {
-		embed.Image = &DiscohookImage{URL: imageURL}
+	if base.ImageURL != "" {
+		embed.Image = &DiscohookImage{URL: base.ImageURL}
 	}
-	if thumbURL != "" {
-		embed.Thumbnail = &DiscohookImage{URL: thumbURL}
+	if base.ThumbURL != "" {
+		embed.Thumbnail = &DiscohookImage{URL: base.ThumbURL}
 	}
 
 	return embed

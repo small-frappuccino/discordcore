@@ -67,6 +67,19 @@ func (e *OfficialPostStateDivergenceError) Unwrap() error {
 	return errors.Join(ErrOfficialPostStateDivergence, e.Cause)
 }
 
+// officialPostThreadTransition bundles the inputs to
+// applyOfficialPostThreadTransition: the persisted post whose Discord thread
+// is being transitioned, the target Discord thread state, the
+// OfficialPostState to persist on success, and the optional closed/archived
+// timestamps forwarded to the DB write.
+type officialPostThreadTransition struct {
+	Post          storage.QOTDOfficialPostRecord
+	ThreadState   discordqotd.ThreadState
+	TargetDBState OfficialPostState
+	ClosedAt      *time.Time
+	ArchivedAt    *time.Time
+}
+
 // applyOfficialPostThreadTransition is the canonical seam through which a
 // QOTD official-post lifecycle transition touches BOTH Discord and the
 // DB. Every code path that flips state on a post with a Discord thread
@@ -114,26 +127,26 @@ func (e *OfficialPostStateDivergenceError) Unwrap() error {
 //
 // # Parameters
 //
-//   - post: the current persisted record. Used for IDs and the
+// The transition inputs are bundled in an officialPostThreadTransition:
+//
+//   - Post: the current persisted record. Used for IDs and the
 //     Discord thread ID; the helper does not mutate it.
-//   - threadState: the target Discord thread state. For current/previous
+//   - ThreadState: the target Discord thread state. For current/previous
 //     transitions, all three flags are false. For archive, Locked=true
 //     while Archived stays false (Discord's auto_archive_duration
 //     handles the visible archive).
-//   - targetDBState: the OfficialPostState to persist on success. Will
+//   - TargetDBState: the OfficialPostState to persist on success. Will
 //     be overridden to OfficialPostStateMissingDiscord if the thread is
 //     gone from Discord's side.
-//   - closedAt, archivedAt: passed through to UpdateQOTDOfficialPostState
+//   - ClosedAt, ArchivedAt: passed through to UpdateQOTDOfficialPostState
 //     unchanged. nil for live transitions, non-nil for archive.
-func (s *Service) applyOfficialPostThreadTransition(
-	ctx context.Context,
-	session *discordgo.Session,
-	post storage.QOTDOfficialPostRecord,
-	threadState discordqotd.ThreadState,
-	targetDBState OfficialPostState,
-	closedAt *time.Time,
-	archivedAt *time.Time,
-) (*storage.QOTDOfficialPostRecord, error) {
+func (s *Service) applyOfficialPostThreadTransition(ctx context.Context, session *discordgo.Session, params officialPostThreadTransition) (*storage.QOTDOfficialPostRecord, error) {
+	post := params.Post
+	threadState := params.ThreadState
+	targetDBState := params.TargetDBState
+	closedAt := params.ClosedAt
+	archivedAt := params.ArchivedAt
+
 	if strings.TrimSpace(post.DiscordThreadID) == "" {
 		// Message-mode posts (no Discord thread, e.g. legacy/manual seed
 		// rows) skip Discord entirely; there is no divergence to manage.

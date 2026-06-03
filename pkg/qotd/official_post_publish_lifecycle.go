@@ -45,15 +45,26 @@ func generatePublishNonce() (string, error) {
 	return hex.EncodeToString(raw[:]), nil
 }
 
-func (s *Service) completeOfficialPostProvisioning(
-	ctx context.Context,
-	session *discordgo.Session,
-	post storage.QOTDOfficialPostRecord,
-	question *storage.QOTDQuestionRecord,
-	availableQuestions int,
-	threadName string,
-	now time.Time,
-) (*storage.QOTDOfficialPostRecord, *storage.QOTDQuestionRecord, string, error) {
+// officialPostProvisioningParams carries the per-attempt inputs to
+// completeOfficialPostProvisioning: the persisted post record being
+// provisioned, the reserved question (nil when the row was seeded without
+// one), the count of still-available questions used in the thread header,
+// the pre-rendered thread name, and the reference time for window math.
+type officialPostProvisioningParams struct {
+	Post               storage.QOTDOfficialPostRecord
+	Question           *storage.QOTDQuestionRecord
+	AvailableQuestions int
+	ThreadName         string
+	Now                time.Time
+}
+
+func (s *Service) completeOfficialPostProvisioning(ctx context.Context, session *discordgo.Session, params officialPostProvisioningParams) (*storage.QOTDOfficialPostRecord, *storage.QOTDQuestionRecord, string, error) {
+	post := params.Post
+	question := params.Question
+	availableQuestions := params.AvailableQuestions
+	threadName := params.ThreadName
+	now := params.Now
+
 	// Always reassert provisioning in storage before touching Discord. This
 	// guards cross-instance races where maintenance deleted the row after we
 	// loaded it but before publish starts.
@@ -189,16 +200,15 @@ func (s *Service) handlePublishFailure(ctx context.Context, post storage.QOTDOff
 // finalizeOfficialPost writes the finalized official-post record and upserts its surface,
 // marking the post failed if either step errors.
 func (s *Service) finalizeOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord, publishedAt time.Time) (*storage.QOTDOfficialPostRecord, error) {
-	finalized, err := s.store.FinalizeQOTDOfficialPost(
-		ctx,
-		post.ID,
-		post.QuestionListThreadID,
-		post.QuestionListEntryMessageID,
-		post.DiscordThreadID,
-		post.DiscordStarterMessageID,
-		post.AnswerChannelID,
-		publishedAt,
-	)
+	finalized, err := s.store.FinalizeQOTDOfficialPost(ctx, storage.FinalizeQOTDOfficialPostParams{
+		ID:                         post.ID,
+		QuestionListThreadID:       post.QuestionListThreadID,
+		QuestionListEntryMessageID: post.QuestionListEntryMessageID,
+		DiscordThreadID:            post.DiscordThreadID,
+		StarterMessageID:           post.DiscordStarterMessageID,
+		AnswerChannelID:            post.AnswerChannelID,
+		PublishedAt:                publishedAt,
+	})
 	if err != nil {
 		if _, markErr := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateFailed), nil, nil); markErr != nil {
 			return nil, fmt.Errorf("finalize qotd official post: %w (mark failed: %v)", err, markErr)
@@ -279,7 +289,13 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 	// that finalize will perform momentarily.
 	threadName := buildOfficialThreadName(displayNumber)
 
-	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, post, question, availableQuestions, threadName, now)
+	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, officialPostProvisioningParams{
+		Post:               post,
+		Question:           question,
+		AvailableQuestions: availableQuestions,
+		ThreadName:         threadName,
+		Now:                now,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Service.resumeOfficialPostProvisioning: %w", err)
 	}

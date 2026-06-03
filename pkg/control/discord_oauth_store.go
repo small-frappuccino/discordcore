@@ -30,15 +30,7 @@ func newDiscordOAuthSessionStore(path string) (discordOAuthSessionStore, error) 
 	return store, nil
 }
 
-func (s *discordOAuthSessionDiskStore) Create(
-	user discordOAuthUser,
-	scopes []string,
-	accessToken string,
-	refreshToken string,
-	tokenType string,
-	tokenTTL time.Duration,
-	ttl time.Duration,
-) (discordOAuthSession, error) {
+func (s *discordOAuthSessionDiskStore) Create(params discordOAuthSessionCreateParams) (discordOAuthSession, error) {
 	sessionID, err := generateRandomToken(32)
 	if err != nil {
 		return discordOAuthSession{}, fmt.Errorf("generate session id: %w", err)
@@ -49,16 +41,16 @@ func (s *discordOAuthSessionDiskStore) Create(
 	}
 
 	now := time.Now().UTC()
-	sessionExpiresAt := now.Add(ttl).UTC()
+	sessionExpiresAt := now.Add(params.TTL).UTC()
 	session := discordOAuthSession{
 		ID:                   sessionID,
-		User:                 user,
-		Scopes:               slices.Clone(scopes),
+		User:                 params.User,
+		Scopes:               slices.Clone(params.Scopes),
 		CSRFToken:            csrfToken,
-		AccessToken:          strings.TrimSpace(accessToken),
-		RefreshToken:         strings.TrimSpace(refreshToken),
-		AccessTokenExpiresAt: resolveAccessTokenExpiry(now, tokenTTL, sessionExpiresAt),
-		TokenType:            strings.TrimSpace(tokenType),
+		AccessToken:          strings.TrimSpace(params.AccessToken),
+		RefreshToken:         strings.TrimSpace(params.RefreshToken),
+		AccessTokenExpiresAt: resolveAccessTokenExpiry(now, params.TokenTTL, sessionExpiresAt),
+		TokenType:            strings.TrimSpace(params.TokenType),
 		CreatedAt:            now,
 		ExpiresAt:            sessionExpiresAt,
 	}

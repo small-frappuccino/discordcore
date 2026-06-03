@@ -44,15 +44,15 @@ func TestResolveManageableGuildsCachesDiscordLookup(t *testing.T) {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
-	session, err := srv.discordOAuth.sessions.Create(
-		discordOAuthUser{ID: "u1", Username: "alice"},
-		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
-		"access-token",
-		"refresh-token",
-		"Bearer",
-		time.Hour,
-		time.Hour,
-	)
+	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
+		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		TokenType:    "Bearer",
+		TokenTTL:     time.Hour,
+		TTL:          time.Hour,
+	})
 	if err != nil {
 		t.Fatalf("create oauth session: %v", err)
 	}
@@ -111,15 +111,15 @@ func TestResolveManageableGuildsCacheExpires(t *testing.T) {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
-	session, err := srv.discordOAuth.sessions.Create(
-		discordOAuthUser{ID: "u1", Username: "alice"},
-		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
-		"access-token",
-		"refresh-token",
-		"Bearer",
-		time.Hour,
-		time.Hour,
-	)
+	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
+		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		TokenType:    "Bearer",
+		TokenTTL:     time.Hour,
+		TTL:          time.Hour,
+	})
 	if err != nil {
 		t.Fatalf("create oauth session: %v", err)
 	}
@@ -196,15 +196,15 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 		t.Fatalf("configure oauth: %v", err)
 	}
 
-	session, err := srv.discordOAuth.sessions.Create(
-		discordOAuthUser{ID: "u1", Username: "alice"},
-		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
-		"access-token",
-		"refresh-token",
-		"Bearer",
-		time.Hour,
-		time.Hour,
-	)
+	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
+		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		TokenType:    "Bearer",
+		TokenTTL:     time.Hour,
+		TTL:          time.Hour,
+	})
 	if err != nil {
 		t.Fatalf("create oauth session: %v", err)
 	}

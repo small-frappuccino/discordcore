@@ -506,7 +506,15 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) 
 		t.Fatalf("UpdateQOTDOfficialPostProgress mutated publish_ordinal: %d -> %d", originalOrdinal, progressed.PublishOrdinal)
 	}
 
-	finalized, err := store.FinalizeQOTDOfficialPost(ctx, post.ID, "qlist-thread", "qlist-entry", "thread-1", "starter-1", "thread-1", publishDate.Add(13*time.Hour))
+	finalized, err := store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+		ID:                         post.ID,
+		QuestionListThreadID:       "qlist-thread",
+		QuestionListEntryMessageID: "qlist-entry",
+		DiscordThreadID:            "thread-1",
+		StarterMessageID:           "starter-1",
+		AnswerChannelID:            "thread-1",
+		PublishedAt:                publishDate.Add(13 * time.Hour),
+	})
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}
@@ -673,7 +681,15 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
 	}
-	manual, err = store.FinalizeQOTDOfficialPost(ctx, manual.ID, "questions-list-thread", "questions-list-entry-manual", "manual-thread", "manual-message", "manual-thread", publishedAt)
+	manual, err = store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+		ID:                         manual.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-manual",
+		DiscordThreadID:            "manual-thread",
+		StarterMessageID:           "manual-message",
+		AnswerChannelID:            "manual-thread",
+		PublishedAt:                publishedAt,
+	})
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost(manual) failed: %v", err)
 	}
@@ -812,7 +828,15 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
 	}
-	if _, err := store.FinalizeQOTDOfficialPost(ctx, manual.ID, "questions-list-thread", "questions-list-entry-manual", "manual-thread", "manual-message", "manual-thread", publishedAt); err != nil {
+	if _, err := store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+		ID:                         manual.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-manual",
+		DiscordThreadID:            "manual-thread",
+		StarterMessageID:           "manual-message",
+		AnswerChannelID:            "manual-thread",
+		PublishedAt:                publishedAt,
+	}); err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost(manual) failed: %v", err)
 	}
 
@@ -1040,7 +1064,15 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 	}
 
 	finalizedAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
-	finalized, err := store.FinalizeQOTDOfficialPost(ctx, official.ID, "questions-list-thread", "list-entry-1", "official-thread-1", "starter-message-1", "official-thread-1", finalizedAt)
+	finalized, err := store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+		ID:                         official.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "list-entry-1",
+		DiscordThreadID:            "official-thread-1",
+		StarterMessageID:           "starter-message-1",
+		AnswerChannelID:            "official-thread-1",
+		PublishedAt:                finalizedAt,
+	})
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}

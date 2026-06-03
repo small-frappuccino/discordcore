@@ -34,12 +34,12 @@ func DeleteMessages(session *discordgo.Session, channelID string, messageIDs []s
 	}
 
 	if opts.Mode == DeleteModeSingleOnly {
-		return deleteSingle(session, channelID, messageIDs, opts.OnDeleteError)
+		return deleteSingle(session, channelID, messageIDs, opts)
 	}
-	return deleteBulkPreferred(session, channelID, messageIDs, opts.OnDeleteError, opts.OnChunkError)
+	return deleteBulkPreferred(session, channelID, messageIDs, opts)
 }
 
-func deleteSingle(session *discordgo.Session, channelID string, messageIDs []string, onError func(string, error, FailureClass)) (int, int) {
+func deleteSingle(session *discordgo.Session, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
 	deleted := 0
 	failed := 0
 	for _, id := range messageIDs {
@@ -55,8 +55,8 @@ func deleteSingle(session *discordgo.Session, channelID string, messageIDs []str
 				continue
 			}
 			failed++
-			if onError != nil {
-				onError(id, err, class)
+			if opts.OnDeleteError != nil {
+				opts.OnDeleteError(id, err, class)
 			}
 			continue
 		}
@@ -65,7 +65,7 @@ func deleteSingle(session *discordgo.Session, channelID string, messageIDs []str
 	return deleted, failed
 }
 
-func deleteBulkPreferred(session *discordgo.Session, channelID string, messageIDs []string, onError func(string, error, FailureClass), onChunkError func([]string, error, FailureClass)) (int, int) {
+func deleteBulkPreferred(session *discordgo.Session, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
 	deleted := 0
 	failed := 0
 	for _, chunk := range chunkStrings(messageIDs, 100) {
@@ -73,7 +73,7 @@ func deleteBulkPreferred(session *discordgo.Session, channelID string, messageID
 			continue
 		}
 		if len(chunk) == 1 {
-			d, f := deleteSingle(session, channelID, chunk, onError)
+			d, f := deleteSingle(session, channelID, chunk, opts)
 			deleted += d
 			failed += f
 			continue
@@ -87,14 +87,14 @@ func deleteBulkPreferred(session *discordgo.Session, channelID string, messageID
 				// per-message classification (the rest of the chunk is
 				// usually still valid) instead of marking 100 messages
 				// failed for one borderline message.
-				d, f := deleteSingle(session, channelID, chunk, onError)
+				d, f := deleteSingle(session, channelID, chunk, opts)
 				deleted += d
 				failed += f
 				continue
 			}
 			failed += len(chunk)
-			if onChunkError != nil {
-				onChunkError(chunk, err, class)
+			if opts.OnChunkError != nil {
+				opts.OnChunkError(chunk, err, class)
 			}
 			continue
 		}

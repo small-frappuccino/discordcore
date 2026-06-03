@@ -595,7 +595,15 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(old) failed: %v", err)
 	}
-	oldOfficial, err = store.FinalizeQOTDOfficialPost(context.Background(), oldOfficial.ID, "questions-list-thread", "questions-list-entry-previous", "thread-previous", "message-previous", "thread-previous", oldUsedAt)
+	oldOfficial, err = store.FinalizeQOTDOfficialPost(context.Background(), storage.FinalizeQOTDOfficialPostParams{
+		ID:                         oldOfficial.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-previous",
+		DiscordThreadID:            "thread-previous",
+		StarterMessageID:           "message-previous",
+		AnswerChannelID:            "thread-previous",
+		PublishedAt:                oldUsedAt,
+	})
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost(old) failed: %v", err)
 	}
@@ -1734,7 +1742,15 @@ func TestServiceResolvePublishNowConflictTranslatesUniqueSlotConflicts(t *testin
 				if err != nil {
 					return fmt.Errorf("CreateQOTDOfficialPostProvisioning(): %w", err)
 				}
-				if _, err := store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "questions-list-entry", "thread-1", "message-1", "thread-1", time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)); err != nil {
+				if _, err := store.FinalizeQOTDOfficialPost(context.Background(), storage.FinalizeQOTDOfficialPostParams{
+					ID:                         official.ID,
+					QuestionListThreadID:       "questions-list-thread",
+					QuestionListEntryMessageID: "questions-list-entry",
+					DiscordThreadID:            "thread-1",
+					StarterMessageID:           "message-1",
+					AnswerChannelID:            "thread-1",
+					PublishedAt:                time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC),
+				}); err != nil {
 					return fmt.Errorf("FinalizeQOTDOfficialPost(): %w", err)
 				}
 				return nil
@@ -2447,7 +2463,15 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
-	official, err = store.FinalizeQOTDOfficialPost(context.Background(), official.ID, "questions-list-thread", "questions-list-entry-archive", "official-thread-archive", "official-message-archive", "official-thread-archive", publishedAt)
+	official, err = store.FinalizeQOTDOfficialPost(context.Background(), storage.FinalizeQOTDOfficialPostParams{
+		ID:                         official.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-archive",
+		DiscordThreadID:            "official-thread-archive",
+		StarterMessageID:           "official-message-archive",
+		AnswerChannelID:            "official-thread-archive",
+		PublishedAt:                publishedAt,
+	})
 	if err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}
@@ -2551,7 +2575,15 @@ func TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen(t *testin
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
-	if _, err := store.FinalizeQOTDOfficialPost(context.Background(), post.ID, "questions-list-thread", "questions-list-entry-lock", threadID, "starter-lock", threadID, publishedAt); err != nil {
+	if _, err := store.FinalizeQOTDOfficialPost(context.Background(), storage.FinalizeQOTDOfficialPostParams{
+		ID:                         post.ID,
+		QuestionListThreadID:       "questions-list-thread",
+		QuestionListEntryMessageID: "questions-list-entry-lock",
+		DiscordThreadID:            threadID,
+		StarterMessageID:           "starter-lock",
+		AnswerChannelID:            threadID,
+		PublishedAt:                publishedAt,
+	}); err != nil {
 		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
 	}
 	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), post.ID, string(OfficialPostStatePrevious), nil, nil); err != nil {

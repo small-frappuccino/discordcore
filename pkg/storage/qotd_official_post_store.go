@@ -108,27 +108,39 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 	return created, nil
 }
 
-func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, questionListThreadID, questionListEntryMessageID, discordThreadID, starterMessageID, answerChannelID string, publishedAt time.Time) (_ *QOTDOfficialPostRecord, err error) {
+// FinalizeQOTDOfficialPostParams carries the Discord-side identifiers and the
+// publish timestamp recorded when a QOTD official post finishes provisioning.
+type FinalizeQOTDOfficialPostParams struct {
+	ID                         int64
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	DiscordThreadID            string
+	StarterMessageID           string
+	AnswerChannelID            string
+	PublishedAt                time.Time
+}
+
+func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, params FinalizeQOTDOfficialPostParams) (_ *QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("finalize qotd official post: %w", err)
 		}
 	}()
-	if id <= 0 {
+	if params.ID <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}
-	questionListThreadID = strings.TrimSpace(questionListThreadID)
-	questionListEntryMessageID = strings.TrimSpace(questionListEntryMessageID)
-	discordThreadID = strings.TrimSpace(discordThreadID)
-	starterMessageID = strings.TrimSpace(starterMessageID)
-	answerChannelID = strings.TrimSpace(answerChannelID)
+	questionListThreadID := strings.TrimSpace(params.QuestionListThreadID)
+	questionListEntryMessageID := strings.TrimSpace(params.QuestionListEntryMessageID)
+	discordThreadID := strings.TrimSpace(params.DiscordThreadID)
+	starterMessageID := strings.TrimSpace(params.StarterMessageID)
+	answerChannelID := strings.TrimSpace(params.AnswerChannelID)
 	if starterMessageID == "" {
 		return nil, fmt.Errorf("starter message id is required")
 	}
 	if answerChannelID == "" {
 		return nil, fmt.Errorf("answer channel id is required")
 	}
-	if publishedAt.IsZero() {
+	if params.PublishedAt.IsZero() {
 		return nil, fmt.Errorf("published_at is required")
 	}
 
@@ -175,8 +187,8 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, id int64, question
 		zeroEmptyString(discordThreadID),
 		starterMessageID,
 		answerChannelID,
-		publishedAt.UTC(),
-		id,
+		params.PublishedAt.UTC(),
+		params.ID,
 	)
 	updated, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {

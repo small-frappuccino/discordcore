@@ -387,15 +387,15 @@ func configureDashboardSession(t *testing.T, srv *Server) *http.Cookie {
 		t.Fatalf("configure dashboard oauth: %v", err)
 	}
 
-	session, err := srv.discordOAuth.sessions.Create(
-		discordOAuthUser{ID: "u1", Username: "alice"},
-		[]string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
-		"access-token",
-		"refresh-token",
-		"Bearer",
-		time.Hour,
-		time.Hour,
-	)
+	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
+		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		TokenType:    "Bearer",
+		TokenTTL:     time.Hour,
+		TTL:          time.Hour,
+	})
 	if err != nil {
 		t.Fatalf("create dashboard oauth session: %v", err)
 	}

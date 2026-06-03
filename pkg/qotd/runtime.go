@@ -184,15 +184,13 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID st
 		return s.handleProvisioningConflict(ctx, guildID, session, slotState.PublishDateUTC, now, err)
 	}
 
-	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(
-		ctx,
-		session,
-		*provisioned,
-		question,
-		availableQuestions,
-		buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
-		now,
-	)
+	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(ctx, session, officialPostProvisioningParams{
+		Post:               *provisioned,
+		Question:           question,
+		AvailableQuestions: availableQuestions,
+		ThreadName:         buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
+		Now:                now,
+	})
 	if err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
@@ -384,15 +382,13 @@ func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.S
 	// applyOfficialPostThreadTransition. That helper documents the
 	// divergence-window contract; the reconcile loop is the recovery path
 	// if the DB write fails after Discord succeeded.
-	_, err := s.applyOfficialPostThreadTransition(
-		ctx,
-		session,
-		post,
-		discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false},
-		lifecycle.State,
-		nil,
-		nil,
-	)
+	_, err := s.applyOfficialPostThreadTransition(ctx, session, officialPostThreadTransition{
+		Post:          post,
+		ThreadState:   discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false},
+		TargetDBState: lifecycle.State,
+		ClosedAt:      nil,
+		ArchivedAt:    nil,
+	})
 	return err
 }
 
@@ -430,15 +426,13 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	// the archived state. applyOfficialPostThreadTransition flips the
 	// final state to OfficialPostStateMissingDiscord when the thread is
 	// gone from Discord's side.
-	_, err = s.applyOfficialPostThreadTransition(
-		ctx,
-		session,
-		post,
-		discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false},
-		OfficialPostStateArchived,
-		&archivedAt,
-		&archivedAt,
-	)
+	_, err = s.applyOfficialPostThreadTransition(ctx, session, officialPostThreadTransition{
+		Post:          post,
+		ThreadState:   discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false},
+		TargetDBState: OfficialPostStateArchived,
+		ClosedAt:      &archivedAt,
+		ArchivedAt:    &archivedAt,
+	})
 	return err
 }
 

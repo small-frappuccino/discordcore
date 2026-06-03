@@ -179,15 +179,13 @@ func (s *Service) provisionManualOfficialPost(ctx context.Context, guildID strin
 		return conflictResult, false, conflictErr
 	}
 
-	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(
-		ctx,
-		session,
-		*provisioned,
-		question,
-		availableQuestions,
-		buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
-		now,
-	)
+	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, officialPostProvisioningParams{
+		Post:               *provisioned,
+		Question:           question,
+		AvailableQuestions: availableQuestions,
+		ThreadName:         buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
+		Now:                now,
+	})
 	if err != nil {
 		return nil, false, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
