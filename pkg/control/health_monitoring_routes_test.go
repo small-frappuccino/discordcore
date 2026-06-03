@@ -84,7 +84,7 @@ func TestMonitoringHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
 
-	metrics := logging.NewInMemoryMetrics()
+	metrics := &logging.InMemoryMetrics{}
 	metrics.RecordAuditLogCall()
 	metrics.RecordAuditLogCall()
 	metrics.RecordGuildMemberCall()
@@ -131,7 +131,7 @@ func TestMonitoringHealthRouteRejectsUnauthenticatedRequests(t *testing.T) {
 
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
-	srv.SetMonitoringMetricsResolver(func() logging.Metrics { return logging.NewInMemoryMetrics() })
+	srv.SetMonitoringMetricsResolver(func() logging.Metrics { return &logging.InMemoryMetrics{} })
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/monitoring", nil)
@@ -149,7 +149,7 @@ func TestMonitoringHealthRouteRejectsNonGETMethods(t *testing.T) {
 
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
-	srv.SetMonitoringMetricsResolver(func() logging.Metrics { return logging.NewInMemoryMetrics() })
+	srv.SetMonitoringMetricsResolver(func() logging.Metrics { return &logging.InMemoryMetrics{} })
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		method := method

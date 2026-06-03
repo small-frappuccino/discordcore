@@ -65,13 +65,12 @@ type ModerationWarning struct {
 }
 
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
-// Panics when db is nil: callers construct the store from a verified *sql.DB at
-// startup, so a nil here is a programmer error, not a runtime condition.
-func NewStore(db *sql.DB) *Store {
+// Returns an error if the provided db is nil, avoiding runtime panics for invariant failures.
+func NewStore(db *sql.DB) (*Store, error) {
 	if db == nil {
-		panic("storage: NewStore requires a non-nil *sql.DB")
+		return nil, fmt.Errorf("storage: NewStore requires a non-nil *sql.DB")
 	}
-	return &Store{db: db}
+	return &Store{db: db}, nil
 }
 
 // Init ensures the migrated schema is present and primes per-deployment state.

@@ -47,10 +47,6 @@ type UserPruneService struct {
 	running bool
 }
 
-func NewUserPruneService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store) *UserPruneService {
-	return NewUserPruneServiceForBot(session, configManager, store, "", "")
-}
-
 func NewUserPruneServiceForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,

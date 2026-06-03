@@ -68,7 +68,7 @@ func TestQOTDHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	srv := newQOTDHealthTestServer(t)
 	srv.SetBearerToken(healthQOTDTestToken)
 
-	metrics := qotd.NewInMemoryMetrics()
+	metrics := &qotd.InMemoryMetrics{}
 	metrics.RecordPublishAttempt(qotd.PublishModeScheduled)
 	metrics.RecordPublishSuccess(qotd.PublishModeScheduled, 1200*time.Millisecond)
 	metrics.RecordPublishFailure(qotd.PublishModeManual, "no_questions", 400*time.Millisecond)
@@ -125,7 +125,7 @@ func TestQOTDHealthRouteRejectsUnauthenticatedRequests(t *testing.T) {
 
 	srv := newQOTDHealthTestServer(t)
 	srv.SetBearerToken(healthQOTDTestToken)
-	srv.SetQOTDService(qotd.NewServiceWithMetrics(srv.configManager, nil, nil, qotd.NewInMemoryMetrics()))
+	srv.SetQOTDService(qotd.NewServiceWithMetrics(srv.configManager, nil, nil, &qotd.InMemoryMetrics{}))
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/qotd", nil)
@@ -145,7 +145,7 @@ func TestQOTDHealthRouteRejectsNonGETMethods(t *testing.T) {
 
 	srv := newQOTDHealthTestServer(t)
 	srv.SetBearerToken(healthQOTDTestToken)
-	srv.SetQOTDService(qotd.NewServiceWithMetrics(srv.configManager, nil, nil, qotd.NewInMemoryMetrics()))
+	srv.SetQOTDService(qotd.NewServiceWithMetrics(srv.configManager, nil, nil, &qotd.InMemoryMetrics{}))
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		method := method

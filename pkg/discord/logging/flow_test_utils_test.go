@@ -34,7 +34,10 @@ func newLoggingStore(t *testing.T, _ string) (*storage.Store, *sql.DB) {
 		}
 	})
 
-	store := storage.NewStore(db)
+	store, err := storage.NewStore(db)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
 	if err := store.Init(); err != nil {
 		t.Fatalf("init store: %v", err)
 	}

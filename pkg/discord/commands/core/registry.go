@@ -510,7 +510,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 		desiredCommand := desired[name]
 		if existing, ok := regByName[name]; ok {
 			if CompareCommands(existing, desiredCommand) {
-				slog.Info(fmt.Sprintf("Command unchanged (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, FormatOptions(desiredCommand.Options), desiredCommand.Description))
+				slog.Info(fmt.Sprintf("Command unchanged (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, formatOptions(desiredCommand.Options), desiredCommand.Description))
 				summary.unchanged++
 				continue
 			}
@@ -518,7 +518,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, guildID, existing.ID, desiredCommand); err != nil {
 				return commandSyncSummary{}, fmt.Errorf("error updating command '%s' in %s scope: %w", name, commandSyncScopeLabel(guildID), err)
 			}
-			slog.Info(fmt.Sprintf("Command updated (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, FormatOptions(desiredCommand.Options), desiredCommand.Description))
+			slog.Info(fmt.Sprintf("Command updated (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, formatOptions(desiredCommand.Options), desiredCommand.Description))
 			summary.updated++
 			continue
 		}
@@ -526,7 +526,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 		if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, guildID, desiredCommand); err != nil {
 			return commandSyncSummary{}, fmt.Errorf("error creating command '%s' in %s scope: %w", name, commandSyncScopeLabel(guildID), err)
 		}
-		slog.Info(fmt.Sprintf("Command created (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, FormatOptions(desiredCommand.Options), desiredCommand.Description))
+		slog.Info(fmt.Sprintf("Command created (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, formatOptions(desiredCommand.Options), desiredCommand.Description))
 		summary.created++
 	}
 
@@ -538,7 +538,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 			slog.Warn(fmt.Sprintf("Error removing orphan command from %s scope: %s, error: %v", commandSyncScopeLabel(guildID), rc.Name, err))
 			continue
 		}
-		slog.Info(fmt.Sprintf("Orphan command removed (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), rc.Name, FormatOptions(rc.Options), rc.Description))
+		slog.Info(fmt.Sprintf("Orphan command removed (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), rc.Name, formatOptions(rc.Options), rc.Description))
 		summary.deleted++
 	}
 
@@ -746,6 +746,18 @@ func (cr *CommandRouter) GetSession() *discordgo.Session {
 // GetConfigManager returns the config manager from the context builder
 func (cr *CommandRouter) GetConfigManager() *files.ConfigManager {
 	return cr.contextBuilder.configManager
+}
+
+// formatOptions format options for logging
+func formatOptions(options []*discordgo.ApplicationCommandOption) string {
+	if len(options) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, opt := range options {
+		parts = append(parts, fmt.Sprintf("%s (%s)", opt.Name, opt.Type.String()))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // GetRegistry returns the command registry

@@ -142,7 +142,7 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 		opts.store,
 		runtime.instanceID,
 		opts.defaultBotInstanceID,
-		logging.NewInMemoryMetrics(),
+		&logging.InMemoryMetrics{},
 		log.DiscordLogger(),
 	)
 	if err != nil {
@@ -420,6 +420,5 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 		close(runtime.persistStop)
 		runtime.persistStop = nil
 	}
-	_ = ctx
 	return errs
 }

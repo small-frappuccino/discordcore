@@ -202,12 +202,12 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// expose. NopMetrics is a valid fallback (the service still works) but
 	// without a SnapshotProvider the route returns 503; production startup
 	// always uses the in-memory implementation.
-	qotdMetrics := qotd.NewInMemoryMetrics()
+	qotdMetrics := &qotd.InMemoryMetrics{}
 	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
 	// Mirror QOTD: wire the in-memory moderation metrics so /v1/health/moderation
 	// has counters to expose. NopMetrics is a valid fallback for tests, but
 	// production startup always uses the in-memory implementation.
-	moderationMetrics := moderation.NewInMemoryMetrics()
+	moderationMetrics := &moderation.InMemoryMetrics{}
 
 	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,
@@ -612,7 +612,13 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	}
 	log.ApplicationLogger().Info("Database migrations applied", "operation", "startup.database.migrate", "driver", "postgres")
 
-	store := storage.NewStore(db)
+	store, err := storage.NewStore(db)
+	if err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			err = stdErrors.Join(err, fmt.Errorf("close db after store creation failure: %w", closeErr))
+		}
+		return nil, nil, fmt.Errorf("create postgres store: %w", err)
+	}
 	if err := store.Init(); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			err = stdErrors.Join(err, fmt.Errorf("close db after store init failure: %w", closeErr))

@@ -220,7 +220,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
 
-	metrics := NewInMemoryMetrics()
+	metrics := &InMemoryMetrics{}
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,

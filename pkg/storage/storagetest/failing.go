@@ -16,7 +16,8 @@ import (
 // the connector error, exercising the persistence-unavailable branch without
 // requiring a real Postgres connection.
 func NewFailingStore() *storage.Store {
-	return storage.NewStore(sql.OpenDB(failingConnector{}))
+	store, _ := storage.NewStore(sql.OpenDB(failingConnector{}))
+	return store
 }
 
 type failingConnector struct{}

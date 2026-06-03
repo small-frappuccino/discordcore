@@ -7,6 +7,17 @@ import (
 	"slices"
 )
 
+type catalogResponse struct {
+	Status  string                `json:"status"`
+	Catalog []featureCatalogEntry `json:"catalog"`
+}
+
+type featurePatchResponse struct {
+	Status  string        `json:"status"`
+	GuildID string        `json:"guild_id,omitempty"`
+	Feature featureRecord `json:"feature"`
+}
+
 type featureControlService struct {
 	builder *featureWorkspaceBuilder
 	applier *featureMutationApplier
@@ -80,9 +91,9 @@ func (s *Server) handleFeatureCatalogGet(w http.ResponseWriter) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"catalog": svc.catalog(),
+	writeJSON(w, http.StatusOK, catalogResponse{
+		Status:  "ok",
+		Catalog: svc.catalog(),
 	})
 }
 
@@ -100,9 +111,9 @@ func (s *Server) handleGlobalFeaturePatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"feature": record,
+	writeJSON(w, http.StatusOK, featurePatchResponse{
+		Status:  "ok",
+		Feature: record,
 	})
 }
 
@@ -120,10 +131,10 @@ func (s *Server) handleGuildFeaturePatch(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"feature":  record,
+	writeJSON(w, http.StatusOK, featurePatchResponse{
+		Status:  "ok",
+		GuildID: guildID,
+		Feature: record,
 	})
 }
 

@@ -459,7 +459,9 @@ func (s *Server) serveHealthRoute(w http.ResponseWriter, r *http.Request, resolv
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	// Response status header is already in flight; nothing recoverable.
-	_ = json.NewEncoder(w).Encode(snapshot)
+	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
+		log.ApplicationLogger().Warn("Failed to encode health snapshot response", "err", err)
+	}
 }
 
 func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {

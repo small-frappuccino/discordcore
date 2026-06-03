@@ -263,7 +263,7 @@ func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
 	// same constraint — see TestCleanCommandDeletesMatchingMessagesAndLogsAction.
 
 	t.Run("success path records attempt+success+deleted", func(t *testing.T) {
-		metrics := NewInMemoryMetrics()
+		metrics := &InMemoryMetrics{}
 		h := newCleanCommandHarness(t, cleanHarnessConfig{
 			guildID:   "g-metrics-ok",
 			channelID: "c-main",
@@ -302,7 +302,7 @@ func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
 	})
 
 	t.Run("permission failure records permission_denied cause", func(t *testing.T) {
-		metrics := NewInMemoryMetrics()
+		metrics := &InMemoryMetrics{}
 		h := newCleanCommandHarness(t, cleanHarnessConfig{
 			guildID:   "g-metrics-perm",
 			channelID: "c-main",
@@ -328,7 +328,7 @@ func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
 	})
 
 	t.Run("audit-log channel failure records RecordCleanAuditLogFailure", func(t *testing.T) {
-		metrics := NewInMemoryMetrics()
+		metrics := &InMemoryMetrics{}
 		h := newCleanCommandHarness(t, cleanHarnessConfig{
 			guildID:      "g-metrics-audit",
 			channelID:    "c-main",
@@ -371,7 +371,7 @@ func TestCleanCommandRecordsObservabilityMetrics(t *testing.T) {
 	})
 
 	t.Run("fetch failure records classified fetch cause", func(t *testing.T) {
-		metrics := NewInMemoryMetrics()
+		metrics := &InMemoryMetrics{}
 		h := newCleanCommandHarness(t, cleanHarnessConfig{
 			guildID:   "g-metrics-fetch",
 			channelID: "c-main",

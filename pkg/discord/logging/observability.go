@@ -123,13 +123,6 @@ type InMemoryMetrics struct {
 	rolesAuditHits  atomic.Int64
 }
 
-// NewInMemoryMetrics constructs the production metrics implementation.
-// Use this in pkg/app wiring and pass into NewMonitoringServiceForBotWithMetrics
-// so /v1/health/monitoring has counters to expose.
-func NewInMemoryMetrics() *InMemoryMetrics {
-	return &InMemoryMetrics{}
-}
-
 func (m *InMemoryMetrics) RecordAuditLogCall()        { m.auditLogCalls.Add(1) }
 func (m *InMemoryMetrics) RecordGuildMemberCall()     { m.guildMemberCalls.Add(1) }
 func (m *InMemoryMetrics) RecordMessageSent()         { m.messagesSent.Add(1) }

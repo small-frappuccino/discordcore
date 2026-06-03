@@ -19,7 +19,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) error {
 	return nil
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload map[string]any) {
+func writeJSON[T any](w http.ResponseWriter, status int, payload T) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {

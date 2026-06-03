@@ -181,16 +181,6 @@ type InMemoryMetrics struct {
 	duration        observability.Summary
 }
 
-// NewInMemoryMetrics constructs the production metrics implementation.
-// Use this in pkg/app wiring and pass into the moderation command
-// registration so /v1/health/moderation has counters to expose.
-func NewInMemoryMetrics() *InMemoryMetrics {
-	return &InMemoryMetrics{
-		failureByCause:       make(map[string]*atomic.Int64),
-		deleteFailureByClass: make(map[string]*atomic.Int64),
-	}
-}
-
 func (m *InMemoryMetrics) RecordCleanAttempt() {
 	m.attempts.Add(1)
 }
@@ -248,9 +238,9 @@ func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
 }
 
 func (m *InMemoryMetrics) causeCounter(cause string) *atomic.Int64 {
-	return observability.GetOrCreateLabeledCounter(&m.mu, m.failureByCause, cause)
+	return observability.GetOrCreateLabeledCounter(&m.mu, &m.failureByCause, cause)
 }
 
 func (m *InMemoryMetrics) classCounter(label string) *atomic.Int64 {
-	return observability.GetOrCreateLabeledCounter(&m.mu, m.deleteFailureByClass, label)
+	return observability.GetOrCreateLabeledCounter(&m.mu, &m.deleteFailureByClass, label)
 }

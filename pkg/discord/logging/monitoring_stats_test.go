@@ -15,7 +15,7 @@ import (
 func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 	t.Parallel()
 
-	metrics := NewInMemoryMetrics()
+	metrics := &InMemoryMetrics{}
 	metrics.RecordAuditLogCall()
 	metrics.RecordGuildMemberCall()
 	metrics.RecordMessageSent()
@@ -64,7 +64,7 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 	t.Parallel()
 
-	metrics := NewInMemoryMetrics()
+	metrics := &InMemoryMetrics{}
 	for i := 0; i < 3; i++ {
 		metrics.RecordAuditLogCall()
 	}
@@ -139,7 +139,7 @@ func TestMonitoringServiceStatsReturnsTypedMetrics(t *testing.T) {
 		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
 		roleAudit:  roleUpdateAuditStore{},
 		stats:      newStatsCoordinator(),
-		metrics:    NewInMemoryMetrics(),
+		metrics:    &InMemoryMetrics{},
 	}
 
 	stats := ms.Stats()

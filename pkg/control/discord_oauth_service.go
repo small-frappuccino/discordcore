@@ -12,6 +12,42 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
+type oauthErrorResponse struct {
+	Status       string          `json:"status"`
+	Message      string          `json:"message"`
+	DiscordError json.RawMessage `json:"discord_error,omitempty"`
+}
+
+type oauthSessionResponse struct {
+	Status    string           `json:"status"`
+	User      discordOAuthUser `json:"user"`
+	Scopes    []string         `json:"scopes"`
+	CSRFToken string           `json:"csrf_token"`
+	ExpiresAt string           `json:"expires_at"`
+}
+
+type oauthStatusResponse struct {
+	Status          string            `json:"status"`
+	OAuthConfigured bool              `json:"oauth_configured"`
+	Authenticated   bool              `json:"authenticated"`
+	DashboardURL    string            `json:"dashboard_url,omitempty"`
+	LoginURL        string            `json:"login_url,omitempty"`
+	User            *discordOAuthUser `json:"user,omitempty"`
+	Scopes          []string          `json:"scopes,omitempty"`
+	CSRFToken       string            `json:"csrf_token,omitempty"`
+	ExpiresAt       string            `json:"expires_at,omitempty"`
+}
+
+type okResponse struct {
+	Status string `json:"status"`
+}
+
+type guildAccessListResponse struct {
+	Status string                    `json:"status"`
+	Guilds []accessibleGuildResponse `json:"guilds"`
+	Count  int                       `json:"count"`
+}
+
 var errDiscordOAuthUnavailable = errors.New("discord oauth is not configured")
 
 type discordOAuthControlService struct {
@@ -142,14 +178,14 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 			status = http.StatusBadGateway
 		}
 
-		response := map[string]any{
-			"status":  "error",
-			"message": "discord oauth token exchange failed",
+		response := oauthErrorResponse{
+			Status:  "error",
+			Message: "discord oauth token exchange failed",
 		}
 		if len(rawError) > 0 {
-			var discordErr map[string]any
+			var discordErr json.RawMessage
 			if jsonErr := json.Unmarshal(rawError, &discordErr); jsonErr == nil {
-				response["discord_error"] = discordErr
+				response.DiscordError = discordErr
 			}
 		}
 
@@ -195,12 +231,12 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":     "ok",
-		"user":       session.User,
-		"scopes":     session.Scopes,
-		"csrf_token": session.CSRFToken,
-		"expires_at": session.ExpiresAt.UTC().Format(time.RFC3339),
+	writeJSON(w, http.StatusOK, oauthSessionResponse{
+		Status:    "ok",
+		User:      session.User,
+		Scopes:    session.Scopes,
+		CSRFToken: session.CSRFToken,
+		ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }
 
@@ -222,12 +258,12 @@ func (svc *discordOAuthControlService) handleMe(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":     "ok",
-		"user":       session.User,
-		"scopes":     session.Scopes,
-		"csrf_token": session.CSRFToken,
-		"expires_at": session.ExpiresAt.UTC().Format(time.RFC3339),
+	writeJSON(w, http.StatusOK, oauthSessionResponse{
+		Status:    "ok",
+		User:      session.User,
+		Scopes:    session.Scopes,
+		CSRFToken: session.CSRFToken,
+		ExpiresAt: session.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }
 
@@ -238,15 +274,13 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 	}
 
 	next := sanitizeControlRedirectTarget(r.URL.Query().Get("next"))
-	response := map[string]any{
-		"status":           "ok",
-		"oauth_configured": svc.configured(),
-		"authenticated":    false,
-		"dashboard_url":    "",
-		"login_url":        "",
+	response := oauthStatusResponse{
+		Status:          "ok",
+		OAuthConfigured: svc.configured(),
+		Authenticated:   false,
 	}
 	if svc.publicDashboardURL != nil {
-		response["dashboard_url"] = svc.publicDashboardURL(dashboardRoutePrefix)
+		response.DashboardURL = svc.publicDashboardURL(dashboardRoutePrefix)
 	}
 	if !svc.configured() {
 		w.Header().Set("Cache-Control", "no-store")
@@ -256,15 +290,15 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 	}
 
 	if svc.publicDiscordOAuthLoginURL != nil {
-		response["login_url"] = svc.publicDiscordOAuthLoginURL(next)
+		response.LoginURL = svc.publicDiscordOAuthLoginURL(next)
 	}
 	session, err := svc.sessionFromRequest(r)
 	if err == nil {
-		response["authenticated"] = true
-		response["user"] = session.User
-		response["scopes"] = session.Scopes
-		response["csrf_token"] = session.CSRFToken
-		response["expires_at"] = session.ExpiresAt.UTC().Format(time.RFC3339)
+		response.Authenticated = true
+		response.User = &session.User
+		response.Scopes = session.Scopes
+		response.CSRFToken = session.CSRFToken
+		response.ExpiresAt = session.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 
 	w.Header().Set("Cache-Control", "no-store")
@@ -308,8 +342,8 @@ func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *ht
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
+	writeJSON(w, http.StatusOK, okResponse{
+		Status: "ok",
 	})
 }
 
@@ -368,10 +402,10 @@ func (svc *discordOAuthControlService) handleGuildAccessList(
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-		"guilds": accessible,
-		"count":  len(accessible),
+	writeJSON(w, http.StatusOK, guildAccessListResponse{
+		Status: "ok",
+		Guilds: accessible,
+		Count:  len(accessible),
 	})
 }
 

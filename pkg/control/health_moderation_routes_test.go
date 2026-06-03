@@ -68,7 +68,7 @@ func TestModerationHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	srv := newModerationHealthTestServer(t)
 	srv.SetBearerToken(healthModerationTestToken)
 
-	metrics := moderation.NewInMemoryMetrics()
+	metrics := &moderation.InMemoryMetrics{}
 	metrics.RecordCleanAttempt()
 	metrics.RecordCleanAttempt()
 	metrics.RecordCleanSuccess(1200*time.Millisecond, 7)
@@ -125,7 +125,7 @@ func TestModerationHealthRouteRejectsUnauthenticatedRequests(t *testing.T) {
 
 	srv := newModerationHealthTestServer(t)
 	srv.SetBearerToken(healthModerationTestToken)
-	srv.SetModerationMetrics(moderation.NewInMemoryMetrics())
+	srv.SetModerationMetrics(&moderation.InMemoryMetrics{})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/moderation", nil)
@@ -146,7 +146,7 @@ func TestModerationHealthRouteRejectsNonGETMethods(t *testing.T) {
 
 	srv := newModerationHealthTestServer(t)
 	srv.SetBearerToken(healthModerationTestToken)
-	srv.SetModerationMetrics(moderation.NewInMemoryMetrics())
+	srv.SetModerationMetrics(&moderation.InMemoryMetrics{})
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		method := method

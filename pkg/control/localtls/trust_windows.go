@@ -2,6 +2,15 @@
 
 package localtls
 
+// # Contract: Unsafe Usage in Windows Certificate Store Interop
+// The `unsafe` package is strictly required here to interop with the Windows Native C-API
+// `crypt32.dll`. Specifically, the function `CertAddEncodedCertificateToStore` expects raw byte
+// pointers to the certificate ASN.1 encoding. `golang.org/x/sys/windows` does not provide a
+// higher-level wrapper for this specific injection method that avoids unsafe memory slicing.
+// By isolating this strictly within the `localtls` package (which only runs on Windows setup),
+// we prevent unsafe pointer arithmetic from bleeding into business logic, conforming to the
+// "Clear is better than clever" rule within a narrow, unavoidable system boundary.
+
 import (
 	"context"
 	"crypto/x509"
@@ -82,7 +91,9 @@ func certificateExistsInStore(store windows.Handle, raw []byte) (bool, error) {
 		}
 		encoded := unsafe.Slice(current.EncodedCert, current.Length)
 		if len(encoded) == len(raw) && equalBytes(encoded, raw) {
-			_ = windows.CertFreeCertificateContext(previous)
+			if err := windows.CertFreeCertificateContext(previous); err != nil {
+				return true, fmt.Errorf("free certificate context: %w", err)
+			}
 			return true, nil
 		}
 	}

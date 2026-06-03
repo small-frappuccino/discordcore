@@ -10,6 +10,7 @@ import (
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 const (
@@ -74,7 +75,9 @@ func SelectTokenEnv(testMode bool, spec Spec) string {
 		return env
 	}
 
-	_, _ = files.LoadEnvWithLocalBinFallback(spec.ProductionTokenEnv)
+	if _, err := files.LoadEnvWithLocalBinFallback(spec.ProductionTokenEnv); err != nil {
+		log.ApplicationLogger().Debug("Failed to load environment from local bin fallback", "err", err)
+	}
 	if env := availableTokenEnv(spec); env != "" {
 		return env
 	}
@@ -168,7 +171,9 @@ func loadKnownTokenEnvs(tokenEnvs []string) {
 		if strings.TrimSpace(tokenEnv) == "" {
 			continue
 		}
-		_, _ = files.LoadEnvWithLocalBinFallback(tokenEnv)
+		if _, err := files.LoadEnvWithLocalBinFallback(tokenEnv); err != nil {
+			log.ApplicationLogger().Debug("Failed to load environment from local bin fallback", "env", tokenEnv, "err", err)
+		}
 	}
 }
 

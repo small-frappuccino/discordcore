@@ -22,7 +22,7 @@ func TestNopMetricsImplementsInterface(t *testing.T) {
 func TestInMemoryMetricsSnapshotZeroValuesAreSerializable(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	snap := m.Snapshot()
 	if got := len(snap.Publishes); got != 0 {
 		t.Fatalf("expected empty publishes map on fresh metrics, got %d entries", got)
@@ -42,7 +42,7 @@ func TestInMemoryMetricsSnapshotZeroValuesAreSerializable(t *testing.T) {
 func TestInMemoryMetricsRecordsPublishSuccessAndFailureSeparately(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	m.RecordPublishAttempt(PublishModeScheduled)
 	m.RecordPublishSuccess(PublishModeScheduled, 1500*time.Millisecond)
 	m.RecordPublishAttempt(PublishModeScheduled)
@@ -77,7 +77,7 @@ func TestInMemoryMetricsRecordsPublishSuccessAndFailureSeparately(t *testing.T) 
 func TestInMemoryMetricsRecordsReconcileCycleSuccessAndFailureSeparately(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	m.RecordReconcileCycle(50*time.Millisecond, nil)
 	m.RecordReconcileCycle(60*time.Millisecond, nil)
 	m.RecordReconcileCycle(70*time.Millisecond, errors.New("boom"))
@@ -97,7 +97,7 @@ func TestInMemoryMetricsRecordsReconcileCycleSuccessAndFailureSeparately(t *test
 func TestInMemoryMetricsRecordsSideEvents(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	m.RecordOfficialPostAbandoned()
 	m.RecordOfficialPostAbandoned()
 	m.RecordStateDivergence()
@@ -127,7 +127,7 @@ func TestInMemoryMetricsRecordsSideEvents(t *testing.T) {
 func TestInMemoryMetricsTolerantToConcurrentWrites(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 
 	// 8 writers × 1000 records = 8000 events of each type. The atomic +
 	// per-map-RWMutex design must surface exactly those numbers in the
@@ -165,7 +165,7 @@ func TestInMemoryMetricsTolerantToConcurrentWrites(t *testing.T) {
 func TestInMemoryMetricsSummaryTracksMaxIndependentOfSum(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	// Two short observations and one long. Max must reflect the long one,
 	// sum must be all three combined, count is three.
 	m.RecordPublishSuccess(PublishModeScheduled, 50*time.Millisecond)

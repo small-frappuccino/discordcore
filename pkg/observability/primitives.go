@@ -79,20 +79,25 @@ func (s *Summary) Snapshot() SummarySnapshot {
 // Key type is generic so callers can use either a plain string label or a
 // domain newtype (e.g. qotd.PublishMode) without losing type safety at
 // the call site.
-func GetOrCreateLabeledCounter[K comparable](mu *sync.RWMutex, m map[K]*atomic.Int64, key K) *atomic.Int64 {
+func GetOrCreateLabeledCounter[K comparable](mu *sync.RWMutex, m *map[K]*atomic.Int64, key K) *atomic.Int64 {
 	mu.RLock()
-	if c, ok := m[key]; ok {
-		mu.RUnlock()
-		return c
+	if *m != nil {
+		if c, ok := (*m)[key]; ok {
+			mu.RUnlock()
+			return c
+		}
 	}
 	mu.RUnlock()
 
 	mu.Lock()
 	defer mu.Unlock()
-	if c, ok := m[key]; ok {
+	if *m == nil {
+		*m = make(map[K]*atomic.Int64)
+	}
+	if c, ok := (*m)[key]; ok {
 		return c
 	}
 	c := &atomic.Int64{}
-	m[key] = c
+	(*m)[key] = c
 	return c
 }

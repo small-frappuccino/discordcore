@@ -162,18 +162,6 @@ type InMemoryMetrics struct {
 	suppressionCleared atomic.Int64
 }
 
-// NewInMemoryMetrics constructs the production metrics implementation.
-// Use this in pkg/app wiring and pass into qotd.NewService.
-func NewInMemoryMetrics() *InMemoryMetrics {
-	return &InMemoryMetrics{
-		publishAttempts:    make(map[PublishMode]*atomic.Int64),
-		publishSuccess:     make(map[PublishMode]*atomic.Int64),
-		publishFailure:     make(map[PublishMode]*atomic.Int64),
-		publishFailByCause: make(map[PublishMode]map[string]*atomic.Int64),
-		publishDuration:    make(map[PublishMode]*observability.Summary),
-	}
-}
-
 func (m *InMemoryMetrics) RecordPublishAttempt(mode PublishMode) {
 	m.counterFor(mode, m.publishAttemptsGetOrCreate).Add(1)
 }
@@ -263,27 +251,32 @@ func (m *InMemoryMetrics) counterFor(mode PublishMode, getOrCreate func(PublishM
 }
 
 func (m *InMemoryMetrics) publishAttemptsGetOrCreate(mode PublishMode) *atomic.Int64 {
-	return observability.GetOrCreateLabeledCounter(&m.mu, m.publishAttempts, mode)
+	return observability.GetOrCreateLabeledCounter(&m.mu, &m.publishAttempts, mode)
 }
 func (m *InMemoryMetrics) publishSuccessGetOrCreate(mode PublishMode) *atomic.Int64 {
-	return observability.GetOrCreateLabeledCounter(&m.mu, m.publishSuccess, mode)
+	return observability.GetOrCreateLabeledCounter(&m.mu, &m.publishSuccess, mode)
 }
 func (m *InMemoryMetrics) publishFailureGetOrCreate(mode PublishMode) *atomic.Int64 {
-	return observability.GetOrCreateLabeledCounter(&m.mu, m.publishFailure, mode)
+	return observability.GetOrCreateLabeledCounter(&m.mu, &m.publishFailure, mode)
 }
 
 func (m *InMemoryMetrics) failureCauseFor(mode PublishMode, cause string) *atomic.Int64 {
 	m.mu.RLock()
-	if causes, ok := m.publishFailByCause[mode]; ok {
-		if counter, ok := causes[cause]; ok {
-			m.mu.RUnlock()
-			return counter
+	if m.publishFailByCause != nil {
+		if causes, ok := m.publishFailByCause[mode]; ok {
+			if counter, ok := causes[cause]; ok {
+				m.mu.RUnlock()
+				return counter
+			}
 		}
 	}
 	m.mu.RUnlock()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.publishFailByCause == nil {
+		m.publishFailByCause = make(map[PublishMode]map[string]*atomic.Int64)
+	}
 	causes, ok := m.publishFailByCause[mode]
 	if !ok {
 		causes = make(map[string]*atomic.Int64)
@@ -299,14 +292,19 @@ func (m *InMemoryMetrics) failureCauseFor(mode PublishMode, cause string) *atomi
 
 func (m *InMemoryMetrics) durationFor(mode PublishMode) *observability.Summary {
 	m.mu.RLock()
-	if s, ok := m.publishDuration[mode]; ok {
-		m.mu.RUnlock()
-		return s
+	if m.publishDuration != nil {
+		if s, ok := m.publishDuration[mode]; ok {
+			m.mu.RUnlock()
+			return s
+		}
 	}
 	m.mu.RUnlock()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.publishDuration == nil {
+		m.publishDuration = make(map[PublishMode]*observability.Summary)
+	}
 	s, ok := m.publishDuration[mode]
 	if !ok {
 		s = &observability.Summary{}

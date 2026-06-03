@@ -93,7 +93,9 @@ func scheduleRuntimeConfiguredGuildLogging(
 	}
 
 	if startupTasks == nil {
-		_ = run(context.Background())
+		if err := run(context.Background()); err != nil {
+			log.ApplicationLogger().Warn("Failed to log configured guilds", "err", err)
+		}
 		return
 	}
 
@@ -145,7 +147,9 @@ func scheduleStartupWebhookEmbedUpdates(
 	}
 
 	if startupTasks == nil {
-		_ = run(context.Background())
+		if err := run(context.Background()); err != nil {
+			log.ApplicationLogger().Warn("Failed to schedule startup webhook embed updates", "err", err)
+		}
 		return
 	}
 
@@ -271,7 +275,9 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	if err := ctx.Err(); err != nil {
 		stopCtx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		_ = controlServer.Stop(stopCtx)
+		if stopErr := controlServer.Stop(stopCtx); stopErr != nil {
+			log.ApplicationLogger().Warn("Control server stop failed during startup cancellation", "err", stopErr)
+		}
 		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}
 

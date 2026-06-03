@@ -42,10 +42,6 @@ type EmbedUpdater interface {
 // DefaultEmbedUpdater implements EmbedUpdater using Discord REST calls.
 type DefaultEmbedUpdater struct{}
 
-func NewDefaultEmbedUpdater() *DefaultEmbedUpdater {
-	return &DefaultEmbedUpdater{}
-}
-
 func (u *DefaultEmbedUpdater) UpdateEmbeds(
 	session *discordgo.Session,
 	target EmbedUpdateTarget,

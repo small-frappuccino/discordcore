@@ -1,6 +1,9 @@
 package control
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 func (s *Server) handleFeatureRoutes(w http.ResponseWriter, r *http.Request) {
 	auth, ok := s.authorizeRequest(w, r)
@@ -53,4 +56,24 @@ func (s *Server) handleFeatureRoutes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}
+}
+
+func normalizeFeatureRoutePath(path string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(path), "/")
+	if trimmed == "" {
+		return "/"
+	}
+	return trimmed
+}
+
+func splitGlobalFeatureRoute(path string) (string, bool) {
+	const prefix = "/v1/features/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	trimmed := strings.Trim(strings.TrimPrefix(path, prefix), "/")
+	if trimmed == "" || strings.Contains(trimmed, "/") {
+		return "", false
+	}
+	return trimmed, true
 }

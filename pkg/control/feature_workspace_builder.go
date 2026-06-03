@@ -337,3 +337,31 @@ func buildStatsChannelDetails(channels []files.StatsChannelConfig) []featureStat
 	}
 	return out
 }
+
+func logFeatureChannelID(guild *files.GuildConfig, eventType logpolicy.LogEventType) string {
+	if guild == nil {
+		return ""
+	}
+	switch eventType {
+	case logpolicy.LogEventAvatarChange:
+		return strings.TrimSpace(guild.Channels.AvatarLogging)
+	case logpolicy.LogEventRoleChange:
+		return strings.TrimSpace(guild.Channels.RoleUpdate)
+	case logpolicy.LogEventMemberJoin:
+		return strings.TrimSpace(guild.Channels.MemberJoin)
+	case logpolicy.LogEventMemberLeave:
+		return strings.TrimSpace(guild.Channels.MemberLeave)
+	case logpolicy.LogEventMessageEdit:
+		return strings.TrimSpace(guild.Channels.MessageEdit)
+	case logpolicy.LogEventMessageDelete:
+		return strings.TrimSpace(guild.Channels.MessageDelete)
+	case logpolicy.LogEventAutomodAction:
+		return strings.TrimSpace(guild.Channels.AutomodAction)
+	case logpolicy.LogEventModerationCase:
+		return strings.TrimSpace(guild.Channels.ModerationCase)
+	case logpolicy.LogEventCleanAction:
+		return strings.TrimSpace(guild.Channels.CleanAction)
+	default:
+		return ""
+	}
+}

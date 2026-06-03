@@ -155,7 +155,10 @@ func newIntegrationTestQOTDService(t *testing.T) (*Service, *storage.Store, *fak
 		}
 	})
 
-	store := storage.NewStore(db)
+	store, err := storage.NewStore(db)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
 	if err := store.Init(); err != nil {
 		t.Fatalf("init store: %v", err)
 	}

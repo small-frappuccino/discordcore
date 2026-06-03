@@ -11,7 +11,7 @@ import (
 func TestInMemoryMetricsSnapshotReflectsRecordings(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	m.RecordCleanAttempt()
 	m.RecordCleanAttempt()
 	m.RecordCleanSuccess(1200*time.Millisecond, 5)
@@ -64,7 +64,7 @@ func TestInMemoryMetricsSnapshotReflectsRecordings(t *testing.T) {
 func TestInMemoryMetricsIsConcurrencySafe(t *testing.T) {
 	t.Parallel()
 
-	m := NewInMemoryMetrics()
+	m := &InMemoryMetrics{}
 	const goroutines = 16
 	const perGoroutine = 200
 
@@ -136,7 +136,7 @@ func TestNopMetricsSatisfiesInterfaceWithoutSnapshotProvider(t *testing.T) {
 func TestInMemoryMetricsSatisfiesSnapshotProvider(t *testing.T) {
 	t.Parallel()
 
-	var m Metrics = NewInMemoryMetrics()
+	var m Metrics = &InMemoryMetrics{}
 	if _, ok := m.(SnapshotProvider); !ok {
 		t.Fatal("InMemoryMetrics must satisfy SnapshotProvider for /v1/health/moderation")
 	}
