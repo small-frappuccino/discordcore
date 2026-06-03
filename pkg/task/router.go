@@ -188,6 +188,11 @@ type TaskRouter struct {
 	wg        sync.WaitGroup
 	stopOnce  sync.Once
 	stopCh    chan struct{}
+	// ctx is the router's lifecycle context, handed to every task handler and
+	// canceled by Close before it waits for in-flight handlers. It lets Close
+	// actively cancel running work instead of only blocking on completion.
+	ctx       context.Context
+	cancel    context.CancelFunc
 	randMutex sync.Mutex // for jitter RNG
 
 	// Global concurrency limiter; nil when unlimited.
@@ -311,6 +316,7 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 		stopCh:      make(chan struct{}),
 		retryWakeCh: make(chan struct{}, 1),
 	}
+	tr.ctx, tr.cancel = context.WithCancel(context.Background())
 	if cfg.ExecutionLimiter != nil {
 		tr.execLimiter = cfg.ExecutionLimiter
 	} else if cfg.GlobalMaxWorkers > 0 {
@@ -423,6 +429,9 @@ func (tr *TaskRouter) Close() {
 		clear(tr.handlers)
 		tr.mu.Unlock()
 		close(tr.stopCh)
+		if tr.cancel != nil {
+			tr.cancel()
+		}
 		for _, gw := range groups {
 			gw.finishStop()
 		}
@@ -651,11 +660,15 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 			continue
 		}
 
-		// Execute with global concurrency control
+		// Execute with global concurrency control. The handler receives the
+		// router lifecycle context so Close can cancel in-flight work.
 		tr.acquireExecSlot()
 		err := func() error {
 			defer tr.releaseExecSlot()
-			ctx := context.Background()
+			ctx := tr.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
 			return handler(ctx, enq.task.Payload)
 		}()
 		gw.endWork(tr.nowNs())

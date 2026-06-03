@@ -784,10 +784,27 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	ms.adapters = nil
 	ms.runMu.Unlock()
 
+	var stopErrs []error
+
+	// Drain the task router before canceling the lifecycle context. In-flight
+	// handlers depend on lifecycle-scoped collaborators — notably the stats
+	// actor goroutine, which serves request/reply round-trips. Canceling the
+	// lifecycle first would stop that actor while a handler is mid-round-trip,
+	// stranding it until the close timeout; draining first lets handlers finish
+	// cleanly. Close also cancels the router lifecycle context so handlers that
+	// honor it abort promptly.
+	if router != nil {
+		if err := monitoringRunErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
+			router.Close()
+			return nil
+		}); err != nil {
+			stopErrs = append(stopErrs, fmt.Errorf("close task router: %w", err))
+		}
+	}
+
 	if cancelLifecycle != nil {
 		cancelLifecycle()
 	}
-	var stopErrs []error
 	if err := ms.stopHeartbeat(ctx); err != nil {
 		stopErrs = append(stopErrs, fmt.Errorf("stop heartbeat: %w", err))
 	}
@@ -844,14 +861,6 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 		ms.unifiedCache.Stop()
 	}
 
-	if router != nil {
-		if err := monitoringRunErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
-			router.Close()
-			return nil
-		}); err != nil {
-			stopErrs = append(stopErrs, fmt.Errorf("close task router: %w", err))
-		}
-	}
 	if ms.messageEventService != nil {
 		ms.messageEventService.SetTaskRouter(nil)
 		ms.messageEventService.SetAdapters(nil)
