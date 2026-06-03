@@ -11,6 +11,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 func testBoolPtr(value bool) *bool {
@@ -277,7 +278,7 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 	store, _ := newLoggingStore(t, "stats-store.db")
 	joinedAt := time.Now().UTC().Add(-time.Hour)
 	seenAt := joinedAt.Add(30 * time.Minute)
-	if err := store.UpsertMemberPresenceContext(context.Background(), guildID, userID, joinedAt, seenAt, false); err != nil {
+	if err := store.UpsertMemberPresenceContext(context.Background(), storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: seenAt, IsBot: false}); err != nil {
 		t.Fatalf("seed member presence: %v", err)
 	}
 	if err := store.UpsertMemberRoles(guildID, userID, []string{roleID}, seenAt); err != nil {

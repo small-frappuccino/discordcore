@@ -465,7 +465,7 @@ func (c *rolePanelDeleteSubCommand) Handle(ctx *core.Context) error {
 
 	syncNote := ""
 	if len(panel.Postings) > 0 {
-		result := c.syncer.Sync(ctx.Session, ctx.GuildID, panel.Key, panel.Postings, renderRolePanelEmbed(panel), nil)
+		result := c.syncer.Sync(rolePanelSyncRequest{Session: ctx.Session, GuildID: ctx.GuildID, Key: panel.Key, Postings: panel.Postings, Embed: renderRolePanelEmbed(panel)})
 		if summary := formatRolePanelSyncSummary(result, "Stripped buttons from"); summary != "" {
 			syncNote = "\n" + summary
 		}
@@ -926,14 +926,14 @@ func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
 		)
 	}
 
-	result := c.syncer.Sync(
-		ctx.Session,
-		ctx.GuildID,
-		panel.Key,
-		panel.Postings,
-		renderRolePanelEmbed(panel),
-		renderRolePanelComponents(panel),
-	)
+	result := c.syncer.Sync(rolePanelSyncRequest{
+		Session:    ctx.Session,
+		GuildID:    ctx.GuildID,
+		Key:        panel.Key,
+		Postings:   panel.Postings,
+		Embed:      renderRolePanelEmbed(panel),
+		Components: renderRolePanelComponents(panel),
+	})
 	summary := formatRolePanelSyncSummary(result, "Refreshed")
 	if summary == "" {
 		summary = "No postings needed updating."
@@ -994,14 +994,13 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	embed := renderRolePanelEmbed(panel)
-	result := c.syncer.Sync(
-		ctx.Session,
-		ctx.GuildID,
-		panelKey,
-		[]files.RolePanelPostingConfig{posting},
-		embed,
-		nil,
-	)
+	result := c.syncer.Sync(rolePanelSyncRequest{
+		Session:  ctx.Session,
+		GuildID:  ctx.GuildID,
+		Key:      panelKey,
+		Postings: []files.RolePanelPostingConfig{posting},
+		Embed:    embed,
+	})
 
 	// Sync's drop-on-missing path already removed the posting from
 	// config when Discord returned 10003/10008. Otherwise, the
@@ -1085,14 +1084,14 @@ func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, syncer *rolePan
 	if len(panel.Postings) == 0 {
 		return ""
 	}
-	result := syncer.Sync(
-		ctx.Session,
-		ctx.GuildID,
-		panel.Key,
-		panel.Postings,
-		renderRolePanelEmbed(panel),
-		renderRolePanelComponents(panel),
-	)
+	result := syncer.Sync(rolePanelSyncRequest{
+		Session:    ctx.Session,
+		GuildID:    ctx.GuildID,
+		Key:        panel.Key,
+		Postings:   panel.Postings,
+		Embed:      renderRolePanelEmbed(panel),
+		Components: renderRolePanelComponents(panel),
+	})
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
 	}

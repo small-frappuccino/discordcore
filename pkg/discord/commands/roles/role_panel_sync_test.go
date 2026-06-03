@@ -61,7 +61,7 @@ func TestRolePanelSyncEditsEachPosting(t *testing.T) {
 	embed := &discordgo.MessageEmbed{Title: "Pings"}
 	components := []discordgo.MessageComponent{discordgo.ActionsRow{}}
 
-	result := syncer.Sync(nil, "guild", "pings", postings, embed, components)
+	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: embed, Components: components})
 	if result.Edited != 2 || len(result.Dropped) != 0 || len(result.Failed) != 0 {
 		t.Fatalf("unexpected sync result: %+v", result)
 	}
@@ -109,7 +109,7 @@ func TestRolePanelSyncDropsMissingPostings(t *testing.T) {
 	}
 
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
-	result := syncer.Sync(nil, "guild", "pings", postings, &discordgo.MessageEmbed{}, nil)
+	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: &discordgo.MessageEmbed{}})
 	if result.Edited != 1 {
 		t.Fatalf("expected 1 edited, got %d", result.Edited)
 	}
@@ -146,7 +146,7 @@ func TestRolePanelSyncRecordsNonTerminalFailures(t *testing.T) {
 	}
 
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
-	result := syncer.Sync(nil, "guild", "pings", postings, &discordgo.MessageEmbed{}, nil)
+	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: &discordgo.MessageEmbed{}})
 	if result.Edited != 0 || len(result.Dropped) != 0 {
 		t.Fatalf("unexpected counts in result: %+v", result)
 	}
@@ -246,7 +246,7 @@ func TestRolePanelPostingSyncer_BatchDrops(t *testing.T) {
 	}
 
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
-	result := syncer.Sync(nil, "guild", "pings", postings, &discordgo.MessageEmbed{}, nil)
+	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: &discordgo.MessageEmbed{}})
 
 	if dropCallCount != 1 {
 		t.Fatalf("expected exactly 1 call to dropPostings, got %d", dropCallCount)

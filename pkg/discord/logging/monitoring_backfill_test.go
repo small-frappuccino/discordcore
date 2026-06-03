@@ -119,7 +119,7 @@ func TestApplyBackfillPage_WindowsAndStopsAtStart(t *testing.T) {
 		{ID: "5", Timestamp: time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC)},   // never reached
 	}
 
-	res, err := ms.applyBackfillPage(context.Background(), "g", "c", "bot", "range", msgs, start, end)
+	res, err := ms.applyBackfillPage(context.Background(), backfillScope{GuildID: "g", ChannelID: "c", BotID: "bot", Mode: "range"}, msgs, start, end)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestApplyBackfillPage_NoStartReachedProcessesAll(t *testing.T) {
 		{ID: "2", Timestamp: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)},
 	}
 
-	res, err := ms.applyBackfillPage(context.Background(), "g", "c", "bot", "day", msgs, start, end)
+	res, err := ms.applyBackfillPage(context.Background(), backfillScope{GuildID: "g", ChannelID: "c", BotID: "bot", Mode: "day"}, msgs, start, end)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestApplyBackfillPage_CanceledContextReturnsError(t *testing.T) {
 		{ID: "1", Timestamp: time.Now().UTC()},
 	}
 
-	if _, err := ms.applyBackfillPage(ctx, "g", "c", "bot", "day", msgs, time.Time{}, time.Now().Add(time.Hour)); err == nil {
+	if _, err := ms.applyBackfillPage(ctx, backfillScope{GuildID: "g", ChannelID: "c", BotID: "bot", Mode: "day"}, msgs, time.Time{}, time.Now().Add(time.Hour)); err == nil {
 		t.Fatalf("expected error from canceled context")
 	}
 }

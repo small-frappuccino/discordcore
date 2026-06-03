@@ -507,31 +507,34 @@ func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	return err
 }
 
+// memberRoleUpdateNotice describes a single role add/remove to announce.
+type memberRoleUpdateNotice struct {
+	ChannelID      string // destination log channel
+	ActorID        string // actor who performed the action (moderator/admin)
+	TargetID       string // target user
+	TargetUsername string // target user's name (optional, may be empty)
+	RoleID         string // affected role ID
+	RoleName       string // role name (fallback when mention is not desired)
+	Action         string // "add" | "remove" | "added" | "removed"
+}
+
 // SendMemberRoleUpdateNotification sends role update notification (add/remove)
-func (ns *NotificationSender) SendMemberRoleUpdateNotification(
-	channelID string,
-	actorID string, // the actor who performed the action (moderator/admin)
-	targetID string, // target user
-	targetUsername string, // target user's name (optional, may be empty)
-	roleID string, // affected role ID
-	roleName string, // role name (fallback when mention is not desired)
-	action string, // "add" | "remove" | "added" | "removed"
-) error {
-	if channelID == "" || targetID == "" || (roleID == "" && roleName == "") {
+func (ns *NotificationSender) SendMemberRoleUpdateNotification(notice memberRoleUpdateNotice) error {
+	if notice.ChannelID == "" || notice.TargetID == "" || (notice.RoleID == "" && notice.RoleName == "") {
 		return nil
 	}
 
 	act := "Updated"
 	switch {
-	case strings.EqualFold(action, "add") || strings.EqualFold(action, "added"):
+	case strings.EqualFold(notice.Action, "add") || strings.EqualFold(notice.Action, "added"):
 		act = "Added"
-	case strings.EqualFold(action, "remove") || strings.EqualFold(action, "removed"):
+	case strings.EqualFold(notice.Action, "remove") || strings.EqualFold(notice.Action, "removed"):
 		act = "Removed"
 	}
 
-	roleDisplay := formatRoleLabel(roleID, roleName)
-	targetLabel := formatUserLabel(targetUsername, targetID)
-	actorLabel := formatUserRef(actorID)
+	roleDisplay := formatRoleLabel(notice.RoleID, notice.RoleName)
+	targetLabel := formatUserLabel(notice.TargetUsername, notice.TargetID)
+	actorLabel := formatUserRef(notice.ActorID)
 	embed := &discordgo.MessageEmbed{
 		Title:       "Role Updated",
 		Color:       theme.MemberRoleUpdate(),
@@ -556,7 +559,7 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	_, err := ns.session.ChannelMessageSendEmbed(notice.ChannelID, embed)
 	return err
 }
 

@@ -63,7 +63,7 @@ func upsertGuildMemberSnapshotBatch(ctx context.Context, tx *sql.Tx, guildID str
 		if err != nil {
 			return fmt.Errorf("query current avatar hashes: %w", err)
 		}
-		if err := insertAvatarHistoryBatch(ctx, tx, guildID, avatarRows, currentHashes, updatedAt); err != nil {
+		if err := insertAvatarHistoryBatch(ctx, tx, avatarHistoryBatch{GuildID: guildID, Snapshots: avatarRows, CurrentHashes: currentHashes, UpdatedAt: updatedAt}); err != nil {
 			return fmt.Errorf("insert avatar history batch: %w", err)
 		}
 		if err := upsertAvatarCurrentBatch(ctx, tx, guildID, avatarRows, updatedAt); err != nil {
@@ -179,16 +179,23 @@ func queryCurrentAvatarHashesByUserID(ctx context.Context, tx *sql.Tx, guildID s
 	return hashes, rows.Err()
 }
 
-func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, currentHashes map[string]string, updatedAt time.Time) error {
+type avatarHistoryBatch struct {
+	GuildID       string
+	Snapshots     []GuildMemberSnapshot
+	CurrentHashes map[string]string
+	UpdatedAt     time.Time
+}
+
+func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, batch avatarHistoryBatch) error {
 	type avatarHistoryRow struct {
 		UserID    string
 		OldHash   string
 		NewHash   string
 		ChangedAt time.Time
 	}
-	rows := make([]avatarHistoryRow, 0, len(snapshots))
-	for _, snapshot := range snapshots {
-		oldHash, ok := currentHashes[snapshot.UserID]
+	rows := make([]avatarHistoryRow, 0, len(batch.Snapshots))
+	for _, snapshot := range batch.Snapshots {
+		oldHash, ok := batch.CurrentHashes[snapshot.UserID]
 		if !ok || oldHash == snapshot.AvatarHash {
 			continue
 		}
@@ -196,7 +203,7 @@ func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, guildID string, s
 			UserID:    snapshot.UserID,
 			OldHash:   oldHash,
 			NewHash:   snapshot.AvatarHash,
-			ChangedAt: updatedAt,
+			ChangedAt: batch.UpdatedAt,
 		})
 	}
 	guildIDs := make([]string, len(rows))
@@ -206,7 +213,7 @@ func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, guildID string, s
 	changedAts := make([]time.Time, len(rows))
 
 	for i, row := range rows {
-		guildIDs[i] = guildID
+		guildIDs[i] = batch.GuildID
 		userIDs[i] = row.UserID
 		oldHashes[i] = row.OldHash
 		newHashes[i] = row.NewHash
@@ -373,23 +380,33 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
 	return err
 }
 
+// MemberPresenceInput describes a member presence upsert. When JoinedAt is
+// zero it is seeded from SeenAt; a zero SeenAt defaults to now (UTC).
+type MemberPresenceInput struct {
+	GuildID  string
+	UserID   string
+	JoinedAt time.Time
+	SeenAt   time.Time
+	IsBot    bool
+}
+
 // UpsertMemberPresenceContext records that a member is currently present in a guild.
-// When joinedAt is unknown, seenAt is used as a fallback seed for the row.
-func (s *Store) UpsertMemberPresenceContext(ctx context.Context, guildID, userID string, joinedAt, seenAt time.Time, isBot bool) error {
-	guildID = strings.TrimSpace(guildID)
-	userID = strings.TrimSpace(userID)
-	if guildID == "" || userID == "" {
+// When JoinedAt is unknown, SeenAt is used as a fallback seed for the row.
+func (s *Store) UpsertMemberPresenceContext(ctx context.Context, input MemberPresenceInput) error {
+	input.GuildID = strings.TrimSpace(input.GuildID)
+	input.UserID = strings.TrimSpace(input.UserID)
+	if input.GuildID == "" || input.UserID == "" {
 		return nil
 	}
-	if seenAt.IsZero() {
-		seenAt = time.Now().UTC()
+	if input.SeenAt.IsZero() {
+		input.SeenAt = time.Now().UTC()
 	} else {
-		seenAt = seenAt.UTC()
+		input.SeenAt = input.SeenAt.UTC()
 	}
-	if joinedAt.IsZero() {
-		joinedAt = seenAt
+	if input.JoinedAt.IsZero() {
+		input.JoinedAt = input.SeenAt
 	} else {
-		joinedAt = joinedAt.UTC()
+		input.JoinedAt = input.JoinedAt.UTC()
 	}
 
 	_, err := s.execContext(
@@ -407,7 +424,7 @@ func (s *Store) UpsertMemberPresenceContext(ctx context.Context, guildID, userID
            END,
            is_bot = excluded.is_bot,
            left_at = NULL`,
-		guildID, userID, joinedAt, seenAt, isBot,
+		input.GuildID, input.UserID, input.JoinedAt, input.SeenAt, input.IsBot,
 	)
 	return err
 }

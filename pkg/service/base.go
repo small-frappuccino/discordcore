@@ -284,21 +284,25 @@ type ServiceWrapper struct {
 	wrappedCheck func() bool
 }
 
+// ServiceWrapperSpec configures a ServiceWrapper: identity/metadata plus the
+// start/stop/health callbacks invoked through the wrapper's hooks.
+type ServiceWrapperSpec struct {
+	Name         string
+	Type         ServiceType
+	Priority     ServicePriority
+	Dependencies []string
+	Start        func(context.Context) error
+	Stop         func(context.Context) error
+	Check        func() bool
+}
+
 // NewServiceWrapper creates a wrapper for existing services
-func NewServiceWrapper(
-	name string,
-	serviceType ServiceType,
-	priority ServicePriority,
-	dependencies []string,
-	startFunc func(context.Context) error,
-	stopFunc func(context.Context) error,
-	checkFunc func() bool,
-) *ServiceWrapper {
+func NewServiceWrapper(spec ServiceWrapperSpec) *ServiceWrapper {
 	wrapper := &ServiceWrapper{
-		BaseService:  NewBaseService(name, serviceType, priority, dependencies),
-		wrappedStart: startFunc,
-		wrappedStop:  stopFunc,
-		wrappedCheck: checkFunc,
+		BaseService:  NewBaseService(spec.Name, spec.Type, spec.Priority, spec.Dependencies),
+		wrappedStart: spec.Start,
+		wrappedStop:  spec.Stop,
+		wrappedCheck: spec.Check,
 	}
 
 	// Set up hooks to call the wrapped functions
@@ -332,7 +336,7 @@ func NewServiceWrapper(
 			Message:   message,
 			LastCheck: time.Now(),
 			Details: map[string]any{
-				"wrapped_service": name,
+				"wrapped_service": spec.Name,
 			},
 		}
 	})

@@ -39,21 +39,19 @@ func TestServiceWrapperPassesLifecycleContext(t *testing.T) {
 	var startValue string
 	var stopValue string
 
-	wrapper := NewServiceWrapper(
-		"wrapped",
-		TypeMonitoring,
-		PriorityNormal,
-		nil,
-		func(ctx context.Context) error {
+	wrapper := NewServiceWrapper(ServiceWrapperSpec{
+		Name:     "wrapped",
+		Type:     TypeMonitoring,
+		Priority: PriorityNormal,
+		Start: func(ctx context.Context) error {
 			startValue, _ = ctx.Value(startCtxKey).(string)
 			return nil
 		},
-		func(ctx context.Context) error {
+		Stop: func(ctx context.Context) error {
 			stopValue, _ = ctx.Value(stopCtxKey).(string)
 			return nil
 		},
-		nil,
-	)
+	})
 
 	startCtx := context.WithValue(context.Background(), startCtxKey, "start")
 	if err := wrapper.Start(startCtx); err != nil {

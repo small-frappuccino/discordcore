@@ -69,42 +69,44 @@ func newRolePanelPostingSyncer(cm *files.ConfigManager) *rolePanelPostingSyncer 
 	}
 }
 
+// rolePanelSyncRequest describes one posting-sync pass: the target panel
+// (GuildID/Key), its current Postings, and the Embed/Components to apply.
+// Embed must be non-nil; nil Components clears the buttons.
+type rolePanelSyncRequest struct {
+	Session    *discordgo.Session
+	GuildID    string
+	Key        string
+	Postings   []files.RolePanelPostingConfig
+	Embed      *discordgo.MessageEmbed
+	Components []discordgo.MessageComponent
+}
+
 // Sync iterates the supplied postings and edits each Discord message
 // to carry the supplied embed + components. Postings whose message no
 // longer exists (Discord 10003 / 10008) are dropped from the panel's
 // config; other failures are recorded so the caller can surface them
 // to the operator without aborting the rest of the pass.
-//
-// embed must be non-nil. Pass nil for components to clear the buttons
-// on a posted message; pass the rendered ActionRows to refresh them.
-func (s *rolePanelPostingSyncer) Sync(
-	session *discordgo.Session,
-	guildID string,
-	key string,
-	postings []files.RolePanelPostingConfig,
-	embed *discordgo.MessageEmbed,
-	components []discordgo.MessageComponent,
-) rolePanelSyncResult {
+func (s *rolePanelPostingSyncer) Sync(req rolePanelSyncRequest) rolePanelSyncResult {
 	var result rolePanelSyncResult
-	if len(postings) == 0 {
+	if len(req.Postings) == 0 {
 		return result
 	}
 
 	embeds := []*discordgo.MessageEmbed{}
-	if embed != nil {
-		embeds = []*discordgo.MessageEmbed{embed}
+	if req.Embed != nil {
+		embeds = []*discordgo.MessageEmbed{req.Embed}
 	}
-	componentsCopy := append([]discordgo.MessageComponent(nil), components...)
+	componentsCopy := append([]discordgo.MessageComponent(nil), req.Components...)
 
-	for _, posting := range postings {
+	for _, posting := range req.Postings {
 		var err error
 		if posting.WebhookID != "" && posting.WebhookToken != "" {
-			err = s.editWebhookMessage(session, posting.WebhookID, posting.WebhookToken, posting.MessageID, &discordgo.WebhookEdit{
+			err = s.editWebhookMessage(req.Session, posting.WebhookID, posting.WebhookToken, posting.MessageID, &discordgo.WebhookEdit{
 				Embeds:     &embeds,
 				Components: &componentsCopy,
 			})
 		} else {
-			err = s.editMessage(session, &discordgo.MessageEdit{
+			err = s.editMessage(req.Session, &discordgo.MessageEdit{
 				ID:         strings.TrimSpace(posting.MessageID),
 				Channel:    strings.TrimSpace(posting.ChannelID),
 				Embeds:     &embeds,
@@ -129,10 +131,10 @@ func (s *rolePanelPostingSyncer) Sync(
 		for _, p := range result.Dropped {
 			ids = append(ids, p.MessageID)
 		}
-		if dropErr := s.dropPostings(s.configManager, guildID, key, ids); dropErr != nil {
+		if dropErr := s.dropPostings(s.configManager, req.GuildID, req.Key, ids); dropErr != nil {
 			slog.Warn("Role panel batch posting cleanup failed",
-				"guildID", guildID,
-				"key", key,
+				"guildID", req.GuildID,
+				"key", req.Key,
 				"err", dropErr,
 			)
 		}

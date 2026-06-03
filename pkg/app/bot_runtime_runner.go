@@ -178,19 +178,19 @@ func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConf
 	automodAdapters := task.NewNotificationAdapters(automodRouter, runtime.session, opts.configManager, opts.store, notifier)
 	automodService.SetAdapters(automodAdapters)
 
-	return service.NewServiceWrapper(
-		"automod",
-		service.TypeAutomod,
-		service.PriorityNormal,
-		[]string{},
-		func(context.Context) error { automodService.Start(); return nil },
-		func(context.Context) error {
+	return service.NewServiceWrapper(service.ServiceWrapperSpec{
+		Name:         "automod",
+		Type:         service.TypeAutomod,
+		Priority:     service.PriorityNormal,
+		Dependencies: []string{},
+		Start:        func(context.Context) error { automodService.Start(); return nil },
+		Stop: func(context.Context) error {
 			automodRouter.Close()
 			automodService.Stop()
 			return nil
 		},
-		func() bool { return true },
-	)
+		Check: func() bool { return true },
+	})
 }
 
 // registerUserPruneService registers the Discord-native user prune maintenance service
@@ -204,15 +204,15 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 	if monitoringService != nil {
 		userPruneDependencies = []string{"monitoring"}
 	}
-	userPruneWrapper := service.NewServiceWrapper(
-		"user-prune",
-		service.TypeMonitoring,
-		service.PriorityNormal,
-		userPruneDependencies,
-		func(context.Context) error { userPruneService.Start(); return nil },
-		func(context.Context) error { userPruneService.Stop(); return nil },
-		func() bool { return userPruneService.IsRunning() },
-	)
+	userPruneWrapper := service.NewServiceWrapper(service.ServiceWrapperSpec{
+		Name:         "user-prune",
+		Type:         service.TypeMonitoring,
+		Priority:     service.PriorityNormal,
+		Dependencies: userPruneDependencies,
+		Start:        func(context.Context) error { userPruneService.Start(); return nil },
+		Stop:         func(context.Context) error { userPruneService.Stop(); return nil },
+		Check:        func() bool { return userPruneService.IsRunning() },
+	})
 	if err := runtime.serviceManager.Register(userPruneWrapper); err != nil {
 		return fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
 	}
@@ -233,15 +233,15 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		runtime.instanceID,
 		opts.defaultBotInstanceID,
 	)
-	qotdWrapper := service.NewServiceWrapper(
-		"qotd",
-		service.TypeMonitoring,
-		service.PriorityNormal,
-		[]string{},
-		func(context.Context) error { qotdRuntimeService.Start(); return nil },
-		func(context.Context) error { qotdRuntimeService.Stop(); return nil },
-		func() bool { return qotdRuntimeService.IsRunning() },
-	)
+	qotdWrapper := service.NewServiceWrapper(service.ServiceWrapperSpec{
+		Name:         "qotd",
+		Type:         service.TypeMonitoring,
+		Priority:     service.PriorityNormal,
+		Dependencies: []string{},
+		Start:        func(context.Context) error { qotdRuntimeService.Start(); return nil },
+		Stop:         func(context.Context) error { qotdRuntimeService.Stop(); return nil },
+		Check:        func() bool { return qotdRuntimeService.IsRunning() },
+	})
 	if err := runtime.serviceManager.Register(qotdWrapper); err != nil {
 		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
 	}

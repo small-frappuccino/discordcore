@@ -120,7 +120,7 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 			break
 		}
 
-		page, err := ms.applyBackfillPage(serviceCtx, guildID, channelID, botID, mode, msgs, start, end)
+		page, err := ms.applyBackfillPage(serviceCtx, backfillScope{GuildID: guildID, ChannelID: channelID, BotID: botID, Mode: mode}, msgs, start, end)
 		if err != nil {
 			return err
 		}
@@ -150,12 +150,22 @@ type backfillPageResult struct {
 	reachedStart bool
 }
 
+// backfillScope identifies the channel/bot context shared across a backfill
+// pass: the guild and channel scanned, the bot ID whose log messages are
+// parsed, and the mode label used in progress logs.
+type backfillScope struct {
+	GuildID   string
+	ChannelID string
+	BotID     string
+	Mode      string
+}
+
 // applyBackfillPage processes a single page of messages ordered newest-to-oldest,
 // persisting the member join/leave events whose timestamp falls in [start, end). It
 // returns as soon as it encounters a message older than start, with reachedStart set,
 // so the caller can stop paging without a separate loop-control flag. A canceled
 // serviceCtx aborts mid-page and surfaces the wrapped context error.
-func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, guildID, channelID, botID, mode string, msgs []*discordgo.Message, start, end time.Time) (backfillPageResult, error) {
+func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, scope backfillScope, msgs []*discordgo.Message, start, end time.Time) (backfillPageResult, error) {
 	var res backfillPageResult
 	for _, m := range msgs {
 		if err := serviceCtx.Err(); err != nil {
@@ -170,7 +180,7 @@ func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, guild
 			res.processed++
 			continue
 		}
-		if ms.persistBackfillMessage(serviceCtx, guildID, channelID, botID, mode, m, t) {
+		if ms.persistBackfillMessage(serviceCtx, scope, m, t) {
 			res.eventsFound++
 		}
 		res.processed++
@@ -181,38 +191,38 @@ func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, guild
 // persistBackfillMessage parses a single backfilled log message and, when it encodes
 // a member join or leave, updates the corresponding counters and the per-channel
 // progress marker. It reports whether the message yielded a recognized event.
-func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, guildID, channelID, botID, mode string, m *discordgo.Message, t time.Time) bool {
+func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, scope backfillScope, m *discordgo.Message, t time.Time) bool {
 	if ms.store == nil {
 		return false
 	}
 	var rc files.RuntimeConfig
 	if cfg := ms.configManager.Config(); cfg != nil {
-		rc = cfg.ResolveRuntimeConfig(guildID)
+		rc = cfg.ResolveRuntimeConfig(scope.GuildID)
 	}
-	evt, userID, ok := parseEntryExitBackfillMessage(m, botID, rc)
+	evt, userID, ok := parseEntryExitBackfillMessage(m, scope.BotID, rc)
 	if !ok {
 		return false
 	}
 
 	switch evt {
 	case "join":
-		if err := ms.store.UpsertMemberJoin(guildID, userID, t); err != nil {
-			log.ApplicationLogger().Warn("Backfill: failed to persist member join", "mode", mode, "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+		if err := ms.store.UpsertMemberJoin(scope.GuildID, userID, t); err != nil {
+			log.ApplicationLogger().Warn("Backfill: failed to persist member join", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "userID", userID, "at", t, "err", err)
 		}
-		if err := ms.store.IncrementDailyMemberJoin(guildID, userID, t); err != nil {
-			log.ApplicationLogger().Warn("Backfill: failed to increment daily member join", "mode", mode, "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+		if err := ms.store.IncrementDailyMemberJoin(scope.GuildID, userID, t); err != nil {
+			log.ApplicationLogger().Warn("Backfill: failed to increment daily member join", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "userID", userID, "at", t, "err", err)
 		}
 	case "leave":
 		// If the member is no longer in the guild, count the leave for the day.
-		if !ms.memberStillInGuild(serviceCtx, guildID, userID) {
-			if err := ms.store.IncrementDailyMemberLeave(guildID, userID, t); err != nil {
-				log.ApplicationLogger().Warn("Backfill: failed to increment daily member leave", "mode", mode, "guildID", guildID, "channelID", channelID, "userID", userID, "at", t, "err", err)
+		if !ms.memberStillInGuild(serviceCtx, scope.GuildID, userID) {
+			if err := ms.store.IncrementDailyMemberLeave(scope.GuildID, userID, t); err != nil {
+				log.ApplicationLogger().Warn("Backfill: failed to increment daily member leave", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "userID", userID, "at", t, "err", err)
 			}
 		}
 	}
 
-	if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+channelID, t); err != nil {
-		log.ApplicationLogger().Warn("Backfill: failed to persist progress metadata", "mode", mode, "guildID", guildID, "channelID", channelID, "at", t, "err", err)
+	if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+scope.ChannelID, t); err != nil {
+		log.ApplicationLogger().Warn("Backfill: failed to persist progress metadata", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "at", t, "err", err)
 	}
 	return true
 }

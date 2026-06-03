@@ -162,7 +162,7 @@ func TestUpsertMemberPresenceAndMarkMemberLeftTracksActiveState(t *testing.T) {
 	joinedAt := time.Date(2022, 7, 1, 8, 0, 0, 0, time.UTC)
 	seenAt := joinedAt.Add(30 * time.Minute)
 
-	if err := store.UpsertMemberPresenceContext(context.Background(), guildID, userID, joinedAt, seenAt, true); err != nil {
+	if err := store.UpsertMemberPresenceContext(context.Background(), MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: seenAt, IsBot: true}); err != nil {
 		t.Fatalf("UpsertMemberPresenceContext() failed: %v", err)
 	}
 	if err := store.UpsertMemberRoles(guildID, userID, []string{"r1", "r2"}, seenAt); err != nil {
@@ -226,7 +226,7 @@ func TestUpsertGuildMemberSnapshotsContextPersistsBotFlagsAndReactivatesMembers(
 	userID := "u1"
 	joinedAt := time.Date(2022, 9, 5, 9, 30, 0, 0, time.UTC)
 
-	if err := store.UpsertMemberPresenceContext(context.Background(), guildID, userID, joinedAt, joinedAt.Add(30*time.Minute), false); err != nil {
+	if err := store.UpsertMemberPresenceContext(context.Background(), MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: joinedAt.Add(30 * time.Minute), IsBot: false}); err != nil {
 		t.Fatalf("UpsertMemberPresenceContext(seed) failed: %v", err)
 	}
 	if err := store.MarkMemberLeftContext(context.Background(), guildID, userID, joinedAt.Add(time.Hour)); err != nil {

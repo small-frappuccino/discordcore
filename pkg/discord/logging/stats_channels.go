@@ -840,7 +840,7 @@ func (ms *MonitoringService) persistStatsMemberActive(guildID, userID string, jo
 	}
 
 	err := monitoringRunErrWithTimeoutContext(ms.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
-		if err := ms.store.UpsertMemberPresenceContext(runCtx, guildID, userID, joinedAt, time.Now().UTC(), isBot); err != nil {
+		if err := ms.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
 			return fmt.Errorf("upsert member presence: %w", err)
 		}
 		if err := ms.store.UpsertMemberRoles(guildID, userID, roles, time.Now().UTC()); err != nil {

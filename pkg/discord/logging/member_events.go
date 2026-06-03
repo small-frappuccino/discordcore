@@ -44,33 +44,44 @@ type MemberEventService struct {
 	store *storage.Store
 }
 
+// eventServiceDeps bundles the shared dependencies for the bot-scoped logging
+// event services. BotInstanceID/DefaultBotInstanceID are normalized by the
+// constructors via files.NormalizeBotInstanceID.
+type eventServiceDeps struct {
+	Session              *discordgo.Session
+	ConfigManager        *files.ConfigManager
+	Notifier             *NotificationSender
+	Store                *storage.Store
+	BotInstanceID        string
+	DefaultBotInstanceID string
+	Logger               *slog.Logger
+}
+
 // NewMemberEventService creates a new instance of the member events service
 func NewMemberEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store, logger *slog.Logger) *MemberEventService {
-	return NewMemberEventServiceForBot(session, configManager, notifier, store, "", "", logger)
+	return NewMemberEventServiceForBot(eventServiceDeps{
+		Session:       session,
+		ConfigManager: configManager,
+		Notifier:      notifier,
+		Store:         store,
+		Logger:        logger,
+	})
 }
 
 // NewMemberEventServiceForBot creates a member event service scoped to one bot instance.
-func NewMemberEventServiceForBot(
-	session *discordgo.Session,
-	configManager *files.ConfigManager,
-	notifier *NotificationSender,
-	store *storage.Store,
-	botInstanceID string,
-	defaultBotInstanceID string,
-	logger *slog.Logger,
-) *MemberEventService {
+func NewMemberEventServiceForBot(deps eventServiceDeps) *MemberEventService {
 	return &MemberEventService{
-		session:       session,
-		configManager: configManager,
-		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
-		notifier:      notifier,
-		store:         store,
-		logger:        logger,
-		activity: newRuntimeActivity(store, runtimeActivityOptions{
+		session:       deps.Session,
+		configManager: deps.ConfigManager,
+		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
+		defaultBotID:  files.NormalizeBotInstanceID(deps.DefaultBotInstanceID),
+		notifier:      deps.Notifier,
+		store:         deps.Store,
+		logger:        deps.Logger,
+		activity: newRuntimeActivity(deps.Store, runtimeActivityOptions{
 			RunErr:        runErrWithTimeoutContext,
 			EventTimeout:  loggingDependencyTimeout,
-			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 			Warn:          slog.Warn,
 		}),
 		lifecycle:      newServiceLifecycle("member event service"),

@@ -89,31 +89,42 @@ func (s *Service) publishScheduledInActor(ctx context.Context, guildID string, s
 		return false, nil
 	}
 
+	scope := publishScope{GuildID: guildID, Session: session, Now: now}
 	if slotState.HasOfficialPostRecord() {
-		return s.resumeOrReconcileExistingPost(ctx, guildID, session, slotState, now, recordAttempt)
+		return s.resumeOrReconcileExistingPost(ctx, scope, slotState, recordAttempt)
 	}
-	return s.provisionScheduledOfficialPost(ctx, guildID, session, cfg, slotState, now, recordAttempt)
+	return s.provisionScheduledOfficialPost(ctx, scope, cfg, slotState, recordAttempt)
+}
+
+// publishScope carries the per-cycle ambient values threaded unchanged
+// through the scheduled/manual publish helpers: the guild being published,
+// the Discord session used for the API calls, and the cycle clock captured
+// once by the actor.
+type publishScope struct {
+	GuildID string
+	Session *discordgo.Session
+	Now     time.Time
 }
 
 // resumeOrReconcileExistingPost handles a due slot that already has an official-post
 // record: resume it if still provisioning (a publish attempt), otherwise just realign
 // the window.
-func (s *Service) resumeOrReconcileExistingPost(ctx context.Context, guildID string, session *discordgo.Session, slotState currentSlotState, now time.Time, recordAttempt func()) (bool, error) {
+func (s *Service) resumeOrReconcileExistingPost(ctx context.Context, scope publishScope, slotState currentSlotState, recordAttempt func()) (bool, error) {
 	if slotState.HasProvisioningOfficialPost() {
 		// Resuming a half-provisioned record IS a publish attempt from the
 		// metrics perspective: we are about to talk to Discord and may
 		// transition the post to current.
 		recordAttempt()
-		recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, session, *slotState.OfficialPost, now)
+		recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, scope.Session, *slotState.OfficialPost, scope.Now)
 		if resumeErr != nil {
 			return false, resumeErr
 		}
-		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+		if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, recovered.OfficialPost.ID); err != nil {
 			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 		}
 		return true, nil
 	}
-	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, slotState.OfficialPost.ID); err != nil {
+	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, slotState.OfficialPost.ID); err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	return false, nil
@@ -122,7 +133,7 @@ func (s *Service) resumeOrReconcileExistingPost(ctx context.Context, guildID str
 // provisionScheduledOfficialPost applies the deck/suppression gates and, once committed,
 // reserves a question and provisions a fresh official post, recovering through
 // handleProvisioningConflict when the provisioning insert conflicts.
-func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID string, session *discordgo.Session, cfg files.QOTDConfig, slotState currentSlotState, now time.Time, recordAttempt func()) (bool, error) {
+func (s *Service) provisionScheduledOfficialPost(ctx context.Context, scope publishScope, cfg files.QOTDConfig, slotState currentSlotState, recordAttempt func()) (bool, error) {
 	deck, ok := cfg.ActiveDeck()
 	if !ok || !deck.Enabled || !canPublishQOTD(deck) {
 		return false, ErrQOTDDisabled
@@ -135,7 +146,7 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID st
 	// records the projection's date because that matches the manual post being
 	// claimed; without this check, today's late publish would re-fire even
 	// though the user just paused autopublishing.
-	if projected := CurrentPublishDateUTC(slotState.Schedule, now); !projected.Equal(slotState.PublishDateUTC) && isScheduledPublishSuppressed(cfg, projected) {
+	if projected := CurrentPublishDateUTC(slotState.Schedule, scope.Now); !projected.Equal(slotState.PublishDateUTC) && isScheduledPublishSuppressed(cfg, projected) {
 		return false, nil
 	}
 
@@ -145,28 +156,28 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID st
 	// short-circuits before completeOfficialPostProvisioning runs.
 	recordAttempt()
 
-	question, err := s.store.ReserveNextQOTDQuestion(ctx, guildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
+	question, err := s.store.ReserveNextQOTDQuestion(ctx, scope.GuildID, deck.ID, slotState.PublishDateUTC, deckQuestionSelector(deck))
 	if err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	if question == nil {
 		return false, ErrNoQuestionsAvailable
 	}
-	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
+	counts, err := s.deckQuestionCounts(ctx, scope.GuildID, deck.ID)
 	if err != nil {
-		s.releaseReservedQuestionBestEffort(ctx, guildID, *question)
+		s.releaseReservedQuestionBestEffort(ctx, scope.GuildID, *question)
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	availableQuestions := counts.Ready + counts.Draft
 
-	lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, now)
+	lifecycle := EvaluateOfficialPost(slotState.Schedule, slotState.PublishDateUTC, scope.Now)
 	nonce, err := generatePublishNonce()
 	if err != nil {
-		s.releaseReservedQuestionBestEffort(ctx, guildID, *question)
+		s.releaseReservedQuestionBestEffort(ctx, scope.GuildID, *question)
 		return false, fmt.Errorf("generate qotd publish nonce: %w", err)
 	}
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
-		GuildID:              guildID,
+		GuildID:              scope.GuildID,
 		DeckID:               deck.ID,
 		DeckNameSnapshot:     deck.Name,
 		QuestionID:           question.ID,
@@ -180,16 +191,16 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID st
 		ArchiveAt:            lifecycle.ArchiveAt,
 	})
 	if err != nil {
-		s.releaseReservedQuestionBestEffort(ctx, guildID, *question)
-		return s.handleProvisioningConflict(ctx, guildID, session, slotState.PublishDateUTC, now, err)
+		s.releaseReservedQuestionBestEffort(ctx, scope.GuildID, *question)
+		return s.handleProvisioningConflict(ctx, scope, slotState.PublishDateUTC, err)
 	}
 
-	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(ctx, session, officialPostProvisioningParams{
+	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(ctx, scope.Session, officialPostProvisioningParams{
 		Post:               *provisioned,
 		Question:           question,
 		AvailableQuestions: availableQuestions,
 		ThreadName:         buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
-		Now:                now,
+		Now:                scope.Now,
 	})
 	if err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
@@ -198,7 +209,7 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID st
 		question = updatedQuestion
 	}
 
-	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
+	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, finalized.ID); err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 
@@ -209,8 +220,8 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, guildID st
 // typically due to a unique-index conflict with a concurrently created record. It
 // resumes a still-unpublished record, defers a permanently abandoned one to admin
 // action, or simply realigns the window for an already-published record.
-func (s *Service) handleProvisioningConflict(ctx context.Context, guildID string, session *discordgo.Session, publishDateUTC time.Time, now time.Time, createErr error) (bool, error) {
-	existing, conflictErr := s.lookupPublishConflictPost(ctx, guildID, publishDateUTC, createErr)
+func (s *Service) handleProvisioningConflict(ctx context.Context, scope publishScope, publishDateUTC time.Time, createErr error) (bool, error) {
+	existing, conflictErr := s.lookupPublishConflictPost(ctx, scope.GuildID, publishDateUTC, createErr)
 	if conflictErr != nil {
 		return false, conflictErr
 	}
@@ -218,19 +229,19 @@ func (s *Service) handleProvisioningConflict(ctx context.Context, guildID string
 		// Existing record was permanently abandoned by a previous attempt
 		// (unrecoverable Discord error). Don't resume it — admin must
 		// intervene. Just keep the window state coherent.
-		return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+		return false, s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, 0)
 	}
 	if !isOfficialPostPublished(*existing) {
-		recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, session, *existing, now)
+		recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, scope.Session, *existing, scope.Now)
 		if recoverErr != nil {
 			return false, recoverErr
 		}
-		if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, recovered.OfficialPost.ID); err != nil {
+		if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, recovered.OfficialPost.ID); err != nil {
 			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 		}
 		return true, nil
 	}
-	return false, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+	return false, s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, 0)
 }
 
 // releaseReservedQuestionBestEffort returns a reserved question to the pool, logging but

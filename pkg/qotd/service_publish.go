@@ -89,7 +89,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 			}
 		}
 
-		publishResult, keep, err := s.provisionManualOfficialPost(ctx, guildID, session, deck, publishDate, consumeAutomaticSlot, now)
+		publishResult, keep, err := s.provisionManualOfficialPost(ctx, publishScope{GuildID: guildID, Session: session, Now: now}, deck, publishDate, consumeAutomaticSlot)
 		keepSuppression = keep
 		if err != nil {
 			return nil, err
@@ -137,29 +137,29 @@ func (s *Service) resolveManualPublishTarget(ctx context.Context, guildID string
 // the caller should keep any applied scheduled-slot suppression (true only on a fully
 // successful publish). On a provisioning conflict it adopts the existing record via
 // resolvePublishNowConflict.
-func (s *Service) provisionManualOfficialPost(ctx context.Context, guildID string, session *discordgo.Session, deck files.QOTDDeckConfig, publishDate time.Time, consumeAutomaticSlot bool, now time.Time) (*PublishResult, bool, error) {
-	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, guildID, deck.ID, storage.QOTDQuestionSelectorQueue)
+func (s *Service) provisionManualOfficialPost(ctx context.Context, scope publishScope, deck files.QOTDDeckConfig, publishDate time.Time, consumeAutomaticSlot bool) (*PublishResult, bool, error) {
+	question, err := s.store.ReserveNextReadyQOTDQuestion(ctx, scope.GuildID, deck.ID, storage.QOTDQuestionSelectorQueue)
 	if err != nil {
 		return nil, false, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if question == nil {
 		return nil, false, ErrNoQuestionsAvailable
 	}
-	counts, err := s.deckQuestionCounts(ctx, guildID, deck.ID)
+	counts, err := s.deckQuestionCounts(ctx, scope.GuildID, deck.ID)
 	if err != nil {
-		s.releaseManualReservedQuestion(ctx, guildID, *question)
+		s.releaseManualReservedQuestion(ctx, scope.GuildID, *question)
 		return nil, false, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	availableQuestions := counts.Ready + counts.Draft
 
-	lifecycle := EvaluateManualOfficialPost(now, now)
+	lifecycle := EvaluateManualOfficialPost(scope.Now, scope.Now)
 	nonce, err := generatePublishNonce()
 	if err != nil {
-		s.releaseManualReservedQuestion(ctx, guildID, *question)
+		s.releaseManualReservedQuestion(ctx, scope.GuildID, *question)
 		return nil, false, fmt.Errorf("generate qotd publish nonce: %w", err)
 	}
 	provisioned, err := s.store.CreateQOTDOfficialPostProvisioning(ctx, storage.QOTDOfficialPostRecord{
-		GuildID:              guildID,
+		GuildID:              scope.GuildID,
 		DeckID:               deck.ID,
 		DeckNameSnapshot:     deck.Name,
 		QuestionID:           question.ID,
@@ -174,17 +174,17 @@ func (s *Service) provisionManualOfficialPost(ctx context.Context, guildID strin
 		ArchiveAt:            lifecycle.ArchiveAt,
 	})
 	if err != nil {
-		s.releaseManualReservedQuestion(ctx, guildID, *question)
-		conflictResult, conflictErr := s.resolvePublishNowConflict(ctx, guildID, publishDate, err)
+		s.releaseManualReservedQuestion(ctx, scope.GuildID, *question)
+		conflictResult, conflictErr := s.resolvePublishNowConflict(ctx, scope.GuildID, publishDate, err)
 		return conflictResult, false, conflictErr
 	}
 
-	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, officialPostProvisioningParams{
+	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, scope.Session, officialPostProvisioningParams{
 		Post:               *provisioned,
 		Question:           question,
 		AvailableQuestions: availableQuestions,
 		ThreadName:         buildOfficialThreadName(threadDisplayNumberFromUsedCount(counts.Used, question)),
-		Now:                now,
+		Now:                scope.Now,
 	})
 	if err != nil {
 		return nil, false, fmt.Errorf("Service.PublishNowWithParams: %w", err)
@@ -193,11 +193,11 @@ func (s *Service) provisionManualOfficialPost(ctx context.Context, guildID strin
 		question = updatedQuestion
 	}
 
-	if err := s.reconcileOfficialPostWindow(ctx, guildID, session, now, finalized.ID); err != nil {
+	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, finalized.ID); err != nil {
 		return nil, false, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if consumeAutomaticSlot {
-		s.clearScheduledPublishSuppressionForDate(guildID, publishDate)
+		s.clearScheduledPublishSuppressionForDate(scope.GuildID, publishDate)
 	}
 
 	return &PublishResult{

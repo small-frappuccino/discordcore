@@ -100,32 +100,30 @@ type MessageDeleteTaskPayload struct {
 
 // NewMessageEventService creates a new instance of the message events service
 func NewMessageEventService(session *discordgo.Session, configManager *files.ConfigManager, notifier *NotificationSender, store *storage.Store, logger *slog.Logger) *MessageEventService {
-	return NewMessageEventServiceForBot(session, configManager, notifier, store, "", "", logger)
+	return NewMessageEventServiceForBot(eventServiceDeps{
+		Session:       session,
+		ConfigManager: configManager,
+		Notifier:      notifier,
+		Store:         store,
+		Logger:        logger,
+	})
 }
 
 // NewMessageEventServiceForBot creates a message event service scoped to a bot
 // instance assignment.
-func NewMessageEventServiceForBot(
-	session *discordgo.Session,
-	configManager *files.ConfigManager,
-	notifier *NotificationSender,
-	store *storage.Store,
-	botInstanceID string,
-	defaultBotInstanceID string,
-	logger *slog.Logger,
-) *MessageEventService {
+func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
 	return &MessageEventService{
-		session:       session,
-		configManager: configManager,
-		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
-		notifier:      notifier,
-		store:         store,
-		logger:        logger,
-		activity: newRuntimeActivity(store, runtimeActivityOptions{
+		session:       deps.Session,
+		configManager: deps.ConfigManager,
+		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
+		defaultBotID:  files.NormalizeBotInstanceID(deps.DefaultBotInstanceID),
+		notifier:      deps.Notifier,
+		store:         deps.Store,
+		logger:        deps.Logger,
+		activity: newRuntimeActivity(deps.Store, runtimeActivityOptions{
 			RunErr:        runErrWithTimeoutContext,
 			EventTimeout:  loggingDependencyTimeout,
-			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 			Warn:          slog.Warn,
 		}),
 		lifecycle:      newServiceLifecycle("message event service"),
