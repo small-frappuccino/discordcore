@@ -839,7 +839,7 @@ func (ms *MonitoringService) persistStatsMemberActive(guildID, userID string, jo
 		return
 	}
 
-	err := monitoringRunErrWithTimeoutContext(context.Background(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+	err := monitoringRunErrWithTimeoutContext(ms.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
 		if err := ms.store.UpsertMemberPresenceContext(runCtx, guildID, userID, joinedAt, time.Now().UTC(), isBot); err != nil {
 			return fmt.Errorf("upsert member presence: %w", err)
 		}
@@ -869,7 +869,7 @@ func (ms *MonitoringService) persistStatsMemberLeft(guildID, userID string) {
 		return
 	}
 
-	err := monitoringRunErrWithTimeoutContext(context.Background(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+	err := monitoringRunErrWithTimeoutContext(ms.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
 		return ms.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC())
 	})
 	if err != nil {
