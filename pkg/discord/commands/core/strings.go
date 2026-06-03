@@ -47,10 +47,10 @@ func TruncateString(s string, maxLen int) string {
 // ValidateStringLength validates a string length
 func ValidateStringLength(s string, minLen, maxLen int, fieldName string) error {
 	if len(s) < minLen {
-		return NewValidationError(fieldName, fmt.Sprintf("%s must be at least %d characters", fieldName, minLen))
+		return &ValidationError{Field: fieldName, Message: fmt.Sprintf("%s must be at least %d characters", fieldName, minLen)}
 	}
 	if len(s) > maxLen {
-		return NewValidationError(fieldName, fmt.Sprintf("%s must be at most %d characters", fieldName, maxLen))
+		return &ValidationError{Field: fieldName, Message: fmt.Sprintf("%s must be at most %d characters", fieldName, maxLen)}
 	}
 	return nil
 }

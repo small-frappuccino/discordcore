@@ -34,10 +34,7 @@ type UnifiedCache struct {
 	channels *segment[*discordgo.Channel]
 
 	// Indices to relate channels and guilds for efficient guild-scoped operations
-	guildToChannels   map[string]map[string]struct{}
-	guildToChannelsMu sync.RWMutex
-	channelToGuild    map[string]string
-	channelToGuildMu  sync.RWMutex
+	indices *cacheIndices
 
 	// TTL configurations (configurable per type)
 	memberTTL  time.Duration
@@ -105,6 +102,85 @@ func stripPersistKey(cacheType, key string) string {
 	return key
 }
 
+type cacheIndices struct {
+	guildToChannels   map[string]map[string]struct{}
+	guildToChannelsMu sync.RWMutex
+	channelToGuild    map[string]string
+	channelToGuildMu  sync.RWMutex
+}
+
+func newCacheIndices() *cacheIndices {
+	return &cacheIndices{
+		guildToChannels: make(map[string]map[string]struct{}),
+		channelToGuild:  make(map[string]string),
+	}
+}
+
+func (ci *cacheIndices) associateChannel(channelID, guildID string) {
+	ci.channelToGuildMu.Lock()
+	oldGuildID := ci.channelToGuild[channelID]
+	ci.channelToGuild[channelID] = guildID
+	ci.channelToGuildMu.Unlock()
+
+	ci.guildToChannelsMu.Lock()
+	if oldGuildID != "" && oldGuildID != guildID {
+		if set, ok := ci.guildToChannels[oldGuildID]; ok {
+			delete(set, channelID)
+			if len(set) == 0 {
+				delete(ci.guildToChannels, oldGuildID)
+			}
+		}
+	}
+	set := ci.guildToChannels[guildID]
+	if set == nil {
+		set = make(map[string]struct{})
+		ci.guildToChannels[guildID] = set
+	}
+	set[channelID] = struct{}{}
+	ci.guildToChannelsMu.Unlock()
+}
+
+func (ci *cacheIndices) removeChannel(channelID string) {
+	ci.channelToGuildMu.RLock()
+	guildID := ci.channelToGuild[channelID]
+	ci.channelToGuildMu.RUnlock()
+
+	if guildID != "" {
+		ci.guildToChannelsMu.Lock()
+		if set, ok := ci.guildToChannels[guildID]; ok {
+			delete(set, channelID)
+			if len(set) == 0 {
+				delete(ci.guildToChannels, guildID)
+			}
+		}
+		ci.guildToChannelsMu.Unlock()
+	}
+
+	ci.channelToGuildMu.Lock()
+	delete(ci.channelToGuild, channelID)
+	ci.channelToGuildMu.Unlock()
+}
+
+func (ci *cacheIndices) getChannelsForGuild(guildID string) []string {
+	ci.guildToChannelsMu.RLock()
+	defer ci.guildToChannelsMu.RUnlock()
+	var chIDs []string
+	if set, ok := ci.guildToChannels[guildID]; ok {
+		chIDs = slices.Collect(maps.Keys(set))
+	}
+	return chIDs
+}
+
+func (ci *cacheIndices) clear() {
+	ci.guildToChannelsMu.Lock()
+	clear(ci.guildToChannels)
+	ci.guildToChannelsMu.Unlock()
+
+	ci.channelToGuildMu.Lock()
+	clear(ci.channelToGuild)
+	ci.channelToGuildMu.Unlock()
+}
+
 // Cached value types
 
 // persistentCacheEntry is a persistent cache entry for the persistent store.
@@ -161,12 +237,11 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 	}
 
 	uc := &UnifiedCache{
-		members:         newSegment[*discordgo.Member](cfg.MemberTTL, cfg.MaxMemberSize),
-		guilds:          newSegment[*discordgo.Guild](cfg.GuildTTL, cfg.MaxGuildSize),
-		roles:           newSegment[[]*discordgo.Role](cfg.RolesTTL, cfg.MaxRolesSize),
-		channels:        newSegment[*discordgo.Channel](cfg.ChannelTTL, cfg.MaxChannelSize),
-		guildToChannels: make(map[string]map[string]struct{}),
-		channelToGuild:  make(map[string]string),
+		members:  newSegment[*discordgo.Member](cfg.MemberTTL, cfg.MaxMemberSize),
+		guilds:   newSegment[*discordgo.Guild](cfg.GuildTTL, cfg.MaxGuildSize),
+		roles:    newSegment[[]*discordgo.Role](cfg.RolesTTL, cfg.MaxRolesSize),
+		channels: newSegment[*discordgo.Channel](cfg.ChannelTTL, cfg.MaxChannelSize),
+		indices:  newCacheIndices(),
 
 		memberTTL:  cfg.MemberTTL,
 		guildTTL:   cfg.GuildTTL,
@@ -297,42 +372,10 @@ func (uc *UnifiedCache) SetChannel(channelID string, channel *discordgo.Channel)
 
 	// Update indices before inserting
 	if channel.GuildID != "" {
-		// channelID -> guildID
-		uc.channelToGuildMu.Lock()
-		if uc.channelToGuild == nil {
-			uc.channelToGuild = make(map[string]string)
-		}
-		oldGuildID := uc.channelToGuild[channelID]
-		uc.channelToGuild[channelID] = channel.GuildID
-		uc.channelToGuildMu.Unlock()
-
-		// guildID -> set(channelID)
-		uc.guildToChannelsMu.Lock()
-		if uc.guildToChannels == nil {
-			uc.guildToChannels = make(map[string]map[string]struct{})
-		}
-		if oldGuildID != "" && oldGuildID != channel.GuildID {
-			if set, ok := uc.guildToChannels[oldGuildID]; ok {
-				delete(set, channelID)
-				if len(set) == 0 {
-					delete(uc.guildToChannels, oldGuildID)
-				}
-			}
-		}
-		set := uc.guildToChannels[channel.GuildID]
-		if set == nil {
-			set = make(map[string]struct{})
-			uc.guildToChannels[channel.GuildID] = set
-		}
-		set[channelID] = struct{}{}
-		uc.guildToChannelsMu.Unlock()
+		uc.indices.associateChannel(channelID, channel.GuildID)
 	} else {
 		// No guild association
-		uc.channelToGuildMu.Lock()
-		if uc.channelToGuild != nil {
-			delete(uc.channelToGuild, channelID)
-		}
-		uc.channelToGuildMu.Unlock()
+		uc.indices.removeChannel(channelID)
 	}
 
 	uc.channels.Set(channelID, channel)
@@ -347,29 +390,7 @@ func (uc *UnifiedCache) InvalidateChannel(channelID string) {
 		return
 	}
 	// Update indices
-	var guildID string
-	uc.channelToGuildMu.RLock()
-	if uc.channelToGuild != nil {
-		guildID = uc.channelToGuild[channelID]
-	}
-	uc.channelToGuildMu.RUnlock()
-
-	if guildID != "" {
-		uc.guildToChannelsMu.Lock()
-		if set, ok := uc.guildToChannels[guildID]; ok {
-			delete(set, channelID)
-			if len(set) == 0 {
-				delete(uc.guildToChannels, guildID)
-			}
-		}
-		uc.guildToChannelsMu.Unlock()
-	}
-
-	uc.channelToGuildMu.Lock()
-	if uc.channelToGuild != nil {
-		delete(uc.channelToGuild, channelID)
-	}
-	uc.channelToGuildMu.Unlock()
+	uc.indices.removeChannel(channelID)
 
 	uc.channels.Invalidate(channelID)
 }
@@ -450,13 +471,7 @@ func (uc *UnifiedCache) Clear() {
 	}
 
 	// Reset indices
-	uc.guildToChannelsMu.Lock()
-	clear(uc.guildToChannels)
-	uc.guildToChannelsMu.Unlock()
-
-	uc.channelToGuildMu.Lock()
-	clear(uc.channelToGuild)
-	uc.channelToGuildMu.Unlock()
+	uc.indices.clear()
 }
 
 // ClearGuild removes all cached data for a specific guild.
@@ -488,12 +503,7 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	}
 
 	// Clear channels for this guild using the guild->channels index
-	uc.guildToChannelsMu.RLock()
-	var chIDs []string
-	if set, ok := uc.guildToChannels[guildID]; ok {
-		chIDs = slices.Collect(maps.Keys(set))
-	}
-	uc.guildToChannelsMu.RUnlock()
+	chIDs := uc.indices.getChannelsForGuild(guildID)
 	for _, cid := range chIDs {
 		uc.InvalidateChannel(cid)
 	}
@@ -575,22 +585,7 @@ func (uc *UnifiedCache) cleanupExpired() {
 	if uc.channels != nil {
 		uc.channels.CleanupExpiredWithCallback(now, func(key string, _ *discordgo.Channel) {
 			// Cleanup indices for channels
-			uc.channelToGuildMu.RLock()
-			guildID := uc.channelToGuild[key]
-			uc.channelToGuildMu.RUnlock()
-			if guildID != "" {
-				uc.guildToChannelsMu.Lock()
-				if set, ok := uc.guildToChannels[guildID]; ok {
-					delete(set, key)
-					if len(set) == 0 {
-						delete(uc.guildToChannels, guildID)
-					}
-				}
-				uc.guildToChannelsMu.Unlock()
-			}
-			uc.channelToGuildMu.Lock()
-			delete(uc.channelToGuild, key)
-			uc.channelToGuildMu.Unlock()
+			uc.indices.removeChannel(key)
 		})
 	}
 
@@ -872,30 +867,9 @@ func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channe
 
 	// Maintain indices
 	if channel.GuildID != "" {
-		uc.channelToGuildMu.Lock()
-		if uc.channelToGuild == nil {
-			uc.channelToGuild = make(map[string]string)
-		}
-		uc.channelToGuild[key] = channel.GuildID
-		uc.channelToGuildMu.Unlock()
-
-		uc.guildToChannelsMu.Lock()
-		if uc.guildToChannels == nil {
-			uc.guildToChannels = make(map[string]map[string]struct{})
-		}
-		set := uc.guildToChannels[channel.GuildID]
-		if set == nil {
-			set = make(map[string]struct{})
-			uc.guildToChannels[channel.GuildID] = set
-		}
-		set[key] = struct{}{}
-		uc.guildToChannelsMu.Unlock()
+		uc.indices.associateChannel(key, channel.GuildID)
 	} else {
-		uc.channelToGuildMu.Lock()
-		if uc.channelToGuild != nil {
-			delete(uc.channelToGuild, key)
-		}
-		uc.channelToGuildMu.Unlock()
+		uc.indices.removeChannel(key)
 	}
 
 	uc.channels.SetCleanWithExpiration(key, channel, expiresAt)

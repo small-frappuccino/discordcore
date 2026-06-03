@@ -38,6 +38,57 @@ type auditCacheValue struct {
 	createdAt time.Time
 }
 
+type auditCacheState struct {
+	mu          sync.Mutex
+	entries     map[string]auditCacheEntry
+	ttl         time.Duration
+	entryMaxAge time.Duration
+}
+
+func newAuditCacheState(ttl, maxAge time.Duration) *auditCacheState {
+	return &auditCacheState{
+		entries:     make(map[string]auditCacheEntry),
+		ttl:         ttl,
+		entryMaxAge: maxAge,
+	}
+}
+
+func (s *auditCacheState) get(guildID string) (auditCacheEntry, bool) {
+	if s.ttl <= 0 {
+		return auditCacheEntry{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.entries[guildID]
+	if !ok || time.Since(entry.fetchedAt) >= s.ttl {
+		return auditCacheEntry{}, false
+	}
+	return entry, true
+}
+
+func (s *auditCacheState) set(guildID string, entry auditCacheEntry) {
+	if s.ttl <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries[guildID] = entry
+}
+
+func (s *auditCacheState) pickEntry(entries map[string]auditCacheValue, key string) string {
+	if entries == nil {
+		return ""
+	}
+	val, ok := entries[key]
+	if !ok {
+		return ""
+	}
+	if s.entryMaxAge > 0 && time.Since(val.createdAt) > s.entryMaxAge {
+		return ""
+	}
+	return val.userID
+}
+
 // MessageEventService manages message events (delete/edit)
 type MessageEventService struct {
 	session        *discordgo.Session
@@ -61,10 +112,7 @@ type MessageEventService struct {
 	// Versioning configuration (populated from persisted runtime_config)
 	versioningEnabled bool
 
-	auditCacheMu  sync.Mutex
-	auditCache    map[string]auditCacheEntry
-	auditCacheTTL time.Duration
-	auditEntryMax time.Duration
+	auditCache *auditCacheState
 
 	taskRouter *task.TaskRouter
 
@@ -127,9 +175,7 @@ func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
 			Warn:          slog.Warn,
 		}),
 		lifecycle:      newServiceLifecycle("message event service"),
-		auditCache:     make(map[string]auditCacheEntry),
-		auditCacheTTL:  2 * time.Second,
-		auditEntryMax:  15 * time.Second,
+		auditCache:     newAuditCacheState(2*time.Second, 15*time.Second),
 		handlerCancels: make([]func(), 0, 4),
 	}
 }
@@ -1054,21 +1100,14 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 
 	cacheKey := authorID + ":" + channelID
 	cacheFallbackKey := authorID + ":"
-	if mes.auditCacheTTL > 0 {
-		mes.auditCacheMu.Lock()
-		if entry, ok := mes.auditCache[guildID]; ok && time.Since(entry.fetchedAt) < mes.auditCacheTTL {
-			if userID := mes.pickAuditEntry(entry.entries, cacheKey); userID != "" {
-				mes.auditCacheMu.Unlock()
-				return userID
-			}
-			if userID := mes.pickAuditEntry(entry.entries, cacheFallbackKey); userID != "" {
-				mes.auditCacheMu.Unlock()
-				return userID
-			}
-			mes.auditCacheMu.Unlock()
-			return ""
+	if entry, ok := mes.auditCache.get(guildID); ok {
+		if userID := mes.auditCache.pickEntry(entry.entries, cacheKey); userID != "" {
+			return userID
 		}
-		mes.auditCacheMu.Unlock()
+		if userID := mes.auditCache.pickEntry(entry.entries, cacheFallbackKey); userID != "" {
+			return userID
+		}
+		return ""
 	}
 
 	al, err := s.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMessageDelete), 50)
@@ -1092,7 +1131,7 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 		if ts, ok := snowflakeTimestamp(entry.ID); ok {
 			createdAt = ts
 		}
-		if mes.auditEntryMax > 0 && now.Sub(createdAt) > mes.auditEntryMax {
+		if mes.auditCache.entryMaxAge > 0 && now.Sub(createdAt) > mes.auditCache.entryMaxAge {
 			continue
 		}
 		targetOK := entry.TargetID == authorID
@@ -1113,35 +1152,17 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 		entries[key] = newerAuditEntry(entries[key], auditCacheValue{userID: entry.UserID, createdAt: createdAt})
 	}
 
-	if mes.auditCacheTTL > 0 {
-		mes.auditCacheMu.Lock()
-		mes.auditCache[guildID] = auditCacheEntry{
-			fetchedAt: now,
-			entries:   entries,
-		}
-		mes.auditCacheMu.Unlock()
-		if userID := mes.pickAuditEntry(entries, cacheKey); userID != "" {
-			return userID
-		}
-		if userID := mes.pickAuditEntry(entries, cacheFallbackKey); userID != "" {
-			return userID
-		}
+	mes.auditCache.set(guildID, auditCacheEntry{
+		fetchedAt: now,
+		entries:   entries,
+	})
+	if userID := mes.auditCache.pickEntry(entries, cacheKey); userID != "" {
+		return userID
+	}
+	if userID := mes.auditCache.pickEntry(entries, cacheFallbackKey); userID != "" {
+		return userID
 	}
 	return ""
-}
-
-func (mes *MessageEventService) pickAuditEntry(entries map[string]auditCacheValue, key string) string {
-	if entries == nil {
-		return ""
-	}
-	val, ok := entries[key]
-	if !ok {
-		return ""
-	}
-	if mes.auditEntryMax > 0 && time.Since(val.createdAt) > mes.auditEntryMax {
-		return ""
-	}
-	return val.userID
 }
 
 func newerAuditEntry(current, candidate auditCacheValue) auditCacheValue {

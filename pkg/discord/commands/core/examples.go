@@ -248,7 +248,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 		case "channels.automod_action":
 			guildConfig.Channels.AutomodAction = value
 		default:
-			return NewValidationError("key", "Invalid configuration key")
+			return &ValidationError{Field: "key", Message: "Invalid configuration key"}
 		}
 		return nil
 	})

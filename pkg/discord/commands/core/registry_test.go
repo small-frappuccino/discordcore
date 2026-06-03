@@ -168,7 +168,10 @@ func buildModalInteraction(customID, guildID, userID string) *discordgo.Interact
 }
 
 func TestCommandRegistryRegisterLookup(t *testing.T) {
-	registry := NewCommandRegistry()
+	registry := &CommandRegistry{
+		commands:    make(map[string]Command),
+		subcommands: make(map[string]map[string]SubCommand),
+	}
 	first := testCommand{name: "ping"}
 	registry.Register(first)
 

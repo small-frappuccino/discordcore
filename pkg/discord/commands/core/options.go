@@ -24,7 +24,7 @@ func (e OptionList) String(name string) string {
 func (e OptionList) StringRequired(name string) (string, error) {
 	value := e.String(name)
 	if value == "" {
-		return "", NewValidationError(name, fmt.Sprintf("Option '%s' is required", name))
+		return "", &ValidationError{Field: name, Message: fmt.Sprintf("Option '%s' is required", name)}
 	}
 	return value, nil
 }

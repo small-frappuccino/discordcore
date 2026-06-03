@@ -41,7 +41,10 @@ func NewCommandRouter(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 ) *CommandRouter {
-	registry := NewCommandRegistry()
+	registry := &CommandRegistry{
+		commands:    make(map[string]Command),
+		subcommands: make(map[string]map[string]SubCommand),
+	}
 
 	permChecker := NewPermissionChecker(session, configManager)
 	contextBuilder := NewContextBuilder(session, configManager, permChecker)

@@ -179,13 +179,6 @@ type CommandRegistry struct {
 	subcommands map[string]map[string]SubCommand // [commandName][subcommandName]
 }
 
-func NewCommandRegistry() *CommandRegistry {
-	return &CommandRegistry{
-		commands:    make(map[string]Command),
-		subcommands: make(map[string]map[string]SubCommand),
-	}
-}
-
 // Register registers a command in the registry
 func (r *CommandRegistry) Register(cmd Command) {
 	r.commands[cmd.Name()] = cmd
@@ -365,12 +358,4 @@ func (e *ValidationError) ValidationField() string {
 
 func (e *ValidationError) Error() string {
 	return e.Message
-}
-
-// NewValidationError creates a new validation error
-func NewValidationError(field, message string) *ValidationError {
-	return &ValidationError{
-		Field:   field,
-		Message: message,
-	}
 }

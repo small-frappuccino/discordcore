@@ -265,7 +265,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *core.Context) error {
 		case "channels.entry_backfill":
 			guildConfig.Channels.EntryBackfill = value
 		default:
-			return core.NewValidationError("key", "Invalid configuration key")
+			return &core.ValidationError{Field: "key", Message: "Invalid configuration key"}
 		}
 		return nil
 	}); err != nil {
