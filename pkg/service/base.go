@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -170,11 +171,11 @@ func (bs *BaseService) HealthCheck(ctx context.Context) HealthStatus {
 			Healthy:   bs.IsRunning(),
 			Message:   bs.getDefaultHealthMessage(),
 			LastCheck: bs.lastHealthCheck,
-			Details: map[string]any{
-				"state":         bs.GetState(),
-				"uptime":        bs.getUptime(),
-				"restart_count": bs.restartCount,
-				"error_count":   bs.errorCount,
+			Details: map[string]string{
+				"state":         string(bs.GetState()),
+				"uptime":        bs.getUptime().String(),
+				"restart_count": strconv.Itoa(bs.restartCount),
+				"error_count":   strconv.Itoa(bs.errorCount),
 			},
 		}
 	}
@@ -335,7 +336,7 @@ func NewServiceWrapper(spec ServiceWrapperSpec) *ServiceWrapper {
 			Healthy:   healthy,
 			Message:   message,
 			LastCheck: time.Now(),
-			Details: map[string]any{
+			Details: map[string]string{
 				"wrapped_service": spec.Name,
 			},
 		}

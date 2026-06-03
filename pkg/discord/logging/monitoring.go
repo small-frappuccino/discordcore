@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -255,8 +256,8 @@ func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 		Healthy:   isRunning && runCtx != nil && runCtx.Err() == nil,
 		Message:   message,
 		LastCheck: time.Now(),
-		Details: map[string]any{
-			"router_ready": ms.TaskRouter() != nil,
+		Details: map[string]string{
+			"router_ready": strconv.FormatBool(ms.TaskRouter() != nil),
 		},
 	}
 }

@@ -18,7 +18,7 @@ describe("ControlApiClient feature routes", () => {
   });
 
   it("loads the feature catalog from /v1/features/catalog", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
         status: "ok",
         catalog: [
@@ -41,16 +41,15 @@ describe("ControlApiClient feature routes", () => {
     const response = await client.getFeatureCatalog();
 
     expect(response.catalog).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledWith("/v1/features/catalog", {
-      method: "GET",
-      headers: expect.any(Headers),
-      credentials: "include",
-      body: undefined,
-    });
+    const callArgs = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[0]).toBe("/v1/features/catalog");
+    expect(callArgs[1].method).toBe("GET");
+    expect(callArgs[1].credentials).toBe("include");
+    expect(callArgs[1].headers).toBeInstanceOf(Headers);
   });
 
   it("loads guild channel options with an optional domain query", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
         status: "ok",
         guild_id: "guild-1",
@@ -65,15 +64,11 @@ describe("ControlApiClient feature routes", () => {
 
     await client.listGuildChannelOptions("guild-1", { domain: "qotd" });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/guilds/guild-1/channel-options?domain=qotd",
-      {
-        method: "GET",
-        headers: expect.any(Headers),
-        credentials: "include",
-        body: undefined,
-      },
-    );
+    const callArgs = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[0]).toBe("/v1/guilds/guild-1/channel-options?domain=qotd");
+    expect(callArgs[1].method).toBe("GET");
+    expect(callArgs[1].credentials).toBe("include");
+    expect(callArgs[1].headers).toBeInstanceOf(Headers);
   });
 
   it("patches a guild feature with PATCH and a CSRF token", async () => {
@@ -129,24 +124,17 @@ describe("ControlApiClient feature routes", () => {
     });
 
     expect(response.feature).toEqual(updatedFeature);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/v1/guilds/guild-1/features/logging.member_join",
-      {
-        method: "PATCH",
-        headers: expect.objectContaining({
-          get: expect.any(Function),
-        }),
-        credentials: "include",
-        body: JSON.stringify({
-          enabled: null,
-          channel_id: "",
-        }),
-      },
-    );
+    const secondCall = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(secondCall[0]).toBe("/v1/guilds/guild-1/features/logging.member_join");
+    expect(secondCall[1].method).toBe("PATCH");
+    expect(secondCall[1].credentials).toBe("include");
+    expect(secondCall[1].body).toBe(JSON.stringify({
+      enabled: null,
+      channel_id: "",
+    }));
 
-    const secondCall = fetchMock.mock.calls[1];
-    const headers = secondCall?.[1]?.headers as Headers;
+    const headers = secondCall[1].headers as Headers;
+    expect(headers).toBeInstanceOf(Headers);
     expect(headers.get("X-CSRF-Token")).toBe("csrf-token");
   });
 
@@ -204,20 +192,16 @@ describe("ControlApiClient feature routes", () => {
     });
 
     expect(response.feature).toEqual(updatedFeature);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/v1/guilds/guild-1/features/services.commands",
-      {
-        method: "PATCH",
-        headers: expect.objectContaining({
-          get: expect.any(Function),
-        }),
-        credentials: "include",
-        body: JSON.stringify({
-          channel_id: "bot-commands",
-        }),
-      },
-    );
+    const secondCall = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(secondCall[0]).toBe("/v1/guilds/guild-1/features/services.commands");
+    expect(secondCall[1].method).toBe("PATCH");
+    expect(secondCall[1].credentials).toBe("include");
+    expect(secondCall[1].body).toBe(JSON.stringify({
+      channel_id: "bot-commands",
+    }));
+
+    const headers = secondCall[1].headers as Headers;
+    expect(headers).toBeInstanceOf(Headers);
   });
 
   it("patches admin command roles with the expected payload", async () => {
@@ -278,20 +262,16 @@ describe("ControlApiClient feature routes", () => {
     );
 
     expect(response.feature).toEqual(updatedFeature);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/v1/guilds/guild-1/features/services.admin_commands",
-      {
-        method: "PATCH",
-        headers: expect.objectContaining({
-          get: expect.any(Function),
-        }),
-        credentials: "include",
-        body: JSON.stringify({
-          allowed_role_ids: ["role-guard", "role-target"],
-        }),
-      },
-    );
+    const secondCall = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(secondCall[0]).toBe("/v1/guilds/guild-1/features/services.admin_commands");
+    expect(secondCall[1].method).toBe("PATCH");
+    expect(secondCall[1].credentials).toBe("include");
+    expect(secondCall[1].body).toBe(JSON.stringify({
+      allowed_role_ids: ["role-guard", "role-target"],
+    }));
+
+    const headers = secondCall[1].headers as Headers;
+    expect(headers).toBeInstanceOf(Headers);
   });
 
   it("updates guild settings with bot routing payload", async () => {
@@ -357,34 +337,31 @@ describe("ControlApiClient feature routes", () => {
       },
     });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/guilds/guild-1/settings", {
-      method: "PUT",
-      headers: expect.objectContaining({
-        get: expect.any(Function),
-      }),
-      credentials: "include",
-      body: JSON.stringify({
-        bot_routing: {
-          bot_instance_id: "main",
-          domain_bot_instance_ids: {
-            qotd: "companion",
-          },
+    const secondCall = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(secondCall[0]).toBe("/v1/guilds/guild-1/settings");
+    expect(secondCall[1].method).toBe("PUT");
+    expect(secondCall[1].credentials).toBe("include");
+    expect(secondCall[1].body).toBe(JSON.stringify({
+      bot_routing: {
+        bot_instance_id: "main",
+        domain_bot_instance_ids: {
+          qotd: "companion",
         },
-        roles: {
-          dashboard_read: ["role-target"],
-        },
-      }),
-    });
+      },
+      roles: {
+        dashboard_read: ["role-target"],
+      },
+    }));
 
-    const secondCall = fetchMock.mock.calls[1];
-    const headers = secondCall?.[1]?.headers as Headers;
+    const headers = secondCall[1].headers as Headers;
+    expect(headers).toBeInstanceOf(Headers);
     expect(headers.get("X-CSRF-Token")).toBe("csrf-token");
   });
 
   it("loads qotd summary with the expected guild-scoped path", async () => {
     const fetchMock = vi.fn(
-      async (input: RequestInfo | URL) => {
-        const url = typeof input === "string" ? input : input.toString();
+      async (input?: RequestInfo | URL, _init?: RequestInit) => {
+        const url = typeof input === "string" ? input : (input ? input.toString() : "");
 
         if (url.endsWith("/auth/me")) {
           return jsonResponse({
@@ -502,20 +479,15 @@ describe("ControlApiClient feature routes", () => {
     expect(summary.summary.current_post?.answer_channel_url).toBe(
       "https://discord.com/channels/guild-1/thread-20260403",
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "/v1/guilds/guild-1/qotd",
-      {
-        method: "GET",
-        headers: expect.any(Headers),
-        credentials: "include",
-        body: undefined,
-      },
-    );
+    const callArgs = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[0]).toBe("/v1/guilds/guild-1/qotd");
+    expect(callArgs[1].method).toBe("GET");
+    expect(callArgs[1].credentials).toBe("include");
+    expect(callArgs[1].headers).toBeInstanceOf(Headers);
   });
 
   it("loads guild role options from /v1/guilds/{guild_id}/role-options", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
         status: "ok",
         guild_id: "guild-1",
@@ -539,16 +511,15 @@ describe("ControlApiClient feature routes", () => {
     const response = await client.listGuildRoleOptions("guild-1");
 
     expect(response.roles).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledWith("/v1/guilds/guild-1/role-options", {
-      method: "GET",
-      headers: expect.any(Headers),
-      credentials: "include",
-      body: undefined,
-    });
+    const callArgs = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[0]).toBe("/v1/guilds/guild-1/role-options");
+    expect(callArgs[1].method).toBe("GET");
+    expect(callArgs[1].credentials).toBe("include");
+    expect(callArgs[1].headers).toBeInstanceOf(Headers);
   });
 
   it("loads guild channel options from /v1/guilds/{guild_id}/channel-options", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
         status: "ok",
         guild_id: "guild-1",
@@ -572,12 +543,11 @@ describe("ControlApiClient feature routes", () => {
     const response = await client.listGuildChannelOptions("guild-1");
 
     expect(response.channels).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledWith("/v1/guilds/guild-1/channel-options", {
-      method: "GET",
-      headers: expect.any(Headers),
-      credentials: "include",
-      body: undefined,
-    });
+    const callArgs = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[0]).toBe("/v1/guilds/guild-1/channel-options");
+    expect(callArgs[1].method).toBe("GET");
+    expect(callArgs[1].credentials).toBe("include");
+    expect(callArgs[1].headers).toBeInstanceOf(Headers);
   });
 
   it("retries transient GET failures before surfacing an error", async () => {
@@ -622,7 +592,7 @@ describe("ControlApiClient feature routes", () => {
   });
 
   it("loads guild member options with query parameters", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
         status: "ok",
         guild_id: "guild-1",
@@ -649,19 +619,15 @@ describe("ControlApiClient feature routes", () => {
     });
 
     expect(response.members).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/guilds/guild-1/member-options?query=ali&selected_id=user-2&limit=10",
-      {
-        method: "GET",
-        headers: expect.any(Headers),
-        credentials: "include",
-        body: undefined,
-      },
-    );
+    const callArgs = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[0]).toBe("/v1/guilds/guild-1/member-options?query=ali&selected_id=user-2&limit=10");
+    expect(callArgs[1].method).toBe("GET");
+    expect(callArgs[1].credentials).toBe("include");
+    expect(callArgs[1].headers).toBeInstanceOf(Headers);
   });
 
   it("preserves the landing page as the OAuth return target when requested", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL, _init?: RequestInit) =>
       jsonResponse({
         status: "ok",
         oauth_configured: true,
