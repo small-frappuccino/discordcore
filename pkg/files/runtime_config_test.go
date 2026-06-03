@@ -2,6 +2,7 @@ package files
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -284,5 +285,217 @@ func TestNormalizeRuntimeConfigRejectsNegativeGlobalMaxWorkers(t *testing.T) {
 
 	if _, err := NormalizeRuntimeConfig(RuntimeConfig{GlobalMaxWorkers: -1}); err == nil {
 		t.Fatal("expected negative global_max_workers to be rejected")
+	}
+}
+
+// TestResolveRuntimeConfigAdoptsEveryGuildField guards against the silent-merge-gap
+// failure mode of ResolveRuntimeConfig. That merge is ~30 hand-written
+// "if guildRC.X != zero { resolved.X = guildRC.X }" blocks, so adding a field to
+// RuntimeConfig without its matching merge line compiles cleanly and breaks no other
+// test — the per-guild override is simply dropped at runtime. The merge stays explicit
+// on purpose ("clear is better than clever"); this test, not reflection in production
+// code, is the guard.
+//
+// Default rule: a non-zero guild sentinel must survive into the resolved config. Fields
+// whose semantics differ are listed in exceptions and covered by dedicated assertions.
+//
+// Adding a new RuntimeConfig field? Either (a) merge it in ResolveRuntimeConfig so it
+// satisfies the default adoption rule, or (b) add it to exceptions with its own
+// assertion here. A field that is neither merged nor classified fails this test.
+func TestResolveRuntimeConfigAdoptsEveryGuildField(t *testing.T) {
+	t.Parallel()
+
+	// Fields not covered by the default "non-zero guild sentinel is adopted" rule;
+	// each has a dedicated assertion below.
+	exceptions := map[string]string{
+		"ModerationLogging":    "*bool with normalization (global defaults to non-nil)",
+		"BackfillInitialDate":  "GuildOnly: adopts the guild value even when zero, no global fallback",
+		"WebhookEmbedUpdates":  "slice merged via NormalizedWebhookEmbedUpdates (empty entries filtered)",
+		"PastebinDevKey":       "global-only credential, intentionally not per-guild overridable",
+		"PastebinUserName":     "global-only credential, intentionally not per-guild overridable",
+		"PastebinUserPassword": "global-only credential, intentionally not per-guild overridable",
+	}
+
+	recurse := map[reflect.Type]bool{
+		reflect.TypeOf(DatabaseRuntimeConfig{}):        true,
+		reflect.TypeOf(WebhookEmbedValidationConfig{}): true,
+	}
+	leaves := runtimeConfigLeaves(reflect.TypeOf(RuntimeConfig{}), "", nil, recurse)
+
+	// A stale exception (e.g. a renamed field) would let a new field slip past the
+	// default loop unguarded, so fail if an exception no longer matches a real field.
+	leafNames := make(map[string]bool, len(leaves))
+	for _, lf := range leaves {
+		leafNames[lf.name] = true
+	}
+	for name := range exceptions {
+		if !leafNames[name] {
+			t.Errorf("exceptions lists %q, which is not a RuntimeConfig field; remove or rename the stale entry", name)
+		}
+	}
+
+	const testGuildID = "guild-under-test"
+
+	for _, lf := range leaves {
+		if _, skip := exceptions[lf.name]; skip {
+			continue
+		}
+		t.Run(lf.name, func(t *testing.T) {
+			var guildRC RuntimeConfig
+			lf.setSentinel(t, reflect.ValueOf(&guildRC).Elem().FieldByIndex(lf.index))
+
+			cfg := &BotConfig{
+				Guilds: []GuildConfig{{GuildID: testGuildID, RuntimeConfig: guildRC}},
+			}
+			resolved := cfg.ResolveRuntimeConfig(testGuildID)
+			lf.assertAdopted(t, reflect.ValueOf(resolved).FieldByIndex(lf.index))
+		})
+	}
+
+	// Dedicated assertions for the exception fields.
+
+	t.Run("ModerationLogging", func(t *testing.T) {
+		cfg := &BotConfig{
+			RuntimeConfig: RuntimeConfig{ModerationLogging: boolPtr(true)},
+			Guilds: []GuildConfig{{
+				GuildID:       testGuildID,
+				RuntimeConfig: RuntimeConfig{ModerationLogging: boolPtr(false)},
+			}},
+		}
+		resolved := cfg.ResolveRuntimeConfig(testGuildID)
+		if resolved.ModerationLogging == nil || *resolved.ModerationLogging {
+			t.Fatalf("expected guild moderation_logging=false to override global true, got %v", resolved.ModerationLogging)
+		}
+	})
+
+	t.Run("BackfillInitialDate", func(t *testing.T) {
+		adopted := &BotConfig{
+			RuntimeConfig: RuntimeConfig{BackfillInitialDate: "2020-01-01"},
+			Guilds: []GuildConfig{{
+				GuildID:       testGuildID,
+				RuntimeConfig: RuntimeConfig{BackfillInitialDate: "2024-12-31"},
+			}},
+		}
+		if got := adopted.ResolveRuntimeConfig(testGuildID).BackfillInitialDate; got != "2024-12-31" {
+			t.Fatalf("expected guild backfill_initial_date to be adopted, got %q", got)
+		}
+		// GuildOnly: an empty guild value clears the global instead of falling back.
+		cleared := &BotConfig{
+			RuntimeConfig: RuntimeConfig{BackfillInitialDate: "2020-01-01"},
+			Guilds:        []GuildConfig{{GuildID: testGuildID}},
+		}
+		if got := cleared.ResolveRuntimeConfig(testGuildID).BackfillInitialDate; got != "" {
+			t.Fatalf("expected GuildOnly backfill_initial_date to ignore the global fallback, got %q", got)
+		}
+	})
+
+	t.Run("WebhookEmbedUpdates", func(t *testing.T) {
+		cfg := &BotConfig{
+			RuntimeConfig: RuntimeConfig{WebhookEmbedUpdates: []WebhookEmbedUpdateConfig{
+				{MessageID: "global", WebhookURL: "https://discord.com/api/webhooks/1/token"},
+			}},
+			Guilds: []GuildConfig{{
+				GuildID: testGuildID,
+				RuntimeConfig: RuntimeConfig{WebhookEmbedUpdates: []WebhookEmbedUpdateConfig{
+					{MessageID: "guild", WebhookURL: "https://discord.com/api/webhooks/2/token"},
+				}},
+			}},
+		}
+		updates := cfg.ResolveRuntimeConfig(testGuildID).NormalizedWebhookEmbedUpdates()
+		if len(updates) != 1 || updates[0].MessageID != "guild" {
+			t.Fatalf("expected guild webhook_embed_updates to override global, got %+v", updates)
+		}
+	})
+
+	t.Run("PastebinGlobalOnly", func(t *testing.T) {
+		cfg := &BotConfig{
+			RuntimeConfig: RuntimeConfig{
+				PastebinDevKey:       EncryptedString("global-dev-key"),
+				PastebinUserName:     EncryptedString("global-user"),
+				PastebinUserPassword: EncryptedString("global-pass"),
+			},
+			Guilds: []GuildConfig{{
+				GuildID: testGuildID,
+				RuntimeConfig: RuntimeConfig{
+					PastebinDevKey:       EncryptedString("guild-dev-key"),
+					PastebinUserName:     EncryptedString("guild-user"),
+					PastebinUserPassword: EncryptedString("guild-pass"),
+				},
+			}},
+		}
+		resolved := cfg.ResolveRuntimeConfig(testGuildID)
+		if resolved.PastebinDevKey != "global-dev-key" ||
+			resolved.PastebinUserName != "global-user" ||
+			resolved.PastebinUserPassword != "global-pass" {
+			t.Fatalf("expected pastebin credentials to remain global-only, got dev=%q user=%q pass=%q",
+				resolved.PastebinDevKey, resolved.PastebinUserName, resolved.PastebinUserPassword)
+		}
+	})
+}
+
+const (
+	runtimeConfigSentinelString = "runtime-config-guard-sentinel"
+	runtimeConfigSentinelInt    = int64(424242)
+)
+
+// runtimeConfigLeaf identifies one mergeable RuntimeConfig field by dotted name
+// (for messages and exception lookup) and by reflect index path (for set/get).
+type runtimeConfigLeaf struct {
+	name  string
+	index []int
+}
+
+// runtimeConfigLeaves flattens typ into its mergeable leaf fields, descending only
+// into the nested struct types in recurse (Database, WebhookEmbedValidation) so the
+// guard checks each concrete merged field rather than a parent struct.
+func runtimeConfigLeaves(typ reflect.Type, prefix string, base []int, recurse map[reflect.Type]bool) []runtimeConfigLeaf {
+	var leaves []runtimeConfigLeaf
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		index := append(append([]int(nil), base...), i)
+		name := prefix + field.Name
+		if recurse[field.Type] {
+			leaves = append(leaves, runtimeConfigLeaves(field.Type, name+".", index, recurse)...)
+			continue
+		}
+		leaves = append(leaves, runtimeConfigLeaf{name: name, index: index})
+	}
+	return leaves
+}
+
+// setSentinel writes a non-zero, type-appropriate sentinel into the guild-side field.
+func (lf runtimeConfigLeaf) setSentinel(t *testing.T, field reflect.Value) {
+	t.Helper()
+	switch field.Kind() {
+	case reflect.String:
+		field.SetString(runtimeConfigSentinelString)
+	case reflect.Bool:
+		field.SetBool(true)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		field.SetInt(runtimeConfigSentinelInt)
+	default:
+		t.Fatalf("RuntimeConfig field %s has kind %s with no sentinel rule; merge it in ResolveRuntimeConfig and rely on the default adoption rule, or classify it in the exceptions map", lf.name, field.Kind())
+	}
+}
+
+// assertAdopted fails when the resolved field did not take the guild sentinel, which
+// is the signature of a missing merge line in ResolveRuntimeConfig.
+func (lf runtimeConfigLeaf) assertAdopted(t *testing.T, got reflect.Value) {
+	t.Helper()
+	switch got.Kind() {
+	case reflect.String:
+		if got.String() != runtimeConfigSentinelString {
+			t.Fatalf("ResolveRuntimeConfig dropped the guild override for %s: got %q, want %q; add the merge line or classify the field in the exceptions map", lf.name, got.String(), runtimeConfigSentinelString)
+		}
+	case reflect.Bool:
+		if !got.Bool() {
+			t.Fatalf("ResolveRuntimeConfig dropped the guild override for %s: got false, want true; add the merge line or classify the field in the exceptions map", lf.name)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if got.Int() != runtimeConfigSentinelInt {
+			t.Fatalf("ResolveRuntimeConfig dropped the guild override for %s: got %d, want %d; add the merge line or classify the field in the exceptions map", lf.name, got.Int(), runtimeConfigSentinelInt)
+		}
+	default:
+		t.Fatalf("RuntimeConfig field %s has kind %s with no sentinel rule", lf.name, got.Kind())
 	}
 }
