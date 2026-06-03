@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -301,7 +302,17 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	}
 
 	if fromCache && !auditLookupDebounced {
-		time.Sleep(monitoringRoleAuditRetryDelay)
+		// Use the service lifecycle context so the retry wait is abandoned on
+		// shutdown. It is nil when ms was instantiated without Start (tests).
+		ctx := ms.currentRunCtx()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(monitoringRoleAuditRetryDelay):
+		}
 		refreshedEntries, _, refreshErr := ms.getRoleUpdateAuditEntries(m.GuildID, true)
 		if refreshErr != nil {
 			log.ApplicationLogger().Warn("Failed to refresh audit logs for role update", "guildID", m.GuildID, "userID", m.User.ID, "err", refreshErr)

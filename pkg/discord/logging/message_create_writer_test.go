@@ -96,7 +96,7 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 	if cachedAfterUpdate != nil {
 		t.Fatalf("expected async update to stay out of store before writer drain, got %+v", cachedAfterUpdate)
 	}
-	if pending := service.lookupCachedMessage(guildID, messageID, false); pending == nil || pending.Content != "after" {
+	if pending := service.lookupCachedMessage(context.Background(), guildID, messageID, false); pending == nil || pending.Content != "after" {
 		t.Fatalf("expected pending cache to expose updated content before drain, got %+v", pending)
 	}
 
@@ -191,7 +191,7 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 	}, false); err != nil {
 		t.Fatalf("process delete: %v", err)
 	}
-	if pending := service.lookupCachedMessage(guildID, messageID, false); pending != nil {
+	if pending := service.lookupCachedMessage(context.Background(), guildID, messageID, false); pending != nil {
 		t.Fatalf("expected pending delete to hide message before drain, got %+v", pending)
 	}
 

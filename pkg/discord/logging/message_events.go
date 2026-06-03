@@ -561,7 +561,7 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 		return nil
 	}
 
-	cached := mes.lookupCachedMessage(guildID, m.ID, allowWait)
+	cached := mes.lookupCachedMessage(ctx, guildID, m.ID, allowWait)
 	if cached == nil {
 		authorID := ""
 		if m.Author != nil {
@@ -679,7 +679,7 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 		return nil
 	}
 
-	cached := mes.lookupCachedMessage(guildID, m.ID, allowWait)
+	cached := mes.lookupCachedMessage(ctx, guildID, m.ID, allowWait)
 	if cached == nil {
 		if !allowWait && mes.store != nil && guildID != "" {
 			if !mes.shouldRetryMessageDeleteCacheMiss(s, guildID, m) {
@@ -782,7 +782,12 @@ func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(s *discordgo.S
 	return true
 }
 
-func (mes *MessageEventService) lookupCachedMessage(guildID, messageID string, allowWait bool) *CachedMessage {
+const (
+	cachedMessageRetryDelay1 = 200 * time.Millisecond
+	cachedMessageRetryDelay2 = 400 * time.Millisecond
+)
+
+func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID, messageID string, allowWait bool) *CachedMessage {
 	if mes.store == nil || guildID == "" || messageID == "" {
 		return nil
 	}
@@ -808,13 +813,19 @@ func (mes *MessageEventService) lookupCachedMessage(guildID, messageID string, a
 	if cached != nil || !allowWait {
 		return cached
 	}
-	time.Sleep(200 * time.Millisecond)
-	cached = tryFetch()
-	if cached != nil {
-		return cached
+	// Poll for the asynchronous store write, but yield to context cancellation
+	// so a shutting-down handler does not block for the full backoff.
+	for _, d := range []time.Duration{cachedMessageRetryDelay1, cachedMessageRetryDelay2} {
+		select {
+		case <-ctx.Done():
+			return tryFetch()
+		case <-time.After(d):
+		}
+		if cached = tryFetch(); cached != nil {
+			return cached
+		}
 	}
-	time.Sleep(400 * time.Millisecond)
-	return tryFetch()
+	return cached
 }
 
 func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordgo.MessageCreate) {
