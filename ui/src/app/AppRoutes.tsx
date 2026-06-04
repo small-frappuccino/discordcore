@@ -14,7 +14,7 @@ function ManageIndexRedirect() {
   if (authState === "checking") return <div>Loading...</div>;
   if (authState !== "signed_in") return <Navigate to="/" replace />;
   
-  const firstGuild = accessibleGuilds[0] || manageableGuilds[0];
+  const firstGuild = accessibleGuilds?.[0] || manageableGuilds?.[0];
   if (firstGuild) {
     return <Navigate to={`/manage/${firstGuild.id}/core`} replace />;
   }

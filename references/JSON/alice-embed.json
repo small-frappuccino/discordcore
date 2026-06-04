@@ -1,0 +1,66 @@
+{
+  "content": "https://discord.gg/aUqjuMtyc6",
+  "embeds": [
+    {
+      "title": "✧･ﾟ: ✧･ﾟ: Welcome to Alice Mains!  :･ﾟ✧:･ﾟ✧",
+      "description": "Alice is a playable agent in **Zenless Zone Zero**, a sabre wielding bunny  thiren with the most adorable ears! ♡\n૮₍ ´• ˕ • ₎ა ☆ ☆ ૮₍ ´• ˕ • ₎ა",
+      "color": 16753352,
+      "footer": {
+        "text": "While I swing my sword, I'm counting on you to track those anomalous parameters and identify the enemy's true form!\" - Alice Thymefield"
+      },
+      "thumbnail": {
+        "url": "https://cdn.discordapp.com/attachments/1375835655845842984/1391147387736555590/alice_icon_011.png?ex=68ad6a37&is=68ac18b7&hm=302a75bf46fa61c2a702b5f0ecb46dc4bfe0578a6ec4fbe9942b828bc3d21322"
+      },
+      "author": {
+        "name": "Alice",
+        "icon_url": "https://cdn.discordapp.com/attachments/1375835655845842984/1391147387736555590/alice_icon_011.png?ex=68ad6a37&is=68ac18b7&hm=302a75bf46fa61c2a702b5f0ecb46dc4bfe0578a6ec4fbe9942b828bc3d21322"
+      }
+    },
+    {
+      "color": 16753352,
+      "image": {
+        "url": "https://cdn.discordapp.com/attachments/1375835655845842984/1391138229394079934/image.png?ex=68ad61af&is=68ac102f&hm=484dfe9f8b4cf7d9bee9f8b6680166c6f9e6532523e6c0e393e45a5ecb48bc78"
+      }
+    },
+    {
+      "title": "We offer:\n\n",
+      "description": "<:pinkheart:1378494177599295509> A safe space for anyone and a welcoming community \n<:pinkheart:1378494177599295509> Themed events and giveaways hosted by our lovely staff team with prizes!\n<:pinkheart:1378494177599295509> Fanart channels,  QOTD, minigames and other gacha game channels\n <:pinkheart:1378494177599295509> Vanity roles and celebration roles\n <:pinkheart:1378494177599295509>  Other Alice lovers for you to connect with!\n <:pinkheart:1378494177599295509> Lots of Alice emotes!\n# <:scaredalice_hyvoff:1376354551191441429><a:PATTHEALICE:1379465184950882425><:Alicebox:1390798142584393838><:aliceheart:1381820472684970054><:aliceblushy:1382564805797482537> <:bugcatalice:1390839396936454315><:Alicebunnyspeech:1391120549962321980><:Aliceyippee:1391120525207535696>  <:skrunklyalice:1396309245108027576>",
+      "color": 16753352
+    },
+    {
+      "color": 16753352,
+      "image": {
+        "url": "https://images-ext-1.discordapp.net/external/nARm8r6TRZNHnEAN0v8daQzjjIVZTc84yiyuqCwNPr8/https/media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYXZ5N3F2OGgxc21hejJ4czBuODdrcWViMWw4eXFsdnlza2dmem5xaCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/T88hvXOGnMOOCAhMz2/giphy.gif"
+      }
+    },
+    {
+      "color": 16753352,
+      "image": {
+        "url": "https://media.discordapp.net/attachments/1375835655845842984/1391138229394079934/image.png?ex=68ad61af&is=68ac102f&hm=484dfe9f8b4cf7d9bee9f8b6680166c6f9e6532523e6c0e393e45a5ecb48bc78&=&format=webp&quality=lossless"
+      }
+    },
+    {
+      "description": "-# *We're excited to see you soon! With love from alice mains!*\n# [Join Us Here!!!](https://discord.gg/aUqjuMtyc6)",
+      "color": 16753352,
+      "footer": {
+        "text": "Discord: https://discord.gg/aUqjuMtyc6"
+      },
+      "image": {
+        "url": "https://media.discordapp.net/attachments/1375835655845842984/1391138229394079934/image.png?ex=68ad61af&is=68ac102f&hm=484dfe9f8b4cf7d9bee9f8b6680166c6f9e6532523e6c0e393e45a5ecb48bc78&=&format=webp&quality=lossless"
+      },
+      "fields": [
+        {
+          "name": "Reddit",
+          "value": "[r/AliceMains_ZZZ](https://www.reddit.com/r/AliceMains_ZZZ)",
+          "inline": true
+        },
+        {
+          "name": "Twitter",
+          "value": "[@TimelyAliceZZZ](https://x.com/TimelyAliceZzz)",
+          "inline": true
+        }
+      ]
+    }
+  ],
+  "components": []
+}
