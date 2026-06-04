@@ -15,7 +15,9 @@ import (
 // typed surface catches event-naming drift at compile time. Adding a new
 // counter is one method on this interface plus the corresponding field on
 // the snapshot; ad-hoc string keys are not supported on purpose.
-type Metrics interface {
+// APIMetrics tracks Discord-side API call counts the monitoring service
+// is responsible for.
+type APIMetrics interface {
 	// RecordAuditLogCall is called each time monitoring fetches the
 	// guild audit log via Discord API. Operators read this as the rate
 	// of audit-log polls; sudden spikes correlate with elevated 429
@@ -32,7 +34,11 @@ type Metrics interface {
 	// to a Discord channel (log embed, notification). Headline number
 	// for "bot is talking to Discord" rate.
 	RecordMessageSent()
+}
 
+// MonitoringCacheMetrics tracks the in-process caches monitoring uses to
+// avoid Discord API calls.
+type MonitoringCacheMetrics interface {
 	// RecordStateMemberCacheHit is called when monitoring resolves a
 	// member via the discordgo.State cache instead of going to the API.
 	// Inverse of RecordGuildMemberCall over the same code path; the
@@ -54,6 +60,13 @@ type Metrics interface {
 	// the audit-log fetch instead of re-hitting the Discord API. The
 	// rate is a proxy for how effective the per-guild audit dedup is.
 	RecordRolesAuditCacheHit()
+}
+
+// Metrics is the union of all observability seams the monitoring service writes
+// through.
+type Metrics interface {
+	APIMetrics
+	MonitoringCacheMetrics
 }
 
 // SnapshotProvider is the optional capability the /v1/health/monitoring

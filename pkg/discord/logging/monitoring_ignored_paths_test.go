@@ -117,7 +117,7 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 			},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -188,7 +188,7 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 			},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -243,9 +243,9 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 	})
 
 	ms := &MonitoringService{
-		store:    store,
-		run:      monitoringRunState{stopChan: make(chan struct{})},
-		activity: activity,
+		store:        store,
+		run:          monitoringRunState{stopChan: make(chan struct{})},
+		activity:     activity,
 		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 

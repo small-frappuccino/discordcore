@@ -37,23 +37,33 @@ func TestIntelligentWarmupOrdering(t *testing.T) {
 		},
 		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) {
 			record("guild:" + id)
-			if id == "g1" { return g1, nil }
-			if id == "g2" { return g2, nil }
+			if id == "g1" {
+				return g1, nil
+			}
+			if id == "g2" {
+				return g2, nil
+			}
 			return nil, fmt.Errorf("missing guild %s", id)
 		},
 		GuildRoles: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error) {
 			record("roles:" + id)
-			if id == "g1" || id == "g2" { return []*discordgo.Role{r1}, nil }
+			if id == "g1" || id == "g2" {
+				return []*discordgo.Role{r1}, nil
+			}
 			return nil, fmt.Errorf("missing roles %s", id)
 		},
 		GuildChannels: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error) {
 			record("channels:" + id)
-			if id == "g1" || id == "g2" { return []*discordgo.Channel{c1}, nil }
+			if id == "g1" || id == "g2" {
+				return []*discordgo.Channel{c1}, nil
+			}
 			return nil, fmt.Errorf("missing channels %s", id)
 		},
 		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			record("members:" + guildID)
-			if guildID == "g1" || guildID == "g2" { return []*discordgo.Member{m1}, nil }
+			if guildID == "g1" || guildID == "g2" {
+				return []*discordgo.Member{m1}, nil
+			}
 			return nil, fmt.Errorf("missing members %s", guildID)
 		},
 	}

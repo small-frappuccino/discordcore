@@ -202,8 +202,6 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	}
 }
 
-
-
 func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 	t.Parallel()
 

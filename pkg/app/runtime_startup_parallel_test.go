@@ -153,8 +153,6 @@ func TestOpenBotRuntimesAppliesParallelLimit(t *testing.T) {
 	}
 }
 
-
-
 func TestRuntimeStartupBackgroundWorkerAppliesParallelLimit(t *testing.T) {
 	worker := newRuntimeStartupBackgroundWorker(4)
 

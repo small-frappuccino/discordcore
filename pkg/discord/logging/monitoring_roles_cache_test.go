@@ -2,13 +2,12 @@ package logging
 
 import (
 	"testing"
-	
 )
 
 func TestMonitoringService_CacheRolesSetClearsEntryOnEmptySnapshot(t *testing.T) {
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.rolesCacheService.CacheRolesSet("g1", "u1", []string{"r1", "r2"})

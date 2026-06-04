@@ -38,8 +38,6 @@ func (ms *MonitoringService) stopHeartbeat(ctx context.Context) error {
 	return ms.activity.StopHeartbeat(ctx)
 }
 
-
-
 // metricsRows returns the monitoring-local display rows surfaced via
 // Service.Stats().Metrics (and therefore /admin status). Cache observability
 // lives on the typed cache.CacheMetricsSnapshot exposed at /v1/health/cache;

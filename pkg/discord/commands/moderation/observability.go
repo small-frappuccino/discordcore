@@ -22,7 +22,8 @@ import (
 // instead of free-form string keys. Right now only /clean records here;
 // future moderation commands plug in by adding methods, not by introducing
 // a parallel metrics package.
-type Metrics interface {
+// CleanLifecycleMetrics tracks the high-level success/failure of a /clean invocation.
+type CleanLifecycleMetrics interface {
 	// RecordCleanAttempt is called once per /clean invocation, before
 	// success/failure is known. Useful as the "in flight" denominator
 	// against RecordCleanSuccess/RecordCleanFailure.
@@ -39,7 +40,10 @@ type Metrics interface {
 	// permission, session unavailable, fetch failure). cause is a short,
 	// stable token operators read as "why did /clean refuse this hour".
 	RecordCleanFailure(cause string, duration time.Duration)
+}
 
+// CleanDetailMetrics tracks specific sub-failures during a /clean invocation.
+type CleanDetailMetrics interface {
 	// RecordCleanDeleteFailure is called once per message that Discord
 	// rejected during the deletion pass. The cleanup.FailureClass is
 	// preserved (forbidden, missing_channel, rate_limited, transient,
@@ -54,6 +58,12 @@ type Metrics interface {
 	// loss: a steady non-zero rate means "audit channel is broken and
 	// nobody noticed because the slash command still replied success".
 	RecordCleanAuditLogFailure()
+}
+
+// Metrics is the union of all observability seams moderation commands write through.
+type Metrics interface {
+	CleanLifecycleMetrics
+	CleanDetailMetrics
 }
 
 // SnapshotProvider is the optional capability the /v1/health/moderation

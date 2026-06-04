@@ -2,8 +2,7 @@ package files
 
 import (
 	"encoding/json"
-	
-	
+
 	"reflect"
 	"testing"
 )
@@ -105,4 +104,3 @@ func TestFeatureTogglesJSONRoundTrip(t *testing.T) {
 		t.Fatalf("json round-trip mismatch:\n  src=%#v\n  got=%#v", src, round)
 	}
 }
-

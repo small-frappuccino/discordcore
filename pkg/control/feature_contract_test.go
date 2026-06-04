@@ -8,8 +8,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-
-
 func TestFeatureRegistryMatchesCatalog(t *testing.T) {
 	t.Parallel()
 
@@ -73,8 +71,6 @@ func TestFeatureAPIContractShapesRemainStable(t *testing.T) {
 	})
 }
 
-
-
 func expectJSONFieldOrder(t *testing.T, typ reflect.Type, expected []string) {
 	t.Helper()
 
@@ -92,4 +88,3 @@ func expectJSONFieldOrder(t *testing.T, typ reflect.Type, expected []string) {
 		t.Fatalf("unexpected json field order for %s: got=%v want=%v", typ.Name(), actual, expected)
 	}
 }
-

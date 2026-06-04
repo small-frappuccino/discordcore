@@ -206,10 +206,10 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	appServiceManager := service.NewServiceManager()
 
 	storeService := service.NewServiceWrapper(service.ServiceWrapperSpec{
-		Name:         "postgres-store",
-		Type:         service.TypeCache,
-		Priority:     service.PriorityHigh,
-		Start:        func(context.Context) error { return nil },
+		Name:     "postgres-store",
+		Type:     service.TypeCache,
+		Priority: service.PriorityHigh,
+		Start:    func(context.Context) error { return nil },
 		Stop: func(context.Context) error {
 			shutdownDelay(100 * time.Millisecond)
 			return closeStore(store)
@@ -415,8 +415,6 @@ func shutdownStartupServices(startupTasks *startupTaskOrchestrator, controlServe
 		log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
 	}
 }
-
-
 
 func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
 	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))

@@ -275,12 +275,12 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 	}
 
 	ms := &MonitoringService{
-		session:        session,
-		configManager:  cfgMgr,
-		store:          store,
-		changeDebounce: changeDebouncer{},
+		session:           session,
+		configManager:     cfgMgr,
+		store:             store,
+		changeDebounce:    changeDebouncer{},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.initializeGuildCache(guildID)
@@ -391,7 +391,7 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 			},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{

@@ -231,7 +231,7 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 				guildID + ":" + userID + ":default": time.Now().UTC(),
 			},
 		},
-		statsService: &StatsService{ configManager: cfgMgr,
+		statsService: &StatsService{configManager: cfgMgr,
 			actorCh: make(chan func(), 1024),
 			guilds: map[string]*statsGuildState{
 				guildID: state,

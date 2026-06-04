@@ -25,7 +25,8 @@ import (
 // drift at compile time. Adding a new event is one method on this interface
 // plus the corresponding field on the snapshot; ad-hoc string keys are not
 // supported on purpose.
-type MessageWriterMetrics interface {
+// MessageWriterEnqueueMetrics tracks the producer-side telemetry for the message writer.
+type MessageWriterEnqueueMetrics interface {
 	// RecordEnqueueUpsert is called once per accepted upsert enqueue
 	// (Enqueue). version and metric indicate whether the same request
 	// also carried a versioned-history insert and/or a daily-metric
@@ -51,7 +52,10 @@ type MessageWriterMetrics interface {
 	// channel buffer occupancy. Tracks the max watermark; useful as the
 	// backpressure headline number.
 	ObserveQueueDepth(depth int)
+}
 
+// MessageWriterFlushMetrics tracks the consumer-side batch flush telemetry.
+type MessageWriterFlushMetrics interface {
 	// RecordFlush is called once per flush cycle, success or failure,
 	// with the batch request count and wall-clock duration. Operators
 	// read this as the writer's drain rate.
@@ -70,6 +74,13 @@ type MessageWriterMetrics interface {
 	// non-zero rate is the explicit "Postgres is rejecting bulk writes"
 	// signal — operators correlate it against batch-store latency.
 	RecordFlushFallback(op string, count int)
+}
+
+// MessageWriterMetrics is the union of all observability seams the async message
+// persistence writer (messageCreateWriter) writes through.
+type MessageWriterMetrics interface {
+	MessageWriterEnqueueMetrics
+	MessageWriterFlushMetrics
 }
 
 // Stable cause tokens recorded by RecordEnqueueFailure. Renames are a

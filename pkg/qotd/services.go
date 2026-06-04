@@ -13,21 +13,31 @@ import (
 // remove, recover, mark-published) depend on this instead of pulling in
 // the whole publish lifecycle. Tests that exercise question CRUD can mock
 // six methods instead of the ~20 the monolithic Service exposes.
-type QuestionCatalog interface {
+// SettingsProvider returns the dashboard-shaped QOTD config for the guild.
+type SettingsProvider interface {
 	// Settings returns the dashboard-shaped QOTD config for the guild.
 	// Most command handlers need it to resolve "active deck" before
 	// touching questions.
 	Settings(guildID string) (files.QOTDConfig, error)
+}
 
+// QuestionReader provides read-only access to QOTD deck questions.
+type QuestionReader interface {
 	// ListQuestions returns every question in a deck, in queue order.
 	ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error)
+}
 
+// QuestionWriter defines the mutation surface for QOTD questions.
+type QuestionWriter interface {
 	// CreateQuestion appends a new question to a deck.
 	CreateQuestion(ctx context.Context, guildID, actorID string, mutation QuestionMutation) (*storage.QOTDQuestionRecord, error)
 
 	// DeleteQuestion removes a mutable question (not reserved/used).
 	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
+}
 
+// QuestionStateModifier defines the surface for modifying question states outside of the normal publish cycle.
+type QuestionStateModifier interface {
 	// RestoreUsedQuestion flips a used question back to ready so it can
 	// be published again.
 	RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
@@ -36,6 +46,14 @@ type QuestionCatalog interface {
 	// without touching the official-post day state. Used by operators
 	// who published the question outside the bot.
 	MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
+}
+
+// QuestionCatalog is the union of all read/write surfaces for QOTD deck questions.
+type QuestionCatalog interface {
+	SettingsProvider
+	QuestionReader
+	QuestionWriter
+	QuestionStateModifier
 }
 
 // PublishCoordinator is the narrow surface for the publish state machine

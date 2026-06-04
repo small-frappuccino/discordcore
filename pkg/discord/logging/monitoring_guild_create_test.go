@@ -18,7 +18,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 		session:       session,
 		configManager: cfgMgr,
 		botInstanceID: "companion",
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleGuildCreate(session, &discordgo.GuildCreate{

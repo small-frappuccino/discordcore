@@ -86,8 +86,8 @@ type ServiceStats struct {
 	Metrics      []ServiceMetric `json:"metrics,omitempty"`
 }
 
-// Service defines the interface that all services must implement
-type Service interface {
+// ServiceIdentity defines the static metadata of a service.
+type ServiceIdentity interface {
 	// Name returns the unique name of the service
 	Name() string
 
@@ -99,7 +99,10 @@ type Service interface {
 
 	// Dependencies returns a list of service names this service depends on
 	Dependencies() []string
+}
 
+// ServiceLifecycle defines the state transitions of a service.
+type ServiceLifecycle interface {
 	// Start initializes and starts the service
 	Start(ctx context.Context) error
 
@@ -108,12 +111,23 @@ type Service interface {
 
 	// IsRunning returns true if the service is currently running
 	IsRunning() bool
+}
 
+// ServiceObservability defines the health and metrics inspection surface.
+type ServiceObservability interface {
 	// HealthCheck returns the current health status
 	HealthCheck(ctx context.Context) HealthStatus
 
 	// Stats returns runtime statistics
 	Stats() ServiceStats
+}
+
+// Service defines the interface that all services must implement by composing
+// identity, lifecycle, and observability.
+type Service interface {
+	ServiceIdentity
+	ServiceLifecycle
+	ServiceObservability
 }
 
 // ServiceInfo holds metadata about a registered service

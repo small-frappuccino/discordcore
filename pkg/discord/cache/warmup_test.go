@@ -98,7 +98,7 @@ func TestWarmupGuildMembersConcurrentCalls(t *testing.T) {
 	ready := make(chan struct{}, 2)
 	release := make(chan struct{})
 	members := []*discordgo.Member{{User: &discordgo.User{ID: "u1"}}}
-	
+
 	session := warmupSession{
 		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			ready <- struct{}{}

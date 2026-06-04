@@ -15,7 +15,6 @@ type Store struct {
 
 const storeBulkInsertMaxRows = 4000
 
-
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
 // Returns an error if the provided db is nil, avoiding runtime panics for invariant failures.
 func NewStore(db *sql.DB) (*Store, error) {

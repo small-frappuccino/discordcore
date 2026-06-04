@@ -53,7 +53,7 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -117,7 +117,7 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -230,8 +230,8 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 			},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:    metrics,
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		metrics:           metrics,
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -309,7 +309,7 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
 		},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{

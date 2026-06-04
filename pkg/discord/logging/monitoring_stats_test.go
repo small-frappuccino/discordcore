@@ -3,7 +3,6 @@ package logging
 import (
 	"strings"
 	"testing"
-	
 
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 )
@@ -26,8 +25,8 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:    metrics,
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		metrics:           metrics,
 	}
 
 	rows := ms.metricsRows()
@@ -73,8 +72,8 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:    metrics,
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		metrics:           metrics,
 	}
 
 	rows := ms.metricsRows()
@@ -102,7 +101,7 @@ func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 		// metrics intentionally nil — observability() yields NopMetrics.
 	}
 
@@ -134,8 +133,8 @@ func TestMonitoringServiceStatsReturnsTypedMetrics(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:    &InMemoryMetrics{},
+		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		metrics:           &InMemoryMetrics{},
 	}
 
 	stats := ms.Stats()

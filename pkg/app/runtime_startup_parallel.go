@@ -94,8 +94,6 @@ func openBotRuntimes(botInstances []resolvedBotInstance, runtimeCapabilities map
 	return runtimes, runtimeOrder, err
 }
 
-
-
 type runtimeStartupBackgroundWorker struct {
 	ctx          context.Context
 	cancel       context.CancelFunc

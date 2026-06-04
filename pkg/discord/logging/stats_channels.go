@@ -9,9 +9,9 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"log/slog"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"log/slog"
 )
 
 const (
@@ -38,8 +38,8 @@ type StatsService struct {
 	lastRun map[string]time.Time
 
 	currentRunCtx func() context.Context
-	getHeartbeat func(context.Context) (time.Time, bool, error)
-	fetchMembers func(context.Context, string, func([]*discordgo.Member) error) (int, error)
+	getHeartbeat  func(context.Context) (time.Time, bool, error)
+	fetchMembers  func(context.Context, string, func([]*discordgo.Member) error) (int, error)
 }
 
 func NewStatsService(

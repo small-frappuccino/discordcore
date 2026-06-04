@@ -14,14 +14,29 @@ import (
 )
 
 // Task type identifiers for notifications and avatar pipeline
-// NotificationSender defines dependency-free methods for sending notifications.
-type NotificationSender interface {
+// MemberNotificationSender defines methods for sending member-related notifications.
+type MemberNotificationSender interface {
 	SendAvatarChangeNotification(channelID string, change files.AvatarChange) error
 	SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error
 	SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error
+}
+
+// MessageNotificationSender defines methods for sending message-related notifications.
+type MessageNotificationSender interface {
 	SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error
 	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
+}
+
+// ModerationNotificationSender defines methods for sending automod-related notifications.
+type ModerationNotificationSender interface {
 	SendAutomodActionNotification(channelID string, event *discordgo.AutoModerationActionExecution) error
+}
+
+// NotificationSender defines dependency-free methods for sending notifications.
+type NotificationSender interface {
+	MemberNotificationSender
+	MessageNotificationSender
+	ModerationNotificationSender
 }
 
 // AvatarProcessor defines the logic for processing avatar changes.
