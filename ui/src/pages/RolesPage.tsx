@@ -25,7 +25,7 @@ export function RolesPage() {
           description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
           badge={<Badge variant="success">Active</Badge>}
         />
-        <Skeleton className="h-[600px] w-full mt-8" />
+        <Skeleton className="h-96 w-full mt-8" />
       </PageContainer>
     );
   }

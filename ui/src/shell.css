@@ -1,3 +1,4 @@
+@reference "tailwindcss";
 /* shell.css - Dashboard Layout Shell (Topbar & Sidebar) */
 
 .dashboard-layout {
@@ -10,7 +11,7 @@
 
 /* Sidebar */
 .shell-sidebar {
-  width: 260px;
+  @apply w-[260px];
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
   display: flex;
@@ -20,10 +21,9 @@
 }
 
 .shell-sidebar-header {
-  height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  @apply h-16 px-5 py-0;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -43,12 +43,11 @@
 }
 
 .shell-nav {
-  padding: 16px 12px;
+  @apply px-3 py-4 gap-1;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .shell-nav-section-title {
@@ -57,14 +56,13 @@
   letter-spacing: 0.05em;
   color: var(--text-muted);
   font-weight: 600;
-  padding: 16px 12px 8px;
+  @apply pt-4 px-3 pb-2;
 }
 
 .shell-nav-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  @apply px-3 py-2 gap-3;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-weight: 500;
@@ -92,11 +90,10 @@
 
 /* Topbar */
 .shell-topbar {
-  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  @apply h-16 px-6 py-0;
   background-color: rgba(14, 14, 17, 0.8);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-subtle);
@@ -107,21 +104,20 @@
 .shell-topbar-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  @apply gap-4;
 }
 
 .shell-topbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  @apply gap-4;
 }
 
 /* Trigger Buttons (Server / Account) */
 .shell-trigger-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
+  @apply gap-3 py-1.5 pr-3 pl-1.5;
   border-radius: var(--radius-full);
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -186,10 +182,9 @@
 .shell-content {
   flex: 1;
   overflow-y: auto;
-  padding: 32px 48px;
+  @apply px-12 py-8 gap-8;
   display: flex;
   flex-direction: column;
-  gap: 32px;
 }
 
 /* Dropdown Menus */

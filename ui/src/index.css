@@ -124,15 +124,15 @@ ul, ol {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  @apply gap-2;
   border-radius: var(--radius-sm);
   font-weight: 500;
   transition: all var(--transition-fast);
 }
 
-.btn-sm { padding: 4px 10px; font-size: 0.8rem; }
-.btn-md { padding: 8px 16px; font-size: 0.9rem; }
-.btn-lg { padding: 12px 24px; font-size: 1rem; }
+.btn-sm { @apply px-2.5 py-1 text-xs; }
+.btn-md { @apply px-4 py-2 text-sm; }
+.btn-lg { @apply px-6 py-3 text-base; }
 
 .btn-primary {
   background-color: var(--accent-primary);
@@ -156,7 +156,7 @@ ul, ol {
   background-color: var(--bg-surface);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  padding: 24px;
+  @apply p-6;
   box-shadow: var(--shadow-sm);
 }
 
@@ -164,7 +164,7 @@ ul, ol {
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  @apply px-2 py-0.5;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
@@ -181,7 +181,7 @@ ul, ol {
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 8px;
+  @apply p-2;
   outline: none;
   font-family: inherit;
   transition: border-color var(--transition-fast);
@@ -190,7 +190,7 @@ ul, ol {
   border-color: var(--accent-primary);
 }
 select[multiple].form-select {
-  height: 100px;
+  @apply h-24;
 }
 .form-checkbox {
   accent-color: var(--accent-primary);
@@ -201,12 +201,12 @@ select[multiple].form-select {
 .page-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  @apply gap-2;
 }
 .page-header-title-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  @apply gap-3;
 }
 .page-title {
   font-size: 1.5rem;
@@ -230,7 +230,7 @@ select[multiple].form-select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  @apply p-4;
   border-bottom: 1px solid var(--border-subtle);
 }
 .settings-row.is-last {
@@ -240,7 +240,7 @@ select[multiple].form-select {
 .settings-row-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  @apply gap-1;
 }
 .settings-row-title {
   font-weight: 500;

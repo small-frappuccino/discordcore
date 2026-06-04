@@ -71,7 +71,7 @@ export function PartnersPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-[600px] w-full mt-8" />
+        <Skeleton className="h-96 w-full mt-8" />
       ) : (
         <div className="mt-8">
           <SettingsGroup>
