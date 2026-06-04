@@ -195,11 +195,8 @@ export function ControlPanelPage() {
         <section className="control-panel-flat-section">
           <div className="workspace-view-header">
             <div className="card-copy">
-              <p className="section-label">Bot routing</p>
-              <h2>Domain ownership</h2>
-              <p className="section-description">
-                Choose which bot instance owns the default server surface and specialized domains like QOTD.
-              </p>
+              <p className="section-label">Routing</p>
+              <h2>Domain Ownership</h2>
             </div>
             <div className="workspace-view-meta">
               <span className="meta-note">
@@ -246,11 +243,8 @@ export function ControlPanelPage() {
         <section className="control-panel-flat-section">
           <div className="workspace-view-header">
             <div className="card-copy">
-              <p className="section-label">Access roles</p>
-              <h2>Dashboard access</h2>
-              <p className="section-description">
-                Choose which roles can open the dashboard in read-only or writable mode.
-              </p>
+              <p className="section-label">Access</p>
+              <h2>Dashboard Access Roles</h2>
             </div>
             <div className="workspace-view-meta">
               <span className="meta-note">
@@ -302,18 +296,14 @@ export function ControlPanelPage() {
         <section className="control-panel-flat-section">
           <div className="workspace-view-header">
             <div className="card-copy">
-              <p className="section-label">Access rules</p>
-              <h2>Implicit administrator access</h2>
-              <p className="section-description">
-                Discord server owners, administrators, and members with Manage Server remain implicitly allowed with write access.
-              </p>
+              <p className="section-label">Rules</p>
+              <h2>Implicit Admin Access</h2>
             </div>
           </div>
-
           <p className="meta-note">
             {selectedGuildAccessLevel === "read"
-              ? "You currently have read-only access to this server. Role changes are disabled."
-              : "Save changes after reviewing both role lists. Existing admin command roles remain separate."}
+              ? "Read-only access. Role changes are disabled."
+              : "Server owners and admins implicitly have full write access."}
           </p>
         </section>
       </div>

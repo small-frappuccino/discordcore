@@ -9,13 +9,34 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
+
+// UserWatcher contains the specific logic for processing user changes.
+type UserWatcher struct {
+	session       *discordgo.Session
+	configManager *files.ConfigManager
+	store         *storage.Store
+	notifier      *NotificationSender
+	cache         *cache.UnifiedCache
+}
+
+func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *NotificationSender, unifiedCache *cache.UnifiedCache) *UserWatcher {
+	return &UserWatcher{
+		session:       session,
+		configManager: configManager,
+		store:         store,
+		notifier:      notifier,
+		cache:         unifiedCache,
+	}
+}
 
 type auditRolePartial struct {
 	ID   string `json:"id"`

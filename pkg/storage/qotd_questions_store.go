@@ -899,11 +899,11 @@ func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx *sql.Tx, guildID, d
 	return nil
 }
 
-func nullableTime(value *time.Time) any {
+func nullableTime(value *time.Time) sql.NullTime {
 	if value == nil || value.IsZero() {
-		return nil
+		return sql.NullTime{Valid: false}
 	}
-	return value.UTC()
+	return sql.NullTime{Time: value.UTC(), Valid: true}
 }
 
 func timePtrFromNull(value sql.NullTime) *time.Time {
@@ -945,12 +945,12 @@ func normalizeQOTDTimePtr(value *time.Time) *time.Time {
 	return &normalized
 }
 
-func zeroEmptyString(value string) any {
+func zeroEmptyString(value string) sql.NullString {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return nil
+		return sql.NullString{Valid: false}
 	}
-	return value
+	return sql.NullString{String: value, Valid: true}
 }
 
 func maxInt64(left, right int64) int64 {

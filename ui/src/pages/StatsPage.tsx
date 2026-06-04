@@ -22,7 +22,6 @@ import {
 } from "../features/features/featureContract";
 import {
   formatFeatureStatusLabel,
-  formatWorkspaceStateDescription,
   formatWorkspaceStateTitle,
   getFeatureStatusTone,
   summarizeFeatureArea,
@@ -152,10 +151,7 @@ export function StatsPage() {
       return (
         <EmptyState
           title={formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
-          description={formatWorkspaceStateDescription(
-            areaLabel,
-            workspace.workspaceState,
-          )}
+          description=""
           action={
             authState !== "signed_in" ? (
               <button
@@ -185,10 +181,6 @@ export function StatsPage() {
           <div className="card-copy">
             <p className="section-label">Workspace</p>
             <h2>No stats controls yet</h2>
-            <p className="section-description">
-              The selected server does not expose the stats channel feature
-              record required by this workspace yet.
-            </p>
           </div>
         </div>
       );
@@ -223,10 +215,6 @@ export function StatsPage() {
           <div className="card-copy">
             <p className="section-label">Configured channels</p>
             <h2>Stats channel inventory</h2>
-            <p className="section-description">
-              Review the current server channel list that receives periodic
-              member-count renames.
-            </p>
           </div>
 
           {statsDetails.channels.length === 0 ? (
@@ -234,10 +222,6 @@ export function StatsPage() {
               <div className="card-copy">
                 <p className="section-label">Inventory</p>
                 <h3>No stats channels configured</h3>
-                <p className="section-description">
-                  This server does not currently expose any stats channel
-                  targets in its configuration.
-                </p>
               </div>
             </div>
           ) : (
@@ -283,7 +267,7 @@ export function StatsPage() {
       <PageHeader
         eyebrow="Feature area"
         title={areaLabel}
-        description="Manage the stats module schedule and review the configured stats channels for the selected server without falling back to the generic feature list."
+        description=""
         status={
           <StatusBadge
             tone={
@@ -311,24 +295,18 @@ export function StatsPage() {
               <MetricCard
                 label="Stats module"
                 value={formatFeatureStatusLabel(statsFeature)}
-                description={summarizeStatsSignal(statsFeature)}
                 tone={getFeatureStatusTone(statsFeature)}
               />
               <MetricCard
                 label="Update rule"
                 value={formatStatsConfigValue(statsDetails.configEnabled)}
-                description={
-                  statsDetails.configEnabled
-                    ? `Runs every ${formatStatsIntervalValue(statsDetails.updateIntervalMins)}.`
-                    : "Updates are paused until the server rule is enabled."
-                }
                 tone={statsDetails.configEnabled ? "info" : "neutral"}
               />
             </section>
           ) : null
         }
         workspaceTitle="Stats configuration"
-        workspaceDescription="Keep the schedule controls and current inventory visible in the main workspace instead of editing the stats schedule in a separate drawer."
+        workspaceDescription={null}
       >
         {renderPageState()}
       </FlatPageLayout>
@@ -409,10 +387,6 @@ function StatsScheduleSection({
               {formatFeatureStatusLabel(feature)}
             </StatusBadge>
           </div>
-          <p className="section-description">
-            Keep the stats module enabled, choose whether updates should run,
-            and adjust the interval without leaving the main page.
-          </p>
         </div>
       </div>
 
@@ -445,10 +419,6 @@ function StatsScheduleSection({
             <option value="enabled">Enabled</option>
             <option value="disabled">Disabled</option>
           </select>
-          <span className="meta-note">
-            Pause channel renames here without disabling the module-level
-            override for this server.
-          </span>
         </label>
 
         <label className="field-stack">
@@ -463,20 +433,12 @@ function StatsScheduleSection({
             value={updateIntervalDraft}
             onChange={(event) => setUpdateIntervalDraft(event.target.value)}
           />
-          <span className="meta-note">
-            Enter how often the selected server should refresh the configured
-            stats channel names.
-          </span>
         </label>
       </div>
 
       {!canSaveStatsSettings ? (
         <div className="surface-subsection">
           <p className="section-label">Interval required</p>
-          <p className="meta-note">
-            Enter a whole number greater than zero before saving the stats
-            schedule.
-          </p>
         </div>
       ) : null}
 

@@ -1,37 +1,37 @@
 :root {
   color-scheme: dark;
 
-  --bg-page: #0f141b;
-  --bg-shell: #141b23;
-  --bg-home-dashboard-canvas: #0f141b;
-  --bg-surface: #171f29;
-  --bg-surface-card: #1f2936;
-  --bg-surface-elevated: #273343;
+  --bg-page: #0a0a0c;
+  --bg-shell: #0a0a0c;
+  --bg-home-dashboard-canvas: #0a0a0c;
+  --bg-surface: #121214;
+  --bg-surface-card: #18181b;
+  --bg-surface-elevated: #27272a;
   --bg-surface-muted: rgba(255, 255, 255, 0.03);
-  --bg-surface-subtle: rgba(255, 255, 255, 0.048);
-  --bg-input: #101720;
-  --bg-native-select-menu: var(--bg-input);
-  --bg-accent: #d0a172;
-  --bg-accent-hover: #ddb48a;
-  --bg-accent-soft: #2f241c;
-  --border-soft: #2c3748;
-  --border-strong: #3b475c;
-  --border-accent: rgba(208, 161, 114, 0.34);
-  --text-main: #eef3f7;
-  --text-muted: #c4cdda;
-  --text-dim: #96a4b5;
-  --text-disabled: #6f7c8d;
+  --bg-surface-subtle: rgba(255, 255, 255, 0.05);
+  --bg-input: rgba(0, 0, 0, 0.2);
+  --bg-native-select-menu: #18181b;
+  --bg-accent: #5865F2;
+  --bg-accent-hover: #4752C4;
+  --bg-accent-soft: rgba(88, 101, 242, 0.15);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --border-accent: rgba(88, 101, 242, 0.4);
+  --text-main: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
+  --text-disabled: #52525b;
   --text-native-select-menu: var(--text-main);
   --text-native-select-menu-disabled: var(--text-disabled);
   --success: #5aa474;
   --warning: #c89a57;
   --error: #cf6f7b;
   --info: #78a1f4;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.16);
-  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.24);
+  --shadow-1: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.4);
   --radius-shell: 16px;
-  --radius-card: 12px;
-  --radius-control: 8px;
+  --radius-card: 16px;
+  --radius-control: 10px;
   --radius-pill: 999px;
   --dashboard-content-max-width: 1520px;
   --space-1: 4px;
@@ -43,13 +43,17 @@
   --space-7: 32px;
   --space-8: 40px;
   --font-display:
-    "Aptos Display",
-    "Segoe UI Variable Display",
-    "Bahnschrift",
+    "Inter",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
   --font-body:
-    "Aptos",
-    "Segoe UI Variable Text",
+    "Inter",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
   --font-weight-regular: 400;
@@ -170,7 +174,7 @@ button:hover:not(:disabled),
 }
 
 .button-primary {
-  color: #211915;
+  color: #ffffff;
   border-color: transparent;
   background: var(--bg-accent);
 }

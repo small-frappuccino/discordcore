@@ -1,6 +1,15 @@
 package logging
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/bwmarrin/discordgo"
+)
+
+type presenceSnapshot struct {
+	Status       discordgo.Status
+	ClientStatus discordgo.ClientStatus
+}
 
 // presenceWatcher records the last presence snapshot seen for each watched
 // user and reports whether a newly observed snapshot differs from it. Access

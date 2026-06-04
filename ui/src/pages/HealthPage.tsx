@@ -162,7 +162,7 @@ export function HealthPage() {
         <PageHeader
           eyebrow="Operational"
           title="Health"
-          description="Live snapshots from the embedded /v1/health/* endpoints."
+          description=""
           status={headerStatus}
           actions={headerActions}
         />
@@ -172,8 +172,8 @@ export function HealthPage() {
           workspaceDescription={null}
         >
           <EmptyState
-            title="Sign in to view health snapshots"
-            description="Health endpoints require the same authentication as the rest of the control plane."
+            title="Not Connected"
+            description="Sign in to view health snapshots"
           />
         </FlatPageLayout>
       </section>
@@ -183,9 +183,9 @@ export function HealthPage() {
   return (
     <section className="page-shell">
       <PageHeader
-        eyebrow="Operational"
-        title="Health"
-        description="Live snapshots from /v1/health/{live,cache,monitoring,qotd,moderation}. Replaces the deprecated /admin metrics_watch Discord command."
+        eyebrow="Core"
+        title="Bot Health"
+        description=""
         status={headerStatus}
         actions={headerActions}
       />
@@ -205,17 +205,11 @@ export function HealthPage() {
                   ? "Never"
                   : lastUpdatedAt.toLocaleTimeString()
               }
-              description={
-                globalError === null
-                  ? "Snapshots refresh in the background."
-                  : globalError
-              }
               tone={globalError === null ? "info" : "error"}
             />
             <MetricCard
               label="Auto-refresh"
               value={paused ? "Paused" : `${intervalSeconds}s`}
-              description="Use the buttons in the header to pause or refresh now."
               tone={paused ? "neutral" : "success"}
             />
             <SurfaceCard>
@@ -238,10 +232,6 @@ export function HealthPage() {
                     }
                   }}
                 />
-                <span className="meta-note">
-                  Minimum {MIN_POLL_INTERVAL_SECONDS} seconds. Polling pauses
-                  automatically when the auto-refresh button is toggled off.
-                </span>
               </label>
             </SurfaceCard>
           </section>
@@ -274,10 +264,6 @@ function LiveSection({
       <div className="card-copy">
         <p className="section-label">/v1/health/live</p>
         <h2>Liveness</h2>
-        <p className="section-description">
-          Returned by the embedded control HTTP server itself. Reaching this
-          endpoint means the process is running and serving traffic.
-        </p>
       </div>
       <KeyValueList
         items={[
@@ -311,10 +297,6 @@ function CacheSection({
       <div className="card-copy">
         <p className="section-label">/v1/health/cache</p>
         <h2>Cache</h2>
-        <p className="section-description">
-          UnifiedCache segments and persisted cache totals from the default
-          bot runtime.
-        </p>
       </div>
       <div className="overview-summary-strip">
         <SegmentMetricCard
@@ -365,29 +347,21 @@ function MonitoringSection({
       <div className="card-copy">
         <p className="section-label">/v1/health/monitoring</p>
         <h2>Monitoring</h2>
-        <p className="section-description">
-          Discord API call counts the monitoring service is responsible for,
-          plus the in-process cache hit counters it uses to avoid those API
-          calls.
-        </p>
       </div>
       <div className="overview-summary-strip">
         <MetricCard
           label="Audit log calls"
           value={snapshot.api.audit_log_calls_total.toLocaleString()}
-          description="Total GuildAuditLog fetches."
           tone="info"
         />
         <MetricCard
           label="Guild member calls"
           value={snapshot.api.guild_member_calls_total.toLocaleString()}
-          description="Total GuildMember API resolutions."
           tone="info"
         />
         <MetricCard
           label="Messages sent"
           value={snapshot.api.messages_sent_total.toLocaleString()}
-          description="Total log embeds posted to Discord."
           tone="info"
         />
       </div>
@@ -438,9 +412,6 @@ function QOTDSection({
       <div className="card-copy">
         <p className="section-label">/v1/health/qotd</p>
         <h2>QOTD</h2>
-        <p className="section-description">
-          Publish, reconcile, and side-event counters from the QOTD service.
-        </p>
       </div>
       <KeyValueList
         items={[
@@ -492,28 +463,21 @@ function ModerationSection({
       <div className="card-copy">
         <p className="section-label">/v1/health/moderation</p>
         <h2>Moderation</h2>
-        <p className="section-description">
-          /clean command counters: attempts, outcomes, deleted messages, and
-          per-cause failure breakdown.
-        </p>
       </div>
       <div className="overview-summary-strip">
         <MetricCard
           label="Attempts"
           value={snapshot.attempts_total.toLocaleString()}
-          description="Total /clean invocations."
           tone="info"
         />
         <MetricCard
           label="Success"
           value={snapshot.success_total.toLocaleString()}
-          description={`${snapshot.deleted_messages_total.toLocaleString()} messages removed.`}
           tone="success"
         />
         <MetricCard
           label="Failure"
           value={snapshot.failure_total.toLocaleString()}
-          description="Includes refused and aborted runs."
           tone={snapshot.failure_total > 0 ? "error" : "neutral"}
         />
       </div>
@@ -561,9 +525,6 @@ function PendingSection({ title }: { title: string }) {
       <div className="card-copy">
         <p className="section-label">Loading</p>
         <h2>{title}</h2>
-        <p className="section-description">
-          Waiting for the first snapshot to land.
-        </p>
       </div>
     </section>
   );

@@ -7,6 +7,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
+type cachedRoles struct {
+	roles     []string
+	expiresAt time.Time
+}
+
 // rolesCacheStore is an in-memory, TTL-bounded cache of per-(guild,user) role
 // ID lists used to avoid REST/DB lookups during member updates. Access is
 // serialized by mu. The zero value is ready to use: the entry map is created

@@ -88,37 +88,39 @@ type RuntimeConfig struct {
 // only emits the canonical fields.
 func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 	type rawRuntimeConfig struct {
-		Database                     DatabaseRuntimeConfig        `json:"database,omitempty"`
-		BotTheme                     string                       `json:"bot_theme,omitempty"`
-		DisableDBCleanup             bool                         `json:"disable_db_cleanup,omitempty"`
-		DisableAutomodLogs           bool                         `json:"disable_automod_logs,omitempty"`
-		DisableMessageLogs           bool                         `json:"disable_message_logs,omitempty"`
-		DisableEntryExitLogs         bool                         `json:"disable_entry_exit_logs,omitempty"`
-		DisableReactionLogs          bool                         `json:"disable_reaction_logs,omitempty"`
-		DisableUserLogs              bool                         `json:"disable_user_logs,omitempty"`
-		DisableCleanLog              bool                         `json:"disable_clean_log,omitempty"`
-		ModerationLogging            *bool                        `json:"moderation_logging,omitempty"`
-		LegacyModerationLogMode      string                       `json:"moderation_log_mode,omitempty"`
-		PresenceWatchUserID          string                       `json:"presence_watch_user_id,omitempty"`
-		PresenceWatchBot             bool                         `json:"presence_watch_bot,omitempty"`
-		MessageCacheTTLHours         int                          `json:"message_cache_ttl_hours,omitempty"`
-		MessageDeleteOnLog           bool                         `json:"message_delete_on_log,omitempty"`
-		MessageCacheCleanup          bool                         `json:"message_cache_cleanup,omitempty"`
-		GlobalMaxWorkers             int                          `json:"global_max_workers,omitempty"`
-		BackfillChannelID            string                       `json:"backfill_channel_id,omitempty"`
-		BackfillStartDay             string                       `json:"backfill_start_day,omitempty"`
-		BackfillInitialDate          string                       `json:"backfill_initial_date,omitempty"`
-		MimuWelcomeString            string                       `json:"mimu_welcome_string,omitempty"`
-		MimuGoodbyeString            string                       `json:"mimu_goodbye_string,omitempty"`
-		DisableBotRolePermMirror     bool                         `json:"disable_bot_role_perm_mirror,omitempty"`
-		BotRolePermMirrorActorRoleID string                       `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
-		WebhookEmbedUpdates          []WebhookEmbedUpdateConfig   `json:"webhook_embed_updates,omitempty"`
-		LegacyWebhookEmbedUpdate     WebhookEmbedUpdateConfig     `json:"webhook_embed_update,omitempty"`
-		WebhookEmbedValidation       WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
-		DisableInteractiveEphemeral  bool                         `json:"disable_interactive_ephemeral,omitempty"`
-		PastebinDevKey               EncryptedString              `json:"pastebin_dev_key,omitempty"`
-		PastebinUserName             EncryptedString              `json:"pastebin_user_name,omitempty"`
-		PastebinUserPassword         EncryptedString              `json:"pastebin_user_password,omitempty"`
+		Database             DatabaseRuntimeConfig `json:"database,omitempty"`
+		BotTheme             string                `json:"bot_theme,omitempty"`
+		DisableDBCleanup     bool                  `json:"disable_db_cleanup,omitempty"`
+		DisableAutomodLogs   bool                  `json:"disable_automod_logs,omitempty"`
+		DisableMessageLogs   bool                  `json:"disable_message_logs,omitempty"`
+		DisableEntryExitLogs bool                  `json:"disable_entry_exit_logs,omitempty"`
+		DisableReactionLogs  bool                  `json:"disable_reaction_logs,omitempty"`
+		DisableUserLogs      bool                  `json:"disable_user_logs,omitempty"`
+		DisableCleanLog      bool                  `json:"disable_clean_log,omitempty"`
+		ModerationLogging    *bool                 `json:"moderation_logging,omitempty"`
+		// Deprecated: migrated to ModerationLogging
+		ModerationLogMode            string                     `json:"moderation_log_mode,omitempty"`
+		PresenceWatchUserID          string                     `json:"presence_watch_user_id,omitempty"`
+		PresenceWatchBot             bool                       `json:"presence_watch_bot,omitempty"`
+		MessageCacheTTLHours         int                        `json:"message_cache_ttl_hours,omitempty"`
+		MessageDeleteOnLog           bool                       `json:"message_delete_on_log,omitempty"`
+		MessageCacheCleanup          bool                       `json:"message_cache_cleanup,omitempty"`
+		GlobalMaxWorkers             int                        `json:"global_max_workers,omitempty"`
+		BackfillChannelID            string                     `json:"backfill_channel_id,omitempty"`
+		BackfillStartDay             string                     `json:"backfill_start_day,omitempty"`
+		BackfillInitialDate          string                     `json:"backfill_initial_date,omitempty"`
+		MimuWelcomeString            string                     `json:"mimu_welcome_string,omitempty"`
+		MimuGoodbyeString            string                     `json:"mimu_goodbye_string,omitempty"`
+		DisableBotRolePermMirror     bool                       `json:"disable_bot_role_perm_mirror,omitempty"`
+		BotRolePermMirrorActorRoleID string                     `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
+		WebhookEmbedUpdates          []WebhookEmbedUpdateConfig `json:"webhook_embed_updates,omitempty"`
+		// Deprecated: migrated to WebhookEmbedUpdates
+		WebhookEmbedUpdate          WebhookEmbedUpdateConfig     `json:"webhook_embed_update,omitempty"`
+		WebhookEmbedValidation      WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
+		DisableInteractiveEphemeral bool                         `json:"disable_interactive_ephemeral,omitempty"`
+		PastebinDevKey              EncryptedString              `json:"pastebin_dev_key,omitempty"`
+		PastebinUserName            EncryptedString              `json:"pastebin_user_name,omitempty"`
+		PastebinUserPassword        EncryptedString              `json:"pastebin_user_password,omitempty"`
 	}
 
 	var raw rawRuntimeConfig
@@ -158,11 +160,11 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		PastebinUserPassword:         raw.PastebinUserPassword,
 	}
 
-	if rc.ModerationLogging == nil && strings.TrimSpace(raw.LegacyModerationLogMode) != "" {
-		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(raw.LegacyModerationLogMode)) != "off")
+	if rc.ModerationLogging == nil && strings.TrimSpace(raw.ModerationLogMode) != "" {
+		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(raw.ModerationLogMode)) != "off")
 	}
 
-	if !raw.LegacyWebhookEmbedUpdate.IsZero() {
+	if !raw.WebhookEmbedUpdate.IsZero() {
 		hasCanonical := false
 		for _, item := range rc.WebhookEmbedUpdates {
 			if !item.IsZero() {
@@ -171,7 +173,7 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 			}
 		}
 		if !hasCanonical {
-			rc.WebhookEmbedUpdates = append(rc.WebhookEmbedUpdates, raw.LegacyWebhookEmbedUpdate)
+			rc.WebhookEmbedUpdates = append(rc.WebhookEmbedUpdates, raw.WebhookEmbedUpdate)
 		}
 	}
 
@@ -292,7 +294,8 @@ func (cc *ChannelsConfig) UnmarshalJSON(data []byte) error {
 	type alias ChannelsConfig
 	type rawChannelsConfig struct {
 		alias
-		LegacyVerificationCleanup string `json:"verification_cleanup,omitempty"`
+		// Deprecated: removed in favor of native features
+		VerificationCleanup string `json:"verification_cleanup,omitempty"`
 	}
 
 	var raw rawChannelsConfig
@@ -345,7 +348,8 @@ func (rc *RolesConfig) UnmarshalJSON(data []byte) error {
 	type alias RolesConfig
 	type rawRolesConfig struct {
 		alias
-		LegacyVerificationRole string `json:"verification_role,omitempty"`
+		// Deprecated: removed in favor of native features
+		VerificationRole string `json:"verification_role,omitempty"`
 	}
 
 	var raw rawRolesConfig
@@ -461,13 +465,20 @@ func (upc *UserPruneConfig) UnmarshalJSON(data []byte) error {
 	type alias UserPruneConfig
 	type rawUserPruneConfig struct {
 		alias
-		LegacyGraceDays int      `json:"grace_days,omitempty"`
-		LegacyScanInt   int      `json:"scan_interval_mins,omitempty"`
-		LegacyDelay     int      `json:"initial_delay_secs,omitempty"`
-		LegacyKPS       int      `json:"kps,omitempty"`
-		LegacyMaxKicks  int      `json:"max_kicks_per_run,omitempty"`
-		LegacyExempt    []string `json:"exempt_role_ids,omitempty"`
-		LegacyDryRun    bool     `json:"dry_run,omitempty"`
+		// Deprecated: removed in favor of native Discord prune (Enabled toggle)
+		GraceDays int `json:"grace_days,omitempty"`
+		// Deprecated: removed in favor of native Discord prune
+		ScanIntervalMins int `json:"scan_interval_mins,omitempty"`
+		// Deprecated: removed in favor of native Discord prune
+		InitialDelaySecs int `json:"initial_delay_secs,omitempty"`
+		// Deprecated: removed in favor of native Discord prune
+		KicksPerSecond int `json:"kps,omitempty"`
+		// Deprecated: removed in favor of native Discord prune
+		MaxKicksPerRun int `json:"max_kicks_per_run,omitempty"`
+		// Deprecated: removed in favor of native Discord prune
+		ExemptRoleIDs []string `json:"exempt_role_ids,omitempty"`
+		// Deprecated: removed in favor of native Discord prune
+		DryRun bool `json:"dry_run,omitempty"`
 	}
 
 	var raw rawUserPruneConfig
@@ -504,6 +515,19 @@ type ReactionBlockConfig struct {
 	Rules []ReactionBlockRuleConfig `json:"rules,omitempty"`
 }
 
+// TicketsCategoryConfig maps a ticket category name to its assigned Role ID.
+type TicketsCategoryConfig struct {
+	Name   string `json:"name,omitempty"`
+	RoleID string `json:"role_id,omitempty"`
+}
+
+// TicketsConfig stores ticket system configuration per guild.
+type TicketsConfig struct {
+	Enabled             bool                    `json:"enabled,omitempty"`
+	TranscriptChannelID string                  `json:"transcript_channel_id,omitempty"`
+	Categories          []TicketsCategoryConfig `json:"categories,omitempty"`
+}
+
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
 	GuildID       string `json:"guild_id"`
@@ -528,6 +552,7 @@ type GuildConfig struct {
 	PartnerBoard   PartnerBoardConfig  `json:"partner_board,omitempty"`
 	ReactionBlocks ReactionBlockConfig `json:"reaction_blocks,omitempty"`
 	QOTD           QOTDConfig          `json:"qotd,omitempty"`
+	Tickets        TicketsConfig       `json:"tickets,omitempty"`
 	RolePanels     []RolePanelConfig   `json:"role_panels,omitempty"`
 	CustomEmbeds   []CustomEmbedConfig `json:"custom_embeds,omitempty"`
 

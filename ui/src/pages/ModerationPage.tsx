@@ -221,10 +221,6 @@ export function ModerationPage() {
           <div className="card-copy">
             <p className="section-label">Workspace</p>
             <h2>No moderation controls yet</h2>
-            <p className="section-description">
-              The selected server does not expose moderation feature records for
-              this workspace yet.
-            </p>
           </div>
         </div>
       );

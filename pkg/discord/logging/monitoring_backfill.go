@@ -12,6 +12,35 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
+const (
+	// TaskTypeMonitorBackfillEntryExitDay names the task that scans a single UTC day
+	// of an entry/exit channel for join/leave events. Payload must be
+	// [BackfillEntryExitDayPayload]; dispatchers and the handler share that type so
+	// the type-assertion is a single point of contract.
+	TaskTypeMonitorBackfillEntryExitDay = "monitor.backfill_entry_exit_day"
+
+	// TaskTypeMonitorBackfillEntryExitRange names the task that scans an arbitrary
+	// UTC time range of an entry/exit channel. Payload must be
+	// [BackfillEntryExitRangePayload].
+	TaskTypeMonitorBackfillEntryExitRange = "monitor.backfill_entry_exit_range"
+)
+
+// BackfillEntryExitDayPayload carries the channel and target UTC day for a
+// [TaskTypeMonitorBackfillEntryExitDay] dispatch. Day uses the YYYY-MM-DD form.
+type BackfillEntryExitDayPayload struct {
+	ChannelID string
+	Day       string
+}
+
+// BackfillEntryExitRangePayload carries the channel and the inclusive UTC range
+// for a [TaskTypeMonitorBackfillEntryExitRange] dispatch. Start and End are
+// RFC3339 timestamps; End must be strictly after Start.
+type BackfillEntryExitRangePayload struct {
+	ChannelID string
+	Start     string
+	End       string
+}
+
 // registerBackfillHandlers wires the entry/exit backfill task handlers and, once at
 // startup, dispatches any backfill work implied by the current runtime config.
 func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context, workload monitoringWorkloadState) {

@@ -273,7 +273,7 @@ export function CommandsPage() {
       <PageHeader
         eyebrow="Feature area"
         title={areaLabel}
-        description="Configure command routing and privileged command access for the selected server without falling back to the generic feature list."
+        description="Configure command routing and privileged command access for the selected server."
         status={
           <StatusBadge
             tone={
@@ -399,10 +399,6 @@ function CommandChannelSection({
               {formatFeatureStatusLabel(feature)}
             </StatusBadge>
           </div>
-          <p className="section-description">
-            Set the optional command destination and keep the routing controls
-            in the main workspace.
-          </p>
         </div>
       </div>
 
@@ -572,10 +568,6 @@ function AdminCommandAccessSection({
               {formatFeatureStatusLabel(feature)}
             </StatusBadge>
           </div>
-          <p className="section-description">
-            Keep privileged command access visible here instead of hiding the
-            role selection in a separate editor.
-          </p>
         </div>
       </div>
 

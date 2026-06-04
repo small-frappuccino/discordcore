@@ -176,6 +176,7 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		PartnerBoard:         clonePartnerBoardConfig(in.PartnerBoard),
 		ReactionBlocks:       cloneReactionBlockConfig(in.ReactionBlocks),
 		QOTD:                 cloneQOTDConfig(in.QOTD),
+		Tickets:              cloneTicketsConfig(in.Tickets),
 		RolePanels:           cloneRolePanels(in.RolePanels),
 		CustomEmbeds:         cloneCustomEmbeds(in.CustomEmbeds),
 		RuntimeConfig:        cloneRuntimeConfig(in.RuntimeConfig),
@@ -378,4 +379,17 @@ func cloneJSONRawMessage(in json.RawMessage) json.RawMessage {
 	out := make(json.RawMessage, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneTicketsConfig(in TicketsConfig) TicketsConfig {
+	var categories []TicketsCategoryConfig
+	if len(in.Categories) > 0 {
+		categories = make([]TicketsCategoryConfig, len(in.Categories))
+		copy(categories, in.Categories)
+	}
+	return TicketsConfig{
+		Enabled:             in.Enabled,
+		TranscriptChannelID: in.TranscriptChannelID,
+		Categories:          categories,
+	}
 }

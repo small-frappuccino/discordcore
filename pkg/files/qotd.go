@@ -249,12 +249,15 @@ func isImplicitDefaultQOTDDeck(deck QOTDDeckConfig, activeDeckID string) bool {
 
 func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 	type rawQOTDDeckConfig struct {
-		ID                string `json:"id,omitempty"`
-		Name              string `json:"name,omitempty"`
-		Enabled           bool   `json:"enabled,omitempty"`
-		ChannelID         string `json:"channel_id,omitempty"`
-		ForumChannelID    string `json:"forum_channel_id,omitempty"`
+		ID        string `json:"id,omitempty"`
+		Name      string `json:"name,omitempty"`
+		Enabled   bool   `json:"enabled,omitempty"`
+		ChannelID string `json:"channel_id,omitempty"`
+		// Deprecated: migrated to ChannelID
+		ForumChannelID string `json:"forum_channel_id,omitempty"`
+		// Deprecated: migrated to ChannelID
 		QuestionChannelID string `json:"question_channel_id,omitempty"`
+		// Deprecated: migrated to ChannelID
 		ResponseChannelID string `json:"response_channel_id,omitempty"`
 		SelectionStrategy string `json:"selection_strategy,omitempty"`
 	}
@@ -287,12 +290,16 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 
 func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	type rawQOTDPublishScheduleConfig struct {
-		HourUTC          *int `json:"hour_utc,omitempty"`
-		MinuteUTC        *int `json:"minute_utc,omitempty"`
-		PublishHourUTC   *int `json:"publish_hour_utc,omitempty"`
+		HourUTC   *int `json:"hour_utc,omitempty"`
+		MinuteUTC *int `json:"minute_utc,omitempty"`
+		// Deprecated: migrated to Schedule
+		PublishHourUTC *int `json:"publish_hour_utc,omitempty"`
+		// Deprecated: migrated to Schedule
 		PublishMinuteUTC *int `json:"publish_minute_utc,omitempty"`
-		LegacyHourUTC    *int `json:"qotd_time_hour_utc,omitempty"`
-		LegacyMinuteUTC  *int `json:"qotd_time_minute_utc,omitempty"`
+		// Deprecated: migrated to HourUTC
+		QOTDTimeHourUTC *int `json:"qotd_time_hour_utc,omitempty"`
+		// Deprecated: migrated to MinuteUTC
+		QOTDTimeMinuteUTC *int `json:"qotd_time_minute_utc,omitempty"`
 	}
 
 	type rawQOTDConfig struct {
@@ -304,16 +311,26 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 		// persisted only LegacySuppressDateUTC; the unmarshal migrates the
 		// legacy value into the list when the new field is absent.
 		SuppressScheduledPublishDatesUTC []string `json:"suppress_scheduled_publish_dates_utc,omitempty"`
-		LegacySuppressDateUTC            string   `json:"suppress_scheduled_publish_date_utc,omitempty"`
-		Enabled                          bool     `json:"enabled,omitempty"`
-		ChannelID                        string   `json:"channel_id,omitempty"`
-		ForumChannelID                   string   `json:"forum_channel_id,omitempty"`
-		QuestionChannelID                string   `json:"question_channel_id,omitempty"`
-		ResponseChannelID                string   `json:"response_channel_id,omitempty"`
-		PublishHourUTC                   *int     `json:"publish_hour_utc,omitempty"`
-		PublishMinuteUTC                 *int     `json:"publish_minute_utc,omitempty"`
-		LegacyHourUTC                    *int     `json:"qotd_time_hour_utc,omitempty"`
-		LegacyMinuteUTC                  *int     `json:"qotd_time_minute_utc,omitempty"`
+		// Deprecated: migrated to SuppressScheduledPublishDatesUTC
+		SuppressScheduledPublishDateUTC string `json:"suppress_scheduled_publish_date_utc,omitempty"`
+		// Deprecated: migrated to Decks
+		Enabled bool `json:"enabled,omitempty"`
+		// Deprecated: migrated to Decks
+		ChannelID string `json:"channel_id,omitempty"`
+		// Deprecated: migrated to Decks
+		ForumChannelID string `json:"forum_channel_id,omitempty"`
+		// Deprecated: migrated to Decks
+		QuestionChannelID string `json:"question_channel_id,omitempty"`
+		// Deprecated: migrated to Decks
+		ResponseChannelID string `json:"response_channel_id,omitempty"`
+		// Deprecated: migrated to Schedule
+		PublishHourUTC *int `json:"publish_hour_utc,omitempty"`
+		// Deprecated: migrated to Schedule
+		PublishMinuteUTC *int `json:"publish_minute_utc,omitempty"`
+		// Deprecated: migrated to PublishHourUTC
+		QOTDTimeHourUTC *int `json:"qotd_time_hour_utc,omitempty"`
+		// Deprecated: migrated to PublishMinuteUTC
+		QOTDTimeMinuteUTC *int `json:"qotd_time_minute_utc,omitempty"`
 	}
 
 	var raw rawQOTDConfig
@@ -331,10 +348,10 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 			schedule.HourUTC = cloneOptionalInt(raw.Schedule.PublishHourUTC)
 		case raw.PublishHourUTC != nil:
 			schedule.HourUTC = cloneOptionalInt(raw.PublishHourUTC)
-		case raw.Schedule.LegacyHourUTC != nil:
-			schedule.HourUTC = cloneOptionalInt(raw.Schedule.LegacyHourUTC)
-		case raw.LegacyHourUTC != nil:
-			schedule.HourUTC = cloneOptionalInt(raw.LegacyHourUTC)
+		case raw.Schedule.QOTDTimeHourUTC != nil:
+			schedule.HourUTC = cloneOptionalInt(raw.Schedule.QOTDTimeHourUTC)
+		case raw.QOTDTimeHourUTC != nil:
+			schedule.HourUTC = cloneOptionalInt(raw.QOTDTimeHourUTC)
 		}
 	}
 	if schedule.MinuteUTC == nil {
@@ -343,19 +360,19 @@ func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 			schedule.MinuteUTC = cloneOptionalInt(raw.Schedule.PublishMinuteUTC)
 		case raw.PublishMinuteUTC != nil:
 			schedule.MinuteUTC = cloneOptionalInt(raw.PublishMinuteUTC)
-		case raw.Schedule.LegacyMinuteUTC != nil:
-			schedule.MinuteUTC = cloneOptionalInt(raw.Schedule.LegacyMinuteUTC)
-		case raw.LegacyMinuteUTC != nil:
-			schedule.MinuteUTC = cloneOptionalInt(raw.LegacyMinuteUTC)
+		case raw.Schedule.QOTDTimeMinuteUTC != nil:
+			schedule.MinuteUTC = cloneOptionalInt(raw.Schedule.QOTDTimeMinuteUTC)
+		case raw.QOTDTimeMinuteUTC != nil:
+			schedule.MinuteUTC = cloneOptionalInt(raw.QOTDTimeMinuteUTC)
 		}
 	}
 
 	suppressedDates := raw.SuppressScheduledPublishDatesUTC
-	if len(suppressedDates) == 0 && strings.TrimSpace(raw.LegacySuppressDateUTC) != "" {
+	if len(suppressedDates) == 0 && strings.TrimSpace(raw.SuppressScheduledPublishDateUTC) != "" {
 		// Legacy single-string field migration: keep old persisted configs
 		// loading until the next write replaces the legacy key with the
 		// canonical list form.
-		suppressedDates = []string{raw.LegacySuppressDateUTC}
+		suppressedDates = []string{raw.SuppressScheduledPublishDateUTC}
 	}
 
 	*cfg = QOTDConfig{

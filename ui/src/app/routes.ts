@@ -6,6 +6,7 @@ export const appRoutes = {
   landing: "/",
   manage: "/manage",
   manageLegacy: "/dashboard",
+  transcriptView: "/transcripts/view",
   dashboardGuildPattern: "/manage/:guildId",
   dashboardHomePattern: "/manage/:guildId/home",
   dashboardCorePattern: "/manage/:guildId/core",

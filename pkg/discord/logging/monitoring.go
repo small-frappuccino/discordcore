@@ -23,34 +23,7 @@ const (
 	monitoringGuildMembersPageSize   = 1000
 	monitoringMaxConcurrentGuildScan = 4
 	taskTypeStartupWarmupMembers     = "monitor.startup_warmup_members"
-
-	// TaskTypeMonitorBackfillEntryExitDay names the task that scans a single UTC day
-	// of an entry/exit channel for join/leave events. Payload must be
-	// [BackfillEntryExitDayPayload]; dispatchers and the handler share that type so
-	// the type-assertion is a single point of contract.
-	TaskTypeMonitorBackfillEntryExitDay = "monitor.backfill_entry_exit_day"
-
-	// TaskTypeMonitorBackfillEntryExitRange names the task that scans an arbitrary
-	// UTC time range of an entry/exit channel. Payload must be
-	// [BackfillEntryExitRangePayload].
-	TaskTypeMonitorBackfillEntryExitRange = "monitor.backfill_entry_exit_range"
 )
-
-// BackfillEntryExitDayPayload carries the channel and target UTC day for a
-// [TaskTypeMonitorBackfillEntryExitDay] dispatch. Day uses the YYYY-MM-DD form.
-type BackfillEntryExitDayPayload struct {
-	ChannelID string
-	Day       string
-}
-
-// BackfillEntryExitRangePayload carries the channel and the inclusive UTC range
-// for a [TaskTypeMonitorBackfillEntryExitRange] dispatch. Start and End are
-// RFC3339 timestamps; End must be strictly after Start.
-type BackfillEntryExitRangePayload struct {
-	ChannelID string
-	Start     string
-	End       string
-}
 
 var monitoringWarmupTaskFn = cache.IntelligentWarmupContext
 
@@ -95,41 +68,6 @@ const (
 )
 
 var heartbeatTickInterval = heartbeatInterval
-
-const (
-	// persistent_cache types
-	persistentCacheTypeBotRolePermSnapshot = "bot_role_perm_snapshot"
-
-	// persistent_cache key prefix
-	persistentCacheKeyPrefixBotRolePermSnapshot = "bot_role_perm_snapshot:"
-)
-
-type botRolePermSnapshot struct {
-	GuildID         string    `json:"guild_id"`
-	RoleID          string    `json:"role_id"`
-	PrevPermissions int64     `json:"prev_permissions"`
-	SavedAt         time.Time `json:"saved_at"`
-	SavedByUserID   string    `json:"saved_by_user_id"`
-}
-
-// UserWatcher contains the specific logic for processing user changes.
-type UserWatcher struct {
-	session       *discordgo.Session
-	configManager *files.ConfigManager
-	store         *storage.Store
-	notifier      *NotificationSender
-	cache         *cache.UnifiedCache
-}
-
-func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *NotificationSender, unifiedCache *cache.UnifiedCache) *UserWatcher {
-	return &UserWatcher{
-		session:       session,
-		configManager: configManager,
-		store:         store,
-		notifier:      notifier,
-		cache:         unifiedCache,
-	}
-}
 
 // MonitoringService coordinates multi-guild handlers and delegates specific tasks (e.g., user).
 type MonitoringService struct {
@@ -388,21 +326,6 @@ func monitoringRunErrWithTimeoutContext(ctx context.Context, timeout time.Durati
 		return struct{}{}, fn(runCtx)
 	})
 	return err
-}
-
-type cachedRoles struct {
-	roles     []string
-	expiresAt time.Time
-}
-
-type cachedRoleUpdateAudit struct {
-	fetchedAt time.Time
-	entries   []*discordgo.AuditLogEntry
-}
-
-type presenceSnapshot struct {
-	Status       discordgo.Status
-	ClientStatus discordgo.ClientStatus
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.

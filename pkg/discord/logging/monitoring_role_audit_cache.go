@@ -7,6 +7,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+type cachedRoleUpdateAudit struct {
+	fetchedAt time.Time
+	entries   []*discordgo.AuditLogEntry
+}
+
 // roleUpdateAuditStore is a short-lived, self-evicting cache of per-guild
 // member-role-update audit-log entries together with a per-(guild,user)
 // debounce of audit refreshes. All access is serialized by mu. The zero value

@@ -14,6 +14,22 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
+const (
+	// persistent_cache types
+	persistentCacheTypeBotRolePermSnapshot = "bot_role_perm_snapshot"
+
+	// persistent_cache key prefix
+	persistentCacheKeyPrefixBotRolePermSnapshot = "bot_role_perm_snapshot:"
+)
+
+type botRolePermSnapshot struct {
+	GuildID         string    `json:"guild_id"`
+	RoleID          string    `json:"role_id"`
+	PrevPermissions int64     `json:"prev_permissions"`
+	SavedAt         time.Time `json:"saved_at"`
+	SavedByUserID   string    `json:"saved_by_user_id"`
+}
+
 func (ms *MonitoringService) botRolePermSnapshotKey(guildID, roleID string) string {
 	if guildID == "" || roleID == "" {
 		return ""

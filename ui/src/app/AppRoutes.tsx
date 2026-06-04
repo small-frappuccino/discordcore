@@ -20,6 +20,7 @@ import { appRoutes, mapLegacyDashboardPathForGuild } from "./routes";
 import { ManageIndexPage } from "../pages/ManageIndexPage";
 import { LandingPage } from "../pages/LandingPage";
 import { useDashboardSession } from "../context/DashboardSessionContext";
+import { TranscriptViewer } from "../features/tickets/TranscriptViewer";
 
 export function AppRoutes() {
   return (
@@ -103,6 +104,7 @@ export function AppRoutes() {
       <Route path="/dashboard" element={<LegacyDashboardRedirect />} />
       <Route path="/dashboard/*" element={<LegacyDashboardRedirect />} />
       <Route path={appRoutes.landing} element={<LandingPage />} />
+      <Route path={appRoutes.transcriptView} element={<TranscriptViewer />} />
       <Route path="*" element={<Navigate replace to={appRoutes.manage} />} />
     </Routes>
   );

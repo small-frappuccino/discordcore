@@ -1,11 +1,11 @@
 .dashboard-layout-shell {
   --shell-sidebar-width: 324px;
   --shell-sidebar-collapsed-width: 88px;
-  --shell-chrome-surface: rgba(20, 27, 35, 0.96);
-  --shell-chrome-border: rgba(42, 49, 64, 0.92);
-  --shell-nav-panel: rgba(27, 35, 46, 0.72);
-  --shell-nav-panel-border: rgba(54, 67, 87, 0.74);
-  --shell-nav-submenu-surface: #111821;
+  --shell-chrome-surface: transparent;
+  --shell-chrome-border: transparent;
+  --shell-nav-panel: rgba(255, 255, 255, 0.02);
+  --shell-nav-panel-border: transparent;
+  --shell-nav-submenu-surface: transparent;
   --shell-nav-hover: rgba(255, 255, 255, 0.04);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -316,14 +316,7 @@
 }
 
 .shell-body::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--shell-sidebar-width);
-  border-right: 1px solid var(--shell-chrome-border);
-  background: var(--shell-chrome-surface);
-  pointer-events: none;
-  z-index: 0;
+  content: none;
 }
 
 .shell-context-strip {
@@ -483,8 +476,8 @@
 
 .shell-nav-link-root.is-active {
   color: var(--text-main);
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 3px 0 0 var(--bg-accent);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-control);
 }
 
 .shell-nav-section {
@@ -521,7 +514,9 @@
 }
 
 .shell-nav-section-trigger.is-active {
-  box-shadow: inset 3px 0 0 var(--bg-accent);
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-control);
 }
 
 .shell-nav-section-indicator {
@@ -562,8 +557,7 @@
 
 .shell-nav-link-sub.is-active {
   color: var(--text-main);
-  background: rgba(215, 161, 132, 0.08);
-  box-shadow: inset 3px 0 0 var(--bg-accent);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .shell-main {

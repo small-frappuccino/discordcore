@@ -61,25 +61,18 @@ func Run(appName, tokenEnv string) error {
 }
 
 // RunWithOptions bootstraps the bot and allows hosts to override control-plane wiring.
-//
-// Note: This wrapper is a high-drift architectural choice. It encapsulates a 500+ line initialization
-// flow to provide centralized, graceful panic recovery without polluting the main implementation
-// with complex named-return shadowing. This drift elevates code quality by guaranteeing the lifecycle
-// webhook fires without crashing the host supervisor unexpectedly.
-func RunWithOptions(appName, tokenEnv string, opts RunOptions) error {
-	var panicErr error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				notifyLifecycleEvent("fatal", fmt.Sprintf("%v", r))
-				panicErr = fmt.Errorf("panic recovered during runtime: %v", r)
-			} else if panicErr == nil {
-				notifyLifecycleEvent("stopping", "")
-			}
-		}()
-		panicErr = runWithOptions(appName, tokenEnv, opts)
+func RunWithOptions(appName, tokenEnv string, opts RunOptions) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			notifyLifecycleEvent("fatal", fmt.Sprintf("panic recovered during runtime: %v", r))
+			err = fmt.Errorf("panic recovered during runtime: %v", r)
+		} else if err != nil {
+			notifyLifecycleEvent("fatal", fmt.Sprintf("startup or runtime error: %v", err))
+		} else {
+			notifyLifecycleEvent("stopping", "")
+		}
 	}()
-	return panicErr
+	return runWithOptions(appName, tokenEnv, opts)
 }
 
 func runWithOptions(appName, tokenEnv string, opts RunOptions) error {

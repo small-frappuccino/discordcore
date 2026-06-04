@@ -684,4 +684,16 @@ var postgresMigrations = []migration{
 			`CREATE INDEX IF NOT EXISTS idx_qotd_message_archives_created ON qotd_message_archives(thread_archive_id, created_at ASC)`,
 		},
 	},
+	{
+		Version: 22,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS ticket_sequences (
+				guild_id TEXT PRIMARY KEY,
+				last_id  BIGINT NOT NULL DEFAULT 0
+			)`,
+		},
+		DownSQL: []string{
+			`DROP TABLE IF EXISTS ticket_sequences`,
+		},
+	},
 }

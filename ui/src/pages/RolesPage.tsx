@@ -398,7 +398,7 @@ export function RolesPage() {
       <PageHeader
         eyebrow="Feature area"
         title={areaLabel}
-        description="Configure automatic role assignment and the related presence-aware controls inline, without hiding the main role editors behind drawers or disclosure panels."
+        description=""
         status={
           <StatusBadge
             tone={
@@ -435,7 +435,6 @@ export function RolesPage() {
                   autoRoleDetails.targetRoleId,
                   roleOptions.roles,
                 )}
-                description="The role that gets assigned automatically."
               />
               <MetricCard
                 label="Requirement roles"
@@ -443,11 +442,6 @@ export function RolesPage() {
                   autoRoleFeature,
                   roleOptions.roles,
                 )}
-                description={
-                  autoRoleDetails.requiredRoleCount === 2
-                    ? "Both requirement roles are configured."
-                    : "Choose the level and booster roles that gate the assignment."
-                }
                 tone={
                   autoRoleDetails.requiredRoleCount === 2
                     ? "success"
@@ -458,7 +452,7 @@ export function RolesPage() {
           ) : null
         }
         workspaceTitle="Manage roles"
-        workspaceDescription="Keep auto role assignment, presence watching, and the permission mirror in one flat workspace so the main role controls stay visible while you edit them."
+        workspaceDescription=""
       >
         <RolesWorkspaceContent
           areaLabel={areaLabel}
@@ -658,10 +652,6 @@ function RolesWorkspaceContent({
         <div className="card-copy">
           <p className="section-label">Workspace</p>
           <h2>No role controls yet</h2>
-          <p className="section-description">
-            The selected server does not expose role controls in this workspace
-            yet.
-          </p>
         </div>
       </div>
     );
@@ -821,11 +811,6 @@ function RolesPrimaryWorkflow({
               {formatFeatureStatusLabel(autoRoleFeature)}
             </StatusBadge>
           </div>
-          <p className="section-description">
-            Configure the role that should be assigned automatically and the
-            role requirements that gate the assignment flow without leaving this
-            page.
-          </p>
         </div>
       </div>
 
@@ -975,7 +960,6 @@ function RolesAdvancedControls({
                       {formatFeatureStatusLabel(feature)}
                     </StatusBadge>
                   </div>
-                  <p className="section-description">{feature.description}</p>
                 </div>
               </div>
 
@@ -1045,7 +1029,6 @@ function RolesAdvancedControls({
                       {formatFeatureStatusLabel(feature)}
                     </StatusBadge>
                   </div>
-                  <p className="section-description">{feature.description}</p>
                 </div>
               </div>
 
@@ -1124,7 +1107,6 @@ function RolesAdvancedControls({
                     {formatFeatureStatusLabel(feature)}
                   </StatusBadge>
                 </div>
-                <p className="section-description">{feature.description}</p>
               </div>
             </div>
 
