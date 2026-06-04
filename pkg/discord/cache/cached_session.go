@@ -6,6 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
+	"golang.org/x/sync/singleflight"
 )
 
 // CachedSession wraps a discordgo.Session and provides automatic caching for frequently accessed data.
@@ -13,6 +14,7 @@ import (
 type CachedSession struct {
 	session *discordgo.Session
 	cache   *UnifiedCache
+	sf      singleflight.Group
 }
 
 // NewCachedSession creates a new cached session wrapper
@@ -54,10 +56,13 @@ func (cs *CachedSession) GuildMember(guildID, userID string) (*discordgo.Member,
 	}
 
 	// Fallback to API
-	member, err := cs.session.GuildMember(guildID, userID)
+	v, err, _ := cs.sf.Do(fmt.Sprintf("member:%s:%s", guildID, userID), func() (any, error) {
+		return cs.session.GuildMember(guildID, userID)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("CachedSession.GuildMember: %w", err)
 	}
+	member := v.(*discordgo.Member)
 
 	cs.cache.SetMember(guildID, userID, member)
 	return member, nil
@@ -79,10 +84,13 @@ func (cs *CachedSession) Guild(guildID string) (*discordgo.Guild, error) {
 	}
 
 	// Fallback to API
-	guild, err := cs.session.Guild(guildID)
+	v, err, _ := cs.sf.Do(fmt.Sprintf("guild:%s", guildID), func() (any, error) {
+		return cs.session.Guild(guildID)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("CachedSession.Guild: %w", err)
 	}
+	guild := v.(*discordgo.Guild)
 
 	cs.cache.SetGuild(guildID, guild)
 	return guild, nil
@@ -96,10 +104,13 @@ func (cs *CachedSession) GuildRoles(guildID string) ([]*discordgo.Role, error) {
 	}
 
 	// Fallback to API
-	roles, err := cs.session.GuildRoles(guildID)
+	v, err, _ := cs.sf.Do(fmt.Sprintf("roles:%s", guildID), func() (any, error) {
+		return cs.session.GuildRoles(guildID)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("CachedSession.GuildRoles: %w", err)
 	}
+	roles := v.([]*discordgo.Role)
 
 	cs.cache.SetRoles(guildID, roles)
 	return roles, nil
@@ -121,10 +132,13 @@ func (cs *CachedSession) Channel(channelID string) (*discordgo.Channel, error) {
 	}
 
 	// Fallback to API
-	channel, err := cs.session.Channel(channelID)
+	v, err, _ := cs.sf.Do(fmt.Sprintf("channel:%s", channelID), func() (any, error) {
+		return cs.session.Channel(channelID)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("CachedSession.Channel: %w", err)
 	}
+	channel := v.(*discordgo.Channel)
 
 	cs.cache.SetChannel(channelID, channel)
 	return channel, nil
