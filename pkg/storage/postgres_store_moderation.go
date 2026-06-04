@@ -7,6 +7,18 @@ import (
 	"time"
 )
 
+// ModerationWarning is a stored warning against a user in a guild. CaseNumber is
+// the per-guild sequential case identifier surfaced to moderators.
+type ModerationWarning struct {
+	ID          int64
+	GuildID     string
+	UserID      string
+	CaseNumber  int64
+	ModeratorID string
+	Reason      string
+	CreatedAt   time.Time
+}
+
 // NextModerationCaseNumber atomically increments and returns the next moderation case number for a guild.
 func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 	guildID = strings.TrimSpace(guildID)

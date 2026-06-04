@@ -15,54 +15,6 @@ type Store struct {
 
 const storeBulkInsertMaxRows = 4000
 
-// GuildMemberSnapshot represents the persisted snapshot for one guild member.
-// Fields are opt-in so callers can batch only the parts they need to refresh.
-type GuildMemberSnapshot struct {
-	UserID     string
-	AvatarHash string
-	HasAvatar  bool
-	Roles      []string
-	HasRoles   bool
-	JoinedAt   time.Time
-	IsBot      bool
-	HasBot     bool
-}
-
-// GuildMemberCurrentState is the persisted current membership state for a user
-// in a guild, including join/leave timestamps and the last known role set.
-// LeftAt is the zero time while Active is true.
-type GuildMemberCurrentState struct {
-	UserID     string
-	JoinedAt   time.Time
-	LastSeenAt time.Time
-	LeftAt     time.Time
-	Active     bool
-	IsBot      bool
-	HasBot     bool
-	Roles      []string
-}
-
-// CacheEntryRecord is a single persisted cache row keyed by Key within a
-// CacheType namespace; Data is the serialized payload and ExpiresAt bounds its
-// validity.
-type CacheEntryRecord struct {
-	Key       string
-	CacheType string
-	Data      string
-	ExpiresAt time.Time
-}
-
-// ModerationWarning is a stored warning against a user in a guild. CaseNumber is
-// the per-guild sequential case identifier surfaced to moderators.
-type ModerationWarning struct {
-	ID          int64
-	GuildID     string
-	UserID      string
-	CaseNumber  int64
-	ModeratorID string
-	Reason      string
-	CreatedAt   time.Time
-}
 
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
 // Returns an error if the provided db is nil, avoiding runtime panics for invariant failures.

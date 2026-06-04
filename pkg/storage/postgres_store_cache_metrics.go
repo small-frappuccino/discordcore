@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+// CacheEntryRecord is a single persisted cache row keyed by Key within a
+// CacheType namespace; Data is the serialized payload and ExpiresAt bounds its
+// validity.
+type CacheEntryRecord struct {
+	Key       string
+	CacheType string
+	Data      string
+	ExpiresAt time.Time
+}
+
 // DailyMessageCountDelta represents a delta to be applied to one daily message metric bucket.
 type DailyMessageCountDelta struct {
 	GuildID   string

@@ -8,6 +8,33 @@ import (
 	"time"
 )
 
+// GuildMemberSnapshot represents the persisted snapshot for one guild member.
+// Fields are opt-in so callers can batch only the parts they need to refresh.
+type GuildMemberSnapshot struct {
+	UserID     string
+	AvatarHash string
+	HasAvatar  bool
+	Roles      []string
+	HasRoles   bool
+	JoinedAt   time.Time
+	IsBot      bool
+	HasBot     bool
+}
+
+// GuildMemberCurrentState is the persisted current membership state for a user
+// in a guild, including join/leave timestamps and the last known role set.
+// LeftAt is the zero time while Active is true.
+type GuildMemberCurrentState struct {
+	UserID     string
+	JoinedAt   time.Time
+	LastSeenAt time.Time
+	LeftAt     time.Time
+	Active     bool
+	IsBot      bool
+	HasBot     bool
+	Roles      []string
+}
+
 // UpsertGuildMemberSnapshotsContext persists one page of guild member snapshots in a single transaction.
 func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
 	guildID = strings.TrimSpace(guildID)
