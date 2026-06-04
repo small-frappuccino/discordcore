@@ -365,3 +365,79 @@ func TestQOTDConfigUnmarshalMigratesLegacyChannelFields(t *testing.T) {
 		t.Fatalf("expected legacy schedule fields to map to canonical schedule, got %+v", cfg.Schedule)
 	}
 }
+
+func TestQOTDConfigLegacyJSONTableMappings(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		payload string
+		check   func(t *testing.T, cfg QOTDConfig)
+	}{
+		{
+			name:    "legacy question_channel_id maps to default deck channel_id",
+			payload: `{"enabled": true, "question_channel_id": "111"}`,
+			check: func(t *testing.T, cfg QOTDConfig) {
+				if len(cfg.Decks) != 1 || cfg.Decks[0].ChannelID != "111" {
+					t.Fatalf("expected channel_id mapped to 111, got %+v", cfg.Decks)
+				}
+			},
+		},
+		{
+			name:    "legacy forum_channel_id maps to default deck forum_channel_id",
+			payload: `{"enabled": true, "forum_channel_id": "222"}`,
+			check: func(t *testing.T, cfg QOTDConfig) {
+				if len(cfg.Decks) != 1 || cfg.Decks[0].ChannelID != "222" {
+					t.Fatalf("expected forum_channel_id mapped to ChannelID 222, got %+v", cfg.Decks)
+				}
+			},
+		},
+		{
+			name:    "legacy qotd_time_hour_utc and minute maps to Schedule",
+			payload: `{"qotd_time_hour_utc": 15, "qotd_time_minute_utc": 30}`,
+			check: func(t *testing.T, cfg QOTDConfig) {
+				if cfg.Schedule.HourUTC == nil || *cfg.Schedule.HourUTC != 15 || cfg.Schedule.MinuteUTC == nil || *cfg.Schedule.MinuteUTC != 30 {
+					t.Fatalf("expected schedule 15:30, got %+v", cfg.Schedule)
+				}
+			},
+		},
+		{
+			name:    "legacy publish_hour_utc and minute maps to Schedule",
+			payload: `{"publish_hour_utc": 10, "publish_minute_utc": 45}`,
+			check: func(t *testing.T, cfg QOTDConfig) {
+				if cfg.Schedule.HourUTC == nil || *cfg.Schedule.HourUTC != 10 || cfg.Schedule.MinuteUTC == nil || *cfg.Schedule.MinuteUTC != 45 {
+					t.Fatalf("expected schedule 10:45, got %+v", cfg.Schedule)
+				}
+			},
+		},
+		{
+			name:    "legacy suppress_scheduled_publish_date_utc maps to list",
+			payload: `{"suppress_scheduled_publish_date_utc": "2026-06-04"}`,
+			check: func(t *testing.T, cfg QOTDConfig) {
+				if len(cfg.SuppressScheduledPublishDatesUTC) != 1 || cfg.SuppressScheduledPublishDatesUTC[0] != "2026-06-04" {
+					t.Fatalf("expected suppressed dates list length 1, got %+v", cfg.SuppressScheduledPublishDatesUTC)
+				}
+			},
+		},
+		{
+			name:    "canonical schedule shadows legacy",
+			payload: `{"publish_hour_utc": 10, "publish_minute_utc": 45, "schedule": {"hour_utc": 11, "minute_utc": 50}}`,
+			check: func(t *testing.T, cfg QOTDConfig) {
+				if cfg.Schedule.HourUTC == nil || *cfg.Schedule.HourUTC != 11 || cfg.Schedule.MinuteUTC == nil || *cfg.Schedule.MinuteUTC != 50 {
+					t.Fatalf("expected canonical schedule 11:50 to win, got %+v", cfg.Schedule)
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var cfg QOTDConfig
+			if err := json.Unmarshal([]byte(tc.payload), &cfg); err != nil {
+				t.Fatalf("unmarshal failed: %v", err)
+			}
+			tc.check(t, cfg)
+		})
+	}
+}
