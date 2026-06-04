@@ -18,17 +18,24 @@ export function CorePage() {
       <SurfaceCard className="mt-8">
         <h3 className="mb-4 text-lg">Domain Routing</h3>
         <SettingsGroup>
-          <SettingsRow
-            title="Default Bot Instance"
-            description="The fallback worker instance for this server."
-            control={<span className="text-muted">{settings?.workspace?.sections?.bot_routing?.bot_instance_id || "Main Worker"}</span>}
-          />
-          <SettingsRow
-            title="QOTD Domain Override"
-            description="Specific worker assigned to QOTD processing."
-            control={<span className="text-muted">{settings?.workspace?.sections?.bot_routing?.domain_bot_instance_ids?.qotd || "Inherited"}</span>}
-            isLast
-          />
+          <SettingsRow>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Default Bot Instance</SettingsRow.Title>
+              <SettingsRow.Description>The fallback worker instance for this server.</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              <span className="text-muted">{settings?.workspace?.sections?.bot_routing?.bot_instance_id || "Main Worker"}</span>
+            </SettingsRow.Control>
+          </SettingsRow>
+          <SettingsRow isLast>
+            <SettingsRow.Info>
+              <SettingsRow.Title>QOTD Domain Override</SettingsRow.Title>
+              <SettingsRow.Description>Specific worker assigned to QOTD processing.</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              <span className="text-muted">{settings?.workspace?.sections?.bot_routing?.domain_bot_instance_ids?.qotd || "Inherited"}</span>
+            </SettingsRow.Control>
+          </SettingsRow>
         </SettingsGroup>
       </SurfaceCard>
     </PageContainer>

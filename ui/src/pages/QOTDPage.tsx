@@ -28,10 +28,12 @@ export function QOTDPage() {
             <h2 className="text-lg mb-4">Core Settings</h2>
             
             <SettingsGroup className="mb-8">
-              <SettingsRow 
-                title="Active Deck"
-                description={`Currently active deck for drawing questions. ${activeDeck ? `Remaining cards: ${activeDeck.name}` : ""}`}
-                control={
+              <SettingsRow>
+                <SettingsRow.Info>
+                  <SettingsRow.Title>Active Deck</SettingsRow.Title>
+                  <SettingsRow.Description>{`Currently active deck for drawing questions. ${activeDeck ? `Remaining cards: ${activeDeck.name}` : ""}`}</SettingsRow.Description>
+                </SettingsRow.Info>
+                <SettingsRow.Control>
                   <select 
                     {...form.register("active_deck_id")}
                     className="form-select w-full max-w-xs"
@@ -41,30 +43,32 @@ export function QOTDPage() {
                       <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
                   </select>
-                }
-              />
-              <SettingsRow 
-                title="Verified Role (Optional)"
-                description="If set, only users with this role can answer the QOTD."
-                isLast
-                control={
+                </SettingsRow.Control>
+              </SettingsRow>
+              <SettingsRow isLast>
+                <SettingsRow.Info>
+                  <SettingsRow.Title>Verified Role (Optional)</SettingsRow.Title>
+                  <SettingsRow.Description>If set, only users with this role can answer the QOTD.</SettingsRow.Description>
+                </SettingsRow.Info>
+                <SettingsRow.Control>
                   <input
                     type="text"
                     placeholder="Role ID..."
                     {...form.register("verified_role_id")}
                     className="form-input w-full max-w-xs"
                   />
-                }
-              />
+                </SettingsRow.Control>
+              </SettingsRow>
             </SettingsGroup>
 
             <h2 className="text-lg mb-4">Publish Schedule (UTC)</h2>
             <SettingsGroup className="mb-8">
-              <SettingsRow 
-                title="Hour & Minute"
-                description="The exact UTC time when the question should be posted."
-                isLast
-                control={
+              <SettingsRow isLast>
+                <SettingsRow.Info>
+                  <SettingsRow.Title>Hour & Minute</SettingsRow.Title>
+                  <SettingsRow.Description>The exact UTC time when the question should be posted.</SettingsRow.Description>
+                </SettingsRow.Info>
+                <SettingsRow.Control>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -82,8 +86,8 @@ export function QOTDPage() {
                       className="form-input w-16"
                     />
                   </div>
-                }
-              />
+                </SettingsRow.Control>
+              </SettingsRow>
             </SettingsGroup>
 
             <div className="mt-4">

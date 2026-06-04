@@ -1,17 +1,33 @@
-import * as React from "react";
+import type { VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
+import { cn } from "../../../lib/utils";
 
-type BadgeProps = React.HTMLAttributes<HTMLSpanElement> & {
-  variant?: "success" | "danger" | "warning" | "neutral";
-};
+const badgeVariants = cva("badge", {
+  variants: {
+    variant: {
+      success: "badge-success",
+      danger: "badge-danger",
+      warning: "badge-warning",
+      neutral: "badge-neutral",
+    },
+  },
+  defaultVariants: {
+    variant: "neutral",
+  },
+});
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLSpanElement>,
+    VariantProps<typeof badgeVariants> {}
 
 export function Badge({
-  className = "",
-  variant = "neutral",
+  className,
+  variant,
   children,
   ...props
 }: BadgeProps) {
   return (
-    <span className={`badge badge-${variant} ${className}`} {...props}>
+    <span className={cn(badgeVariants({ variant, className }))} {...props}>
       {children}
     </span>
   );

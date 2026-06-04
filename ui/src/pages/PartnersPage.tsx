@@ -17,45 +17,48 @@ export function PartnersPage() {
   }
 
   const renderInputRow = (name: Path<PartnersFormData>, title: string, placeholder: string = "") => (
-    <SettingsRow
-      title={title}
-      description=""
-      control={
+    <SettingsRow>
+      <SettingsRow.Info>
+        <SettingsRow.Title>{title}</SettingsRow.Title>
+      </SettingsRow.Info>
+      <SettingsRow.Control>
         <input
           type="text"
           placeholder={placeholder}
           {...form.register(name)}
           className="form-input w-full"
         />
-      }
-    />
+      </SettingsRow.Control>
+    </SettingsRow>
   );
 
   const renderTextareaRow = (name: Path<PartnersFormData>, title: string) => (
-    <SettingsRow
-      title={title}
-      description=""
-      control={
+    <SettingsRow>
+      <SettingsRow.Info>
+        <SettingsRow.Title>{title}</SettingsRow.Title>
+      </SettingsRow.Info>
+      <SettingsRow.Control>
         <textarea
           {...form.register(name)}
           className="form-input w-full min-h-16"
         />
-      }
-    />
+      </SettingsRow.Control>
+    </SettingsRow>
   );
 
   const renderCheckboxRow = (name: Path<PartnersFormData>, title: string) => (
-    <SettingsRow
-      title={title}
-      description=""
-      control={
+    <SettingsRow>
+      <SettingsRow.Info>
+        <SettingsRow.Title>{title}</SettingsRow.Title>
+      </SettingsRow.Info>
+      <SettingsRow.Control>
         <input
           type="checkbox"
           className="form-checkbox w-4 h-4"
           {...form.register(name)}
         />
-      }
-    />
+      </SettingsRow.Control>
+    </SettingsRow>
   );
 
   return (
@@ -82,17 +85,19 @@ export function PartnersPage() {
             {renderInputRow("empty_state_text", "Empty State Text")}
             {renderTextareaRow("footer_template", "Footer Template")}
             {renderInputRow("other_fandom_label", "Other Fandom Label")}
-            <SettingsRow
-              title="Embed Color (Decimal)"
-              description="Color of the embed side border."
-              control={
+            <SettingsRow>
+              <SettingsRow.Info>
+                <SettingsRow.Title>Embed Color (Decimal)</SettingsRow.Title>
+                <SettingsRow.Description>Color of the embed side border.</SettingsRow.Description>
+              </SettingsRow.Info>
+              <SettingsRow.Control>
                 <input
                   type="number"
                   {...form.register("color", { valueAsNumber: true })}
                   className="form-input w-40"
                 />
-              }
-            />
+              </SettingsRow.Control>
+            </SettingsRow>
             {renderCheckboxRow("disable_fandom_sorting", "Disable Fandom Sorting")}
             {renderCheckboxRow("disable_partner_sorting", "Disable Partner Sorting")}
           </SettingsGroup>

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"log/slog"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
@@ -24,28 +25,95 @@ const (
 // serializes. guilds and lastRun are mutated only from within funcs delivered
 // on actorCh and executed by loop, so they require no additional locking.
 // Construct with newStatsCoordinator; the zero value has nil maps and channel.
-type statsCoordinator struct {
+type StatsService struct {
+	session              *discordgo.Session
+	configManager        *files.ConfigManager
+	store                *storage.Store
+	logger               *slog.Logger
+	botInstanceID        string
+	defaultBotInstanceID string
+
 	actorCh chan func()
 	guilds  map[string]*statsGuildState
 	lastRun map[string]time.Time
+
+	currentRunCtx func() context.Context
+	getHeartbeat func(context.Context) (time.Time, bool, error)
+	fetchMembers func(context.Context, string, func([]*discordgo.Member) error) (int, error)
 }
 
-func newStatsCoordinator() *statsCoordinator {
-	return &statsCoordinator{
-		actorCh: make(chan func(), 1024),
-		guilds:  make(map[string]*statsGuildState),
-		lastRun: make(map[string]time.Time),
+func NewStatsService(
+	session *discordgo.Session,
+	configManager *files.ConfigManager,
+	store *storage.Store,
+	logger *slog.Logger,
+	botInstanceID string,
+	defaultBotInstanceID string,
+	currentRunCtx func() context.Context,
+	getHeartbeat func(context.Context) (time.Time, bool, error),
+	fetchMembers func(context.Context, string, func([]*discordgo.Member) error) (int, error),
+) *StatsService {
+	return &StatsService{
+		session:              session,
+		configManager:        configManager,
+		store:                store,
+		logger:               logger,
+		botInstanceID:        botInstanceID,
+		defaultBotInstanceID: defaultBotInstanceID,
+		actorCh:              make(chan func(), 1024),
+		guilds:               make(map[string]*statsGuildState),
+		lastRun:              make(map[string]time.Time),
+		currentRunCtx:        currentRunCtx,
+		getHeartbeat:         getHeartbeat,
+		fetchMembers:         fetchMembers,
 	}
+}
+
+func (s *StatsService) Start(ctx context.Context) error {
+	go s.loop(ctx)
+	return nil
+}
+
+func (s *StatsService) Stop(ctx context.Context) error {
+	return nil
+}
+
+func (s *StatsService) handlesGuild(guildID string) bool {
+	if s == nil || s.configManager == nil {
+		return false
+	}
+	cfg := s.configManager.GuildConfig(guildID)
+	if cfg == nil {
+		return false
+	}
+	return cfg.BelongsToBotInstance(s.botInstanceID, s.defaultBotInstanceID)
+}
+
+func (s *StatsService) scopedConfig() *files.BotConfig {
+	if s == nil || s.configManager == nil {
+		return nil
+	}
+	cfg := s.configManager.Config()
+	if cfg == nil {
+		return nil
+	}
+	scopedGuilds := cfg.GuildsForBotInstance(s.botInstanceID, s.defaultBotInstanceID)
+	if len(scopedGuilds) == len(cfg.Guilds) {
+		return cfg
+	}
+	scoped := *cfg
+	scoped.Guilds = scopedGuilds
+	return &scoped
 }
 
 // loop runs the stats actor until ctx is canceled, executing each enqueued
 // closure serially so the maps above are only ever touched by one goroutine.
-func (sc *statsCoordinator) loop(ctx context.Context) {
+func (s *StatsService) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case fn := <-sc.actorCh:
+		case fn := <-s.actorCh:
 			fn()
 		}
 	}
@@ -191,13 +259,13 @@ func (state *statsGuildState) addContribution(snapshot statsMemberSnapshot, delt
 	}
 }
 
-func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
-	if ms == nil || ms.session == nil || ms.configManager == nil {
+func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
+	if s == nil || s.session == nil || s.configManager == nil {
 		return nil
 	}
-	cfg := ms.scopedConfig()
+	cfg := s.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		ms.pruneStatsGuildState(nil)
+		s.pruneStatsGuildState(nil)
 		return nil
 	}
 
@@ -212,7 +280,7 @@ func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 		}
 		activeGuilds[gcfg.GuildID] = struct{}{}
 
-		needsReconcile, prepErr := ms.prepareStatsState(ctx, gcfg)
+		needsReconcile, prepErr := s.prepareStatsState(ctx, gcfg)
 		if prepErr != nil {
 			log.ErrorLoggerRaw().Error(
 				"Failed to prepare stats state",
@@ -221,9 +289,9 @@ func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 				"err", prepErr,
 			)
 		}
-		shouldPublish := ms.shouldRunStatsUpdate(gcfg.GuildID, statsInterval(gcfg.Stats))
+		shouldPublish := s.shouldRunStatsUpdate(gcfg.GuildID, statsInterval(gcfg.Stats))
 		if needsReconcile {
-			if err := ms.reconcileStatsForGuild(ctx, gcfg); err != nil {
+			if err := s.reconcileStatsForGuild(ctx, gcfg); err != nil {
 				log.ErrorLoggerRaw().Error(
 					"Failed to reconcile stats channels",
 					"operation", "monitoring.stats.reconcile",
@@ -238,7 +306,7 @@ func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 		if !shouldPublish {
 			continue
 		}
-		if err := ms.publishStatsForGuild(ctx, gcfg); err != nil {
+		if err := s.publishStatsForGuild(ctx, gcfg); err != nil {
 			log.ErrorLoggerRaw().Error(
 				"Failed to update stats channels",
 				"operation", "monitoring.stats.publish",
@@ -248,7 +316,7 @@ func (ms *MonitoringService) updateStatsChannels(ctx context.Context) error {
 		}
 	}
 
-	ms.pruneStatsGuildState(activeGuilds)
+	s.pruneStatsGuildState(activeGuilds)
 	return nil
 }
 
@@ -277,7 +345,7 @@ func statsReconcileInterval(cfg files.StatsConfig) time.Duration {
 	return interval
 }
 
-func (ms *MonitoringService) shouldRunStatsUpdate(guildID string, interval time.Duration) bool {
+func (s *StatsService) shouldRunStatsUpdate(guildID string, interval time.Duration) bool {
 	if guildID == "" {
 		return false
 	}
@@ -286,22 +354,22 @@ func (ms *MonitoringService) shouldRunStatsUpdate(guildID string, interval time.
 	}
 	now := time.Now()
 	replyCh := make(chan bool, 1)
-	ms.stats.actorCh <- func() {
-		if ms.stats.lastRun == nil {
-			ms.stats.lastRun = make(map[string]time.Time)
+	s.actorCh <- func() {
+		if s.lastRun == nil {
+			s.lastRun = make(map[string]time.Time)
 		}
-		last, ok := ms.stats.lastRun[guildID]
+		last, ok := s.lastRun[guildID]
 		if ok && now.Sub(last) < interval {
 			replyCh <- false
 			return
 		}
-		ms.stats.lastRun[guildID] = now
+		s.lastRun[guildID] = now
 		replyCh <- true
 	}
 	return <-replyCh
 }
 
-func (ms *MonitoringService) reconcileStatsForGuild(ctx context.Context, gcfg files.GuildConfig) error {
+func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.GuildConfig) error {
 	if gcfg.GuildID == "" {
 		return fmt.Errorf("guild id is empty")
 	}
@@ -310,8 +378,8 @@ func (ms *MonitoringService) reconcileStatsForGuild(ctx context.Context, gcfg fi
 	}
 
 	trackedRoles, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
-	state := newStatsGuildState(trackedRolesKey, ms.statsPublishedChannels(gcfg.GuildID))
-	if _, err := ms.forEachGuildMemberPageContext(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
+	state := newStatsGuildState(trackedRolesKey, s.statsPublishedChannels(gcfg.GuildID))
+	if _, err := s.fetchMembers(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
 		for _, member := range members {
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("MonitoringService.reconcileStatsForGuild: %w", err)
@@ -330,8 +398,8 @@ func (ms *MonitoringService) reconcileStatsForGuild(ctx context.Context, gcfg fi
 	state.initialized = true
 	state.dirty = false
 	state.lastReconciled = time.Now().UTC()
-	ms.replaceStatsGuildState(gcfg.GuildID, state)
-	ms.markStatsSeeded(ctx, gcfg.GuildID, state.lastReconciled)
+	s.replaceStatsGuildState(gcfg.GuildID, state)
+	s.markStatsSeeded(ctx, gcfg.GuildID, state.lastReconciled)
 
 	log.ApplicationLogger().Info(
 		"Reconciled stats counters",
@@ -343,15 +411,15 @@ func (ms *MonitoringService) reconcileStatsForGuild(ctx context.Context, gcfg fi
 	return nil
 }
 
-func (ms *MonitoringService) prepareStatsState(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
+func (s *StatsService) prepareStatsState(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
 	_, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
 
 	replyCh := make(chan struct {
 		needsReconcile bool
 		skipRest       bool
 	}, 1)
-	ms.stats.actorCh <- func() {
-		state := ms.ensureStatsGuildState(gcfg.GuildID)
+	s.actorCh <- func() {
+		state := s.ensureStatsGuildState(gcfg.GuildID)
 		keysMatch := state.trackedRolesKey == trackedRolesKey
 		if state.initialized && keysMatch && !state.dirty {
 			lastReconciled := state.lastReconciled
@@ -374,28 +442,28 @@ func (ms *MonitoringService) prepareStatsState(ctx context.Context, gcfg files.G
 		return res.needsReconcile, nil
 	}
 
-	hydrated, err := ms.hydrateStatsForGuildFromStore(ctx, gcfg)
+	hydrated, err := s.hydrateStatsForGuildFromStore(ctx, gcfg)
 	if err != nil {
 		return true, fmt.Errorf("MonitoringService.prepareStatsState: %w", err)
 	}
 	if !hydrated {
 		return true, nil
 	}
-	return ms.statsStoreStateStale(ctx, gcfg), nil
+	return s.statsStoreStateStale(ctx, gcfg), nil
 }
 
-func (ms *MonitoringService) hydrateStatsForGuildFromStore(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
-	if ms == nil || ms.store == nil {
+func (s *StatsService) hydrateStatsForGuildFromStore(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
+	if s == nil || s.store == nil {
 		return false, nil
 	}
 	if gcfg.GuildID == "" {
 		return false, nil
 	}
-	if !ms.hasStatsSeed(ctx, gcfg.GuildID) {
+	if !s.hasStatsSeed(ctx, gcfg.GuildID) {
 		return false, nil
 	}
 
-	storedMembers, err := ms.store.GetActiveGuildMemberStatesContext(ctx, gcfg.GuildID)
+	storedMembers, err := s.store.GetActiveGuildMemberStatesContext(ctx, gcfg.GuildID)
 	if err != nil {
 		return false, fmt.Errorf("load active member state: %w", err)
 	}
@@ -409,7 +477,7 @@ func (ms *MonitoringService) hydrateStatsForGuildFromStore(ctx context.Context, 
 		}
 	}
 
-	state := newStatsGuildState(trackedRolesKey, ms.statsPublishedChannels(gcfg.GuildID))
+	state := newStatsGuildState(trackedRolesKey, s.statsPublishedChannels(gcfg.GuildID))
 	for _, member := range storedMembers {
 		userID, snapshot, ok := statsSnapshotFromStoredState(member, trackedRoles)
 		if !ok {
@@ -420,7 +488,7 @@ func (ms *MonitoringService) hydrateStatsForGuildFromStore(ctx context.Context, 
 	state.initialized = true
 	state.dirty = false
 	state.lastReconciled = time.Now().UTC()
-	ms.replaceStatsGuildState(gcfg.GuildID, state)
+	s.replaceStatsGuildState(gcfg.GuildID, state)
 	return true, nil
 }
 
@@ -434,9 +502,9 @@ func statsRequiresBotClassification(channels []files.StatsChannelConfig) bool {
 	return false
 }
 
-func (ms *MonitoringService) statsStoreStateStale(ctx context.Context, gcfg files.GuildConfig) bool {
+func (s *StatsService) statsStoreStateStale(ctx context.Context, gcfg files.GuildConfig) bool {
 	limit := statsStoreFreshnessLimit(gcfg.Stats)
-	lastHeartbeat, ok, err := ms.getHeartbeat(ctx)
+	lastHeartbeat, ok, err := s.getHeartbeat(ctx)
 	if err != nil || !ok {
 		return true
 	}
@@ -456,11 +524,11 @@ func statsSeedMetadataKey(guildID string) string {
 	return statsSeedMetadataPrefix + strings.TrimSpace(guildID)
 }
 
-func (ms *MonitoringService) hasStatsSeed(ctx context.Context, guildID string) bool {
-	if ms == nil || ms.store == nil {
+func (s *StatsService) hasStatsSeed(ctx context.Context, guildID string) bool {
+	if s == nil || s.store == nil {
 		return false
 	}
-	_, ok, err := ms.store.Metadata(ctx, statsSeedMetadataKey(guildID))
+	_, ok, err := s.store.Metadata(ctx, statsSeedMetadataKey(guildID))
 	if err != nil {
 		log.ApplicationLogger().Warn(
 			"Failed to read stats seed metadata",
@@ -473,14 +541,14 @@ func (ms *MonitoringService) hasStatsSeed(ctx context.Context, guildID string) b
 	return ok
 }
 
-func (ms *MonitoringService) markStatsSeeded(ctx context.Context, guildID string, at time.Time) {
-	if ms == nil || ms.store == nil || strings.TrimSpace(guildID) == "" {
+func (s *StatsService) markStatsSeeded(ctx context.Context, guildID string, at time.Time) {
+	if s == nil || s.store == nil || strings.TrimSpace(guildID) == "" {
 		return
 	}
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
-	if err := ms.store.SetMetadata(ctx, statsSeedMetadataKey(guildID), at); err != nil {
+	if err := s.store.SetMetadata(ctx, statsSeedMetadataKey(guildID), at); err != nil {
 		log.ApplicationLogger().Warn(
 			"Failed to persist stats seed metadata",
 			"operation", "monitoring.stats.seed.write",
@@ -490,8 +558,8 @@ func (ms *MonitoringService) markStatsSeeded(ctx context.Context, guildID string
 	}
 }
 
-func (ms *MonitoringService) publishStatsForGuild(ctx context.Context, gcfg files.GuildConfig) error {
-	snapshot, ok := ms.statsSnapshot(gcfg.GuildID)
+func (s *StatsService) publishStatsForGuild(ctx context.Context, gcfg files.GuildConfig) error {
+	snapshot, ok := s.statsSnapshot(gcfg.GuildID)
 	if !ok {
 		return fmt.Errorf("stats state unavailable")
 	}
@@ -501,7 +569,7 @@ func (ms *MonitoringService) publishStatsForGuild(ctx context.Context, gcfg file
 			return fmt.Errorf("MonitoringService.publishStatsForGuild: %w", err)
 		}
 		count := statsCountForChannel(snapshot, sc)
-		if err := ms.updateStatsChannelName(ctx, gcfg.GuildID, sc, count); err != nil {
+		if err := s.updateStatsChannelName(ctx, gcfg.GuildID, sc, count); err != nil {
 			log.ErrorLoggerRaw().Error(
 				"Failed to update stats channel name",
 				"operation", "monitoring.stats.publish_channel",
@@ -616,13 +684,13 @@ func normalizeMemberType(raw string) string {
 	}
 }
 
-func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID string, cfg files.StatsChannelConfig, count int) error {
+func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID string, cfg files.StatsChannelConfig, count int) error {
 	channelID := strings.TrimSpace(cfg.ChannelID)
 	if channelID == "" {
 		return nil
 	}
 
-	published, hasPublished := ms.statsPublishedChannel(guildID, channelID)
+	published, hasPublished := s.statsPublishedChannel(guildID, channelID)
 	label := strings.TrimSpace(cfg.Label)
 	if label == "" {
 		label = strings.TrimSpace(published.label)
@@ -630,7 +698,7 @@ func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID
 
 	channelName := ""
 	if !hasPublished || label == "" {
-		channel, err := ms.resolveChannel(ctx, channelID)
+		channel, err := s.resolveChannel(ctx, channelID)
 		if err != nil {
 			return fmt.Errorf("resolve channel: %w", err)
 		}
@@ -657,7 +725,7 @@ func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID
 		return nil
 	}
 	if channelName != "" && channelName == newName {
-		ms.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
+		s.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
 			count: count,
 			name:  newName,
 			label: label,
@@ -665,7 +733,7 @@ func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID
 		return nil
 	}
 	if hasPublished && published.name == newName {
-		ms.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
+		s.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
 			count: count,
 			name:  newName,
 			label: label,
@@ -674,12 +742,12 @@ func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID
 	}
 
 	if _, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
-		return ms.session.ChannelEdit(channelID, &discordgo.ChannelEdit{Name: newName})
+		return s.session.ChannelEdit(channelID, &discordgo.ChannelEdit{Name: newName})
 	}); err != nil {
 		return fmt.Errorf("channel edit: %w", err)
 	}
 
-	ms.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
+	s.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
 		count: count,
 		name:  newName,
 		label: label,
@@ -695,17 +763,17 @@ func (ms *MonitoringService) updateStatsChannelName(ctx context.Context, guildID
 	return nil
 }
 
-func (ms *MonitoringService) resolveChannel(ctx context.Context, channelID string) (*discordgo.Channel, error) {
-	if ms.session == nil || channelID == "" {
+func (s *StatsService) resolveChannel(ctx context.Context, channelID string) (*discordgo.Channel, error) {
+	if s.session == nil || channelID == "" {
 		return nil, fmt.Errorf("session not available or channel id empty")
 	}
-	if ms.session.State != nil {
-		if ch, err := ms.session.State.Channel(channelID); err == nil && ch != nil {
+	if s.session.State != nil {
+		if ch, err := s.session.State.Channel(channelID); err == nil && ch != nil {
 			return ch, nil
 		}
 	}
 	return monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
-		return ms.session.Channel(channelID)
+		return s.session.Channel(channelID)
 	})
 }
 
@@ -723,27 +791,27 @@ func renderStatsChannelName(label, template string, count int) string {
 	return strings.TrimSpace(out)
 }
 
-func (ms *MonitoringService) handleStatsMemberAdd(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
+func (s *StatsService) HandleStatsMemberAdd(_ *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	if m == nil || m.Member == nil || m.Member.User == nil {
 		return
 	}
-	if !ms.handlesGuild(m.GuildID) {
+	if !s.handlesGuild(m.GuildID) {
 		return
 	}
-	ms.applyStatsMemberAdd(m.Member)
+	s.applyStatsMemberAdd(m.Member)
 }
 
-func (ms *MonitoringService) handleStatsMemberRemove(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
+func (s *StatsService) HandleStatsMemberRemove(_ *discordgo.Session, m *discordgo.GuildMemberRemove) {
 	if m == nil || m.User == nil {
 		return
 	}
-	if !ms.handlesGuild(m.GuildID) {
+	if !s.handlesGuild(m.GuildID) {
 		return
 	}
-	ms.applyStatsMemberRemove(m.GuildID, m.User.ID)
+	s.applyStatsMemberRemove(m.GuildID, m.User.ID)
 }
 
-func (ms *MonitoringService) applyStatsMemberAdd(member *discordgo.Member) {
+func (s *StatsService) applyStatsMemberAdd(member *discordgo.Member) {
 	if member == nil || member.User == nil {
 		return
 	}
@@ -753,18 +821,18 @@ func (ms *MonitoringService) applyStatsMemberAdd(member *discordgo.Member) {
 		return
 	}
 
-	_, trackedRoles, trackedRolesKey, enabled := ms.statsGuildConfig(guildID)
+	_, trackedRoles, trackedRolesKey, enabled := s.statsGuildConfig(guildID)
 	if !enabled {
 		return
 	}
-	ms.persistStatsMemberActive(guildID, userID, member.JoinedAt, member.User.Bot, member.Roles)
+	s.persistStatsMemberActive(guildID, userID, member.JoinedAt, member.User.Bot, member.Roles)
 	snapshot := statsMemberSnapshot{
 		isBot:        member.User.Bot,
 		trackedRoles: filterTrackedRoles(member.Roles, trackedRoles),
 	}
 
-	ms.stats.actorCh <- func() {
-		state := ms.ensureStatsGuildState(guildID)
+	s.actorCh <- func() {
+		state := s.ensureStatsGuildState(guildID)
 		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 			state.dirty = true
 			return
@@ -775,25 +843,25 @@ func (ms *MonitoringService) applyStatsMemberAdd(member *discordgo.Member) {
 	}
 }
 
-func (ms *MonitoringService) applyStatsMemberUpdate(guildID, userID string, isBot bool, roles []string) {
+func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool, roles []string) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
 		return
 	}
 
-	_, trackedRoles, trackedRolesKey, enabled := ms.statsGuildConfig(guildID)
+	_, trackedRoles, trackedRolesKey, enabled := s.statsGuildConfig(guildID)
 	if !enabled {
 		return
 	}
-	ms.persistStatsMemberActive(guildID, userID, time.Time{}, isBot, roles)
+	s.persistStatsMemberActive(guildID, userID, time.Time{}, isBot, roles)
 	snapshot := statsMemberSnapshot{
 		isBot:        isBot,
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
 	}
 
-	ms.stats.actorCh <- func() {
-		state := ms.ensureStatsGuildState(guildID)
+	s.actorCh <- func() {
+		state := s.ensureStatsGuildState(guildID)
 		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 			state.dirty = true
 			return
@@ -804,21 +872,21 @@ func (ms *MonitoringService) applyStatsMemberUpdate(guildID, userID string, isBo
 	}
 }
 
-func (ms *MonitoringService) applyStatsMemberRemove(guildID, userID string) {
+func (s *StatsService) applyStatsMemberRemove(guildID, userID string) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
 		return
 	}
 
-	_, _, trackedRolesKey, enabled := ms.statsGuildConfig(guildID)
+	_, _, trackedRolesKey, enabled := s.statsGuildConfig(guildID)
 	if !enabled {
 		return
 	}
-	ms.persistStatsMemberLeft(guildID, userID)
+	s.persistStatsMemberLeft(guildID, userID)
 
-	ms.stats.actorCh <- func() {
-		state := ms.ensureStatsGuildState(guildID)
+	s.actorCh <- func() {
+		state := s.ensureStatsGuildState(guildID)
 		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 			state.dirty = true
 			return
@@ -829,8 +897,8 @@ func (ms *MonitoringService) applyStatsMemberRemove(guildID, userID string) {
 	}
 }
 
-func (ms *MonitoringService) persistStatsMemberActive(guildID, userID string, joinedAt time.Time, isBot bool, roles []string) {
-	if ms == nil || ms.store == nil {
+func (s *StatsService) persistStatsMemberActive(guildID, userID string, joinedAt time.Time, isBot bool, roles []string) {
+	if s == nil || s.store == nil {
 		return
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -839,11 +907,11 @@ func (ms *MonitoringService) persistStatsMemberActive(guildID, userID string, jo
 		return
 	}
 
-	err := monitoringRunErrWithTimeoutContext(ms.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
-		if err := ms.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
+	err := monitoringRunErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+		if err := s.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
 			return fmt.Errorf("upsert member presence: %w", err)
 		}
-		if err := ms.store.UpsertMemberRoles(guildID, userID, roles, time.Now().UTC()); err != nil {
+		if err := s.store.UpsertMemberRoles(guildID, userID, roles, time.Now().UTC()); err != nil {
 			return fmt.Errorf("upsert member roles: %w", err)
 		}
 		return nil
@@ -859,8 +927,8 @@ func (ms *MonitoringService) persistStatsMemberActive(guildID, userID string, jo
 	}
 }
 
-func (ms *MonitoringService) persistStatsMemberLeft(guildID, userID string) {
-	if ms == nil || ms.store == nil {
+func (s *StatsService) persistStatsMemberLeft(guildID, userID string) {
+	if s == nil || s.store == nil {
 		return
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -869,8 +937,8 @@ func (ms *MonitoringService) persistStatsMemberLeft(guildID, userID string) {
 		return
 	}
 
-	err := monitoringRunErrWithTimeoutContext(ms.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
-		return ms.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC())
+	err := monitoringRunErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+		return s.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC())
 	})
 	if err != nil {
 		log.ApplicationLogger().Warn(
@@ -883,8 +951,8 @@ func (ms *MonitoringService) persistStatsMemberLeft(guildID, userID string) {
 	}
 }
 
-func (ms *MonitoringService) statsGuildConfig(guildID string) (files.GuildConfig, map[string]struct{}, string, bool) {
-	cfg := ms.scopedConfig()
+func (s *StatsService) statsGuildConfig(guildID string) (files.GuildConfig, map[string]struct{}, string, bool) {
+	cfg := s.scopedConfig()
 	if cfg == nil {
 		return files.GuildConfig{}, nil, "", false
 	}
@@ -902,36 +970,36 @@ func (ms *MonitoringService) statsGuildConfig(guildID string) (files.GuildConfig
 	return files.GuildConfig{}, nil, "", false
 }
 
-func (ms *MonitoringService) ensureStatsGuildState(guildID string) *statsGuildState {
-	if ms.stats.guilds == nil {
-		ms.stats.guilds = make(map[string]*statsGuildState)
+func (s *StatsService) ensureStatsGuildState(guildID string) *statsGuildState {
+	if s.guilds == nil {
+		s.guilds = make(map[string]*statsGuildState)
 	}
-	state := ms.stats.guilds[guildID]
+	state := s.guilds[guildID]
 	if state != nil {
 		return state
 	}
 	state = newStatsGuildState("", nil)
-	ms.stats.guilds[guildID] = state
+	s.guilds[guildID] = state
 	return state
 }
 
-func (ms *MonitoringService) replaceStatsGuildState(guildID string, state *statsGuildState) {
-	ms.stats.actorCh <- func() {
-		if ms.stats.guilds == nil {
-			ms.stats.guilds = make(map[string]*statsGuildState)
+func (s *StatsService) replaceStatsGuildState(guildID string, state *statsGuildState) {
+	s.actorCh <- func() {
+		if s.guilds == nil {
+			s.guilds = make(map[string]*statsGuildState)
 		}
-		ms.stats.guilds[guildID] = state
+		s.guilds[guildID] = state
 	}
 }
 
-func (ms *MonitoringService) statsPublishedChannels(guildID string) map[string]statsPublishedChannel {
+func (s *StatsService) statsPublishedChannels(guildID string) map[string]statsPublishedChannel {
 	replyCh := make(chan map[string]statsPublishedChannel, 1)
-	ms.stats.actorCh <- func() {
-		if ms.stats.guilds == nil {
+	s.actorCh <- func() {
+		if s.guilds == nil {
 			replyCh <- nil
 			return
 		}
-		state := ms.stats.guilds[guildID]
+		state := s.guilds[guildID]
 		if state == nil {
 			replyCh <- nil
 			return
@@ -941,20 +1009,20 @@ func (ms *MonitoringService) statsPublishedChannels(guildID string) map[string]s
 	return <-replyCh
 }
 
-func (ms *MonitoringService) statsPublishedChannel(guildID, channelID string) (statsPublishedChannel, bool) {
+func (s *StatsService) statsPublishedChannel(guildID, channelID string) (statsPublishedChannel, bool) {
 	replyCh := make(chan struct {
 		published statsPublishedChannel
 		ok        bool
 	}, 1)
-	ms.stats.actorCh <- func() {
-		if ms.stats.guilds == nil {
+	s.actorCh <- func() {
+		if s.guilds == nil {
 			replyCh <- struct {
 				published statsPublishedChannel
 				ok        bool
 			}{statsPublishedChannel{}, false}
 			return
 		}
-		state := ms.stats.guilds[guildID]
+		state := s.guilds[guildID]
 		if state == nil || state.published == nil {
 			replyCh <- struct {
 				published statsPublishedChannel
@@ -972,9 +1040,9 @@ func (ms *MonitoringService) statsPublishedChannel(guildID, channelID string) (s
 	return res.published, res.ok
 }
 
-func (ms *MonitoringService) recordStatsPublishedChannel(guildID, channelID string, published statsPublishedChannel) {
-	ms.stats.actorCh <- func() {
-		state := ms.ensureStatsGuildState(guildID)
+func (s *StatsService) recordStatsPublishedChannel(guildID, channelID string, published statsPublishedChannel) {
+	s.actorCh <- func() {
+		state := s.ensureStatsGuildState(guildID)
 		if state.published == nil {
 			state.published = make(map[string]statsPublishedChannel)
 		}
@@ -982,20 +1050,20 @@ func (ms *MonitoringService) recordStatsPublishedChannel(guildID, channelID stri
 	}
 }
 
-func (ms *MonitoringService) statsSnapshot(guildID string) (statsGuildSnapshot, bool) {
+func (s *StatsService) statsSnapshot(guildID string) (statsGuildSnapshot, bool) {
 	replyCh := make(chan struct {
 		snapshot statsGuildSnapshot
 		ok       bool
 	}, 1)
-	ms.stats.actorCh <- func() {
-		if ms.stats.guilds == nil {
+	s.actorCh <- func() {
+		if s.guilds == nil {
 			replyCh <- struct {
 				snapshot statsGuildSnapshot
 				ok       bool
 			}{statsGuildSnapshot{}, false}
 			return
 		}
-		state := ms.stats.guilds[guildID]
+		state := s.guilds[guildID]
 		if state == nil || !state.initialized {
 			replyCh <- struct {
 				snapshot statsGuildSnapshot
@@ -1023,19 +1091,19 @@ func (ms *MonitoringService) statsSnapshot(guildID string) (statsGuildSnapshot, 
 	return res.snapshot, res.ok
 }
 
-func (ms *MonitoringService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
-	ms.stats.actorCh <- func() {
-		for guildID := range ms.stats.lastRun {
+func (s *StatsService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
+	s.actorCh <- func() {
+		for guildID := range s.lastRun {
 			if _, ok := activeGuilds[guildID]; ok {
 				continue
 			}
-			delete(ms.stats.lastRun, guildID)
+			delete(s.lastRun, guildID)
 		}
-		for guildID := range ms.stats.guilds {
+		for guildID := range s.guilds {
 			if _, ok := activeGuilds[guildID]; ok {
 				continue
 			}
-			delete(ms.stats.guilds, guildID)
+			delete(s.guilds, guildID)
 		}
 	}
 }

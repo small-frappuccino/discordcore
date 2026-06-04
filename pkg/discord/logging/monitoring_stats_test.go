@@ -3,7 +3,7 @@ package logging
 import (
 	"strings"
 	"testing"
-	"time"
+	
 
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 )
@@ -25,9 +25,8 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 	metrics.RecordRolesAuditCacheHit()
 
 	ms := &MonitoringService{
-		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 		metrics:    metrics,
 	}
 
@@ -36,7 +35,7 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 	wantPrefixes := []string{
 		"Running",
 		"Roles cache size",
-		"Roles cache TTL",
+		"Roles cache default TTL",
 		"Role update audit cache size",
 		"Role update audit debounce size",
 		"API audit log calls",
@@ -73,9 +72,8 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 	}
 
 	ms := &MonitoringService{
-		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 		metrics:    metrics,
 	}
 
@@ -103,9 +101,8 @@ func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 	t.Parallel()
 
 	ms := &MonitoringService{
-		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 		// metrics intentionally nil — observability() yields NopMetrics.
 	}
 
@@ -136,9 +133,8 @@ func TestMonitoringServiceStatsReturnsTypedMetrics(t *testing.T) {
 	t.Parallel()
 
 	ms := &MonitoringService{
-		rolesCache: rolesCacheStore{ttl: 5 * time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 		metrics:    &InMemoryMetrics{},
 	}
 

@@ -279,8 +279,8 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		configManager:  cfgMgr,
 		store:          store,
 		changeDebounce: changeDebouncer{},
-		rolesCache:     rolesCacheStore{ttl: time.Minute},
-		stats:          newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.initializeGuildCache(guildID)
@@ -328,7 +328,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		t.Fatalf("unexpected member join snapshot: got=%s ok=%v want=%s", gotJoin.UTC(), ok, memberJoinedAt.UTC())
 	}
 
-	if cachedRoles, ok := ms.cacheRolesGet(guildID, userID); !ok || !sameStringSet(cachedRoles, []string{"role-a", "role-b"}) {
+	if cachedRoles, ok := ms.rolesCacheService.CacheRolesGet(guildID, userID); !ok || !sameStringSet(cachedRoles, []string{"role-a", "role-b"}) {
 		t.Fatalf("expected in-memory role snapshot to be populated, got=%v ok=%v", cachedRoles, ok)
 	}
 }
@@ -390,8 +390,8 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 				guildID + ":" + userID + ":default": time.Now().UTC(),
 			},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -414,7 +414,7 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 		t.Fatalf("expected role snapshot to be updated to current state, got=%v", roles)
 	}
 
-	if cachedRoles, ok := ms.cacheRolesGet(guildID, userID); !ok || !sameStringSet(cachedRoles, []string{"role-new"}) {
+	if cachedRoles, ok := ms.rolesCacheService.CacheRolesGet(guildID, userID); !ok || !sameStringSet(cachedRoles, []string{"role-new"}) {
 		t.Fatalf("expected updated in-memory role cache, got=%v ok=%v", cachedRoles, ok)
 	}
 

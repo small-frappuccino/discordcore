@@ -38,35 +38,7 @@ func (ms *MonitoringService) stopHeartbeat(ctx context.Context) error {
 	return ms.activity.StopHeartbeat(ctx)
 }
 
-func (ms *MonitoringService) rolesCacheCleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			ms.rolesCache.evictExpired()
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (ms *MonitoringService) cacheRolesSet(guildID, userID string, roles []string) {
-	ttl := ms.rolesCache.ttl
-	if ms.configManager != nil {
-		if gcfg := ms.configManager.GuildConfig(guildID); gcfg != nil {
-			if d := gcfg.RolesCacheTTLDuration(); d > 0 {
-				ttl = d
-			}
-		}
-	}
-	ms.rolesCache.set(guildID, userID, roles, ttl)
-}
-
-func (ms *MonitoringService) cacheRolesGet(guildID, userID string) ([]string, bool) {
-	return ms.rolesCache.get(guildID, userID)
-}
 
 // metricsRows returns the monitoring-local display rows surfaced via
 // Service.Stats().Metrics (and therefore /admin status). Cache observability
@@ -80,13 +52,13 @@ func (ms *MonitoringService) cacheRolesGet(guildID, userID string) ([]string, bo
 // Rows are appended in display order; callers MUST iterate in slice order
 // (the consumer contract on ServiceMetric).
 func (ms *MonitoringService) metricsRows() []svc.ServiceMetric {
-	size := ms.rolesCache.size()
-	roleAuditCacheSize, roleAuditDebounceSize := ms.roleAudit.sizes()
+	size := ms.rolesCacheService.CacheRolesSize()
+	roleAuditCacheSize, roleAuditDebounceSize := ms.rolesCacheService.AuditSizes()
 
 	rows := []svc.ServiceMetric{
 		{Label: "Running", Value: formatBoolYesNo(ms.IsRunning())},
 		{Label: "Roles cache size", Value: strconv.Itoa(size)},
-		{Label: "Roles cache TTL", Value: ms.rolesCache.ttl.String()},
+		{Label: "Roles cache default TTL", Value: (5 * time.Minute).String()},
 		{Label: "Role update audit cache size", Value: strconv.Itoa(roleAuditCacheSize)},
 		{Label: "Role update audit debounce size", Value: strconv.Itoa(roleAuditDebounceSize)},
 	}

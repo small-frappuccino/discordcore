@@ -56,7 +56,7 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 	monitoringService := &MonitoringService{
 		store:    failingStore,
 		activity: newMonitoringRuntimeActivity(failingStore),
-		stats:    newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	memberService.markEvent(context.Background())
@@ -70,7 +70,7 @@ func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 		store:    failingStore,
 		run:      monitoringRunState{stopChan: make(chan struct{})},
 		activity: newMonitoringRuntimeActivity(failingStore),
-		stats:    newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.startHeartbeat(context.Background())
@@ -157,7 +157,7 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 	ms := &MonitoringService{
 		session: session,
 		store:   store,
-		stats:   newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.saveBotRolePermSnapshot(guildID, roleID, 8, "tester")

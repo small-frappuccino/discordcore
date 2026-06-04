@@ -33,8 +33,8 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 	}
 	if state.statsMemberHandlers {
 		ms.eventHandlers = append(ms.eventHandlers,
-			ms.session.AddHandler(ms.handleStatsMemberAdd),
-			ms.session.AddHandler(ms.handleStatsMemberRemove),
+			ms.session.AddHandler(ms.statsService.HandleStatsMemberAdd),
+			ms.session.AddHandler(ms.statsService.HandleStatsMemberRemove),
 		)
 	}
 	if state.userUpdateHandler {

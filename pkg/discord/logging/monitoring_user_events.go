@@ -86,7 +86,7 @@ func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, propo
 	}
 
 	var prev []string
-	if p, ok := ms.cacheRolesGet(guildID, userID); ok {
+	if p, ok := ms.rolesCacheService.CacheRolesGet(guildID, userID); ok {
 		ms.observability().RecordRolesCacheMemoryHit()
 		prev = p
 	} else if ms.store != nil {
@@ -106,7 +106,7 @@ func (ms *MonitoringService) persistMemberRoleSnapshot(guildID, userID string, r
 			return fmt.Errorf("MonitoringService.persistMemberRoleSnapshot: %w", err)
 		}
 	}
-	ms.cacheRolesSet(guildID, userID, roles)
+	ms.rolesCacheService.CacheRolesSet(guildID, userID, roles)
 	return nil
 }
 
@@ -114,7 +114,7 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 	now := time.Now()
 
 	if !forceRefresh {
-		if entries, ok := ms.roleAudit.cachedEntries(guildID, now); ok {
+		if entries, ok := ms.rolesCacheService.AuditCachedEntries(guildID, now); ok {
 			ms.observability().RecordRolesAuditCacheHit()
 			return entries, true, nil
 		}
@@ -137,13 +137,13 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 		entries = append(entries, entry)
 	}
 
-	ms.roleAudit.storeEntries(guildID, now, entries)
+	ms.rolesCacheService.AuditStoreEntries(guildID, now, entries)
 
 	return entries, false, nil
 }
 
 func (ms *MonitoringService) shouldDebounceRoleUpdateAuditRefresh(guildID, userID string) bool {
-	return ms.roleAudit.shouldDebounce(guildID, userID, time.Now())
+	return ms.rolesCacheService.AuditShouldDebounce(guildID, userID, time.Now())
 }
 
 func isRecentRoleUpdateAuditEntry(entry *discordgo.AuditLogEntry) bool {
@@ -289,7 +289,7 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		return
 	}
 
-	ms.applyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
+	ms.statsService.ApplyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 
 	emit := logpolicy.ShouldEmitLogEvent(ms.session, ms.configManager, logpolicy.LogEventRoleChange, m.GuildID)

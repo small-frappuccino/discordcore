@@ -55,61 +55,84 @@ export function RolesPage() {
       <div className="mt-8 mb-4">
         <h2 className="text-lg mb-2">Dashboard Access</h2>
         <SettingsGroup>
-          <SettingsRow 
-            title="Read Access Roles"
-            description="Roles allowed to view dashboard settings"
-            control={renderMultiSelect("dashboard_read")}
-          />
-          <SettingsRow 
-            title="Write Access Roles"
-            description="Roles allowed to view and edit dashboard settings"
-            control={renderMultiSelect("dashboard_write")}
-            isLast
-          />
+          <SettingsRow>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Read Access Roles</SettingsRow.Title>
+              <SettingsRow.Description>Roles allowed to view dashboard settings</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              {renderMultiSelect("dashboard_read")}
+            </SettingsRow.Control>
+          </SettingsRow>
+          <SettingsRow isLast>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Write Access Roles</SettingsRow.Title>
+              <SettingsRow.Description>Roles allowed to view and edit dashboard settings</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              {renderMultiSelect("dashboard_write")}
+            </SettingsRow.Control>
+          </SettingsRow>
         </SettingsGroup>
       </div>
 
       <div className="mb-4">
         <h2 className="text-lg mb-2">Auto Assignment</h2>
         <SettingsGroup>
-          <SettingsRow 
-            title="Enable Auto Assignment"
-            description="Automatically assign the target role to users that have required roles"
-            control={
+          <SettingsRow>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Enable Auto Assignment</SettingsRow.Title>
+              <SettingsRow.Description>Automatically assign the target role to users that have required roles</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
               <input 
                 type="checkbox" 
                 {...form.register("auto_assignment.enabled")}
               />
-            }
-          />
-          <SettingsRow 
-            title="Target Role"
-            description="The role to assign automatically"
-            control={renderSelect("auto_assignment.target_role")}
-          />
-          <SettingsRow 
-            title="Required Roles"
-            description="Users must have all these roles to get the target role"
-            control={renderMultiSelect("auto_assignment.required_roles")}
-            isLast
-          />
+            </SettingsRow.Control>
+          </SettingsRow>
+          <SettingsRow>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Target Role</SettingsRow.Title>
+              <SettingsRow.Description>The role to assign automatically</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              {renderSelect("auto_assignment.target_role")}
+            </SettingsRow.Control>
+          </SettingsRow>
+          <SettingsRow isLast>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Required Roles</SettingsRow.Title>
+              <SettingsRow.Description>Users must have all these roles to get the target role</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              {renderMultiSelect("auto_assignment.required_roles")}
+            </SettingsRow.Control>
+          </SettingsRow>
         </SettingsGroup>
       </div>
 
       <div className="mb-4">
         <h2 className="text-lg mb-2">Special Roles</h2>
         <SettingsGroup>
-          <SettingsRow 
-            title="Mute Role"
-            description="Role applied to muted users"
-            control={renderSelect("mute_role")}
-          />
-          <SettingsRow 
-            title="Booster Role"
-            description="Role representing Nitro Boosters"
-            control={renderSelect("booster_role")}
-            isLast
-          />
+          <SettingsRow>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Mute Role</SettingsRow.Title>
+              <SettingsRow.Description>Role applied to muted users</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              {renderSelect("mute_role")}
+            </SettingsRow.Control>
+          </SettingsRow>
+          <SettingsRow isLast>
+            <SettingsRow.Info>
+              <SettingsRow.Title>Booster Role</SettingsRow.Title>
+              <SettingsRow.Description>Role representing Nitro Boosters</SettingsRow.Description>
+            </SettingsRow.Info>
+            <SettingsRow.Control>
+              {renderSelect("booster_role")}
+            </SettingsRow.Control>
+          </SettingsRow>
         </SettingsGroup>
       </div>
 

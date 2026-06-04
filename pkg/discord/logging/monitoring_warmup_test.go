@@ -31,7 +31,7 @@ func TestScheduleStartupMemberWarmupDispatchesToTaskRouter(t *testing.T) {
 		router:       router,
 		run:          monitoringRunState{ctx: context.Background(), running: true},
 		unifiedCache: &cache.UnifiedCache{},
-		stats:        newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 	ms.registerStartupWarmupHandler(ms.run.ctx)
 

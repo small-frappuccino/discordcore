@@ -64,14 +64,14 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new monitoring service: %v", err)
 	}
-	ms.stats.lastRun = map[string]time.Time{
+	ms.statsService.lastRun = map[string]time.Time{
 		"g-restart": time.Now().UTC(),
 	}
 	preseeded := newStatsGuildState("", nil)
 	preseeded.initialized = true
 	preseeded.dirty = false
 	preseeded.lastReconciled = time.Now().UTC()
-	ms.stats.guilds = map[string]*statsGuildState{
+	ms.statsService.guilds = map[string]*statsGuildState{
 		"g-restart": preseeded,
 	}
 

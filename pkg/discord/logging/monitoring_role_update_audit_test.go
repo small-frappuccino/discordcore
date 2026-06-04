@@ -52,9 +52,8 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -117,9 +116,8 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -141,7 +139,7 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 	if len(roles) != 0 {
 		t.Fatalf("expected role snapshot to be cleared after empty role update, got=%v", roles)
 	}
-	if _, ok := ms.cacheRolesGet(guildID, userID); ok {
+	if _, ok := ms.rolesCacheService.CacheRolesGet(guildID, userID); ok {
 		t.Fatalf("expected in-memory role cache to be cleared after empty role update")
 	}
 	if got := atomic.LoadInt32(&auditGets); got != 1 {
@@ -231,9 +229,8 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 				guildID + ":" + userTwo + ":default": time.Now().UTC(),
 			},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 		metrics:    metrics,
 	}
 
@@ -311,9 +308,8 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		roleAudit:  roleUpdateAuditStore{},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{

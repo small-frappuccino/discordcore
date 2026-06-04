@@ -93,19 +93,14 @@ type MonitoringService struct {
 	// Unified cache for Discord API data (members, guilds, roles, channels)
 	unifiedCache *cache.UnifiedCache
 
-	// In-memory roles cache with TTL to reduce REST/DB lookups
-	rolesCache rolesCacheStore
-
-	// Short-lived audit cache for member role updates.
-	roleAudit roleUpdateAuditStore
+	// Sub-services for domain separation
+	rolesCacheService *RolesCacheService
+	statsService      *StatsService
 
 	// Event handler references for cleanup
 
 	eventHandlers []func()
 	presence      presenceWatcher
-
-	// Stats channel updates
-	stats *statsCoordinator
 
 	// Observability sink. When nil, observability() returns NopMetrics
 	// so call-sites can issue Record* without nil checks. This mirrors
@@ -395,12 +390,15 @@ func NewMonitoringServiceForBotWithMetrics(
 		memberEventService:   NewMemberEventServiceForBot(eventServiceDeps{Session: session, ConfigManager: configManager, Notifier: n, Store: store, BotInstanceID: botInstanceID, DefaultBotInstanceID: defaultBotInstanceID, Logger: logger}),
 		messageEventService:  NewMessageEventServiceForBot(eventServiceDeps{Session: session, ConfigManager: configManager, Notifier: n, Store: store, BotInstanceID: botInstanceID, DefaultBotInstanceID: defaultBotInstanceID, Logger: logger}),
 		run:                  monitoringRunState{stopChan: make(chan struct{})},
-		rolesCache:           rolesCacheStore{ttl: 5 * time.Minute},
+		rolesCacheService:    NewRolesCacheService(configManager),
 		eventHandlers:        make([]func(), 0),
-		stats:                newStatsCoordinator(),
+		statsService:         NewStatsService(session, configManager, store, logger, botInstanceID, defaultBotInstanceID, nil, nil, nil),
 		metrics:              metrics,
 		logger:               logger,
 	}
+	ms.statsService.currentRunCtx = ms.currentRunCtx
+	ms.statsService.getHeartbeat = ms.getHeartbeat
+	ms.statsService.fetchMembers = ms.forEachGuildMemberPageContext
 	ms.rebuildTaskPipeline()
 	return ms, nil
 }
@@ -567,8 +565,24 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	}
 
 	ms.startHeartbeat(lifecycleCtx)
-	ms.startOwnedWorker(lifecycleCtx, ms.rolesCacheCleanupLoop)
-	ms.startOwnedWorker(lifecycleCtx, ms.stats.loop)
+	if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.roles_cache", "roles_cache_service", func() error {
+		return ms.rolesCacheService.Start(lifecycleCtx)
+	}); err != nil {
+		cancelLifecycle()
+		ms.removeEventHandlers()
+		ms.recordLifecycleErrorLocked()
+		return fmt.Errorf("failed to start roles cache service: %w", err)
+	}
+
+	if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.stats", "stats_service", func() error {
+		return ms.statsService.Start(lifecycleCtx)
+	}); err != nil {
+		cancelLifecycle()
+		ms.removeEventHandlers()
+		ms.recordLifecycleErrorLocked()
+		return fmt.Errorf("failed to start stats service: %w", err)
+	}
+
 	serviceCtx := lifecycleCtx
 
 	ms.registerStartupWarmupHandler(serviceCtx)
@@ -903,7 +917,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 			return nil
 		}
 		for _, snapshot := range snapshots {
-			ms.cacheRolesSet(guildID, snapshot.UserID, snapshot.Roles)
+			ms.rolesCacheService.CacheRolesSet(guildID, snapshot.UserID, snapshot.Roles)
 		}
 		return nil
 	})
@@ -1104,7 +1118,7 @@ func (ms *MonitoringService) runStatsUpdateTask(runCtx context.Context) error {
 	if err := runCtx.Err(); err != nil {
 		return fmt.Errorf("MonitoringService.runStatsUpdateTask: %w", err)
 	}
-	return ms.updateStatsChannels(runCtx)
+	return ms.statsService.UpdateStatsChannels(runCtx)
 }
 
 func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
@@ -1161,7 +1175,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 				return nil
 			}
 			for _, snapshot := range snapshots {
-				ms.cacheRolesSet(gcfg.GuildID, snapshot.UserID, snapshot.Roles)
+				ms.rolesCacheService.CacheRolesSet(gcfg.GuildID, snapshot.UserID, snapshot.Roles)
 			}
 			guildUpdates += len(snapshots)
 			return nil

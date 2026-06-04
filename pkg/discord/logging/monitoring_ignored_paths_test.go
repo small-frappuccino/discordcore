@@ -35,7 +35,7 @@ func TestMonitoringService_HandleGuildUpdatePersistsOwnerID(t *testing.T) {
 	if err := store.SetGuildOwnerID(guildID, "owner-old"); err != nil {
 		t.Fatalf("seed old owner id: %v", err)
 	}
-	ms := &MonitoringService{store: store, stats: newStatsCoordinator()}
+	ms := &MonitoringService{store: store, statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil)}
 
 	ms.handleGuildUpdate(nil, &discordgo.GuildUpdate{
 		Guild: &discordgo.Guild{
@@ -116,8 +116,8 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 				guildID + ":" + userID + ":default": time.Now().UTC(),
 			},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -187,8 +187,8 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 				guildID + ":" + userID + ":default": time.Now().UTC(),
 			},
 		},
-		rolesCache: rolesCacheStore{ttl: time.Minute},
-		stats:      newStatsCoordinator(),
+		rolesCacheService: NewRolesCacheService(nil),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
@@ -246,7 +246,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		store:    store,
 		run:      monitoringRunState{stopChan: make(chan struct{})},
 		activity: activity,
-		stats:    newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	origInterval := heartbeatTickInterval

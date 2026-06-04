@@ -39,48 +39,53 @@ export function ModerationPage() {
       ) : (
         <SurfaceCard className="mt-8">
           <SettingsGroup>
-            <SettingsRow
-              title="AutoMod Engine"
-              description="Automatically detect and block forbidden content."
-              control={
+            <SettingsRow>
+              <SettingsRow.Info>
+                <SettingsRow.Title>AutoMod Engine</SettingsRow.Title>
+                <SettingsRow.Description>Automatically detect and block forbidden content.</SettingsRow.Description>
+              </SettingsRow.Info>
+              <SettingsRow.Control>
                 <Button
                   variant={automodEnabled ? "danger" : "primary"}
                   onClick={handleToggleAutomod}
                 >
                   {automodEnabled ? "Disable" : "Enable"}
                 </Button>
-              }
-            />
-            <SettingsRow
-              title="Audit Logging"
-              description="Log moderation actions and deleted messages to a dedicated channel."
-              control={
+              </SettingsRow.Control>
+            </SettingsRow>
+            <SettingsRow>
+              <SettingsRow.Info>
+                <SettingsRow.Title>Audit Logging</SettingsRow.Title>
+                <SettingsRow.Description>Log moderation actions and deleted messages to a dedicated channel.</SettingsRow.Description>
+              </SettingsRow.Info>
+              <SettingsRow.Control>
                 <Button
                   variant={loggingEnabled ? "danger" : "primary"}
                   onClick={handleToggleLogging}
                 >
                   {loggingEnabled ? "Disable" : "Enable"}
                 </Button>
-              }
-            />
+              </SettingsRow.Control>
+            </SettingsRow>
           </SettingsGroup>
           
           <form onSubmit={onSubmit} className="mt-8">
             <h3 className="mb-4 text-lg">Roles Config</h3>
             <SettingsGroup>
-              <SettingsRow
-                title="Mute Role"
-                description="Role assigned when a user is muted."
-                control={
+              <SettingsRow isLast>
+                <SettingsRow.Info>
+                  <SettingsRow.Title>Mute Role</SettingsRow.Title>
+                  <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
+                </SettingsRow.Info>
+                <SettingsRow.Control>
                   <input
                     type="text"
                     {...form.register("mute_role")}
                     placeholder="Role ID..."
                     className="form-input w-full max-w-xs"
                   />
-                }
-                isLast
-              />
+                </SettingsRow.Control>
+              </SettingsRow>
             </SettingsGroup>
             <div className="mt-4">
               <Button variant="primary" type="submit" disabled={isSaving}>

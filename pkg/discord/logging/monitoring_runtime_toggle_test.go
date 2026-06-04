@@ -28,7 +28,7 @@ func TestMonitoringService_SetupAndRemoveEventHandlersFromRuntimeConfig(t *testi
 		session:       session,
 		configManager: cfgMgr,
 		eventHandlers: make([]func(), 0),
-		stats:         newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{DisableUserLogs: true})
@@ -66,7 +66,7 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		router:               router,
 		run:                  monitoringRunState{running: true, ctx: runCtx},
 		eventHandlers:        make([]func(), 0),
-		stats:                newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	if err := ms.memberEventService.Start(context.Background()); err != nil {
@@ -182,7 +182,7 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 		configManager: cfgMgr,
 		router:        router,
 		run:           monitoringRunState{ctx: runCtx},
-		stats:         newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	state := monitoringWorkloadState{
@@ -249,7 +249,7 @@ func TestMonitoringService_SetupEventHandlersKeepsPresenceWatchWhenUserLogsDisab
 		session:       session,
 		configManager: cfgMgr,
 		eventHandlers: make([]func(), 0),
-		stats:         newStatsCoordinator(),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{
