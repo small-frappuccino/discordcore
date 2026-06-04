@@ -366,6 +366,8 @@ func TestQOTDConfigUnmarshalMigratesLegacyChannelFields(t *testing.T) {
 	}
 }
 
+// TestQOTDConfigLegacyJSONTableMappings ensures that legacy JSON keys (such as
+// forum_channel_id and old QOTD schedules) correctly map to canonical config fields.
 func TestQOTDConfigLegacyJSONTableMappings(t *testing.T) {
 	t.Parallel()
 
