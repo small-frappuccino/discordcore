@@ -25,7 +25,7 @@ export function PartnersPage() {
           type="text"
           placeholder={placeholder}
           {...form.register(name)}
-          style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid var(--border-subtle)", background: "var(--bg-base)", color: "var(--text-primary)" }}
+          className="form-input w-full"
         />
       }
     />
@@ -38,7 +38,7 @@ export function PartnersPage() {
       control={
         <textarea
           {...form.register(name)}
-          style={{ width: "100%", minHeight: "60px", padding: "8px", borderRadius: "4px", border: "1px solid var(--border-subtle)", background: "var(--bg-base)", color: "var(--text-primary)" }}
+          className="form-input w-full min-h-[60px]"
         />
       }
     />
@@ -51,6 +51,7 @@ export function PartnersPage() {
       control={
         <input
           type="checkbox"
+          className="form-checkbox w-4 h-4"
           {...form.register(name)}
         />
       }
@@ -87,7 +88,7 @@ export function PartnersPage() {
                 <input
                   type="number"
                   {...form.register("color", { valueAsNumber: true })}
-                  style={{ width: "150px", padding: "8px", borderRadius: "4px", border: "1px solid var(--border-subtle)", background: "var(--bg-base)", color: "var(--text-primary)" }}
+                  className="form-input w-[150px]"
                 />
               }
             />

@@ -75,7 +75,7 @@ export function ModerationPage() {
                     type="text"
                     {...form.register("mute_role")}
                     placeholder="Role ID..."
-                    style={{ padding: "8px", borderRadius: "4px", border: "1px solid var(--border-subtle)", background: "var(--bg-base)", color: "var(--text-primary)" }}
+                    className="form-input w-[200px]"
                   />
                 }
                 isLast

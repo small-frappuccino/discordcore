@@ -171,6 +171,28 @@ ul, ol {
 .badge-success { background-color: var(--success-bg); color: var(--success); }
 .badge-danger { background-color: var(--danger-bg); color: var(--danger); }
 
+/* Form Inputs */
+.form-input, .form-select {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--transition-fast);
+}
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent-primary);
+}
+select[multiple].form-select {
+  height: 100px;
+}
+.form-checkbox {
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
 /* Page Header */
 .page-header {
   display: flex;

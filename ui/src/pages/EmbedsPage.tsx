@@ -32,7 +32,7 @@ export function EmbedsPage() {
                   <input
                     type="checkbox"
                     {...form.register("enabled")}
-                    style={{ width: "20px", height: "20px", accentColor: "var(--accent-primary)", cursor: "pointer" }}
+                    className="form-checkbox w-5 h-5"
                   />
                 }
               />
@@ -45,7 +45,7 @@ export function EmbedsPage() {
                     type="text"
                     placeholder="https://discord.com/api/webhooks/..."
                     {...form.register("webhook_url")}
-                    style={{ width: "300px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
+                    className="form-input w-[300px]"
                   />
                 }
               />

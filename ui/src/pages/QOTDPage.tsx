@@ -33,7 +33,7 @@ export function QOTDPage() {
                 control={
                   <select 
                     {...form.register("active_deck_id")}
-                    style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none", minWidth: "200px" }}
+                    className="form-select min-w-[200px]"
                   >
                     <option value="">-- No Active Deck --</option>
                     {config.decks?.map(d => (
@@ -51,7 +51,7 @@ export function QOTDPage() {
                     type="text"
                     placeholder="Role ID..."
                     {...form.register("verified_role_id")}
-                    style={{ width: "200px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
+                    className="form-input w-[200px]"
                   />
                 }
               />
@@ -64,13 +64,13 @@ export function QOTDPage() {
                 description="The exact UTC time when the question should be posted."
                 isLast
                 control={
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div className="flex items-center gap-2">
                     <input
                       type="number"
                       min="0"
                       max="23"
                       {...form.register("schedule.hour_utc", { valueAsNumber: true })}
-                      style={{ width: "60px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
+                      className="form-input w-[60px]"
                     />
                     <span className="text-muted">:</span>
                     <input
@@ -78,7 +78,7 @@ export function QOTDPage() {
                       min="0"
                       max="59"
                       {...form.register("schedule.minute_utc", { valueAsNumber: true })}
-                      style={{ width: "60px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
+                      className="form-input w-[60px]"
                     />
                   </div>
                 }

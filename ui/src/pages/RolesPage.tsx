@@ -21,21 +21,12 @@ export function RolesPage() {
     return <div>Loading roles settings...</div>;
   }
 
-  const selectStyle: React.CSSProperties = {
-    backgroundColor: "var(--bg-base)",
-    color: "var(--text-primary)",
-    border: "1px solid var(--border-subtle)",
-    borderRadius: "var(--radius-sm)",
-    padding: "6px 8px",
-    outline: "none",
-    minWidth: "200px",
-    fontFamily: "inherit"
-  };
+
 
   const renderMultiSelect = (name: Path<RolesFormData>) => (
     <select
       multiple
-      style={{...selectStyle, height: "100px"}}
+      className="form-select min-w-[200px]"
       {...form.register(name)}
     >
       {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -44,7 +35,7 @@ export function RolesPage() {
 
   const renderSelect = (name: Path<RolesFormData>) => (
     <select
-      style={selectStyle}
+      className="form-select min-w-[200px]"
       {...form.register(name)}
     >
       <option value="">-- None --</option>
@@ -53,7 +44,7 @@ export function RolesPage() {
   );
 
   return (
-    <form style={{ display: "flex", flexDirection: "column" }} onSubmit={onSubmit}>
+    <form className="flex flex-col" onSubmit={onSubmit}>
       <PageHeader 
         title="Roles Configuration" 
         description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
